@@ -790,6 +790,20 @@ bool ExpectF16VectorBinarySeedState(
          !state.waiting_on_barrier && state.pc == 5u;
 }
 
+bool ExpectHalfPackMulSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[99][0] == 0x0000ff00u &&
+         state.vgprs[99][1] == 0x00006405u &&
+         state.vgprs[99][2] == 0x99999999u &&
+         state.vgprs[99][3] == 0x000000ffu &&
+         state.vgprs[100][0] == 0x00004200u &&
+         state.vgprs[100][1] == 0x00004000u &&
+         state.vgprs[100][2] == 0xa0a0a0a0u &&
+         state.vgprs[100][3] == 0x0000be00u &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 2u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -1735,6 +1749,18 @@ int main() {
     return 1;
   }
 
+  const std::array<std::uint32_t, 1> v_sat_pk_u8_i16_words{
+      MakeVop1(98u, 30u, 257u)};
+  if (!Expect(decoder.DecodeInstruction(v_sat_pk_u8_i16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_SAT_PK_U8_I16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_SAT_PK_U8_I16",
+                                     OperandKind::kVgpr, 30u,
+                                     OperandKind::kVgpr, 1u),
+              "expected decoded V_SAT_PK_U8_I16 operands")) {
+    return 1;
+  }
+
   const std::array<std::uint32_t, 1> v_rcp_f16_words{
       MakeVop1(84u, 40u, 257u)};
   if (!Expect(decoder.DecodeInstruction(v_rcp_f16_words, &instruction,
@@ -2051,6 +2077,19 @@ int main() {
                                       OperandKind::kVgpr, 1u,
                                       OperandKind::kVgpr, 4u),
               "expected decoded V_ADD_F16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_mul_f16_words{
+      MakeVop2(53u, 11u, 258u, 4u)};
+  if (!Expect(decoder.DecodeInstruction(vector_mul_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_MUL_F16 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_MUL_F16",
+                                      OperandKind::kVgpr, 11u,
+                                      OperandKind::kVgpr, 2u,
+                                      OperandKind::kVgpr, 4u),
+              "expected decoded V_MUL_F16 operands")) {
     return 1;
   }
 
@@ -4673,6 +4712,86 @@ int main() {
               "expected compiled F16 vector binary execution success") ||
       !Expect(ExpectF16VectorBinarySeedState(compiled_f16_vector_binary_state),
               "expected compiled F16 vector binary state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 3> half_pack_mul_words{
+      MakeVop1(98u, 99u, 257u),
+      MakeVop2(53u, 100u, 258u, 3u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> half_pack_mul_program;
+  if (!Expect(decoder.DecodeProgram(half_pack_mul_words, &half_pack_mul_program,
+                                    &error_message),
+              "expected half pack/mul program decode success") ||
+      !Expect(half_pack_mul_program.size() == 3u,
+              "expected three decoded half pack/mul instructions") ||
+      !Expect(half_pack_mul_program[0].opcode == "V_SAT_PK_U8_I16",
+              "expected decoded V_SAT_PK_U8_I16") ||
+      !Expect(half_pack_mul_program[1].opcode == "V_MUL_F16",
+              "expected decoded V_MUL_F16") ||
+      !Expect(half_pack_mul_program[2].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after half pack/mul batch")) {
+    return 1;
+  }
+
+  auto initialize_half_pack_mul_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[1][0] = 0x012cff9cu;
+    state->vgprs[1][1] = 0x00640005u;
+    state->vgprs[1][2] = 0x11111111u;
+    state->vgprs[1][3] = 0xffec00ffu;
+
+    state->vgprs[2][0] = 0x00003e00u;
+    state->vgprs[2][1] = 0x00004000u;
+    state->vgprs[2][2] = 0x22222222u;
+    state->vgprs[2][3] = 0x0000b800u;
+
+    state->vgprs[3][0] = 0x00004000u;
+    state->vgprs[3][1] = 0x00003c00u;
+    state->vgprs[3][2] = 0x33333333u;
+    state->vgprs[3][3] = 0x00004200u;
+
+    state->vgprs[99][2] = 0x99999999u;
+    state->vgprs[100][2] = 0xa0a0a0a0u;
+  };
+
+  WaveExecutionState decoded_half_pack_mul_state;
+  initialize_half_pack_mul_state(&decoded_half_pack_mul_state);
+  if (!Expect(interpreter.ExecuteProgram(half_pack_mul_program,
+                                         &decoded_half_pack_mul_state,
+                                         &error_message),
+              "expected decoded half pack/mul execution success") ||
+      !Expect(ExpectHalfPackMulSeedState(decoded_half_pack_mul_state),
+              "expected decoded half pack/mul state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_half_pack_mul_program;
+  if (!Expect(interpreter.CompileProgram(half_pack_mul_program,
+                                         &compiled_half_pack_mul_program,
+                                         &error_message),
+              "expected compiled half pack/mul program success") ||
+      !Expect(compiled_half_pack_mul_program.size() == 3u,
+              "expected three compiled half pack/mul instructions") ||
+      !Expect(compiled_half_pack_mul_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVSatPkU8I16,
+              "expected compiled V_SAT_PK_U8_I16 opcode") ||
+      !Expect(compiled_half_pack_mul_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVMulF16,
+              "expected compiled V_MUL_F16 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_half_pack_mul_state;
+  initialize_half_pack_mul_state(&compiled_half_pack_mul_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_half_pack_mul_program,
+                                         &compiled_half_pack_mul_state,
+                                         &error_message),
+              "expected compiled half pack/mul execution success") ||
+      !Expect(ExpectHalfPackMulSeedState(compiled_half_pack_mul_state),
+              "expected compiled half pack/mul state")) {
     return 1;
   }
 

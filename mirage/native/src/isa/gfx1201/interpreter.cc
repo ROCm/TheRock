@@ -37,7 +37,7 @@ constexpr std::uint16_t kSrcSccSgprIndex = 253;
 float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 
-constexpr std::array<std::string_view, 287> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 289> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -254,6 +254,7 @@ constexpr std::array<std::string_view, 287> kExecutableSeedOpcodes{{
     "V_CVT_F16_U16",
     "V_CVT_I16_F16",
     "V_CVT_U16_F16",
+    "V_SAT_PK_U8_I16",
     "V_CVT_NORM_I16_F16",
     "V_CVT_NORM_U16_F16",
     "V_CVT_F64_F32",
@@ -309,6 +310,7 @@ constexpr std::array<std::string_view, 287> kExecutableSeedOpcodes{{
     "V_ADD_F16",
     "V_SUB_F16",
     "V_SUBREV_F16",
+    "V_MUL_F16",
     "V_MIN_NUM_F16",
     "V_MAX_NUM_F16",
     "V_ADD_U32",
@@ -460,6 +462,16 @@ std::uint16_t NormalizeFloatToUnorm16(float input) {
     return 0xffffu;
   }
   return static_cast<std::uint16_t>(std::nearbyint(input * 65535.0f));
+}
+
+std::uint8_t SaturateI16ToU8(std::int16_t input) {
+  if (input <= 0) {
+    return 0u;
+  }
+  if (input >= 255) {
+    return 0xffu;
+  }
+  return static_cast<std::uint8_t>(input);
 }
 
 std::int32_t EvaluateFrexpExpI32(float input) {
@@ -1578,6 +1590,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtU16F16;
     return true;
   }
+  if (opcode == "V_SAT_PK_U8_I16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVSatPkU8I16;
+    return true;
+  }
   if (opcode == "V_CVT_NORM_I16_F16") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtNormI16F16;
     return true;
@@ -1796,6 +1812,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_SUBREV_F16") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVSubrevF16;
+    return true;
+  }
+  if (opcode == "V_MUL_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMulF16;
     return true;
   }
   if (opcode == "V_MIN_NUM_F16") {
@@ -2223,6 +2243,14 @@ std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
     return static_cast<std::uint32_t>(static_cast<std::uint16_t>(
         TruncateFloatToU32(ExpandFp16ToFloat(static_cast<std::uint16_t>(value)))));
   }
+  if (opcode == "V_SAT_PK_U8_I16") {
+    const std::uint8_t low = SaturateI16ToU8(
+        static_cast<std::int16_t>(value & 0xffffu));
+    const std::uint8_t high = SaturateI16ToU8(
+        static_cast<std::int16_t>((value >> 16) & 0xffffu));
+    return static_cast<std::uint32_t>(low) |
+           (static_cast<std::uint32_t>(high) << 8);
+  }
   if (opcode == "V_CVT_NORM_I16_F16") {
     return static_cast<std::uint32_t>(NormalizeFloatToSnorm16(
         ExpandFp16ToFloat(static_cast<std::uint16_t>(value))));
@@ -2398,6 +2426,9 @@ std::uint32_t EvaluateVectorBinaryHalfSeedInstruction(std::string_view opcode,
   if (opcode == "V_SUBREV_F16") {
     return CompressFloatToFp16Bits(rhs_value - lhs_value);
   }
+  if (opcode == "V_MUL_F16") {
+    return CompressFloatToFp16Bits(lhs_value * rhs_value);
+  }
   if (opcode == "V_MIN_NUM_F16") {
     return CompressFloatToFp16Bits(std::fmin(lhs_value, rhs_value));
   }
@@ -2411,8 +2442,8 @@ std::uint32_t EvaluateVectorBinarySeedInstruction(std::string_view opcode,
                                                   std::uint32_t lhs,
                                                   std::uint32_t rhs) {
   if (opcode == "V_ADD_F16" || opcode == "V_SUB_F16" ||
-      opcode == "V_SUBREV_F16" || opcode == "V_MIN_NUM_F16" ||
-      opcode == "V_MAX_NUM_F16") {
+      opcode == "V_SUBREV_F16" || opcode == "V_MUL_F16" ||
+      opcode == "V_MIN_NUM_F16" || opcode == "V_MAX_NUM_F16") {
     return EvaluateVectorBinaryHalfSeedInstruction(opcode, lhs, rhs);
   }
   if (opcode == "V_ADD_U32") {
@@ -3575,6 +3606,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "V_CVT_F16_U16" ||
       instruction.opcode == "V_CVT_I16_F16" ||
       instruction.opcode == "V_CVT_U16_F16" ||
+      instruction.opcode == "V_SAT_PK_U8_I16" ||
       instruction.opcode == "V_CVT_NORM_I16_F16" ||
       instruction.opcode == "V_CVT_NORM_U16_F16" ||
       instruction.opcode == "V_EXP_F16" ||
@@ -3807,6 +3839,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
 
   if (instruction.opcode == "V_ADD_F16" || instruction.opcode == "V_SUB_F16" ||
       instruction.opcode == "V_SUBREV_F16" ||
+      instruction.opcode == "V_MUL_F16" ||
       instruction.opcode == "V_MIN_NUM_F16" ||
       instruction.opcode == "V_MAX_NUM_F16" ||
       instruction.opcode == "V_ADD_U32" || instruction.opcode == "V_SUB_U32" ||
@@ -4073,6 +4106,7 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCvtF16U16:
     case Gfx1201CompiledOpcode::kVCvtI16F16:
     case Gfx1201CompiledOpcode::kVCvtU16F16:
+    case Gfx1201CompiledOpcode::kVSatPkU8I16:
     case Gfx1201CompiledOpcode::kVCvtNormI16F16:
     case Gfx1201CompiledOpcode::kVCvtNormU16F16:
     case Gfx1201CompiledOpcode::kVCvtF64F32:
@@ -4128,6 +4162,7 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVAddF16:
     case Gfx1201CompiledOpcode::kVSubF16:
     case Gfx1201CompiledOpcode::kVSubrevF16:
+    case Gfx1201CompiledOpcode::kVMulF16:
     case Gfx1201CompiledOpcode::kVMinNumF16:
     case Gfx1201CompiledOpcode::kVMaxNumF16:
     case Gfx1201CompiledOpcode::kVAddU32:
