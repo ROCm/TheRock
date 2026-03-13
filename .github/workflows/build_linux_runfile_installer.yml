@@ -200,19 +200,20 @@ jobs:
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::317668459450:role/therock-dev-runfile-s3-oidc
-          set-credentials-in-profile: dev-bucket
+      
+      - name: Upload to both buckets
+        run: |
+          aws s3 cp s3://therock-dev-runfile/rocm-installer-7.12.0-rc0-1.run
 
       - name: Configure AWS Credentials for Bucket B
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::317668459450:role/therock-therock-prerelease-runfile-s3-oidc
-          set-credentials-in-profile: pre-relase-bucket
 
       - name: Upload to both buckets
         run: |
-          aws s3 cp s3://therock-dev-runfile/rocm-installer-7.12.0-rc0-1.run . --profile dev-bucket
-          aws s3 cp rocm-installer-7.12.0-rc0-1.run s3://therock-prerelease-runfile --profile pre-relase-bucket
+          aws s3 cp rocm-installer-7.12.0-rc0-1.run s3://therock-prerelease-runfile
       
       - name: Generate index.html needed to display runfile installers.
         if: ${{ github.repository_owner == 'ROCm' }}
