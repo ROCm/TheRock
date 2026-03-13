@@ -134,66 +134,85 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
          
-      - name: Set BUILD_TAG for dev branch
-        if: ${{ env.RELEASE_TYPE == 'dev' }}
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          BUILD_TAG="dev-$(git rev-parse --short HEAD)"
-          echo "Set value of BUILD_TAG = '$BUILD_TAG'"
-          echo "BUILD_TAG=$BUILD_TAG" >> $GITHUB_ENV
+      # - name: Set BUILD_TAG for dev branch
+      #   if: ${{ env.RELEASE_TYPE == 'dev' }}
+      #   run: |
+      #     git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      #     BUILD_TAG="dev-$(git rev-parse --short HEAD)"
+      #     echo "Set value of BUILD_TAG = '$BUILD_TAG'"
+      #     echo "BUILD_TAG=$BUILD_TAG" >> $GITHUB_ENV
       
-      - name: Build args
-        run: |
-          args=""
-          if [[ -n "$GFX_ARCHS" ]]; then
-            args="$args rocm-archs=$GFX_ARCHS"
-          fi
-          if [[ -n "$PULL_AMDGPU" ]]; then
-            args="$args pullamdgpu=$PULL_AMDGPU"
-          fi
-          echo "ARGS=$args" >> $GITHUB_ENV
+      # - name: Build args
+      #   run: |
+      #     args=""
+      #     if [[ -n "$GFX_ARCHS" ]]; then
+      #       args="$args rocm-archs=$GFX_ARCHS"
+      #     fi
+      #     if [[ -n "$PULL_AMDGPU" ]]; then
+      #       args="$args pullamdgpu=$PULL_AMDGPU"
+      #     fi
+      #     echo "ARGS=$args" >> $GITHUB_ENV
 
-      - name: Run build-runfile-installer.sh
-        run: |
-          echo "### Runfile Build Options" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+      # - name: Run build-runfile-installer.sh
+      #   run: |
+      #     echo "### Runfile Build Options" >> $GITHUB_STEP_SUMMARY
+      #     echo "" >> $GITHUB_STEP_SUMMARY
 
-          echo "\`bash build-runfile-installer.sh config=$RUNFILE_CONFIG rocm amdgpu pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID $ARGS\`" >> $GITHUB_STEP_SUMMARY
+      #     echo "\`bash build-runfile-installer.sh config=$RUNFILE_CONFIG rocm amdgpu pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID $ARGS\`" >> $GITHUB_STEP_SUMMARY
           
-          bash build-runfile-installer.sh config=$RUNFILE_CONFIG rocm amdgpu pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID $ARGS
+      #     bash build-runfile-installer.sh config=$RUNFILE_CONFIG rocm amdgpu pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID $ARGS
 
-      - name: Show .run file
-        run: find . -name "*.run" -type f -exec ls -lctrh {} \;
+      # - name: Show .run file
+      #   run: find . -name "*.run" -type f -exec ls -lctrh {} \;
 
       - name: Install AWS CLI
         working-directory: ${{ github.workspace }}
         run: bash ./dockerfiles/install_awscli.sh
 
-      - name: Configure AWS Credentials
-        if: ${{ github.repository_owner == 'ROCm' }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+      # - name: Configure AWS Credentials
+      #   if: ${{ github.repository_owner == 'ROCm' }}
+      #   uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+      #   with:
+      #     aws-region: us-east-1
+      #     role-to-assume: arn:aws:iam::317668459450:role/therock-${{ env.RELEASE_TYPE }}-runfile-s3-oidc
+
+      # - name: Upload runfile to S3
+      #   if: ${{ github.repository_owner == 'ROCm' }}    
+      #   run: |
+      #     RUNFILE=$(find . -name "*.run" -type f | head -1)
+      #     if [ -z "$RUNFILE" ]; then
+      #       echo "ERROR: No .run file found"
+      #       exit 1
+      #     fi
+      #     RUNFILE_NAME=$(basename "$RUNFILE")
+      #     echo "Uploading $RUNFILE to s3://${{ env.S3_BUCKET_RUNFILE }}/"
+      #     aws s3 cp "$RUNFILE" "s3://${{ env.S3_BUCKET_RUNFILE }}/"
+          
+      #     # Append to GitHub Actions summary
+      #     echo "### Runfile Uploaded to S3" >> $GITHUB_STEP_SUMMARY
+      #     echo "" >> $GITHUB_STEP_SUMMARY
+      #     echo "**File:** \`${RUNFILE_NAME}\`" >> $GITHUB_STEP_SUMMARY
+      #     echo "" >> $GITHUB_STEP_SUMMARY
+      #     echo "**S3 Bucket:** \`${{ env.S3_BUCKET_RUNFILE }}\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Configure AWS Credentials for Bucket A
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7
         with:
           aws-region: us-east-1
-          role-to-assume: arn:aws:iam::317668459450:role/therock-${{ env.RELEASE_TYPE }}-runfile-s3-oidc
+          role-to-assume: arn:aws:iam::317668459450:role/therock-dev-runfile-s3-oidc
+          set-credentials-in-profile: dev-bucket
 
-      - name: Upload runfile to S3
-        if: ${{ github.repository_owner == 'ROCm' }}    
+      - name: Configure AWS Credentials for Bucket B
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::317668459450:role/therock-therock-prerelease-runfile-s3-oidc
+          set-credentials-in-profile: pre-relase-bucket
+
+      - name: Upload to both buckets
         run: |
-          RUNFILE=$(find . -name "*.run" -type f | head -1)
-          if [ -z "$RUNFILE" ]; then
-            echo "ERROR: No .run file found"
-            exit 1
-          fi
-          RUNFILE_NAME=$(basename "$RUNFILE")
-          echo "Uploading $RUNFILE to s3://${{ env.S3_BUCKET_RUNFILE }}/"
-          aws s3 cp "$RUNFILE" "s3://${{ env.S3_BUCKET_RUNFILE }}/"
-          
-          # Append to GitHub Actions summary
-          echo "### Runfile Uploaded to S3" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**File:** \`${RUNFILE_NAME}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**S3 Bucket:** \`${{ env.S3_BUCKET_RUNFILE }}\`" >> $GITHUB_STEP_SUMMARY
+          aws s3 cp s3://therock-dev-runfile/rocm-installer-7.12.0-rc0-1.run . --profile dev-bucket
+          aws s3 cp rocm-installer-7.12.0-rc0-1.run s3://therock-prerelease-runfile --profile pre-relase-bucket
       
       - name: Generate index.html needed to display runfile installers.
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -202,4 +221,4 @@ jobs:
           python -m venv .venv
           source .venv/bin/activate
           pip install boto3
-          python index_generation_s3_runfile.py --bucket ${{ env.S3_BUCKET_RUNFILE }} --upload
+          python index_generation_s3_runfile.py --bucket therock-prerelease-runfile --upload
