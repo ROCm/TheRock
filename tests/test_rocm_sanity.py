@@ -393,7 +393,9 @@ class TestROCmSanity:
                 stdout_text.strip() == ""
             ), f"Expected no stdout when using --file, got: {stdout_text}"
             assert output_file_path.exists(), "Expected output file to be created"
-            content_text = output_file_path.read_text(encoding="utf-8", errors="replace")
+            content_text = output_file_path.read_text(
+                encoding="utf-8", errors="replace"
+            )
         else:
             content_text = stdout_text
 
