@@ -1,8 +1,13 @@
 def pytest_configure(config):
     config.addinivalue_line(
         "markers",
-        "amdsmi_tests_default_unblocking_for_sanity: marks tests as default-unblocking for amdsmi sanity (amdsmi_tests_default_unblocking_for_sanity)",
+        "not_sanity: marks tests that must not run in sanity gating",
     )
     config.addinivalue_line(
-        "markers", "amd_smi: marks tests that exercise the amd-smi CLI"
+        "markers",
+        "amd_smi: marks tests that exercise amd-smi",
+    )
+    config.addinivalue_line(
+        "markers",
+        "amd_smi_cli: marks amd-smi CLI tests",
     )

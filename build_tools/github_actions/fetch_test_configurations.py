@@ -183,7 +183,7 @@ test_matrix = {
         "job_name": "amdsmi_cli",
         "fetch_artifact_args": "--base-only",
         "timeout_minutes": 15,
-        "test_script": f"pytest {_get_script_path('test_amdsmi_cli.py')} -o log_cli=true --log-cli-level=INFO",
+        "test_script": "pytest tests/test_amdsmi_cli.py -m not_sanity -o log_cli=true --log-cli-level=INFO",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
