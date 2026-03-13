@@ -127,7 +127,11 @@ if(THEROCK_ENABLE_AMD_LLVM_BASE)
   therock_cmake_subproject_provide_package(amd-llvm Clang lib/llvm/lib/cmake/clang)
   therock_cmake_subproject_provide_package(amd-llvm LLD lib/llvm/lib/cmake/lld)
   therock_cmake_subproject_provide_package(amd-llvm LLVM lib/llvm/lib/cmake/llvm)
-  therock_cmake_subproject_provide_package(amd-llvm OpenMP lib/llvm/lib/cmake/openmp)
+  if(NOT WIN32)
+    # OpenMP runtime is only built on non-Windows (the Windows LLVM build
+    # uses a minimal LLVM_ENABLE_RUNTIMES that excludes openmp).
+    therock_cmake_subproject_provide_package(amd-llvm OpenMP lib/llvm/lib/cmake/openmp)
+  endif()
   therock_cmake_subproject_activate(amd-llvm)
 
   therock_provide_artifact(amd-llvm-base

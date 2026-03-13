@@ -476,6 +476,7 @@ disable_platforms = ["windows"]
 artifact_group = "compiler"
 type = "target-neutral"
 artifact_deps = ["amd-llvm", "core-runtime"]
+feature_group = "ALL"
 disable_platforms = ["windows"]
 
 [artifacts.hipify]

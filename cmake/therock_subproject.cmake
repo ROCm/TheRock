@@ -504,7 +504,7 @@ function(therock_cmake_subproject_declare target_name)
       if(ARG_FORTRAN_REQUIRED)
         message(FATAL_ERROR
           "Sub-project ${target_name} requires Fortran (FORTRAN_REQUIRED) "
-          "but THEROCK_ENABLE_FLANG is OFF and no system Fortran compiler is available on Linux.")
+          "but THEROCK_ENABLE_FLANG is OFF.")
       endif()
     endif()
   endif()

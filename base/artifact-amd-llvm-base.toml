@@ -13,15 +13,6 @@ unmatched_exclude = [
 #   lib/llvm/clang : Contains a prefix like tree that must always be
 #     accessible for library use, regardless of file type/association
 #     (and should be excluded from other components).
-[components.dbg."base/amd-llvm/stage"]
-[components.dev."base/amd-llvm/stage"]
-include = [
-  "lib/llvm/share/libc++/**",
-]
-exclude = [
-  "lib/llvm/lib/clang/**",
-]
-[components.doc."base/amd-llvm/stage"]
 [components.lib."base/amd-llvm/stage"]
 include = [
   "lib/llvm/amdgcn/**",
@@ -43,3 +34,15 @@ include = [
 exclude = [
   "lib/llvm/lib/clang/**",
 ]
+
+[components.dbg."base/amd-llvm/stage"]
+
+[components.dev."base/amd-llvm/stage"]
+include = [
+  "lib/llvm/share/libc++/**",
+]
+exclude = [
+  "lib/llvm/lib/clang/**",
+]
+
+[components.doc."base/amd-llvm/stage"]
