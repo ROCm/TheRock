@@ -38,7 +38,7 @@ float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 std::uint16_t CompressFloatToFp16BitsRtz(float value);
 
-constexpr std::array<std::string_view, 297> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 301> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -322,6 +322,10 @@ constexpr std::array<std::string_view, 297> kExecutableSeedOpcodes{{
     "V_MUL_F32",
     "V_MIN_NUM_F32",
     "V_MAX_NUM_F32",
+    "V_ADD_F64",
+    "V_MUL_F64",
+    "V_MIN_NUM_F64",
+    "V_MAX_NUM_F64",
     "V_ADD_U32",
     "V_SUB_U32",
     "V_SUBREV_U32",
@@ -1867,6 +1871,22 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVMaxNumF32;
     return true;
   }
+  if (opcode == "V_ADD_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVAddF64;
+    return true;
+  }
+  if (opcode == "V_MUL_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMulF64;
+    return true;
+  }
+  if (opcode == "V_MIN_NUM_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMinNumF64;
+    return true;
+  }
+  if (opcode == "V_MAX_NUM_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMaxNumF64;
+    return true;
+  }
   if (opcode == "V_ADD_U32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVAddU32;
     return true;
@@ -2524,6 +2544,27 @@ std::uint32_t EvaluateVectorHalfLdexpSeedInstruction(std::uint32_t lhs,
   const auto exponent =
       static_cast<int>(BitCast<std::int16_t>(static_cast<std::uint16_t>(rhs)));
   return CompressFloatToFp16Bits(std::ldexp(mantissa, exponent));
+}
+
+std::uint64_t EvaluateVectorBinaryF64SeedInstruction(std::string_view opcode,
+                                                     std::uint64_t lhs,
+                                                     std::uint64_t rhs) {
+  const double lhs_value = BitCast<double>(lhs);
+  const double rhs_value = BitCast<double>(rhs);
+
+  if (opcode == "V_ADD_F64") {
+    return BitCast<std::uint64_t>(lhs_value + rhs_value);
+  }
+  if (opcode == "V_MUL_F64") {
+    return BitCast<std::uint64_t>(lhs_value * rhs_value);
+  }
+  if (opcode == "V_MIN_NUM_F64") {
+    return BitCast<std::uint64_t>(std::fmin(lhs_value, rhs_value));
+  }
+  if (opcode == "V_MAX_NUM_F64") {
+    return BitCast<std::uint64_t>(std::fmax(lhs_value, rhs_value));
+  }
+  return 0u;
 }
 
 std::uint32_t EvaluateVectorBinarySeedInstruction(std::string_view opcode,
@@ -4026,6 +4067,37 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     return true;
   }
 
+  if (instruction.opcode == "V_ADD_F64" || instruction.opcode == "V_MUL_F64" ||
+      instruction.opcode == "V_MIN_NUM_F64" ||
+      instruction.opcode == "V_MAX_NUM_F64") {
+    if (!ValidateOperandCount(instruction, 3, error_message)) {
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      const std::uint64_t lhs = ReadWideSourceOperand(
+          instruction.operands[1], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint64_t rhs = ReadWideSourceOperand(
+          instruction.operands[2], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint64_t result =
+          EvaluateVectorBinaryF64SeedInstruction(instruction.opcode, lhs, rhs);
+      if (!WriteWideVectorOperand(instruction.operands[0], lane_index, result,
+                                  state, error_message)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   if (error_message != nullptr) {
     *error_message = BuildInterpreterBringupMessage(instruction.opcode);
   }
@@ -4318,6 +4390,10 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVMulF32:
     case Gfx1201CompiledOpcode::kVMinNumF32:
     case Gfx1201CompiledOpcode::kVMaxNumF32:
+    case Gfx1201CompiledOpcode::kVAddF64:
+    case Gfx1201CompiledOpcode::kVMulF64:
+    case Gfx1201CompiledOpcode::kVMinNumF64:
+    case Gfx1201CompiledOpcode::kVMaxNumF64:
     case Gfx1201CompiledOpcode::kVAddU32:
     case Gfx1201CompiledOpcode::kVSubU32:
     case Gfx1201CompiledOpcode::kVSubrevU32:

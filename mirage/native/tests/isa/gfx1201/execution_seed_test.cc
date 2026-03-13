@@ -848,6 +848,70 @@ bool ExpectF32VectorBinarySeedState(
          !state.waiting_on_barrier && state.pc == 6u;
 }
 
+bool ExpectF64VectorBinarySeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  std::uint32_t add_lane0_low, add_lane0_high;
+  std::uint32_t add_lane1_low, add_lane1_high;
+  std::uint32_t add_lane3_low, add_lane3_high;
+  std::uint32_t mul_lane0_low, mul_lane0_high;
+  std::uint32_t mul_lane1_low, mul_lane1_high;
+  std::uint32_t mul_lane3_low, mul_lane3_high;
+  std::uint32_t min_lane0_low, min_lane0_high;
+  std::uint32_t min_lane1_low, min_lane1_high;
+  std::uint32_t min_lane3_low, min_lane3_high;
+  std::uint32_t max_lane0_low, max_lane0_high;
+  std::uint32_t max_lane1_low, max_lane1_high;
+  std::uint32_t max_lane3_low, max_lane3_high;
+
+  SplitU64(DoubleBits(2.0), &add_lane0_low, &add_lane0_high);
+  SplitU64(DoubleBits(1.0), &add_lane1_low, &add_lane1_high);
+  SplitU64(DoubleBits(3.0), &add_lane3_low, &add_lane3_high);
+  SplitU64(DoubleBits(0.75), &mul_lane0_low, &mul_lane0_high);
+  SplitU64(DoubleBits(-6.0), &mul_lane1_low, &mul_lane1_high);
+  SplitU64(DoubleBits(-4.0), &mul_lane3_low, &mul_lane3_high);
+  SplitU64(DoubleBits(0.5), &min_lane0_low, &min_lane0_high);
+  SplitU64(DoubleBits(-2.0), &min_lane1_low, &min_lane1_high);
+  SplitU64(DoubleBits(-1.0), &min_lane3_low, &min_lane3_high);
+  SplitU64(DoubleBits(1.5), &max_lane0_low, &max_lane0_high);
+  SplitU64(DoubleBits(3.0), &max_lane1_low, &max_lane1_high);
+  SplitU64(DoubleBits(4.0), &max_lane3_low, &max_lane3_high);
+
+  return state.vgprs[109][0] == add_lane0_low &&
+         state.vgprs[109][1] == add_lane1_low &&
+         state.vgprs[109][2] == 0xb9b9b9b9u &&
+         state.vgprs[109][3] == add_lane3_low &&
+         state.vgprs[110][0] == add_lane0_high &&
+         state.vgprs[110][1] == add_lane1_high &&
+         state.vgprs[110][2] == 0xc9c9c9c9u &&
+         state.vgprs[110][3] == add_lane3_high &&
+         state.vgprs[111][0] == mul_lane0_low &&
+         state.vgprs[111][1] == mul_lane1_low &&
+         state.vgprs[111][2] == 0xb1b1b1b1u &&
+         state.vgprs[111][3] == mul_lane3_low &&
+         state.vgprs[112][0] == mul_lane0_high &&
+         state.vgprs[112][1] == mul_lane1_high &&
+         state.vgprs[112][2] == 0xc1c1c1c1u &&
+         state.vgprs[112][3] == mul_lane3_high &&
+         state.vgprs[113][0] == min_lane0_low &&
+         state.vgprs[113][1] == min_lane1_low &&
+         state.vgprs[113][2] == 0xb3b3b3b3u &&
+         state.vgprs[113][3] == min_lane3_low &&
+         state.vgprs[114][0] == min_lane0_high &&
+         state.vgprs[114][1] == min_lane1_high &&
+         state.vgprs[114][2] == 0xc3c3c3c3u &&
+         state.vgprs[114][3] == min_lane3_high &&
+         state.vgprs[115][0] == max_lane0_low &&
+         state.vgprs[115][1] == max_lane1_low &&
+         state.vgprs[115][2] == 0xb5b5b5b5u &&
+         state.vgprs[115][3] == max_lane3_low &&
+         state.vgprs[116][0] == max_lane0_high &&
+         state.vgprs[116][1] == max_lane1_high &&
+         state.vgprs[116][2] == 0xc5c5c5c5u &&
+         state.vgprs[116][3] == max_lane3_high &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 4u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -2229,6 +2293,32 @@ int main() {
                                       OperandKind::kVgpr, 1u,
                                       OperandKind::kVgpr, 2u),
               "expected decoded V_MAX_NUM_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_add_f64_words{
+      MakeVop2(2u, 18u, 257u, 3u)};
+  if (!Expect(decoder.DecodeInstruction(vector_add_f64_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_ADD_F64 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_ADD_F64",
+                                      OperandKind::kVgpr, 18u,
+                                      OperandKind::kVgpr, 1u,
+                                      OperandKind::kVgpr, 3u),
+              "expected decoded V_ADD_F64 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_max_num_f64_words{
+      MakeVop2(14u, 20u, 257u, 3u)};
+  if (!Expect(decoder.DecodeInstruction(vector_max_num_f64_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_MAX_NUM_F64 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_MAX_NUM_F64",
+                                      OperandKind::kVgpr, 20u,
+                                      OperandKind::kVgpr, 1u,
+                                      OperandKind::kVgpr, 3u),
+              "expected decoded V_MAX_NUM_F64 operands")) {
     return 1;
   }
 
@@ -5096,6 +5186,104 @@ int main() {
       !Expect(ExpectF32VectorBinarySeedState(
                   compiled_f32_vector_binary_state),
               "expected compiled F32 vector binary state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 5> f64_vector_binary_words{
+      MakeVop2(2u, 109u, 257u, 3u),
+      MakeVop2(6u, 111u, 257u, 3u),
+      MakeVop2(13u, 113u, 257u, 3u),
+      MakeVop2(14u, 115u, 257u, 3u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> f64_vector_binary_program;
+  if (!Expect(decoder.DecodeProgram(f64_vector_binary_words,
+                                    &f64_vector_binary_program,
+                                    &error_message),
+              "expected F64 vector binary program decode success") ||
+      !Expect(f64_vector_binary_program.size() == 5u,
+              "expected five decoded F64 vector binary instructions") ||
+      !Expect(f64_vector_binary_program[0].opcode == "V_ADD_F64",
+              "expected decoded V_ADD_F64") ||
+      !Expect(f64_vector_binary_program[1].opcode == "V_MUL_F64",
+              "expected decoded V_MUL_F64") ||
+      !Expect(f64_vector_binary_program[2].opcode == "V_MIN_NUM_F64",
+              "expected decoded V_MIN_NUM_F64") ||
+      !Expect(f64_vector_binary_program[3].opcode == "V_MAX_NUM_F64",
+              "expected decoded V_MAX_NUM_F64") ||
+      !Expect(f64_vector_binary_program[4].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after F64 vector binary batch")) {
+    return 1;
+  }
+
+  auto initialize_f64_vector_binary_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    SplitU64(DoubleBits(1.5), &state->vgprs[1][0], &state->vgprs[2][0]);
+    SplitU64(DoubleBits(-2.0), &state->vgprs[1][1], &state->vgprs[2][1]);
+    state->vgprs[1][2] = 0x11111111u;
+    state->vgprs[2][2] = 0x21212121u;
+    SplitU64(DoubleBits(4.0), &state->vgprs[1][3], &state->vgprs[2][3]);
+
+    SplitU64(DoubleBits(0.5), &state->vgprs[3][0], &state->vgprs[4][0]);
+    SplitU64(DoubleBits(3.0), &state->vgprs[3][1], &state->vgprs[4][1]);
+    state->vgprs[3][2] = 0x33333333u;
+    state->vgprs[4][2] = 0x43434343u;
+    SplitU64(DoubleBits(-1.0), &state->vgprs[3][3], &state->vgprs[4][3]);
+
+    state->vgprs[109][2] = 0xb9b9b9b9u;
+    state->vgprs[110][2] = 0xc9c9c9c9u;
+    state->vgprs[111][2] = 0xb1b1b1b1u;
+    state->vgprs[112][2] = 0xc1c1c1c1u;
+    state->vgprs[113][2] = 0xb3b3b3b3u;
+    state->vgprs[114][2] = 0xc3c3c3c3u;
+    state->vgprs[115][2] = 0xb5b5b5b5u;
+    state->vgprs[116][2] = 0xc5c5c5c5u;
+  };
+
+  WaveExecutionState decoded_f64_vector_binary_state;
+  initialize_f64_vector_binary_state(&decoded_f64_vector_binary_state);
+  if (!Expect(interpreter.ExecuteProgram(f64_vector_binary_program,
+                                         &decoded_f64_vector_binary_state,
+                                         &error_message),
+              "expected decoded F64 vector binary execution success") ||
+      !Expect(ExpectF64VectorBinarySeedState(
+                  decoded_f64_vector_binary_state),
+              "expected decoded F64 vector binary state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_f64_vector_binary_program;
+  if (!Expect(interpreter.CompileProgram(f64_vector_binary_program,
+                                         &compiled_f64_vector_binary_program,
+                                         &error_message),
+              "expected compiled F64 vector binary program success") ||
+      !Expect(compiled_f64_vector_binary_program.size() == 5u,
+              "expected five compiled F64 vector binary instructions") ||
+      !Expect(compiled_f64_vector_binary_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVAddF64,
+              "expected compiled V_ADD_F64 opcode") ||
+      !Expect(compiled_f64_vector_binary_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVMulF64,
+              "expected compiled V_MUL_F64 opcode") ||
+      !Expect(compiled_f64_vector_binary_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVMinNumF64,
+              "expected compiled V_MIN_NUM_F64 opcode") ||
+      !Expect(compiled_f64_vector_binary_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVMaxNumF64,
+              "expected compiled V_MAX_NUM_F64 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_f64_vector_binary_state;
+  initialize_f64_vector_binary_state(&compiled_f64_vector_binary_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_f64_vector_binary_program,
+                                         &compiled_f64_vector_binary_state,
+                                         &error_message),
+              "expected compiled F64 vector binary execution success") ||
+      !Expect(ExpectF64VectorBinarySeedState(
+                  compiled_f64_vector_binary_state),
+              "expected compiled F64 vector binary state")) {
     return 1;
   }
 
