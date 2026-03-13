@@ -186,10 +186,6 @@ def run_windows(args: argparse.Namespace) -> int:
             "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')",
         ),
         ("Installing uv", "irm https://astral.sh/uv/install.ps1 | iex"),
-        (
-            "Cloning TheRock",
-            "git clone https://github.com/ROCm/TheRock.git; Set-Location TheRock",
-        ),
         ("Creating virtual environment", "uv venv .venv; .venv\\Scripts\\Activate.ps1"),
         ("Installing Python dependencies", "uv pip install -r requirements-test.txt"),
         ("Downloading artifacts", fetch_cmd),
