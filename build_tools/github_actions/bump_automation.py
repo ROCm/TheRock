@@ -246,10 +246,10 @@ def create_therock_bump(submodule, token):
         os.chdir(original_cwd)
 
 
-def handle_schedule(systems_token, libraries_token):
+def handle_schedule(therock_token):
     """Create bump PRs for both submodules"""
-    create_therock_bump("rocm-systems", systems_token)
-    create_therock_bump("rocm-libraries", libraries_token)
+    create_therock_bump("rocm-systems", therock_token)
+    create_therock_bump("rocm-libraries", therock_token)
 
 
 def handle_push(before, after, systems_token, libraries_token, therock_token):
@@ -319,7 +319,7 @@ def main():
     args = parser.parse_args()
 
     if args.event_type == "schedule":
-        handle_schedule(args.systems_token, args.libraries_token)
+        handle_schedule(args.therock_token)
     elif args.event_type == "push":
         handle_push(
             args.before,
