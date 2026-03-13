@@ -1,4 +1,4 @@
-# RFC-0010: Quartz: Central CI/CD Data Hub for the ROCm Ecosystem
+# RFC-0011: Quartz: Central CI/CD Data Hub for the ROCm Ecosystem
 
 - **Author:** Laura Promberger (HereThereBeDragons)
 - **Created:** 2026-03-03
