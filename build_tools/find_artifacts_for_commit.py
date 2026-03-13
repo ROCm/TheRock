@@ -33,7 +33,7 @@ import urllib.request
 import urllib.error
 
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from github_actions.github_actions_utils import (
+from github_actions.github_actions_api import (
     GitHubAPIError,
     gha_query_workflow_runs_for_commit,
 )

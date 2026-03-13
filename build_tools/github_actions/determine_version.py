@@ -29,7 +29,7 @@ from packaging.version import parse
 import argparse
 import sys
 
-from github_actions_utils import *
+from github_actions_api import *
 
 
 def derive_version_suffix(rocm_version: str) -> str:

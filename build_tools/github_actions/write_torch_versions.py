@@ -14,7 +14,7 @@ import argparse
 import os
 import glob
 import platform
-from github_actions_utils import *
+from github_actions_api import *
 
 
 def _log(*args, **kwargs):

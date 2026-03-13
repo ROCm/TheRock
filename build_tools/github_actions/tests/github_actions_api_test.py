@@ -10,7 +10,7 @@ from unittest import mock
 from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
-from github_actions_utils import (
+from github_actions_api import (
     GitHubAPI,
     GitHubAPIError,
     gha_query_last_successful_workflow_run,
@@ -61,8 +61,8 @@ class GitHubAPITest(unittest.TestCase):
         mock_result.returncode = 0
 
         with mock.patch(
-            "github_actions_utils.shutil.which", return_value="/usr/bin/gh"
-        ), mock.patch("github_actions_utils.subprocess.run", return_value=mock_result):
+            "github_actions_api.shutil.which", return_value="/usr/bin/gh"
+        ), mock.patch("github_actions_api.subprocess.run", return_value=mock_result):
             api = GitHubAPI()
             self.assertEqual(api.get_auth_method(), GitHubAPI.AuthMethod.GITHUB_TOKEN)
 
@@ -73,8 +73,8 @@ class GitHubAPITest(unittest.TestCase):
         mock_result.returncode = 0
 
         with mock.patch(
-            "github_actions_utils.shutil.which", return_value="/usr/bin/gh"
-        ), mock.patch("github_actions_utils.subprocess.run", return_value=mock_result):
+            "github_actions_api.shutil.which", return_value="/usr/bin/gh"
+        ), mock.patch("github_actions_api.subprocess.run", return_value=mock_result):
             api = GitHubAPI()
             self.assertEqual(api.get_auth_method(), GitHubAPI.AuthMethod.GH_CLI)
 
@@ -85,8 +85,8 @@ class GitHubAPITest(unittest.TestCase):
         mock_result.returncode = 1
 
         with mock.patch(
-            "github_actions_utils.shutil.which", return_value="/usr/bin/gh"
-        ), mock.patch("github_actions_utils.subprocess.run", return_value=mock_result):
+            "github_actions_api.shutil.which", return_value="/usr/bin/gh"
+        ), mock.patch("github_actions_api.subprocess.run", return_value=mock_result):
             api = GitHubAPI()
             self.assertEqual(
                 api.get_auth_method(), GitHubAPI.AuthMethod.UNAUTHENTICATED
@@ -94,7 +94,7 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_unauthenticated_fallback(self):
         """Should fall back to unauthenticated when no auth is available."""
-        with mock.patch("github_actions_utils.shutil.which", return_value=None):
+        with mock.patch("github_actions_api.shutil.which", return_value=None):
             api = GitHubAPI()
             self.assertEqual(
                 api.get_auth_method(), GitHubAPI.AuthMethod.UNAUTHENTICATED
@@ -121,7 +121,7 @@ class GitHubAPITest(unittest.TestCase):
 
         # New instance with no token should detect unauthenticated
         del os.environ["GITHUB_TOKEN"]
-        with mock.patch("github_actions_utils.shutil.which", return_value=None):
+        with mock.patch("github_actions_api.shutil.which", return_value=None):
             api2 = GitHubAPI()
             self.assertEqual(
                 api2.get_auth_method(), GitHubAPI.AuthMethod.UNAUTHENTICATED
@@ -135,7 +135,7 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_is_authenticated_without_auth(self):
         """is_authenticated should return False without any auth."""
-        with mock.patch("github_actions_utils.shutil.which", return_value=None):
+        with mock.patch("github_actions_api.shutil.which", return_value=None):
             api = GitHubAPI()
             self.assertFalse(api.is_authenticated())
 
@@ -158,7 +158,7 @@ class GitHubAPITest(unittest.TestCase):
         mock_response.read.return_value = b'{"id": 12345, "name": "test"}'
         mock_response.__enter__.return_value = mock_response
 
-        with mock.patch("github_actions_utils.urlopen", return_value=mock_response):
+        with mock.patch("github_actions_api.urlopen", return_value=mock_response):
             result = api.send_request("https://api.github.com/repos/test/test")
 
         self.assertEqual(result, {"id": 12345, "name": "test"})
@@ -173,9 +173,7 @@ class GitHubAPITest(unittest.TestCase):
         mock_result.returncode = 0
         mock_result.stdout = '{"id": 12345, "name": "test"}'
 
-        with mock.patch(
-            "github_actions_utils.subprocess.run", return_value=mock_result
-        ):
+        with mock.patch("github_actions_api.subprocess.run", return_value=mock_result):
             result = api.send_request("https://api.github.com/repos/test/test")
 
         self.assertEqual(result, {"id": 12345, "name": "test"})
@@ -191,7 +189,7 @@ class GitHubAPITest(unittest.TestCase):
         api._gh_cli_path = "/usr/bin/gh"
 
         with mock.patch(
-            "github_actions_utils.subprocess.run",
+            "github_actions_api.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="gh", timeout=10),
         ):
             with self.assertRaises(GitHubAPIError) as ctx:
@@ -207,7 +205,7 @@ class GitHubAPITest(unittest.TestCase):
         api._gh_cli_path = "/nonexistent/gh"
 
         with mock.patch(
-            "github_actions_utils.subprocess.run",
+            "github_actions_api.subprocess.run",
             side_effect=OSError("No such file or directory"),
         ):
             with self.assertRaises(GitHubAPIError) as ctx:
@@ -226,9 +224,7 @@ class GitHubAPITest(unittest.TestCase):
         mock_result.returncode = 1
         mock_result.stderr = "gh: Not Found (HTTP 404)"
 
-        with mock.patch(
-            "github_actions_utils.subprocess.run", return_value=mock_result
-        ):
+        with mock.patch("github_actions_api.subprocess.run", return_value=mock_result):
             with self.assertRaises(GitHubAPIError) as ctx:
                 api.send_request("https://api.github.com/repos/test/test")
 
@@ -245,9 +241,7 @@ class GitHubAPITest(unittest.TestCase):
         mock_result.returncode = 1
         mock_result.stderr = "gh: API rate limit exceeded for user ID 123."
 
-        with mock.patch(
-            "github_actions_utils.subprocess.run", return_value=mock_result
-        ):
+        with mock.patch("github_actions_api.subprocess.run", return_value=mock_result):
             with self.assertRaises(GitHubAPIError) as ctx:
                 api.send_request("https://api.github.com/repos/test/test")
 
@@ -265,9 +259,7 @@ class GitHubAPITest(unittest.TestCase):
         mock_result.returncode = 0
         mock_result.stdout = ""
 
-        with mock.patch(
-            "github_actions_utils.subprocess.run", return_value=mock_result
-        ):
+        with mock.patch("github_actions_api.subprocess.run", return_value=mock_result):
             with self.assertRaises(GitHubAPIError) as ctx:
                 api.send_request("https://api.github.com/repos/test/test")
 
@@ -285,9 +277,7 @@ class GitHubAPITest(unittest.TestCase):
         mock_result.returncode = 0
         mock_result.stdout = "not valid json {"
 
-        with mock.patch(
-            "github_actions_utils.subprocess.run", return_value=mock_result
-        ):
+        with mock.patch("github_actions_api.subprocess.run", return_value=mock_result):
             with self.assertRaises(GitHubAPIError) as ctx:
                 api.send_request("https://api.github.com/repos/test/test")
 
@@ -311,7 +301,7 @@ class GitHubAPITest(unittest.TestCase):
             fp=None,
         )
 
-        with mock.patch("github_actions_utils.urlopen", side_effect=mock_error):
+        with mock.patch("github_actions_api.urlopen", side_effect=mock_error):
             with self.assertRaises(GitHubAPIError) as ctx:
                 api.send_request("https://api.github.com/repos/test/test")
 
@@ -337,7 +327,7 @@ class GitHubAPITest(unittest.TestCase):
             fp=io.BytesIO(rate_limit_body),
         )
 
-        with mock.patch("github_actions_utils.urlopen", side_effect=mock_error):
+        with mock.patch("github_actions_api.urlopen", side_effect=mock_error):
             with self.assertRaises(GitHubAPIError) as ctx:
                 api.send_request("https://api.github.com/repos/test/test")
 
@@ -359,7 +349,7 @@ class GitHubAPITest(unittest.TestCase):
             fp=None,
         )
 
-        with mock.patch("github_actions_utils.urlopen", side_effect=mock_error):
+        with mock.patch("github_actions_api.urlopen", side_effect=mock_error):
             with self.assertRaises(GitHubAPIError) as ctx:
                 api.send_request("https://api.github.com/repos/test/test")
 
@@ -380,7 +370,7 @@ class GitHubAPITest(unittest.TestCase):
             fp=None,
         )
 
-        with mock.patch("github_actions_utils.urlopen", side_effect=mock_error):
+        with mock.patch("github_actions_api.urlopen", side_effect=mock_error):
             with self.assertRaises(GitHubAPIError) as ctx:
                 api.send_request("https://api.github.com/repos/test/test")
 
@@ -394,7 +384,7 @@ class GitHubAPITest(unittest.TestCase):
 
         mock_error = URLError(reason="Connection refused")
 
-        with mock.patch("github_actions_utils.urlopen", side_effect=mock_error):
+        with mock.patch("github_actions_api.urlopen", side_effect=mock_error):
             with self.assertRaises(GitHubAPIError) as ctx:
                 api.send_request("https://api.github.com/repos/test/test")
 
@@ -406,7 +396,7 @@ class GitHubAPITest(unittest.TestCase):
         os.environ["GITHUB_TOKEN"] = "test-token"
         api = GitHubAPI()
 
-        with mock.patch("github_actions_utils.urlopen", side_effect=TimeoutError()):
+        with mock.patch("github_actions_api.urlopen", side_effect=TimeoutError()):
             with self.assertRaises(GitHubAPIError) as ctx:
                 api.send_request("https://api.github.com/repos/test/test")
 
@@ -424,7 +414,7 @@ class GitHubAPITest(unittest.TestCase):
         mock_response.read.return_value = b"not valid json {"
         mock_response.__enter__.return_value = mock_response
 
-        with mock.patch("github_actions_utils.urlopen", return_value=mock_response):
+        with mock.patch("github_actions_api.urlopen", return_value=mock_response):
             with self.assertRaises(GitHubAPIError) as ctx:
                 api.send_request("https://api.github.com/repos/test/test")
 
@@ -510,7 +500,7 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         newer_run = {"id": 2, "created_at": "2026-01-15T10:00:00Z"}
 
         with mock.patch(
-            "github_actions_utils.gha_send_request",
+            "github_actions_api.gha_send_request",
             return_value={"workflow_runs": [older_run, newer_run]},
         ):
             runs = gha_query_workflow_runs_for_commit(
