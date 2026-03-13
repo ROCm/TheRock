@@ -23,9 +23,6 @@ import logging
 import shlex
 from pathlib import Path
 
-sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
-from github_actions_utils import find_matching_gpu_arch
-
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
@@ -87,6 +84,35 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
 logging.basicConfig(level=logging.INFO)
 ##############################################
+
+
+def find_matching_gpu_arch(gpu_arch: str, available_gpu_archs: set[str]) -> str | None:
+    """
+    Find the most specific GPU architecture in the set that matches the given GPU.
+
+    Tries in order from most specific to least specific:
+    # Example:
+    # find_matching_gpu_arch('gfx1151', {'gfx1151', 'gfx115X', 'gfx11X'}) gives 'gfx1151'
+    # find_matching_gpu_arch('gfx1151', {'gfx1150', 'gfx94X', 'gfx11X'}) gives 'gfx11X'
+    - Wildcard matches (gfx115X, gfx11X, etc.)
+
+    Returns the matching architecture string or None if no match found.
+    """
+    if gpu_arch in available_gpu_archs:
+        return gpu_arch
+
+    possible_patterns = []
+    arch_str = gpu_arch
+
+    for i in range(len(arch_str) - 1, 1, -1):
+        pattern = arch_str[:i] + "X"
+        possible_patterns.append(pattern)
+
+    for pattern in possible_patterns:
+        if pattern in available_gpu_archs:
+            return pattern
+
+    return None
 
 
 def get_available_gpu_suite_tests():
