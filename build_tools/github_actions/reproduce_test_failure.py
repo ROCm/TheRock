@@ -180,6 +180,10 @@ def run_windows(args: argparse.Namespace) -> int:
                 "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
             ),
         ),
+        (
+            "Refreshing environment",
+            "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')",
+        ),
         ("Installing dependencies", "choco install -y git python cmake ninja ccache"),
         (
             "Refreshing environment",
