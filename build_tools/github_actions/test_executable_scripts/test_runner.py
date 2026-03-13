@@ -101,14 +101,10 @@ def find_matching_gpu_arch(gpu_arch: str, available_gpu_archs: set[str]) -> str 
     if gpu_arch in available_gpu_archs:
         return gpu_arch
 
-    possible_patterns = []
-    arch_str = gpu_arch
-
-    for i in range(len(arch_str) - 1, 1, -1):
-        pattern = arch_str[:i] + "X"
-        possible_patterns.append(pattern)
-
-    for pattern in possible_patterns:
+    # Start matching from the end (gfx115X) and go back till the 5th character (gfx11X)
+    # Return the top matching pattern
+    for i in range(len(gpu_arch) - 1, 4, -1):
+        pattern = gpu_arch[:i] + "X"
         if pattern in available_gpu_archs:
             return pattern
 
