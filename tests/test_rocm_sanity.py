@@ -126,6 +126,7 @@ def _validate_csv_row(csv_row: dict) -> list[str]:
         missing_fields.append("partition_id")
     return missing_fields
 
+
 def is_windows():
     return "windows" == platform.system().lower()
 
