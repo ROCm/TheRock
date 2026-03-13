@@ -213,3 +213,76 @@ Uninstall requirements:
 - Remove registry entries created by that installation
 - Remove package-owend  `PATH` entries associated with that installation only
 - Avoid impacting other installed ROCm major.minor versions
+
+### Environment Variables
+
+After successful installation, Windows installers must publish a stable discovery mechanism for tools and build systems.
+
+At minimum:
+
+- `ROCM_PATH` must point to the installation root of the most recently installed active ROCm version
+- The selected installation's `bin` directory must be prepended to the relevant `PATH`
+- Duplicate `PATH` entries must not be introduced across reinstalls or upgrades
+- Per-machine installs must modify machine-scoped enrionment variables
+- Per-user installs must modify user-scoped environment variables only
+
+The convenience variable `ROCM_PATH` is last-writer-wins. Build systems and applications that require deterministic selection of a specific version should rely on versioned install paths and registry-based discovery rather than assuming `ROCM_PATH` is pinned permanently.
+
+### Registry Requirements
+
+To support discovery and side-by-side versioning, Windows ROCm installers must create versioned registry keys.
+
+Per-machine installs:
+
+```
+HKLM\Software\AMD\ROCm\X.Y\
+```
+
+Per-user installs:
+
+```
+HKCU\Software\AMD\ROCm\X.Y\
+```
+
+At minimum, each versioned key must contain:
+
+- `InstallDir`
+- `ProductCode`
+- `Version`
+
+Additionally, a convenience pointer to the latest installed active version should be maintained:
+
+```
+HKLM\Software\AMD\ROCm\CurrentVersion
+HKCU\Software\AMD\ROCm\CurrentVersion
+```
+
+This convenience pointer is also last-writer-wins and exists to support straightforward SDK dsicovery by tools and administrators.
+
+### Driver Compatibility and Preflight
+
+Driver packaging is out of scope for this RFC, but Windows SDK packaging must be designed around an explicit driver compatibility contract.
+
+Windows ROCm packages must:
+
+- Publish a compatibility matrix describing supported driver ranges for each ROCm release line
+- Avoid coupling SDK patch delivery to mandatory driver rebundling wherever possible
+- Provide install-time or first-run preflight checks that warn when the installed driver is outside the supported compatiblity range
+
+The Windows packaging contract must assume that the display driver and the ROCm SDK are seperate deliverables, even where an AMD driver may bundle or invole onstallation of a runtime-oriented package or compatibility purposes.
+
+### Winget Requirements
+
+Winget packages are the Windows package-manager-facing distribution layer for ROCm.
+
+Winget packages must:
+
+- Reference AMD-hosted MSI installers
+- Include version metadata and installer hash validation
+- Support silent installation flows
+- Preserve MSI-defined upgrade and uninstall behavior
+- Support installation-path override capability where the underlying MSI supports it
+- Maintain clear package naming and publisher metadata
+
+A top-level package identifier such as `AMD.ROCm` may be used for the primary Windows SDK experience. Additional componentized identifiers may be introduced if needed, but must remain aligned with the same package boundaries defined by this RFC.
+
