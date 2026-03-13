@@ -16,6 +16,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # See: https://github.com/ROCm/rocprof-trace-decoder/
   ##############################################################################
   therock_cmake_subproject_declare(rocprof-trace-decoder
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprof-trace-decoder"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder"
     BACKGROUND_BUILD
