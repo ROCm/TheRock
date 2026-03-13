@@ -27,7 +27,7 @@ Class hierarchy
 -------------------------------------------------------------------------------
 
 AmdGpuFamilyMatrix
-  └─ MatrixEntry          one (family, scope) row, e.g. gfx94X-dcgpu or gfx1151
+  └─ MatrixEntry          one GPU target entry, e.g. gfx942 or gfx1151
        ├─ PlatformConfig  per-platform config (linux / windows); all fields Optional
        │    ├─ BuildConfig
        │    ├─ TestConfig
@@ -42,12 +42,13 @@ Key functions
 -------------------------------------------------------------------------------
 
 AmdGpuFamilyMatrix.get_entry(key)
-    Look up a MatrixEntry by canonical key ("gfx94X-dcgpu", "gfx1151") or by
-    family name alone ("gfx950"), which resolves to the is_family_default entry.
+    Look up a MatrixEntry by canonical key ("gfx942", "gfx1151") or by
+    family name alone ("gfx94X-dcgpu"), which resolves to the is_family_default entry.
 
 AmdGpuFamilyMatrix.get_default_for_family(family)
-    Return the default MatrixEntry for a family, or None if no default is set
-    (e.g. gfx115X where each GPU is registered individually).
+    Return the is_family_default entry whose family list contains the given name,
+    or None if no default is set (e.g. gfx115X-all where GPUs are registered individually)
+    or the requested family does not exist.
 
 AmdGpuFamilyMatrix.get_entries_for_groups(list[str])
     Return a GroupLookupResult with matched MatrixEntry list and unmatched keys.
@@ -56,31 +57,29 @@ AmdGpuFamilyMatrix.keys()
     Return all canonical keys in alphabetical order.
 
 AmdGpuFamilyMatrix.to_nested_dict()
-    Serialize to nested dict: family → scope → platform → fields.
-    For example, the gfx101X-dgpu entry would be:
-    {'gfx101X': {'dgpu': {  'amdgpu_family': 'gfx101X-dgpu',
-                            'linux': {'build': {'build_variants': ['release'],
-                                                'expect_failure': False},
-                                        'release': {'bypass_tests_for_releases': False},
-                                        'test': {'expect_pytorch_failure': True,
-                                                'fetch-gfx-targets': [],
-                                                'run_tests': False,
-                                                'runs_on': {'benchmark': '',
-                                                            'test': '',
-                                                            'test-multi-gpu': ''},
-                                                'sanity_check_only_for_family': False,
-                                                'test_scope': 'all'}},
-                            'windows': {'build': {'build_variants': ['release'],
-                                                    'expect_failure': False},
-                                        'release': {'bypass_tests_for_releases': False},
-                                        'test': {'expect_pytorch_failure': False,
-                                                'fetch-gfx-targets': [],
-                                                'run_tests': False,
-                                                'runs_on': {'benchmark': '',
-                                                            'test': '',
-                                                            'test-multi-gpu': ''},
-                                                'sanity_check_only_for_family': False,
-                                                'test_scope': 'all'}}}},
+    Serialize all entries as a flat dict keyed by target name, e.g.:
+    {"gfx1101": {"amdgpu_family": "gfx1101",
+                 "linux": {"build": {"build_variants": ["release"], "expect_failure": False},
+                           "release": {"bypass_tests_for_releases": True},
+                           "test": {"expect_pytorch_failure": False,
+                                    "fetch-gfx-targets": ["gfx1101"],
+                                    "run_tests": False,
+                                    "runs_on": {"benchmark": "",
+                                                "test": "linux-gfx110X-gpu-rocm",
+                                                "test-multi-gpu": ""},
+                                    "sanity_check_only_for_family": True,
+                                    "test_scope": "all"}},
+                 "windows": {"build": {"build_variants": ["release"], "expect_failure": False},
+                             "release": {"bypass_tests_for_releases": True},
+                             "test": {"expect_pytorch_failure": False,
+                                      "fetch-gfx-targets": ["gfx1101"],
+                                      "run_tests": True,
+                                      "runs_on": {"benchmark": "",
+                                                  "test": "windows-gfx110X-gpu-rocm",
+                                                  "test-multi-gpu": ""},
+                                      "sanity_check_only_for_family": True,
+                                      "test_scope": "all"}}},
+     ...}
 
 MatrixEntry.to_dict(platform=None)
     Serialize to dict. Without platform: nested linux/windows keys.
@@ -255,36 +254,28 @@ class PlatformConfig:
         }
 
 
-# Generic scope names that pair with the family name to form a lookup key.
-# Specific GPU names (e.g. "gfx1151") are their own key.
-_GENERIC_SCOPES: frozenset[str] = frozenset({"all", "dcgpu", "dgpu", "igpu"})
-
-
 @dataclass
 class MatrixEntry:
-    """A single (family, scope) row in the matrix."""
+    """A single GPU target entry in the matrix."""
 
-    family: str
-    """GPU family group name, e.g. 'gfx94X', 'gfx115X'."""
-    scope: str
-    """Scope within the family, e.g. 'dcgpu', 'all', 'gfx1151'."""
+    target: str
+    """Specific GPU target name, e.g. 'gfx942', 'gfx1151'."""
     is_family_default: bool = False
-    """If True, this entry is the default when only the family name is given (e.g. 'gfx110X')."""
+    """If True, this entry is returned when looking up by a shared family name
+    (e.g. 'gfx94X-dcgpu'). At most one entry per shared family name may have
+    this set — validated at AmdGpuFamilyMatrix construction time."""
     linux: Optional[PlatformConfig] = None
     """Linux platform config, or None if Linux is not supported."""
     windows: Optional[PlatformConfig] = None
     """Windows platform config, or None if Windows is not supported."""
+    family: list[str] = field(init=False, default_factory=list)
+    """Family names this target belongs to (e.g. ['dcgpu-all', 'gfx94X-all', 'gfx94X-dcgpu']).
+    Auto-populated by AmdGpuFamilyMatrix from cmake/therock_amdgpu_targets.cmake."""
 
     @property
     def key(self) -> str:
-        """Canonical lookup key used in predefined group lists.
-
-        Generic scopes (dcgpu, dgpu, all) → '{family}-{scope}'  e.g. 'gfx94X-dcgpu'
-        Specific GPU scopes               → scope alone          e.g. 'gfx1151'
-        """
-        if self.scope in _GENERIC_SCOPES:
-            return f"{self.family}-{self.scope}"
-        return self.scope
+        """Canonical lookup key"""
+        return self.target
 
     def platform_config(self, platform: str) -> Optional[PlatformConfig]:
         """Return the PlatformConfig for 'linux' or 'windows', or None."""
@@ -317,19 +308,87 @@ class GroupLookupResult:
 
 
 @dataclass
+class EntryLookupResult:
+    """Result of a single-key lookup, preserving how the entry was resolved."""
+
+    entry: MatrixEntry
+    amdgpu_family: str
+    """The original lookup key, e.g. 'gfx94X', 'gfx94X-dcgpu', 'gfx942'.
+    Used as the family identifier in CI output."""
+    resolved_via: Literal["target", "family", "family_prefix"]
+    """How the entry was resolved:
+      'target'        — exact target name match (e.g. 'gfx942')
+      'family'        — exact family name match (e.g. 'gfx94X-dcgpu')
+      'family_prefix' — prefix match via trailing X (e.g. 'gfx94X')
+    """
+
+
+@dataclass
 class AmdGpuFamilyMatrix:
     """The complete AMD GPU family matrix."""
 
     entries: list[MatrixEntry]
+    cmake_families: dict[str, list[str]] = field(default_factory=dict)
+    """Mapping of gfx_target → [family names], parsed from cmake/therock_amdgpu_targets.cmake.
+    Used to auto-populate MatrixEntry.family at construction time."""
+
+    def __post_init__(self) -> None:
+        self._populate_families()
+        self._validate_is_family_default()
+
+    def _populate_families(self) -> None:
+        """Populate entry.family from cmake_families for each entry."""
+        for entry in self.entries:
+            families = self.cmake_families.get(entry.target, [])
+            if not families:
+                raise ValueError(
+                    f"Target '{entry.target}' has no family entries in cmake_families. "
+                    f"Check cmake/therock_amdgpu_targets.cmake."
+                )
+            entry.family = families
+
+    def _validate_is_family_default(self) -> None:
+        """Ensure at most one entry has is_family_default=True per gfx-prefixed family name.
+
+        Only validates gfx-prefixed family names (e.g. 'gfx94X-dcgpu', 'gfx110X-all').
+        Broad category names like 'dgpu-all', 'dcgpu-all', 'igpu-all' are intentionally
+        shared across many entries and are not validated here.
+        """
+        family_defaults: dict[str, str] = {}
+        for entry in self.entries:
+            if not entry.is_family_default:
+                continue
+            for family in entry.family:
+                if family == entry.target:
+                    continue  # skip self-family (each target is its own family in cmake)
+                if not family.startswith("gfx"):
+                    continue  # skip broad categories like dgpu-all, dcgpu-all, igpu-all
+                if family in family_defaults:
+                    raise ValueError(
+                        f"Multiple is_family_default entries for family '{family}': "
+                        f"'{family_defaults[family]}' and '{entry.target}'"
+                    )
+                family_defaults[family] = entry.target
+
+    def get_targets_for_family(self, family: str) -> list[str]:
+        """Return all target names that belong to the given family name.
+
+        Example: get_targets_for_family("gfx120X-all") → ["gfx1200", "gfx1201"]
+        Lookup is case-insensitive. Returns an empty list if no targets match.
+        """
+        family_lower = family.lower()
+        return [
+            entry.target
+            for entry in self.entries
+            if any(f.lower() == family_lower for f in entry.family)
+        ]
 
     def get_entry(self, key: str) -> Optional[MatrixEntry]:
-        """Look up a MatrixEntry by its canonical key (e.g. 'gfx94X-dcgpu', 'gfx1151').
+        """Look up a MatrixEntry by target name (e.g. 'gfx942') or family name (e.g. 'gfx94X-dcgpu').
 
-        If no exact match is found, treats the key as a family name and returns
-        the default entry for that family (e.g. 'gfx950' → gfx950-dcgpu).
-        Lookup is case-insensitive.
-
-        If no match is found, return None.
+        Direct target lookup is tried first. If not found, treats the key as a family
+        name and returns the is_family_default entry for that family.
+        Lookup is case-insensitive. Returns None if no match found.
         """
         key_lower = key.lower()
         for entry in self.entries:
@@ -338,19 +397,71 @@ class AmdGpuFamilyMatrix:
         return self.get_default_for_family(key)
 
     def get_default_for_family(self, family: str) -> Optional[MatrixEntry]:
-        """Return the is_family_default entry for a family, or None if no default is set.
+        """Return the is_family_default entry whose family list contains the given name,
+        or None if no default is set.
 
-        For example, 'gfx110X' → gfx110X-all entry. Families like gfx115X that register
-        GPUs individually without a default will return None. Lookup is case-insensitive.
+        Supports two match modes (case-insensitive):
+          - Exact: 'gfx94X-dcgpu' matches the family name literally.
+          - Prefix: if the key ends with 'X' or 'x', it matches any family name that
+            starts with key + '-'. E.g. 'gfx94X' matches 'gfx94X-dcgpu' and 'gfx94X-all'.
+
+        Family names like 'gfx115X-all' that have no is_family_default entry return None.
         """
         family_lower = family.lower()
+        is_prefix = family_lower.endswith("x")
         for entry in self.entries:
-            if entry.family.lower() == family_lower and entry.is_family_default:
-                return entry
+            if not entry.is_family_default:
+                continue
+            for f in entry.family:
+                f_lower = f.lower()
+                if f_lower == family_lower:
+                    return entry
+                if is_prefix and f_lower.startswith(family_lower + "-"):
+                    return entry
         return None
 
-    def get_entries_for_groups(self, group_keys: list[str]) -> GroupLookupResult:
+    def lookup(self, key: str) -> Optional[EntryLookupResult]:
+        """Look up a single key and return the entry with resolution metadata.
+
+        Returns an EntryLookupResult or None if no match found. resolved_via indicates
+        how the entry was found:
+          'target'        — exact target name match (e.g. 'gfx942' → gfx942)
+          'family'        — exact family name match (e.g. 'gfx94X-dcgpu' → gfx942)
+          'family_prefix' — prefix match via trailing X (e.g. 'gfx94X' → gfx942)
+        """
+        key_lower = key.lower()
+        for entry in self.entries:
+            if entry.key.lower() == key_lower:
+                return EntryLookupResult(
+                    entry=entry, amdgpu_family=key, resolved_via="target"
+                )
+        family_lower = key_lower
+        is_prefix = family_lower.endswith("x")
+        for entry in self.entries:
+            if not entry.is_family_default:
+                continue
+            for f in entry.family:
+                f_lower = f.lower()
+                if f_lower == family_lower:
+                    return EntryLookupResult(
+                        entry=entry, amdgpu_family=key, resolved_via="family"
+                    )
+                if is_prefix and f_lower.startswith(family_lower + "-"):
+                    return EntryLookupResult(
+                        entry=entry, amdgpu_family=key, resolved_via="family_prefix"
+                    )
+        return None
+
+    def get_entries_for_groups(
+        self, group_keys: list[str], deduplicate: bool = True
+    ) -> GroupLookupResult:
         """Look up entries for a list of keys, returning both matches and misses.
+           By default deduplicates group_keys entries resolving to the same target.
+
+        Args:
+            group_keys: list of keys to look up.
+            deduplicate: if True, entries with the same target are included only once
+                         (first occurrence wins). Unmatched keys are always reported.
 
         Returns a GroupLookupResult with:
             entries: matched MatrixEntry objects, in the order of group_keys
@@ -358,12 +469,16 @@ class AmdGpuFamilyMatrix:
         """
         entries = []
         unmatched_keys = []
+        seen: set[str] = set()
         for key in group_keys:
             entry = self.get_entry(key)
-            if entry is not None:
-                entries.append(entry)
-            else:
+            if entry is None:
                 unmatched_keys.append(key)
+                continue
+            if deduplicate and entry.target in seen:
+                continue
+            seen.add(entry.target)
+            entries.append(entry)
         return GroupLookupResult(entries=entries, unmatched_keys=unmatched_keys)
 
     def keys(self) -> list[str]:
@@ -371,8 +486,5 @@ class AmdGpuFamilyMatrix:
         return sorted(e.key for e in self.entries)
 
     def to_nested_dict(self) -> dict:
-        """Convert to the original nested-dict format: family → target → platform → fields"""
-        result: dict = {}
-        for entry in self.entries:
-            result.setdefault(entry.family, {})[entry.scope] = entry.to_dict()
-        return result
+        """Serialize all entries as a flat dict keyed by target name."""
+        return {entry.target: entry.to_dict() for entry in self.entries}

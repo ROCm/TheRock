@@ -11,7 +11,9 @@ from new_amdgpu_family_matrix_data import (
     all_build_variants,
 )
 from new_amdgpu_family_matrix_types import (
+    AmdGpuFamilyMatrix,
     BuildConfig,
+    EntryLookupResult,
     GroupLookupResult,
     GpuRunners,
     MatrixEntry,
@@ -29,13 +31,11 @@ class TestMatrixKeys(unittest.TestCase):
         self.assertEqual(len(keys), len(set(keys)), "Duplicate canonical keys found")
 
     def test_predefined_groups_reference_valid_keys(self):
-        all_keys = set(amdgpu_family_info_matrix_all.keys())
         for group_name, group_keys in amdgpu_family_predefined_groups.items():
             for key in group_keys:
-                self.assertIn(
-                    key,
-                    all_keys,
-                    f"Group {group_name!r} references unknown key {key!r}",
+                self.assertIsNotNone(
+                    amdgpu_family_info_matrix_all.get_entry(key),
+                    f"Group {group_name!r} references unresolvable key {key!r}",
                 )
 
     def test_all_known_archs_present(self):
@@ -44,19 +44,28 @@ class TestMatrixKeys(unittest.TestCase):
             "gfx906",
             "gfx908",
             "gfx90a",
-            "gfx94X-dcgpu",
-            "gfx950-dcgpu",
-            "gfx101X-dgpu",
-            "gfx103X-dgpu",
-            "gfx110X-all",
+            "gfx942",
+            "gfx950",
+            "gfx1010",
+            "gfx1011",
+            "gfx1012",
+            "gfx1030",
+            "gfx1031",
+            "gfx1032",
+            "gfx1034",
+            "gfx1100",
+            "gfx1101",
+            "gfx1102",
+            "gfx1103",
             "gfx1150",
             "gfx1151",
             "gfx1152",
             "gfx1153",
-            "gfx120X-all",
+            "gfx1200",
+            "gfx1201",
         ]:
             self.assertIn(
-                expected, keys, f"Expected key {expected!r} missing from matrix"
+                expected, keys, f"Expected target {expected!r} missing from matrix"
             )
 
 
@@ -64,29 +73,39 @@ class TestEntryLookup(unittest.TestCase):
     """Verify get_entry and get_default_for_family behavior."""
 
     def test_exact_key_lookup(self):
-        entry = amdgpu_family_info_matrix_all.get_entry("gfx94X-dcgpu")
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx942")
         self.assertIsNotNone(entry)
-        self.assertEqual(entry.key, "gfx94X-dcgpu")
+        self.assertEqual(entry.key, "gfx942")
 
     def test_family_name_resolves_to_default(self):
-        entry = amdgpu_family_info_matrix_all.get_entry("gfx950")
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx94X-dcgpu")
         self.assertIsNotNone(entry)
-        self.assertEqual(entry.key, "gfx950-dcgpu")
+        self.assertEqual(entry.key, "gfx942")
 
     def test_lookup_is_case_insensitive(self):
         self.assertEqual(
-            amdgpu_family_info_matrix_all.get_entry("GFX950"),
-            amdgpu_family_info_matrix_all.get_entry("gfx950"),
+            amdgpu_family_info_matrix_all.get_entry("GFX942"),
+            amdgpu_family_info_matrix_all.get_entry("gfx942"),
         )
         self.assertEqual(
             amdgpu_family_info_matrix_all.get_entry("GFX94X-DCGPU"),
             amdgpu_family_info_matrix_all.get_entry("gfx94X-dcgpu"),
         )
 
+    def test_family_prefix_resolves_for_gfx94X(self):
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx94X")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.key, "gfx942")
+
+    def test_family_prefix_resolves_for_gfx110X(self):
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx110X")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.key, "gfx1101")
+
     def test_family_without_default_returns_none(self):
         # gfx115X has no family default — each chip is registered individually
         self.assertIsNone(
-            amdgpu_family_info_matrix_all.get_default_for_family("gfx115X")
+            amdgpu_family_info_matrix_all.get_default_for_family("gfx115X-all")
         )
 
     def test_unknown_key_returns_none(self):
@@ -108,6 +127,16 @@ class TestEntryLookup(unittest.TestCase):
         )
         self.assertEqual(len(result.entries), 2)
         self.assertEqual(result.unmatched_keys, ["gfx9999-unknown"])
+
+    def test_family_default_resolves_for_gfx110X(self):
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx110X-all")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.key, "gfx1101")
+
+    def test_family_default_resolves_for_gfx101X(self):
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx101X-dgpu")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.key, "gfx1010")
 
 
 class TestDefaultConfig(unittest.TestCase):
@@ -166,7 +195,7 @@ class TestDedicatedConfig(unittest.TestCase):
     """Verify entries with non-default configuration."""
 
     def test_gfx94x_has_asan_build_variant(self):
-        entry = amdgpu_family_info_matrix_all.get_entry("gfx94X-dcgpu")
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx942")
         self.assertIn("asan", entry.linux.build.build_variants)
 
     def test_gfx1151_has_bypass_tests_for_releases(self):
@@ -183,7 +212,7 @@ class TestDedicatedConfig(unittest.TestCase):
             self.assertIsNotNone(entry.linux, f"{key} should have linux config")
 
     def test_gfx94x_has_no_windows_config(self):
-        entry = amdgpu_family_info_matrix_all.get_entry("gfx94x")
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx942")
         self.assertIsNone(entry.windows, f"{entry.key} should not have windows config")
 
 
@@ -191,7 +220,7 @@ class TestExtraRunners(unittest.TestCase):
     """Verify extra runners are included in to_dict output."""
 
     def test_gfx94x_sandbox_runner_in_to_dict(self):
-        entry = amdgpu_family_info_matrix_all.get_entry("gfx94X-dcgpu")
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx942")
         runners_dict = entry.linux.test.runs_on.to_dict()
         self.assertIn("test-sandbox", runners_dict)
         self.assertEqual(
@@ -204,7 +233,7 @@ class TestExtraRunners(unittest.TestCase):
         self.assertIn("oem", runners_dict)
 
     def test_extra_runners_accessible_directly(self):
-        entry = amdgpu_family_info_matrix_all.get_entry("gfx94X-dcgpu")
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx942")
         extra = entry.linux.test.runs_on.extra
         self.assertIn("test-sandbox", extra)
 
@@ -260,12 +289,12 @@ class TestToDict(unittest.TestCase):
     def test_matrix_entry_to_dict_includes_amdgpu_family(self):
         entry = amdgpu_family_info_matrix_all.get_entry("gfx950")
         d = entry.to_dict()
-        self.assertEqual(d["amdgpu_family"], "gfx950-dcgpu")
+        self.assertEqual(d["amdgpu_family"], "gfx950")
 
     def test_matrix_entry_to_dict_with_platform(self):
         entry = amdgpu_family_info_matrix_all.get_entry("gfx950")
         d = entry.to_dict("linux")
-        self.assertEqual(d["amdgpu_family"], "gfx950-dcgpu")
+        self.assertEqual(d["amdgpu_family"], "gfx950")
         self.assertIn("build", d)
         self.assertNotIn("linux", d)
 
@@ -273,60 +302,55 @@ class TestToDict(unittest.TestCase):
 class TestToNestedDict(unittest.TestCase):
     """Verify to_nested_dict structure."""
 
-    def test_to_nested_dict_structure(self):
+    def test_to_nested_dict_is_flat_by_target(self):
         d = amdgpu_family_info_matrix_all.to_nested_dict()
-        # Top-level keys are family names
-        self.assertIn("gfx94X", d)
-        self.assertIn("gfx115X", d)
-
-    def test_to_nested_dict_scope_as_second_level(self):
-        d = amdgpu_family_info_matrix_all.to_nested_dict()
-        self.assertIn("dcgpu", d["gfx94X"])
+        # Top-level keys are target names, not family names
+        self.assertIn("gfx942", d)
+        self.assertIn("gfx1151", d)
+        self.assertNotIn("gfx94X", d)
 
     def test_to_nested_dict_entry_has_amdgpu_family(self):
         d = amdgpu_family_info_matrix_all.to_nested_dict()
-        self.assertEqual(d["gfx94X"]["dcgpu"]["amdgpu_family"], "gfx94X-dcgpu")
+        self.assertEqual(d["gfx942"]["amdgpu_family"], "gfx942")
 
-    def test_to_nested_dict_gfx110X_match_layout(self):
+    def test_to_nested_dict_gfx1101_match_layout(self):
         d = amdgpu_family_info_matrix_all.to_nested_dict()
-        subsection_gfx110X = {
-            "all": {
-                "amdgpu_family": "gfx110X-all",
-                "linux": {
-                    "build": {"build_variants": ["release"], "expect_failure": False},
-                    "release": {"bypass_tests_for_releases": True},
-                    "test": {
-                        "expect_pytorch_failure": False,
-                        "fetch-gfx-targets": ["gfx1100"],
-                        "run_tests": False,
-                        "runs_on": {
-                            "benchmark": "",
-                            "test": "linux-gfx110X-gpu-rocm",
-                            "test-multi-gpu": "",
-                        },
-                        "sanity_check_only_for_family": True,
-                        "test_scope": "all",
+        subsection_gfx1101 = {
+            "amdgpu_family": "gfx1101",
+            "linux": {
+                "build": {"build_variants": ["release"], "expect_failure": False},
+                "release": {"bypass_tests_for_releases": True},
+                "test": {
+                    "expect_pytorch_failure": False,
+                    "fetch-gfx-targets": ["gfx1101"],
+                    "run_tests": False,
+                    "runs_on": {
+                        "benchmark": "",
+                        "test": "linux-gfx110X-gpu-rocm",
+                        "test-multi-gpu": "",
                     },
+                    "sanity_check_only_for_family": True,
+                    "test_scope": "all",
                 },
-                "windows": {
-                    "build": {"build_variants": ["release"], "expect_failure": False},
-                    "release": {"bypass_tests_for_releases": True},
-                    "test": {
-                        "expect_pytorch_failure": False,
-                        "fetch-gfx-targets": ["gfx1100"],
-                        "run_tests": True,
-                        "runs_on": {
-                            "benchmark": "",
-                            "test": "windows-gfx110X-gpu-rocm",
-                            "test-multi-gpu": "",
-                        },
-                        "sanity_check_only_for_family": True,
-                        "test_scope": "all",
+            },
+            "windows": {
+                "build": {"build_variants": ["release"], "expect_failure": False},
+                "release": {"bypass_tests_for_releases": True},
+                "test": {
+                    "expect_pytorch_failure": False,
+                    "fetch-gfx-targets": ["gfx1101"],
+                    "run_tests": True,
+                    "runs_on": {
+                        "benchmark": "",
+                        "test": "windows-gfx110X-gpu-rocm",
+                        "test-multi-gpu": "",
                     },
+                    "sanity_check_only_for_family": True,
+                    "test_scope": "all",
                 },
-            }
+            },
         }
-        self.assertEqual(d["gfx110X"], subsection_gfx110X)
+        self.assertEqual(d["gfx1101"], subsection_gfx1101)
 
 
 class TestGetEntriesForGroupsUnmatched(unittest.TestCase):
@@ -350,6 +374,94 @@ class TestGetEntriesForGroupsUnmatched(unittest.TestCase):
         result = amdgpu_family_info_matrix_all.get_entries_for_groups([])
         self.assertEqual(result.entries, [])
         self.assertEqual(result.unmatched_keys, [])
+
+    def test_deduplicate_removes_duplicate_entries(self):
+        # gfx94X, gfx94X-dcgpu, gfx942 all resolve to the same entry
+        result = amdgpu_family_info_matrix_all.get_entries_for_groups(
+            ["gfx94X", "gfx94X-dcgpu", "gfx942"], deduplicate=True
+        )
+        self.assertEqual(len(result.entries), 1)
+        self.assertEqual(result.entries[0].target, "gfx942")
+
+    def test_deduplicate_false_allows_duplicates(self):
+        result = amdgpu_family_info_matrix_all.get_entries_for_groups(
+            ["gfx94X", "gfx94X-dcgpu", "gfx942"], deduplicate=False
+        )
+        self.assertEqual(len(result.entries), 3)
+
+
+class TestLookup(unittest.TestCase):
+    """Verify lookup() returns EntryLookupResult with correct resolved_via."""
+
+    def test_lookup_by_target(self):
+        result = amdgpu_family_info_matrix_all.lookup("gfx942")
+        self.assertIsInstance(result, EntryLookupResult)
+        self.assertEqual(result.entry.target, "gfx942")
+        self.assertEqual(result.amdgpu_family, "gfx942")
+        self.assertEqual(result.resolved_via, "target")
+
+    def test_lookup_by_family(self):
+        result = amdgpu_family_info_matrix_all.lookup("gfx94X-dcgpu")
+        self.assertIsInstance(result, EntryLookupResult)
+        self.assertEqual(result.entry.target, "gfx942")
+        self.assertEqual(result.amdgpu_family, "gfx94X-dcgpu")
+        self.assertEqual(result.resolved_via, "family")
+
+    def test_lookup_by_family_prefix(self):
+        result = amdgpu_family_info_matrix_all.lookup("gfx94X")
+        self.assertIsInstance(result, EntryLookupResult)
+        self.assertEqual(result.entry.target, "gfx942")
+        self.assertEqual(result.amdgpu_family, "gfx94X")
+        self.assertEqual(result.resolved_via, "family_prefix")
+
+    def test_lookup_unknown_returns_none(self):
+        self.assertIsNone(amdgpu_family_info_matrix_all.lookup("gfx9999"))
+
+    def test_lookup_preserves_original_key_case(self):
+        result = amdgpu_family_info_matrix_all.lookup("GFX94X-DCGPU")
+        self.assertIsNotNone(result)
+        self.assertEqual(result.amdgpu_family, "GFX94X-DCGPU")
+
+
+class TestFamilyPopulation(unittest.TestCase):
+    """Verify that entry.family is auto-populated from cmake data."""
+
+    def test_gfx942_family_contains_gfx94X_dcgpu(self):
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx942")
+        self.assertIn("gfx94X-dcgpu", entry.family)
+
+    def test_gfx1010_family_contains_gfx101X_dgpu(self):
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx1010")
+        self.assertIn("gfx101X-dgpu", entry.family)
+
+    def test_gfx1151_family_contains_gfx115X_all(self):
+        entry = amdgpu_family_info_matrix_all.get_entry("gfx1151")
+        self.assertIn("gfx115X-all", entry.family)
+
+    def test_get_targets_for_family_gfx120X_all(self):
+        targets = amdgpu_family_info_matrix_all.get_targets_for_family("gfx120X-all")
+        self.assertCountEqual(targets, ["gfx1200", "gfx1201"])
+
+    def test_get_targets_for_family_gfx115X_all(self):
+        targets = amdgpu_family_info_matrix_all.get_targets_for_family("gfx115X-all")
+        self.assertCountEqual(targets, ["gfx1150", "gfx1151", "gfx1152", "gfx1153"])
+
+    def test_get_targets_for_family_unknown_returns_empty(self):
+        targets = amdgpu_family_info_matrix_all.get_targets_for_family("gfx999X-fake")
+        self.assertEqual(targets, [])
+
+    def test_is_family_default_validation_prevents_duplicates(self):
+        with self.assertRaises(ValueError):
+            AmdGpuFamilyMatrix(
+                entries=[
+                    MatrixEntry(target="gfx1010", is_family_default=True),
+                    MatrixEntry(target="gfx1011", is_family_default=True),
+                ],
+                cmake_families={
+                    "gfx1010": ["dgpu-all", "gfx101X-all", "gfx101X-dgpu"],
+                    "gfx1011": ["dgpu-all", "gfx101X-all", "gfx101X-dgpu"],
+                },
+            )
 
 
 if __name__ == "__main__":
