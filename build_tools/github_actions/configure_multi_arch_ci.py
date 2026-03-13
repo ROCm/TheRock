@@ -8,8 +8,8 @@ This script is a pipeline of data transformations:
 
     1. Parse Inputs    — read GitHub event context → CIInputs
     2. Check Skip CI   — gate: should we skip CI entirely?
-    3. Select Targets  — trigger type + labels → GPU families
-    4. Decide Jobs     — changed files + topology → per-job-group decisions
+    3. Decide Jobs     — changed files + topology → per-job-group decisions
+    4. Select Targets  — trigger type + labels → per-platform GPU families
     5. Expand Matrix   — families × variant → matrix entries
     6. Write Outputs   — JSON → GITHUB_OUTPUT + GITHUB_STEP_SUMMARY
 
@@ -49,8 +49,22 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_ci_path_filters import get_git_modified_paths
 from github_actions_utils import gha_append_step_summary, gha_set_output
+
+# ---------------------------------------------------------------------------
+# Input parsing helpers
+# ---------------------------------------------------------------------------
+
+
+def _parse_comma_list(raw: str) -> list[str]:
+    """Parse a comma-separated string into a list of stripped, non-empty names.
+
+    Example: "gfx94X, gfx120X" → ["gfx94X", "gfx120X"]
+    """
+    return [name.strip() for name in raw.split(",") if name.strip()]
+
 
 # ---------------------------------------------------------------------------
 # Dataclasses — the typed interfaces between pipeline steps
@@ -74,9 +88,9 @@ class CIInputs:
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
 
-    # Per-platform workflow_dispatch overrides
-    linux_amdgpu_families: str = ""
-    windows_amdgpu_families: str = ""
+    # Per-platform workflow_dispatch overrides (parsed from comma-separated input)
+    linux_amdgpu_families: list[str] = field(default_factory=list)
+    windows_amdgpu_families: list[str] = field(default_factory=list)
     linux_test_labels: str = ""
     windows_test_labels: str = ""
 
@@ -147,8 +161,12 @@ class CIInputs:
             base_ref=base_ref,
             build_variant=build_variant,
             pr_labels=pr_labels,
-            linux_amdgpu_families=inputs.get("linux_amdgpu_families", ""),
-            windows_amdgpu_families=inputs.get("windows_amdgpu_families", ""),
+            linux_amdgpu_families=_parse_comma_list(
+                inputs.get("linux_amdgpu_families", "")
+            ),
+            windows_amdgpu_families=_parse_comma_list(
+                inputs.get("windows_amdgpu_families", "")
+            ),
             linux_test_labels=inputs.get("linux_test_labels", ""),
             windows_test_labels=inputs.get("windows_test_labels", ""),
             prebuilt_stages=inputs.get("prebuilt_stages", ""),
@@ -305,25 +323,7 @@ def check_skip_ci(
 
 
 # ---------------------------------------------------------------------------
-# Step 3: Select Targets
-# ---------------------------------------------------------------------------
-
-
-def select_targets(inputs: CIInputs) -> TargetSelection:
-    """Determine GPU families and test names based on trigger type and inputs.
-
-    Handles:
-    - workflow_dispatch: parse explicit family/test inputs
-    - pull_request: presubmit+postsubmit defaults, PR label opt-ins
-    - push: presubmit+postsubmit defaults
-    - schedule: all families
-    """
-    # TODO: Implement — trigger dispatch, label parsing, family validation
-    return TargetSelection()
-
-
-# ---------------------------------------------------------------------------
-# Step 4: Decide Jobs
+# Step 3: Decide Jobs
 # ---------------------------------------------------------------------------
 
 
@@ -344,6 +344,109 @@ def decide_jobs(
         build_rocm_python=JobGroupDecision(action="run", reason="default (stub)"),
         build_pytorch=JobGroupDecision(action="run", reason="default (stub)"),
         test_pytorch=JobGroupDecision(action="run", reason="default (stub)"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Step 4: Select Targets
+# ---------------------------------------------------------------------------
+
+
+def _validate_family_names(
+    names: list[str],
+    known: dict[str, dict],
+) -> None:
+    """Raise ValueError if any family name is not in the known matrix."""
+    unknown = [name for name in names if name not in known]
+    if unknown:
+        raise ValueError(
+            f"Unknown GPU families: {unknown}. "
+            f"Known families: {sorted(known.keys())}"
+        )
+
+
+def _filter_families_by_platform(
+    family_names: list[str],
+    platform: str,
+    lookup_matrix: dict[str, dict],
+) -> list[str]:
+    """Return only the family names that have an entry for the given platform."""
+    return [
+        name
+        for name in family_names
+        if name in lookup_matrix and platform in lookup_matrix[name]
+    ]
+
+
+def select_targets(inputs: CIInputs) -> TargetSelection:
+    """Determine GPU families per platform based on trigger type and inputs.
+
+    Policy:
+    - workflow_dispatch: explicit per-platform family inputs
+    - pull_request: presubmit defaults + PR label opt-ins
+    - push: presubmit+postsubmit families
+    - schedule: all families (presubmit+postsubmit+nightly)
+
+    Returns per-platform family lists, filtered to only include families
+    that have a platform entry in amdgpu_family_matrix.py.
+    """
+    all_families = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit", "nightly"]
+    )
+
+    # Select family names per platform based on trigger type
+    if inputs.is_workflow_dispatch:
+        # workflow_dispatch: Family names are taken directly from workflow inputs.
+        linux_names = list(inputs.linux_amdgpu_families)
+        windows_names = list(inputs.windows_amdgpu_families)
+    elif inputs.is_pull_request:
+        # pull_request: presubmit only; PR labels can extend below.
+        defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
+        linux_names = list(defaults)
+        windows_names = list(defaults)
+    elif inputs.is_push:
+        # push: Include presubmit _and_ postsubmit.
+        defaults = list(
+            get_all_families_for_trigger_types(["presubmit", "postsubmit"]).keys()
+        )
+        linux_names = list(defaults)
+        windows_names = list(defaults)
+    elif inputs.is_schedule:
+        # schedule: Include all families.
+        linux_names = list(all_families.keys())
+        windows_names = list(all_families.keys())
+    else:
+        raise ValueError(f"Unsupported event type: {inputs.event_name!r}")
+
+    # PR labels can extend the family set (both platforms)
+    if inputs.is_pull_request:
+        for label in inputs.pr_labels:
+            if label == "run-all-archs-ci":
+                # Override to all families.
+                linux_names = list(all_families.keys())
+                windows_names = list(all_families.keys())
+                print("  Label 'run-all-archs-ci' -> all families")
+                break
+            if label.startswith("gfx"):
+                target = label.split("-")[0]
+                linux_names.append(target)
+                windows_names.append(target)
+                print(f"  Label '{label}' -> adding target {target}")
+
+    # De-dup, validate, then filter by platform availability.
+    linux_names = list(dict.fromkeys(linux_names))
+    windows_names = list(dict.fromkeys(windows_names))
+    _validate_family_names(linux_names, all_families)
+    _validate_family_names(windows_names, all_families)
+    # TODO: For workflow_dispatch, a family requested for a specific platform
+    # but not available there (e.g. gfx94x on windows) is silently dropped.
+    # Consider validating per-platform and reporting the mismatch.
+    linux_names = _filter_families_by_platform(linux_names, "linux", all_families)
+    windows_names = _filter_families_by_platform(windows_names, "windows", all_families)
+
+    return TargetSelection(
+        linux_families=linux_names,
+        windows_families=windows_names,
     )
 
 
@@ -436,10 +539,10 @@ def configure(inputs: CIInputs) -> CIOutputs:
         print(f"Skipping CI: {skip.reason}")
         return CIOutputs.skipped(skip.reason)
 
-    # Steps 3 and 4 are independent: target selection (which GPU families)
-    # and job decisions (which job groups run) are orthogonal concerns.
-    targets = select_targets(inputs)
+    # Steps 3 and 4 are independent: job decisions (which job groups run)
+    # and target selection (which GPU families) are orthogonal concerns.
     jobs = decide_jobs(inputs=inputs, changed_files=changed_files)
+    targets = select_targets(inputs)
 
     # Step 5: Expand matrix
     linux_matrix = expand_matrix(

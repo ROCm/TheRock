@@ -87,7 +87,7 @@ class TestCIInputs(unittest.TestCase):
             build_variant="release",
         )
         self.assertEqual(inputs.pr_labels, [])
-        self.assertEqual(inputs.linux_amdgpu_families, "")
+        self.assertEqual(inputs.linux_amdgpu_families, [])
         self.assertEqual(inputs.prebuilt_stages, "")
 
 
@@ -118,7 +118,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 }
             },
         )
-        self.assertEqual(inputs.linux_amdgpu_families, "gfx94X, gfx120X")
+        self.assertEqual(inputs.linux_amdgpu_families, ["gfx94X", "gfx120X"])
         self.assertEqual(inputs.linux_test_labels, "test:rocprim")
         self.assertEqual(inputs.prebuilt_stages, "foundation,compiler-runtime")
         self.assertEqual(inputs.baseline_run_id, "12345")
@@ -173,30 +173,7 @@ class TestCheckSkipCI(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Step 3: Select Targets
-# ---------------------------------------------------------------------------
-
-
-class TestSelectTargets(unittest.TestCase):
-    """Test target family selection."""
-
-    def test_returns_target_selection(self):
-        """Stub returns a TargetSelection dataclass."""
-        inputs = cm.CIInputs(
-            event_name="push",
-            branch_name="main",
-            base_ref="HEAD^1",
-            build_variant="release",
-        )
-        result = cm.select_targets(inputs)
-        self.assertIsInstance(result, cm.TargetSelection)
-
-    # TODO: Tests for each trigger type, label parsing, family validation
-    # These will be filled in when select_targets is implemented (Phase 2).
-
-
-# ---------------------------------------------------------------------------
-# Step 4: Decide Jobs
+# Step 3: Decide Jobs
 # ---------------------------------------------------------------------------
 
 
@@ -251,6 +228,192 @@ class TestDecideJobs(unittest.TestCase):
             ["compiler-runtime", "foundation"],
         )
         self.assertEqual(decision.rebuild_stages, ["math-libs"])
+
+
+# ---------------------------------------------------------------------------
+# Step 4: Select Targets
+# ---------------------------------------------------------------------------
+
+
+class TestSelectTargets(unittest.TestCase):
+    """Test target family selection.
+
+    These tests exercise the trigger-type dispatch and label parsing logic.
+    Family names and platform availability come from amdgpu_family_matrix.py
+    (the real data), so tests assert on structural properties rather than
+    hardcoding specific family names.
+    """
+
+    def test_push_includes_postsubmit_families(self):
+        """Push trigger selects presubmit+postsubmit families."""
+        inputs = cm.CIInputs(
+            event_name="push",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        result = cm.select_targets(inputs)
+        # gfx950 is postsubmit-only, should be present for push
+        self.assertIn("gfx950", result.linux_families)
+
+    def test_schedule_returns_all_families(self):
+        """Schedule trigger selects all families (presubmit+postsubmit+nightly)."""
+        inputs = cm.CIInputs(
+            event_name="schedule",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        result = cm.select_targets(inputs)
+        # Schedule should have more families than push (nightly families added)
+        push_inputs = cm.CIInputs(
+            event_name="push",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        push_result = cm.select_targets(push_inputs)
+        self.assertGreater(len(result.linux_families), len(push_result.linux_families))
+
+    def test_pull_request_defaults_to_presubmit_only(self):
+        """PR without labels gets presubmit families only, not postsubmit."""
+        inputs = cm.CIInputs(
+            event_name="pull_request",
+            branch_name="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        result = cm.select_targets(inputs)
+        self.assertGreater(len(result.linux_families), 0)
+        # gfx950 is postsubmit-only, should NOT be in PR defaults
+        self.assertNotIn("gfx950", result.linux_families)
+
+    def test_pull_request_gfx_label_adds_family(self):
+        """PR with a gfx label adds that family to the defaults."""
+        inputs_without = cm.CIInputs(
+            event_name="pull_request",
+            branch_name="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        inputs_with = cm.CIInputs(
+            event_name="pull_request",
+            branch_name="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            # gfx906 is nightly-only, not in presubmit+postsubmit defaults
+            pr_labels=["gfx906"],
+        )
+        result_without = cm.select_targets(inputs_without)
+        result_with = cm.select_targets(inputs_with)
+        self.assertNotIn("gfx906", result_without.linux_families)
+        self.assertIn("gfx906", result_with.linux_families)
+
+    def test_pull_request_run_all_archs_label(self):
+        """PR with run-all-archs-ci label selects all families."""
+        inputs = cm.CIInputs(
+            event_name="pull_request",
+            branch_name="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["run-all-archs-ci"],
+        )
+        result = cm.select_targets(inputs)
+        # Should include nightly-only families
+        self.assertIn("gfx906", result.linux_families)
+
+    def test_pull_request_unknown_gfx_label_raises(self):
+        """PR with an unknown gfx label fails fast."""
+        inputs = cm.CIInputs(
+            event_name="pull_request",
+            branch_name="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["gfx9999"],
+        )
+        with self.assertRaises(ValueError, msg="Unknown GPU families"):
+            cm.select_targets(inputs)
+
+    def test_workflow_dispatch_per_platform(self):
+        """workflow_dispatch selects families per platform."""
+        inputs = cm.CIInputs(
+            event_name="workflow_dispatch",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x", "gfx110x"],
+            windows_amdgpu_families=["gfx110x"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertIn("gfx94x", result.linux_families)
+        self.assertIn("gfx110x", result.linux_families)
+        self.assertIn("gfx110x", result.windows_families)
+        # gfx94x has no windows entry in the matrix
+        self.assertNotIn("gfx94x", result.windows_families)
+
+    def test_workflow_dispatch_empty_input(self):
+        """workflow_dispatch with empty lists returns empty families."""
+        inputs = cm.CIInputs(
+            event_name="workflow_dispatch",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, [])
+        self.assertEqual(result.windows_families, [])
+
+    def test_workflow_dispatch_unknown_family_raises(self):
+        """workflow_dispatch with unknown family fails fast."""
+        inputs = cm.CIInputs(
+            event_name="workflow_dispatch",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx_bogus"],
+        )
+        with self.assertRaises(ValueError, msg="Unknown GPU families"):
+            cm.select_targets(inputs)
+
+    @unittest.skip(
+        "TODO: workflow_dispatch should reject families unavailable on the requested platform"
+    )
+    def test_workflow_dispatch_wrong_platform_raises(self):
+        """Requesting a family for a platform it doesn't support should fail."""
+        inputs = cm.CIInputs(
+            event_name="workflow_dispatch",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            # gfx950 has no windows entry — this should be an error, not silently dropped
+            windows_amdgpu_families=["gfx950"],
+        )
+        with self.assertRaises(ValueError):
+            cm.select_targets(inputs)
+
+    def test_unsupported_event_type_raises(self):
+        """Unknown event type raises ValueError."""
+        inputs = cm.CIInputs(
+            event_name="repository_dispatch",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        with self.assertRaises(ValueError, msg="Unsupported event type"):
+            cm.select_targets(inputs)
+
+    def test_platform_filtering(self):
+        """Families without a platform entry are excluded from that platform."""
+        inputs = cm.CIInputs(
+            event_name="push",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        result = cm.select_targets(inputs)
+        # gfx94x is linux-only (no windows entry in presubmit matrix)
+        self.assertIn("gfx94x", result.linux_families)
+        self.assertNotIn("gfx94x", result.windows_families)
 
 
 # ---------------------------------------------------------------------------
