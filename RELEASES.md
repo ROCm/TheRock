@@ -510,32 +510,30 @@ published for Debian-based and RPM-based distributions.
 | Linux    | [![Build Native Linux Packages](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml?query=branch%3Amain) |
 | Windows  |                                                                                                                                                                                                                      (Coming soon)           |
 
-### Index page listing
+### GPU family and package mapping
 
-| Product Name                       | GFX Target | GFX Family   | Install instructions                                    |
-| ---------------------------------- | ---------- | ------------ | ------------------------------------------------------- |
-| MI300A/MI300X                      | gfx942     | gfx94X       | [deb](#deb-for-gfx94x) / [rpm](#rpm-for-gfx94x)         |
-| MI350X/MI355X                      | gfx950     | gfx950       | [deb](#deb-for-gfx950) / [rpm](#rpm-for-gfx950)         |
-| AMD RX 7900 XTX                    | gfx1100    | gfx110x      | [deb](#deb-for-gfx110x) / [rpm](#rpm-for-gfx110x)       |
-| AMD RX 7800 XT                     | gfx1101    | gfx110x      | [deb](#deb-for-gfx110x) / [rpm](#rpm-for-gfx110x)       |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110x      | [deb](#deb-for-gfx110x) / [rpm](#rpm-for-gfx110x)       |
-| AMD Radeon 780M Laptop iGPU        | gfx1103    | gfx110x      | [deb](#deb-for-gfx110x) / [rpm](#rpm-for-gfx110x)       |
-| AMD Strix Point iGPU               | gfx1150    | gfx1150      | [deb](#deb-for-gfx1150) / [rpm](#rpm-for-gfx1150)       |
-| AMD Strix Halo iGPU                | gfx1151    | gfx1151      | [deb](#deb-for-gfx1151) / [rpm](#rpm-for-gfx1151)       |
-| AMD Fire Range iGPU                | gfx1152    | gfx1152      | [deb](#deb-for-gfx1152) / [rpm](#rpm-for-gfx1152)       |
-| AMD Strix Halo XT                  | gfx1153    | gfx1153      | [deb](#deb-for-gfx1153) / [rpm](#rpm-for-gfx1153)       |
-| AMD RX 9060 / XT                   | gfx1200    | gfx120X      | [deb](#deb-for-gfx120x) / [rpm](#rpm-for-gfx120x)       |
-| AMD RX 9070 / XT                   | gfx1201    | gfx120X      | [deb](#deb-for-gfx120x) / [rpm](#rpm-for-gfx120x)       |
-| Radeon VII                         | gfx906     | gfx906       | [deb](#deb-for-gfx906) / [rpm](#rpm-for-gfx906)         |
-| MI100                              | gfx908     | gfx908       | [deb](#deb-for-gfx908) / [rpm](#rpm-for-gfx908)         |
-| MI200 series                       | gfx90a     | gfx90a       | [deb](#deb-for-gfx90a) / [rpm](#rpm-for-gfx90a)         |
-| AMD RX 5700 XT                     | gfx1010    | gfx101x      | [deb](#deb-for-gfx101x) / [rpm](#rpm-for-gfx101x)       |
-| AMD RX 6900 XT                     | gfx1030    | gfx103x      | [deb](#deb-for-gfx103x) / [rpm](#rpm-for-gfx103x)       |
-| AMD RX 6800 XT                     | gfx1031    | gfx103x      | [deb](#deb-for-gfx103x) / [rpm](#rpm-for-gfx103x)       |
+| Product Name                       | GFX Target | GFX Family | Package Name      |
+| ---------------------------------- | ---------- | ---------- | ----------------- |
+| MI300A/MI300X                      | gfx942     | gfx94X     | amdrocm-gfx94x    |
+| MI350X/MI355X                      | gfx950     | gfx950     | amdrocm-gfx950    |
+| AMD RX 7900 XTX                    | gfx1100    | gfx110x    | amdrocm-gfx110x   |
+| AMD RX 7800 XT                     | gfx1101    | gfx110x    | amdrocm-gfx110x   |
+| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110x    | amdrocm-gfx110x   |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    | gfx110x    | amdrocm-gfx110x   |
+| AMD Strix Point iGPU               | gfx1150    | gfx1150    | amdrocm-gfx1150   |
+| AMD Strix Halo iGPU                | gfx1151    | gfx1151    | amdrocm-gfx1151   |
+| AMD Fire Range iGPU                | gfx1152    | gfx1152    | amdrocm-gfx1152   |
+| AMD Strix Halo XT                  | gfx1153    | gfx1153    | amdrocm-gfx1153   |
+| AMD RX 9060 / XT                   | gfx1200    | gfx120X    | amdrocm-gfx120x   |
+| AMD RX 9070 / XT                   | gfx1201    | gfx120X    | amdrocm-gfx120x   |
+| Radeon VII                         | gfx906     | gfx906     | amdrocm-gfx906    |
+| MI100                              | gfx908     | gfx908     | amdrocm-gfx908    |
+| MI200 series                       | gfx90a     | gfx90a     | amdrocm-gfx90a    |
+| AMD RX 5700 XT                     | gfx1010    | gfx101x    | amdrocm-gfx101x   |
+| AMD RX 6900 XT                     | gfx1030    | gfx103x    | amdrocm-gfx103x   |
+| AMD RX 6800 XT                     | gfx1031    | gfx103x    | amdrocm-gfx103x   |
 
 > [!TIP]
-> The installation commands below use `<YYYYMMDD>-<action-run-id>` as a placeholder for the nightly release identifier.
->
 > To find the latest available release:
 >
 > 1. Browse the index pages:
@@ -544,161 +542,26 @@ published for Debian-based and RPM-based distributions.
 >
 > 2. Look for directories in the format `YYYYMMDD-<action-run-id>` (e.g., `20260310-12345678`)
 >
-> 3. Choose the latest date and replace `<YYYYMMDD>-<action-run-id>` in the commands below with that value
->
-> For example, if you find `20260310-12345678`, use:
-> ```bash
-> # Debian:
-> echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/20260310-12345678 stable main" \
->   | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
->
-> # RPM:
-> baseurl=https://rocm.nightlies.amd.com/rpm/20260310-12345678/x86_64
-> ```
+> 3. Use the latest date in the installation commands below
 
 ### Installing on Debian-based systems (Ubuntu, Debian, etc.)
 
-#### deb for gfx94X
-
 ```bash
+# Step 1: Find the latest release from https://rocm.nightlies.amd.com/deb/
+#         Look for directories like "20260310-12345678"
+# Step 2: Find your package name from the table above
+# Step 3: Set the variables below
+
+export RELEASE_ID=20260310-12345678  # Replace with actual date-runid
+export GFX_ARCH=gfx110x              # Replace with your arch (e.g., gfx94x, gfx110x, gfx1151)
+
+# Step 4: Add repository and install
 sudo apt update
 sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
+echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/${RELEASE_ID} stable main" \
   | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
 sudo apt update
-sudo apt install amdrocm-gfx94x
-```
-
-#### deb for gfx950
-
-```bash
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
-sudo apt update
-sudo apt install amdrocm-gfx950
-```
-
-#### deb for gfx110x
-
-```bash
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
-sudo apt update
-sudo apt install amdrocm-gfx110x
-```
-
-#### deb for gfx1150
-
-```bash
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
-sudo apt update
-sudo apt install amdrocm-gfx1150
-```
-
-#### deb for gfx1151
-
-```bash
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
-sudo apt update
-sudo apt install amdrocm-gfx1151
-```
-
-#### deb for gfx1152
-
-```bash
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
-sudo apt update
-sudo apt install amdrocm-gfx1152
-```
-
-#### deb for gfx1153
-
-```bash
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
-sudo apt update
-sudo apt install amdrocm-gfx1153
-```
-
-#### deb for gfx120X
-
-```bash
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
-sudo apt update
-sudo apt install amdrocm-gfx120x
-```
-
-#### deb for gfx906
-
-```bash
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
-sudo apt update
-sudo apt install amdrocm-gfx906
-```
-
-#### deb for gfx908
-
-```bash
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
-sudo apt update
-sudo apt install amdrocm-gfx908
-```
-
-#### deb for gfx90a
-
-```bash
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
-sudo apt update
-sudo apt install amdrocm-gfx90a
-```
-
-#### deb for gfx101x
-
-```bash
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
-sudo apt update
-sudo apt install amdrocm-gfx101x
-```
-
-#### deb for gfx103x
-
-```bash
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
-sudo apt update
-sudo apt install amdrocm-gfx103x
+sudo apt install amdrocm-${GFX_ARCH}
 ```
 
 ### Installing on RPM-based systems (RHEL, SLES, AlmaLinux etc.)
@@ -706,199 +569,26 @@ sudo apt install amdrocm-gfx103x
 > [!NOTE]
 > The following instructions are for RHEL-based operating systems.
 
-#### rpm for gfx94X
-
 ```bash
+# Step 1: Find the latest release from https://rocm.nightlies.amd.com/rpm/
+#         Look for directories like "20260310-12345678"
+# Step 2: Find your package name from the table above
+# Step 3: Set the variables below
+
+export RELEASE_ID=20260310-12345678  # Replace with actual date-runid
+export GFX_ARCH=gfx110x              # Replace with your arch (e.g., gfx94x, gfx110x, gfx1151)
+
+# Step 4: Add repository and install
 sudo dnf install -y ca-certificates
 sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
 [rocm-nightly]
 name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
+baseurl=https://rocm.nightlies.amd.com/rpm/${RELEASE_ID}/x86_64
 enabled=1
 gpgcheck=0
 repo_gpgcheck=0
 EOF
-sudo dnf install amdrocm-gfx94x
-```
-
-#### rpm for gfx950
-
-```bash
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
-[rocm-nightly]
-name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-sudo dnf install amdrocm-gfx950
-```
-
-#### rpm for gfx110x
-
-```bash
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
-[rocm-nightly]
-name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-sudo dnf install amdrocm-gfx110x
-```
-
-#### rpm for gfx1150
-
-```bash
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
-[rocm-nightly]
-name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-sudo dnf install amdrocm-gfx1150
-```
-
-#### rpm for gfx1151
-
-```bash
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
-[rocm-nightly]
-name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-sudo dnf install amdrocm-gfx1151
-```
-
-#### rpm for gfx1152
-
-```bash
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
-[rocm-nightly]
-name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-sudo dnf install amdrocm-gfx1152
-```
-
-#### rpm for gfx1153
-
-```bash
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
-[rocm-nightly]
-name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-sudo dnf install amdrocm-gfx1153
-```
-
-#### rpm for gfx120X
-
-```bash
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
-[rocm-nightly]
-name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-sudo dnf install amdrocm-gfx120x
-```
-
-#### rpm for gfx906
-
-```bash
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
-[rocm-nightly]
-name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-sudo dnf install amdrocm-gfx906
-```
-
-#### rpm for gfx908
-
-```bash
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
-[rocm-nightly]
-name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-sudo dnf install amdrocm-gfx908
-```
-
-#### rpm for gfx90a
-
-```bash
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
-[rocm-nightly]
-name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-sudo dnf install amdrocm-gfx90a
-```
-
-#### rpm for gfx101x
-
-```bash
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
-[rocm-nightly]
-name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-sudo dnf install amdrocm-gfx101x
-```
-
-#### rpm for gfx103x
-
-```bash
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
-[rocm-nightly]
-name=ROCm Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-sudo dnf install amdrocm-gfx103x
+sudo dnf install amdrocm-${GFX_ARCH}
 ```
 
 ## Verifying your installation
