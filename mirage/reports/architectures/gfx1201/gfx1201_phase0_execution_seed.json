@@ -275,6 +275,8 @@
     "V_SUB_F16",
     "V_SUBREV_F16",
     "V_MUL_F16",
+    "V_CVT_PK_RTZ_F16_F32",
+    "V_LDEXP_F16",
     "V_MIN_NUM_F16",
     "V_MAX_NUM_F16",
     "V_ADD_U32",
@@ -417,6 +419,8 @@
       "V_SUB_F16",
       "V_SUBREV_F16",
       "V_MUL_F16",
+      "V_CVT_PK_RTZ_F16_F32",
+      "V_LDEXP_F16",
       "V_MIN_NUM_F16",
       "V_MAX_NUM_F16",
       "V_ADD_NC_U32 -> V_ADD_U32",
@@ -633,6 +637,7 @@
     "Decodes V_FREXP_EXP_I16_F16, V_FREXP_MANT_F16, and V_FRACT_F16 from ENC_VOP1 on the same unary vector path, keeping exponent results in the low 16 bits and mantissa/fraction results in the local F16 payload convention.",
     "Decodes V_TRUNC_F16, V_CEIL_F16, V_RNDNE_F16, and V_FLOOR_F16 from ENC_VOP1 on the same unary vector path, keeping the current local low-16-bit F16 payload convention.",
     "Decodes V_ADD_F16, V_SUB_F16, V_SUBREV_F16, and V_MUL_F16 from ENC_VOP2 on the same binary vector path, using the current local low-16-bit F16 payload convention.",
+    "Decodes V_CVT_PK_RTZ_F16_F32 and V_LDEXP_F16 from ENC_VOP2 on the same binary vector path, using the current local F32-to-packed-F16 bridge and low-16-bit F16 plus signed-low-16 exponent payload convention without widening the shared/common surface.",
     "Decodes V_MIN_NUM_F16 and V_MAX_NUM_F16 from ENC_VOP2 on the same binary vector path, using the current local low-16-bit F16 payload convention for half-width min/max-num behavior.",
     "Decodes V_ADD_U32, V_SUB_U32, V_SUBREV_U32, V_MIN/MAX_I32, V_MIN/MAX_U32, V_CNDMASK_B32, V_LSHRREV_B32, V_ASHRREV_I32, V_LSHLREV_B32, V_AND_B32, V_OR_B32, and V_XOR_B32 from ENC_VOP2.",
     "Decodes V_CMP_EQ/NE/LT/LE/GT/GE_I32, V_CMP_EQ/NE/LT/LE/GT/GE_U32, V_CMPX_EQ/NE/LT/LE/GT/GE_I32, and V_CMPX_EQ/NE/LT/LE/GT/GE_U32 from ENC_VOPC with SGPR, VGPR, inline, and literal sources.",
@@ -690,6 +695,7 @@
     "Executes exec-masked V_FREXP_EXP_I16_F16, V_FREXP_MANT_F16, and V_FRACT_F16 while keeping integer exponent results in the low 16 bits and mantissa/fraction results in the local F16 payload convention.",
     "Executes exec-masked V_TRUNC_F16, V_CEIL_F16, V_RNDNE_F16, and V_FLOOR_F16 with half-width rounding behavior on the current local F16 payload path.",
     "Executes exec-masked V_ADD_F16, V_SUB_F16, V_SUBREV_F16, and V_MUL_F16 by expanding low-16-bit F16 payloads to float, applying half-width add/subtract or multiply behavior, and compressing results back to F16.",
+    "Executes exec-masked V_CVT_PK_RTZ_F16_F32 by converting two F32 inputs into a packed low/high F16 result with round-toward-zero behavior, and executes V_LDEXP_F16 by applying a signed low-16-bit exponent to the current local F16 payload path.",
     "Executes exec-masked V_MIN_NUM_F16 and V_MAX_NUM_F16 with half-width min/max-num behavior on the current local F16 payload path.",
     "Executes exec-masked V_ADD_U32, V_SUB_U32, V_SUBREV_U32, V_MIN/MAX_I32, V_MIN/MAX_U32, V_CNDMASK_B32, V_LSHRREV_B32, V_ASHRREV_I32, V_LSHLREV_B32, V_AND_B32, V_OR_B32, and V_XOR_B32 lane-wise."
   ],
@@ -700,6 +706,6 @@
     "ENC_VDS",
     "ENC_VGLOBAL",
     "The remaining ENC_VOPC surface outside this seed is now primarily packed and other wider forms not yet on the current local path.",
-    "The next coherent extension point is the remaining adjacent ENC_VOP1/ENC_VOP2 half-width seed work after the local B16/F16 payload, swap, normalized bridge, F16 unary math bridge, F16 VOP2 arithmetic bridge, and half pack/mul bridge, or the remaining packed/wider ENC_VOPC compare work, before ENC_VOP3/half-conversion work."
+    "The next coherent extension point is the remaining adjacent ENC_VOP1/ENC_VOP2 half-width seed work after the local B16/F16 payload, swap, normalized bridge, F16 unary math bridge, F16 VOP2 arithmetic bridge, half pack/mul bridge, and the packed-half RTZ plus half ldexp bridge, or the remaining packed/wider ENC_VOPC compare work, before ENC_VOP3/half-conversion work."
   ]
 }

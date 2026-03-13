@@ -286,6 +286,8 @@ enum class Gfx1201CompiledOpcode : std::uint16_t {
   kVSubF16,
   kVSubrevF16,
   kVMulF16,
+  kVCvtPkRtzF16F32,
+  kVLdexpF16,
   kVMinNumF16,
   kVMaxNumF16,
   kVAddU32,

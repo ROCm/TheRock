@@ -804,6 +804,20 @@ bool ExpectHalfPackMulSeedState(
          !state.waiting_on_barrier && state.pc == 2u;
 }
 
+bool ExpectHalfPackExponentSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[101][0] == 0xbc003c00u &&
+         state.vgprs[101][1] == 0x34004100u &&
+         state.vgprs[101][2] == 0xa1a1a1a1u &&
+         state.vgprs[101][3] == 0x3e00ba00u &&
+         state.vgprs[102][0] == 0x00004000u &&
+         state.vgprs[102][1] == 0x0000b400u &&
+         state.vgprs[102][2] == 0xa2a2a2a2u &&
+         state.vgprs[102][3] == 0x00004200u &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 2u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -2119,6 +2133,33 @@ int main() {
                                       OperandKind::kImm32, 0x00003e00u,
                                       OperandKind::kVgpr, 7u),
               "expected decoded V_MAX_NUM_F16 literal operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_cvt_pk_rtz_f16_f32_words{
+      MakeVop2(47u, 13u, 257u, 2u)};
+  if (!Expect(decoder.DecodeInstruction(vector_cvt_pk_rtz_f16_f32_words,
+                                        &instruction, &words_consumed,
+                                        &error_message),
+              "expected V_CVT_PK_RTZ_F16_F32 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CVT_PK_RTZ_F16_F32",
+                                      OperandKind::kVgpr, 13u,
+                                      OperandKind::kVgpr, 1u,
+                                      OperandKind::kVgpr, 2u),
+              "expected decoded V_CVT_PK_RTZ_F16_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_ldexp_f16_words{
+      MakeVop2(59u, 14u, 260u, 5u)};
+  if (!Expect(decoder.DecodeInstruction(vector_ldexp_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_LDEXP_F16 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_LDEXP_F16",
+                                      OperandKind::kVgpr, 14u,
+                                      OperandKind::kVgpr, 4u,
+                                      OperandKind::kVgpr, 5u),
+              "expected decoded V_LDEXP_F16 operands")) {
     return 1;
   }
 
@@ -4792,6 +4833,94 @@ int main() {
               "expected compiled half pack/mul execution success") ||
       !Expect(ExpectHalfPackMulSeedState(compiled_half_pack_mul_state),
               "expected compiled half pack/mul state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 3> half_pack_exponent_words{
+      MakeVop2(47u, 101u, 257u, 2u),
+      MakeVop2(59u, 102u, 260u, 5u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> half_pack_exponent_program;
+  if (!Expect(decoder.DecodeProgram(half_pack_exponent_words,
+                                    &half_pack_exponent_program,
+                                    &error_message),
+              "expected half pack/exponent program decode success") ||
+      !Expect(half_pack_exponent_program.size() == 3u,
+              "expected three decoded half pack/exponent instructions") ||
+      !Expect(half_pack_exponent_program[0].opcode == "V_CVT_PK_RTZ_F16_F32",
+              "expected decoded V_CVT_PK_RTZ_F16_F32") ||
+      !Expect(half_pack_exponent_program[1].opcode == "V_LDEXP_F16",
+              "expected decoded V_LDEXP_F16") ||
+      !Expect(half_pack_exponent_program[2].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after half pack/exponent batch")) {
+    return 1;
+  }
+
+  auto initialize_half_pack_exponent_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[1][0] = FloatBits(1.0007f);
+    state->vgprs[1][1] = FloatBits(2.5f);
+    state->vgprs[1][2] = 0x11111111u;
+    state->vgprs[1][3] = FloatBits(-0.75f);
+
+    state->vgprs[2][0] = FloatBits(-1.0007f);
+    state->vgprs[2][1] = FloatBits(0.25f);
+    state->vgprs[2][2] = 0x22222222u;
+    state->vgprs[2][3] = FloatBits(1.5f);
+
+    state->vgprs[4][0] = 0x00003800u;
+    state->vgprs[4][1] = 0x0000b800u;
+    state->vgprs[4][2] = 0x44444444u;
+    state->vgprs[4][3] = 0x00003e00u;
+
+    state->vgprs[5][0] = 0x00000002u;
+    state->vgprs[5][1] = 0x0000ffffu;
+    state->vgprs[5][2] = 0x55555555u;
+    state->vgprs[5][3] = 0x00000001u;
+
+    state->vgprs[101][2] = 0xa1a1a1a1u;
+    state->vgprs[102][2] = 0xa2a2a2a2u;
+  };
+
+  WaveExecutionState decoded_half_pack_exponent_state;
+  initialize_half_pack_exponent_state(&decoded_half_pack_exponent_state);
+  if (!Expect(interpreter.ExecuteProgram(half_pack_exponent_program,
+                                         &decoded_half_pack_exponent_state,
+                                         &error_message),
+              "expected decoded half pack/exponent execution success") ||
+      !Expect(ExpectHalfPackExponentSeedState(
+                  decoded_half_pack_exponent_state),
+              "expected decoded half pack/exponent state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_half_pack_exponent_program;
+  if (!Expect(interpreter.CompileProgram(half_pack_exponent_program,
+                                         &compiled_half_pack_exponent_program,
+                                         &error_message),
+              "expected compiled half pack/exponent program success") ||
+      !Expect(compiled_half_pack_exponent_program.size() == 3u,
+              "expected three compiled half pack/exponent instructions") ||
+      !Expect(compiled_half_pack_exponent_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtPkRtzF16F32,
+              "expected compiled V_CVT_PK_RTZ_F16_F32 opcode") ||
+      !Expect(compiled_half_pack_exponent_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVLdexpF16,
+              "expected compiled V_LDEXP_F16 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_half_pack_exponent_state;
+  initialize_half_pack_exponent_state(&compiled_half_pack_exponent_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_half_pack_exponent_program,
+                                         &compiled_half_pack_exponent_state,
+                                         &error_message),
+              "expected compiled half pack/exponent execution success") ||
+      !Expect(ExpectHalfPackExponentSeedState(
+                  compiled_half_pack_exponent_state),
+              "expected compiled half pack/exponent state")) {
     return 1;
   }
 

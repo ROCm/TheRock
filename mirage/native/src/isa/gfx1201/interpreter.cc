@@ -36,8 +36,9 @@ constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
 float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
+std::uint16_t CompressFloatToFp16BitsRtz(float value);
 
-constexpr std::array<std::string_view, 289> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 291> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -311,6 +312,8 @@ constexpr std::array<std::string_view, 289> kExecutableSeedOpcodes{{
     "V_SUB_F16",
     "V_SUBREV_F16",
     "V_MUL_F16",
+    "V_CVT_PK_RTZ_F16_F32",
+    "V_LDEXP_F16",
     "V_MIN_NUM_F16",
     "V_MAX_NUM_F16",
     "V_ADD_U32",
@@ -1818,6 +1821,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVMulF16;
     return true;
   }
+  if (opcode == "V_CVT_PK_RTZ_F16_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtPkRtzF16F32;
+    return true;
+  }
+  if (opcode == "V_LDEXP_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVLdexpF16;
+    return true;
+  }
   if (opcode == "V_MIN_NUM_F16") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVMinNumF16;
     return true;
@@ -2438,6 +2449,26 @@ std::uint32_t EvaluateVectorBinaryHalfSeedInstruction(std::string_view opcode,
   return 0u;
 }
 
+std::uint32_t EvaluateVectorPackedHalfBinarySeedInstruction(
+    std::string_view opcode, std::uint32_t lhs, std::uint32_t rhs) {
+  if (opcode == "V_CVT_PK_RTZ_F16_F32") {
+    const std::uint32_t low =
+        CompressFloatToFp16BitsRtz(BitCast<float>(lhs));
+    const std::uint32_t high =
+        CompressFloatToFp16BitsRtz(BitCast<float>(rhs));
+    return low | (high << 16);
+  }
+  return 0u;
+}
+
+std::uint32_t EvaluateVectorHalfLdexpSeedInstruction(std::uint32_t lhs,
+                                                     std::uint32_t rhs) {
+  const float mantissa = ExpandFp16ToFloat(static_cast<std::uint16_t>(lhs));
+  const auto exponent =
+      static_cast<int>(BitCast<std::int16_t>(static_cast<std::uint16_t>(rhs)));
+  return CompressFloatToFp16Bits(std::ldexp(mantissa, exponent));
+}
+
 std::uint32_t EvaluateVectorBinarySeedInstruction(std::string_view opcode,
                                                   std::uint32_t lhs,
                                                   std::uint32_t rhs) {
@@ -2445,6 +2476,12 @@ std::uint32_t EvaluateVectorBinarySeedInstruction(std::string_view opcode,
       opcode == "V_SUBREV_F16" || opcode == "V_MUL_F16" ||
       opcode == "V_MIN_NUM_F16" || opcode == "V_MAX_NUM_F16") {
     return EvaluateVectorBinaryHalfSeedInstruction(opcode, lhs, rhs);
+  }
+  if (opcode == "V_CVT_PK_RTZ_F16_F32") {
+    return EvaluateVectorPackedHalfBinarySeedInstruction(opcode, lhs, rhs);
+  }
+  if (opcode == "V_LDEXP_F16") {
+    return EvaluateVectorHalfLdexpSeedInstruction(lhs, rhs);
   }
   if (opcode == "V_ADD_U32") {
     return lhs + rhs;
@@ -2606,6 +2643,44 @@ std::uint16_t CompressFloatToFp16Bits(float value) {
                                     (static_cast<std::uint16_t>(half_exponent)
                                      << 10) |
                                     half_mantissa);
+}
+
+std::uint16_t CompressFloatToFp16BitsRtz(float value) {
+  const std::uint32_t bits = BitCast<std::uint32_t>(value);
+  const std::uint16_t sign = static_cast<std::uint16_t>((bits >> 16) & 0x8000u);
+  const std::uint32_t exponent = (bits >> 23) & 0xffu;
+  const std::uint32_t mantissa = bits & 0x007fffffu;
+
+  if (exponent == 0xffu) {
+    if (mantissa == 0u) {
+      return static_cast<std::uint16_t>(sign | 0x7c00u);
+    }
+    std::uint16_t half_mantissa = static_cast<std::uint16_t>(mantissa >> 13);
+    if (half_mantissa == 0u) {
+      half_mantissa = 1u;
+    }
+    return static_cast<std::uint16_t>(sign | 0x7c00u | 0x0200u |
+                                      half_mantissa);
+  }
+
+  int half_exponent = static_cast<int>(exponent) - 127 + 15;
+  if (half_exponent >= 0x1f) {
+    return static_cast<std::uint16_t>(sign | 0x7c00u);
+  }
+
+  if (half_exponent <= 0) {
+    if (half_exponent < -10) {
+      return sign;
+    }
+    const std::uint32_t normalized_mantissa = mantissa | 0x00800000u;
+    const std::uint32_t shift = static_cast<std::uint32_t>(14 - half_exponent);
+    return static_cast<std::uint16_t>(
+        sign | static_cast<std::uint16_t>(normalized_mantissa >> shift));
+  }
+
+  return static_cast<std::uint16_t>(
+      sign | (static_cast<std::uint16_t>(half_exponent) << 10) |
+      static_cast<std::uint16_t>(mantissa >> 13));
 }
 
 std::uint32_t ClassifyFp32Mask(std::uint32_t bits) {
@@ -3840,6 +3915,8 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
   if (instruction.opcode == "V_ADD_F16" || instruction.opcode == "V_SUB_F16" ||
       instruction.opcode == "V_SUBREV_F16" ||
       instruction.opcode == "V_MUL_F16" ||
+      instruction.opcode == "V_CVT_PK_RTZ_F16_F32" ||
+      instruction.opcode == "V_LDEXP_F16" ||
       instruction.opcode == "V_MIN_NUM_F16" ||
       instruction.opcode == "V_MAX_NUM_F16" ||
       instruction.opcode == "V_ADD_U32" || instruction.opcode == "V_SUB_U32" ||
@@ -4163,6 +4240,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVSubF16:
     case Gfx1201CompiledOpcode::kVSubrevF16:
     case Gfx1201CompiledOpcode::kVMulF16:
+    case Gfx1201CompiledOpcode::kVCvtPkRtzF16F32:
+    case Gfx1201CompiledOpcode::kVLdexpF16:
     case Gfx1201CompiledOpcode::kVMinNumF16:
     case Gfx1201CompiledOpcode::kVMaxNumF16:
     case Gfx1201CompiledOpcode::kVAddU32:
