@@ -15,6 +15,7 @@ therock_cmake_subproject_declare(therock-aux-overlay
   BACKGROUND_BUILD
   CMAKE_ARGS
     "-DTHEROCK_FLAG_SETTINGS_FILE=${THEROCK_FLAG_SETTINGS_FILE}"
+    "-DTHEROCK_PACKAGE_VERSION=${THEROCK_PACKAGE_VERSION}"
 )
 therock_cmake_subproject_activate(therock-aux-overlay)
 
