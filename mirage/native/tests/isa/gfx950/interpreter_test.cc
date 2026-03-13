@@ -12179,6 +12179,8 @@ int main() {
   buffer_format_state.vgprs[41][0] = 0x06u;
   buffer_format_state.vgprs[42][0] = 0x07u;
   buffer_format_state.vgprs[43][0] = 0x08u;
+  buffer_format_state.vgprs[44][0] = 0x09u;
+  buffer_format_state.vgprs[45][0] = 0x0au;
   buffer_format_state.vgprs[50][0] = 0x40200000u;
   buffer_format_state.vgprs[51][0] = 0xbf800000u;
   buffer_format_state.vgprs[52][0] = 0x40800000u;
@@ -12200,6 +12202,18 @@ int main() {
                                       InstructionOperand::Sgpr(20),
                                       InstructionOperand::Imm32(0),
                                       InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_XY",
+                                      InstructionOperand::Vgpr(78),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(24),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_XY",
+                                      InstructionOperand::Vgpr(44),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(24),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x28)),
       DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_XYZW",
                                       InstructionOperand::Vgpr(71),
                                       InstructionOperand::Imm32(0),
@@ -12280,6 +12294,9 @@ int main() {
               "expected buffer format program to halt") ||
       !Expect(buffer_format_state.vgprs[70][0] == 0x7au,
               "expected buffer format x load result") ||
+      !Expect(buffer_format_state.vgprs[78][0] == 0x01u &&
+                  buffer_format_state.vgprs[79][0] == 0x02u,
+              "expected buffer format xy load result") ||
       !Expect(buffer_format_state.vgprs[71][0] == 0x01u &&
                   buffer_format_state.vgprs[72][0] == 0x02u &&
                   buffer_format_state.vgprs[73][0] == 0x03u &&
@@ -12306,6 +12323,14 @@ int main() {
               "expected buffer format x store read") ||
       !Expect(buffer_format_byte == 0x55u,
               "expected buffer format x store result") ||
+      !Expect(ReadU8(buffer_format_memory, 0x168u, &buffer_format_byte),
+              "expected buffer format xy store read") ||
+      !Expect(buffer_format_byte == 0x09u,
+              "expected buffer format xy store result") ||
+      !Expect(ReadU8(buffer_format_memory, 0x169u, &buffer_format_byte),
+              "expected buffer format xy store read") ||
+      !Expect(buffer_format_byte == 0x0au,
+              "expected buffer format xy store result") ||
       !Expect(ReadU8(buffer_format_memory, 0x160u, &buffer_format_byte),
               "expected buffer format xyzw store read") ||
       !Expect(buffer_format_byte == 0x05u,
@@ -12373,6 +12398,9 @@ int main() {
               "expected compiled buffer format program to halt") ||
       !Expect(compiled_buffer_format_state.vgprs[70][0] == 0x7au,
               "expected compiled buffer format x load result") ||
+      !Expect(compiled_buffer_format_state.vgprs[78][0] == 0x01u &&
+                  compiled_buffer_format_state.vgprs[79][0] == 0x02u,
+              "expected compiled buffer format xy load result") ||
       !Expect(compiled_buffer_format_state.vgprs[71][0] == 0x01u &&
                   compiled_buffer_format_state.vgprs[72][0] == 0x02u &&
                   compiled_buffer_format_state.vgprs[73][0] == 0x03u &&
@@ -12400,6 +12428,16 @@ int main() {
               "expected compiled buffer format x store read") ||
       !Expect(compiled_buffer_format_byte == 0x55u,
               "expected compiled buffer format x store result") ||
+      !Expect(ReadU8(compiled_buffer_format_memory, 0x168u,
+                     &compiled_buffer_format_byte),
+              "expected compiled buffer format xy store read") ||
+      !Expect(compiled_buffer_format_byte == 0x09u,
+              "expected compiled buffer format xy store result") ||
+      !Expect(ReadU8(compiled_buffer_format_memory, 0x169u,
+                     &compiled_buffer_format_byte),
+              "expected compiled buffer format xy store read") ||
+      !Expect(compiled_buffer_format_byte == 0x0au,
+              "expected compiled buffer format xy store result") ||
       !Expect(ReadU8(compiled_buffer_format_memory, 0x160u,
                      &compiled_buffer_format_byte),
               "expected compiled buffer format xyzw store read") ||
