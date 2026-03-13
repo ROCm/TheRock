@@ -117,25 +117,22 @@ jobs:
             --prerelease-version=${{ inputs.prerelease_version }} \
             --package-type="deb"
 
-      - name: Set release variables
+      - name: Generate release information
+        id: release_information
         run: |
           case "${{ env.release_type }}" in
             nightly)    domain="rocm.nightlies.amd.com" ;;
             prerelease) domain="rocm.prereleases.amd.com" ;;
             dev)        domain="rocm.devreleases.amd.com" ;;
           esac
-          echo "tmp_cloudfront_url=https://${domain}/whl" >> $GITHUB_ENV
-          echo "tmp_cloudfront_staging_url=https://${domain}/whl-staging" >> $GITHUB_ENV
-          echo "tmp_s3_subdir_tar=v3/tarball/" >> $GITHUB_ENV
-
-      - name: Generate release information
-        id: release_information
-        run: |
-          echo "cloudfront_url=${tmp_cloudfront_url}" >> $GITHUB_OUTPUT
-          echo "cloudfront_staging_url=${tmp_cloudfront_staging_url}" >> $GITHUB_OUTPUT
-          echo "s3_subdir_tar=${tmp_s3_subdir_tar}" >> $GITHUB_OUTPUT
+          cloudfront_url="https://${domain}/whl"
+          cloudfront_staging_url="https://${domain}/whl-staging"
+          s3_subdir_tar="v3/tarball/"
+          echo "cloudfront_url=${cloudfront_url}" >> $GITHUB_OUTPUT
+          echo "cloudfront_staging_url=${cloudfront_staging_url}" >> $GITHUB_OUTPUT
+          echo "s3_subdir_tar=${s3_subdir_tar}" >> $GITHUB_OUTPUT
           # Uses bash parameter expansion to strip off the last path component (the whl subdir).
-          echo "cloudfront_base_url=${tmp_cloudfront_url%/*}" >> $GITHUB_OUTPUT
+          echo "cloudfront_base_url=${cloudfront_url%/*}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix
         id: configure
