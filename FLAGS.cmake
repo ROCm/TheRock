@@ -25,6 +25,19 @@ therock_declare_flag(
     hip-clr
 )
 
+if(WIN32)
+  set(_fortran_default OFF)
+else()
+  set(_fortran_default ON)
+endif()
+therock_declare_flag(
+  NAME BUILD_FORTRAN_LIBS
+  DEFAULT_VALUE ${_fortran_default}
+  DESCRIPTION "Build Fortran components in sub-projects (wrappers, tests, hipfort)"
+  GLOBAL_CMAKE_VARS
+    ROCM_BUILD_FORTRAN_LIBS=ON
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on

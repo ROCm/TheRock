@@ -141,9 +141,9 @@ artifact_groups = ["third-party-sysdeps", "base"]
 [build_stages.compiler-runtime]
 description = "Compiler, runtimes, and core profiling"
 artifact_groups = [
-    "compiler",
     "core-amdsmi",
     "core-runtime",
+    "compiler",
     "third-party-libs",
     "hip-runtime",
     "opencl-runtime",
@@ -451,12 +451,33 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 # --- Compiler Artifacts ---
 
+[artifacts.amd-llvm-base]
+artifact_group = "base"
+type = "target-neutral"
+artifact_deps = ["sysdeps"]
+feature_group = "ALL"
+
 [artifacts.amd-llvm]
 artifact_group = "compiler"
 type = "target-neutral"
-artifact_deps = ["sysdeps"]
+artifact_deps = ["amd-llvm-base"]
 feature_name = "COMPILER"
 feature_group = "ALL"
+
+[artifacts.amd-llvm-flang]
+artifact_group = "compiler"
+type = "target-neutral"
+artifact_deps = ["amd-llvm"]
+feature_name = "FLANG"
+feature_group = "ALL"
+disable_platforms = ["windows"]
+
+[artifacts.amd-llvm-offload]
+artifact_group = "compiler"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "core-runtime"]
+feature_group = "ALL"
+disable_platforms = ["windows"]
 
 [artifacts.hipify]
 artifact_group = "compiler"
@@ -469,7 +490,7 @@ feature_group = "ALL"
 [artifacts.core-runtime]
 artifact_group = "core-runtime"
 type = "target-neutral"
-artifact_deps = ["base", "sysdeps", "amd-llvm"]
+artifact_deps = ["base", "sysdeps", "amd-llvm-base"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms = ["windows"]

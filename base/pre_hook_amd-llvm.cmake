@@ -22,38 +22,21 @@ else()
   set(LLVM_BUILD_LLVM_DYLIB ON)
   set(LLVM_LINK_LLVM_DYLIB ON)
   set(LLVM_ENABLE_LIBCXX ON)
-  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang" CACHE STRING "Enable LLVM projects" FORCE)
-  set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp;offload" CACHE STRING "Enabled runtimes" FORCE)
-  if("offload" IN_LIST LLVM_ENABLE_RUNTIMES)
-    set(OPENMP_ENABLE_LIBOMPTARGET ON)
-    set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
-    set(LIBOMPTARGET_ENABLE_DEBUG ON)
-    set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
-    set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
-    set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime")
-    set(OFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR ON)
-    # There is an issue with finding the zstd config built by TheRock when zstd
-    # is searched for in the llvm config. LLVM has a FindZSTD.cmake that is
-    # found in module mode, which ultimately fails to locate the library.
-    # For now we will switch the priorty for find_package to first search in
-    # CONFIG mode.
-    set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
+  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
+  set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp" CACHE STRING "Enabled runtimes" FORCE)
 
-    # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
-    if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
-      list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
-      set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/GPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
-      set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
-      set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
-      #TODO: Enable when HWLOC dependency is figured out
-      #set(LIBOMP_USE_HWLOC ON)
-    endif()
-  endif()
+  # CRITICAL: Leave OPENMP_ENABLE_LIBOMPTARGET at default (ON).
+  # This bakes dlsym hooks into libomp for offload cooperation.
+  # At runtime, libomp calls dlsym(RTLD_DEFAULT, "__tgt_target_sync").
+  # If libomptarget is not loaded (i.e. amd-llvm-offload not installed),
+  # dlsym returns NULL, callbacks stay NULL, and all offload hooks are
+  # silently skipped (guarded by UNLIKELY(ptr != NULL)).
+  # When amd-llvm-offload is installed, libomptarget becomes available and
+  # libomp discovers it via dlsym — full async target task cooperation works.
+
+  # Don't create flang→clang symlink in base build (flang is in amd-llvm-flang).
+  set(CLANG_LINK_FLANG OFF)
+
   # Setting "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
   # with each other" as libomp and generated headers are copied into the original
   # source otherwise. Defaults to `ON`.
