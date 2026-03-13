@@ -38,9 +38,6 @@
 	path = iree-libs/fusilli
 	url = https://github.com/iree-org/fusilli.git
 	branch = main
-[submodule "rocm-kpack"]
-	path = base/rocm-kpack
-	url = https://github.com/ROCm/rocm-kpack.git
 [submodule "libhipcxx"]
 	path = math-libs/libhipcxx
 	url = https://github.com/ROCm/libhipcxx.git
