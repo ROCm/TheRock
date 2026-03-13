@@ -10,16 +10,15 @@ Upload layout:
 """
 
 import argparse
-from dataclasses import dataclass
 from pathlib import Path
 import platform
-import shlex
-import subprocess
 import sys
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from github_actions.github_actions_utils import retrieve_bucket_info
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from _therock_utils.storage_location import StorageLocation
+from _therock_utils.storage_backend import create_storage_backend
 
 
 PLATFORM = platform.system().lower()
@@ -28,23 +27,6 @@ PLATFORM = platform.system().lower()
 def log(*args):
     print(*args)
     sys.stdout.flush()
-
-
-def run_command(cmd: list[str], cwd: Path) -> None:
-    log(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, check=True)
-
-
-@dataclass(frozen=True)
-class UploadPath:
-    """Tracks upload paths and provides S3 URI computation."""
-
-    bucket: str
-    prefix: str  # e.g. "{external_repo}{run_id}-{platform}/manifests/gfx110X-all"
-
-    @property
-    def s3_uri(self) -> str:
-        return f"s3://{self.bucket}/{self.prefix}"
 
 
 def normalize_python_version_for_filename(python_version: str) -> str:
@@ -71,21 +53,14 @@ def sanitize_ref_for_filename(pytorch_git_ref: str) -> str:
     return pytorch_git_ref.replace("/", "-")
 
 
-def build_upload_path_for_workflow_run(
-    *,
-    run_id: str,
-    amdgpu_family: str,
-    bucket_override: str | None,
-) -> UploadPath:
+def _make_output_root(
+    run_id: str, bucket_override: str | None = None
+) -> WorkflowOutputRoot:
     if bucket_override:
-        external_repo = ""
-        bucket = bucket_override
-    else:
-        # Prefer explicit run_id so retrieve_bucket_info can query the workflow run if needed.
-        external_repo, bucket = retrieve_bucket_info(workflow_run_id=run_id)
-
-    prefix = f"{external_repo}{run_id}-{PLATFORM}/manifests/{amdgpu_family}"
-    return UploadPath(bucket=bucket, prefix=prefix)
+        return WorkflowOutputRoot(
+            bucket=bucket_override, external_repo="", run_id=run_id, platform=PLATFORM
+        )
+    return WorkflowOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -126,7 +101,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--bucket",
         type=str,
         default=None,
-        help="Override S3 bucket (default: auto-select via retrieve_bucket_info).",
+        help="Override S3 bucket (default: auto-select from workflow run).",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output to local directory instead of S3 (for testing).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be uploaded without actually uploading.",
     )
     return parser.parse_args(argv)
 
@@ -144,14 +130,15 @@ def main(argv: list[str]) -> None:
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
-    upload_path = build_upload_path_for_workflow_run(
-        run_id=args.run_id,
-        amdgpu_family=args.amdgpu_family,
-        bucket_override=args.bucket,
+    output_root = _make_output_root(args.run_id, bucket_override=args.bucket)
+    manifest_dir_loc = output_root.manifest_dir(args.amdgpu_family)
+    dest = StorageLocation(
+        manifest_dir_loc.bucket,
+        f"{manifest_dir_loc.relative_path}/{manifest_name}",
     )
-    dest_uri = f"{upload_path.s3_uri}/{manifest_name}"
 
-    run_command(["aws", "s3", "cp", str(manifest_path), dest_uri], cwd=Path.cwd())
+    backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
+    backend.upload_file(manifest_path, dest)
 
 
 if __name__ == "__main__":
