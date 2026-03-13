@@ -8,7 +8,7 @@
 # New patches are strongly discouraged. See patches/README.md.
 /patches/               @ScottTodd @marbre
 
-# GitHub Actions API module (REST API client and workflow commands).
+# This file accumulated unrelated code, tighten reviews until cleaned up.
 /build_tools/github_actions/github_actions_api.py       @ScottTodd
 
 # Debug tools configs and ROCgdb cmake wrapper.
