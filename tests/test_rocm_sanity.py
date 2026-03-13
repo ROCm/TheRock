@@ -403,7 +403,9 @@ class TestROCmSanity:
             try:
                 json_data = json.loads(content_text)
             except Exception as e:
-                pytest.fail(f"Failed to parse JSON output: {e}\nContent:\n{content_text}")
+                pytest.fail(
+                    f"Failed to parse JSON output: {e}\nContent:\n{content_text}"
+                )
             assert (
                 isinstance(json_data, list) and json_data
             ), "Expected non-empty JSON array"
@@ -420,7 +422,9 @@ class TestROCmSanity:
                 csv_reader = csv.DictReader(content_text.splitlines())
                 csv_rows = list(csv_reader)
             except Exception as e:
-                pytest.fail(f"Failed to parse CSV output: {e}\nContent:\n{content_text}")
+                pytest.fail(
+                    f"Failed to parse CSV output: {e}\nContent:\n{content_text}"
+                )
             assert csv_rows, "Expected at least one CSV row"
             for index, csv_row in enumerate(csv_rows):
                 missing_fields = _validate_csv_row(csv_row)
