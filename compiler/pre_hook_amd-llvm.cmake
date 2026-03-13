@@ -48,7 +48,11 @@ else()
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
       set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
-      set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+      if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+        set(FLANG_RUNTIME_F128_MATH_LIB "")
+      else()
+        set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+      endif()
       set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
       #TODO: Enable when HWLOC dependency is figured out
       #set(LIBOMP_USE_HWLOC ON)
@@ -103,7 +107,11 @@ endif()
 # we have never enabled benchmarks,
 # disabling more explicitly after a bug fix enabled.
 set(LLVM_INCLUDE_BENCHMARKS OFF)
-set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+    set(LLVM_TARGETS_TO_BUILD "AMDGPU;PowerPC" CACHE STRING "Enable LLVM Targets" FORCE)
+else()
+    set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
+endif()
 
 # Packaging.
 set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
