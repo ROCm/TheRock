@@ -51,7 +51,7 @@ jobs:
       contents: read
     # For push: which of the 4 test cases to run (change this in each of 4 commits).
     env:
-      MANIFEST_DIFF_PUSH_CASE: "1"
+      MANIFEST_DIFF_PUSH_CASE: "2"
       # For Case 3 (workflow mode): start run ID (e.g. a run before rocm-systems/rocm-libraries bump).
       MANIFEST_DIFF_PUSH_START_RUN_ID: "22468436712"
       # For Case 4 (commit SHAs): start commit (e.g. 5f60db78).
