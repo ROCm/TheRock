@@ -85,7 +85,9 @@ def _validate_json(gpu_obj: dict) -> list[str]:
         missing_fields.append("kfd_id")
     if "node_id" not in gpu_obj or not isinstance(gpu_obj.get("node_id"), int):
         missing_fields.append("node_id")
-    if "partition_id" not in gpu_obj or not isinstance(gpu_obj.get("partition_id"), int):
+    if "partition_id" not in gpu_obj or not isinstance(
+        gpu_obj.get("partition_id"), int
+    ):
         missing_fields.append("partition_id")
     return missing_fields
 
@@ -181,23 +183,33 @@ def test_amd_smi_list(mod_args, tmp_path: Path) -> None:
     ), f"amd-smi failed rc={return_code} stderr={stderr_text} stdout={stdout_text}"
 
     if output_file_path is not None:
-        assert stdout_text.strip() == "", f"Expected no stdout with --file, got: {stdout_text}"
+        assert (
+            stdout_text.strip() == ""
+        ), f"Expected no stdout with --file, got: {stdout_text}"
         assert output_file_path.exists(), "Expected output file to be created"
         content_text = output_file_path.read_text(encoding="utf-8", errors="replace")
     else:
         content_text = stdout_text
 
-    if expected_output_mode == "json" or ("--json" in modifiers and expected_output_mode is None):
+    if expected_output_mode == "json" or (
+        "--json" in modifiers and expected_output_mode is None
+    ):
         try:
             json_data = json.loads(content_text)
         except Exception as e:
             pytest.fail(f"Failed to parse JSON output: {e}\nContent:\n{content_text}")
-        assert isinstance(json_data, list) and json_data, "Expected non-empty JSON array"
+        assert (
+            isinstance(json_data, list) and json_data
+        ), "Expected non-empty JSON array"
         for index, gpu_obj in enumerate(json_data):
             missing_fields = _validate_json(gpu_obj)
-            assert not missing_fields, f"JSON GPU entry {index} missing fields: {missing_fields}"
+            assert (
+                not missing_fields
+            ), f"JSON GPU entry {index} missing fields: {missing_fields}"
 
-    elif expected_output_mode == "csv" or ("--csv" in modifiers and expected_output_mode is None):
+    elif expected_output_mode == "csv" or (
+        "--csv" in modifiers and expected_output_mode is None
+    ):
         try:
             csv_reader = csv.DictReader(content_text.splitlines())
             csv_rows = list(csv_reader)
@@ -206,13 +218,17 @@ def test_amd_smi_list(mod_args, tmp_path: Path) -> None:
         assert csv_rows, "Expected at least one CSV row"
         for index, csv_row in enumerate(csv_rows):
             missing_fields = _validate_csv_row(csv_row)
-            assert not missing_fields, f"CSV row {index} missing fields: {missing_fields}"
+            assert (
+                not missing_fields
+            ), f"CSV row {index} missing fields: {missing_fields}"
 
     else:
         gpu_blocks = _parse_gpu_blocks(content_text)
         assert gpu_blocks, "No GPU blocks found in amd-smi human output"
         for index, human_readable_gpu_block in enumerate(gpu_blocks):
-            missing_fields = _validate_human_readable_gpu_block(human_readable_gpu_block)
+            missing_fields = _validate_human_readable_gpu_block(
+                human_readable_gpu_block
+            )
             assert (
                 not missing_fields
             ), f"Human-readable GPU block {index} missing fields: {missing_fields}\nBlock:\n{human_readable_gpu_block}"

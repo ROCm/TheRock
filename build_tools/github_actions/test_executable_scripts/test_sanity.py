@@ -13,9 +13,12 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 
-def _run_pytest(cmd: list[str], *, cwd: Path, env: dict[str, str], check: bool) -> subprocess.CompletedProcess[str]:
+def _run_pytest(
+    cmd: list[str], *, cwd: Path, env: dict[str, str], check: bool
+) -> subprocess.CompletedProcess[str]:
     logging.info("++ Exec [%s]$ %s", cwd, " ".join(cmd))
     return subprocess.run(cmd, cwd=cwd, env=env, check=check, text=True)
+
 
 env = os.environ.copy()
 # Enable verbose ROCm logging, see
