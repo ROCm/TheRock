@@ -543,9 +543,9 @@ def run():
             job_config_data["shard_arr"] = [i + 1 for i in range(total_shards)]
             job_config_data["total_shards"] = total_shards
 
-            # If the test type is quick tests, we only need one shard for the test job
+            # If the test type is smoke tests, we only need one shard for the test job
             # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
-            if test_type == "quick":
+            if test_type == "smoke":
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 
