@@ -78,7 +78,12 @@ def get_asan_lib_path():
 def copy_dlls_exe_path():
     if platform.system() == "Windows":
         # hip and comgr dlls need to be copied to the same folder as exectuable
-        dlls_pattern = ["amdhip64*.dll", "amd_comgr*.dll", "hiprtc*.dll"]
+        dlls_pattern = [
+            "amdhip64*.dll",
+            "amd_comgr*.dll",
+            "hiprtc*.dll",
+            "rocm_kpack*.dll",
+        ]
         dlls_to_copy = []
         for pattern in dlls_pattern:
             dlls_to_copy.extend(THEROCK_BIN_DIR.glob(pattern))

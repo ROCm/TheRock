@@ -264,14 +264,6 @@ cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
 
 # Additional manual features that don't map to artifacts
 
-# Profiler Trace Decoder Binary (not an artifact, just a config option)
-if(THEROCK_FLAG_INCLUDE_PROFILER)
-  therock_add_feature(ROCPROF_TRACE_DECODER_BINARY
-    GROUP PROFILER
-    DESCRIPTION "Enables the closed-source rocprof trace decoder binary"
-  )
-endif()
-
 # Finalize all feature flags.
 therock_finalize_features()
 therock_report_features()

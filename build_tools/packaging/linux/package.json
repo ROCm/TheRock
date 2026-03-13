@@ -228,6 +228,17 @@
         ]
       },
       {
+        "Artifact": "core-kpack",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocm-kpack",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "amd-llvm",
         "Artifact_Subdir": [
           {
@@ -285,6 +296,17 @@
         "Artifact_Subdir": [
           {
             "Name": "clr",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "core-kpack",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocm-kpack",
             "Components": [
               "dev"
             ]
@@ -2105,7 +2127,8 @@
           {
             "Name": "rocdecode",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]
@@ -2179,7 +2202,8 @@
           {
             "Name": "rocjpeg",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]
