@@ -1231,19 +1231,53 @@ int main() {
     }
     if (instruction_name.rfind("V_WMMA_SCALE", 0) == 0 &&
         instruction_name.rfind("V_WMMA_LD_SCALE", 0) != 0) {
-      if (!Expect(ContainsSlot(decoded, StubOperandSlotKind::kScaleSource,
-                               StubOperandValueClass::kScalarRegister, 4, 1,
-                               false) &&
+      if (!Expect(decoded.operand_slots.binding_count == 5 &&
+                      decoded.operand_descriptors.descriptor_count == 5 &&
+                      CountSlotsOfKind(decoded, StubOperandSlotKind::kDestination) == 1 &&
+                      CountSlotsOfKind(decoded, StubOperandSlotKind::kSource0) == 1 &&
+                      CountSlotsOfKind(decoded, StubOperandSlotKind::kSource1) == 1 &&
+                      CountSlotsOfKind(decoded, StubOperandSlotKind::kAccumulatorSource) == 1 &&
+                      CountSlotsOfKind(decoded, StubOperandSlotKind::kScaleSource) == 1 &&
+                      CountDescriptorsForRole(decoded, StubOperandRole::kDestination) == 1 &&
+                      CountDescriptorsForRole(decoded, StubOperandRole::kSource0) == 1 &&
+                      CountDescriptorsForRole(decoded, StubOperandRole::kSource1) == 1 &&
+                      CountDescriptorsForRole(decoded, StubOperandRole::kAccumulator) == 1 &&
+                      CountDescriptorsForRole(decoded, StubOperandRole::kScale) == 1 &&
+                      ContainsSlot(decoded, StubOperandSlotKind::kScaleSource,
+                                   StubOperandValueClass::kScalarRegister, 4, 1,
+                                   false) &&
                       ContainsSlotFragment(decoded,
                                            StubOperandSlotKind::kScaleSource,
                                            StubFragmentKind::kScalar, 1, 1, 1,
                                            32, 1) &&
+                      ContainsSlotWaveSize(decoded,
+                                           StubOperandSlotKind::kScaleSource,
+                                           StubFragmentKind::kScalar, 0) &&
                       ContainsDescriptor(decoded, StubOperandRole::kScale,
                                          StubOperandSlotKind::kScaleSource,
                                          StubOperandValueClass::kScalarRegister,
                                          StubOperandAccess::kRead, 1,
-                                         StubFragmentKind::kScalar, 32),
+                                         StubFragmentKind::kScalar, 32) &&
+                      ContainsDescriptorWaveSize(decoded, StubOperandRole::kScale,
+                                                 StubOperandSlotKind::kScaleSource,
+                                                 StubFragmentKind::kScalar, 0),
                   "expected routed WMMA scale seed to keep scalar scale metadata")) {
+        return 1;
+      }
+    } else {
+      if (!Expect(decoded.operand_slots.binding_count == 4 &&
+                      decoded.operand_descriptors.descriptor_count == 4 &&
+                      CountSlotsOfKind(decoded, StubOperandSlotKind::kDestination) == 1 &&
+                      CountSlotsOfKind(decoded, StubOperandSlotKind::kSource0) == 1 &&
+                      CountSlotsOfKind(decoded, StubOperandSlotKind::kSource1) == 1 &&
+                      CountSlotsOfKind(decoded, StubOperandSlotKind::kAccumulatorSource) == 1 &&
+                      CountSlotsOfKind(decoded, StubOperandSlotKind::kScaleSource) == 0 &&
+                      CountDescriptorsForRole(decoded, StubOperandRole::kDestination) == 1 &&
+                      CountDescriptorsForRole(decoded, StubOperandRole::kSource0) == 1 &&
+                      CountDescriptorsForRole(decoded, StubOperandRole::kSource1) == 1 &&
+                      CountDescriptorsForRole(decoded, StubOperandRole::kAccumulator) == 1 &&
+                      CountDescriptorsForRole(decoded, StubOperandRole::kScale) == 0,
+                  "expected routed WMMA/SWMMAC core seed to keep exact matrix composition")) {
         return 1;
       }
     }
