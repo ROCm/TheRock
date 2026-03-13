@@ -183,6 +183,7 @@
     - vector `source0` and destination fragment coverage on `B64`
     - scalar scale / paired-scale fragment coverage on `B64`
     - route-wide non-matrix wave-size and descriptor-role validation across current paired scale-load helpers
+    - route-wide role-specific non-matrix slot and descriptor wave-size checks across current paired scale-load helpers
     - route-wide slot-count and exact descriptor/slot composition validation across current paired scale-load helpers
     - route-wide exact vector source/destination and scalar scale / paired-scale slot-shape checks across current paired scale-load helpers
     - route-wide exact scalar scale / paired-scale and width-specific destination descriptor-shape checks across current paired scale-load helpers
@@ -229,6 +230,7 @@
     - LDS address fragment/descriptor coverage on load and store
     - tensor-descriptor fragment coverage on store
     - route-wide non-matrix wave-size and descriptor-role validation across the current tensor route set
+    - route-wide role-specific non-matrix slot and descriptor wave-size checks across the current tensor route set
     - route-wide slot-count and descriptor-count validation across the current tensor route set
     - route-wide exact descriptor/slot composition checks across the current tensor route set
     - route-wide exact tensor-descriptor, tensor-coordinate, and LDS address slot-shape checks across the current tensor route set
@@ -245,6 +247,7 @@
     - packed FP8/BF8 source and destination descriptors for `PK_F16` conversions
     - scalar and packed destination fragment coverage on BF8 conversion paths
     - route-wide non-matrix wave-size and source/destination descriptor validation across the current VOP1 route set
+    - route-wide role-specific non-matrix slot and descriptor wave-size checks across the current VOP1 route set
     - route-wide slot-count and descriptor-count validation plus packed-vs-scalar descriptor-shape checks across the current VOP1 route set
     - route-wide exact source/destination descriptor composition plus paired-operand flag checks across the current VOP1 route set
     - route-wide exact scalar and packed source/destination slot-shape checks across the current VOP1 route set
@@ -259,6 +262,7 @@
   - Descriptor depth:
     - full vector source, scale, and vector/scalar destination descriptor coverage
     - route-wide non-matrix wave-size and scale/destination descriptor validation across the current VOP3 SDST route set
+    - route-wide role-specific non-matrix slot and descriptor wave-size checks across the current VOP3 SDST route set
     - route-wide slot-count and descriptor-count validation plus scalar-destination slot checks across the current VOP3 SDST route set
     - route-wide exact descriptor-role and slot-kind composition checks across the current VOP3 SDST route set
     - route-wide exact source, scale, and vector/scalar destination slot-shape checks across the current VOP3 SDST route set
