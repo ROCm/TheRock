@@ -30,8 +30,8 @@ environ_vars = os.environ.copy()
 
 # Determine test filter based on TEST_TYPE environment variable
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "quick":
-    # Exclude tests that start with "Full" during quick tests
+if test_type == "smoke":
+    # Exclude tests that start with "Full" during smoke tests
     environ_vars["GTEST_FILTER"] = "-Full*"
 
 # As a sanity check, verify libIREECompiler.so is available in the build artifacts.
@@ -49,8 +49,8 @@ environ_vars["PATH"] = f"{THEROCK_BIN_DIR}:{environ_vars['PATH']}"
 
 # Run the tests
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-if test_type == "quick":
-    logging.info("   TEST_TYPE=quick: Excluding Full* tests via GTEST_FILTER")
+if test_type == "smoke":
+    logging.info("   TEST_TYPE=smoke: Excluding Full* tests via GTEST_FILTER")
 subprocess.run(
     cmd,
     cwd=THEROCK_DIR,

@@ -52,11 +52,11 @@ env["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 # -----------------------------
 # Test filtering
 # -----------------------------
-# If quick mode is enabled, run minimal suite (only dynamic metric tests)
+# If smoke mode is enabled, run minimal suite (only dynamic metric tests)
 test_type = os.getenv("TEST_TYPE", "full")
 
-if test_type == "quick":
-    logging.info("Running quick tests only for amdsmitst")
+if test_type == "smoke":
+    logging.info("Running smoke tests only for amdsmitst")
     test_filter = ["--gtest_filter=AmdSmiDynamicMetricTest.*"]
 else:
     # Full test mode: run whitelist and explicitly exclude known failing tests
