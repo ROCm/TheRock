@@ -32,6 +32,36 @@ DEFAULT_CONTAINER_IMAGE = "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"
 is_windows = platform.system() == "Windows"
 
 
+def check_windows_package_installed(package: str) -> bool:
+    """Check if a Windows package is already installed."""
+    if platform.system() != "Windows":
+        return False
+
+    # Map package names to their executables or check commands
+    checks = {
+        "chocolatey": ["choco", "--version"],
+        "git": ["git", "--version"],
+        "python": ["python", "--version"],
+        "cmake": ["cmake", "--version"],
+        "ninja": ["ninja", "--version"],
+        "ccache": ["ccache", "--version"],
+        "uv": ["uv", "--version"],
+    }
+
+    if package not in checks:
+        return False
+
+    try:
+        result = subprocess.run(
+            checks[package],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
+
 def check_docker() -> bool:
     if not shutil.which("docker"):
         return False
@@ -146,21 +176,42 @@ def run_linux(args: argparse.Namespace) -> int:
 
 def run_windows(args: argparse.Namespace) -> int:
     """Run reproduction on bare metal for Windows."""
-    packages = ["chocolatey", "git", "python", "cmake", "ninja", "ccache", "uv"]
+    all_packages = ["chocolatey", "git", "python", "cmake", "ninja", "ccache", "uv"]
+
+    # Check which packages are already installed
+    installed = []
+    missing = []
+    for pkg in all_packages:
+        if check_windows_package_installed(pkg):
+            installed.append(pkg)
+        else:
+            missing.append(pkg)
 
     print("=" * 60)
     print("WINDOWS REPRODUCTION (bare metal)")
     print("=" * 60)
     print()
-    print("This will install the following packages on your system:")
-    for pkg in packages:
-        print(f"  - {pkg}")
-    print()
-    response = input("Continue? [y/N] ").strip().lower()
-    if response not in ("y", "yes"):
-        print("Aborted.")
-        return 1
-    print()
+
+    if installed:
+        print("Already installed:")
+        for pkg in installed:
+            print(f"  - {pkg}")
+        print()
+
+    # Only prompt if there are packages to install
+    if missing:
+        print("This will install the following packages on your system:")
+        for pkg in missing:
+            print(f"  - {pkg}")
+        print()
+        response = input("Continue? [y/N] ").strip().lower()
+        if response not in ("y", "yes"):
+            print("Aborted.")
+            return 1
+        print()
+    else:
+        print("All required packages are already installed.")
+        print()
 
     fetch_cmd = (
         f"$env:GITHUB_REPOSITORY='{args.repository}'; "
@@ -171,21 +222,38 @@ def run_windows(args: argparse.Namespace) -> int:
     if args.fetch_artifact_args:
         fetch_cmd += f" {args.fetch_artifact_args}"
 
-    steps = [
-        (
-            "Installing chocolatey",
+    # Build steps conditionally based on what's already installed
+    steps = []
+
+    if "chocolatey" in missing:
+        steps.append(
             (
-                "Set-ExecutionPolicy Bypass -Scope Process -Force; "
-                "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; "
-                "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
-            ),
-        ),
-        ("Installing dependencies", "choco install -y git python cmake ninja ccache"),
-        (
-            "Refreshing environment",
-            "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')",
-        ),
-        ("Installing uv", "irm https://astral.sh/uv/install.ps1 | iex"),
+                "Installing chocolatey",
+                (
+                    "Set-ExecutionPolicy Bypass -Scope Process -Force; "
+                    "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; "
+                    "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
+                ),
+            )
+        )
+
+    # Check which choco packages need installing
+    choco_packages = [p for p in ["git", "python", "cmake", "ninja", "ccache"] if p in missing]
+    if choco_packages:
+        steps.append(
+            ("Installing dependencies", f"choco install -y {' '.join(choco_packages)}")
+        )
+        steps.append(
+            (
+                "Refreshing environment",
+                "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')",
+            )
+        )
+
+    if "uv" in missing:
+        steps.append(("Installing uv", "irm https://astral.sh/uv/install.ps1 | iex"))
+
+    steps.extend([
         ("Creating virtual environment", "uv venv .venv; .venv\\Scripts\\Activate.ps1"),
         ("Installing Python dependencies", "uv pip install -r requirements-test.txt"),
         ("Downloading artifacts", fetch_cmd),
@@ -201,7 +269,7 @@ def run_windows(args: argparse.Namespace) -> int:
                 ]
             ),
         ),
-    ]
+    ])
 
     if args.setup_only:
         steps.append(("Setup complete", f"Write-Host 'Run: {args.test_script}'"))
