@@ -105,25 +105,15 @@ jobs:
             --release-type=${{ env.release_type }} \
             --prerelease-version=${{ inputs.prerelease_version }}
 
-      - name: Set variables for nightly release
-        if: ${{ env.release_type == 'nightly' }}
+      - name: Set release variables
         run: |
-          echo "tmp_cloudfront_url=https://rocm.nightlies.amd.com/whl" >> $GITHUB_ENV
-          echo "tmp_cloudfront_staging_url=https://rocm.nightlies.amd.com/whl-staging" >> $GITHUB_ENV
-          echo "tmp_s3_subdir_tar=v3/tarball/" >> $GITHUB_ENV
-
-      - name: Set variables for prerelease
-        if: ${{ env.release_type == 'prerelease' }}
-        run: |
-          echo "tmp_cloudfront_url=https://rocm.prereleases.amd.com/whl" >> $GITHUB_ENV
-          echo "tmp_cloudfront_staging_url=https://rocm.prereleases.amd.com/whl-staging" >> $GITHUB_ENV
-          echo "tmp_s3_subdir_tar=v3/tarball/" >> $GITHUB_ENV
-
-      - name: Set variables for development release
-        if: ${{ env.release_type == 'dev' }}
-        run: |
-          echo "tmp_cloudfront_url=https://rocm.devreleases.amd.com/whl" >> $GITHUB_ENV
-          echo "tmp_cloudfront_staging_url=https://rocm.devreleases.amd.com/whl-staging" >> $GITHUB_ENV
+          case "${{ env.release_type }}" in
+            nightly)    domain="rocm.nightlies.amd.com" ;;
+            prerelease) domain="rocm.prereleases.amd.com" ;;
+            dev)        domain="rocm.devreleases.amd.com" ;;
+          esac
+          echo "tmp_cloudfront_url=https://${domain}/whl" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://${domain}/whl-staging" >> $GITHUB_ENV
           echo "tmp_s3_subdir_tar=v3/tarball/" >> $GITHUB_ENV
 
       - name: Generate release information
