@@ -236,10 +236,11 @@ def run_windows(args: argparse.Namespace) -> int:
                 ),
             )
         )
+        # Must use Import-Module to refresh env since [System.Environment] can be stale
         steps.append(
             (
                 "Refreshing environment",
-                "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')",
+                "Import-Module $env:ChocolateyInstall\\helpers\\chocolateyProfile.psm1; refreshenv",
             )
         )
 
@@ -252,7 +253,7 @@ def run_windows(args: argparse.Namespace) -> int:
         steps.append(
             (
                 "Refreshing environment",
-                "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')",
+                "Import-Module $env:ChocolateyInstall\\helpers\\chocolateyProfile.psm1; refreshenv",
             )
         )
 
