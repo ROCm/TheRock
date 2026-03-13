@@ -1,5 +1,6 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
+
 from pathlib import Path
 from pytest_check import check
 import logging
@@ -14,7 +15,9 @@ import sys
 THIS_DIR = Path(__file__).resolve().parent
 
 logger = logging.getLogger(__name__)
+
 THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
+
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 # Importing is_asan from github_actions_utils.py

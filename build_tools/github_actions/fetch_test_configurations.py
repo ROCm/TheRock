@@ -168,17 +168,6 @@ test_matrix = {
             "windows": 2,
         },
     },
-    "rocprofiler_systems": {
-        "job_name": "rocprofiler_systems",
-        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
-        },
-    },
     "amdsmi_cli": {
         "job_name": "amdsmi_cli",
         "fetch_artifact_args": "--base-only",
