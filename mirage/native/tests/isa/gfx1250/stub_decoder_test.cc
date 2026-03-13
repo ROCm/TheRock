@@ -338,6 +338,31 @@ std::uint32_t CountDescriptorsWithFragmentKindAndWaveSize(
   return count;
 }
 
+std::uint32_t CountSlotsWithValueClass(const StubDecodedInstruction& instruction,
+                                       StubOperandValueClass value_class) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    if (instruction.operand_slots.bindings[i].value_class == value_class) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountDescriptorsWithValueClass(
+    const StubDecodedInstruction& instruction,
+    StubOperandValueClass value_class) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    if (instruction.operand_descriptors.descriptors[i].value_class ==
+        value_class) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 }  // namespace
 
 int main() {
@@ -1329,6 +1354,14 @@ int main() {
                                  instruction_name.rfind("V_WMMA_LD_SCALE", 0) != 0
                              ? 4u
                              : 4u) &&
+                    CountSlotsWithValueClass(
+                        decoded, StubOperandValueClass::kMatrixFragment) == 3 &&
+                    CountSlotsWithValueClass(
+                        decoded, StubOperandValueClass::kAccumulatorFragment) == 1 &&
+                    CountDescriptorsWithValueClass(
+                        decoded, StubOperandValueClass::kMatrixFragment) == 3 &&
+                    CountDescriptorsWithValueClass(
+                        decoded, StubOperandValueClass::kAccumulatorFragment) == 1 &&
                     AllMatrixSlotsHaveWaveSize(decoded, 32) &&
                     AllMatrixDescriptorsHaveWaveSize(decoded, 32),
                 "expected routed WMMA/SWMMAC matrix fragments to stay wave32")) {
@@ -1364,6 +1397,20 @@ int main() {
                           decoded, StubFragmentKind::kScalar, 0) == 1 &&
                       CountDescriptorsWithFragmentKindAndWaveSize(
                           decoded, StubFragmentKind::kScalar, 0) == 1 &&
+                      CountSlotsWithValueClass(
+                          decoded, StubOperandValueClass::kMatrixFragment) == 3 &&
+                      CountSlotsWithValueClass(
+                          decoded,
+                          StubOperandValueClass::kAccumulatorFragment) == 1 &&
+                      CountSlotsWithValueClass(
+                          decoded, StubOperandValueClass::kScalarRegister) == 1 &&
+                      CountDescriptorsWithValueClass(
+                          decoded, StubOperandValueClass::kMatrixFragment) == 3 &&
+                      CountDescriptorsWithValueClass(
+                          decoded,
+                          StubOperandValueClass::kAccumulatorFragment) == 1 &&
+                      CountDescriptorsWithValueClass(
+                          decoded, StubOperandValueClass::kScalarRegister) == 1 &&
                       ContainsSlot(decoded, StubOperandSlotKind::kScaleSource,
                                    StubOperandValueClass::kScalarRegister, 4, 1,
                                    false) &&
@@ -1413,7 +1460,17 @@ int main() {
                       CountSlotsWithFragmentKindAndWaveSize(
                           decoded, StubFragmentKind::kScalar, 0) == 0 &&
                       CountDescriptorsWithFragmentKindAndWaveSize(
-                          decoded, StubFragmentKind::kScalar, 0) == 0,
+                          decoded, StubFragmentKind::kScalar, 0) == 0 &&
+                      CountSlotsWithValueClass(
+                          decoded, StubOperandValueClass::kMatrixFragment) == 3 &&
+                      CountSlotsWithValueClass(
+                          decoded,
+                          StubOperandValueClass::kAccumulatorFragment) == 1 &&
+                      CountDescriptorsWithValueClass(
+                          decoded, StubOperandValueClass::kMatrixFragment) == 3 &&
+                      CountDescriptorsWithValueClass(
+                          decoded,
+                          StubOperandValueClass::kAccumulatorFragment) == 1,
                   "expected routed WMMA/SWMMAC core seed to keep exact matrix composition")) {
         return 1;
       }
@@ -2628,6 +2685,18 @@ int main() {
                         decoded, StubFragmentKind::kTensorCoordinate, 0) == 1 &&
                     CountDescriptorsWithFragmentKindAndWaveSize(
                         decoded, StubFragmentKind::kAddress, 0) == 1 &&
+                    CountSlotsWithValueClass(
+                        decoded, StubOperandValueClass::kTensorDescriptor) == 1 &&
+                    CountSlotsWithValueClass(
+                        decoded, StubOperandValueClass::kTensorCoordinate) == 1 &&
+                    CountSlotsWithValueClass(
+                        decoded, StubOperandValueClass::kLdsAddress) == 1 &&
+                    CountDescriptorsWithValueClass(
+                        decoded, StubOperandValueClass::kTensorDescriptor) == 1 &&
+                    CountDescriptorsWithValueClass(
+                        decoded, StubOperandValueClass::kTensorCoordinate) == 1 &&
+                    CountDescriptorsWithValueClass(
+                        decoded, StubOperandValueClass::kLdsAddress) == 1 &&
                     CountOutputSlots(decoded) ==
                         (instruction_name == "TENSOR_LOAD_TO_LDS" ? 1u : 0u) &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kRead) ==
@@ -2813,6 +2882,16 @@ int main() {
                             ? StubFragmentKind::kPacked
                             : StubFragmentKind::kScalar,
                         0) == 2 &&
+                    CountSlotsWithValueClass(
+                        decoded,
+                        instruction_name.find("PK_") != std::string_view::npos
+                            ? StubOperandValueClass::kPackedVector
+                            : StubOperandValueClass::kVectorRegister) == 2 &&
+                    CountDescriptorsWithValueClass(
+                        decoded,
+                        instruction_name.find("PK_") != std::string_view::npos
+                            ? StubOperandValueClass::kPackedVector
+                            : StubOperandValueClass::kVectorRegister) == 2 &&
                     CountOutputSlots(decoded) == 1 &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kRead) == 1 &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kWrite) == 1 &&
@@ -2941,6 +3020,14 @@ int main() {
                         decoded, StubFragmentKind::kScalar, 0) == 5 &&
                     CountDescriptorsWithFragmentKindAndWaveSize(
                         decoded, StubFragmentKind::kScalar, 0) == 5 &&
+                    CountSlotsWithValueClass(
+                        decoded, StubOperandValueClass::kVectorRegister) == 4 &&
+                    CountSlotsWithValueClass(
+                        decoded, StubOperandValueClass::kScalarRegister) == 1 &&
+                    CountDescriptorsWithValueClass(
+                        decoded, StubOperandValueClass::kVectorRegister) == 4 &&
+                    CountDescriptorsWithValueClass(
+                        decoded, StubOperandValueClass::kScalarRegister) == 1 &&
                     CountOutputSlots(decoded) == 2 &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kRead) == 3 &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kWrite) == 2 &&
@@ -3065,6 +3152,14 @@ int main() {
                         decoded, StubFragmentKind::kVector, 0) == 2 &&
                     CountDescriptorsWithFragmentKindAndWaveSize(
                         decoded, StubFragmentKind::kScalar, 0) == 2 &&
+                    CountSlotsWithValueClass(
+                        decoded, StubOperandValueClass::kVectorRegister) == 2 &&
+                    CountSlotsWithValueClass(
+                        decoded, StubOperandValueClass::kScalarRegister) == 2 &&
+                    CountDescriptorsWithValueClass(
+                        decoded, StubOperandValueClass::kVectorRegister) == 2 &&
+                    CountDescriptorsWithValueClass(
+                        decoded, StubOperandValueClass::kScalarRegister) == 2 &&
                     CountOutputSlots(decoded) == 1 &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kRead) == 3 &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kWrite) == 1 &&
