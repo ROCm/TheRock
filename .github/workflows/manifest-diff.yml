@@ -1,9 +1,6 @@
 name: TheRock Manifest Diff Report
 
-# Push trigger for testing the 4 input cases (change MANIFEST_DIFF_PUSH_CASE per commit).
 on:
-  push:
-    branches: [amd/hsivasun/add-manifest-diff-workflow]
   workflow_dispatch:
     inputs:
       start_ref:
@@ -49,65 +46,13 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    # For push: which of the 4 test cases to run (change this in each of 4 commits).
-    env:
-      MANIFEST_DIFF_PUSH_CASE: "4"
-      # For Case 3 (workflow mode): start run ID (e.g. a run before rocm-systems/rocm-libraries bump).
-      MANIFEST_DIFF_PUSH_START_RUN_ID: "22468436712"
-      # For Case 4 (commit SHAs): start commit (e.g. 5f60db78).
-      MANIFEST_DIFF_PUSH_START_SHA: "5f60db78"
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
-      # --- Push test cases (exactly one runs per push based on MANIFEST_DIFF_PUSH_CASE) ---
-      - name: Generate manifest diff report (push Case 1 – find-last-successful + workflow-mode)
-        if: ${{ github.event_name == 'push' && env.MANIFEST_DIFF_PUSH_CASE == '1' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python3 build_tools/generate_manifest_diff_report.py \
-            --find-last-successful ci_nightly.yml \
-            --workflow-mode \
-            --end "${{ github.run_id }}" \
-            --output-dir reports
-
-      - name: Generate manifest diff report (push Case 2 – find-last-successful only)
-        if: ${{ github.event_name == 'push' && env.MANIFEST_DIFF_PUSH_CASE == '2' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python3 build_tools/generate_manifest_diff_report.py \
-            --find-last-successful ci_nightly.yml \
-            --end "${{ github.sha }}" \
-            --output-dir reports
-
-      - name: Generate manifest diff report (push Case 3 – workflow-mode, start/end run IDs)
-        if: ${{ github.event_name == 'push' && env.MANIFEST_DIFF_PUSH_CASE == '3' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python3 build_tools/generate_manifest_diff_report.py \
-            --workflow-mode \
-            --start "${{ env.MANIFEST_DIFF_PUSH_START_RUN_ID }}" \
-            --end "${{ github.run_id }}" \
-            --output-dir reports
-
-      - name: Generate manifest diff report (push Case 4 – start/end commit SHAs)
-        if: ${{ github.event_name == 'push' && env.MANIFEST_DIFF_PUSH_CASE == '4' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python3 build_tools/generate_manifest_diff_report.py \
-            --start "${{ env.MANIFEST_DIFF_PUSH_START_SHA }}" \
-            --end "${{ github.sha }}" \
-            --output-dir reports
-
-      # --- Manual / workflow_call (uses inputs) ---
-      - name: Generate manifest diff report (dispatch/call)
-        if: ${{ github.event_name != 'push' }}
+      - name: Generate manifest diff report
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
