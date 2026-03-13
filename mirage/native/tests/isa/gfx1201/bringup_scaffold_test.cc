@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 268u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 282u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -195,6 +195,34 @@ int main() {
               "expected V_CVT_NORM_I16_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_NORM_U16_F16"),
               "expected V_CVT_NORM_U16_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_RCP_F16"),
+              "expected V_RCP_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_RSQ_F16"),
+              "expected V_RSQ_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_SQRT_F16"),
+              "expected V_SQRT_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_EXP_F16"),
+              "expected V_EXP_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_LOG_F16"),
+              "expected V_LOG_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_SIN_F16"),
+              "expected V_SIN_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_COS_F16"),
+              "expected V_COS_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_FREXP_EXP_I16_F16"),
+              "expected V_FREXP_EXP_I16_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_FREXP_MANT_F16"),
+              "expected V_FREXP_MANT_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_FRACT_F16"),
+              "expected V_FRACT_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_TRUNC_F16"),
+              "expected V_TRUNC_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CEIL_F16"),
+              "expected V_CEIL_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_RNDNE_F16"),
+              "expected V_RNDNE_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_FLOOR_F16"),
+              "expected V_FLOOR_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_I32_I16"),
               "expected V_CVT_I32_I16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_U32_U16"),
@@ -254,7 +282,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 268u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 282u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -378,6 +406,34 @@ int main() {
               "expected interpreter support for V_CVT_NORM_I16_F16") ||
       !Expect(interpreter.Supports("V_CVT_NORM_U16_F16"),
               "expected interpreter support for V_CVT_NORM_U16_F16") ||
+      !Expect(interpreter.Supports("V_RCP_F16"),
+              "expected interpreter support for V_RCP_F16") ||
+      !Expect(interpreter.Supports("V_RSQ_F16"),
+              "expected interpreter support for V_RSQ_F16") ||
+      !Expect(interpreter.Supports("V_SQRT_F16"),
+              "expected interpreter support for V_SQRT_F16") ||
+      !Expect(interpreter.Supports("V_EXP_F16"),
+              "expected interpreter support for V_EXP_F16") ||
+      !Expect(interpreter.Supports("V_LOG_F16"),
+              "expected interpreter support for V_LOG_F16") ||
+      !Expect(interpreter.Supports("V_SIN_F16"),
+              "expected interpreter support for V_SIN_F16") ||
+      !Expect(interpreter.Supports("V_COS_F16"),
+              "expected interpreter support for V_COS_F16") ||
+      !Expect(interpreter.Supports("V_FREXP_EXP_I16_F16"),
+              "expected interpreter support for V_FREXP_EXP_I16_F16") ||
+      !Expect(interpreter.Supports("V_FREXP_MANT_F16"),
+              "expected interpreter support for V_FREXP_MANT_F16") ||
+      !Expect(interpreter.Supports("V_FRACT_F16"),
+              "expected interpreter support for V_FRACT_F16") ||
+      !Expect(interpreter.Supports("V_TRUNC_F16"),
+              "expected interpreter support for V_TRUNC_F16") ||
+      !Expect(interpreter.Supports("V_CEIL_F16"),
+              "expected interpreter support for V_CEIL_F16") ||
+      !Expect(interpreter.Supports("V_RNDNE_F16"),
+              "expected interpreter support for V_RNDNE_F16") ||
+      !Expect(interpreter.Supports("V_FLOOR_F16"),
+              "expected interpreter support for V_FLOOR_F16") ||
       !Expect(interpreter.Supports("V_CVT_I32_I16"),
               "expected interpreter support for V_CVT_I32_I16") ||
       !Expect(interpreter.Supports("V_CVT_U32_U16"),

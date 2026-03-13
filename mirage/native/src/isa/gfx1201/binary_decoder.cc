@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 268> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 282> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -246,23 +246,37 @@ constexpr std::array<std::string_view, 268> kPhase0ExecutableOpcodes{{
     "V_CVT_I32_I16",
     "V_CVT_U32_U16",
     "V_CVT_I32_F64",
+    "V_EXP_F16",
     "V_EXP_F32",
+    "V_LOG_F16",
     "V_LOG_F32",
+    "V_RCP_F16",
     "V_RCP_F32",
     "V_RCP_IFLAG_F32",
+    "V_RSQ_F16",
     "V_RSQ_F32",
+    "V_SQRT_F16",
     "V_SQRT_F32",
+    "V_SIN_F16",
     "V_SIN_F32",
+    "V_COS_F16",
     "V_COS_F32",
     "V_RCP_F64",
     "V_RSQ_F64",
     "V_SQRT_F64",
+    "V_FREXP_EXP_I16_F16",
     "V_FREXP_EXP_I32_F32",
+    "V_FREXP_MANT_F16",
     "V_FREXP_MANT_F32",
+    "V_FRACT_F16",
     "V_FRACT_F32",
     "V_FREXP_EXP_I32_F64",
     "V_FREXP_MANT_F64",
     "V_FRACT_F64",
+    "V_TRUNC_F16",
+    "V_CEIL_F16",
+    "V_RNDNE_F16",
+    "V_FLOOR_F16",
     "V_TRUNC_F32",
     "V_CEIL_F32",
     "V_RNDNE_F32",
@@ -883,17 +897,31 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "V_CVT_U16_F16" ||
              instruction_name == "V_CVT_NORM_I16_F16" ||
              instruction_name == "V_CVT_NORM_U16_F16" ||
+             instruction_name == "V_EXP_F16" ||
              instruction_name == "V_EXP_F32" ||
+             instruction_name == "V_LOG_F16" ||
              instruction_name == "V_LOG_F32" ||
+             instruction_name == "V_RCP_F16" ||
              instruction_name == "V_RCP_F32" ||
              instruction_name == "V_RCP_IFLAG_F32" ||
+             instruction_name == "V_RSQ_F16" ||
              instruction_name == "V_RSQ_F32" ||
+             instruction_name == "V_SQRT_F16" ||
              instruction_name == "V_SQRT_F32" ||
+             instruction_name == "V_SIN_F16" ||
              instruction_name == "V_SIN_F32" ||
+             instruction_name == "V_COS_F16" ||
              instruction_name == "V_COS_F32" ||
+             instruction_name == "V_FREXP_EXP_I16_F16" ||
              instruction_name == "V_FREXP_EXP_I32_F32" ||
+             instruction_name == "V_FREXP_MANT_F16" ||
              instruction_name == "V_FREXP_MANT_F32" ||
+             instruction_name == "V_FRACT_F16" ||
              instruction_name == "V_FRACT_F32" ||
+             instruction_name == "V_TRUNC_F16" ||
+             instruction_name == "V_CEIL_F16" ||
+             instruction_name == "V_RNDNE_F16" ||
+             instruction_name == "V_FLOOR_F16" ||
              instruction_name == "V_TRUNC_F32" ||
              instruction_name == "V_CEIL_F32" ||
              instruction_name == "V_RNDNE_F32" ||

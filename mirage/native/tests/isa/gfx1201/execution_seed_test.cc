@@ -702,6 +702,68 @@ bool ExpectOffsetNormSeedState(
          !state.waiting_on_barrier && state.pc == 4u;
 }
 
+bool ExpectF16UnaryMathSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[80][0] == 0x00003400u &&
+         state.vgprs[80][1] == 0x00003400u &&
+         state.vgprs[80][2] == 0x80808080u &&
+         state.vgprs[80][3] == 0x00003400u &&
+         state.vgprs[81][0] == 0x00003800u &&
+         state.vgprs[81][1] == 0x00003800u &&
+         state.vgprs[81][2] == 0x81818181u &&
+         state.vgprs[81][3] == 0x00003800u &&
+         state.vgprs[82][0] == 0x00004000u &&
+         state.vgprs[82][1] == 0x00004000u &&
+         state.vgprs[82][2] == 0x82828282u &&
+         state.vgprs[82][3] == 0x00004000u &&
+         state.vgprs[83][0] == 0x00004800u &&
+         state.vgprs[83][1] == 0x00004800u &&
+         state.vgprs[83][2] == 0x83838383u &&
+         state.vgprs[83][3] == 0x00004800u &&
+         state.vgprs[84][0] == 0x00004200u &&
+         state.vgprs[84][1] == 0x00004200u &&
+         state.vgprs[84][2] == 0x84848484u &&
+         state.vgprs[84][3] == 0x00004200u &&
+         state.vgprs[85][0] == 0x00000000u &&
+         state.vgprs[85][1] == 0x00000000u &&
+         state.vgprs[85][2] == 0x85858585u &&
+         state.vgprs[85][3] == 0x00000000u &&
+         state.vgprs[86][0] == 0x00003c00u &&
+         state.vgprs[86][1] == 0x00003c00u &&
+         state.vgprs[86][2] == 0x86868686u &&
+         state.vgprs[86][3] == 0x00003c00u &&
+         state.vgprs[87][0] == 0x00000003u &&
+         state.vgprs[87][1] == 0x00000003u &&
+         state.vgprs[87][2] == 0x87878787u &&
+         state.vgprs[87][3] == 0x00000003u &&
+         state.vgprs[88][0] == 0x00003800u &&
+         state.vgprs[88][1] == 0x00003800u &&
+         state.vgprs[88][2] == 0x88888888u &&
+         state.vgprs[88][3] == 0x00003800u &&
+         state.vgprs[89][0] == 0x00003400u &&
+         state.vgprs[89][1] == 0x00003400u &&
+         state.vgprs[89][2] == 0x89898989u &&
+         state.vgprs[89][3] == 0x00003400u &&
+         state.vgprs[90][0] == 0x0000c000u &&
+         state.vgprs[90][1] == 0x0000c000u &&
+         state.vgprs[90][2] == 0x90909090u &&
+         state.vgprs[90][3] == 0x0000c000u &&
+         state.vgprs[91][0] == 0x0000c000u &&
+         state.vgprs[91][1] == 0x0000c000u &&
+         state.vgprs[91][2] == 0x91919191u &&
+         state.vgprs[91][3] == 0x0000c000u &&
+         state.vgprs[92][0] == 0x0000c200u &&
+         state.vgprs[92][1] == 0x0000c200u &&
+         state.vgprs[92][2] == 0x92929292u &&
+         state.vgprs[92][3] == 0x0000c200u &&
+         state.vgprs[93][0] == 0x0000c200u &&
+         state.vgprs[93][1] == 0x0000c200u &&
+         state.vgprs[93][2] == 0x93939393u &&
+         state.vgprs[93][3] == 0x0000c200u &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 14u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -1644,6 +1706,55 @@ int main() {
                                      OperandKind::kVgpr, 29u,
                                      OperandKind::kSgpr, 5u),
               "expected decoded V_CVT_U16_F16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_rcp_f16_words{
+      MakeVop1(84u, 40u, 257u)};
+  if (!Expect(decoder.DecodeInstruction(v_rcp_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_RCP_F16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_RCP_F16",
+                                     OperandKind::kVgpr, 40u,
+                                     OperandKind::kVgpr, 1u),
+              "expected decoded V_RCP_F16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_frexp_exp_i16_f16_words{
+      MakeVop1(90u, 41u, 3u)};
+  if (!Expect(decoder.DecodeInstruction(v_frexp_exp_i16_f16_words,
+                                        &instruction, &words_consumed,
+                                        &error_message),
+              "expected V_FREXP_EXP_I16_F16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_FREXP_EXP_I16_F16",
+                                     OperandKind::kVgpr, 41u,
+                                     OperandKind::kSgpr, 3u),
+              "expected decoded V_FREXP_EXP_I16_F16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_trunc_f16_words{
+      MakeVop1(93u, 42u, 258u)};
+  if (!Expect(decoder.DecodeInstruction(v_trunc_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_TRUNC_F16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_TRUNC_F16",
+                                     OperandKind::kVgpr, 42u,
+                                     OperandKind::kVgpr, 2u),
+              "expected decoded V_TRUNC_F16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cos_f16_words{
+      MakeVop1(97u, 43u, 259u)};
+  if (!Expect(decoder.DecodeInstruction(v_cos_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_COS_F16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_COS_F16",
+                                     OperandKind::kVgpr, 43u,
+                                     OperandKind::kVgpr, 3u),
+              "expected decoded V_COS_F16 operands")) {
     return 1;
   }
 
@@ -3754,6 +3865,185 @@ int main() {
               "expected compiled offset/norm execution success") ||
       !Expect(ExpectOffsetNormSeedState(compiled_offset_norm_state),
               "expected compiled offset/norm state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 15> f16_unary_words{
+      MakeVop1(84u, 80u, 257u),
+      MakeVop1(86u, 81u, 257u),
+      MakeVop1(85u, 82u, 257u),
+      MakeVop1(88u, 83u, 262u),
+      MakeVop1(87u, 84u, 258u),
+      MakeVop1(96u, 85u, 259u),
+      MakeVop1(97u, 86u, 259u),
+      MakeVop1(90u, 87u, 257u),
+      MakeVop1(89u, 88u, 257u),
+      MakeVop1(95u, 89u, 260u),
+      MakeVop1(93u, 90u, 261u),
+      MakeVop1(92u, 91u, 261u),
+      MakeVop1(94u, 92u, 261u),
+      MakeVop1(91u, 93u, 261u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> f16_unary_program;
+  if (!Expect(decoder.DecodeProgram(f16_unary_words, &f16_unary_program,
+                                    &error_message),
+              "expected F16 unary program decode success") ||
+      !Expect(f16_unary_program.size() == 15u,
+              "expected fifteen decoded F16 unary instructions") ||
+      !Expect(f16_unary_program[0].opcode == "V_RCP_F16",
+              "expected decoded V_RCP_F16") ||
+      !Expect(f16_unary_program[1].opcode == "V_RSQ_F16",
+              "expected decoded V_RSQ_F16") ||
+      !Expect(f16_unary_program[2].opcode == "V_SQRT_F16",
+              "expected decoded V_SQRT_F16") ||
+      !Expect(f16_unary_program[3].opcode == "V_EXP_F16",
+              "expected decoded V_EXP_F16") ||
+      !Expect(f16_unary_program[4].opcode == "V_LOG_F16",
+              "expected decoded V_LOG_F16") ||
+      !Expect(f16_unary_program[5].opcode == "V_SIN_F16",
+              "expected decoded V_SIN_F16") ||
+      !Expect(f16_unary_program[6].opcode == "V_COS_F16",
+              "expected decoded V_COS_F16") ||
+      !Expect(f16_unary_program[7].opcode == "V_FREXP_EXP_I16_F16",
+              "expected decoded V_FREXP_EXP_I16_F16") ||
+      !Expect(f16_unary_program[8].opcode == "V_FREXP_MANT_F16",
+              "expected decoded V_FREXP_MANT_F16") ||
+      !Expect(f16_unary_program[9].opcode == "V_FRACT_F16",
+              "expected decoded V_FRACT_F16") ||
+      !Expect(f16_unary_program[10].opcode == "V_TRUNC_F16",
+              "expected decoded V_TRUNC_F16") ||
+      !Expect(f16_unary_program[11].opcode == "V_CEIL_F16",
+              "expected decoded V_CEIL_F16") ||
+      !Expect(f16_unary_program[12].opcode == "V_RNDNE_F16",
+              "expected decoded V_RNDNE_F16") ||
+      !Expect(f16_unary_program[13].opcode == "V_FLOOR_F16",
+              "expected decoded V_FLOOR_F16") ||
+      !Expect(f16_unary_program[14].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after F16 unary batch")) {
+    return 1;
+  }
+
+  auto initialize_f16_unary_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[1][0] = 0x00004400u;
+    state->vgprs[1][1] = 0x00004400u;
+    state->vgprs[1][2] = 0x11111111u;
+    state->vgprs[1][3] = 0x00004400u;
+
+    state->vgprs[2][0] = 0x00004800u;
+    state->vgprs[2][1] = 0x00004800u;
+    state->vgprs[2][2] = 0x22222222u;
+    state->vgprs[2][3] = 0x00004800u;
+
+    state->vgprs[3][0] = 0x00000000u;
+    state->vgprs[3][1] = 0x00000000u;
+    state->vgprs[3][2] = 0x33333333u;
+    state->vgprs[3][3] = 0x00000000u;
+
+    state->vgprs[4][0] = 0x00003d00u;
+    state->vgprs[4][1] = 0x00003d00u;
+    state->vgprs[4][2] = 0x44444444u;
+    state->vgprs[4][3] = 0x00003d00u;
+
+    state->vgprs[5][0] = 0x0000c180u;
+    state->vgprs[5][1] = 0x0000c180u;
+    state->vgprs[5][2] = 0x55555555u;
+    state->vgprs[5][3] = 0x0000c180u;
+
+    state->vgprs[6][0] = 0x00004200u;
+    state->vgprs[6][1] = 0x00004200u;
+    state->vgprs[6][2] = 0x66666666u;
+    state->vgprs[6][3] = 0x00004200u;
+
+    state->vgprs[80][2] = 0x80808080u;
+    state->vgprs[81][2] = 0x81818181u;
+    state->vgprs[82][2] = 0x82828282u;
+    state->vgprs[83][2] = 0x83838383u;
+    state->vgprs[84][2] = 0x84848484u;
+    state->vgprs[85][2] = 0x85858585u;
+    state->vgprs[86][2] = 0x86868686u;
+    state->vgprs[87][2] = 0x87878787u;
+    state->vgprs[88][2] = 0x88888888u;
+    state->vgprs[89][2] = 0x89898989u;
+    state->vgprs[90][2] = 0x90909090u;
+    state->vgprs[91][2] = 0x91919191u;
+    state->vgprs[92][2] = 0x92929292u;
+    state->vgprs[93][2] = 0x93939393u;
+  };
+
+  WaveExecutionState decoded_f16_unary_state;
+  initialize_f16_unary_state(&decoded_f16_unary_state);
+  if (!Expect(interpreter.ExecuteProgram(f16_unary_program,
+                                         &decoded_f16_unary_state,
+                                         &error_message),
+              "expected decoded F16 unary execution success") ||
+      !Expect(ExpectF16UnaryMathSeedState(decoded_f16_unary_state),
+              "expected decoded F16 unary state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_f16_unary_program;
+  if (!Expect(interpreter.CompileProgram(f16_unary_program,
+                                         &compiled_f16_unary_program,
+                                         &error_message),
+              "expected compiled F16 unary program success") ||
+      !Expect(compiled_f16_unary_program.size() == 15u,
+              "expected fifteen compiled F16 unary instructions") ||
+      !Expect(compiled_f16_unary_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVRcpF16,
+              "expected compiled V_RCP_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVRsqF16,
+              "expected compiled V_RSQ_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVSqrtF16,
+              "expected compiled V_SQRT_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVExpF16,
+              "expected compiled V_EXP_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kVLogF16,
+              "expected compiled V_LOG_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[5].opcode ==
+                  Gfx1201CompiledOpcode::kVSinF16,
+              "expected compiled V_SIN_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[6].opcode ==
+                  Gfx1201CompiledOpcode::kVCosF16,
+              "expected compiled V_COS_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[7].opcode ==
+                  Gfx1201CompiledOpcode::kVFrexpExpI16F16,
+              "expected compiled V_FREXP_EXP_I16_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[8].opcode ==
+                  Gfx1201CompiledOpcode::kVFrexpMantF16,
+              "expected compiled V_FREXP_MANT_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[9].opcode ==
+                  Gfx1201CompiledOpcode::kVFractF16,
+              "expected compiled V_FRACT_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[10].opcode ==
+                  Gfx1201CompiledOpcode::kVTruncF16,
+              "expected compiled V_TRUNC_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[11].opcode ==
+                  Gfx1201CompiledOpcode::kVCeilF16,
+              "expected compiled V_CEIL_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[12].opcode ==
+                  Gfx1201CompiledOpcode::kVRndneF16,
+              "expected compiled V_RNDNE_F16 opcode") ||
+      !Expect(compiled_f16_unary_program[13].opcode ==
+                  Gfx1201CompiledOpcode::kVFloorF16,
+              "expected compiled V_FLOOR_F16 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_f16_unary_state;
+  initialize_f16_unary_state(&compiled_f16_unary_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_f16_unary_program,
+                                         &compiled_f16_unary_state,
+                                         &error_message),
+              "expected compiled F16 unary execution success") ||
+      !Expect(ExpectF16UnaryMathSeedState(compiled_f16_unary_state),
+              "expected compiled F16 unary state")) {
     return 1;
   }
 
