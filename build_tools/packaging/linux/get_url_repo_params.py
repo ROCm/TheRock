@@ -5,16 +5,18 @@
 """
 Get URL/repo parameters: base URL from any URL, repo_sub_folder from an S3 prefix, or full repo URL from components.
 
+Output is always KEY=value (suitable for GITHUB_OUTPUT).
+
 Subcommands (get operations):
 
-  get-base-url         Get base URL (scheme + netloc) from an input URL. With --output-format kvp prints KEY=value for GITHUB_OUTPUT.
-  get-repo-sub-folder  Get repo_sub_folder from an S3 prefix (last segment if YYYYMMDD-<id>, else empty).
-  get-repo-url        Get full repo URL from release_type, native_package_type, repo_base_url, os_profile, repo_sub_folder.
+  get-base-url         Get base URL (scheme + netloc) from an input URL. Prints repo_base_url=<value>.
+  get-repo-sub-folder  Get repo_sub_folder from an S3 prefix (last segment if YYYYMMDD-<id>, else empty). Prints repo_sub_folder=<value>.
+  get-repo-url         Get full repo URL from components(release_type, native_package_type, repo_base_url, os_profile, repo_sub_folder). Prints repo_url=<value>.
 
-Usage (--output-format must appear before the subcommand; default is value):
-  python build_tools/packaging/linux/get_url_repo_params.py [--output-format value|kvp] get-base-url --from-url <url>
-  python build_tools/packaging/linux/get_url_repo_params.py [--output-format value|kvp] get-repo-sub-folder --from-s3-prefix <prefix>
-  python build_tools/packaging/linux/get_url_repo_params.py [--output-format value|kvp] get-repo-url ...
+Usage:
+  python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url <url>
+  python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix <prefix>
+  python build_tools/packaging/linux/get_url_repo_params.py get-repo-url ...
 
 Examples:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url https://example.com/v2/whl
@@ -45,10 +47,7 @@ def cmd_base_url(args: argparse.Namespace) -> int:
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-    if args.output_format == "kvp":
-        print(f"repo_base_url={base_url}")
-    else:
-        print(base_url)
+    print(f"repo_base_url={base_url}")
     return 0
 
 
@@ -70,10 +69,7 @@ def get_repo_sub_folder(s3_prefix: str) -> str:
 
 def cmd_repo_sub_folder(args: argparse.Namespace) -> int:
     repo_sub_folder = get_repo_sub_folder(args.from_s3_prefix)
-    if args.output_format == "kvp":
-        print(f"repo_sub_folder={repo_sub_folder}")
-    else:
-        print(repo_sub_folder)
+    print(f"repo_sub_folder={repo_sub_folder}")
     return 0
 
 
@@ -116,26 +112,16 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
     except (ValueError, TypeError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-    if args.output_format == "kvp":
-        print(f"repo_url={url}")
-    else:
-        print(url)
+    print(f"repo_url={url}")
     return 0
 
 
 # --- main ---
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Get URL/repo parameters: base URL (from any URL) or repo_sub_folder (from S3 prefix).",
-    )
-    parser.add_argument(
-        "--output-format",
-        dest="output_format",
-        choices=["value", "kvp"],
-        default="value",
-        help="value = print value only (default); kvp = print KEY=value (key-value pair) for GITHUB_OUTPUT",
+        description="Get URL/repo parameters: base URL (from any URL) or repo_sub_folder (from S3 prefix). Output is KEY=value for GITHUB_OUTPUT.",
     )
     subparsers = parser.add_subparsers(
         dest="command", required=True, help="Get operation to run"
@@ -205,9 +191,9 @@ def main() -> int:
     )
     p_url.set_defaults(func=cmd_repo_url)
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     return args.func(args)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
