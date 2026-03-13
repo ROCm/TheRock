@@ -42,14 +42,15 @@ Outputs (written to GITHUB_OUTPUT):
     test_type           : "smoke" or "full"
 """
 
-from __future__ import annotations
-
 import json
 import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
+
+from configure_ci_path_filters import get_git_modified_paths
+from github_actions_utils import gha_append_step_summary, gha_set_output
 
 # ---------------------------------------------------------------------------
 # Dataclasses — the typed interfaces between pipeline steps
@@ -100,7 +101,7 @@ class CIInputs:
         return self.event_name == "workflow_dispatch"
 
     @staticmethod
-    def from_environ() -> CIInputs:
+    def from_environ() -> "CIInputs":
         """Parse from GitHub Actions environment.
 
         Reads GITHUB_EVENT_PATH for the event payload and a few standard
@@ -278,7 +279,7 @@ class CIOutputs:
     jobs: JobDecisions | None = None
 
     @staticmethod
-    def skipped(reason: str) -> CIOutputs:
+    def skipped(reason: str) -> "CIOutputs":
         """Produce empty outputs when CI is skipped."""
         return CIOutputs(is_ci_enabled=False)
 
@@ -328,7 +329,6 @@ def select_targets(inputs: CIInputs) -> TargetSelection:
 
 def decide_jobs(
     inputs: CIInputs,
-    targets: TargetSelection,
     changed_files: list[str] | None,
 ) -> JobDecisions:
     """Determine which job groups to run, skip, or satisfy with prebuilt files.
@@ -396,8 +396,6 @@ def write_outputs(outputs: CIOutputs) -> None:
 
     This is the only function with side effects (besides from_environ).
     """
-    from github_actions_utils import gha_set_output, gha_append_step_summary
-
     test_type = outputs.jobs.test_rocm.test_type if outputs.jobs else "smoke"
     output_vars = {
         "linux_variants": json.dumps(
@@ -431,31 +429,28 @@ def configure(inputs: CIInputs) -> CIOutputs:
     # For schedule and workflow_dispatch, always proceed.
     changed_files: list[str] | None = None
     if inputs.is_pull_request or inputs.is_push:
-        from configure_ci_path_filters import get_git_modified_paths
-
         changed_files = get_git_modified_paths(inputs.base_ref)
 
-    skip = check_skip_ci(inputs, changed_files)
+    skip = check_skip_ci(inputs=inputs, changed_files=changed_files)
     if skip.skip:
         print(f"Skipping CI: {skip.reason}")
         return CIOutputs.skipped(skip.reason)
 
-    # Step 3: Select targets
+    # Steps 3 and 4 are independent: target selection (which GPU families)
+    # and job decisions (which job groups run) are orthogonal concerns.
     targets = select_targets(inputs)
-
-    # Step 4: Decide jobs (stub: run everything)
-    jobs = decide_jobs(inputs, targets, changed_files)
+    jobs = decide_jobs(inputs=inputs, changed_files=changed_files)
 
     # Step 5: Expand matrix
     linux_matrix = expand_matrix(
-        targets.linux_families,
-        "linux",
-        inputs.build_variant,
+        families=targets.linux_families,
+        platform="linux",
+        build_variant=inputs.build_variant,
     )
     windows_matrix = expand_matrix(
-        targets.windows_families,
-        "windows",
-        inputs.build_variant,
+        families=targets.windows_families,
+        platform="windows",
+        build_variant=inputs.build_variant,
     )
 
     return CIOutputs(

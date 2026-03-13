@@ -250,8 +250,7 @@ class TestDecideJobs(unittest.TestCase):
     def test_stub_returns_job_decisions(self):
         """Stub returns JobDecisions with all groups set to run."""
         inputs = self._make_inputs()
-        targets = cm.TargetSelection()
-        result = cm.decide_jobs(inputs, targets, changed_files=None)
+        result = cm.decide_jobs(inputs, changed_files=None)
         self.assertIsInstance(result, cm.JobDecisions)
         self.assertEqual(result.build_rocm.action, "run")
         self.assertEqual(result.test_rocm.action, "run")
@@ -262,8 +261,7 @@ class TestDecideJobs(unittest.TestCase):
     def test_test_rocm_has_test_type(self):
         """TestRocmDecision carries test_type details."""
         inputs = self._make_inputs()
-        targets = cm.TargetSelection()
-        result = cm.decide_jobs(inputs, targets, changed_files=None)
+        result = cm.decide_jobs(inputs, changed_files=None)
         self.assertIsInstance(result.test_rocm, cm.TestRocmDecision)
         self.assertEqual(result.test_rocm.test_type, "smoke")
 
