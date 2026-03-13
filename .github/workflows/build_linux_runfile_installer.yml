@@ -203,7 +203,7 @@ jobs:
       
       - name: Upload to both buckets
         run: |
-          aws s3 cp s3://therock-dev-runfile/rocm-installer-7.12.0-rc0-1.run
+          aws s3 cp s3://therock-dev-runfile/rocm-installer-7.12.0-rc0-1.run .
 
       - name: Configure AWS Credentials for Bucket B
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7
