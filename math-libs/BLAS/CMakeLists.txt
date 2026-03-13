@@ -47,11 +47,6 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 
 if(WIN32)
   set(_enable_rocRoller "OFF")
-elseif(THEROCK_SANITIZER)
-  # Disable rocRoller for sanitizer builds to avoid ASan runtime preloading
-  # issues with GPUArchitectureGenerator build-time tool.
-  # CMAKE_CROSSCOMPILING_EMULATOR doesn't work with add_custom_command().
-  set(_enable_rocRoller "OFF")
 else()
   set(_enable_rocRoller "ON")
 endif()
