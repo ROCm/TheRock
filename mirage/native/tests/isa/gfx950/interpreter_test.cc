@@ -14404,6 +14404,22 @@ int main() {
           },
           {0x0000007fu, 0x00000080u, 0x000000feu}) ||
       !run_global_load_lds_case(
+          "GLOBAL_LOAD_LDS_SBYTE", 0, 0x60u, {0x240u, 0x250u, 0x270u},
+          [](LinearExecutionMemory* memory) {
+            return memory != nullptr && WriteU8(memory, 0x240u, 0x7fu) &&
+                   WriteU8(memory, 0x250u, 0x80u) &&
+                   WriteU8(memory, 0x270u, 0xfeu);
+          },
+          {0x0000007fu, 0xffffff80u, 0xfffffffeu}) ||
+      !run_global_load_lds_case(
+          "GLOBAL_LOAD_LDS_USHORT", 0, 0xa0u, {0x340u, 0x360u, 0x390u},
+          [](LinearExecutionMemory* memory) {
+            return memory != nullptr && WriteU16(memory, 0x340u, 0x0001u) &&
+                   WriteU16(memory, 0x360u, 0xff80u) &&
+                   WriteU16(memory, 0x390u, 0x7f01u);
+          },
+          {0x00000001u, 0x0000ff80u, 0x00007f01u}) ||
+      !run_global_load_lds_case(
           "GLOBAL_LOAD_LDS_SSHORT", 0, 0x80u, {0x300u, 0x320u, 0x360u},
           [](LinearExecutionMemory* memory) {
             return memory != nullptr && WriteU16(memory, 0x300u, 0x0001u) &&
