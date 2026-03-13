@@ -108,7 +108,7 @@ jobs:
           esac
           echo "release_type=${RELEASE_TYPE}" >> $GITHUB_OUTPUT
           echo "pkg_type=${PKG_TYPE}" >> $GITHUB_OUTPUT
-          python build_tools/packaging/linux/get_url_repo_params.py --output-format kvp get-repo-url \
+          python build_tools/packaging/linux/get_url_repo_params.py get-repo-url \
             --release-type "${RELEASE_TYPE}" \
             --native-package-type "${PKG_TYPE}" \
             --repo-base-url "${{ inputs.repo_base_url }}" \
