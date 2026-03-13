@@ -104,3 +104,75 @@ All new Windows ROCm runtime components must be installed into the package insta
 - `PATH` entries associated with the selected ROCm installation
 - Registry-based SDK discovery
 - Environment-variable-based SDK discovery
+
+New installations must not place core ROCm runtime DLLs into `System32`. Legacy driver-installed runtime DLLs in `System32` that conflict with the new Windows packaging model must be detected and handled by the appropriate runtime installer. At a minimum, the Windows runtime package must handle cleanup of legacy `amdhip64` and `amd_comgr` placements when present, while preserving installer robustness if files are locked or permissions are insufficient.
+
+### Package Naming
+
+Windows package naming should remain aligned with the Linux TheRock naming model where practical so that users can reason about package purpose consistently across operating systems.
+
+The `amdrocm-` naming prefix should be used for AMD-published Windows package componens where a package-level identity is exposed directly to users.
+
+Examples inlcude:
+
+- `amdrocm-runtimes`
+- `amdrocm-core`
+- `amdrocm-core-dev`
+- `amdrocm-developer-tools`
+- `amdrocm-core-sdk`
+
+Winget package identifiers may use Windows ecosystem naming conventions such as `AMD.ROCm`, but they should map cleanly to the same product and component boundaries.
+
+### Package Granularity
+
+Windows package granularity should follow the same general model as Linux: runtime and development responsibilities must be seperable, and developer tools must be independently installable.
+
+The following high-level package groupings must be avaialable:
+
+| Name                      | Content                                                                                            | Description |
+| :------------------------ | :------------------------------------------------------------------------------------------------- | :------------- |
+| `amdrocm-runtimes`        | HIP runtime, runtime compiler support, required runtime libraries                                  |                |
+| `amdrocm-core`            | Runtime components, core libraries, core utilities, discovery tools                                |                |
+| `amdrocm-core-dev`        | Headers, CMake config files, import libraries, static libraries, compiler-facing development files |                |
+| `amdrocm-developer-tools` | Debugging, profiling, diagnostics, and related developer tools                                     |                |
+| `amdrocm-core-sdk`        | Core runtime, development files, and developer tools                                               |                |
+
+Windows package composition may evolve as TheRock matures, but the runtime vs. development vs. tools split must remain clear.
+
+### Installation Configurations
+
+Windows installation flows must support multiple install configurations aligned with Windows user expectations and the ROCm SDK for Windows product direction.
+
+At minimum, the following install configurations must be supported:
+
+- **Core SDK**: default developer installation
+- **Runtime Only**: minimal runtime footproint for executing prebuilt applications and redistribuition workflows
+- **Developer Tools Only**: debugging, profiling, and diagnostics when runtime is already present
+- **Custom**: component-level selection for advanced users where supported by package dependency rules
+
+These configurations may be implemented as separate packages, features, meta packages, or a combination thereof, but their behavior must remain well-defined and documented.
+
+### MSI Package Requirements
+
+MSI packages are the primary Windows installation mechanism and must satisfy the following requirements:
+
+- Support silent installation
+- Support logging
+- Support default installation path behavior
+- Support custom installation path overrides
+- Support uninstall and repair flows through standard Windows Installer semantics
+- Support per-machine installation by default
+- Support per-user installation where technically valid for the selected package set
+- Be digitally signed by AMD
+- Avoid partially installed states and maintain transactional integrity to the degree supported by Windows Installer
+
+Example installation commands:
+
+```
+msiexec /i amdrocm-core-sdk.msi /quiet
+msiexec /i amdrocm-core-sdk.msi INSTALLDIR="D:\tools\rocm\core-8.2" /quiet
+msiexec /x amdrocm-core-sdk.msi /quiet
+msiexec /famus amdrocm-core-sdk.msi /quiet
+```
+
+MSI installers should be GUI-less or minimal-UI by default and must support unattended enterprise deployment.
