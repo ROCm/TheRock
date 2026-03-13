@@ -76,9 +76,6 @@ if(THEROCK_PACKAGE_VERSION)
   list(APPEND _manifest_flag_args --rocm-package-version "${THEROCK_PACKAGE_VERSION}")
 endif()
 
-message(STATUS "THEROCK_PACKAGE_VERSION='${THEROCK_PACKAGE_VERSION}'")
-message(STATUS "Manifest args='${_manifest_flag_args}'")
-
 add_custom_command(
   OUTPUT "${THEROCK_MANIFEST_JSON}"
   COMMAND "${Python3_EXECUTABLE}" "${THEROCK_MANIFEST_SCRIPT}"
