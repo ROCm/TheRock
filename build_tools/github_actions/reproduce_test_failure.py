@@ -236,6 +236,12 @@ def run_windows(args: argparse.Namespace) -> int:
                 ),
             )
         )
+        steps.append(
+            (
+                "Refreshing environment",
+                "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')",
+            )
+        )
 
     # Check which choco packages need installing
     choco_packages = [p for p in ["git", "python", "cmake", "ninja", "ccache"] if p in missing]
