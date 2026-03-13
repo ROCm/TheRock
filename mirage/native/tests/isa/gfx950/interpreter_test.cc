@@ -12395,6 +12395,7 @@ int main() {
   buffer_format_state.vgprs[63][0] = 0x33440000u;
   buffer_format_state.vgprs[64][0] = 0x38003400u;
   buffer_format_state.vgprs[65][0] = 0x40003c00u;
+  buffer_format_state.vgprs[66][0] = 0x00001234u;
 
   const std::vector<DecodedInstruction> buffer_format_program = {
       DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_X",
@@ -12457,6 +12458,18 @@ int main() {
                                       InstructionOperand::Sgpr(32),
                                       InstructionOperand::Imm32(0),
                                       InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_X",
+                                      InstructionOperand::Vgpr(86),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(32),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_X",
+                                      InstructionOperand::Vgpr(66),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(32),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x30)),
       DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_XYZ",
                                       InstructionOperand::Vgpr(81),
                                       InstructionOperand::Imm32(0),
@@ -12527,6 +12540,8 @@ int main() {
               "expected buffer format xyz load result") ||
       !Expect(buffer_format_state.vgprs[80][0] == 0x00220011u,
               "expected buffer format d16 xy load result") ||
+      !Expect(buffer_format_state.vgprs[86][0] == 0x00000011u,
+              "expected buffer format d16 x load result") ||
       !Expect(buffer_format_state.vgprs[81][0] == 0x40003c00u &&
                   buffer_format_state.vgprs[82][0] == 0x0000c000u,
               "expected buffer format d16 xyz load result") ||
@@ -12589,6 +12604,10 @@ int main() {
               "expected buffer format d16 xy store read") ||
       !Expect(buffer_format_short == 0x0022u,
               "expected buffer format d16 xy store result") ||
+      !Expect(ReadU16(buffer_format_memory, 0x1f0u, &buffer_format_short),
+              "expected buffer format d16 x store read") ||
+      !Expect(buffer_format_short == 0x1234u,
+              "expected buffer format d16 x store result") ||
       !Expect(ReadU16(buffer_format_memory, 0x220u, &buffer_format_short),
               "expected buffer format d16 xyz store read") ||
       !Expect(buffer_format_short == 0x3c00u,
@@ -12650,6 +12669,8 @@ int main() {
               "expected compiled buffer format xyz load result") ||
       !Expect(compiled_buffer_format_state.vgprs[80][0] == 0x00220011u,
               "expected compiled buffer format d16 xy load result") ||
+      !Expect(compiled_buffer_format_state.vgprs[86][0] == 0x00000011u,
+              "expected compiled buffer format d16 x load result") ||
       !Expect(compiled_buffer_format_state.vgprs[81][0] == 0x40003c00u &&
                   compiled_buffer_format_state.vgprs[82][0] == 0x0000c000u,
               "expected compiled buffer format d16 xyz load result") ||
@@ -12724,6 +12745,11 @@ int main() {
               "expected compiled buffer format d16 xy store read") ||
       !Expect(compiled_buffer_format_short == 0x0022u,
               "expected compiled buffer format d16 xy store result") ||
+      !Expect(ReadU16(compiled_buffer_format_memory, 0x1f0u,
+                      &compiled_buffer_format_short),
+              "expected compiled buffer format d16 x store read") ||
+      !Expect(compiled_buffer_format_short == 0x1234u,
+              "expected compiled buffer format d16 x store result") ||
       !Expect(ReadU16(compiled_buffer_format_memory, 0x220u,
                       &compiled_buffer_format_short),
               "expected compiled buffer format d16 xyz store read") ||
