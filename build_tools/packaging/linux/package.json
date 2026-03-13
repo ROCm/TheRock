@@ -2105,7 +2105,8 @@
           {
             "Name": "rocdecode",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]
@@ -2179,7 +2180,8 @@
           {
             "Name": "rocjpeg",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]

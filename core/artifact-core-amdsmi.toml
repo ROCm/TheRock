@@ -1,7 +1,4 @@
 # amdsmi
-[components.dbg."core/amdsmi/stage"]
-[components.dev."core/amdsmi/stage"]
-[components.doc."core/amdsmi/stage"]
 [components.lib."core/amdsmi/stage"]
 include = [ "lib/**" ]
 [components.run."core/amdsmi/stage"]
@@ -10,3 +7,6 @@ include = [
   "libexec/**",
   "share/amd_smi/**",
 ]
+[components.dbg."core/amdsmi/stage"]
+[components.dev."core/amdsmi/stage"]
+[components.doc."core/amdsmi/stage"]
