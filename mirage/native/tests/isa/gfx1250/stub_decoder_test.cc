@@ -297,10 +297,39 @@ std::uint32_t CountDescriptorsWithAccess(
   return count;
 }
 
+std::uint32_t CountDescriptorsForRoleAndAccess(
+    const StubDecodedInstruction& instruction,
+    StubOperandRole role,
+    StubOperandAccess access) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    const auto& descriptor = instruction.operand_descriptors.descriptors[i];
+    if (descriptor.role == role && descriptor.access == access) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 std::uint32_t CountOutputSlots(const StubDecodedInstruction& instruction) {
   std::uint32_t count = 0;
   for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
     if (instruction.operand_slots.bindings[i].is_output) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountSlotsOfKindWithOutputFlag(
+    const StubDecodedInstruction& instruction,
+    StubOperandSlotKind slot_kind,
+    bool is_output) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    const auto& binding = instruction.operand_slots.bindings[i];
+    if (binding.slot_kind == slot_kind && binding.is_output == is_output) {
       ++count;
     }
   }
@@ -357,6 +386,37 @@ std::uint32_t CountDescriptorsWithValueClass(
        ++i) {
     if (instruction.operand_descriptors.descriptors[i].value_class ==
         value_class) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountSlotsWithValueClassAndComponentCount(
+    const StubDecodedInstruction& instruction,
+    StubOperandValueClass value_class,
+    std::uint8_t component_count) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    const auto& binding = instruction.operand_slots.bindings[i];
+    if (binding.value_class == value_class &&
+        binding.component_count == component_count) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountDescriptorsWithValueClassAndComponentCount(
+    const StubDecodedInstruction& instruction,
+    StubOperandValueClass value_class,
+    std::uint8_t component_count) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    const auto& descriptor = instruction.operand_descriptors.descriptors[i];
+    if (descriptor.value_class == value_class &&
+        descriptor.component_count == component_count) {
       ++count;
     }
   }
@@ -1358,10 +1418,19 @@ int main() {
                         decoded, StubOperandValueClass::kMatrixFragment) == 3 &&
                     CountSlotsWithValueClass(
                         decoded, StubOperandValueClass::kAccumulatorFragment) == 1 &&
+                    CountSlotsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kMatrixFragment, 1) == 3 &&
+                    CountSlotsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kAccumulatorFragment, 1) == 1 &&
                     CountDescriptorsWithValueClass(
                         decoded, StubOperandValueClass::kMatrixFragment) == 3 &&
                     CountDescriptorsWithValueClass(
                         decoded, StubOperandValueClass::kAccumulatorFragment) == 1 &&
+                    CountDescriptorsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kMatrixFragment, 1) == 3 &&
+                    CountDescriptorsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kAccumulatorFragment,
+                        1) == 1 &&
                     AllMatrixSlotsHaveWaveSize(decoded, 32) &&
                     AllMatrixDescriptorsHaveWaveSize(decoded, 32),
                 "expected routed WMMA/SWMMAC matrix fragments to stay wave32")) {
@@ -1389,6 +1458,32 @@ int main() {
                       CountDescriptorsForRole(decoded, StubOperandRole::kSource1) == 1 &&
                       CountDescriptorsForRole(decoded, StubOperandRole::kAccumulator) == 1 &&
                       CountDescriptorsForRole(decoded, StubOperandRole::kScale) == 1 &&
+                      CountDescriptorsForRoleAndAccess(
+                          decoded, StubOperandRole::kDestination,
+                          StubOperandAccess::kWrite) == 1 &&
+                      CountDescriptorsForRoleAndAccess(
+                          decoded, StubOperandRole::kSource0,
+                          StubOperandAccess::kRead) == 1 &&
+                      CountDescriptorsForRoleAndAccess(
+                          decoded, StubOperandRole::kSource1,
+                          StubOperandAccess::kRead) == 1 &&
+                      CountDescriptorsForRoleAndAccess(
+                          decoded, StubOperandRole::kAccumulator,
+                          StubOperandAccess::kRead) == 1 &&
+                      CountDescriptorsForRoleAndAccess(
+                          decoded, StubOperandRole::kScale,
+                          StubOperandAccess::kRead) == 1 &&
+                      CountSlotsOfKindWithOutputFlag(
+                          decoded, StubOperandSlotKind::kDestination, true) == 1 &&
+                      CountSlotsOfKindWithOutputFlag(
+                          decoded, StubOperandSlotKind::kSource0, false) == 1 &&
+                      CountSlotsOfKindWithOutputFlag(
+                          decoded, StubOperandSlotKind::kSource1, false) == 1 &&
+                      CountSlotsOfKindWithOutputFlag(
+                          decoded, StubOperandSlotKind::kAccumulatorSource,
+                          false) == 1 &&
+                      CountSlotsOfKindWithOutputFlag(
+                          decoded, StubOperandSlotKind::kScaleSource, false) == 1 &&
                       CountSlotsWithFragmentKindAndWaveSize(
                           decoded, StubFragmentKind::kMatrix, 32) == 4 &&
                       CountDescriptorsWithFragmentKindAndWaveSize(
@@ -1404,6 +1499,13 @@ int main() {
                           StubOperandValueClass::kAccumulatorFragment) == 1 &&
                       CountSlotsWithValueClass(
                           decoded, StubOperandValueClass::kScalarRegister) == 1 &&
+                      CountSlotsWithValueClassAndComponentCount(
+                          decoded, StubOperandValueClass::kMatrixFragment, 1) == 3 &&
+                      CountSlotsWithValueClassAndComponentCount(
+                          decoded,
+                          StubOperandValueClass::kAccumulatorFragment, 1) == 1 &&
+                      CountSlotsWithValueClassAndComponentCount(
+                          decoded, StubOperandValueClass::kScalarRegister, 1) == 1 &&
                       CountDescriptorsWithValueClass(
                           decoded, StubOperandValueClass::kMatrixFragment) == 3 &&
                       CountDescriptorsWithValueClass(
@@ -1411,6 +1513,13 @@ int main() {
                           StubOperandValueClass::kAccumulatorFragment) == 1 &&
                       CountDescriptorsWithValueClass(
                           decoded, StubOperandValueClass::kScalarRegister) == 1 &&
+                      CountDescriptorsWithValueClassAndComponentCount(
+                          decoded, StubOperandValueClass::kMatrixFragment, 1) == 3 &&
+                      CountDescriptorsWithValueClassAndComponentCount(
+                          decoded,
+                          StubOperandValueClass::kAccumulatorFragment, 1) == 1 &&
+                      CountDescriptorsWithValueClassAndComponentCount(
+                          decoded, StubOperandValueClass::kScalarRegister, 1) == 1 &&
                       ContainsSlot(decoded, StubOperandSlotKind::kScaleSource,
                                    StubOperandValueClass::kScalarRegister, 4, 1,
                                    false) &&
@@ -1453,6 +1562,27 @@ int main() {
                       CountDescriptorsForRole(decoded, StubOperandRole::kSource1) == 1 &&
                       CountDescriptorsForRole(decoded, StubOperandRole::kAccumulator) == 1 &&
                       CountDescriptorsForRole(decoded, StubOperandRole::kScale) == 0 &&
+                      CountDescriptorsForRoleAndAccess(
+                          decoded, StubOperandRole::kDestination,
+                          StubOperandAccess::kWrite) == 1 &&
+                      CountDescriptorsForRoleAndAccess(
+                          decoded, StubOperandRole::kSource0,
+                          StubOperandAccess::kRead) == 1 &&
+                      CountDescriptorsForRoleAndAccess(
+                          decoded, StubOperandRole::kSource1,
+                          StubOperandAccess::kRead) == 1 &&
+                      CountDescriptorsForRoleAndAccess(
+                          decoded, StubOperandRole::kAccumulator,
+                          StubOperandAccess::kRead) == 1 &&
+                      CountSlotsOfKindWithOutputFlag(
+                          decoded, StubOperandSlotKind::kDestination, true) == 1 &&
+                      CountSlotsOfKindWithOutputFlag(
+                          decoded, StubOperandSlotKind::kSource0, false) == 1 &&
+                      CountSlotsOfKindWithOutputFlag(
+                          decoded, StubOperandSlotKind::kSource1, false) == 1 &&
+                      CountSlotsOfKindWithOutputFlag(
+                          decoded, StubOperandSlotKind::kAccumulatorSource,
+                          false) == 1 &&
                       CountSlotsWithFragmentKindAndWaveSize(
                           decoded, StubFragmentKind::kMatrix, 32) == 4 &&
                       CountDescriptorsWithFragmentKindAndWaveSize(
@@ -1466,11 +1596,21 @@ int main() {
                       CountSlotsWithValueClass(
                           decoded,
                           StubOperandValueClass::kAccumulatorFragment) == 1 &&
+                      CountSlotsWithValueClassAndComponentCount(
+                          decoded, StubOperandValueClass::kMatrixFragment, 1) == 3 &&
+                      CountSlotsWithValueClassAndComponentCount(
+                          decoded,
+                          StubOperandValueClass::kAccumulatorFragment, 1) == 1 &&
                       CountDescriptorsWithValueClass(
                           decoded, StubOperandValueClass::kMatrixFragment) == 3 &&
                       CountDescriptorsWithValueClass(
                           decoded,
-                          StubOperandValueClass::kAccumulatorFragment) == 1,
+                          StubOperandValueClass::kAccumulatorFragment) == 1 &&
+                      CountDescriptorsWithValueClassAndComponentCount(
+                          decoded, StubOperandValueClass::kMatrixFragment, 1) == 3 &&
+                      CountDescriptorsWithValueClassAndComponentCount(
+                          decoded,
+                          StubOperandValueClass::kAccumulatorFragment, 1) == 1,
                   "expected routed WMMA/SWMMAC core seed to keep exact matrix composition")) {
         return 1;
       }
@@ -2691,18 +2831,56 @@ int main() {
                         decoded, StubOperandValueClass::kTensorCoordinate) == 1 &&
                     CountSlotsWithValueClass(
                         decoded, StubOperandValueClass::kLdsAddress) == 1 &&
+                    CountSlotsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kTensorDescriptor, 1) == 1 &&
+                    CountSlotsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kTensorCoordinate, 1) == 1 &&
+                    CountSlotsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kLdsAddress, 1) == 1 &&
                     CountDescriptorsWithValueClass(
                         decoded, StubOperandValueClass::kTensorDescriptor) == 1 &&
                     CountDescriptorsWithValueClass(
                         decoded, StubOperandValueClass::kTensorCoordinate) == 1 &&
                     CountDescriptorsWithValueClass(
                         decoded, StubOperandValueClass::kLdsAddress) == 1 &&
+                    CountDescriptorsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kTensorDescriptor, 1) == 1 &&
+                    CountDescriptorsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kTensorCoordinate, 1) == 1 &&
+                    CountDescriptorsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kLdsAddress, 1) == 1 &&
                     CountOutputSlots(decoded) ==
                         (instruction_name == "TENSOR_LOAD_TO_LDS" ? 1u : 0u) &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kRead) ==
                         (instruction_name == "TENSOR_LOAD_TO_LDS" ? 2u : 3u) &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kWrite) ==
                         (instruction_name == "TENSOR_LOAD_TO_LDS" ? 1u : 0u) &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kTensorDescriptor,
+                        StubOperandAccess::kRead) == 1 &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kTensorCoordinate,
+                        StubOperandAccess::kRead) == 1 &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded,
+                        instruction_name == "TENSOR_LOAD_TO_LDS"
+                            ? StubOperandRole::kLdsDestination
+                            : StubOperandRole::kLdsSource,
+                        instruction_name == "TENSOR_LOAD_TO_LDS"
+                            ? StubOperandAccess::kWrite
+                            : StubOperandAccess::kRead) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kTensorDescriptorSource,
+                        false) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kTensorCoordinateSource,
+                        false) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded,
+                        instruction_name == "TENSOR_LOAD_TO_LDS"
+                            ? StubOperandSlotKind::kLdsDestination
+                            : StubOperandSlotKind::kLdsSource,
+                        instruction_name == "TENSOR_LOAD_TO_LDS") == 1 &&
                     !decoded.uses_scale_path && !decoded.uses_paired_operands &&
                     AllSlotsExplicit(decoded) &&
                     AllDescriptorsExplicit(decoded) &&
@@ -2892,9 +3070,33 @@ int main() {
                         instruction_name.find("PK_") != std::string_view::npos
                             ? StubOperandValueClass::kPackedVector
                             : StubOperandValueClass::kVectorRegister) == 2 &&
+                    CountSlotsWithValueClassAndComponentCount(
+                        decoded,
+                        instruction_name.find("PK_") != std::string_view::npos
+                            ? StubOperandValueClass::kPackedVector
+                            : StubOperandValueClass::kVectorRegister,
+                        instruction_name.find("PK_") != std::string_view::npos ? 2 : 1) ==
+                        2 &&
+                    CountDescriptorsWithValueClassAndComponentCount(
+                        decoded,
+                        instruction_name.find("PK_") != std::string_view::npos
+                            ? StubOperandValueClass::kPackedVector
+                            : StubOperandValueClass::kVectorRegister,
+                        instruction_name.find("PK_") != std::string_view::npos ? 2 : 1) ==
+                        2 &&
                     CountOutputSlots(decoded) == 1 &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kRead) == 1 &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kWrite) == 1 &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kSource0,
+                        StubOperandAccess::kRead) == 1 &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kDestination,
+                        StubOperandAccess::kWrite) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kSource0, false) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kDestination, true) == 1 &&
                     !decoded.uses_scale_path && !decoded.uses_tensor_memory &&
                     AllSlotsExplicit(decoded) &&
                     AllDescriptorsExplicit(decoded) &&
@@ -3024,13 +3226,44 @@ int main() {
                         decoded, StubOperandValueClass::kVectorRegister) == 4 &&
                     CountSlotsWithValueClass(
                         decoded, StubOperandValueClass::kScalarRegister) == 1 &&
+                    CountSlotsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kVectorRegister, 2) == 4 &&
+                    CountSlotsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kScalarRegister, 1) == 1 &&
                     CountDescriptorsWithValueClass(
                         decoded, StubOperandValueClass::kVectorRegister) == 4 &&
                     CountDescriptorsWithValueClass(
                         decoded, StubOperandValueClass::kScalarRegister) == 1 &&
+                    CountDescriptorsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kVectorRegister, 2) == 4 &&
+                    CountDescriptorsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kScalarRegister, 1) == 1 &&
                     CountOutputSlots(decoded) == 2 &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kRead) == 3 &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kWrite) == 2 &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kSource0,
+                        StubOperandAccess::kRead) == 1 &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kSource1,
+                        StubOperandAccess::kRead) == 1 &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kScale,
+                        StubOperandAccess::kRead) == 1 &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kDestination,
+                        StubOperandAccess::kWrite) == 2 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kDestination, true) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kScalarDestination,
+                        true) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kSource0, false) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kSource1, false) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kScaleSource, false) == 1 &&
                     !decoded.uses_tensor_memory &&
                     AllSlotsExplicit(decoded) &&
                     AllDescriptorsExplicit(decoded) &&
@@ -3156,13 +3389,42 @@ int main() {
                         decoded, StubOperandValueClass::kVectorRegister) == 2 &&
                     CountSlotsWithValueClass(
                         decoded, StubOperandValueClass::kScalarRegister) == 2 &&
+                    CountSlotsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kVectorRegister, 1) == 2 &&
+                    CountSlotsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kScalarRegister, 1) == 2 &&
                     CountDescriptorsWithValueClass(
                         decoded, StubOperandValueClass::kVectorRegister) == 2 &&
                     CountDescriptorsWithValueClass(
                         decoded, StubOperandValueClass::kScalarRegister) == 2 &&
+                    CountDescriptorsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kVectorRegister, 1) == 2 &&
+                    CountDescriptorsWithValueClassAndComponentCount(
+                        decoded, StubOperandValueClass::kScalarRegister, 1) == 2 &&
                     CountOutputSlots(decoded) == 1 &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kRead) == 3 &&
                     CountDescriptorsWithAccess(decoded, StubOperandAccess::kWrite) == 1 &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kSource0,
+                        StubOperandAccess::kRead) == 1 &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kScale,
+                        StubOperandAccess::kRead) == 1 &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kPairedScale,
+                        StubOperandAccess::kRead) == 1 &&
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kDestination,
+                        StubOperandAccess::kWrite) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kDestination, true) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kSource0, false) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kScaleSource, false) == 1 &&
+                    CountSlotsOfKindWithOutputFlag(
+                        decoded, StubOperandSlotKind::kPairedScaleSource,
+                        false) == 1 &&
                     AllSlotsExplicit(decoded) &&
                     AllDescriptorsExplicit(decoded) &&
                     AllSlotWaveSizesAre(decoded, 0) &&

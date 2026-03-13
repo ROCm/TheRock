@@ -23,6 +23,8 @@
   - route-wide wave32 validation across the current routed WMMA / SWMMAC seed set
   - route-wide non-matrix wave-size and descriptor-role validation across current tensor, VOP1 FP8/BF8, and VOP3 SDST scale-assist seeds
   - route-wide exact value-class composition validation across the current routed matrix and non-matrix seed sets
+  - route-wide exact component-count composition validation across the current routed matrix and non-matrix seed sets
+  - route-wide exact per-role access and output-slot validation across the current routed matrix and non-matrix seed sets
 
 ## Routed Seed Metadata Coverage
 
@@ -152,6 +154,9 @@
     - route-wide exact destination/source0/source1/accumulator slot and descriptor composition checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact matrix-fragment composition checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact matrix-fragment vs accumulator-fragment value-class composition checks across current routed non-scale `V_WMMA_*` seeds
+    - route-wide exact matrix-fragment vs accumulator-fragment component-count composition checks across current routed non-scale `V_WMMA_*` seeds
+    - route-wide exact destination write vs source/accumulator read access checks across current routed non-scale `V_WMMA_*` seeds
+    - route-wide exact output-slot binding checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide role-specific wave32 checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide wave32 validation across current routed `V_WMMA_*` seeds except paired-load helpers
 - WMMA scale:
@@ -176,6 +181,9 @@
     - route-wide exact destination/source0/source1/accumulator/scale slot and descriptor composition checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact matrix-vs-scalar fragment composition checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact matrix-fragment vs accumulator-fragment vs scalar-register value-class composition checks across current routed `V_WMMA_SCALE*` seeds
+    - route-wide exact matrix-fragment vs accumulator-fragment vs scalar-register component-count composition checks across current routed `V_WMMA_SCALE*` seeds
+    - route-wide exact destination write vs source/accumulator/scale read access checks across current routed `V_WMMA_SCALE*` seeds
+    - route-wide exact output-slot binding checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide scalar scale-slot and scale-descriptor checks across current routed `V_WMMA_SCALE*` seeds
 - WMMA scale paired loads:
   - `V_WMMA_LD_SCALE_PAIRED_B32` -> `kWmmaLdScalePairedB32`
@@ -195,6 +203,9 @@
     - route-wide slot-count and exact descriptor/slot composition validation across current paired scale-load helpers
     - route-wide exact vector-vs-scalar fragment composition checks across current paired scale-load helpers
     - route-wide exact vector-register vs scalar-register value-class composition checks across current paired scale-load helpers
+    - route-wide exact vector-register vs scalar-register component-count composition checks across current paired scale-load helpers
+    - route-wide exact destination write vs source/scale/paired-scale read access checks across current paired scale-load helpers
+    - route-wide exact output-slot binding checks across current paired scale-load helpers
     - route-wide exact vector source/destination and scalar scale / paired-scale slot-shape checks across current paired scale-load helpers
     - route-wide exact scalar scale / paired-scale and width-specific destination descriptor-shape checks across current paired scale-load helpers
     - route-wide explicit slot/descriptor validation across current paired scale-load helpers
@@ -228,6 +239,9 @@
     - route-wide exact destination/source0/source1/accumulator slot and descriptor composition checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact matrix-fragment composition checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact matrix-fragment vs accumulator-fragment value-class composition checks across current routed `V_SWMMAC_*` seeds
+    - route-wide exact matrix-fragment vs accumulator-fragment component-count composition checks across current routed `V_SWMMAC_*` seeds
+    - route-wide exact destination write vs source/accumulator read access checks across current routed `V_SWMMAC_*` seeds
+    - route-wide exact output-slot binding checks across current routed `V_SWMMAC_*` seeds
     - route-wide role-specific wave32 checks across current routed `V_SWMMAC_*` seeds
     - route-wide wave32 validation across current routed `V_SWMMAC_*` seeds
 - Tensor routes:
@@ -249,6 +263,9 @@
     - route-wide exact descriptor/slot composition checks across the current tensor route set
     - route-wide exact tensor-descriptor / tensor-coordinate / address fragment composition checks across the current tensor route set
     - route-wide exact tensor-descriptor / tensor-coordinate / LDS-address value-class composition checks across the current tensor route set
+    - route-wide exact tensor-descriptor / tensor-coordinate / LDS-address component-count composition checks across the current tensor route set
+    - route-wide exact tensor-descriptor / tensor-coordinate read vs LDS read-write access checks across the current tensor route set
+    - route-wide exact output-slot binding checks across the current tensor route set
     - route-wide exact tensor-descriptor, tensor-coordinate, and LDS address slot-shape checks across the current tensor route set
     - route-wide exact tensor-descriptor, tensor-coordinate, and LDS address descriptor-shape checks across the current tensor route set
     - route-wide explicit slot/descriptor validation across the current tensor route set
@@ -269,6 +286,9 @@
     - route-wide exact source/destination descriptor composition plus paired-operand flag checks across the current VOP1 route set
     - route-wide exact scalar-vs-packed fragment composition checks across the current VOP1 route set
     - route-wide exact scalar-register vs packed-vector value-class composition checks across the current VOP1 route set
+    - route-wide exact scalar-register vs packed-vector component-count composition checks across the current VOP1 route set
+    - route-wide exact source read vs destination write access checks across the current VOP1 route set
+    - route-wide exact output-slot binding checks across the current VOP1 route set
     - route-wide exact scalar and packed source/destination slot-shape checks across the current VOP1 route set
     - route-wide exact scalar and packed source/destination descriptor-shape checks across the current VOP1 route set
     - route-wide explicit slot/descriptor validation across the current VOP1 route set
@@ -287,6 +307,9 @@
     - route-wide exact descriptor-role and slot-kind composition checks across the current VOP3 SDST route set
     - route-wide exact scalar fragment composition checks across the current VOP3 SDST route set
     - route-wide exact vector-register vs scalar-register value-class composition checks across the current VOP3 SDST route set
+    - route-wide exact vector-register vs scalar-register component-count composition checks across the current VOP3 SDST route set
+    - route-wide exact source/scale read vs vector/scalar destination write access checks across the current VOP3 SDST route set
+    - route-wide exact output-slot binding checks across the current VOP3 SDST route set
     - route-wide exact source, scale, and vector/scalar destination slot-shape checks across the current VOP3 SDST route set
     - route-wide exact scale-source and vector/scalar destination descriptor-shape checks across the current VOP3 SDST route set
     - route-wide explicit slot/descriptor validation across the current VOP3 SDST route set
