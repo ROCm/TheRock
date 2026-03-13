@@ -210,7 +210,7 @@ By default the pytorch directory is determined based on this script's location
         choices=["unique", "all"],
         default="unique",
         help="""Stage 1: which GPUs enter the candidate set (see --gpu-policy for stage 2).
-- "unique" (default): one device per architecture. E.g. {gfx942:[0], gfx1100:[2]}.
+- "unique": one device per architecture (default). E.g. {gfx942:[0], gfx1100:[2]}.
 - "all": every device of each architecture. E.g. {gfx942:[0,1], gfx1100:[2]}.""",
     )
 
@@ -220,7 +220,7 @@ By default the pytorch directory is determined based on this script's location
         choices=["single", "all"],
         default="single",
         help="""Stage 2: how many candidate GPUs to make visible (see --device-query for stage 1).
-- "single" (default): one GPU visible at a time. Suitable for most unit tests.
+- "single": one GPU visible at a time (default). Suitable for most unit tests.
 - "all": all candidate GPUs visible at once. Useful for multi-GPU tests.""",
     )
 
