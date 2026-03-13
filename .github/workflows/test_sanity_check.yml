@@ -21,6 +21,10 @@ on:
         type: string
       platform:
         type: string
+      amdsmi_tests_default_unblocking_for_sanity_blocking:
+        type: boolean
+        description: 'If true, treat amdsmi default-unblocking tests as blockers (do not continue on error)'
+        default: false
   workflow_call:
     inputs:
       artifact_group:
@@ -38,6 +42,10 @@ on:
         type: string
       platform:
         type: string
+      amdsmi_tests_default_unblocking_for_sanity_blocking:
+        type: boolean
+        description: 'If true, treat amdsmi default-unblocking tests as blockers (do not continue on error)'
+        default: false
   push:
     branches:
       - ADHOCBUILD
@@ -138,15 +146,27 @@ jobs:
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
-      - name: Run ROCm Sanity Tests
-        timeout-minutes: 5
+      - name: Run ROCm Blocking Sanity Tests
+        timeout-minutes: 10
         env:
           # Enable verbose logging, see
           # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
           AMD_LOG_LEVEL: 4
           ROCM_KPACK_DEBUG: "1"
         run: |
-          pytest tests/ --log-cli-level=info --timeout=300
+          pytest tests/ -m "not amdsmi_tests_default_unblocking_for_sanity" --log-cli-level=info --timeout=300
+
+      - name: Run ROCm AMDSMI Default-Unblocking-For-Sanity Tests
+        id: amdsmi_tests_default_unblocking_for_sanity_tests
+        continue-on-error: ${{ inputs.amdsmi_tests_default_unblocking_for_sanity_blocking == false }}
+        timeout-minutes: 10
+        env:
+          # Enable verbose logging, see
+          # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
+          AMD_LOG_LEVEL: 4
+          ROCM_KPACK_DEBUG: "1"
+        run: |
+          pytest tests/ -m "amdsmi_tests_default_unblocking_for_sanity" --log-cli-level=info --timeout=300
 
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}
