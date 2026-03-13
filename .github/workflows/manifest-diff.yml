@@ -1,14 +1,14 @@
-name: Manifest Diff Report
+name: TheRock Manifest Diff Report
 
 on:
   workflow_dispatch:
     inputs:
-      start_commit:
-        description: 'Start Commit SHA or Workflow Run ID (required when using workflow mode or commit SHA mode without find-last-successful)'
+      start_ref:
+        description: 'Start commit SHA or workflow run ID (required when using workflow mode or commit SHA mode without find-last-successful)'
         required: false
         type: string
-      end_commit:
-        description: 'End Commit SHA or Workflow Run ID'
+      end_ref:
+        description: 'End commit SHA or workflow run ID'
         required: true
         type: string
       workflow_mode:
@@ -22,10 +22,10 @@ on:
         type: string
   workflow_call:
     inputs:
-      start_commit:
+      start_ref:
         required: false
         type: string
-      end_commit:
+      end_ref:
         required: true
         type: string
       workflow_mode:
@@ -57,25 +57,24 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python3 build_tools/generate_manifest_diff_report.py \
-            --end "${{ inputs.end_commit }}" \
-            --start "${{ inputs.start_commit || '' }}" \
+            --end "${{ inputs.end_ref }}" \
+            --start "${{ inputs.start_ref || '' }}" \
             --find-last-successful "${{ inputs.find_last_successful || '' }}" \
             ${{ inputs.workflow_mode && '--workflow-mode' || '' }} \
             --output-dir reports
 
       - name: Configure AWS Credentials
-        if: ${{ !cancelled() && github.repository_owner == 'ROCm' && (github.event.pull_request == null || !github.event.pull_request.head.repo.fork) }}
+        if: ${{ github.repository == 'ROCm/TheRock' }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
       - name: Upload Report to S3
-        if: ${{ !cancelled() && github.repository_owner == 'ROCm' && (github.event.pull_request == null || !github.event.pull_request.head.repo.fork) }}
+        if: ${{ github.repository == 'ROCm/TheRock' }}
         run: |
           python3 build_tools/github_actions/upload_test_report_script.py \
             --run-id ${{ github.run_id }} \
             --amdgpu-family manifest-diff \
             --report-path reports \
-            --log-destination logs/manifest-diff \
             --index-file-name index.html
