@@ -54,7 +54,7 @@ jobs:
       - name: Run scheduled bump automation
         if: github.event_name == 'schedule'
         run: |
-          python3 .github/scripts/bump_submodules.py \
+          python3 build_tools/github_actions/bump_automation.py \
             --event_type schedule \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
             --libraries_token "${{ steps.librarian-token.outputs.token }}" \
@@ -63,7 +63,7 @@ jobs:
       - name: Run push automation
         if: github.event_name == 'push'
         run: |
-          python3 .github/scripts/bump_submodules.py \
+          python3 build_tools/github_actions/bump_automation.py \
             --event_type "push" \
             --before "${{ github.event.before }}" \
             --after "${{ github.sha }}" \
