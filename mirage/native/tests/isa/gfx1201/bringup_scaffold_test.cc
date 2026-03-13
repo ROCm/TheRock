@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 301u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 307u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -261,6 +261,18 @@ int main() {
               "expected V_MIN_NUM_F64 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_MAX_NUM_F64"),
               "expected V_MAX_NUM_F64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_XNOR_B32"),
+              "expected V_XNOR_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_MUL_I32_I24"),
+              "expected V_MUL_I32_I24 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_MUL_HI_I32_I24"),
+              "expected V_MUL_HI_I32_I24 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_MUL_U32_U24"),
+              "expected V_MUL_U32_U24 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_MUL_HI_U32_U24"),
+              "expected V_MUL_HI_U32_U24 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_LSHLREV_B64"),
+              "expected V_LSHLREV_B64 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_I32_I16"),
               "expected V_CVT_I32_I16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_U32_U16"),
@@ -320,7 +332,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 301u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 307u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -510,6 +522,18 @@ int main() {
               "expected interpreter support for V_MIN_NUM_F64") ||
       !Expect(interpreter.Supports("V_MAX_NUM_F64"),
               "expected interpreter support for V_MAX_NUM_F64") ||
+      !Expect(interpreter.Supports("V_XNOR_B32"),
+              "expected interpreter support for V_XNOR_B32") ||
+      !Expect(interpreter.Supports("V_MUL_I32_I24"),
+              "expected interpreter support for V_MUL_I32_I24") ||
+      !Expect(interpreter.Supports("V_MUL_HI_I32_I24"),
+              "expected interpreter support for V_MUL_HI_I32_I24") ||
+      !Expect(interpreter.Supports("V_MUL_U32_U24"),
+              "expected interpreter support for V_MUL_U32_U24") ||
+      !Expect(interpreter.Supports("V_MUL_HI_U32_U24"),
+              "expected interpreter support for V_MUL_HI_U32_U24") ||
+      !Expect(interpreter.Supports("V_LSHLREV_B64"),
+              "expected interpreter support for V_LSHLREV_B64") ||
       !Expect(interpreter.Supports("V_CVT_I32_I16"),
               "expected interpreter support for V_CVT_I32_I16") ||
       !Expect(interpreter.Supports("V_CVT_U32_U16"),

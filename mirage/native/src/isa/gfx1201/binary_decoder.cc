@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 301> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 307> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -304,6 +304,12 @@ constexpr std::array<std::string_view, 301> kPhase0ExecutableOpcodes{{
     "V_MUL_F64",
     "V_MIN_NUM_F64",
     "V_MAX_NUM_F64",
+    "V_XNOR_B32",
+    "V_MUL_I32_I24",
+    "V_MUL_HI_I32_I24",
+    "V_MUL_U32_U24",
+    "V_MUL_HI_U32_U24",
+    "V_LSHLREV_B64",
     "V_ADD_U32",
     "V_SUB_U32",
     "V_SUBREV_U32",
@@ -1294,6 +1300,32 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         DescribeWideSourceOperand(src1, OperandRole::kSource1,
                                   OperandSlotKind::kSource1));
     *words_consumed = 1 + literal_words_consumed;
+  } else if (instruction_name == "V_LSHLREV_B64") {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(ExtractBits(word, 17, 8), &dst, error_message)) {
+      return false;
+    }
+
+    std::size_t literal_words_consumed = 0;
+    InstructionOperand src0;
+    if (!DecodeVectorSource(ExtractBits(word, 0, 9), words.subspan(1),
+                            &literal_words_consumed, &src0, error_message)) {
+      return false;
+    }
+
+    InstructionOperand src1;
+    if (!DecodeVectorRegisterSource(ExtractBits(word, 9, 8), &src1,
+                                    error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::Binary(
+        instruction_name, DescribeWideVectorDestinationOperand(dst),
+        DescribeSourceOperand(src0, OperandRole::kSource0,
+                              OperandSlotKind::kSource0),
+        DescribeWideSourceOperand(src1, OperandRole::kSource1,
+                                  OperandSlotKind::kSource1));
+    *words_consumed = 1 + literal_words_consumed;
   } else if (instruction_name == "V_ADD_F16" ||
              instruction_name == "V_SUB_F16" ||
              instruction_name == "V_SUBREV_F16" ||
@@ -1308,6 +1340,11 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "V_MUL_F32" ||
              instruction_name == "V_MIN_NUM_F32" ||
              instruction_name == "V_MAX_NUM_F32" ||
+             instruction_name == "V_XNOR_B32" ||
+             instruction_name == "V_MUL_I32_I24" ||
+             instruction_name == "V_MUL_HI_I32_I24" ||
+             instruction_name == "V_MUL_U32_U24" ||
+             instruction_name == "V_MUL_HI_U32_U24" ||
              instruction_name == "V_ADD_U32" ||
              instruction_name == "V_SUBREV_U32" ||
              instruction_name == "V_MIN_I32" ||

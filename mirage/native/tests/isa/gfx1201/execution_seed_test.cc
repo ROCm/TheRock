@@ -912,6 +912,54 @@ bool ExpectF64VectorBinarySeedState(
          !state.waiting_on_barrier && state.pc == 4u;
 }
 
+bool ExpectI24VectorBinarySeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[117][0] == 0xfffeffefu &&
+         state.vgprs[117][1] == 0xff000002u &&
+         state.vgprs[117][2] == 0xd7d7d7d7u &&
+         state.vgprs[117][3] == 0xffffffffu &&
+         state.vgprs[118][0] == 0x00100000u &&
+         state.vgprs[118][1] == 0xfffffffau &&
+         state.vgprs[118][2] == 0xd8d8d8d8u &&
+         state.vgprs[118][3] == 0xff000001u &&
+         state.vgprs[119][0] == 0x00000000u &&
+         state.vgprs[119][1] == 0xffffffffu &&
+         state.vgprs[119][2] == 0xd9d9d9d9u &&
+         state.vgprs[119][3] == 0x00003fffu &&
+         state.vgprs[120][0] == 0x00100000u &&
+         state.vgprs[120][1] == 0x02fffffau &&
+         state.vgprs[120][2] == 0xdadadadau &&
+         state.vgprs[120][3] == 0xff000001u &&
+         state.vgprs[121][0] == 0x00000000u &&
+         state.vgprs[121][1] == 0x00000000u &&
+         state.vgprs[121][2] == 0xdbdbdbdbu &&
+         state.vgprs[121][3] == 0x00003fffu &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 5u;
+}
+
+bool ExpectWideShiftSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  std::uint32_t lane0_low, lane0_high;
+  std::uint32_t lane1_low, lane1_high;
+  std::uint32_t lane3_low, lane3_high;
+
+  SplitU64(0x30ull, &lane0_low, &lane0_high);
+  SplitU64(0x100ull, &lane1_low, &lane1_high);
+  SplitU64(0x0000010000000000ull, &lane3_low, &lane3_high);
+
+  return state.vgprs[124][0] == lane0_low &&
+         state.vgprs[124][1] == lane1_low &&
+         state.vgprs[124][2] == 0xe4e4e4e4u &&
+         state.vgprs[124][3] == lane3_low &&
+         state.vgprs[125][0] == lane0_high &&
+         state.vgprs[125][1] == lane1_high &&
+         state.vgprs[125][2] == 0xf5f5f5f5u &&
+         state.vgprs[125][3] == lane3_high &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 1u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -2319,6 +2367,46 @@ int main() {
                                       OperandKind::kVgpr, 1u,
                                       OperandKind::kVgpr, 3u),
               "expected decoded V_MAX_NUM_F64 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_xnor_b32_words{
+      MakeVop2(30u, 21u, 261u, 6u)};
+  if (!Expect(decoder.DecodeInstruction(vector_xnor_b32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_XNOR_B32 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_XNOR_B32",
+                                      OperandKind::kVgpr, 21u,
+                                      OperandKind::kVgpr, 5u,
+                                      OperandKind::kVgpr, 6u),
+              "expected decoded V_XNOR_B32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_mul_hi_i32_i24_words{
+      MakeVop2(10u, 22u, 261u, 6u)};
+  if (!Expect(decoder.DecodeInstruction(vector_mul_hi_i32_i24_words,
+                                        &instruction, &words_consumed,
+                                        &error_message),
+              "expected V_MUL_HI_I32_I24 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_MUL_HI_I32_I24",
+                                      OperandKind::kVgpr, 22u,
+                                      OperandKind::kVgpr, 5u,
+                                      OperandKind::kVgpr, 6u),
+              "expected decoded V_MUL_HI_I32_I24 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_lshlrev_b64_words{
+      MakeVop2(31u, 24u, 263u, 8u)};
+  if (!Expect(decoder.DecodeInstruction(vector_lshlrev_b64_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_LSHLREV_B64 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_LSHLREV_B64",
+                                      OperandKind::kVgpr, 24u,
+                                      OperandKind::kVgpr, 7u,
+                                      OperandKind::kVgpr, 8u),
+              "expected decoded V_LSHLREV_B64 operands")) {
     return 1;
   }
 
@@ -5284,6 +5372,175 @@ int main() {
       !Expect(ExpectF64VectorBinarySeedState(
                   compiled_f64_vector_binary_state),
               "expected compiled F64 vector binary state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 6> i24_vector_binary_words{
+      MakeVop2(30u, 117u, 261u, 6u),
+      MakeVop2(9u, 118u, 261u, 6u),
+      MakeVop2(10u, 119u, 261u, 6u),
+      MakeVop2(11u, 120u, 261u, 6u),
+      MakeVop2(12u, 121u, 261u, 6u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> i24_vector_binary_program;
+  if (!Expect(decoder.DecodeProgram(i24_vector_binary_words,
+                                    &i24_vector_binary_program,
+                                    &error_message),
+              "expected I24 vector binary program decode success") ||
+      !Expect(i24_vector_binary_program.size() == 6u,
+              "expected six decoded I24 vector binary instructions") ||
+      !Expect(i24_vector_binary_program[0].opcode == "V_XNOR_B32",
+              "expected decoded V_XNOR_B32") ||
+      !Expect(i24_vector_binary_program[1].opcode == "V_MUL_I32_I24",
+              "expected decoded V_MUL_I32_I24") ||
+      !Expect(i24_vector_binary_program[2].opcode == "V_MUL_HI_I32_I24",
+              "expected decoded V_MUL_HI_I32_I24") ||
+      !Expect(i24_vector_binary_program[3].opcode == "V_MUL_U32_U24",
+              "expected decoded V_MUL_U32_U24") ||
+      !Expect(i24_vector_binary_program[4].opcode == "V_MUL_HI_U32_U24",
+              "expected decoded V_MUL_HI_U32_U24") ||
+      !Expect(i24_vector_binary_program[5].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after I24 vector binary batch")) {
+    return 1;
+  }
+
+  auto initialize_i24_vector_binary_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[5][0] = 0x00010000u;
+    state->vgprs[5][1] = 0x00fffffeu;
+    state->vgprs[5][2] = 0x55555555u;
+    state->vgprs[5][3] = 0x007fffffu;
+
+    state->vgprs[6][0] = 0x00000010u;
+    state->vgprs[6][1] = 0x00000003u;
+    state->vgprs[6][2] = 0x66666666u;
+    state->vgprs[6][3] = 0x007fffffu;
+
+    state->vgprs[117][2] = 0xd7d7d7d7u;
+    state->vgprs[118][2] = 0xd8d8d8d8u;
+    state->vgprs[119][2] = 0xd9d9d9d9u;
+    state->vgprs[120][2] = 0xdadadadau;
+    state->vgprs[121][2] = 0xdbdbdbdbu;
+  };
+
+  WaveExecutionState decoded_i24_vector_binary_state;
+  initialize_i24_vector_binary_state(&decoded_i24_vector_binary_state);
+  if (!Expect(interpreter.ExecuteProgram(i24_vector_binary_program,
+                                         &decoded_i24_vector_binary_state,
+                                         &error_message),
+              "expected decoded I24 vector binary execution success") ||
+      !Expect(ExpectI24VectorBinarySeedState(
+                  decoded_i24_vector_binary_state),
+              "expected decoded I24 vector binary state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_i24_vector_binary_program;
+  if (!Expect(interpreter.CompileProgram(i24_vector_binary_program,
+                                         &compiled_i24_vector_binary_program,
+                                         &error_message),
+              "expected compiled I24 vector binary program success") ||
+      !Expect(compiled_i24_vector_binary_program.size() == 6u,
+              "expected six compiled I24 vector binary instructions") ||
+      !Expect(compiled_i24_vector_binary_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVXnorB32,
+              "expected compiled V_XNOR_B32 opcode") ||
+      !Expect(compiled_i24_vector_binary_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVMulI32I24,
+              "expected compiled V_MUL_I32_I24 opcode") ||
+      !Expect(compiled_i24_vector_binary_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVMulHiI32I24,
+              "expected compiled V_MUL_HI_I32_I24 opcode") ||
+      !Expect(compiled_i24_vector_binary_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVMulU32U24,
+              "expected compiled V_MUL_U32_U24 opcode") ||
+      !Expect(compiled_i24_vector_binary_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kVMulHiU32U24,
+              "expected compiled V_MUL_HI_U32_U24 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_i24_vector_binary_state;
+  initialize_i24_vector_binary_state(&compiled_i24_vector_binary_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_i24_vector_binary_program,
+                                         &compiled_i24_vector_binary_state,
+                                         &error_message),
+              "expected compiled I24 vector binary execution success") ||
+      !Expect(ExpectI24VectorBinarySeedState(
+                  compiled_i24_vector_binary_state),
+              "expected compiled I24 vector binary state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 2> wide_shift_words{
+      MakeVop2(31u, 124u, 263u, 8u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> wide_shift_program;
+  if (!Expect(decoder.DecodeProgram(wide_shift_words, &wide_shift_program,
+                                    &error_message),
+              "expected wide shift program decode success") ||
+      !Expect(wide_shift_program.size() == 2u,
+              "expected two decoded wide shift instructions") ||
+      !Expect(wide_shift_program[0].opcode == "V_LSHLREV_B64",
+              "expected decoded V_LSHLREV_B64") ||
+      !Expect(wide_shift_program[1].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after wide shift batch")) {
+    return 1;
+  }
+
+  auto initialize_wide_shift_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[7][0] = 4u;
+    state->vgprs[7][1] = 8u;
+    state->vgprs[7][2] = 0x77777777u;
+    state->vgprs[7][3] = 40u;
+
+    SplitU64(0x3ull, &state->vgprs[8][0], &state->vgprs[9][0]);
+    SplitU64(0x1ull, &state->vgprs[8][1], &state->vgprs[9][1]);
+    state->vgprs[8][2] = 0x88888888u;
+    state->vgprs[9][2] = 0x99999999u;
+    SplitU64(0x1ull, &state->vgprs[8][3], &state->vgprs[9][3]);
+
+    state->vgprs[124][2] = 0xe4e4e4e4u;
+    state->vgprs[125][2] = 0xf5f5f5f5u;
+  };
+
+  WaveExecutionState decoded_wide_shift_state;
+  initialize_wide_shift_state(&decoded_wide_shift_state);
+  if (!Expect(interpreter.ExecuteProgram(wide_shift_program,
+                                         &decoded_wide_shift_state,
+                                         &error_message),
+              "expected decoded wide shift execution success") ||
+      !Expect(ExpectWideShiftSeedState(decoded_wide_shift_state),
+              "expected decoded wide shift state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_wide_shift_program;
+  if (!Expect(interpreter.CompileProgram(wide_shift_program,
+                                         &compiled_wide_shift_program,
+                                         &error_message),
+              "expected compiled wide shift program success") ||
+      !Expect(compiled_wide_shift_program.size() == 2u,
+              "expected two compiled wide shift instructions") ||
+      !Expect(compiled_wide_shift_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVLshlrevB64,
+              "expected compiled V_LSHLREV_B64 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_wide_shift_state;
+  initialize_wide_shift_state(&compiled_wide_shift_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_wide_shift_program,
+                                         &compiled_wide_shift_state,
+                                         &error_message),
+              "expected compiled wide shift execution success") ||
+      !Expect(ExpectWideShiftSeedState(compiled_wide_shift_state),
+              "expected compiled wide shift state")) {
     return 1;
   }
 
