@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 291u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 297u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -241,6 +241,18 @@ int main() {
               "expected V_MIN_NUM_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_MAX_NUM_F16"),
               "expected V_MAX_NUM_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_ADD_F32"),
+              "expected V_ADD_F32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_SUB_F32"),
+              "expected V_SUB_F32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_SUBREV_F32"),
+              "expected V_SUBREV_F32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_MUL_F32"),
+              "expected V_MUL_F32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_MIN_NUM_F32"),
+              "expected V_MIN_NUM_F32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_MAX_NUM_F32"),
+              "expected V_MAX_NUM_F32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_I32_I16"),
               "expected V_CVT_I32_I16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_U32_U16"),
@@ -267,8 +279,8 @@ int main() {
               "expected V_CVT_I32_F32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_MOV_B32"),
               "expected S_MOV_B32 executable decode support") ||
-      !Expect(!decoder.SupportsPhase0ExecutableOpcode("V_ADD_F32"),
-              "expected V_ADD_F32 to remain outside executable decode slice")) {
+      !Expect(!decoder.SupportsPhase0ExecutableOpcode("V_FMAC_F32"),
+              "expected V_FMAC_F32 to remain outside executable decode slice")) {
     return 1;
   }
 
@@ -300,7 +312,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 291u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 297u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -470,6 +482,18 @@ int main() {
               "expected interpreter support for V_MIN_NUM_F16") ||
       !Expect(interpreter.Supports("V_MAX_NUM_F16"),
               "expected interpreter support for V_MAX_NUM_F16") ||
+      !Expect(interpreter.Supports("V_ADD_F32"),
+              "expected interpreter support for V_ADD_F32") ||
+      !Expect(interpreter.Supports("V_SUB_F32"),
+              "expected interpreter support for V_SUB_F32") ||
+      !Expect(interpreter.Supports("V_SUBREV_F32"),
+              "expected interpreter support for V_SUBREV_F32") ||
+      !Expect(interpreter.Supports("V_MUL_F32"),
+              "expected interpreter support for V_MUL_F32") ||
+      !Expect(interpreter.Supports("V_MIN_NUM_F32"),
+              "expected interpreter support for V_MIN_NUM_F32") ||
+      !Expect(interpreter.Supports("V_MAX_NUM_F32"),
+              "expected interpreter support for V_MAX_NUM_F32") ||
       !Expect(interpreter.Supports("V_CVT_I32_I16"),
               "expected interpreter support for V_CVT_I32_I16") ||
       !Expect(interpreter.Supports("V_CVT_U32_U16"),
@@ -516,7 +540,7 @@ int main() {
               "expected interpreter support for V_XOR_B32") ||
       !Expect(interpreter.Supports("V_MOV_B32"),
               "expected interpreter support for V_MOV_B32") ||
-      !Expect(!interpreter.Supports("V_ADD_F32"),
+      !Expect(!interpreter.Supports("V_FMAC_F32"),
               "expected interpreter to reject unsupported seed opcode") ||
       !Expect(interpreter.CarryOverFamilyFocus().size() == 7u,
               "expected carry-over family focus list") ||
@@ -556,14 +580,14 @@ int main() {
   }
 
   const std::array<DecodedInstruction, 1> unsupported_program{
-      DecodedInstruction::Binary("V_ADD_F32", InstructionOperand::Vgpr(0),
+      DecodedInstruction::Binary("V_FMAC_F32", InstructionOperand::Vgpr(0),
                                  InstructionOperand::Vgpr(1),
                                  InstructionOperand::Vgpr(2)),
   };
   if (!Expect(!interpreter.CompileProgram(unsupported_program, &compiled_program,
                                           &error_message),
               "expected unsupported program compile failure") ||
-      !Expect(error_message.find("V_ADD_F32 is not in the executable seed slice") !=
+      !Expect(error_message.find("V_FMAC_F32 is not in the executable seed slice") !=
                   std::string::npos,
               "expected unsupported opcode message") ||
       !Expect(error_message.find("RDNA4 delta families") != std::string::npos,

@@ -818,6 +818,36 @@ bool ExpectHalfPackExponentSeedState(
          !state.waiting_on_barrier && state.pc == 2u;
 }
 
+bool ExpectF32VectorBinarySeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[103][0] == FloatBits(2.0f) &&
+         state.vgprs[103][1] == FloatBits(1.0f) &&
+         state.vgprs[103][2] == 0xa3a3a3a3u &&
+         state.vgprs[103][3] == FloatBits(3.0f) &&
+         state.vgprs[104][0] == FloatBits(1.0f) &&
+         state.vgprs[104][1] == FloatBits(-5.0f) &&
+         state.vgprs[104][2] == 0xa4a4a4a4u &&
+         state.vgprs[104][3] == FloatBits(5.0f) &&
+         state.vgprs[105][0] == FloatBits(-1.0f) &&
+         state.vgprs[105][1] == FloatBits(5.0f) &&
+         state.vgprs[105][2] == 0xa5a5a5a5u &&
+         state.vgprs[105][3] == FloatBits(-5.0f) &&
+         state.vgprs[106][0] == FloatBits(0.75f) &&
+         state.vgprs[106][1] == FloatBits(-6.0f) &&
+         state.vgprs[106][2] == 0xa6a6a6a6u &&
+         state.vgprs[106][3] == FloatBits(-4.0f) &&
+         state.vgprs[107][0] == FloatBits(0.5f) &&
+         state.vgprs[107][1] == FloatBits(-2.0f) &&
+         state.vgprs[107][2] == 0xa7a7a7a7u &&
+         state.vgprs[107][3] == FloatBits(-1.0f) &&
+         state.vgprs[108][0] == FloatBits(1.5f) &&
+         state.vgprs[108][1] == FloatBits(3.0f) &&
+         state.vgprs[108][2] == 0xa8a8a8a8u &&
+         state.vgprs[108][3] == FloatBits(4.0f) &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 6u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -2160,6 +2190,45 @@ int main() {
                                       OperandKind::kVgpr, 4u,
                                       OperandKind::kVgpr, 5u),
               "expected decoded V_LDEXP_F16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_add_f32_words{
+      MakeVop2(3u, 15u, 257u, 2u)};
+  if (!Expect(decoder.DecodeInstruction(vector_add_f32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_ADD_F32 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_ADD_F32",
+                                      OperandKind::kVgpr, 15u,
+                                      OperandKind::kVgpr, 1u,
+                                      OperandKind::kVgpr, 2u),
+              "expected decoded V_ADD_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_subrev_f32_words{
+      MakeVop2(5u, 16u, 257u, 2u)};
+  if (!Expect(decoder.DecodeInstruction(vector_subrev_f32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_SUBREV_F32 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_SUBREV_F32",
+                                      OperandKind::kVgpr, 16u,
+                                      OperandKind::kVgpr, 1u,
+                                      OperandKind::kVgpr, 2u),
+              "expected decoded V_SUBREV_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_max_num_f32_words{
+      MakeVop2(22u, 17u, 257u, 2u)};
+  if (!Expect(decoder.DecodeInstruction(vector_max_num_f32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_MAX_NUM_F32 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_MAX_NUM_F32",
+                                      OperandKind::kVgpr, 17u,
+                                      OperandKind::kVgpr, 1u,
+                                      OperandKind::kVgpr, 2u),
+              "expected decoded V_MAX_NUM_F32 operands")) {
     return 1;
   }
 
@@ -4921,6 +4990,112 @@ int main() {
       !Expect(ExpectHalfPackExponentSeedState(
                   compiled_half_pack_exponent_state),
               "expected compiled half pack/exponent state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 7> f32_vector_binary_words{
+      MakeVop2(3u, 103u, 257u, 2u),
+      MakeVop2(4u, 104u, 257u, 2u),
+      MakeVop2(5u, 105u, 257u, 2u),
+      MakeVop2(8u, 106u, 257u, 2u),
+      MakeVop2(21u, 107u, 257u, 2u),
+      MakeVop2(22u, 108u, 257u, 2u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> f32_vector_binary_program;
+  if (!Expect(decoder.DecodeProgram(f32_vector_binary_words,
+                                    &f32_vector_binary_program,
+                                    &error_message),
+              "expected F32 vector binary program decode success") ||
+      !Expect(f32_vector_binary_program.size() == 7u,
+              "expected seven decoded F32 vector binary instructions") ||
+      !Expect(f32_vector_binary_program[0].opcode == "V_ADD_F32",
+              "expected decoded V_ADD_F32") ||
+      !Expect(f32_vector_binary_program[1].opcode == "V_SUB_F32",
+              "expected decoded V_SUB_F32") ||
+      !Expect(f32_vector_binary_program[2].opcode == "V_SUBREV_F32",
+              "expected decoded V_SUBREV_F32") ||
+      !Expect(f32_vector_binary_program[3].opcode == "V_MUL_F32",
+              "expected decoded V_MUL_F32") ||
+      !Expect(f32_vector_binary_program[4].opcode == "V_MIN_NUM_F32",
+              "expected decoded V_MIN_NUM_F32") ||
+      !Expect(f32_vector_binary_program[5].opcode == "V_MAX_NUM_F32",
+              "expected decoded V_MAX_NUM_F32") ||
+      !Expect(f32_vector_binary_program[6].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after F32 vector binary batch")) {
+    return 1;
+  }
+
+  auto initialize_f32_vector_binary_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[1][0] = FloatBits(1.5f);
+    state->vgprs[1][1] = FloatBits(-2.0f);
+    state->vgprs[1][2] = 0x11111111u;
+    state->vgprs[1][3] = FloatBits(4.0f);
+
+    state->vgprs[2][0] = FloatBits(0.5f);
+    state->vgprs[2][1] = FloatBits(3.0f);
+    state->vgprs[2][2] = 0x22222222u;
+    state->vgprs[2][3] = FloatBits(-1.0f);
+
+    state->vgprs[103][2] = 0xa3a3a3a3u;
+    state->vgprs[104][2] = 0xa4a4a4a4u;
+    state->vgprs[105][2] = 0xa5a5a5a5u;
+    state->vgprs[106][2] = 0xa6a6a6a6u;
+    state->vgprs[107][2] = 0xa7a7a7a7u;
+    state->vgprs[108][2] = 0xa8a8a8a8u;
+  };
+
+  WaveExecutionState decoded_f32_vector_binary_state;
+  initialize_f32_vector_binary_state(&decoded_f32_vector_binary_state);
+  if (!Expect(interpreter.ExecuteProgram(f32_vector_binary_program,
+                                         &decoded_f32_vector_binary_state,
+                                         &error_message),
+              "expected decoded F32 vector binary execution success") ||
+      !Expect(ExpectF32VectorBinarySeedState(
+                  decoded_f32_vector_binary_state),
+              "expected decoded F32 vector binary state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_f32_vector_binary_program;
+  if (!Expect(interpreter.CompileProgram(f32_vector_binary_program,
+                                         &compiled_f32_vector_binary_program,
+                                         &error_message),
+              "expected compiled F32 vector binary program success") ||
+      !Expect(compiled_f32_vector_binary_program.size() == 7u,
+              "expected seven compiled F32 vector binary instructions") ||
+      !Expect(compiled_f32_vector_binary_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVAddF32,
+              "expected compiled V_ADD_F32 opcode") ||
+      !Expect(compiled_f32_vector_binary_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVSubF32,
+              "expected compiled V_SUB_F32 opcode") ||
+      !Expect(compiled_f32_vector_binary_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVSubrevF32,
+              "expected compiled V_SUBREV_F32 opcode") ||
+      !Expect(compiled_f32_vector_binary_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVMulF32,
+              "expected compiled V_MUL_F32 opcode") ||
+      !Expect(compiled_f32_vector_binary_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kVMinNumF32,
+              "expected compiled V_MIN_NUM_F32 opcode") ||
+      !Expect(compiled_f32_vector_binary_program[5].opcode ==
+                  Gfx1201CompiledOpcode::kVMaxNumF32,
+              "expected compiled V_MAX_NUM_F32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_f32_vector_binary_state;
+  initialize_f32_vector_binary_state(&compiled_f32_vector_binary_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_f32_vector_binary_program,
+                                         &compiled_f32_vector_binary_state,
+                                         &error_message),
+              "expected compiled F32 vector binary execution success") ||
+      !Expect(ExpectF32VectorBinarySeedState(
+                  compiled_f32_vector_binary_state),
+              "expected compiled F32 vector binary state")) {
     return 1;
   }
 

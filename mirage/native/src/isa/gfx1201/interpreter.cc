@@ -38,7 +38,7 @@ float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 std::uint16_t CompressFloatToFp16BitsRtz(float value);
 
-constexpr std::array<std::string_view, 291> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 297> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -316,6 +316,12 @@ constexpr std::array<std::string_view, 291> kExecutableSeedOpcodes{{
     "V_LDEXP_F16",
     "V_MIN_NUM_F16",
     "V_MAX_NUM_F16",
+    "V_ADD_F32",
+    "V_SUB_F32",
+    "V_SUBREV_F32",
+    "V_MUL_F32",
+    "V_MIN_NUM_F32",
+    "V_MAX_NUM_F32",
     "V_ADD_U32",
     "V_SUB_U32",
     "V_SUBREV_U32",
@@ -1837,6 +1843,30 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVMaxNumF16;
     return true;
   }
+  if (opcode == "V_ADD_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVAddF32;
+    return true;
+  }
+  if (opcode == "V_SUB_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVSubF32;
+    return true;
+  }
+  if (opcode == "V_SUBREV_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVSubrevF32;
+    return true;
+  }
+  if (opcode == "V_MUL_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMulF32;
+    return true;
+  }
+  if (opcode == "V_MIN_NUM_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMinNumF32;
+    return true;
+  }
+  if (opcode == "V_MAX_NUM_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMaxNumF32;
+    return true;
+  }
   if (opcode == "V_ADD_U32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVAddU32;
     return true;
@@ -2449,6 +2479,33 @@ std::uint32_t EvaluateVectorBinaryHalfSeedInstruction(std::string_view opcode,
   return 0u;
 }
 
+std::uint32_t EvaluateVectorBinaryF32SeedInstruction(std::string_view opcode,
+                                                     std::uint32_t lhs,
+                                                     std::uint32_t rhs) {
+  const float lhs_value = BitCast<float>(lhs);
+  const float rhs_value = BitCast<float>(rhs);
+
+  if (opcode == "V_ADD_F32") {
+    return BitCast<std::uint32_t>(lhs_value + rhs_value);
+  }
+  if (opcode == "V_SUB_F32") {
+    return BitCast<std::uint32_t>(lhs_value - rhs_value);
+  }
+  if (opcode == "V_SUBREV_F32") {
+    return BitCast<std::uint32_t>(rhs_value - lhs_value);
+  }
+  if (opcode == "V_MUL_F32") {
+    return BitCast<std::uint32_t>(lhs_value * rhs_value);
+  }
+  if (opcode == "V_MIN_NUM_F32") {
+    return BitCast<std::uint32_t>(std::fmin(lhs_value, rhs_value));
+  }
+  if (opcode == "V_MAX_NUM_F32") {
+    return BitCast<std::uint32_t>(std::fmax(lhs_value, rhs_value));
+  }
+  return 0u;
+}
+
 std::uint32_t EvaluateVectorPackedHalfBinarySeedInstruction(
     std::string_view opcode, std::uint32_t lhs, std::uint32_t rhs) {
   if (opcode == "V_CVT_PK_RTZ_F16_F32") {
@@ -2476,6 +2533,11 @@ std::uint32_t EvaluateVectorBinarySeedInstruction(std::string_view opcode,
       opcode == "V_SUBREV_F16" || opcode == "V_MUL_F16" ||
       opcode == "V_MIN_NUM_F16" || opcode == "V_MAX_NUM_F16") {
     return EvaluateVectorBinaryHalfSeedInstruction(opcode, lhs, rhs);
+  }
+  if (opcode == "V_ADD_F32" || opcode == "V_SUB_F32" ||
+      opcode == "V_SUBREV_F32" || opcode == "V_MUL_F32" ||
+      opcode == "V_MIN_NUM_F32" || opcode == "V_MAX_NUM_F32") {
+    return EvaluateVectorBinaryF32SeedInstruction(opcode, lhs, rhs);
   }
   if (opcode == "V_CVT_PK_RTZ_F16_F32") {
     return EvaluateVectorPackedHalfBinarySeedInstruction(opcode, lhs, rhs);
@@ -3919,6 +3981,12 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "V_LDEXP_F16" ||
       instruction.opcode == "V_MIN_NUM_F16" ||
       instruction.opcode == "V_MAX_NUM_F16" ||
+      instruction.opcode == "V_ADD_F32" ||
+      instruction.opcode == "V_SUB_F32" ||
+      instruction.opcode == "V_SUBREV_F32" ||
+      instruction.opcode == "V_MUL_F32" ||
+      instruction.opcode == "V_MIN_NUM_F32" ||
+      instruction.opcode == "V_MAX_NUM_F32" ||
       instruction.opcode == "V_ADD_U32" || instruction.opcode == "V_SUB_U32" ||
       instruction.opcode == "V_SUBREV_U32" || instruction.opcode == "V_MIN_I32" ||
       instruction.opcode == "V_MAX_I32" || instruction.opcode == "V_MIN_U32" ||
@@ -4244,6 +4312,12 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVLdexpF16:
     case Gfx1201CompiledOpcode::kVMinNumF16:
     case Gfx1201CompiledOpcode::kVMaxNumF16:
+    case Gfx1201CompiledOpcode::kVAddF32:
+    case Gfx1201CompiledOpcode::kVSubF32:
+    case Gfx1201CompiledOpcode::kVSubrevF32:
+    case Gfx1201CompiledOpcode::kVMulF32:
+    case Gfx1201CompiledOpcode::kVMinNumF32:
+    case Gfx1201CompiledOpcode::kVMaxNumF32:
     case Gfx1201CompiledOpcode::kVAddU32:
     case Gfx1201CompiledOpcode::kVSubU32:
     case Gfx1201CompiledOpcode::kVSubrevU32:
