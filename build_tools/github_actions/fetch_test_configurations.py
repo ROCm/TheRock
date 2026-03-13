@@ -74,11 +74,14 @@ test_matrix = {
     # ocltest
     "ocltst": {
         "job_name": "ocltst",
-        "fetch_artifact_args": "--tests",
+        "fetch_artifact_args": "--tests --ocltst",
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_ocltst.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 4,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:f059191fdd5cf3bf8c5a47cb017a7be6e9bded0d52be594feb96f724f6a838eb",
         "container_options": "--cap-add=SYS_PTRACE --cap-add=SYS_NICE",
     },
