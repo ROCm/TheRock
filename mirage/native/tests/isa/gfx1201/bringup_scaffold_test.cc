@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 282u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 287u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -223,6 +223,16 @@ int main() {
               "expected V_RNDNE_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_FLOOR_F16"),
               "expected V_FLOOR_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_ADD_F16"),
+              "expected V_ADD_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_SUB_F16"),
+              "expected V_SUB_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_SUBREV_F16"),
+              "expected V_SUBREV_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_MIN_NUM_F16"),
+              "expected V_MIN_NUM_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_MAX_NUM_F16"),
+              "expected V_MAX_NUM_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_I32_I16"),
               "expected V_CVT_I32_I16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_U32_U16"),
@@ -282,7 +292,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 282u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 287u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -434,6 +444,16 @@ int main() {
               "expected interpreter support for V_RNDNE_F16") ||
       !Expect(interpreter.Supports("V_FLOOR_F16"),
               "expected interpreter support for V_FLOOR_F16") ||
+      !Expect(interpreter.Supports("V_ADD_F16"),
+              "expected interpreter support for V_ADD_F16") ||
+      !Expect(interpreter.Supports("V_SUB_F16"),
+              "expected interpreter support for V_SUB_F16") ||
+      !Expect(interpreter.Supports("V_SUBREV_F16"),
+              "expected interpreter support for V_SUBREV_F16") ||
+      !Expect(interpreter.Supports("V_MIN_NUM_F16"),
+              "expected interpreter support for V_MIN_NUM_F16") ||
+      !Expect(interpreter.Supports("V_MAX_NUM_F16"),
+              "expected interpreter support for V_MAX_NUM_F16") ||
       !Expect(interpreter.Supports("V_CVT_I32_I16"),
               "expected interpreter support for V_CVT_I32_I16") ||
       !Expect(interpreter.Supports("V_CVT_U32_U16"),

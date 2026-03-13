@@ -764,6 +764,32 @@ bool ExpectF16UnaryMathSeedState(
          !state.waiting_on_barrier && state.pc == 14u;
 }
 
+bool ExpectF16VectorBinarySeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[94][0] == 0x00004000u &&
+         state.vgprs[94][1] == 0x00004000u &&
+         state.vgprs[94][2] == 0x94949494u &&
+         state.vgprs[94][3] == 0x00004000u &&
+         state.vgprs[95][0] == 0x00003c00u &&
+         state.vgprs[95][1] == 0x00003c00u &&
+         state.vgprs[95][2] == 0x95959595u &&
+         state.vgprs[95][3] == 0x00003c00u &&
+         state.vgprs[96][0] == 0x0000bc00u &&
+         state.vgprs[96][1] == 0x0000bc00u &&
+         state.vgprs[96][2] == 0x96969696u &&
+         state.vgprs[96][3] == 0x0000bc00u &&
+         state.vgprs[97][0] == 0x00003800u &&
+         state.vgprs[97][1] == 0x00003800u &&
+         state.vgprs[97][2] == 0x97979797u &&
+         state.vgprs[97][3] == 0x00003800u &&
+         state.vgprs[98][0] == 0x00003e00u &&
+         state.vgprs[98][1] == 0x00003e00u &&
+         state.vgprs[98][2] == 0x98989898u &&
+         state.vgprs[98][3] == 0x00003e00u &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 5u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -2012,6 +2038,48 @@ int main() {
                                       OperandKind::kVgpr, 1u,
                                       OperandKind::kVgpr, 4u),
               "expected decoded V_XOR_B32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_add_f16_words{
+      MakeVop2(50u, 10u, 257u, 4u)};
+  if (!Expect(decoder.DecodeInstruction(vector_add_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_ADD_F16 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_ADD_F16",
+                                      OperandKind::kVgpr, 10u,
+                                      OperandKind::kVgpr, 1u,
+                                      OperandKind::kVgpr, 4u),
+              "expected decoded V_ADD_F16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_subrev_f16_words{
+      MakeVop2(52u, 11u, 5u, 6u)};
+  if (!Expect(decoder.DecodeInstruction(vector_subrev_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_SUBREV_F16 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_SUBREV_F16",
+                                      OperandKind::kVgpr, 11u,
+                                      OperandKind::kSgpr, 5u,
+                                      OperandKind::kVgpr, 6u),
+              "expected decoded V_SUBREV_F16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 2> vector_max_num_f16_literal_words{
+      MakeVop2(49u, 12u, 255u, 7u), 0x00003e00u};
+  if (!Expect(decoder.DecodeInstruction(vector_max_num_f16_literal_words,
+                                        &instruction, &words_consumed,
+                                        &error_message),
+              "expected V_MAX_NUM_F16 literal decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected V_MAX_NUM_F16 literal decode to consume 2 dwords") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_MAX_NUM_F16",
+                                      OperandKind::kVgpr, 12u,
+                                      OperandKind::kImm32, 0x00003e00u,
+                                      OperandKind::kVgpr, 7u),
+              "expected decoded V_MAX_NUM_F16 literal operands")) {
     return 1;
   }
 
@@ -4509,6 +4577,102 @@ int main() {
               "expected compiled vector binary execution success") ||
       !Expect(ExpectVectorBinaryBatchState(compiled_vector_binary_state),
               "expected compiled vector binary state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 6> f16_vector_binary_words{
+      MakeVop2(50u, 94u, 257u, 2u),
+      MakeVop2(51u, 95u, 257u, 2u),
+      MakeVop2(52u, 96u, 257u, 2u),
+      MakeVop2(48u, 97u, 257u, 2u),
+      MakeVop2(49u, 98u, 257u, 2u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> f16_vector_binary_program;
+  if (!Expect(decoder.DecodeProgram(f16_vector_binary_words,
+                                    &f16_vector_binary_program, &error_message),
+              "expected F16 vector binary program decode success") ||
+      !Expect(f16_vector_binary_program.size() == 6u,
+              "expected six decoded F16 vector binary instructions") ||
+      !Expect(f16_vector_binary_program[0].opcode == "V_ADD_F16",
+              "expected decoded V_ADD_F16") ||
+      !Expect(f16_vector_binary_program[1].opcode == "V_SUB_F16",
+              "expected decoded V_SUB_F16") ||
+      !Expect(f16_vector_binary_program[2].opcode == "V_SUBREV_F16",
+              "expected decoded V_SUBREV_F16") ||
+      !Expect(f16_vector_binary_program[3].opcode == "V_MIN_NUM_F16",
+              "expected decoded V_MIN_NUM_F16") ||
+      !Expect(f16_vector_binary_program[4].opcode == "V_MAX_NUM_F16",
+              "expected decoded V_MAX_NUM_F16") ||
+      !Expect(f16_vector_binary_program[5].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after F16 vector binary batch")) {
+    return 1;
+  }
+
+  auto initialize_f16_vector_binary_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[1][0] = 0x00003e00u;
+    state->vgprs[1][1] = 0x00003e00u;
+    state->vgprs[1][2] = 0x11111111u;
+    state->vgprs[1][3] = 0x00003e00u;
+
+    state->vgprs[2][0] = 0x00003800u;
+    state->vgprs[2][1] = 0x00003800u;
+    state->vgprs[2][2] = 0x22222222u;
+    state->vgprs[2][3] = 0x00003800u;
+
+    state->vgprs[94][2] = 0x94949494u;
+    state->vgprs[95][2] = 0x95959595u;
+    state->vgprs[96][2] = 0x96969696u;
+    state->vgprs[97][2] = 0x97979797u;
+    state->vgprs[98][2] = 0x98989898u;
+  };
+
+  WaveExecutionState decoded_f16_vector_binary_state;
+  initialize_f16_vector_binary_state(&decoded_f16_vector_binary_state);
+  if (!Expect(interpreter.ExecuteProgram(f16_vector_binary_program,
+                                         &decoded_f16_vector_binary_state,
+                                         &error_message),
+              "expected decoded F16 vector binary execution success") ||
+      !Expect(ExpectF16VectorBinarySeedState(decoded_f16_vector_binary_state),
+              "expected decoded F16 vector binary state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_f16_vector_binary_program;
+  if (!Expect(interpreter.CompileProgram(f16_vector_binary_program,
+                                         &compiled_f16_vector_binary_program,
+                                         &error_message),
+              "expected compiled F16 vector binary program success") ||
+      !Expect(compiled_f16_vector_binary_program.size() == 6u,
+              "expected six compiled F16 vector binary instructions") ||
+      !Expect(compiled_f16_vector_binary_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVAddF16,
+              "expected compiled V_ADD_F16 opcode") ||
+      !Expect(compiled_f16_vector_binary_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVSubF16,
+              "expected compiled V_SUB_F16 opcode") ||
+      !Expect(compiled_f16_vector_binary_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVSubrevF16,
+              "expected compiled V_SUBREV_F16 opcode") ||
+      !Expect(compiled_f16_vector_binary_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVMinNumF16,
+              "expected compiled V_MIN_NUM_F16 opcode") ||
+      !Expect(compiled_f16_vector_binary_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kVMaxNumF16,
+              "expected compiled V_MAX_NUM_F16 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_f16_vector_binary_state;
+  initialize_f16_vector_binary_state(&compiled_f16_vector_binary_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_f16_vector_binary_program,
+                                         &compiled_f16_vector_binary_state,
+                                         &error_message),
+              "expected compiled F16 vector binary execution success") ||
+      !Expect(ExpectF16VectorBinarySeedState(compiled_f16_vector_binary_state),
+              "expected compiled F16 vector binary state")) {
     return 1;
   }
 

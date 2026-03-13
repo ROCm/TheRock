@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 282> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 287> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -285,6 +285,11 @@ constexpr std::array<std::string_view, 282> kPhase0ExecutableOpcodes{{
     "V_CEIL_F64",
     "V_RNDNE_F64",
     "V_FLOOR_F64",
+    "V_ADD_F16",
+    "V_SUB_F16",
+    "V_SUBREV_F16",
+    "V_MIN_NUM_F16",
+    "V_MAX_NUM_F16",
     "V_ADD_U32",
     "V_SUB_U32",
     "V_SUBREV_U32",
@@ -1245,7 +1250,12 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         DescribeWideSourceOperand(src1, OperandRole::kSource1,
                                   OperandSlotKind::kSource1));
     *words_consumed = 1 + literal_words_consumed;
-  } else if (instruction_name == "V_ADD_U32" ||
+  } else if (instruction_name == "V_ADD_F16" ||
+             instruction_name == "V_SUB_F16" ||
+             instruction_name == "V_SUBREV_F16" ||
+             instruction_name == "V_MIN_NUM_F16" ||
+             instruction_name == "V_MAX_NUM_F16" ||
+             instruction_name == "V_ADD_U32" ||
              instruction_name == "V_SUBREV_U32" ||
              instruction_name == "V_MIN_I32" ||
              instruction_name == "V_MAX_I32" ||
