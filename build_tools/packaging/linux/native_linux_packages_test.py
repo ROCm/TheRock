@@ -3,17 +3,22 @@
 # SPDX-License-Identifier: MIT
 
 """
-Full installation test script for ROCm native packages.
+Full installation and simulate-install test script for ROCm native packages.
 
-The test runs in three steps (invoked one by one from main):
+Test modes (--test-type):
+- sanity: Basic test. Repo-based install plus basic verification only
+  (steps 1 and 2).
+- full: Full test. Repo-based install plus basic verification plus full
+  verification (steps 1, 2, and 3).
+  Steps (invoked one by one from main):
   1. Repo setup and install: set up package-manager repository and install
      ROCm packages (amdrocm-{gfx_arch}, amdrocm-core-sdk-{gfx_arch}).
-  2. Basic verification: sanity check that install prefix exists and minimum
-     key components are present.
-  3. Full verification: detailed checks (components, installed packages,
-     rocminfo, rdhc.py).
-
-
+  2. Basic verification: install prefix, key components, installed packages
+     list, rocminfo. (Run for both sanity and full.)
+  3. Full verification: rdhc.py / RDHC test. (Run only for full.)
+- simulate: Dry-run only. Simulated install of local .deb or .rpm files
+  (apt install --simulate or rpm -Uvh --test --nodeps). No repo setup or
+  actual install. Requires --packages-dir.
 
 Path and repo name are overridable via environment variables: ROCM_REPO_NAME (repo id used for
 APT list, Zypper/Yum repo file and section), ROCM_APT_KEYRING_DIR, ROCM_APT_SOURCES_LIST,
@@ -22,42 +27,46 @@ ROCM_RDHC_REL_PATH (relative path from install prefix to rdhc binary).
 
 Prerequisites:
 - This script does NOT start Docker or a VM. You must run it inside an existing
-  container or VM that matches the target OS (e.g., Ubuntu for deb, AlmaLinux/RHEL
-  for rpm, SLES container for sles). Start the appropriate Docker image or VM
-  first, then invoke this script from inside that environment.
+ container or VM that matches the target OS (e.g., Ubuntu for deb, AlmaLinux/RHEL
+ for rpm, SLES container for sles). Start the appropriate Docker image or VM
+ first, then invoke this script from inside that environment.
 - Root or sudo is required (repository setup, package install, keyring writes).
 - System packages: python3, pip, wget, curl; pip packages: pyelftools, requests,
-  prettytable, PyYAML.
+ prettytable, PyYAML.
 
 Example invocations:
 
-  # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
-  python3 native_linux_packages_test.py \\
-    --os-profile ubuntu2404 \\
-    --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
-    --gfx-arch gfx94x \\
-    --release-type nightly
+ # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
+ python3 native_linux_packages_test.py \\
+ --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --gfx-arch gfx94x \\
+ --release-type nightly
 
-  # Prerelease DEB with GPG verification
-  python3 native_linux_packages_test.py \\
-    --os-profile ubuntu2404 \\
-    --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
-    --release-type prerelease \\
-    --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ # Prerelease DEB with GPG verification
+ python3 native_linux_packages_test.py \\
+ --os-profile ubuntu2404 \\
+ --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+ --release-type prerelease \\
+ --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
-  # Nightly RPM (RHEL 8) - run inside rhel8/almalinux container or VM
-  python3 native_linux_packages_test.py \\
-    --os-profile rhel8 \\
-    --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
-    --gfx-arch gfx94x \\
-    --release-type nightly
+ # Nightly RPM (RHEL 8) - run inside rhel8/almalinux container or VM
+ python3 native_linux_packages_test.py \\
+ --os-profile rhel8 \\
+ --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
+ --gfx-arch gfx94x \\
+ --release-type nightly
 
-  # Prerelease RPM (SLES 16)
-  python3 native_linux_packages_test.py \\
-    --os-profile sles16 \\
-    --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
-    --release-type prerelease \\
-    --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ # Prerelease RPM (SLES 16)
+ python3 native_linux_packages_test.py \\
+ --os-profile sles16 \\
+ --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
+ --release-type prerelease \\
+ --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+
+ # Simulate install (dry-run) from local .deb or .rpm directory
+ python3 native_linux_packages_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
+ python3 native_linux_packages_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
 """
 
 import argparse
@@ -117,7 +126,7 @@ def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
     - rpm: rpm -Uvh --test --nodeps *.rpm
 
     Returns:
-        True if simulate succeeded, False otherwise.
+    True if simulate succeeded, False otherwise.
     """
     path = Path(packages_dir)
     if not path.is_dir():
@@ -130,16 +139,19 @@ def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
             print(f"[FAIL] No .deb files found in {packages_dir}", file=sys.stderr)
             return False
         print("Simulate installing DEB packages on host system for testing")
-        cmd = ["sudo", "apt", "install", "--simulate"] + debs
+        cmd = ["apt", "install", "--simulate"] + debs
     elif pkg_type == "rpm":
         rpms = [str(p) for p in path.glob("*.rpm")]
         if not rpms:
             print(f"[FAIL] No .rpm files found in {packages_dir}", file=sys.stderr)
             return False
         print("Simulate installing RPM packages for testing")
-        cmd = ["sudo", "rpm", "-Uvh", "--test", "--nodeps"] + rpms
+        cmd = ["rpm", "-Uvh", "--test", "--nodeps"] + rpms
     else:
-        print(f"[FAIL] Unsupported pkg_type: {pkg_type}. Use 'deb' or 'rpm'.", file=sys.stderr)
+        print(
+            f"[FAIL] Unsupported pkg_type: {pkg_type}. Use 'deb' or 'rpm'.",
+            file=sys.stderr,
+        )
         return False
 
     try:
@@ -147,7 +159,10 @@ def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
         print("[PASS] Simulated install test completed successfully")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"[FAIL] Simulated install failed with exit code {e.returncode}", file=sys.stderr)
+        print(
+            f"[FAIL] Simulated install failed with exit code {e.returncode}",
+            file=sys.stderr,
+        )
         return False
     except FileNotFoundError as e:
         print(f"[FAIL] Command not found: {e}", file=sys.stderr)
@@ -185,10 +200,10 @@ class NativeLinuxPackagesTester:
         """Derive package type from OS profile.
 
         Args:
-            os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, almalinux9, centos7, azl3)
+        os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, almalinux9, centos7, azl3)
 
         Returns:
-            Package type ('deb' or 'rpm')
+        Package type ('deb' or 'rpm')
         """
         os_profile_lower = os_profile.lower()
         if os_profile_lower.startswith(("ubuntu", "debian")):
@@ -207,7 +222,7 @@ class NativeLinuxPackagesTester:
         """Check if the OS profile is SLES (SUSE Linux Enterprise Server).
 
         Returns:
-            True if SLES, False otherwise
+        True if SLES, False otherwise
         """
         return self.os_profile.lower().startswith("sles")
 
@@ -223,13 +238,13 @@ class NativeLinuxPackagesTester:
         """Initialize the package Install tester.
 
         Args:
-            repo_url: Full repository URL (constructed in YAML)
-            os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3)
-            release_type: Type of release ('nightly' or 'prerelease')
-            install_prefix: Installation prefix (default: /opt/rocm/core)
-            gfx_arch: GPU architecture(s) as a single value or list (default: gfx94x).
-                Only the first element is used for package name and installation.
-            gpg_key_url: GPG key URL
+        repo_url: Full repository URL (constructed in YAML)
+        os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3)
+        release_type: Type of release ('nightly' or 'prerelease')
+        install_prefix: Installation prefix (default: /opt/rocm/core)
+        gfx_arch: GPU architecture(s) as a single value or list (default: gfx94x).
+        Only the first element is used for package name and installation.
+        gpg_key_url: GPG key URL
         """
         self.os_profile = os_profile.lower()
         self.package_type = self._derive_package_type(os_profile)
@@ -258,7 +273,7 @@ class NativeLinuxPackagesTester:
         """Setup GPG key for repositories that require GPG verification.
 
         Returns:
-            True if setup successful, False otherwise
+        True if setup successful, False otherwise
         """
         if not self.gpg_key_url:
             return True  # Not needed if no GPG key URL provided
@@ -327,7 +342,7 @@ class NativeLinuxPackagesTester:
         """Setup DEB repository on the system.
 
         Returns:
-            True if setup successful, False otherwise
+        True if setup successful, False otherwise
         """
         print("\n" + "=" * 80)
         print("SETTING UP DEB REPOSITORY")
@@ -357,7 +372,7 @@ class NativeLinuxPackagesTester:
             with open(sources_list, "w") as f:
                 f.write(repo_entry)
             print(f"[PASS] Repository added to {sources_list}")
-            print(f"       {repo_entry.strip()}")
+            print(f" {repo_entry.strip()}")
         except OSError as e:
             print(f"[FAIL] Failed to add repository: {e}")
             return False
@@ -383,7 +398,7 @@ class NativeLinuxPackagesTester:
         """Setup repository for SLES using zypper.
 
         Returns:
-            True if setup successful, False otherwise
+        True if setup successful, False otherwise
         """
         repo_name = REPO_NAME
         repo_file = Path(ZYPP_REPOS_DIR) / f"{repo_name}.repo"
@@ -476,7 +491,7 @@ gpgcheck=0
         """Setup repository for RHEL/AlmaLinux/CentOS using dnf/yum.
 
         Returns:
-            True if setup successful, False otherwise
+        True if setup successful, False otherwise
         """
         print("\nUsing dnf/yum for repository setup...")
 
@@ -538,7 +553,7 @@ gpgcheck=0
         """Setup RPM repository on the system.
 
         Returns:
-            True if setup successful, False otherwise
+        True if setup successful, False otherwise
         """
         print("\n" + "=" * 80)
         print("SETTING UP RPM REPOSITORY")
@@ -564,7 +579,7 @@ gpgcheck=0
         """Install ROCm DEB packages from repository.
 
         Returns:
-            True if installation successful, False otherwise
+        True if installation successful, False otherwise
         """
         print("\n" + "=" * 80)
         print("INSTALLING DEB PACKAGES FROM REPOSITORY")
@@ -599,7 +614,7 @@ gpgcheck=0
         """Install ROCm RPM packages from repository.
 
         Returns:
-            True if installation successful, False otherwise
+        True if installation successful, False otherwise
         """
         print("\n" + "=" * 80)
         print("INSTALLING RPM PACKAGES FROM REPOSITORY")
@@ -652,10 +667,10 @@ gpgcheck=0
             return False
 
     def run_repo_setup_and_install(self) -> bool:
-        """Step 1: Set up package-manager repository and install ROCm packages.
+        """Step 1: Repo setup and install. Run for both sanity (basic) and full test.
 
         Returns:
-            True if repository setup and package installation both succeeded.
+        True if repository setup and package installation both succeeded.
         """
         print("\n" + "=" * 80)
         print("STEP 1: REPOSITORY SETUP AND PACKAGE INSTALLATION")
@@ -675,13 +690,13 @@ gpgcheck=0
             return self.install_rpm_packages()
 
     def run_basic_verification(self) -> bool:
-        """Step 2: Basic install verification (components, packages, rocminfo).
+        """Step 2: Basic test — install prefix, key components, packages list, rocminfo.
 
-        Checks install prefix, key components, lists installed packages, runs rocminfo
-        if available. Does not run test_rdhc (that is in run_full_verification).
+        Used by both --test-type sanity and full. Does not run test_rdhc
+        (that is Step 3 / run_full_verification, full test only).
 
         Returns:
-            True if basic verification passed (enough components found).
+        True if basic verification passed (enough components found).
         """
         print("\n" + "=" * 80)
         print("STEP 2: BASIC INSTALL VERIFICATION")
@@ -700,10 +715,10 @@ gpgcheck=0
         for component in key_components:
             component_path = install_path / component
             if component_path.exists():
-                print(f"   [PASS] {component}")
+                print(f" [PASS] {component}")
                 found_count += 1
             else:
-                print(f"   [WARN] {component} (not found)")
+                print(f" [WARN] {component} (not found)")
 
         print(f"\nComponents found: {found_count}/{len(key_components)}")
 
@@ -732,15 +747,15 @@ gpgcheck=0
                 for line in result.stdout.split("\n")
                 if grep_pattern.lower() in line.lower()
             ]
-            print(f"   Found {len(rocm_packages)} ROCm packages installed")
+            print(f" Found {len(rocm_packages)} ROCm packages installed")
             if rocm_packages:
-                print("\n   Sample packages (Show first 5):")
+                print("\n Sample packages (Show first 5):")
                 for pkg in rocm_packages[:5]:
-                    print(f"      {pkg.strip()}")
+                    print(f" {pkg.strip()}")
                 if len(rocm_packages) > 5:
-                    print(f"      ... and {len(rocm_packages) - 5} more")
+                    print(f" ... and {len(rocm_packages) - 5} more")
         except subprocess.CalledProcessError:
-            print("   [WARN] Could not query installed packages")
+            print(" [WARN] Could not query installed packages")
 
         # Try to run rocminfo if available
         rocminfo_path = install_path / "bin" / "rocminfo"
@@ -755,18 +770,18 @@ gpgcheck=0
                     text=True,
                     timeout=ROCMINFO_TIMEOUT_SEC,
                 )
-                print("   [PASS] rocminfo executed successfully")
+                print(" [PASS] rocminfo executed successfully")
                 lines = result.stdout.split("\n")[:10]
-                print("\n   First few lines of rocminfo output:")
+                print("\n First few lines of rocminfo output:")
                 for line in lines:
                     if line.strip():
-                        print(f"      {line}")
+                        print(f" {line}")
             except subprocess.TimeoutExpired:
-                print("   [WARN] rocminfo timed out (may require GPU hardware)")
+                print(" [WARN] rocminfo timed out (may require GPU hardware)")
             except subprocess.CalledProcessError:
-                print("   [WARN] rocminfo failed (may require GPU hardware)")
+                print(" [WARN] rocminfo failed (may require GPU hardware)")
             except OSError as e:
-                print(f"   [WARN] Could not run rocminfo: {e}")
+                print(f" [WARN] Could not run rocminfo: {e}")
 
         if found_count >= VERIFY_MIN_COMPONENTS:
             print("\n[PASS] Basic verification PASSED")
@@ -775,7 +790,7 @@ gpgcheck=0
         return False
 
     def run_full_verification(self) -> bool:
-        """Step 3: Full verification — runs test_rdhc only."""
+        """Step 3: Full test — runs test_rdhc (rdhc.py) only. Used when --test-type is full."""
         print("\n" + "=" * 80)
         print("STEP 3: FULL VERIFICATION (RDHC)")
         print("=" * 80)
@@ -785,7 +800,7 @@ gpgcheck=0
         """Test rdhc.py binary in libexec/rocm-core/.
 
         Returns:
-            True if test successful, False otherwise
+        True if test successful, False otherwise
         """
         print("\n" + "=" * 80)
         print("TESTING RDHC.PY")
@@ -797,7 +812,7 @@ gpgcheck=0
         # Check if script exists
         if not rdhc_script.exists():
             print(f"\n[WARN] rdhc.py not found at: {rdhc_script}")
-            print("       This is expected if rocm-core package is not installed")
+            print(" This is expected if rocm-core package is not installed")
             return False
 
         print(f"\n[PASS] rdhc.py found at: {rdhc_script}")
@@ -823,55 +838,59 @@ gpgcheck=0
                 text=True,
                 timeout=RDHC_TIMEOUT_SEC,
             )
-            print("   [PASS] rdhc.py executed successfully")
+            print(" [PASS] rdhc.py executed successfully")
             if result.stdout:
                 # Print first few lines of output
                 lines = result.stdout.split("\n")[:5]
-                print("\n   First few lines of output:")
+                print("\n First few lines of output:")
                 for line in lines:
                     if line.strip():
-                        print(f"      {line}")
+                        print(f" {line}")
             return True
         except subprocess.TimeoutExpired:
-            print("   [WARN] rdhc.py --all timed out")
+            print(" [WARN] rdhc.py --all timed out")
             return False
         except subprocess.CalledProcessError:
-            print("   [WARN] rdhc.py --all failed")
+            print(" [WARN] rdhc.py --all failed")
             return False
         except OSError as e:
-            print(f"   [WARN] Could not run rdhc.py: {e}")
+            print(f" [WARN] Could not run rdhc.py: {e}")
             return False
 
 
 def main():
-    """Main entry point for the Native Linux Package Installation Test script."""
+    """Main entry point: runs simulate test (if --test-type simulate) or repo-based installation test (sanity/full)."""
     epilog = """
 Examples:
-  # Nightly DEB (Ubuntu 24.04) - run inside matching container/VM
-  python native_linux_packages_test.py --os-profile ubuntu2404 \\
-      --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
-      --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+ # Nightly DEB (Ubuntu 24.04) - run inside matching container/VM
+ python native_linux_packages_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
-  # Prerelease DEB with GPG verification
-  python native_linux_packages_test.py --os-profile ubuntu2404 \\
-      --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
-      --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
-      --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ # Prerelease DEB with GPG verification
+ python native_linux_packages_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+ --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
+ --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
-  # Nightly RPM (RHEL 8)
-  python native_linux_packages_test.py --os-profile rhel8 \\
-      --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
-      --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+ # Nightly RPM (RHEL 8)
+ python native_linux_packages_test.py --os-profile rhel8 \\
+ --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
+ --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
-  # Prerelease RPM (RHEL 8)
-  python native_linux_packages_test.py --os-profile rhel8 \\
-      --repo-url https://rocm.prereleases.amd.com/packages/rhel8/x86_64/ \\
-      --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
-      --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ # Prerelease RPM (RHEL 8)
+ python native_linux_packages_test.py --os-profile rhel8 \\
+ --repo-url https://rocm.prereleases.amd.com/packages/rhel8/x86_64/ \\
+ --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
+ --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+
+ # Simulate install (dry-run) from local packages
+ python native_linux_packages_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
+ python native_linux_packages_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
 """
 
     parser = argparse.ArgumentParser(
-        description="Full installation test for ROCm native packages",
+        description="Full installation and simulate-install test for ROCm native packages",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=epilog,
     )
@@ -923,7 +942,7 @@ Examples:
         type=str,
         choices=["sanity", "full", "simulate"],
         default="sanity",
-        help="Test type: 'sanity' = basic verification only; 'full' = basic + full verification; 'simulate' = run simulated install test only (requires --packages-dir).",
+        help="Test type: 'sanity' = basic test only; 'full' = basic + full test; 'simulate' = simulated install only (requires --packages-dir).",
     )
 
     parser.add_argument(
@@ -942,6 +961,7 @@ Examples:
 
     args = parser.parse_args()
 
+    # Simulate path: dry-run only; exit after run_simulate_install_test (no repo setup or install)
     if args.test_type == "simulate":
         if not args.packages_dir:
             parser.error("--packages-dir is required when --test-type is 'simulate'")
@@ -949,11 +969,15 @@ Examples:
             pkg_type = args.pkg_type
         elif args.os_profile:
             try:
-                pkg_type = NativeLinuxPackagesTester._derive_package_type(args.os_profile)
+                pkg_type = NativeLinuxPackagesTester._derive_package_type(
+                    args.os_profile
+                )
             except ValueError as e:
                 parser.error(str(e))
         else:
-            parser.error("When --test-type is 'simulate', provide --pkg-type or --os-profile")
+            parser.error(
+                "When --test-type is 'simulate', provide --pkg-type or --os-profile"
+            )
         print("\n" + "=" * 80)
         print("SIMULATED INSTALL TEST")
         print("=" * 80)
@@ -1005,17 +1029,17 @@ Examples:
     print("=" * 80)
 
     try:
-        # 1. Repo setup and install (always)
+        # Step 1: Repo setup and install (both sanity and full)
         if not tester.run_repo_setup_and_install():
             print("\n[FAIL] Step 1 (repo setup and install) failed.")
             sys.exit(1)
 
-        # 2. Basic sanity / basic install verification (always)
+        # Step 2: Basic test — prefix, components, packages, rocminfo (both sanity and full)
         if not tester.run_basic_verification():
             print("\n[FAIL] Step 2 (basic verification) failed.")
             sys.exit(1)
 
-        # 3. Full verification only when test_type is "full"
+        # Step 3: Full test — rdhc.py (full only)
         if args.test_type == "full":
             if not tester.run_full_verification():
                 print("\n[FAIL] Step 3 (full verification) failed.")
