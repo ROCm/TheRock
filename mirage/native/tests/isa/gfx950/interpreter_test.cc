@@ -416,6 +416,95 @@ bool RunBufferAtomicSemanticCase(
   return true;
 }
 
+bool RunFlatAtomicSemanticCase(
+    const mirage::sim::isa::Gfx950Interpreter& interpreter,
+    const AtomicSemanticCase& test_case,
+    bool use_compiled_program = false) {
+  using namespace mirage::sim::isa;
+
+  constexpr std::uint64_t kAtomicAddress = 0x100;
+  constexpr std::uint16_t kAddressReg = 0;
+  constexpr std::uint16_t kDataReg = 20;
+  constexpr std::uint16_t kReturnReg = 40;
+
+  LinearExecutionMemory memory(0x400, 0);
+  for (std::uint8_t dword_index = 0; dword_index < test_case.memory_dword_count;
+       ++dword_index) {
+    if (!memory.WriteU32(kAtomicAddress + static_cast<std::uint64_t>(dword_index) * 4u,
+                         test_case.initial_memory[dword_index])) {
+      std::cerr << test_case.opcode << ": failed to seed flat atomic memory\n";
+      return false;
+    }
+  }
+
+  static thread_local WaveExecutionState state;
+  state = {};
+  state.exec_mask = 0x1ULL;
+  SetLane0VgprU64(&state, kAddressReg, kAtomicAddress);
+  for (std::uint8_t dword_index = 0; dword_index < test_case.data_dword_count;
+       ++dword_index) {
+    state.vgprs[kDataReg + dword_index][0] = test_case.data[dword_index];
+  }
+  for (std::uint8_t dword_index = 0; dword_index < test_case.memory_dword_count;
+       ++dword_index) {
+    state.vgprs[kReturnReg + dword_index][0] = 0xdeadbeefu;
+  }
+
+  const std::vector<DecodedInstruction> program = {
+      DecodedInstruction::FourOperand(test_case.opcode,
+                                      InstructionOperand::Vgpr(kReturnReg),
+                                      InstructionOperand::Vgpr(kAddressReg),
+                                      InstructionOperand::Vgpr(kDataReg),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  std::string error_message;
+  if (use_compiled_program) {
+    std::vector<CompiledInstruction> compiled_program;
+    if (!interpreter.CompileProgram(program, &compiled_program, &error_message)) {
+      std::cerr << test_case.opcode
+                << ": failed to compile flat atomic program: "
+                << error_message << '\n';
+      return false;
+    }
+    if (!interpreter.ExecuteProgram(compiled_program, &state, &memory,
+                                    &error_message)) {
+      std::cerr << test_case.opcode << ": compiled flat atomic: "
+                << error_message << '\n';
+      return false;
+    }
+  } else if (!interpreter.ExecuteProgram(program, &state, &memory,
+                                         &error_message)) {
+    std::cerr << test_case.opcode << ": decoded flat atomic: " << error_message
+              << '\n';
+    return false;
+  }
+
+  for (std::uint8_t dword_index = 0; dword_index < test_case.memory_dword_count;
+       ++dword_index) {
+    std::uint32_t actual_value = 0;
+    if (!memory.ReadU32(kAtomicAddress + static_cast<std::uint64_t>(dword_index) * 4u,
+                        &actual_value)) {
+      std::cerr << test_case.opcode
+                << ": failed to read flat atomic result memory\n";
+      return false;
+    }
+    if (actual_value != test_case.expected_memory[dword_index]) {
+      std::cerr << test_case.opcode << ": flat atomic memory dword "
+                << +dword_index << " mismatch\n";
+      return false;
+    }
+    if (state.vgprs[kReturnReg + dword_index][0] !=
+        test_case.expected_return[dword_index]) {
+      std::cerr << test_case.opcode << ": flat atomic return dword "
+                << +dword_index << " mismatch\n";
+      return false;
+    }
+  }
+  return true;
+}
+
 bool RunSaveexecSemanticCase(
     const mirage::sim::isa::Gfx950Interpreter& interpreter,
     const SaveexecSemanticCase& test_case,
@@ -12719,44 +12808,39 @@ int main() {
   }
   }
 
-  LinearExecutionMemory vector_memory(0x800, 0);
-  if (!Expect(vector_memory.WriteU32(0x184, 0x11111111u),
-              "expected flat load seed write") ||
-      !Expect(vector_memory.WriteU32(0x188, 0x22222222u),
-              "expected flat load seed write") ||
-      !Expect(vector_memory.WriteU32(0x190, 0x33333333u),
-              "expected flat load seed write") ||
-      !Expect(vector_memory.WriteU32(0x220, 0xaaaabbbbu),
-              "expected global load seed write") ||
-      !Expect(vector_memory.WriteU32(0x224, 0xccccddddu),
-              "expected global load seed write") ||
-      !Expect(vector_memory.WriteU32(0x22c, 0x12345678u),
-              "expected global load seed write")) {
-    return 1;
-  }
-
-  WaveExecutionState vector_memory_state;
-  vector_memory_state.exec_mask = 0b1011ULL;
-  vector_memory_state.sgprs[0] = 0x200;
-  vector_memory_state.sgprs[1] = 0x0;
-  vector_memory_state.vgprs[0][0] = 0x180;
-  vector_memory_state.vgprs[0][1] = 0x184;
-  vector_memory_state.vgprs[0][3] = 0x18c;
-  vector_memory_state.vgprs[1][0] = 0x0;
-  vector_memory_state.vgprs[1][1] = 0x0;
-  vector_memory_state.vgprs[1][3] = 0x0;
-  vector_memory_state.vgprs[2][0] = 0xdead0001u;
-  vector_memory_state.vgprs[2][1] = 0xdead0002u;
-  vector_memory_state.vgprs[2][3] = 0xdead0004u;
-  vector_memory_state.vgprs[3][0] = 0xbeef0011u;
-  vector_memory_state.vgprs[3][1] = 0xbeef0022u;
-  vector_memory_state.vgprs[3][3] = 0xbeef0044u;
-  vector_memory_state.vgprs[4][0] = 0x24;
-  vector_memory_state.vgprs[4][1] = 0x28;
-  vector_memory_state.vgprs[4][3] = 0x30;
-  vector_memory_state.vgprs[5][0] = 0x0;
-  vector_memory_state.vgprs[5][1] = 0x0;
-  vector_memory_state.vgprs[5][3] = 0x0;
+  const auto seed_vector_memory = [](LinearExecutionMemory* memory) -> bool {
+    return memory != nullptr && memory->WriteU32(0x184, 0x11111111u) &&
+           memory->WriteU32(0x188, 0x22222222u) &&
+           memory->WriteU32(0x190, 0x33333333u) &&
+           memory->WriteU32(0x220, 0xaaaabbbbu) &&
+           memory->WriteU32(0x224, 0xccccddddu) &&
+           memory->WriteU32(0x22c, 0x12345678u);
+  };
+  const auto make_vector_memory_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x200;
+    state.sgprs[1] = 0x0;
+    state.vgprs[0][0] = 0x180;
+    state.vgprs[0][1] = 0x184;
+    state.vgprs[0][3] = 0x18c;
+    state.vgprs[1][0] = 0x0;
+    state.vgprs[1][1] = 0x0;
+    state.vgprs[1][3] = 0x0;
+    state.vgprs[2][0] = 0xdead0001u;
+    state.vgprs[2][1] = 0xdead0002u;
+    state.vgprs[2][3] = 0xdead0004u;
+    state.vgprs[3][0] = 0xbeef0011u;
+    state.vgprs[3][1] = 0xbeef0022u;
+    state.vgprs[3][3] = 0xbeef0044u;
+    state.vgprs[4][0] = 0x24;
+    state.vgprs[4][1] = 0x28;
+    state.vgprs[4][3] = 0x30;
+    state.vgprs[5][0] = 0x0;
+    state.vgprs[5][1] = 0x0;
+    state.vgprs[5][3] = 0x0;
+    return state;
+  };
   const std::vector<DecodedInstruction> vector_memory_program = {
       DecodedInstruction::ThreeOperand("FLAT_LOAD_DWORD",
                                        InstructionOperand::Vgpr(10),
@@ -12777,102 +12861,134 @@ int main() {
                                       InstructionOperand::Imm32(4)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
+  const auto validate_vector_memory =
+      [](const WaveExecutionState& state,
+         const LinearExecutionMemory& memory,
+         const char* mode) -> bool {
+    std::uint32_t flat_store_lane0 = 0;
+    std::uint32_t flat_store_lane1 = 0;
+    std::uint32_t flat_store_lane3 = 0;
+    std::uint32_t global_store_lane0 = 0;
+    std::uint32_t global_store_lane1 = 0;
+    std::uint32_t global_store_lane3 = 0;
+    return Expect(state.vgprs[10][0] == 0x11111111u,
+                  (std::string(mode) + " lane 0 flat load result").c_str()) &&
+           Expect(state.vgprs[10][1] == 0x22222222u,
+                  (std::string(mode) + " lane 1 flat load result").c_str()) &&
+           Expect(state.vgprs[10][2] == 0x0u,
+                  (std::string(mode) +
+                   " inactive flat load lane to remain untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[10][3] == 0x33333333u,
+                  (std::string(mode) + " lane 3 flat load result").c_str()) &&
+           Expect(state.vgprs[11][0] == 0xaaaabbbbu,
+                  (std::string(mode) + " lane 0 global load result").c_str()) &&
+           Expect(state.vgprs[11][1] == 0xccccddddu,
+                  (std::string(mode) + " lane 1 global load result").c_str()) &&
+           Expect(state.vgprs[11][2] == 0x0u,
+                  (std::string(mode) +
+                   " inactive global load lane to remain untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[11][3] == 0x12345678u,
+                  (std::string(mode) + " lane 3 global load result").c_str()) &&
+           Expect(memory.ReadU32(0x180, &flat_store_lane0),
+                  (std::string(mode) + " flat store lane 0 read").c_str()) &&
+           Expect(memory.ReadU32(0x184, &flat_store_lane1),
+                  (std::string(mode) + " flat store lane 1 read").c_str()) &&
+           Expect(memory.ReadU32(0x18c, &flat_store_lane3),
+                  (std::string(mode) + " flat store lane 3 read").c_str()) &&
+           Expect(flat_store_lane0 == 0xdead0001u,
+                  (std::string(mode) + " lane 0 flat store result").c_str()) &&
+           Expect(flat_store_lane1 == 0xdead0002u,
+                  (std::string(mode) + " lane 1 flat store result").c_str()) &&
+           Expect(flat_store_lane3 == 0xdead0004u,
+                  (std::string(mode) + " lane 3 flat store result").c_str()) &&
+           Expect(memory.ReadU32(0x228, &global_store_lane0),
+                  (std::string(mode) + " global store lane 0 read").c_str()) &&
+           Expect(memory.ReadU32(0x22c, &global_store_lane1),
+                  (std::string(mode) + " global store lane 1 read").c_str()) &&
+           Expect(memory.ReadU32(0x234, &global_store_lane3),
+                  (std::string(mode) + " global store lane 3 read").c_str()) &&
+           Expect(global_store_lane0 == 0xbeef0011u,
+                  (std::string(mode) + " lane 0 global store result")
+                      .c_str()) &&
+           Expect(global_store_lane1 == 0xbeef0022u,
+                  (std::string(mode) + " lane 1 global store result")
+                      .c_str()) &&
+           Expect(global_store_lane3 == 0xbeef0044u,
+                  (std::string(mode) + " lane 3 global store result")
+                      .c_str());
+  };
+  LinearExecutionMemory vector_memory(0x800, 0);
+  if (!Expect(seed_vector_memory(&vector_memory),
+              "expected flat/global vector memory seed writes")) {
+    return 1;
+  }
+  WaveExecutionState vector_memory_state = make_vector_memory_state();
   if (!Expect(interpreter.ExecuteProgram(vector_memory_program,
                                          &vector_memory_state, &vector_memory,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(vector_memory_state.vgprs[10][0] == 0x11111111u,
-              "expected lane 0 flat load result") ||
-      !Expect(vector_memory_state.vgprs[10][1] == 0x22222222u,
-              "expected lane 1 flat load result") ||
-      !Expect(vector_memory_state.vgprs[10][2] == 0x0u,
-              "expected inactive flat load lane to remain untouched") ||
-      !Expect(vector_memory_state.vgprs[10][3] == 0x33333333u,
-              "expected lane 3 flat load result") ||
-      !Expect(vector_memory_state.vgprs[11][0] == 0xaaaabbbbu,
-              "expected lane 0 global load result") ||
-      !Expect(vector_memory_state.vgprs[11][1] == 0xccccddddu,
-              "expected lane 1 global load result") ||
-      !Expect(vector_memory_state.vgprs[11][2] == 0x0u,
-              "expected inactive global load lane to remain untouched") ||
-      !Expect(vector_memory_state.vgprs[11][3] == 0x12345678u,
-              "expected lane 3 global load result")) {
+      !validate_vector_memory(vector_memory_state, vector_memory, "decoded")) {
     return 1;
   }
 
-  std::uint32_t flat_store_lane0 = 0;
-  std::uint32_t flat_store_lane1 = 0;
-  std::uint32_t flat_store_lane3 = 0;
-  std::uint32_t global_store_lane0 = 0;
-  std::uint32_t global_store_lane1 = 0;
-  std::uint32_t global_store_lane3 = 0;
-  if (!Expect(vector_memory.ReadU32(0x180, &flat_store_lane0),
-              "expected flat store lane 0 read") ||
-      !Expect(vector_memory.ReadU32(0x184, &flat_store_lane1),
-              "expected flat store lane 1 read") ||
-      !Expect(vector_memory.ReadU32(0x18c, &flat_store_lane3),
-              "expected flat store lane 3 read") ||
-      !Expect(flat_store_lane0 == 0xdead0001u,
-              "expected lane 0 flat store result") ||
-      !Expect(flat_store_lane1 == 0xdead0002u,
-              "expected lane 1 flat store result") ||
-      !Expect(flat_store_lane3 == 0xdead0004u,
-              "expected lane 3 flat store result") ||
-      !Expect(vector_memory.ReadU32(0x228, &global_store_lane0),
-              "expected global store lane 0 read") ||
-      !Expect(vector_memory.ReadU32(0x22c, &global_store_lane1),
-              "expected global store lane 1 read") ||
-      !Expect(vector_memory.ReadU32(0x234, &global_store_lane3),
-              "expected global store lane 3 read") ||
-      !Expect(global_store_lane0 == 0xbeef0011u,
-              "expected lane 0 global store result") ||
-      !Expect(global_store_lane1 == 0xbeef0022u,
-              "expected lane 1 global store result") ||
-      !Expect(global_store_lane3 == 0xbeef0044u,
-              "expected lane 3 global store result")) {
+  std::vector<CompiledInstruction> compiled_vector_memory_program;
+  if (!Expect(interpreter.CompileProgram(vector_memory_program,
+                                         &compiled_vector_memory_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_vector_memory(0x800, 0);
+  if (!Expect(seed_vector_memory(&compiled_vector_memory),
+              "expected compiled flat/global vector memory seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_vector_memory_state = make_vector_memory_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_vector_memory_program,
+                                         &compiled_vector_memory_state,
+                                         &compiled_vector_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_vector_memory(compiled_vector_memory_state,
+                              compiled_vector_memory, "compiled")) {
     return 1;
   }
 
-  LinearExecutionMemory subword_memory(0x2000, 0);
-  if (!Expect(WriteU8(&subword_memory, 0x600, 0x7au),
-              "expected flat ubyte seed write") ||
-      !Expect(WriteU8(&subword_memory, 0x610, 0x80u),
-              "expected flat sbyte seed write") ||
-      !Expect(WriteU16(&subword_memory, 0x620, 0x1234u),
-              "expected flat ushort seed write") ||
-      !Expect(WriteU16(&subword_memory, 0x630, 0x8001u),
-              "expected flat sshort seed write") ||
-      !Expect(WriteU8(&subword_memory, 0xa20, 0xa5u),
-              "expected global ubyte seed write") ||
-      !Expect(WriteU8(&subword_memory, 0xa30, 0xf0u),
-              "expected global sbyte seed write") ||
-      !Expect(WriteU16(&subword_memory, 0xa40, 0x5678u),
-              "expected global ushort seed write") ||
-      !Expect(WriteU16(&subword_memory, 0xa50, 0x8002u),
-              "expected global sshort seed write")) {
-    return 1;
-  }
-
-  WaveExecutionState subword_state;
-  subword_state.exec_mask = 0x1ULL;
-  subword_state.sgprs[0] = 0xa00;
-  subword_state.sgprs[1] = 0x0;
-  subword_state.vgprs[0][0] = 0x600;
-  subword_state.vgprs[2][0] = 0x610;
-  subword_state.vgprs[4][0] = 0x620;
-  subword_state.vgprs[6][0] = 0x630;
-  subword_state.vgprs[8][0] = 0x20;
-  subword_state.vgprs[10][0] = 0x30;
-  subword_state.vgprs[12][0] = 0x40;
-  subword_state.vgprs[14][0] = 0x50;
-  subword_state.vgprs[16][0] = 0x640;
-  subword_state.vgprs[18][0] = 0x650;
-  subword_state.vgprs[20][0] = 0x60;
-  subword_state.vgprs[22][0] = 0x70;
-  subword_state.vgprs[40][0] = 0x123456abu;
-  subword_state.vgprs[41][0] = 0x89abcdefu;
-  subword_state.vgprs[42][0] = 0x55667788u;
-  subword_state.vgprs[43][0] = 0xa1b2c3d4u;
+  const auto seed_subword_memory = [](LinearExecutionMemory* memory) -> bool {
+    return memory != nullptr && WriteU8(memory, 0x600, 0x7au) &&
+           WriteU8(memory, 0x610, 0x80u) &&
+           WriteU16(memory, 0x620, 0x1234u) &&
+           WriteU16(memory, 0x630, 0x8001u) &&
+           WriteU8(memory, 0xa20, 0xa5u) &&
+           WriteU8(memory, 0xa30, 0xf0u) &&
+           WriteU16(memory, 0xa40, 0x5678u) &&
+           WriteU16(memory, 0xa50, 0x8002u);
+  };
+  const auto make_subword_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0x1ULL;
+    state.sgprs[0] = 0xa00;
+    state.sgprs[1] = 0x0;
+    state.vgprs[0][0] = 0x600;
+    state.vgprs[2][0] = 0x610;
+    state.vgprs[4][0] = 0x620;
+    state.vgprs[6][0] = 0x630;
+    state.vgprs[8][0] = 0x20;
+    state.vgprs[10][0] = 0x30;
+    state.vgprs[12][0] = 0x40;
+    state.vgprs[14][0] = 0x50;
+    state.vgprs[16][0] = 0x640;
+    state.vgprs[18][0] = 0x650;
+    state.vgprs[20][0] = 0x60;
+    state.vgprs[22][0] = 0x70;
+    state.vgprs[40][0] = 0x123456abu;
+    state.vgprs[41][0] = 0x89abcdefu;
+    state.vgprs[42][0] = 0x55667788u;
+    state.vgprs[43][0] = 0xa1b2c3d4u;
+    return state;
+  };
   const std::vector<DecodedInstruction> subword_program = {
       DecodedInstruction::ThreeOperand("FLAT_LOAD_UBYTE",
                                        InstructionOperand::Vgpr(30),
@@ -12930,42 +13046,78 @@ int main() {
                                       InstructionOperand::Imm32(0)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
+  const auto validate_subword_memory =
+      [](const WaveExecutionState& state,
+         const LinearExecutionMemory& memory,
+         const char* mode) -> bool {
+    std::uint8_t stored_byte = 0;
+    std::uint16_t stored_short = 0;
+    return Expect(state.vgprs[30][0] == 0x7au,
+                  (std::string(mode) + " flat ubyte load result").c_str()) &&
+           Expect(state.vgprs[31][0] == 0xffffff80u,
+                  (std::string(mode) + " flat sbyte load result").c_str()) &&
+           Expect(state.vgprs[32][0] == 0x1234u,
+                  (std::string(mode) + " flat ushort load result").c_str()) &&
+           Expect(state.vgprs[33][0] == 0xffff8001u,
+                  (std::string(mode) + " flat sshort load result").c_str()) &&
+           Expect(state.vgprs[34][0] == 0xa5u,
+                  (std::string(mode) + " global ubyte load result").c_str()) &&
+           Expect(state.vgprs[35][0] == 0xfffffff0u,
+                  (std::string(mode) + " global sbyte load result").c_str()) &&
+           Expect(state.vgprs[36][0] == 0x5678u,
+                  (std::string(mode) + " global ushort load result").c_str()) &&
+           Expect(state.vgprs[37][0] == 0xffff8002u,
+                  (std::string(mode) + " global sshort load result").c_str()) &&
+           Expect(ReadU8(memory, 0x640, &stored_byte),
+                  (std::string(mode) + " flat byte store read").c_str()) &&
+           Expect(stored_byte == 0xabu,
+                  (std::string(mode) + " flat byte store result").c_str()) &&
+           Expect(ReadU16(memory, 0x650, &stored_short),
+                  (std::string(mode) + " flat short store read").c_str()) &&
+           Expect(stored_short == 0xcdefu,
+                  (std::string(mode) + " flat short store result").c_str()) &&
+           Expect(ReadU8(memory, 0xa60, &stored_byte),
+                  (std::string(mode) + " global byte store read").c_str()) &&
+           Expect(stored_byte == 0x88u,
+                  (std::string(mode) + " global byte store result").c_str()) &&
+           Expect(ReadU16(memory, 0xa70, &stored_short),
+                  (std::string(mode) + " global short store read").c_str()) &&
+           Expect(stored_short == 0xc3d4u,
+                  (std::string(mode) + " global short store result").c_str());
+  };
+  LinearExecutionMemory subword_memory(0x2000, 0);
+  if (!Expect(seed_subword_memory(&subword_memory),
+              "expected flat/global subword seed writes")) {
+    return 1;
+  }
+  WaveExecutionState subword_state = make_subword_state();
   if (!Expect(interpreter.ExecuteProgram(subword_program, &subword_state,
                                          &subword_memory, &error_message),
               error_message.c_str()) ||
-      !Expect(subword_state.vgprs[30][0] == 0x7au,
-              "expected flat ubyte load result") ||
-      !Expect(subword_state.vgprs[31][0] == 0xffffff80u,
-              "expected flat sbyte load result") ||
-      !Expect(subword_state.vgprs[32][0] == 0x1234u,
-              "expected flat ushort load result") ||
-      !Expect(subword_state.vgprs[33][0] == 0xffff8001u,
-              "expected flat sshort load result") ||
-      !Expect(subword_state.vgprs[34][0] == 0xa5u,
-              "expected global ubyte load result") ||
-      !Expect(subword_state.vgprs[35][0] == 0xfffffff0u,
-              "expected global sbyte load result") ||
-      !Expect(subword_state.vgprs[36][0] == 0x5678u,
-              "expected global ushort load result") ||
-      !Expect(subword_state.vgprs[37][0] == 0xffff8002u,
-              "expected global sshort load result")) {
+      !validate_subword_memory(subword_state, subword_memory, "decoded")) {
     return 1;
   }
 
-  std::uint8_t stored_byte = 0;
-  std::uint16_t stored_short = 0;
-  if (!Expect(ReadU8(subword_memory, 0x640, &stored_byte),
-              "expected flat byte store read") ||
-      !Expect(stored_byte == 0xabu, "expected flat byte store result") ||
-      !Expect(ReadU16(subword_memory, 0x650, &stored_short),
-              "expected flat short store read") ||
-      !Expect(stored_short == 0xcdefu, "expected flat short store result") ||
-      !Expect(ReadU8(subword_memory, 0xa60, &stored_byte),
-              "expected global byte store read") ||
-      !Expect(stored_byte == 0x88u, "expected global byte store result") ||
-      !Expect(ReadU16(subword_memory, 0xa70, &stored_short),
-              "expected global short store read") ||
-      !Expect(stored_short == 0xc3d4u, "expected global short store result")) {
+  std::vector<CompiledInstruction> compiled_subword_program;
+  if (!Expect(interpreter.CompileProgram(subword_program,
+                                         &compiled_subword_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_subword_memory(0x2000, 0);
+  if (!Expect(seed_subword_memory(&compiled_subword_memory),
+              "expected compiled flat/global subword seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_subword_state = make_subword_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_subword_program,
+                                         &compiled_subword_state,
+                                         &compiled_subword_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_subword_memory(compiled_subword_state, compiled_subword_memory,
+                               "compiled")) {
     return 1;
   }
 
@@ -13176,44 +13328,40 @@ int main() {
     return 1;
   }
 
-  LinearExecutionMemory global_x2_memory(0x1000, 0);
-  if (!Expect(global_x2_memory.WriteU32(0x340, 0x01020304u),
-              "expected global x2 load seed write") ||
-      !Expect(global_x2_memory.WriteU32(0x344, 0x05060708u),
-              "expected global x2 load seed write") ||
-      !Expect(global_x2_memory.WriteU32(0x348, 0x11121314u),
-              "expected global x2 load seed write") ||
-      !Expect(global_x2_memory.WriteU32(0x34c, 0x15161718u),
-              "expected global x2 load seed write") ||
-      !Expect(global_x2_memory.WriteU32(0x358, 0x21222324u),
-              "expected global x2 load seed write") ||
-      !Expect(global_x2_memory.WriteU32(0x35c, 0x25262728u),
-              "expected global x2 load seed write")) {
-    return 1;
-  }
-
-  WaveExecutionState global_x2_state;
-  global_x2_state.exec_mask = 0b1011ULL;
-  global_x2_state.sgprs[0] = 0x300;
-  global_x2_state.sgprs[1] = 0x0;
-  global_x2_state.vgprs[6][0] = 0x40;
-  global_x2_state.vgprs[6][1] = 0x48;
-  global_x2_state.vgprs[6][3] = 0x58;
-  global_x2_state.vgprs[7][0] = 0x0;
-  global_x2_state.vgprs[7][1] = 0x0;
-  global_x2_state.vgprs[7][3] = 0x0;
-  global_x2_state.vgprs[8][0] = 0x80;
-  global_x2_state.vgprs[8][1] = 0x88;
-  global_x2_state.vgprs[8][3] = 0x98;
-  global_x2_state.vgprs[9][0] = 0x0;
-  global_x2_state.vgprs[9][1] = 0x0;
-  global_x2_state.vgprs[9][3] = 0x0;
-  global_x2_state.vgprs[20][0] = 0xaaaabbbb;
-  global_x2_state.vgprs[20][1] = 0xccccdddd;
-  global_x2_state.vgprs[20][3] = 0xeeeeffff;
-  global_x2_state.vgprs[21][0] = 0x11112222;
-  global_x2_state.vgprs[21][1] = 0x33334444;
-  global_x2_state.vgprs[21][3] = 0x55556666;
+  const auto seed_global_x2_memory = [](LinearExecutionMemory* memory) -> bool {
+    return memory != nullptr &&
+           memory->WriteU32(0x340, 0x01020304u) &&
+           memory->WriteU32(0x344, 0x05060708u) &&
+           memory->WriteU32(0x348, 0x11121314u) &&
+           memory->WriteU32(0x34c, 0x15161718u) &&
+           memory->WriteU32(0x358, 0x21222324u) &&
+           memory->WriteU32(0x35c, 0x25262728u);
+  };
+  const auto make_global_x2_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x300;
+    state.sgprs[1] = 0x0;
+    state.vgprs[6][0] = 0x40;
+    state.vgprs[6][1] = 0x48;
+    state.vgprs[6][3] = 0x58;
+    state.vgprs[7][0] = 0x0;
+    state.vgprs[7][1] = 0x0;
+    state.vgprs[7][3] = 0x0;
+    state.vgprs[8][0] = 0x80;
+    state.vgprs[8][1] = 0x88;
+    state.vgprs[8][3] = 0x98;
+    state.vgprs[9][0] = 0x0;
+    state.vgprs[9][1] = 0x0;
+    state.vgprs[9][3] = 0x0;
+    state.vgprs[20][0] = 0xaaaabbbb;
+    state.vgprs[20][1] = 0xccccdddd;
+    state.vgprs[20][3] = 0xeeeeffff;
+    state.vgprs[21][0] = 0x11112222;
+    state.vgprs[21][1] = 0x33334444;
+    state.vgprs[21][3] = 0x55556666;
+    return state;
+  };
   const std::vector<DecodedInstruction> global_x2_program = {
       DecodedInstruction::FourOperand("GLOBAL_LOAD_DWORDX2",
                                       InstructionOperand::Vgpr(30),
@@ -13227,113 +13375,157 @@ int main() {
                                       InstructionOperand::Imm32(0)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
+  const auto validate_global_x2 =
+      [](const WaveExecutionState& state,
+         const LinearExecutionMemory& memory,
+         const char* mode) -> bool {
+    std::uint32_t global_x2_store_low = 0;
+    std::uint32_t global_x2_store_high = 0;
+    return Expect(state.vgprs[30][0] == 0x01020304u,
+                  (std::string(mode) + " lane 0 global x2 low load result")
+                      .c_str()) &&
+           Expect(state.vgprs[31][0] == 0x05060708u,
+                  (std::string(mode) + " lane 0 global x2 high load result")
+                      .c_str()) &&
+           Expect(state.vgprs[30][1] == 0x11121314u,
+                  (std::string(mode) + " lane 1 global x2 low load result")
+                      .c_str()) &&
+           Expect(state.vgprs[31][1] == 0x15161718u,
+                  (std::string(mode) + " lane 1 global x2 high load result")
+                      .c_str()) &&
+           Expect(state.vgprs[30][2] == 0x0u,
+                  (std::string(mode) +
+                   " inactive lane global x2 low load to remain untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[31][2] == 0x0u,
+                  (std::string(mode) +
+                   " inactive lane global x2 high load to remain untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[30][3] == 0x21222324u,
+                  (std::string(mode) + " lane 3 global x2 low load result")
+                      .c_str()) &&
+           Expect(state.vgprs[31][3] == 0x25262728u,
+                  (std::string(mode) + " lane 3 global x2 high load result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x380, &global_x2_store_low),
+                  (std::string(mode) + " global x2 store lane 0 low read")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x384, &global_x2_store_high),
+                  (std::string(mode) + " global x2 store lane 0 high read")
+                      .c_str()) &&
+           Expect(global_x2_store_low == 0xaaaabbbbu,
+                  (std::string(mode) + " lane 0 global x2 low store result")
+                      .c_str()) &&
+           Expect(global_x2_store_high == 0x11112222u,
+                  (std::string(mode) + " lane 0 global x2 high store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x388, &global_x2_store_low),
+                  (std::string(mode) + " global x2 store lane 1 low read")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x38c, &global_x2_store_high),
+                  (std::string(mode) + " global x2 store lane 1 high read")
+                      .c_str()) &&
+           Expect(global_x2_store_low == 0xccccddddu,
+                  (std::string(mode) + " lane 1 global x2 low store result")
+                      .c_str()) &&
+           Expect(global_x2_store_high == 0x33334444u,
+                  (std::string(mode) + " lane 1 global x2 high store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x398, &global_x2_store_low),
+                  (std::string(mode) + " global x2 store lane 3 low read")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x39c, &global_x2_store_high),
+                  (std::string(mode) + " global x2 store lane 3 high read")
+                      .c_str()) &&
+           Expect(global_x2_store_low == 0xeeeeffffu,
+                  (std::string(mode) + " lane 3 global x2 low store result")
+                      .c_str()) &&
+           Expect(global_x2_store_high == 0x55556666u,
+                  (std::string(mode) + " lane 3 global x2 high store result")
+                      .c_str());
+  };
+  LinearExecutionMemory global_x2_memory(0x1000, 0);
+  if (!Expect(seed_global_x2_memory(&global_x2_memory),
+              "expected global x2 seed writes")) {
+    return 1;
+  }
+  WaveExecutionState global_x2_state = make_global_x2_state();
   if (!Expect(interpreter.ExecuteProgram(global_x2_program, &global_x2_state,
                                          &global_x2_memory, &error_message),
               error_message.c_str()) ||
-      !Expect(global_x2_state.vgprs[30][0] == 0x01020304u,
-              "expected lane 0 global x2 low load result") ||
-      !Expect(global_x2_state.vgprs[31][0] == 0x05060708u,
-              "expected lane 0 global x2 high load result") ||
-      !Expect(global_x2_state.vgprs[30][1] == 0x11121314u,
-              "expected lane 1 global x2 low load result") ||
-      !Expect(global_x2_state.vgprs[31][1] == 0x15161718u,
-              "expected lane 1 global x2 high load result") ||
-      !Expect(global_x2_state.vgprs[30][2] == 0x0u,
-              "expected inactive lane global x2 low load to remain untouched") ||
-      !Expect(global_x2_state.vgprs[31][2] == 0x0u,
-              "expected inactive lane global x2 high load to remain untouched") ||
-      !Expect(global_x2_state.vgprs[30][3] == 0x21222324u,
-              "expected lane 3 global x2 low load result") ||
-      !Expect(global_x2_state.vgprs[31][3] == 0x25262728u,
-              "expected lane 3 global x2 high load result")) {
+      !validate_global_x2(global_x2_state, global_x2_memory, "decoded")) {
     return 1;
   }
 
-  std::uint32_t global_x2_store_low = 0;
-  std::uint32_t global_x2_store_high = 0;
-  if (!Expect(global_x2_memory.ReadU32(0x380, &global_x2_store_low),
-              "expected global x2 store lane 0 low read") ||
-      !Expect(global_x2_memory.ReadU32(0x384, &global_x2_store_high),
-              "expected global x2 store lane 0 high read") ||
-      !Expect(global_x2_store_low == 0xaaaabbbbu,
-              "expected lane 0 global x2 low store result") ||
-      !Expect(global_x2_store_high == 0x11112222u,
-              "expected lane 0 global x2 high store result") ||
-      !Expect(global_x2_memory.ReadU32(0x388, &global_x2_store_low),
-              "expected global x2 store lane 1 low read") ||
-      !Expect(global_x2_memory.ReadU32(0x38c, &global_x2_store_high),
-              "expected global x2 store lane 1 high read") ||
-      !Expect(global_x2_store_low == 0xccccddddu,
-              "expected lane 1 global x2 low store result") ||
-      !Expect(global_x2_store_high == 0x33334444u,
-              "expected lane 1 global x2 high store result") ||
-      !Expect(global_x2_memory.ReadU32(0x398, &global_x2_store_low),
-              "expected global x2 store lane 3 low read") ||
-      !Expect(global_x2_memory.ReadU32(0x39c, &global_x2_store_high),
-              "expected global x2 store lane 3 high read") ||
-      !Expect(global_x2_store_low == 0xeeeeffffu,
-              "expected lane 3 global x2 low store result") ||
-      !Expect(global_x2_store_high == 0x55556666u,
-              "expected lane 3 global x2 high store result")) {
+  std::vector<CompiledInstruction> compiled_global_x2_program;
+  if (!Expect(interpreter.CompileProgram(global_x2_program,
+                                         &compiled_global_x2_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_global_x2_memory(0x1000, 0);
+  if (!Expect(seed_global_x2_memory(&compiled_global_x2_memory),
+              "expected compiled global x2 seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_global_x2_state = make_global_x2_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_global_x2_program,
+                                         &compiled_global_x2_state,
+                                         &compiled_global_x2_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_global_x2(compiled_global_x2_state, compiled_global_x2_memory,
+                          "compiled")) {
     return 1;
   }
 
-  LinearExecutionMemory global_x4_memory(0x2000, 0);
-  if (!Expect(global_x4_memory.WriteU32(0x440, 0x10111213u),
-              "expected global x4 load seed write") ||
-      !Expect(global_x4_memory.WriteU32(0x444, 0x14151617u),
-              "expected global x4 load seed write") ||
-      !Expect(global_x4_memory.WriteU32(0x448, 0x18191a1bu),
-              "expected global x4 load seed write") ||
-      !Expect(global_x4_memory.WriteU32(0x44c, 0x1c1d1e1fu),
-              "expected global x4 load seed write") ||
-      !Expect(global_x4_memory.WriteU32(0x450, 0x20212223u),
-              "expected global x4 load seed write") ||
-      !Expect(global_x4_memory.WriteU32(0x454, 0x24252627u),
-              "expected global x4 load seed write") ||
-      !Expect(global_x4_memory.WriteU32(0x458, 0x28292a2bu),
-              "expected global x4 load seed write") ||
-      !Expect(global_x4_memory.WriteU32(0x45c, 0x2c2d2e2fu),
-              "expected global x4 load seed write") ||
-      !Expect(global_x4_memory.WriteU32(0x470, 0x30313233u),
-              "expected global x4 load seed write") ||
-      !Expect(global_x4_memory.WriteU32(0x474, 0x34353637u),
-              "expected global x4 load seed write") ||
-      !Expect(global_x4_memory.WriteU32(0x478, 0x38393a3bu),
-              "expected global x4 load seed write") ||
-      !Expect(global_x4_memory.WriteU32(0x47c, 0x3c3d3e3fu),
-              "expected global x4 load seed write")) {
-    return 1;
-  }
-
-  WaveExecutionState global_x4_state;
-  global_x4_state.exec_mask = 0b1011ULL;
-  global_x4_state.sgprs[0] = 0x400;
-  global_x4_state.sgprs[1] = 0x0;
-  global_x4_state.vgprs[10][0] = 0x40;
-  global_x4_state.vgprs[10][1] = 0x50;
-  global_x4_state.vgprs[10][3] = 0x70;
-  global_x4_state.vgprs[11][0] = 0x0;
-  global_x4_state.vgprs[11][1] = 0x0;
-  global_x4_state.vgprs[11][3] = 0x0;
-  global_x4_state.vgprs[12][0] = 0x80;
-  global_x4_state.vgprs[12][1] = 0x90;
-  global_x4_state.vgprs[12][3] = 0xb0;
-  global_x4_state.vgprs[13][0] = 0x0;
-  global_x4_state.vgprs[13][1] = 0x0;
-  global_x4_state.vgprs[13][3] = 0x0;
-  global_x4_state.vgprs[40][0] = 0xa0a1a2a3u;
-  global_x4_state.vgprs[40][1] = 0xb0b1b2b3u;
-  global_x4_state.vgprs[40][3] = 0xc0c1c2c3u;
-  global_x4_state.vgprs[41][0] = 0xa4a5a6a7u;
-  global_x4_state.vgprs[41][1] = 0xb4b5b6b7u;
-  global_x4_state.vgprs[41][3] = 0xc4c5c6c7u;
-  global_x4_state.vgprs[42][0] = 0xa8a9aaabu;
-  global_x4_state.vgprs[42][1] = 0xb8b9babbu;
-  global_x4_state.vgprs[42][3] = 0xc8c9cacbu;
-  global_x4_state.vgprs[43][0] = 0xacadaeafu;
-  global_x4_state.vgprs[43][1] = 0xbcbdbebfu;
-  global_x4_state.vgprs[43][3] = 0xcccdcecfu;
+  const auto seed_global_x4_memory = [](LinearExecutionMemory* memory) -> bool {
+    return memory != nullptr &&
+           memory->WriteU32(0x440, 0x10111213u) &&
+           memory->WriteU32(0x444, 0x14151617u) &&
+           memory->WriteU32(0x448, 0x18191a1bu) &&
+           memory->WriteU32(0x44c, 0x1c1d1e1fu) &&
+           memory->WriteU32(0x450, 0x20212223u) &&
+           memory->WriteU32(0x454, 0x24252627u) &&
+           memory->WriteU32(0x458, 0x28292a2bu) &&
+           memory->WriteU32(0x45c, 0x2c2d2e2fu) &&
+           memory->WriteU32(0x470, 0x30313233u) &&
+           memory->WriteU32(0x474, 0x34353637u) &&
+           memory->WriteU32(0x478, 0x38393a3bu) &&
+           memory->WriteU32(0x47c, 0x3c3d3e3fu);
+  };
+  const auto make_global_x4_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x400;
+    state.sgprs[1] = 0x0;
+    state.vgprs[10][0] = 0x40;
+    state.vgprs[10][1] = 0x50;
+    state.vgprs[10][3] = 0x70;
+    state.vgprs[11][0] = 0x0;
+    state.vgprs[11][1] = 0x0;
+    state.vgprs[11][3] = 0x0;
+    state.vgprs[12][0] = 0x80;
+    state.vgprs[12][1] = 0x90;
+    state.vgprs[12][3] = 0xb0;
+    state.vgprs[13][0] = 0x0;
+    state.vgprs[13][1] = 0x0;
+    state.vgprs[13][3] = 0x0;
+    state.vgprs[40][0] = 0xa0a1a2a3u;
+    state.vgprs[40][1] = 0xb0b1b2b3u;
+    state.vgprs[40][3] = 0xc0c1c2c3u;
+    state.vgprs[41][0] = 0xa4a5a6a7u;
+    state.vgprs[41][1] = 0xb4b5b6b7u;
+    state.vgprs[41][3] = 0xc4c5c6c7u;
+    state.vgprs[42][0] = 0xa8a9aaabu;
+    state.vgprs[42][1] = 0xb8b9babbu;
+    state.vgprs[42][3] = 0xc8c9cacbu;
+    state.vgprs[43][0] = 0xacadaeafu;
+    state.vgprs[43][1] = 0xbcbdbebfu;
+    state.vgprs[43][3] = 0xcccdcecfu;
+    return state;
+  };
   const std::vector<DecodedInstruction> global_x4_program = {
       DecodedInstruction::FourOperand("GLOBAL_LOAD_DWORDX4",
                                       InstructionOperand::Vgpr(50),
@@ -13347,142 +13539,205 @@ int main() {
                                       InstructionOperand::Imm32(0)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
+  const auto validate_global_x4 =
+      [](const WaveExecutionState& state,
+         const LinearExecutionMemory& memory,
+         const char* mode) -> bool {
+    std::uint32_t global_x4_store_value = 0;
+    return Expect(state.vgprs[50][0] == 0x10111213u,
+                  (std::string(mode) + " lane 0 global x4 dword 0 load result")
+                      .c_str()) &&
+           Expect(state.vgprs[51][0] == 0x14151617u,
+                  (std::string(mode) + " lane 0 global x4 dword 1 load result")
+                      .c_str()) &&
+           Expect(state.vgprs[52][0] == 0x18191a1bu,
+                  (std::string(mode) + " lane 0 global x4 dword 2 load result")
+                      .c_str()) &&
+           Expect(state.vgprs[53][0] == 0x1c1d1e1fu,
+                  (std::string(mode) + " lane 0 global x4 dword 3 load result")
+                      .c_str()) &&
+           Expect(state.vgprs[50][1] == 0x20212223u,
+                  (std::string(mode) + " lane 1 global x4 dword 0 load result")
+                      .c_str()) &&
+           Expect(state.vgprs[51][1] == 0x24252627u,
+                  (std::string(mode) + " lane 1 global x4 dword 1 load result")
+                      .c_str()) &&
+           Expect(state.vgprs[52][1] == 0x28292a2bu,
+                  (std::string(mode) + " lane 1 global x4 dword 2 load result")
+                      .c_str()) &&
+           Expect(state.vgprs[53][1] == 0x2c2d2e2fu,
+                  (std::string(mode) + " lane 1 global x4 dword 3 load result")
+                      .c_str()) &&
+           Expect(state.vgprs[50][2] == 0x0u,
+                  (std::string(mode) +
+                   " inactive lane global x4 dword 0 load to remain untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[53][2] == 0x0u,
+                  (std::string(mode) +
+                   " inactive lane global x4 dword 3 load to remain untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[50][3] == 0x30313233u,
+                  (std::string(mode) + " lane 3 global x4 dword 0 load result")
+                      .c_str()) &&
+           Expect(state.vgprs[51][3] == 0x34353637u,
+                  (std::string(mode) + " lane 3 global x4 dword 1 load result")
+                      .c_str()) &&
+           Expect(state.vgprs[52][3] == 0x38393a3bu,
+                  (std::string(mode) + " lane 3 global x4 dword 2 load result")
+                      .c_str()) &&
+           Expect(state.vgprs[53][3] == 0x3c3d3e3fu,
+                  (std::string(mode) + " lane 3 global x4 dword 3 load result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x480, &global_x4_store_value),
+                  (std::string(mode) + " global x4 store lane 0 dword 0 read")
+                      .c_str()) &&
+           Expect(global_x4_store_value == 0xa0a1a2a3u,
+                  (std::string(mode) + " lane 0 global x4 dword 0 store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x484, &global_x4_store_value),
+                  (std::string(mode) + " global x4 store lane 0 dword 1 read")
+                      .c_str()) &&
+           Expect(global_x4_store_value == 0xa4a5a6a7u,
+                  (std::string(mode) + " lane 0 global x4 dword 1 store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x488, &global_x4_store_value),
+                  (std::string(mode) + " global x4 store lane 0 dword 2 read")
+                      .c_str()) &&
+           Expect(global_x4_store_value == 0xa8a9aaabu,
+                  (std::string(mode) + " lane 0 global x4 dword 2 store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x48c, &global_x4_store_value),
+                  (std::string(mode) + " global x4 store lane 0 dword 3 read")
+                      .c_str()) &&
+           Expect(global_x4_store_value == 0xacadaeafu,
+                  (std::string(mode) + " lane 0 global x4 dword 3 store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x490, &global_x4_store_value),
+                  (std::string(mode) + " global x4 store lane 1 dword 0 read")
+                      .c_str()) &&
+           Expect(global_x4_store_value == 0xb0b1b2b3u,
+                  (std::string(mode) + " lane 1 global x4 dword 0 store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x494, &global_x4_store_value),
+                  (std::string(mode) + " global x4 store lane 1 dword 1 read")
+                      .c_str()) &&
+           Expect(global_x4_store_value == 0xb4b5b6b7u,
+                  (std::string(mode) + " lane 1 global x4 dword 1 store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x498, &global_x4_store_value),
+                  (std::string(mode) + " global x4 store lane 1 dword 2 read")
+                      .c_str()) &&
+           Expect(global_x4_store_value == 0xb8b9babbu,
+                  (std::string(mode) + " lane 1 global x4 dword 2 store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x49c, &global_x4_store_value),
+                  (std::string(mode) + " global x4 store lane 1 dword 3 read")
+                      .c_str()) &&
+           Expect(global_x4_store_value == 0xbcbdbebfu,
+                  (std::string(mode) + " lane 1 global x4 dword 3 store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x4b0, &global_x4_store_value),
+                  (std::string(mode) + " global x4 store lane 3 dword 0 read")
+                      .c_str()) &&
+           Expect(global_x4_store_value == 0xc0c1c2c3u,
+                  (std::string(mode) + " lane 3 global x4 dword 0 store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x4b4, &global_x4_store_value),
+                  (std::string(mode) + " global x4 store lane 3 dword 1 read")
+                      .c_str()) &&
+           Expect(global_x4_store_value == 0xc4c5c6c7u,
+                  (std::string(mode) + " lane 3 global x4 dword 1 store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x4b8, &global_x4_store_value),
+                  (std::string(mode) + " global x4 store lane 3 dword 2 read")
+                      .c_str()) &&
+           Expect(global_x4_store_value == 0xc8c9cacbu,
+                  (std::string(mode) + " lane 3 global x4 dword 2 store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x4bc, &global_x4_store_value),
+                  (std::string(mode) + " global x4 store lane 3 dword 3 read")
+                      .c_str()) &&
+           Expect(global_x4_store_value == 0xcccdcecfu,
+                  (std::string(mode) + " lane 3 global x4 dword 3 store result")
+                      .c_str());
+  };
+  LinearExecutionMemory global_x4_memory(0x2000, 0);
+  if (!Expect(seed_global_x4_memory(&global_x4_memory),
+              "expected global x4 seed writes")) {
+    return 1;
+  }
+  WaveExecutionState global_x4_state = make_global_x4_state();
   if (!Expect(interpreter.ExecuteProgram(global_x4_program, &global_x4_state,
                                          &global_x4_memory, &error_message),
               error_message.c_str()) ||
-      !Expect(global_x4_state.vgprs[50][0] == 0x10111213u,
-              "expected lane 0 global x4 dword 0 load result") ||
-      !Expect(global_x4_state.vgprs[51][0] == 0x14151617u,
-              "expected lane 0 global x4 dword 1 load result") ||
-      !Expect(global_x4_state.vgprs[52][0] == 0x18191a1bu,
-              "expected lane 0 global x4 dword 2 load result") ||
-      !Expect(global_x4_state.vgprs[53][0] == 0x1c1d1e1fu,
-              "expected lane 0 global x4 dword 3 load result") ||
-      !Expect(global_x4_state.vgprs[50][1] == 0x20212223u,
-              "expected lane 1 global x4 dword 0 load result") ||
-      !Expect(global_x4_state.vgprs[51][1] == 0x24252627u,
-              "expected lane 1 global x4 dword 1 load result") ||
-      !Expect(global_x4_state.vgprs[52][1] == 0x28292a2bu,
-              "expected lane 1 global x4 dword 2 load result") ||
-      !Expect(global_x4_state.vgprs[53][1] == 0x2c2d2e2fu,
-              "expected lane 1 global x4 dword 3 load result") ||
-      !Expect(global_x4_state.vgprs[50][2] == 0x0u,
-              "expected inactive lane global x4 dword 0 load to remain untouched") ||
-      !Expect(global_x4_state.vgprs[53][2] == 0x0u,
-              "expected inactive lane global x4 dword 3 load to remain untouched") ||
-      !Expect(global_x4_state.vgprs[50][3] == 0x30313233u,
-              "expected lane 3 global x4 dword 0 load result") ||
-      !Expect(global_x4_state.vgprs[51][3] == 0x34353637u,
-              "expected lane 3 global x4 dword 1 load result") ||
-      !Expect(global_x4_state.vgprs[52][3] == 0x38393a3bu,
-              "expected lane 3 global x4 dword 2 load result") ||
-      !Expect(global_x4_state.vgprs[53][3] == 0x3c3d3e3fu,
-              "expected lane 3 global x4 dword 3 load result")) {
+      !validate_global_x4(global_x4_state, global_x4_memory, "decoded")) {
     return 1;
   }
 
-  std::uint32_t global_x4_store_value = 0;
-  if (!Expect(global_x4_memory.ReadU32(0x480, &global_x4_store_value),
-              "expected global x4 store lane 0 dword 0 read") ||
-      !Expect(global_x4_store_value == 0xa0a1a2a3u,
-              "expected lane 0 global x4 dword 0 store result") ||
-      !Expect(global_x4_memory.ReadU32(0x484, &global_x4_store_value),
-              "expected global x4 store lane 0 dword 1 read") ||
-      !Expect(global_x4_store_value == 0xa4a5a6a7u,
-              "expected lane 0 global x4 dword 1 store result") ||
-      !Expect(global_x4_memory.ReadU32(0x488, &global_x4_store_value),
-              "expected global x4 store lane 0 dword 2 read") ||
-      !Expect(global_x4_store_value == 0xa8a9aaabu,
-              "expected lane 0 global x4 dword 2 store result") ||
-      !Expect(global_x4_memory.ReadU32(0x48c, &global_x4_store_value),
-              "expected global x4 store lane 0 dword 3 read") ||
-      !Expect(global_x4_store_value == 0xacadaeafu,
-              "expected lane 0 global x4 dword 3 store result") ||
-      !Expect(global_x4_memory.ReadU32(0x490, &global_x4_store_value),
-              "expected global x4 store lane 1 dword 0 read") ||
-      !Expect(global_x4_store_value == 0xb0b1b2b3u,
-              "expected lane 1 global x4 dword 0 store result") ||
-      !Expect(global_x4_memory.ReadU32(0x494, &global_x4_store_value),
-              "expected global x4 store lane 1 dword 1 read") ||
-      !Expect(global_x4_store_value == 0xb4b5b6b7u,
-              "expected lane 1 global x4 dword 1 store result") ||
-      !Expect(global_x4_memory.ReadU32(0x498, &global_x4_store_value),
-              "expected global x4 store lane 1 dword 2 read") ||
-      !Expect(global_x4_store_value == 0xb8b9babbu,
-              "expected lane 1 global x4 dword 2 store result") ||
-      !Expect(global_x4_memory.ReadU32(0x49c, &global_x4_store_value),
-              "expected global x4 store lane 1 dword 3 read") ||
-      !Expect(global_x4_store_value == 0xbcbdbebfu,
-              "expected lane 1 global x4 dword 3 store result") ||
-      !Expect(global_x4_memory.ReadU32(0x4b0, &global_x4_store_value),
-              "expected global x4 store lane 3 dword 0 read") ||
-      !Expect(global_x4_store_value == 0xc0c1c2c3u,
-              "expected lane 3 global x4 dword 0 store result") ||
-      !Expect(global_x4_memory.ReadU32(0x4b4, &global_x4_store_value),
-              "expected global x4 store lane 3 dword 1 read") ||
-      !Expect(global_x4_store_value == 0xc4c5c6c7u,
-              "expected lane 3 global x4 dword 1 store result") ||
-      !Expect(global_x4_memory.ReadU32(0x4b8, &global_x4_store_value),
-              "expected global x4 store lane 3 dword 2 read") ||
-      !Expect(global_x4_store_value == 0xc8c9cacbu,
-              "expected lane 3 global x4 dword 2 store result") ||
-      !Expect(global_x4_memory.ReadU32(0x4bc, &global_x4_store_value),
-              "expected global x4 store lane 3 dword 3 read") ||
-      !Expect(global_x4_store_value == 0xcccdcecfu,
-              "expected lane 3 global x4 dword 3 store result")) {
+  std::vector<CompiledInstruction> compiled_global_x4_program;
+  if (!Expect(interpreter.CompileProgram(global_x4_program,
+                                         &compiled_global_x4_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_global_x4_memory(0x2000, 0);
+  if (!Expect(seed_global_x4_memory(&compiled_global_x4_memory),
+              "expected compiled global x4 seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_global_x4_state = make_global_x4_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_global_x4_program,
+                                         &compiled_global_x4_state,
+                                         &compiled_global_x4_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_global_x4(compiled_global_x4_state, compiled_global_x4_memory,
+                          "compiled")) {
     return 1;
   }
 
-  LinearExecutionMemory mixed_width_memory(0x3000, 0);
-  if (!Expect(mixed_width_memory.WriteU32(0x900, 0x10101010u),
-              "expected flat x2 load seed write") ||
-      !Expect(mixed_width_memory.WriteU32(0x904, 0x20202020u),
-              "expected flat x2 load seed write") ||
-      !Expect(mixed_width_memory.WriteU32(0x920, 0x30303030u),
-              "expected flat x3 load seed write") ||
-      !Expect(mixed_width_memory.WriteU32(0x924, 0x40404040u),
-              "expected flat x3 load seed write") ||
-      !Expect(mixed_width_memory.WriteU32(0x928, 0x50505050u),
-              "expected flat x3 load seed write") ||
-      !Expect(mixed_width_memory.WriteU32(0x940, 0x60606060u),
-              "expected flat x4 load seed write") ||
-      !Expect(mixed_width_memory.WriteU32(0x944, 0x70707070u),
-              "expected flat x4 load seed write") ||
-      !Expect(mixed_width_memory.WriteU32(0x948, 0x80808080u),
-              "expected flat x4 load seed write") ||
-      !Expect(mixed_width_memory.WriteU32(0x94c, 0x90909090u),
-              "expected flat x4 load seed write") ||
-      !Expect(mixed_width_memory.WriteU32(0xc20, 0xa0a0a0a0u),
-              "expected global x3 load seed write") ||
-      !Expect(mixed_width_memory.WriteU32(0xc24, 0xb0b0b0b0u),
-              "expected global x3 load seed write") ||
-      !Expect(mixed_width_memory.WriteU32(0xc28, 0xc0c0c0c0u),
-              "expected global x3 load seed write")) {
-    return 1;
-  }
-
-  WaveExecutionState mixed_width_state;
-  mixed_width_state.exec_mask = 0x1ULL;
-  mixed_width_state.sgprs[0] = 0xc00;
-  mixed_width_state.sgprs[1] = 0x0;
-  mixed_width_state.vgprs[0][0] = 0x900;
-  mixed_width_state.vgprs[2][0] = 0x980;
-  mixed_width_state.vgprs[4][0] = 0x920;
-  mixed_width_state.vgprs[6][0] = 0x9a0;
-  mixed_width_state.vgprs[8][0] = 0x940;
-  mixed_width_state.vgprs[10][0] = 0x9c0;
-  mixed_width_state.vgprs[12][0] = 0x20;
-  mixed_width_state.vgprs[14][0] = 0x40;
-  mixed_width_state.vgprs[70][0] = 0xd1d2d3d4u;
-  mixed_width_state.vgprs[71][0] = 0xe1e2e3e4u;
-  mixed_width_state.vgprs[72][0] = 0xf1f2f3f4u;
-  mixed_width_state.vgprs[73][0] = 0x11121314u;
-  mixed_width_state.vgprs[74][0] = 0x21222324u;
-  mixed_width_state.vgprs[75][0] = 0x31323334u;
-  mixed_width_state.vgprs[76][0] = 0x41424344u;
-  mixed_width_state.vgprs[79][0] = 0x51525354u;
-  mixed_width_state.vgprs[80][0] = 0x61626364u;
-  mixed_width_state.vgprs[81][0] = 0x71727374u;
+  const auto seed_mixed_width_memory =
+      [](LinearExecutionMemory* memory) -> bool {
+    return memory != nullptr &&
+           memory->WriteU32(0x900, 0x10101010u) &&
+           memory->WriteU32(0x904, 0x20202020u) &&
+           memory->WriteU32(0x920, 0x30303030u) &&
+           memory->WriteU32(0x924, 0x40404040u) &&
+           memory->WriteU32(0x928, 0x50505050u) &&
+           memory->WriteU32(0x940, 0x60606060u) &&
+           memory->WriteU32(0x944, 0x70707070u) &&
+           memory->WriteU32(0x948, 0x80808080u) &&
+           memory->WriteU32(0x94c, 0x90909090u) &&
+           memory->WriteU32(0xc20, 0xa0a0a0a0u) &&
+           memory->WriteU32(0xc24, 0xb0b0b0b0u) &&
+           memory->WriteU32(0xc28, 0xc0c0c0c0u);
+  };
+  const auto make_mixed_width_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0x1ULL;
+    state.sgprs[0] = 0xc00;
+    state.sgprs[1] = 0x0;
+    state.vgprs[0][0] = 0x900;
+    state.vgprs[2][0] = 0x980;
+    state.vgprs[4][0] = 0x920;
+    state.vgprs[6][0] = 0x9a0;
+    state.vgprs[8][0] = 0x940;
+    state.vgprs[10][0] = 0x9c0;
+    state.vgprs[12][0] = 0x20;
+    state.vgprs[14][0] = 0x40;
+    state.vgprs[70][0] = 0xd1d2d3d4u;
+    state.vgprs[71][0] = 0xe1e2e3e4u;
+    state.vgprs[72][0] = 0xf1f2f3f4u;
+    state.vgprs[73][0] = 0x11121314u;
+    state.vgprs[74][0] = 0x21222324u;
+    state.vgprs[75][0] = 0x31323334u;
+    state.vgprs[76][0] = 0x41424344u;
+    state.vgprs[79][0] = 0x51525354u;
+    state.vgprs[80][0] = 0x61626364u;
+    state.vgprs[81][0] = 0x71727374u;
+    return state;
+  };
   const std::vector<DecodedInstruction> mixed_width_program = {
       DecodedInstruction::ThreeOperand("FLAT_LOAD_DWORDX2",
                                        InstructionOperand::Vgpr(50),
@@ -13520,85 +13775,117 @@ int main() {
                                       InstructionOperand::Imm32(0)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
+  const auto validate_mixed_width =
+      [](const WaveExecutionState& state,
+         const LinearExecutionMemory& memory,
+         const char* mode) -> bool {
+    std::uint32_t mixed_width_value = 0;
+    return Expect(state.vgprs[50][0] == 0x10101010u,
+                  (std::string(mode) + " flat x2 low load result").c_str()) &&
+           Expect(state.vgprs[51][0] == 0x20202020u,
+                  (std::string(mode) + " flat x2 high load result").c_str()) &&
+           Expect(state.vgprs[52][0] == 0x30303030u,
+                  (std::string(mode) + " flat x3 dword 0 load result").c_str()) &&
+           Expect(state.vgprs[53][0] == 0x40404040u,
+                  (std::string(mode) + " flat x3 dword 1 load result").c_str()) &&
+           Expect(state.vgprs[54][0] == 0x50505050u,
+                  (std::string(mode) + " flat x3 dword 2 load result").c_str()) &&
+           Expect(state.vgprs[55][0] == 0x60606060u,
+                  (std::string(mode) + " flat x4 dword 0 load result").c_str()) &&
+           Expect(state.vgprs[56][0] == 0x70707070u,
+                  (std::string(mode) + " flat x4 dword 1 load result").c_str()) &&
+           Expect(state.vgprs[57][0] == 0x80808080u,
+                  (std::string(mode) + " flat x4 dword 2 load result").c_str()) &&
+           Expect(state.vgprs[58][0] == 0x90909090u,
+                  (std::string(mode) + " flat x4 dword 3 load result").c_str()) &&
+           Expect(state.vgprs[59][0] == 0xa0a0a0a0u,
+                  (std::string(mode) + " global x3 dword 0 load result").c_str()) &&
+           Expect(state.vgprs[60][0] == 0xb0b0b0b0u,
+                  (std::string(mode) + " global x3 dword 1 load result").c_str()) &&
+           Expect(state.vgprs[61][0] == 0xc0c0c0c0u,
+                  (std::string(mode) + " global x3 dword 2 load result").c_str()) &&
+           Expect(memory.ReadU32(0x980, &mixed_width_value),
+                  (std::string(mode) + " flat x2 store dword 0 read").c_str()) &&
+           Expect(mixed_width_value == 0xd1d2d3d4u,
+                  (std::string(mode) + " flat x2 store dword 0 result").c_str()) &&
+           Expect(memory.ReadU32(0x984, &mixed_width_value),
+                  (std::string(mode) + " flat x2 store dword 1 read").c_str()) &&
+           Expect(mixed_width_value == 0xe1e2e3e4u,
+                  (std::string(mode) + " flat x2 store dword 1 result").c_str()) &&
+           Expect(memory.ReadU32(0x9a0, &mixed_width_value),
+                  (std::string(mode) + " flat x3 store dword 0 read").c_str()) &&
+           Expect(mixed_width_value == 0xf1f2f3f4u,
+                  (std::string(mode) + " flat x3 store dword 0 result").c_str()) &&
+           Expect(memory.ReadU32(0x9a4, &mixed_width_value),
+                  (std::string(mode) + " flat x3 store dword 1 read").c_str()) &&
+           Expect(mixed_width_value == 0x11121314u,
+                  (std::string(mode) + " flat x3 store dword 1 result").c_str()) &&
+           Expect(memory.ReadU32(0x9a8, &mixed_width_value),
+                  (std::string(mode) + " flat x3 store dword 2 read").c_str()) &&
+           Expect(mixed_width_value == 0x21222324u,
+                  (std::string(mode) + " flat x3 store dword 2 result").c_str()) &&
+           Expect(memory.ReadU32(0x9c0, &mixed_width_value),
+                  (std::string(mode) + " flat x4 store dword 0 read").c_str()) &&
+           Expect(mixed_width_value == 0x11121314u,
+                  (std::string(mode) + " flat x4 store dword 0 result").c_str()) &&
+           Expect(memory.ReadU32(0x9c4, &mixed_width_value),
+                  (std::string(mode) + " flat x4 store dword 1 read").c_str()) &&
+           Expect(mixed_width_value == 0x21222324u,
+                  (std::string(mode) + " flat x4 store dword 1 result").c_str()) &&
+           Expect(memory.ReadU32(0x9c8, &mixed_width_value),
+                  (std::string(mode) + " flat x4 store dword 2 read").c_str()) &&
+           Expect(mixed_width_value == 0x31323334u,
+                  (std::string(mode) + " flat x4 store dword 2 result").c_str()) &&
+           Expect(memory.ReadU32(0x9cc, &mixed_width_value),
+                  (std::string(mode) + " flat x4 store dword 3 read").c_str()) &&
+           Expect(mixed_width_value == 0x41424344u,
+                  (std::string(mode) + " flat x4 store dword 3 result").c_str()) &&
+           Expect(memory.ReadU32(0xc40, &mixed_width_value),
+                  (std::string(mode) + " global x3 store dword 0 read").c_str()) &&
+           Expect(mixed_width_value == 0x51525354u,
+                  (std::string(mode) + " global x3 store dword 0 result").c_str()) &&
+           Expect(memory.ReadU32(0xc44, &mixed_width_value),
+                  (std::string(mode) + " global x3 store dword 1 read").c_str()) &&
+           Expect(mixed_width_value == 0x61626364u,
+                  (std::string(mode) + " global x3 store dword 1 result").c_str()) &&
+           Expect(memory.ReadU32(0xc48, &mixed_width_value),
+                  (std::string(mode) + " global x3 store dword 2 read").c_str()) &&
+           Expect(mixed_width_value == 0x71727374u,
+                  (std::string(mode) + " global x3 store dword 2 result").c_str());
+  };
+  LinearExecutionMemory mixed_width_memory(0x3000, 0);
+  if (!Expect(seed_mixed_width_memory(&mixed_width_memory),
+              "expected mixed-width vector memory seed writes")) {
+    return 1;
+  }
+  WaveExecutionState mixed_width_state = make_mixed_width_state();
   if (!Expect(interpreter.ExecuteProgram(mixed_width_program, &mixed_width_state,
                                          &mixed_width_memory, &error_message),
               error_message.c_str()) ||
-      !Expect(mixed_width_state.vgprs[50][0] == 0x10101010u,
-              "expected flat x2 low load result") ||
-      !Expect(mixed_width_state.vgprs[51][0] == 0x20202020u,
-              "expected flat x2 high load result") ||
-      !Expect(mixed_width_state.vgprs[52][0] == 0x30303030u,
-              "expected flat x3 dword 0 load result") ||
-      !Expect(mixed_width_state.vgprs[53][0] == 0x40404040u,
-              "expected flat x3 dword 1 load result") ||
-      !Expect(mixed_width_state.vgprs[54][0] == 0x50505050u,
-              "expected flat x3 dword 2 load result") ||
-      !Expect(mixed_width_state.vgprs[55][0] == 0x60606060u,
-              "expected flat x4 dword 0 load result") ||
-      !Expect(mixed_width_state.vgprs[56][0] == 0x70707070u,
-              "expected flat x4 dword 1 load result") ||
-      !Expect(mixed_width_state.vgprs[57][0] == 0x80808080u,
-              "expected flat x4 dword 2 load result") ||
-      !Expect(mixed_width_state.vgprs[58][0] == 0x90909090u,
-              "expected flat x4 dword 3 load result") ||
-      !Expect(mixed_width_state.vgprs[59][0] == 0xa0a0a0a0u,
-              "expected global x3 dword 0 load result") ||
-      !Expect(mixed_width_state.vgprs[60][0] == 0xb0b0b0b0u,
-              "expected global x3 dword 1 load result") ||
-      !Expect(mixed_width_state.vgprs[61][0] == 0xc0c0c0c0u,
-              "expected global x3 dword 2 load result")) {
+      !validate_mixed_width(mixed_width_state, mixed_width_memory, "decoded")) {
     return 1;
   }
 
-  std::uint32_t mixed_width_value = 0;
-  if (!Expect(mixed_width_memory.ReadU32(0x980, &mixed_width_value),
-              "expected flat x2 store dword 0 read") ||
-      !Expect(mixed_width_value == 0xd1d2d3d4u,
-              "expected flat x2 store dword 0 result") ||
-      !Expect(mixed_width_memory.ReadU32(0x984, &mixed_width_value),
-              "expected flat x2 store dword 1 read") ||
-      !Expect(mixed_width_value == 0xe1e2e3e4u,
-              "expected flat x2 store dword 1 result") ||
-      !Expect(mixed_width_memory.ReadU32(0x9a0, &mixed_width_value),
-              "expected flat x3 store dword 0 read") ||
-      !Expect(mixed_width_value == 0xf1f2f3f4u,
-              "expected flat x3 store dword 0 result") ||
-      !Expect(mixed_width_memory.ReadU32(0x9a4, &mixed_width_value),
-              "expected flat x3 store dword 1 read") ||
-      !Expect(mixed_width_value == 0x11121314u,
-              "expected flat x3 store dword 1 result") ||
-      !Expect(mixed_width_memory.ReadU32(0x9a8, &mixed_width_value),
-              "expected flat x3 store dword 2 read") ||
-      !Expect(mixed_width_value == 0x21222324u,
-              "expected flat x3 store dword 2 result") ||
-      !Expect(mixed_width_memory.ReadU32(0x9c0, &mixed_width_value),
-              "expected flat x4 store dword 0 read") ||
-      !Expect(mixed_width_value == 0x11121314u,
-              "expected flat x4 store dword 0 result") ||
-      !Expect(mixed_width_memory.ReadU32(0x9c4, &mixed_width_value),
-              "expected flat x4 store dword 1 read") ||
-      !Expect(mixed_width_value == 0x21222324u,
-              "expected flat x4 store dword 1 result") ||
-      !Expect(mixed_width_memory.ReadU32(0x9c8, &mixed_width_value),
-              "expected flat x4 store dword 2 read") ||
-      !Expect(mixed_width_value == 0x31323334u,
-              "expected flat x4 store dword 2 result") ||
-      !Expect(mixed_width_memory.ReadU32(0x9cc, &mixed_width_value),
-              "expected flat x4 store dword 3 read") ||
-      !Expect(mixed_width_value == 0x41424344u,
-              "expected flat x4 store dword 3 result") ||
-      !Expect(mixed_width_memory.ReadU32(0xc40, &mixed_width_value),
-              "expected global x3 store dword 0 read") ||
-      !Expect(mixed_width_value == 0x51525354u,
-              "expected global x3 store dword 0 result") ||
-      !Expect(mixed_width_memory.ReadU32(0xc44, &mixed_width_value),
-              "expected global x3 store dword 1 read") ||
-      !Expect(mixed_width_value == 0x61626364u,
-              "expected global x3 store dword 1 result") ||
-      !Expect(mixed_width_memory.ReadU32(0xc48, &mixed_width_value),
-              "expected global x3 store dword 2 read") ||
-      !Expect(mixed_width_value == 0x71727374u,
-              "expected global x3 store dword 2 result")) {
+  std::vector<CompiledInstruction> compiled_mixed_width_program;
+  if (!Expect(interpreter.CompileProgram(mixed_width_program,
+                                         &compiled_mixed_width_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_mixed_width_memory(0x3000, 0);
+  if (!Expect(seed_mixed_width_memory(&compiled_mixed_width_memory),
+              "expected compiled mixed-width vector memory seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_mixed_width_state = make_mixed_width_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_mixed_width_program,
+                                         &compiled_mixed_width_state,
+                                         &compiled_mixed_width_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_mixed_width(compiled_mixed_width_state,
+                            compiled_mixed_width_memory, "compiled")) {
     return 1;
   }
 
@@ -14349,6 +14636,17 @@ int main() {
           !RunBufferAtomicSemanticCase(interpreter, buffer_case, false, true)) {
         return 1;
       }
+    }
+  }
+
+  for (const AtomicSemanticCase& test_case : atomic_cases) {
+    const std::string flat_opcode =
+        "FLAT_" + std::string(test_case.opcode.substr(7));
+    AtomicSemanticCase flat_case = test_case;
+    flat_case.opcode = flat_opcode;
+    if (!RunFlatAtomicSemanticCase(interpreter, flat_case, false) ||
+        !RunFlatAtomicSemanticCase(interpreter, flat_case, true)) {
+      return 1;
     }
   }
 
