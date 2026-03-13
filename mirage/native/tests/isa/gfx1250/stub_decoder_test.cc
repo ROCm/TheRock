@@ -1337,8 +1337,15 @@ int main() {
     if (instruction_name.rfind("V_WMMA_SCALE", 0) == 0 &&
         instruction_name.rfind("V_WMMA_LD_SCALE", 0) != 0) {
       if (!Expect(decoded.uses_scale_path &&
+                      !decoded.uses_tensor_memory &&
+                      !decoded.uses_paired_operands &&
                       decoded.operand_slots.binding_count == 5 &&
                       decoded.operand_descriptors.descriptor_count == 5 &&
+                      CountOutputSlots(decoded) == 1 &&
+                      CountDescriptorsWithAccess(decoded,
+                                                 StubOperandAccess::kRead) == 4 &&
+                      CountDescriptorsWithAccess(decoded,
+                                                 StubOperandAccess::kWrite) == 1 &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kDestination) == 1 &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kSource0) == 1 &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kSource1) == 1 &&
@@ -1382,6 +1389,13 @@ int main() {
       if (!Expect(decoded.operand_slots.binding_count == 4 &&
                       decoded.operand_descriptors.descriptor_count == 4 &&
                       !decoded.uses_scale_path &&
+                      !decoded.uses_tensor_memory &&
+                      !decoded.uses_paired_operands &&
+                      CountOutputSlots(decoded) == 1 &&
+                      CountDescriptorsWithAccess(decoded,
+                                                 StubOperandAccess::kRead) == 3 &&
+                      CountDescriptorsWithAccess(decoded,
+                                                 StubOperandAccess::kWrite) == 1 &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kDestination) == 1 &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kSource0) == 1 &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kSource1) == 1 &&

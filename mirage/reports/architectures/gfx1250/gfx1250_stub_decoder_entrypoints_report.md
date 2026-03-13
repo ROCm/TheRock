@@ -147,6 +147,7 @@
     - explicit wave32 fragment/descriptor checks on representative routed generic variants
     - route-wide explicit slot/descriptor validation across current routed `V_WMMA_*` seeds except paired-load helpers
     - route-wide exact destination/source0/source1/accumulator logical slot binding checks across current routed non-scale `V_WMMA_*` seeds
+    - route-wide exact read/write descriptor and output-slot composition checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact destination/source0/source1/accumulator slot and descriptor composition checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact matrix-fragment composition checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide role-specific wave32 checks across current routed non-scale `V_WMMA_*` seeds
@@ -169,6 +170,7 @@
     - accumulator descriptor coverage on scale, scale16, and routed `F4` scale variants
     - explicit wave32 fragment/descriptor checks on representative routed scale variants
     - route-wide exact destination/source0/source1/accumulator/scale logical slot binding checks across current routed `V_WMMA_SCALE*` seeds
+    - route-wide exact read/write descriptor and output-slot composition checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact destination/source0/source1/accumulator/scale slot and descriptor composition checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact matrix-vs-scalar fragment composition checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide scalar scale-slot and scale-descriptor checks across current routed `V_WMMA_SCALE*` seeds
@@ -218,6 +220,7 @@
     - destination and accumulator descriptor coverage on routed F16/F32/BF16/I32 variants
     - explicit wave32 fragment/descriptor checks on representative routed generic variants
     - route-wide exact destination/source0/source1/accumulator logical slot binding checks across current routed `V_SWMMAC_*` seeds
+    - route-wide exact read/write descriptor and output-slot composition checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact destination/source0/source1/accumulator slot and descriptor composition checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact matrix-fragment composition checks across current routed `V_SWMMAC_*` seeds
     - route-wide role-specific wave32 checks across current routed `V_SWMMAC_*` seeds
