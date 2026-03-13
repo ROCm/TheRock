@@ -14,7 +14,7 @@ from find_artifacts_for_commit import (
     find_artifacts_for_commit,
 )
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from github_actions.github_actions_utils import (
+from github_actions.github_actions_api import (
     GitHubAPIError,
     is_authenticated_github_api_available,
 )

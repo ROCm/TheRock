@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
-from github_actions_utils import get_first_gpu_architecture
+from github_actions_api import get_first_gpu_architecture
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 

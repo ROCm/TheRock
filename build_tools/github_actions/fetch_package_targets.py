@@ -59,7 +59,7 @@ from amdgpu_family_matrix import (
 )
 import string
 
-from github_actions_utils import *
+from github_actions_api import *
 
 
 def determine_package_targets(args):

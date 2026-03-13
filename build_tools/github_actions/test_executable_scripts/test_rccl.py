@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
-from github_actions_utils import get_visible_gpu_count
+from github_actions_api import get_visible_gpu_count
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent

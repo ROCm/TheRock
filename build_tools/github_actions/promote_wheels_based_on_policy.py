@@ -16,7 +16,7 @@ sets `upload` ("true"/"false") via `gha_set_env` using this policy:
 import argparse
 import os
 import sys
-from github_actions_utils import *
+from github_actions_api import *
 
 
 def determine_upload_flag(

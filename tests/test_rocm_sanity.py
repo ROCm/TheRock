@@ -20,9 +20,9 @@ THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
-# Importing is_asan from github_actions_utils.py
+# Importing is_asan from github_actions_api.py
 sys.path.append(str(THIS_DIR.parent / "build_tools" / "github_actions"))
-from github_actions_utils import is_asan
+from github_actions_api import is_asan
 
 
 def is_windows():

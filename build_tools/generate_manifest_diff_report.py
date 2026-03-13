@@ -32,7 +32,7 @@ sys.path.insert(0, str(THIS_SCRIPT_DIR))
 
 # Local imports
 from generate_therock_manifest import build_manifest_schema
-from github_actions.github_actions_utils import (
+from github_actions.github_actions_api import (
     gha_append_step_summary,
     gha_query_last_successful_workflow_run,
     gha_query_workflow_run_by_id,

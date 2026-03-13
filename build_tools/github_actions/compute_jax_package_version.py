@@ -31,7 +31,7 @@ import argparse
 import re
 import sys
 
-from github_actions_utils import *
+from github_actions_api import *
 
 
 def extract_jax_version_from_requirements(requirements_path: str) -> str:

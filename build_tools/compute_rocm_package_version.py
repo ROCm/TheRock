@@ -53,7 +53,7 @@ import os
 import subprocess
 import sys
 
-from github_actions.github_actions_utils import *
+from github_actions.github_actions_api import *
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
