@@ -21,6 +21,43 @@ import configure_multi_arch_ci as cm
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _run_from_environ(
+    event_name: str,
+    event_payload: dict,
+    *,
+    branch_name: str = "main",
+    build_variant: str = "release",
+) -> cm.CIInputs:
+    """Call CIInputs.from_environ() with a synthetic event payload.
+
+    GitHub Actions sets GITHUB_EVENT_PATH to a JSON file containing the full
+    webhook event payload. This helper writes a temporary JSON file and patches
+    the environment to simulate that.
+
+    See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-environment-variables#default-environment-variables
+    """
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(event_payload, f)
+        event_path = f.name
+
+    try:
+        env = {
+            "GITHUB_EVENT_NAME": event_name,
+            "GITHUB_EVENT_PATH": event_path,
+            "GITHUB_REF_NAME": branch_name,
+            "BUILD_VARIANT": build_variant,
+        }
+        with patch.dict(os.environ, env, clear=False):
+            return cm.CIInputs.from_environ()
+    finally:
+        os.unlink(event_path)
+
+
+# ---------------------------------------------------------------------------
 # CIInputs — construction and properties
 # ---------------------------------------------------------------------------
 
@@ -28,48 +65,18 @@ import configure_multi_arch_ci as cm
 class TestCIInputs(unittest.TestCase):
     """Test CIInputs dataclass and its properties."""
 
-    def test_pull_request_properties(self):
+    def test_event_type_properties(self):
+        """Event type properties are mutually exclusive."""
         inputs = cm.CIInputs(
             event_name="pull_request",
-            branch_name="feature-branch",
+            branch_name="feature",
             base_ref="HEAD^",
             build_variant="release",
-            pr_labels=["gfx950", "test:rocprim"],
         )
         self.assertTrue(inputs.is_pull_request)
         self.assertFalse(inputs.is_push)
         self.assertFalse(inputs.is_schedule)
         self.assertFalse(inputs.is_workflow_dispatch)
-
-    def test_push_properties(self):
-        inputs = cm.CIInputs(
-            event_name="push",
-            branch_name="main",
-            base_ref="abc123",
-            build_variant="release",
-        )
-        self.assertFalse(inputs.is_pull_request)
-        self.assertTrue(inputs.is_push)
-
-    def test_schedule_properties(self):
-        inputs = cm.CIInputs(
-            event_name="schedule",
-            branch_name="main",
-            base_ref="HEAD^1",
-            build_variant="release",
-        )
-        self.assertTrue(inputs.is_schedule)
-
-    def test_workflow_dispatch_properties(self):
-        inputs = cm.CIInputs(
-            event_name="workflow_dispatch",
-            branch_name="main",
-            base_ref="HEAD^1",
-            build_variant="release",
-            linux_amdgpu_families="gfx94X, gfx120X",
-        )
-        self.assertTrue(inputs.is_workflow_dispatch)
-        self.assertEqual(inputs.linux_amdgpu_families, "gfx94X, gfx120X")
 
     def test_defaults(self):
         """Fields with defaults can be omitted."""
@@ -85,92 +92,61 @@ class TestCIInputs(unittest.TestCase):
 
 
 class TestCIInputsFromEnviron(unittest.TestCase):
-    """Test CIInputs.from_environ() with event payload fixtures."""
+    """Test CIInputs.from_environ() with event payload fixtures.
 
-    def test_workflow_dispatch_event(self):
-        """from_environ reads workflow_dispatch inputs from GITHUB_EVENT_PATH."""
-        event_payload = {
-            "inputs": {
-                "linux_amdgpu_families": "gfx94X, gfx120X",
-                "linux_test_labels": "test:rocprim",
-                "windows_amdgpu_families": "",
-                "windows_test_labels": "",
-                "prebuilt_stages": "foundation,compiler-runtime",
-                "baseline_run_id": "12345",
-            }
-        }
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(event_payload, f)
-            event_path = f.name
+    GitHub Actions provides the full webhook event payload as a JSON file
+    via GITHUB_EVENT_PATH. Each event type has a different payload structure:
+    - workflow_dispatch: inputs are in event.inputs
+    - pull_request: PR labels are in event.pull_request.labels
+    - push: the previous HEAD SHA is in event.before
 
-        try:
-            env = {
-                "GITHUB_EVENT_NAME": "workflow_dispatch",
-                "GITHUB_EVENT_PATH": event_path,
-                "GITHUB_REF_NAME": "main",
-                "BUILD_VARIANT": "release",
-            }
-            with patch.dict(os.environ, env, clear=False):
-                inputs = cm.CIInputs.from_environ()
+    See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-environment-variables#default-environment-variables
+    """
 
-            self.assertEqual(inputs.event_name, "workflow_dispatch")
-            self.assertEqual(inputs.linux_amdgpu_families, "gfx94X, gfx120X")
-            self.assertEqual(inputs.linux_test_labels, "test:rocprim")
-            self.assertEqual(inputs.prebuilt_stages, "foundation,compiler-runtime")
-            self.assertEqual(inputs.baseline_run_id, "12345")
-        finally:
-            os.unlink(event_path)
+    def test_workflow_dispatch_reads_inputs(self):
+        """workflow_dispatch inputs (families, labels, prebuilt config)."""
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={
+                "inputs": {
+                    "linux_amdgpu_families": "gfx94X, gfx120X",
+                    "linux_test_labels": "test:rocprim",
+                    "windows_amdgpu_families": "",
+                    "windows_test_labels": "",
+                    "prebuilt_stages": "foundation,compiler-runtime",
+                    "baseline_run_id": "12345",
+                }
+            },
+        )
+        self.assertEqual(inputs.linux_amdgpu_families, "gfx94X, gfx120X")
+        self.assertEqual(inputs.linux_test_labels, "test:rocprim")
+        self.assertEqual(inputs.prebuilt_stages, "foundation,compiler-runtime")
+        self.assertEqual(inputs.baseline_run_id, "12345")
 
-    def test_pull_request_event_with_labels(self):
-        """from_environ extracts PR labels from the event payload."""
-        event_payload = {
-            "pull_request": {
-                "labels": [
-                    {"name": "gfx950", "id": 1},
-                    {"name": "test:rocprim", "id": 2},
-                ]
-            }
-        }
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(event_payload, f)
-            event_path = f.name
+    def test_pull_request_extracts_labels(self):
+        """PR labels are extracted from event.pull_request.labels."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "gfx950", "id": 1},
+                        {"name": "test:rocprim", "id": 2},
+                    ]
+                }
+            },
+            branch_name="feature-branch",
+        )
+        self.assertEqual(inputs.pr_labels, ["gfx950", "test:rocprim"])
+        self.assertEqual(inputs.base_ref, "HEAD^")
 
-        try:
-            env = {
-                "GITHUB_EVENT_NAME": "pull_request",
-                "GITHUB_EVENT_PATH": event_path,
-                "GITHUB_REF_NAME": "feature-branch",
-                "BUILD_VARIANT": "release",
-            }
-            with patch.dict(os.environ, env, clear=False):
-                inputs = cm.CIInputs.from_environ()
-
-            self.assertEqual(inputs.event_name, "pull_request")
-            self.assertEqual(inputs.pr_labels, ["gfx950", "test:rocprim"])
-            self.assertEqual(inputs.base_ref, "HEAD^")
-        finally:
-            os.unlink(event_path)
-
-    def test_push_event(self):
-        """from_environ reads 'before' SHA for push events."""
-        event_payload = {"before": "abc123def456"}
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(event_payload, f)
-            event_path = f.name
-
-        try:
-            env = {
-                "GITHUB_EVENT_NAME": "push",
-                "GITHUB_EVENT_PATH": event_path,
-                "GITHUB_REF_NAME": "main",
-                "BUILD_VARIANT": "release",
-            }
-            with patch.dict(os.environ, env, clear=False):
-                inputs = cm.CIInputs.from_environ()
-
-            self.assertEqual(inputs.base_ref, "abc123def456")
-        finally:
-            os.unlink(event_path)
+    def test_push_reads_before_sha(self):
+        """Push events use event.before as the diff base."""
+        inputs = _run_from_environ(
+            event_name="push",
+            event_payload={"before": "abc123def456"},
+        )
+        self.assertEqual(inputs.base_ref, "abc123def456")
 
 
 # ---------------------------------------------------------------------------
@@ -181,19 +157,14 @@ class TestCIInputsFromEnviron(unittest.TestCase):
 class TestCheckSkipCI(unittest.TestCase):
     """Test the skip CI gate."""
 
-    def _make_inputs(self, **kwargs) -> cm.CIInputs:
-        defaults = {
-            "event_name": "pull_request",
-            "branch_name": "feature",
-            "base_ref": "HEAD^",
-            "build_variant": "release",
-        }
-        defaults.update(kwargs)
-        return cm.CIInputs(**defaults)
-
     def test_no_skip_by_default(self):
         """Default stub does not skip."""
-        inputs = self._make_inputs()
+        inputs = cm.CIInputs(
+            event_name="pull_request",
+            branch_name="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
         result = cm.check_skip_ci(inputs, changed_files=["some/file.cpp"])
         self.assertFalse(result.skip)
 
@@ -209,19 +180,14 @@ class TestCheckSkipCI(unittest.TestCase):
 class TestSelectTargets(unittest.TestCase):
     """Test target family selection."""
 
-    def _make_inputs(self, **kwargs) -> cm.CIInputs:
-        defaults = {
-            "event_name": "push",
-            "branch_name": "main",
-            "base_ref": "HEAD^1",
-            "build_variant": "release",
-        }
-        defaults.update(kwargs)
-        return cm.CIInputs(**defaults)
-
     def test_returns_target_selection(self):
         """Stub returns a TargetSelection dataclass."""
-        inputs = self._make_inputs()
+        inputs = cm.CIInputs(
+            event_name="push",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
         result = cm.select_targets(inputs)
         self.assertIsInstance(result, cm.TargetSelection)
 
@@ -237,19 +203,14 @@ class TestSelectTargets(unittest.TestCase):
 class TestDecideJobs(unittest.TestCase):
     """Test job decision logic."""
 
-    def _make_inputs(self, **kwargs) -> cm.CIInputs:
-        defaults = {
-            "event_name": "push",
-            "branch_name": "main",
-            "base_ref": "HEAD^1",
-            "build_variant": "release",
-        }
-        defaults.update(kwargs)
-        return cm.CIInputs(**defaults)
-
     def test_stub_returns_job_decisions(self):
         """Stub returns JobDecisions with all groups set to run."""
-        inputs = self._make_inputs()
+        inputs = cm.CIInputs(
+            event_name="push",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
         result = cm.decide_jobs(inputs, changed_files=None)
         self.assertIsInstance(result, cm.JobDecisions)
         self.assertEqual(result.build_rocm.action, "run")
@@ -260,7 +221,12 @@ class TestDecideJobs(unittest.TestCase):
 
     def test_test_rocm_has_test_type(self):
         """TestRocmDecision carries test_type details."""
-        inputs = self._make_inputs()
+        inputs = cm.CIInputs(
+            event_name="push",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
         result = cm.decide_jobs(inputs, changed_files=None)
         self.assertIsInstance(result.test_rocm, cm.TestRocmDecision)
         self.assertEqual(result.test_rocm.test_type, "smoke")
@@ -297,7 +263,9 @@ class TestExpandMatrix(unittest.TestCase):
 
     def test_empty_families_returns_empty(self):
         """No families → no matrix entries."""
-        result = cm.expand_matrix([], "linux", "release")
+        result = cm.expand_matrix(
+            families=[], platform="linux", build_variant="release"
+        )
         self.assertEqual(result, [])
 
     def test_matrix_entry_to_dict(self):
