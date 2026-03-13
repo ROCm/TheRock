@@ -1,9 +1,9 @@
 # hipblasltprovider
-[components.dbg."ml-libs/hipblasltprovider/stage"]
 [components.lib."ml-libs/hipblasltprovider/stage"]
 exclude = [
   "lib/*.a",
 ]
+[components.dbg."ml-libs/hipblasltprovider/stage"]
 [components.test."ml-libs/hipblasltprovider/stage"]
 include = [
   "bin/hipblaslt_*_test*",

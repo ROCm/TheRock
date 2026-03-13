@@ -81,27 +81,28 @@ The `comp-summary.*` files appear both in the `therock-build-prof/` subdirectory
 
 ### Bucket selection
 
-The bucket is determined by `_retrieve_bucket_info()`:
+The bucket is determined by `_retrieve_bucket_info()` in `workflow_outputs.py`.
+See [S3 Buckets](s3_buckets.md) for the full list of buckets and authentication
+details.
 
 ```
-RELEASE_TYPE set?
-├─ Yes ──> therock-{RELEASE_TYPE}-artifacts
-└─ No
-   └─ ROCm/TheRock and not fork?
-      ├─ Yes
-      │  └─ Pre-cutover? ─Yes─> therock-artifacts
-      │                  ─No──> therock-ci-artifacts
-      └─ No
-         └─ ROCm/therock-releases-internal and not fork?
-            ├─ Yes ──> therock-artifacts-internal
-            └─ No
-               └─ Pre-cutover? ─Yes─> therock-artifacts-external
-                               ─No──> therock-ci-artifacts-external
+RELEASE_TYPE set? ──Yes──> therock-{RELEASE_TYPE}-artifacts
+       │
+       No
+       │
+ROCm/TheRock (not fork)? ──Yes──> therock-ci-artifacts
+       │
+       No
+       │
+       └──> therock-ci-artifacts-external
+
+Legacy (pre-cutover):
+  Runs before 2025-11-11 (TheRock #2046) use the old bucket names:
+    therock-ci-artifacts          → therock-artifacts
+    therock-ci-artifacts-external → therock-artifacts-external
 ```
 
-"Pre-cutover" means the workflow run's `updated_at` timestamp is before
-2025-11-11 (TheRock #2046). Valid `RELEASE_TYPE` values are `dev`, `nightly`,
-and `prerelease`.
+Valid `RELEASE_TYPE` values are `dev`, `nightly`, and `prerelease`.
 
 ## Python API
 

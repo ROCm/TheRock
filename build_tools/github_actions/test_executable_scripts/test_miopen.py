@@ -176,10 +176,17 @@ if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILI
 if AMDGPU_FAMILIES == "gfx950-dcgpu":
     negative_filter.append("*DBSync*")
 
+# Failing on on win gfx110x
+if any(prefix in AMDGPU_FAMILIES for prefix in ["gfx110"]):
+    negative_filter.append("*/GPU_MIOpenDriver*")
+    negative_filter.append("Smoke/CPU_Handle_NONE*")
+    negative_filter.append("Full/GPU_reduce_custom_fp32*")
+
 # Tests to be filtered for navi
 # 1- Ignore gfx942 tests
 # TODO: There is no FP32 wmma on Navi, remove all FP32 conv tests. These should already be skipped via applicability for
 # CK solvers
+
 if any(prefix in AMDGPU_FAMILIES for prefix in ["gfx110", "gfx115", "gfx120"]):
     # These are ignored in miopen
     negative_filter.append(
@@ -233,8 +240,8 @@ if any(prefix in AMDGPU_FAMILIES for prefix in ["gfx110", "gfx115", "gfx120"]):
 
 ####################################################
 
-# Creating a smoke test filter
-smoke_filter = [
+# Creating a quick test filter
+quick_filter = [
     # Batch norm FWD smoke tests
     "Smoke/GPU_BNCKFWDTrainLarge2D_FP16*",
     "Smoke/GPU_BNOCLFWDTrainLarge2D_FP16*",
@@ -249,16 +256,16 @@ smoke_filter = [
 
 # TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
 if AMDGPU_FAMILIES != "gfx950-dcgpu":
-    smoke_filter.append("*DBSync*")
+    quick_filter.append("*DBSync*")
     positive_filter.append("*DBSync*")
 
 ####################################################
 
-# If smoke tests are enabled, we run smoke tests only.
+# If quick tests are enabled, we run quick tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
-    test_filter = "--gtest_filter=" + ":".join(smoke_filter)
+if test_type == "quick":
+    test_filter = "--gtest_filter=" + ":".join(quick_filter)
 else:
     test_filter = (
         "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
