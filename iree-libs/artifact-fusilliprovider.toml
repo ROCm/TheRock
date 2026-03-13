@@ -1,9 +1,9 @@
 # fusilliprovider
-[components.dbg."iree-libs/fusilliprovider/stage"]
 [components.lib."iree-libs/fusilliprovider/stage"]
 exclude = [
   "lib/*.a",
 ]
+[components.dbg."iree-libs/fusilliprovider/stage"]
 [components.test."iree-libs/fusilliprovider/stage"]
 include = [
   "bin/fusilli_plugin_*_test",

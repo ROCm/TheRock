@@ -31,7 +31,7 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
 logging.basicConfig(level=logging.INFO)
 
-# If smoke tests are enabled, we run smoke tests only.
+# If quick tests are enabled, we run quick tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 
@@ -40,7 +40,7 @@ TESTS_TO_IGNORE = ["unpack_util_test"]
 
 test_subdir = ""
 timeout = "3600"
-if test_type == "smoke":
+if test_type == "quick":
     # The emulator regression tests are very fast.
     # If we need something even faster we can use "/smoke" here.
     test_subdir = "/regression"
