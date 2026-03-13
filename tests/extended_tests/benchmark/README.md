@@ -66,9 +66,9 @@ Benchmark tests run **only on nightly CI builds** to save time and resources on 
 
 | Workflow Trigger           | Benchmark Tests                | Regular Tests          |
 | -------------------------- | ------------------------------ | ---------------------- |
-| **Pull Request (PR)**      | Skipped                        | Run (quick: 1 shard)   |
+| **Pull Request (PR)**      | Skipped                        | Run (smoke: 1 shard)   |
 | **Nightly CI (scheduled)** | Run (in parallel, always full) | Run (full: all shards) |
-| **Push to main**           | Skipped                        | Run (quick: 1 shard)   |
+| **Push to main**           | Skipped                        | Run (smoke: 1 shard)   |
 | **Manual workflow**        | Optional                       | Optional               |
 
 **Note:** Benchmarks always run with `total_shards=1` and do not use `test_type` or `test_labels` filtering.

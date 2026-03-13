@@ -8,7 +8,7 @@ TEST_COMPONENT: Job name of the component to test (e.g., "miopen", "rocrand", "h
     This is automatically set by the GitHub Actions workflow from the job_name field.
     The script maps these job names to actual test directory names (e.g., "miopen" -> "MIOpen")
     Defaults to "miopen" if not set.
-TEST_TYPE: "quick" runs tests with "quick" category, otherwise runs "standard" category
+TEST_TYPE: "smoke" runs tests with "quick" category, otherwise runs "standard" category
 AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
 
 The script discovers GPU-specific labels via ctest --print-labels and runs the appropriate tests for the current GPU architecture.
@@ -29,7 +29,7 @@ from github_actions_utils import find_matching_gpu_arch
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-TEST_TYPE = os.getenv("TEST_TYPE", "quick")
+TEST_TYPE = os.getenv("TEST_TYPE", "smoke")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 # Map job names to actual test directory names
@@ -197,7 +197,7 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
 
 def main():
     # Use only two categories for now - quick and standard - depending on TEST_TYPE.
-    if TEST_TYPE and TEST_TYPE.lower() == "quick":
+    if TEST_TYPE and TEST_TYPE.lower() == "smoke":
         category = "quick"
     else:
         category = "standard"

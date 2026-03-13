@@ -21,10 +21,10 @@ environ_vars = os.environ.copy()
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
-# If quick tests are enabled, we run quick tests only.
+# If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "quick":
+if test_type == "smoke":
     test_filter = ["--smoketest"]
 else:
     # "--test_prob" is the probability that a given test will run.

@@ -42,10 +42,10 @@ cmd = [
     f"{THEROCK_BIN_DIR}/hipblas-test",
 ]
 
-# If quick tests are enabled, we run quick tests only.
+# If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "quick":
+if test_type == "smoke":
     cmd += [
         "--yaml",
         f"{THEROCK_BIN_DIR}/hipblas_smoke.yaml",

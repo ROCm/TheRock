@@ -29,7 +29,7 @@ environ_vars["HIPSPARSE_CLIENTS_MATRICES_DIR"] = (
 cmd = [f"{THEROCK_BIN_DIR}/hipsparse-test"]
 
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "quick":
+if test_type == "smoke":
     cmd.append(
         "--gtest_filter=*spmv*:*spsv*:*spsm*:*spmm*:*csric0*:*csrilu0*:-known_bug*"
     )
