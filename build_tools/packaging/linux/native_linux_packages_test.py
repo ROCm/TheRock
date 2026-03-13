@@ -630,16 +630,16 @@ gpgcheck=0
             return self.install_rpm_packages()
 
     def run_basic_verification(self) -> bool:
-        """Step 2: Basic sanity check / basic install verification.
+        """Step 2: Basic install verification (components, packages, rocminfo).
 
-        Checks that the install prefix exists and at least VERIFY_MIN_COMPONENTS
-        key components are present. Does not run rocminfo, package listing, or rdhc.
+        Checks install prefix, key components, lists installed packages, runs rocminfo
+        if available. Does not run test_rdhc (that is in run_full_verification).
 
         Returns:
-            True if basic verification passed.
+            True if basic verification passed (enough components found).
         """
         print("\n" + "=" * 80)
-        print("STEP 2: BASIC INSTALL VERIFICATION (SANITY CHECK)")
+        print("STEP 2: BASIC INSTALL VERIFICATION")
         print("=" * 80)
 
         install_path = Path(self.install_prefix)
@@ -649,57 +649,9 @@ gpgcheck=0
 
         print(f"\n[PASS] Installation directory exists: {self.install_prefix}")
 
-        found_count = 0
-        for component in VERIFY_KEY_COMPONENTS:
-            if (install_path / component).exists():
-                found_count += 1
-
-        print(
-            f"Key components found: {found_count}/{len(VERIFY_KEY_COMPONENTS)} (minimum required: {VERIFY_MIN_COMPONENTS})"
-        )
-
-        if found_count >= VERIFY_MIN_COMPONENTS:
-            print("\n[PASS] Basic verification PASSED")
-            return True
-        print("\n[FAIL] Basic verification FAILED (insufficient components)")
-        return False
-
-    def run_full_verification(self) -> bool:
-        """Step 3: Detailed/full verification of ROCm installation.
-
-        Checks components, lists installed packages, runs rocminfo if available,
-        and tests rdhc.py. See verify_rocm_installation() for implementation.
-        """
-        print("\n" + "=" * 80)
-        print("STEP 3: FULL / DETAILED VERIFICATION")
-        print("=" * 80)
-        return self.verify_rocm_installation()
-
-    def verify_rocm_installation(self) -> bool:
-        """Verify that ROCm is properly installed (detailed: components, packages, rocminfo, rdhc).
-
-        Returns:
-            True if verification successful, False otherwise
-        """
-        print("\n" + "=" * 80)
-        print("VERIFYING ROCM INSTALLATION")
-        print("=" * 80)
-
-        # Check if installation prefix exists
-        install_path = Path(self.install_prefix)
-        if not install_path.exists():
-            print(f"\n[FAIL] Installation directory not found: {self.install_prefix}")
-            return False
-
-        print(f"\n[PASS] Installation directory exists: {self.install_prefix}")
-
-        # List of key components to check
         key_components = VERIFY_KEY_COMPONENTS
-
         print("\nChecking for key ROCm components:")
-        all_found = True
         found_count = 0
-
         for component in key_components:
             component_path = install_path / component
             if component_path.exists():
@@ -707,7 +659,6 @@ gpgcheck=0
                 found_count += 1
             else:
                 print(f"   [WARN] {component} (not found)")
-                all_found = False
 
         print(f"\nComponents found: {found_count}/{len(key_components)}")
 
@@ -718,11 +669,9 @@ gpgcheck=0
                 cmd = ["dpkg", "-l"]
                 grep_pattern = "rocm"
             elif self._is_sles():
-                # Use zypper for SLES to list installed packages
                 cmd = ["zypper", "--non-interactive", "search", "-i", "rocm"]
                 grep_pattern = "rocm"
             else:
-                # Use rpm for other RPM-based systems (RHEL, AlmaLinux, CentOS, AZL)
                 cmd = ["rpm", "-qa"]
                 grep_pattern = "rocm"
 
@@ -733,23 +682,20 @@ gpgcheck=0
                 stderr=subprocess.PIPE,
                 text=True,
             )
-
             rocm_packages = [
                 line
                 for line in result.stdout.split("\n")
                 if grep_pattern.lower() in line.lower()
             ]
             print(f"   Found {len(rocm_packages)} ROCm packages installed")
-
             if rocm_packages:
-                print("\n   Sample packages:")
-                for pkg in rocm_packages[:5]:  # Show first 5
+                print("\n   Sample packages (Show first 5):")
+                for pkg in rocm_packages[:5]:
                     print(f"      {pkg.strip()}")
                 if len(rocm_packages) > 5:
                     print(f"      ... and {len(rocm_packages) - 5} more")
-
-        except subprocess.CalledProcessError as e:
-            print(f"   [WARN] Could not query installed packages")
+        except subprocess.CalledProcessError:
+            print("   [WARN] Could not query installed packages")
 
         # Try to run rocminfo if available
         rocminfo_path = install_path / "bin" / "rocminfo"
@@ -765,7 +711,6 @@ gpgcheck=0
                     timeout=ROCMINFO_TIMEOUT_SEC,
                 )
                 print("   [PASS] rocminfo executed successfully")
-                # Print first few lines of output
                 lines = result.stdout.split("\n")[:10]
                 print("\n   First few lines of rocminfo output:")
                 for line in lines:
@@ -773,21 +718,23 @@ gpgcheck=0
                         print(f"      {line}")
             except subprocess.TimeoutExpired:
                 print("   [WARN] rocminfo timed out (may require GPU hardware)")
-            except subprocess.CalledProcessError as e:
+            except subprocess.CalledProcessError:
                 print("   [WARN] rocminfo failed (may require GPU hardware)")
             except OSError as e:
                 print(f"   [WARN] Could not run rocminfo: {e}")
 
-        # Test rdhc.py if available
-        self.test_rdhc()
-
-        # Return success if at least some components were found
         if found_count >= VERIFY_MIN_COMPONENTS:
-            print("\n[PASS] ROCm installation verification PASSED")
+            print("\n[PASS] Basic verification PASSED")
             return True
-        else:
-            print("\n[FAIL] ROCm installation verification FAILED")
-            return False
+        print("\n[FAIL] Basic verification FAILED (insufficient components)")
+        return False
+
+    def run_full_verification(self) -> bool:
+        """Step 3: Full verification — runs test_rdhc only."""
+        print("\n" + "=" * 80)
+        print("STEP 3: FULL VERIFICATION (RDHC)")
+        print("=" * 80)
+        return self.test_rdhc()
 
     def test_rdhc(self) -> bool:
         """Test rdhc.py binary in libexec/rocm-core/.
