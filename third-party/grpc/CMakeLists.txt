@@ -7,6 +7,7 @@ therock_subproject_fetch(therock-grpc-sources
   # Originally mirrored from: https://github.com/grpc/grpc.git (git tag v1.67.1)
   URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/grpc-v1.67.1.tar.gz"
   URL_HASH "SHA256=ed0051771a1ed0ec6583be4ddb0fe9ee4473bc2f8a59d214ff49290ed5edb4ef"
+  PATCH_COMMAND bash -c "sed -i 's/\\r$//' ${CMAKE_SOURCE_DIR}/build/third-party/grpc/source/third_party/boringssl-with-bazel/src/include/openssl/target.h && ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py ${CMAKE_SOURCE_DIR}/patches/third-party/grpc"
 )
 
 set(_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/build")

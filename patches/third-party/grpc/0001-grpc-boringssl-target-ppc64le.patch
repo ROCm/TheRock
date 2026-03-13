@@ -1,0 +1,15 @@
+diff --git a/third_party/boringssl-with-bazel/src/include/openssl/target.h b/third_party/boringssl-with-bazel/src/include/openssl/target.h
+index 2760f52c..9360296c 100644
+--- a/third_party/boringssl-with-bazel/src/include/openssl/target.h
++++ b/third_party/boringssl-with-bazel/src/include/openssl/target.h
+@@ -54,6 +54,10 @@
+ #define OPENSSL_32_BIT
+ #elif defined(__myriad2__)
+ #define OPENSSL_32_BIT
++#elif defined(__powerpc64__) || defined(__PPC64__)
++#define OPENSSL_64_BIT
++#elif defined(__powerpc__) || defined(__PPC__)
++#define OPENSSL_32_BIT
+ #else
+ // The list above enumerates the platforms that BoringSSL supports. For these
+ // platforms we keep a reasonable bar of not breaking them: automated test
