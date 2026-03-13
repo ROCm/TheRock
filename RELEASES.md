@@ -505,7 +505,7 @@ published for Debian-based and RPM-based distributions.
 
 ### Native packages release status
 
-| Platform |                                                                                                                                                                                                                     Native Linux packages |
+| Platform |                                                                                                                                                                                                                     Native packages |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 | Linux    | [![Build Native Linux Packages](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml?query=branch%3Amain) |
 | Windows  |                                                                                                                                                                                                                      (Coming soon)           |
