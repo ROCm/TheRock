@@ -39,6 +39,11 @@ def _run_amd_smi(subcommands: list[str]) -> tuple[int, str, str]:
     cmd = [str(amd_smi_bin)] + list(subcommands)
     logger.info("Running amd-smi: %s", cmd)
     proc = subprocess.run(cmd, capture_output=True, text=True)
+    logger.info("amd-smi returncode=%s", proc.returncode)
+    if proc.stdout:
+        logger.info("amd-smi stdout:\n%s", proc.stdout)
+    if proc.stderr:
+        logger.info("amd-smi stderr:\n%s", proc.stderr)
     return proc.returncode, proc.stdout, proc.stderr
 
 
