@@ -128,24 +128,26 @@ def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
     Returns:
     True if simulate succeeded, False otherwise.
     """
-    path = Path(packages_dir)
+    path = Path(packages_dir).resolve()
     if not path.is_dir():
         print(f"[FAIL] Not a directory: {packages_dir}", file=sys.stderr)
         return False
 
     if pkg_type == "deb":
-        debs = [str(p) for p in path.glob("*.deb")]
+        debs = [str(p.resolve()) for p in path.glob("*.deb")]
         if not debs:
             print(f"[FAIL] No .deb files found in {packages_dir}", file=sys.stderr)
             return False
         print("Simulate installing DEB packages on host system for testing")
+        # Use absolute paths so apt treats them as local files, not package names
         cmd = ["apt", "install", "--simulate"] + debs
     elif pkg_type == "rpm":
-        rpms = [str(p) for p in path.glob("*.rpm")]
+        rpms = [str(p.resolve()) for p in path.glob("*.rpm")]
         if not rpms:
             print(f"[FAIL] No .rpm files found in {packages_dir}", file=sys.stderr)
             return False
         print("Simulate installing RPM packages for testing")
+        # Use absolute paths for consistency
         cmd = ["rpm", "-Uvh", "--test", "--nodeps"] + rpms
     else:
         print(
@@ -898,24 +900,21 @@ Examples:
     parser.add_argument(
         "--os-profile",
         type=str,
-        required=True,
-        help="OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3). Package type is derived from this.",
+        help="OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3). Required for sanity/full; for simulate, used only to derive pkg-type if --pkg-type is omitted.",
     )
 
     parser.add_argument(
         "--repo-url",
         type=str,
-        required=True,
-        help="Full repository URL (constructed in YAML workflow)",
+        help="Full repository URL (constructed in YAML workflow). Required for sanity/full; not used for simulate.",
     )
 
     parser.add_argument(
         "--gfx-arch",
         type=str,
         nargs="+",
-        required=True,
         metavar="ARCH",
-        help="GPU architecture(s) as a list. Only the first is used for now. Examples: gfx94x, gfx110x gfx1151",
+        help="GPU architecture(s) as a list. Only the first is used for now. Required for sanity/full; not used for simulate. Examples: gfx94x, gfx110x gfx1151",
     )
 
     parser.add_argument(
@@ -961,31 +960,44 @@ Examples:
 
     args = parser.parse_args()
 
-    # Simulate path: dry-run only; exit after run_simulate_install_test (no repo setup or install)
+    # Validate required inputs based on test-type
     if args.test_type == "simulate":
         if not args.packages_dir:
             parser.error("--packages-dir is required when --test-type is 'simulate'")
-        if args.pkg_type:
-            pkg_type = args.pkg_type
-        elif args.os_profile:
-            try:
-                pkg_type = NativeLinuxPackagesTester._derive_package_type(
-                    args.os_profile
-                )
-            except ValueError as e:
-                parser.error(str(e))
-        else:
+        if not args.pkg_type and not args.os_profile:
             parser.error(
                 "When --test-type is 'simulate', provide --pkg-type or --os-profile"
             )
+        if args.os_profile and not args.pkg_type:
+            try:
+                NativeLinuxPackagesTester._derive_package_type(args.os_profile)
+            except ValueError as e:
+                parser.error(str(e))
+    else:
+        # sanity or full
+        if not args.os_profile:
+            parser.error(
+                "--os-profile is required when --test-type is 'sanity' or 'full'"
+            )
+        if not args.repo_url:
+            parser.error(
+                "--repo-url is required when --test-type is 'sanity' or 'full'"
+            )
+        if not args.gfx_arch:
+            parser.error(
+                "--gfx-arch is required when --test-type is 'sanity' or 'full'"
+            )
+
+    # Simulate path: dry-run only; exit after run_simulate_install_test (no repo setup or install)
+    if args.test_type == "simulate":
+        pkg_type = args.pkg_type or NativeLinuxPackagesTester._derive_package_type(
+            args.os_profile
+        )
         print("\n" + "=" * 80)
         print("SIMULATED INSTALL TEST")
         print("=" * 80)
         ok = run_simulate_install_test(pkg_type, args.packages_dir)
         sys.exit(0 if ok else 1)
-
-    if not args.os_profile:
-        parser.error("--os-profile is required when --test-type is not 'simulate'")
 
     # Derive package type from OS profile
     try:
@@ -1010,7 +1022,7 @@ Examples:
         print(f"GPG Key URL: {args.gpg_key_url}")
     print("=" * 80)
 
-    # Create tester and run the three operations in order
+    # Create tester and run repo-based steps (1–3); simulate path exits earlier in main
     tester = NativeLinuxPackagesTester(
         os_profile=args.os_profile,
         repo_url=args.repo_url,
