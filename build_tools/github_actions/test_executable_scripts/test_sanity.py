@@ -12,14 +12,6 @@ logging.basicConfig(level=logging.INFO)
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-
-def _run_pytest(
-    cmd: list[str], *, cwd: Path, env: dict[str, str], check: bool
-) -> subprocess.CompletedProcess[str]:
-    logging.info("++ Exec [%s]$ %s", cwd, " ".join(cmd))
-    return subprocess.run(cmd, cwd=cwd, env=env, check=check, text=True)
-
-
 env = os.environ.copy()
 # Enable verbose ROCm logging, see
 # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
@@ -47,6 +39,6 @@ cmd = [
     "--timeout=300",
 ]
 
-# Default sanity behavior: run everything except tests marked as not_sanity.
-phase_cmd = cmd + ["-m", "not not_sanity"]
-_run_pytest(phase_cmd, cwd=THEROCK_DIR, env=env, check=True)
+logging.info(f"++ Exec [{THEROCK_DIR}]$ {' '.join(cmd)}")
+
+subprocess.run(cmd, cwd=THEROCK_DIR, env=env, check=True)
