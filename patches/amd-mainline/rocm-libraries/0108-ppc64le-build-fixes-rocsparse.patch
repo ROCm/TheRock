@@ -1,0 +1,28 @@
+From cfc2871b4790f960c5fb5ac14ae023a10b1ea607 Mon Sep 17 00:00:00 2001
+From: bluedragan <calvins@us.ibm.com>
+Date: Thu, 5 Mar 2026 05:33:22 +0000
+Subject: [PATCH] rocsparse: ppc64le
+
+---
+ projects/rocsparse/CMakeLists.txt | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/projects/rocsparse/CMakeLists.txt b/projects/rocsparse/CMakeLists.txt
+index db48d24b64..8f196d601b 100644
+--- a/projects/rocsparse/CMakeLists.txt
++++ b/projects/rocsparse/CMakeLists.txt
+@@ -90,6 +90,11 @@ option(BUILD_WITH_ROCBLAS "Enable building rocSPARSE with rocBLAS" ON)
+ option(BUILD_WITH_ROCTX "Enable building rocSPARSE with rocTX" ON)
+ option(BUILD_WITH_OFFLOAD_COMPRESS
+        "Enable offload compression during compilation" ON)
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++  set(BUILD_CLIENTS_TESTS OFF)
++  set(BUILD_CLIENTS_BENCHMARKS OFF)
++  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/clients/matrices")
++endif()
+ 
+ # Clients utilize rocsparse fortran API and a fortran compiler
+ if( NOT BUILD_FORTRAN_CLIENTS )
+-- 
+2.50.1 (Apple Git-155)
+

@@ -1,0 +1,25 @@
+From 60f1cbd5e418b6e71d7ab0baa99762a6781bf4e2 Mon Sep 17 00:00:00 2001
+From: berichar <ben.richard@amd.com>
+Date: Wed, 11 Mar 2026 11:22:06 -0400
+Subject: [PATCH] Fix printf to use portable number formatting
+
+---
+ src/gallium/winsys/amdgpu/drm/amdgpu_cs.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/gallium/winsys/amdgpu/drm/amdgpu_cs.cpp b/src/gallium/winsys/amdgpu/drm/amdgpu_cs.cpp
+index 12aa8b12071..e3f558056a9 100644
+--- a/src/gallium/winsys/amdgpu/drm/amdgpu_cs.cpp
++++ b/src/gallium/winsys/amdgpu/drm/amdgpu_cs.cpp
+@@ -1649,7 +1649,7 @@ static int amdgpu_cs_submit_ib_userq(struct amdgpu_userq *userq,
+           * mapped to same address for all process/apps. Once uq_va is guess mapped to a
+           * given queue, cross process/queue fence dependency can be analyzed.
+           */
+-         mesa_logi("amdgpu: uq_log: %s:  num_wait_fences=%d  uq_va=%llx  job=%llx\n",
++         mesa_logi("amdgpu: uq_log: %s:  num_wait_fences=%d  uq_va=%" PRIx64 " job=%" PRIx64 "\n",
+                    amdgpu_userq_str[acs->queue_index], userq_wait_data.num_fences, fence_info[i].va,
+                    fence_info[i].value);
+       }
+-- 
+2.50.1 (Apple Git-155)
+

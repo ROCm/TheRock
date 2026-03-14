@@ -1,0 +1,89 @@
+From 7bb2c09d4d79e2b8887af1dc65e7394bd8942144 Mon Sep 17 00:00:00 2001
+From: bluedragan <calvins@us.ibm.com>
+Date: Fri, 6 Mar 2026 19:51:50 +0000
+Subject: [PATCH] aqlprofiler: ppc64le
+
+---
+ projects/aqlprofile/CMakeLists.txt           |  4 +++
+ projects/aqlprofile/test/util/perf_timer.cpp | 26 ++++++++++++++------
+ projects/aqlprofile/test/util/perf_timer.h   |  4 +++
+ 3 files changed, 27 insertions(+), 7 deletions(-)
+
+diff --git a/projects/aqlprofile/CMakeLists.txt b/projects/aqlprofile/CMakeLists.txt
+index d93712fa81..18f9673e13 100644
+--- a/projects/aqlprofile/CMakeLists.txt
++++ b/projects/aqlprofile/CMakeLists.txt
+@@ -10,6 +10,10 @@ project ( ${AQLPROFILE_NAME} )
+ set( BUILD_ENABLE_LINTIAN_OVERRIDES ON CACHE BOOL "Enable/Disable Lintian Overrides" )
+ set( BUILD_DEBIAN_PKGING_FLAG ON CACHE BOOL "Internal Status Flag to indicate Debian Packaging Build" )
+ 
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++  add_compile_options("-DNO_WARN_X86_INTRINSICS")
++endif()
++
+ include(GNUInstallDirs)
+ ## Adding default path cmake modules
+ list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules" )
+diff --git a/projects/aqlprofile/test/util/perf_timer.cpp b/projects/aqlprofile/test/util/perf_timer.cpp
+index 577e9a73a3..5d5ee77439 100644
+--- a/projects/aqlprofile/test/util/perf_timer.cpp
++++ b/projects/aqlprofile/test/util/perf_timer.cpp
+@@ -157,21 +157,33 @@ uint64_t PerfTimer::CoarseTimestampUs() {
+ #endif
+ }
+ 
++
+ uint64_t PerfTimer::MeasureTSCFreqHz() {
+-  // Make a coarse interval measurement of TSC ticks for 1 gigacycles.
+   unsigned int unused;
+-  uint64_t tscTicksEnd;
+-
++  uint64_t tscTicksBegin, tscTicksEnd;
+   uint64_t coarseBeginUs = CoarseTimestampUs();
+-  uint64_t tscTicksBegin = __rdtscp(&unused);
++
++//  --- Architecture Specific Read ---
++#if defined(__x86_64__) || defined(_M_X64)
++  tscTicksBegin = __rdtscp(&unused);
++#elif defined(__powerpc64__) || defined(__PPC64__)
++// __ppc_get_timebase() is the standard way to read TB on POWER
++  tscTicksBegin = __ppc_get_timebase();
++#else
++  #error "Unsupported architecture"
++#endif
+   do {
++#if defined(__x86_64__) || defined(_M_X64)
+     tscTicksEnd = __rdtscp(&unused);
++#elif defined(__powerpc64__) || defined(__PPC64__)
++    tscTicksEnd = __ppc_get_timebase();
++#endif
+   } while (tscTicksEnd - tscTicksBegin < 1000000000);
+-
+   uint64_t coarseEndUs = CoarseTimestampUs();
+ 
+-  // Compute the TSC frequency and round to nearest 100MHz.
++  // Compute the frequency
+   uint64_t coarseIntervalNs = (coarseEndUs - coarseBeginUs) * 1000;
+   uint64_t tscIntervalTicks = tscTicksEnd - tscTicksBegin;
+-  return (tscIntervalTicks * 10 + (coarseIntervalNs / 2)) / coarseIntervalNs;
++  // Frequency in Hz, rounded
++  return (tscIntervalTicks * 1000000000 + (coarseIntervalNs / 2)) / coarseIntervalNs;
+ }
+diff --git a/projects/aqlprofile/test/util/perf_timer.h b/projects/aqlprofile/test/util/perf_timer.h
+index 0c2953e888..1577d5b3a6 100644
+--- a/projects/aqlprofile/test/util/perf_timer.h
++++ b/projects/aqlprofile/test/util/perf_timer.h
+@@ -42,6 +42,10 @@
+ #endif  // __GNUC__
+ #endif  // _MSC_VER
+ 
++#if defined(__powerpc64__) || defined(__PPC64__)
++#include <sys/platform/ppc.h>
++#endif
++
+ #include <iostream>
+ #include <string>
+ #include <vector>
+-- 
+2.50.1 (Apple Git-155)
+

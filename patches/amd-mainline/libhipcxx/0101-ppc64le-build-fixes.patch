@@ -1,0 +1,64 @@
+From c3eb3f0513fa566b196b869a0e372c116e614ce9 Mon Sep 17 00:00:00 2001
+From: bluedragan <calvins@us.ibm.com>
+Date: Fri, 6 Mar 2026 23:00:21 +0000
+Subject: [PATCH] libhipcxx: ppc64le
+
+---
+ include/cuda/std/__limits/numeric_limits.h | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/include/cuda/std/__limits/numeric_limits.h b/include/cuda/std/__limits/numeric_limits.h
+index ec615417d..867d0ff4c 100644
+--- a/include/cuda/std/__limits/numeric_limits.h
++++ b/include/cuda/std/__limits/numeric_limits.h
+@@ -50,7 +50,11 @@ enum float_denorm_style
+ enum class __numeric_limits_type
+ {
+   __integral,
++#if defined(__powerpc64__)
++  __mbool,
++#else
+   __bool,
++#endif
+   __floating_point,
+   __other,
+ };
+@@ -61,7 +65,11 @@ _LIBCUDACXX_HIDE_FROM_ABI constexpr __numeric_limits_type __make_numeric_limits_
+ #if !defined(_CCCL_NO_IF_CONSTEXPR)
+   if constexpr (_CCCL_TRAIT(is_same, _Tp, bool))
+   {
++#if defined(__powerpc64__)
++    return __numeric_limits_type::__mbool;
++#else
+     return __numeric_limits_type::__bool;
++#endif
+   }
+   else if constexpr (_CCCL_TRAIT(is_integral, _Tp))
+   {
+@@ -77,7 +85,11 @@ _LIBCUDACXX_HIDE_FROM_ABI constexpr __numeric_limits_type __make_numeric_limits_
+   }
+ #else // ^^^ !_CCCL_NO_IF_CONSTEXPR ^^^ // vvv _CCCL_NO_IF_CONSTEXPR vvv
+   return _CCCL_TRAIT(is_same, _Tp, bool)
++#if defined(__powerpc64__)
++         ? __numeric_limits_type::__mbool
++#else
+          ? __numeric_limits_type::__bool
++#endif
+          : (_CCCL_TRAIT(is_integral, _Tp)
+               ? __numeric_limits_type::__integral
+               : (_CCCL_TRAIT(is_floating_point, _Tp) || _CCCL_TRAIT(__is_extended_floating_point, _Tp)
+@@ -252,7 +264,11 @@ public:
+ };
+ 
+ template <>
++#if defined(__powerpc64__)
++class __numeric_limits_impl<bool, __numeric_limits_type::__mbool>
++#else
+ class __numeric_limits_impl<bool, __numeric_limits_type::__bool>
++#endif
+ {
+ public:
+   using type = bool;
+-- 
+2.50.1 (Apple Git-155)
+

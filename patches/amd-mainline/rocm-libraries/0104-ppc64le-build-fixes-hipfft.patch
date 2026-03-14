@@ -1,0 +1,27 @@
+From cfc2871b4790f960c5fb5ac14ae023a10b1ea607 Mon Sep 17 00:00:00 2001
+From: bluedragan <calvins@us.ibm.com>
+Date: Thu, 5 Mar 2026 05:33:22 +0000
+Subject: [PATCH] hipfft: ppc64le
+
+---
+ projects/hipfft/CMakeLists.txt | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/projects/hipfft/CMakeLists.txt b/projects/hipfft/CMakeLists.txt
+index 4efdf121ac..7424b5d0e0 100644
+--- a/projects/hipfft/CMakeLists.txt
++++ b/projects/hipfft/CMakeLists.txt
+@@ -191,6 +191,10 @@ if( BUILD_CLIENTS )
+   set( BUILD_CLIENTS_TESTS ON )
+ endif()
+ 
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++    set( BUILD_CLIENTS_TESTS OFF )
++endif()
++
+ # old name for BUILD_CLIENTS_BENCH
+ if( BUILD_CLIENTS_RIDER )
+   set( BUILD_CLIENTS_BENCH ${BUILD_CLIENTS_RIDER} )
+-- 
+2.50.1 (Apple Git-155)
+

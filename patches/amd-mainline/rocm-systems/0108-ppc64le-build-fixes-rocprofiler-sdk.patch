@@ -1,0 +1,60 @@
+From 7bb2c09d4d79e2b8887af1dc65e7394bd8942144 Mon Sep 17 00:00:00 2001
+From: bluedragan <calvins@us.ibm.com>
+Date: Fri, 6 Mar 2026 19:51:50 +0000
+Subject: [PATCH] rocprofiler-sdk: ppc64le
+
+---
+ projects/rocprofiler-sdk/CMakeLists.txt            | 2 ++
+ projects/rocprofiler-sdk/external/elfio            | 2 +-
+ projects/rocprofiler-sdk/external/yaml-cpp         | 2 +-
+ projects/rocprofiler-sdk/source/lib/CMakeLists.txt | 6 ++++--
+ 4 files changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/projects/rocprofiler-sdk/CMakeLists.txt b/projects/rocprofiler-sdk/CMakeLists.txt
+index 25f335afb3..28325b7b06 100644
+--- a/projects/rocprofiler-sdk/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/CMakeLists.txt
+@@ -121,7 +121,9 @@ add_subdirectory(source)
+ include(rocprofiler_config_install)
+ include(rocprofiler_config_install_roctx)
+ include(rocprofiler_config_install_rocpd)
++if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+ include(rocprofiler_config_install_rocattach)
++endif()
+ include(rocprofiler_config_install_tests)
+ 
+ # ROCPROFILER_BUILD_INTEGRATION_TESTS is not a standard option. If not defined, set it as
+diff --git a/projects/rocprofiler-sdk/external/elfio b/projects/rocprofiler-sdk/external/elfio
+index 8ae6cec5d6..7d30a22fc5 160000
+--- a/projects/rocprofiler-sdk/external/elfio
++++ b/projects/rocprofiler-sdk/external/elfio
+@@ -1 +1 @@
+-Subproject commit 8ae6cec5d60495822ecd57d736f66149da9b1830
++Subproject commit 7d30a22fc5aac06adfe7887ae57f3701b6b5f913
+diff --git a/projects/rocprofiler-sdk/external/yaml-cpp b/projects/rocprofiler-sdk/external/yaml-cpp
+index 1d8ca1f35e..97d150e98b 160000
+--- a/projects/rocprofiler-sdk/external/yaml-cpp
++++ b/projects/rocprofiler-sdk/external/yaml-cpp
+@@ -1 +1 @@
+-Subproject commit 1d8ca1f35eb3a9c9142462b28282a848e5d29a91
++Subproject commit 97d150e98b77faefa8f1d08f678a2121cfb4f08d
+diff --git a/projects/rocprofiler-sdk/source/lib/CMakeLists.txt b/projects/rocprofiler-sdk/source/lib/CMakeLists.txt
+index 952a65266f..63ea8a86c7 100644
+--- a/projects/rocprofiler-sdk/source/lib/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/source/lib/CMakeLists.txt
+@@ -15,8 +15,10 @@ add_subdirectory(rocprofiler-sdk-roctx)
+ set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "rocpd")
+ add_subdirectory(rocprofiler-sdk-rocpd)
+ 
+-set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "rocattach")
+-add_subdirectory(rocprofiler-sdk-rocattach)
++if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++  set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "rocattach")
++  add_subdirectory(rocprofiler-sdk-rocattach)
++endif()
+ 
+ set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "tools")
+ add_subdirectory(att-tool)
+-- 
+2.50.1 (Apple Git-155)
+
