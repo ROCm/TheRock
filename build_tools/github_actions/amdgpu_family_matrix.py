@@ -86,6 +86,8 @@ amdgpu_family_info_matrix_presubmit = {
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
             "build_variants": ["release", "asan", "tsan"],
+            # Due to no MI325s, we will continue to release artifacts
+            "bypass_tests_for_releases": True,
         }
     },
     "gfx110x": {
