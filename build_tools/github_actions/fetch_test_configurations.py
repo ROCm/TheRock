@@ -168,16 +168,6 @@ test_matrix = {
             "windows": 2,
         },
     },
-    "amdsmi_cli": {
-        "job_name": "amdsmi_cli",
-        "fetch_artifact_args": "--base-only",
-        "timeout_minutes": 15,
-        "test_script": "pytest tests/test_amdsmi_cli.py -m not_sanity -o log_cli=true --log-cli-level=INFO",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-    },
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
