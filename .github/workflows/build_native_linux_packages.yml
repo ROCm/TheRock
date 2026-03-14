@@ -172,14 +172,10 @@ jobs:
       - name: Simulated install Test
         id: test-packages
         run: |
-          echo "Simulate ${{ inputs.native_package_type }} package installation"
-          if [ "${{ inputs.native_package_type }}" = "deb" ]; then
-            echo "Simulate installing DEB packages on host system for testing"
-            sudo apt install --simulate ${{ env.PACKAGE_DIST_DIR }}/*.deb
-          else
-            echo "Simulate installing RPM packages in Docker container for testing"
-            sudo rpm -Uvh --test --nodeps ${{ env.PACKAGE_DIST_DIR }}/*.rpm
-          fi
+          python ./build_tools/packaging/linux/native_linux_packages_test.py \
+            --test-type simulate \
+            --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --pkg-type ${{ inputs.native_package_type }}
 
       - name: Install AWS CLI
         run: bash ./dockerfiles/install_awscli.sh
