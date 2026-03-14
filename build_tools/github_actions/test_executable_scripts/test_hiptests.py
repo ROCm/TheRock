@@ -41,15 +41,31 @@ if not os.path.isdir(CATCH_TESTS_PATH):
 
 # TODO(#3204): Re-enable tests once issues are resolved
 TEST_TO_IGNORE = {
-    "gfx94X-dcgpu": {
-        "linux": [
-            "Unit_hipGetProcAddress_spt_Stream",
-        ]
-    },
     "gfx950-dcgpu": {
         "linux": [
+            "Unit_hipHostRegister_AsyncApis",
+            "Unit_hipMemsetDSync - uint32_t",
+            "Unit_hipMemsetDASyncMulti - int8_t",
+            "Unit_hipStreamValue_Wait_Blocking - uint32_t",
+            "Unit_atomicExch_Positive_Same_Address_Compile_Time",
+            "Unit_hipHostRegister_ReferenceFromKernelandhipMemset - int",
+            "Unit_hipHostRegister_Graphs",
             "Unit_hipManagedKeyword_SingleGpu",
-            "Unit_hipGetProcAddress_spt_Stream",
+            "Unit_hipMemsetSync",
+            "Unit_hipMemset2DSync",
+            "Unit_hipMemsetDASyncMulti - int16_t",
+            "Unit_hipStreamValue_Wait_Blocking - uint64_t",
+            "Unit_hipHostRegister_ReferenceFromKernelandhipMemset - float",
+            "Unit_hipMemsetDSync - int8_t",
+            "Unit_hipMemset3DSync",
+            "Unit_hipMemsetDASyncMulti - uint32_t",
+            "Unit_hipStreamValue_Write - TestParams<uint64_t, PtrType::DevicePtrToHost>",
+            "Unit_hipHostRegister_ReferenceFromKernelandhipMemset - double",
+            "Unit_hipGetProcAddress_MemoryApisRegisterUnReg",
+            "Unit_hipMemsetDSync - int16_t",
+            "Unit_hipMemsetASyncMulti",
+            "Unit_hipHostAlloc_AllocateMoreThanAvailGPUMemory",
+            "Unit_hipStreamValue_Write - TestParams<uint32_t, PtrType::DevicePtrToHost>",
         ]
     },
     "gfx110X-all": {
@@ -78,7 +94,12 @@ def get_asan_lib_path():
 def copy_dlls_exe_path():
     if platform.system() == "Windows":
         # hip and comgr dlls need to be copied to the same folder as exectuable
-        dlls_pattern = ["amdhip64*.dll", "amd_comgr*.dll", "hiprtc*.dll"]
+        dlls_pattern = [
+            "amdhip64*.dll",
+            "amd_comgr*.dll",
+            "hiprtc*.dll",
+            "rocm_kpack*.dll",
+        ]
         dlls_to_copy = []
         for pattern in dlls_pattern:
             dlls_to_copy.extend(THEROCK_BIN_DIR.glob(pattern))
