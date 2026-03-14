@@ -285,6 +285,8 @@
     "V_SUBREV_F16",
     "V_MUL_F16",
     "V_FMAC_F16",
+    "V_FMAMK_F16",
+    "V_FMAAK_F16",
     "V_PK_FMAC_F16",
     "V_CVT_PK_RTZ_F16_F32",
     "V_LDEXP_F16",
@@ -461,6 +463,8 @@
       "V_SUBREV_F16",
       "V_MUL_F16",
       "V_FMAC_F16",
+      "V_FMAMK_F16",
+      "V_FMAAK_F16",
       "V_PK_FMAC_F16",
       "V_CVT_PK_RTZ_F16_F32",
       "V_LDEXP_F16",
@@ -705,6 +709,7 @@
     "Decodes V_TRUNC_F16, V_CEIL_F16, V_RNDNE_F16, and V_FLOOR_F16 from ENC_VOP1 on the same unary vector path, keeping the current local low-16-bit F16 payload convention.",
     "Decodes V_ADD_F16, V_SUB_F16, V_SUBREV_F16, and V_MUL_F16 from ENC_VOP2 on the same binary vector path, using the current local low-16-bit F16 payload convention.",
     "Decodes V_FMAC_F16 from ENC_VOP2 as a read/write-destination half-width vector op, reusing the current local low-16-bit F16 payload convention without widening the shared/common surface.",
+    "Decodes V_FMAMK_F16 and V_FMAAK_F16 from ENC_VOP2 as half-width literal-FMA ops with a required shared trailing literal dword, reusing the current local low-16-bit F16 payload convention without widening the shared/common surface.",
     "Decodes V_PK_FMAC_F16 from ENC_VOP2 as a packed-half read/write-destination vector op, using shared packed fragment metadata while keeping the current local packed-F16 payload path architecture-local.",
     "Decodes V_CVT_PK_RTZ_F16_F32 and V_LDEXP_F16 from ENC_VOP2 on the same binary vector path, using the current local F32-to-packed-F16 bridge and low-16-bit F16 plus signed-low-16 exponent payload convention without widening the shared/common surface.",
     "Decodes V_MIN_NUM_F16 and V_MAX_NUM_F16 from ENC_VOP2 on the same binary vector path, using the current local low-16-bit F16 payload convention for half-width min/max-num behavior.",
@@ -774,6 +779,7 @@
     "Executes exec-masked V_TRUNC_F16, V_CEIL_F16, V_RNDNE_F16, and V_FLOOR_F16 with half-width rounding behavior on the current local F16 payload path.",
     "Executes exec-masked V_ADD_F16, V_SUB_F16, V_SUBREV_F16, and V_MUL_F16 by expanding low-16-bit F16 payloads to float, applying half-width add/subtract or multiply behavior, and compressing results back to F16.",
     "Executes exec-masked V_FMAC_F16 by reading the destination as the accumulator, performing half-width fused multiply-add behavior on the current local F16 payload path, and writing the result back to the same VGPR lane.",
+    "Executes exec-masked V_FMAMK_F16 and V_FMAAK_F16 by combining two half-width vector operands with a shared literal F16 payload on the current local F16 path.",
     "Executes exec-masked V_PK_FMAC_F16 by reading the packed-half destination as the accumulator, performing component-wise fused multiply-add on the low and high F16 lanes, and writing the packed result back to the same VGPR lane.",
     "Executes exec-masked V_CVT_PK_RTZ_F16_F32 by converting two F32 inputs into a packed low/high F16 result with round-toward-zero behavior, and executes V_LDEXP_F16 by applying a signed low-16-bit exponent to the current local F16 payload path.",
     "Executes exec-masked V_MIN_NUM_F16 and V_MAX_NUM_F16 with half-width min/max-num behavior on the current local F16 payload path.",
@@ -792,6 +798,6 @@
     "ENC_VDS",
     "ENC_VGLOBAL",
     "The remaining ENC_VOPC surface outside this seed is now primarily packed and other wider forms not yet on the current local path.",
-    "The next coherent extension point is the remaining adjacent ENC_VOP1/ENC_VOP2 seed work after the local B16/F16 payload, swap, normalized bridge, the FP8/BF8 bridge, the wave32-local M0 relative-move bridge, F16 unary math bridge, F16 VOP2 arithmetic bridge, the half-width and F32 FMAC bridge, the packed-half FMAC plus RTZ/ldexp bridge, the local F32/F64 VOP2 arithmetic bridge, the local XNOR/I24 VOP2 bridge, the local B64 shift bridge, and the wave32-local VCC carry-chain bridge, or the remaining packed/wider ENC_VOPC compare work, before ENC_VOP3/half-conversion work."
+    "The next coherent extension point is the remaining adjacent ENC_VOP1/ENC_VOP2 seed work after the local B16/F16 payload, swap, normalized bridge, the FP8/BF8 bridge, the wave32-local M0 relative-move bridge, F16 unary math bridge, F16 VOP2 arithmetic bridge, the half-width and F32 FMAC bridge, the half-width literal-FMA bridge, the packed-half FMAC plus RTZ/ldexp bridge, the local F32/F64 VOP2 arithmetic bridge, the local XNOR/I24 VOP2 bridge, the local B64 shift bridge, and the wave32-local VCC carry-chain bridge, or the remaining packed/wider ENC_VOPC compare work, before ENC_VOP3/half-conversion work."
   ]
 }

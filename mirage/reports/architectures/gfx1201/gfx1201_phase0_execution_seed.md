@@ -2,7 +2,7 @@
 
 This report captures the current executable `gfx1201` seed slice layered on top of the
 existing phase-0 compute selector and seed catalog. The local seed surface now covers
-323 executable phase-0 ops without leaving architecture-local `gfx1201` files, and
+325 executable phase-0 ops without leaving architecture-local `gfx1201` files, and
 the local interpreter continues to normalize execution to wave32.
 
 ## Executable opcodes
@@ -290,6 +290,8 @@ the local interpreter continues to normalize execution to wave32.
 - `V_SUBREV_F16`
 - `V_MUL_F16`
 - `V_FMAC_F16`
+- `V_FMAMK_F16`
+- `V_FMAAK_F16`
 - `V_PK_FMAC_F16`
 - `V_CVT_PK_RTZ_F16_F32`
 - `V_LDEXP_F16`
@@ -339,7 +341,7 @@ the local interpreter continues to normalize execution to wave32.
 - `ENC_SOP1`: `S_MOV_B32`
 - `ENC_SOPK`: `S_MOVK_I32`
 - `ENC_VOP1`: `V_NOP`, `V_PIPEFLUSH`, `V_MOV_B32`, `V_MOV_B16`, `V_PERMLANE64_B32`, `V_READFIRSTLANE_B32`, `V_MOVRELD_B32`, `V_MOVRELS_B32`, `V_MOVRELSD_B32`, `V_MOVRELSD_2_B32`, `V_SWAPREL_B32`, `V_SWAP_B32`, `V_SWAP_B16`, `V_NOT_B16`, `V_NOT_B32`, `V_BFREV_B32`, `V_CLS_I32`, `V_CLZ_I32_U32`, `V_CTZ_I32_B32`, `V_CVT_F32_UBYTE0`, `V_CVT_F32_UBYTE1`, `V_CVT_F32_UBYTE2`, `V_CVT_F32_UBYTE3`, `V_CVT_F32_I32`, `V_CVT_F32_U32`, `V_CVT_F32_FP8`, `V_CVT_F32_BF8`, `V_CVT_PK_F32_FP8`, `V_CVT_PK_F32_BF8`, `V_CVT_OFF_F32_I4`, `V_CVT_F32_F16`, `V_CVT_F32_F64`, `V_CVT_F16_F32`, `V_CVT_F16_I16`, `V_CVT_F16_U16`, `V_CVT_I16_F16`, `V_CVT_U16_F16`, `V_SAT_PK_U8_I16`, `V_CVT_NORM_I16_F16`, `V_CVT_NORM_U16_F16`, `V_CVT_F64_F32`, `V_CVT_F64_I32`, `V_CVT_F64_U32`, `V_CVT_U32_F32`, `V_CVT_U32_F64`, `V_CVT_I32_F32`, `V_CVT_FLOOR_I32_F32`, `V_CVT_NEAREST_I32_F32`, `V_CVT_I32_I16`, `V_CVT_U32_U16`, `V_CVT_I32_F64`, `V_EXP_F32`, `V_LOG_F32`, `V_RCP_F32`, `V_RCP_IFLAG_F32`, `V_RSQ_F32`, `V_SQRT_F32`, `V_SIN_F32`, `V_COS_F32`, `V_RCP_F64`, `V_RSQ_F64`, `V_SQRT_F64`, `V_FREXP_EXP_I32_F32`, `V_FREXP_MANT_F32`, `V_FRACT_F32`, `V_FREXP_EXP_I32_F64`, `V_FREXP_MANT_F64`, `V_FRACT_F64`, `V_TRUNC_F32`, `V_CEIL_F32`, `V_RNDNE_F32`, `V_FLOOR_F32`, `V_TRUNC_F64`, `V_CEIL_F64`, `V_RNDNE_F64`, `V_FLOOR_F64`, `V_EXP_F16`, `V_LOG_F16`, `V_RCP_F16`, `V_RSQ_F16`, `V_SQRT_F16`, `V_SIN_F16`, `V_COS_F16`, `V_FREXP_EXP_I16_F16`, `V_FREXP_MANT_F16`, `V_FRACT_F16`, `V_TRUNC_F16`, `V_CEIL_F16`, `V_RNDNE_F16`, `V_FLOOR_F16`
-- `ENC_VOP2`: `V_ADD_F16`, `V_SUB_F16`, `V_SUBREV_F16`, `V_MUL_F16`, `V_FMAC_F16`, `V_PK_FMAC_F16`, `V_CVT_PK_RTZ_F16_F32`, `V_LDEXP_F16`, `V_MIN_NUM_F16`, `V_MAX_NUM_F16`, `V_ADD_F32`, `V_SUB_F32`, `V_SUBREV_F32`, `V_MUL_F32`, `V_MUL_DX9_ZERO_F32`, `V_FMAC_F32`, `V_MIN_NUM_F32`, `V_MAX_NUM_F32`, `V_ADD_F64`, `V_MUL_F64`, `V_MIN_NUM_F64`, `V_MAX_NUM_F64`, `V_XNOR_B32`, `V_MUL_I32_I24`, `V_MUL_HI_I32_I24`, `V_MUL_U32_U24`, `V_MUL_HI_U32_U24`, `V_LSHLREV_B64`, `V_ADD_CO_CI_U32`, `V_SUB_CO_CI_U32`, `V_SUBREV_CO_CI_U32`, imported `V_ADD_NC_U32`, `V_SUB_NC_U32`, `V_SUBREV_NC_U32` normalized to `V_ADD_U32`, `V_SUB_U32`, `V_SUBREV_U32`; plus `V_MIN_I32`, `V_MAX_I32`, `V_MIN_U32`, `V_MAX_U32`, `V_CNDMASK_B32`, `V_LSHRREV_B32`, `V_ASHRREV_I32`, `V_LSHLREV_B32`, `V_AND_B32`, `V_OR_B32`, `V_XOR_B32`
+- `ENC_VOP2`: `V_ADD_F16`, `V_SUB_F16`, `V_SUBREV_F16`, `V_MUL_F16`, `V_FMAC_F16`, `V_FMAMK_F16`, `V_FMAAK_F16`, `V_PK_FMAC_F16`, `V_CVT_PK_RTZ_F16_F32`, `V_LDEXP_F16`, `V_MIN_NUM_F16`, `V_MAX_NUM_F16`, `V_ADD_F32`, `V_SUB_F32`, `V_SUBREV_F32`, `V_MUL_F32`, `V_MUL_DX9_ZERO_F32`, `V_FMAC_F32`, `V_MIN_NUM_F32`, `V_MAX_NUM_F32`, `V_ADD_F64`, `V_MUL_F64`, `V_MIN_NUM_F64`, `V_MAX_NUM_F64`, `V_XNOR_B32`, `V_MUL_I32_I24`, `V_MUL_HI_I32_I24`, `V_MUL_U32_U24`, `V_MUL_HI_U32_U24`, `V_LSHLREV_B64`, `V_ADD_CO_CI_U32`, `V_SUB_CO_CI_U32`, `V_SUBREV_CO_CI_U32`, imported `V_ADD_NC_U32`, `V_SUB_NC_U32`, `V_SUBREV_NC_U32` normalized to `V_ADD_U32`, `V_SUB_U32`, `V_SUBREV_U32`; plus `V_MIN_I32`, `V_MAX_I32`, `V_MIN_U32`, `V_MAX_U32`, `V_CNDMASK_B32`, `V_LSHRREV_B32`, `V_ASHRREV_I32`, `V_LSHLREV_B32`, `V_AND_B32`, `V_OR_B32`, `V_XOR_B32`
 - `ENC_VOPC`: `V_CMP_EQ/NE/LT/LE/GT/GE_I32`, `V_CMP_EQ/NE/LT/LE/GT/GE_U32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_I32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_U32`, the local 16-bit integer subset `V_CMP_EQ/NE/LT/LE/GT/GE_I16/U16` and `V_CMPX_EQ/NE/LT/LE/GT/GE_I16/U16`, the local wide integer subset `V_CMP_EQ/NE/LT/LE/GT/GE_I64/U64` and `V_CMPX_EQ/NE/LT/LE/GT/GE_I64/U64`, the local F16 compare/class subset now brought onto the same path: `V_CMP_CLASS_F16`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F16`, `V_CMPX_CLASS_F16`, and `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F16`, the full local F32 compare/class subset currently present in the 1-dword seed path, and the local F64 compare/class subset now brought onto the same path: `V_CMP_CLASS_F64`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64`, `V_CMPX_CLASS_F64`, and `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64`
 
 ## Seed behavior
@@ -381,6 +383,7 @@ the local interpreter continues to normalize execution to wave32.
 - `V_TRUNC_F16`, `V_CEIL_F16`, `V_RNDNE_F16`, and `V_FLOOR_F16` now decode from `ENC_VOP1` on the same unary vector path, keeping the current local low-16-bit F16 payload convention.
 - `V_ADD_F16`, `V_SUB_F16`, `V_SUBREV_F16`, and `V_MUL_F16` now decode from `ENC_VOP2` on the same binary vector path, using the current local low-16-bit F16 payload convention.
 - `V_FMAC_F16` now decodes from `ENC_VOP2` as a read/write-destination half-width vector op, reusing the current local low-16-bit F16 payload convention without widening the shared/common surface.
+- `V_FMAMK_F16` and `V_FMAAK_F16` now decode from `ENC_VOP2` as half-width literal-FMA ops with a required shared trailing literal dword, reusing the current local low-16-bit F16 payload convention without widening the shared/common surface.
 - `V_PK_FMAC_F16` now decodes from `ENC_VOP2` as a packed-half read/write-destination vector op, using shared packed fragment metadata while keeping the current local packed-F16 payload path architecture-local.
 - `V_CVT_PK_RTZ_F16_F32` and `V_LDEXP_F16` now decode from `ENC_VOP2` on the same binary vector path, using the current local F32-to-packed-F16 bridge and low-16-bit F16 plus signed-low-16 exponent payload convention without widening the shared/common surface.
 - `V_MIN_NUM_F16` and `V_MAX_NUM_F16` now decode from `ENC_VOP2` on the same binary vector path, using the current local low-16-bit F16 payload convention for half-width min/max-num behavior.
@@ -442,6 +445,7 @@ the local interpreter continues to normalize execution to wave32.
 - `V_TRUNC_F16`, `V_CEIL_F16`, `V_RNDNE_F16`, and `V_FLOOR_F16` now execute lane-wise under `exec_mask` with half-width rounding behavior on the current local F16 payload path.
 - `V_ADD_F16`, `V_SUB_F16`, `V_SUBREV_F16`, and `V_MUL_F16` now execute lane-wise under `exec_mask`, expanding low-16-bit F16 payloads to float, applying half-width add/subtract or multiply behavior, and compressing results back to F16.
 - `V_FMAC_F16` now executes lane-wise under `exec_mask` by reading the destination as the accumulator, performing half-width fused multiply-add behavior on the current local F16 payload path, and writing the result back to the same VGPR lane.
+- `V_FMAMK_F16` and `V_FMAAK_F16` now execute lane-wise under `exec_mask` by combining two half-width vector operands with a shared literal F16 payload on the current local F16 path.
 - `V_PK_FMAC_F16` now executes lane-wise under `exec_mask` by reading the packed-half destination as the accumulator, performing component-wise fused multiply-add on the low and high F16 lanes, and writing the packed result back to the same VGPR lane.
 - `V_CVT_PK_RTZ_F16_F32` now executes by converting two `F32` inputs into a packed low/high `F16` result with round-toward-zero behavior, and `V_LDEXP_F16` now executes by applying a signed low-16-bit exponent to the current local `F16` payload path.
 - `V_MIN_NUM_F16` and `V_MAX_NUM_F16` now execute lane-wise under `exec_mask`, using half-width min/max-num behavior on the current local F16 payload path.
@@ -459,4 +463,4 @@ the local interpreter continues to normalize execution to wave32.
   the existing selector-aware stub errors.
 - `ENC_SMEM`, `ENC_VOP3`, `ENC_VDS`, and `ENC_VGLOBAL` remain route-only in this slice.
 - The remaining `ENC_VOPC` surface outside this seed is now primarily packed and other wider forms not yet on the current local path.
-- The next coherent extension point is the remaining adjacent `ENC_VOP1`/`ENC_VOP2` seed work after the local `B16/F16` payload, swap, normalized bridge, the FP8/BF8 bridge, the wave32-local `M0` relative-move bridge, F16 unary math bridge, F16 VOP2 arithmetic bridge, the half-width and F32 FMAC bridge, the packed-half FMAC plus RTZ/ldexp bridge, the local F32/F64 VOP2 arithmetic bridge, the local XNOR/I24 VOP2 bridge, the local B64 shift bridge, and the wave32-local `VCC` carry-chain bridge, or the remaining packed/wider `ENC_VOPC` compare work, before `ENC_VOP3`/half-conversion work.
+- The next coherent extension point is the remaining adjacent `ENC_VOP1`/`ENC_VOP2` seed work after the local `B16/F16` payload, swap, normalized bridge, the FP8/BF8 bridge, the wave32-local `M0` relative-move bridge, F16 unary math bridge, F16 VOP2 arithmetic bridge, the half-width and F32 FMAC bridge, the half-width literal-FMA bridge, the packed-half FMAC plus RTZ/ldexp bridge, the local F32/F64 VOP2 arithmetic bridge, the local XNOR/I24 VOP2 bridge, the local B64 shift bridge, and the wave32-local `VCC` carry-chain bridge, or the remaining packed/wider `ENC_VOPC` compare work, before `ENC_VOP3`/half-conversion work.

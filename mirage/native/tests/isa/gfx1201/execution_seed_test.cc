@@ -244,6 +244,49 @@ bool ExpectThreeOperandInstruction(
   return operand0_matches && operand1_matches && operand2_matches;
 }
 
+bool ExpectFourOperandInstruction(
+    const mirage::sim::isa::DecodedInstruction& instruction,
+    std::string_view expected_opcode,
+    mirage::sim::isa::OperandKind operand0_kind,
+    std::uint32_t operand0_value_or_index,
+    mirage::sim::isa::OperandKind operand1_kind,
+    std::uint32_t operand1_value_or_index,
+    mirage::sim::isa::OperandKind operand2_kind,
+    std::uint32_t operand2_value_or_index,
+    mirage::sim::isa::OperandKind operand3_kind,
+    std::uint32_t operand3_value_or_index) {
+  using namespace mirage::sim::isa;
+  if (instruction.opcode != expected_opcode || instruction.operand_count != 4u ||
+      instruction.operands[0].kind != operand0_kind ||
+      instruction.operands[1].kind != operand1_kind ||
+      instruction.operands[2].kind != operand2_kind ||
+      instruction.operands[3].kind != operand3_kind) {
+    return false;
+  }
+  const bool operand0_matches =
+      operand0_kind == OperandKind::kImm32
+          ? instruction.operands[0].imm32 == operand0_value_or_index
+          : instruction.operands[0].index ==
+                static_cast<std::uint16_t>(operand0_value_or_index);
+  const bool operand1_matches =
+      operand1_kind == OperandKind::kImm32
+          ? instruction.operands[1].imm32 == operand1_value_or_index
+          : instruction.operands[1].index ==
+                static_cast<std::uint16_t>(operand1_value_or_index);
+  const bool operand2_matches =
+      operand2_kind == OperandKind::kImm32
+          ? instruction.operands[2].imm32 == operand2_value_or_index
+          : instruction.operands[2].index ==
+                static_cast<std::uint16_t>(operand2_value_or_index);
+  const bool operand3_matches =
+      operand3_kind == OperandKind::kImm32
+          ? instruction.operands[3].imm32 == operand3_value_or_index
+          : instruction.operands[3].index ==
+                static_cast<std::uint16_t>(operand3_value_or_index);
+  return operand0_matches && operand1_matches && operand2_matches &&
+         operand3_matches;
+}
+
 bool ExpectCompareInstruction(const mirage::sim::isa::DecodedInstruction& instruction,
                               std::string_view expected_opcode,
                               mirage::sim::isa::OperandKind src0_kind,
@@ -1164,6 +1207,111 @@ bool RunPackedFmacBatchTest(
               "expected compiled packed FMAC execution success") ||
       !Expect(ExpectPackedFmacSeedState(compiled_packed_fmac_state),
               "expected compiled packed FMAC state")) {
+    return false;
+  }
+
+  return true;
+}
+
+bool ExpectHalfLiteralFmaSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[125][0] == 0x00004200u &&
+         state.vgprs[125][1] == 0x0000bc00u &&
+         state.vgprs[125][2] == 0xa5a5a5a5u &&
+         state.vgprs[125][3] == 0u &&
+         state.vgprs[126][0] == 0x00004400u &&
+         state.vgprs[126][1] == 0x00003c00u &&
+         state.vgprs[126][2] == 0xb6b6b6b6u &&
+         state.vgprs[126][3] == 0x00003e00u &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 2u;
+}
+
+bool RunHalfLiteralFmaBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  const std::array<std::uint32_t, 5> half_literal_fma_words{
+      MakeVop2(55u, 125u, 257u, 2u),
+      0x00003c00u,
+      MakeVop2(56u, 126u, 257u, 3u),
+      0x00004000u,
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> half_literal_fma_program;
+  if (!Expect(decoder.DecodeProgram(half_literal_fma_words,
+                                    &half_literal_fma_program, error_message),
+              "expected half literal FMA program decode success") ||
+      !Expect(half_literal_fma_program.size() == 3u,
+              "expected three decoded half literal FMA instructions") ||
+      !Expect(half_literal_fma_program[0].opcode == "V_FMAMK_F16",
+              "expected decoded V_FMAMK_F16") ||
+      !Expect(half_literal_fma_program[1].opcode == "V_FMAAK_F16",
+              "expected decoded V_FMAAK_F16") ||
+      !Expect(half_literal_fma_program[2].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after half literal FMA batch")) {
+    return false;
+  }
+
+  auto initialize_half_literal_fma_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[1][0] = 0x00003c00u;
+    state->vgprs[1][1] = 0x0000c000u;
+    state->vgprs[1][2] = 0x11111111u;
+    state->vgprs[1][3] = 0x00003800u;
+
+    state->vgprs[2][0] = 0x00004000u;
+    state->vgprs[2][1] = 0x00003c00u;
+    state->vgprs[2][2] = 0x22222222u;
+    state->vgprs[2][3] = 0x0000b800u;
+
+    state->vgprs[3][0] = 0x00004000u;
+    state->vgprs[3][1] = 0x00003800u;
+    state->vgprs[3][2] = 0x33333333u;
+    state->vgprs[3][3] = 0x0000bc00u;
+
+    state->vgprs[125][2] = 0xa5a5a5a5u;
+    state->vgprs[126][2] = 0xb6b6b6b6u;
+  };
+
+  WaveExecutionState decoded_half_literal_fma_state;
+  initialize_half_literal_fma_state(&decoded_half_literal_fma_state);
+  if (!Expect(interpreter.ExecuteProgram(half_literal_fma_program,
+                                         &decoded_half_literal_fma_state,
+                                         error_message),
+              "expected decoded half literal FMA execution success") ||
+      !Expect(ExpectHalfLiteralFmaSeedState(decoded_half_literal_fma_state),
+              "expected decoded half literal FMA state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_half_literal_fma_program;
+  if (!Expect(interpreter.CompileProgram(half_literal_fma_program,
+                                         &compiled_half_literal_fma_program,
+                                         error_message),
+              "expected compiled half literal FMA program success") ||
+      !Expect(compiled_half_literal_fma_program.size() == 3u,
+              "expected three compiled half literal FMA instructions") ||
+      !Expect(compiled_half_literal_fma_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVFmamkF16,
+              "expected compiled V_FMAMK_F16 opcode") ||
+      !Expect(compiled_half_literal_fma_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVFmaakF16,
+              "expected compiled V_FMAAK_F16 opcode")) {
+    return false;
+  }
+
+  WaveExecutionState compiled_half_literal_fma_state;
+  initialize_half_literal_fma_state(&compiled_half_literal_fma_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_half_literal_fma_program,
+                                         &compiled_half_literal_fma_state,
+                                         error_message),
+              "expected compiled half literal FMA execution success") ||
+      !Expect(ExpectHalfLiteralFmaSeedState(compiled_half_literal_fma_state),
+              "expected compiled half literal FMA state")) {
     return false;
   }
 
@@ -3111,13 +3259,64 @@ int main() {
     return 1;
   }
 
+  const std::array<std::uint32_t, 2> vector_fmamk_f16_words{
+      MakeVop2(55u, 28u, 257u, 7u), 0x00003c00u};
+  if (!Expect(decoder.DecodeInstruction(vector_fmamk_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_FMAMK_F16 decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected V_FMAMK_F16 decode to consume 2 dwords") ||
+      !Expect(ExpectFourOperandInstruction(
+                  instruction, "V_FMAMK_F16", OperandKind::kVgpr, 28u,
+                  OperandKind::kVgpr, 1u, OperandKind::kVgpr, 7u,
+                  OperandKind::kImm32, 0x00003c00u),
+              "expected decoded V_FMAMK_F16 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 16u, 1u, false),
+              "expected V_FMAMK_F16 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[3], OperandRole::kSource2,
+                  OperandSlotKind::kSource2, OperandValueClass::kUnknown,
+                  OperandAccess::kRead, FragmentKind::kScalar, 16u, 1u, false),
+              "expected V_FMAMK_F16 literal descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 2> vector_fmaak_f16_words{
+      MakeVop2(56u, 29u, 255u, 8u), 0x00004000u};
+  if (!Expect(decoder.DecodeInstruction(vector_fmaak_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_FMAAK_F16 decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected V_FMAAK_F16 decode to consume 2 dwords") ||
+      !Expect(ExpectFourOperandInstruction(
+                  instruction, "V_FMAAK_F16", OperandKind::kVgpr, 29u,
+                  OperandKind::kImm32, 0x00004000u, OperandKind::kVgpr, 8u,
+                  OperandKind::kImm32, 0x00004000u),
+              "expected decoded V_FMAAK_F16 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0, OperandValueClass::kUnknown,
+                  OperandAccess::kRead, FragmentKind::kScalar, 16u, 1u, false),
+              "expected V_FMAAK_F16 source0 shared-literal descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[3], OperandRole::kSource2,
+                  OperandSlotKind::kSource2, OperandValueClass::kUnknown,
+                  OperandAccess::kRead, FragmentKind::kScalar, 16u, 1u, false),
+              "expected V_FMAAK_F16 literal descriptor")) {
+    return 1;
+  }
+
   const std::array<std::uint32_t, 1> vector_pk_fmac_f16_words{
-      MakeVop2(60u, 28u, 257u, 2u)};
+      MakeVop2(60u, 30u, 257u, 2u)};
   if (!Expect(decoder.DecodeInstruction(vector_pk_fmac_f16_words, &instruction,
                                         &words_consumed, &error_message),
               "expected V_PK_FMAC_F16 decode success") ||
       !Expect(ExpectBinaryInstruction(instruction, "V_PK_FMAC_F16",
-                                      OperandKind::kVgpr, 28u,
+                                      OperandKind::kVgpr, 30u,
                                       OperandKind::kVgpr, 1u,
                                       OperandKind::kVgpr, 2u),
               "expected decoded V_PK_FMAC_F16 operands") ||
@@ -6230,6 +6429,9 @@ int main() {
     return 1;
   }
   if (!RunPackedFmacBatchTest(decoder, interpreter, &error_message)) {
+    return 1;
+  }
+  if (!RunHalfLiteralFmaBatchTest(decoder, interpreter, &error_message)) {
     return 1;
   }
   if (!RunCarryChainBatchTest(decoder, interpreter, &error_message)) {

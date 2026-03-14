@@ -241,20 +241,20 @@
     },
     {
       "alternate_entry_count": 0,
-      "default_entry_count": 45,
+      "default_entry_count": 47,
       "encoding_name": "ENC_VOP2",
       "entry_begin": 369,
-      "entry_count": 45,
+      "entry_count": 47,
       "example_instruction": "V_ADD_F32",
-      "gfx1201_specific_count": 15,
-      "instruction_count": 45,
+      "gfx1201_specific_count": 17,
+      "instruction_count": 47,
       "rationale": "Core vector arithmetic used by both compute and graphics paths.",
       "samples": {
         "gfx1201_specific": [
+          "V_FMAMK_F16",
+          "V_FMAAK_F16",
           "V_MUL_DX9_ZERO_F32",
-          "V_MIN_NUM_F64",
-          "V_MAX_NUM_F64",
-          "V_MIN_NUM_F32"
+          "V_MIN_NUM_F64"
         ],
         "transferable_as_is": [
           "V_CNDMASK_B32",
@@ -280,7 +280,7 @@
       "alternate_entry_count": 0,
       "default_entry_count": 162,
       "encoding_name": "ENC_VOPC",
-      "entry_begin": 414,
+      "entry_begin": 416,
       "entry_count": 162,
       "example_instruction": "V_CMP_EQ_F32",
       "gfx1201_specific_count": 0,
@@ -317,7 +317,7 @@
       "alternate_entry_count": 0,
       "default_entry_count": 434,
       "encoding_name": "ENC_VOP3",
-      "entry_begin": 576,
+      "entry_begin": 578,
       "entry_count": 434,
       "example_instruction": "V_ADD3_U32",
       "gfx1201_specific_count": 87,
@@ -364,7 +364,7 @@
       "alternate_entry_count": 0,
       "default_entry_count": 123,
       "encoding_name": "ENC_VDS",
-      "entry_begin": 1010,
+      "entry_begin": 1012,
       "entry_count": 123,
       "example_instruction": "DS_ADD_U32",
       "gfx1201_specific_count": 58,
@@ -401,7 +401,7 @@
       "alternate_entry_count": 0,
       "default_entry_count": 65,
       "encoding_name": "ENC_VGLOBAL",
-      "entry_begin": 1133,
+      "entry_begin": 1135,
       "entry_count": 65,
       "example_instruction": "GLOBAL_LOAD_B32",
       "gfx1201_specific_count": 62,
@@ -4457,6 +4457,26 @@
       "is_default_encoding": true,
       "opcode": 54,
       "operand_count": 3,
+      "rollup": "gfx1201_specific",
+      "state": "gfx1201_specific"
+    },
+    {
+      "encoding_condition": "default",
+      "encoding_name": "ENC_VOP2",
+      "instruction_name": "V_FMAMK_F16",
+      "is_default_encoding": true,
+      "opcode": 55,
+      "operand_count": 4,
+      "rollup": "gfx1201_specific",
+      "state": "gfx1201_specific"
+    },
+    {
+      "encoding_condition": "default",
+      "encoding_name": "ENC_VOP2",
+      "instruction_name": "V_FMAAK_F16",
+      "is_default_encoding": true,
+      "opcode": 56,
+      "operand_count": 4,
       "rollup": "gfx1201_specific",
       "state": "gfx1201_specific"
     },
@@ -12413,7 +12433,7 @@
   ],
   "summary": {
     "encoding_count": 12,
-    "entry_count": 1198,
-    "unique_instruction_count": 909
+    "entry_count": 1200,
+    "unique_instruction_count": 911
   }
 }

@@ -59,6 +59,17 @@ const Gfx1201DecoderSeedEntry* FindSeedEntryByOpcode(
   return nullptr;
 }
 
+std::size_t GetWordsRequiredForRoute(
+    const Gfx1201OpcodeSelectorRule& rule,
+    const Gfx1201DecoderSeedEntry* seed_entry) {
+  if (seed_entry != nullptr && rule.encoding_name == "ENC_VOP2" &&
+      (seed_entry->instruction_name == "V_FMAMK_F16" ||
+       seed_entry->instruction_name == "V_FMAAK_F16")) {
+    return 2u;
+  }
+  return rule.instruction_dword_count;
+}
+
 bool MatchPhase0Rule(std::uint32_t word, const Gfx1201OpcodeSelectorRule** rule) {
   if (rule == nullptr) {
     return false;
@@ -162,14 +173,8 @@ bool SelectGfx1201Phase0ComputeOpcodeRoute(
 
   route->selector_rule = rule;
   route->seed_encoding = FindGfx1201Phase0ComputeDecoderSeed(rule->encoding_name);
-  route->words_required = rule->instruction_dword_count;
   route->opcode =
       ExtractBits(words.front(), rule->opcode_bit_offset, rule->opcode_bit_width);
-
-  if (words.size() < route->words_required) {
-    route->status = Gfx1201OpcodeRouteStatus::kNeedsMoreWords;
-    return true;
-  }
 
   if (route->seed_encoding == nullptr) {
     route->status = Gfx1201OpcodeRouteStatus::kUnsupportedEncoding;
@@ -180,6 +185,11 @@ bool SelectGfx1201Phase0ComputeOpcodeRoute(
   }
 
   route->seed_entry = FindSeedEntryByOpcode(*route->seed_encoding, route->opcode);
+  route->words_required = GetWordsRequiredForRoute(*rule, route->seed_entry);
+  if (words.size() < route->words_required) {
+    route->status = Gfx1201OpcodeRouteStatus::kNeedsMoreWords;
+    return true;
+  }
   route->status = route->seed_entry != nullptr
                       ? Gfx1201OpcodeRouteStatus::kMatchedSeedEntry
                       : Gfx1201OpcodeRouteStatus::kMatchedEncodingOnly;

@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 323u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 325u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -303,6 +303,10 @@ int main() {
               "expected V_FMAC_F32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_FMAC_F16"),
               "expected V_FMAC_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_FMAMK_F16"),
+              "expected V_FMAMK_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_FMAAK_F16"),
+              "expected V_FMAAK_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_PK_FMAC_F16"),
               "expected V_PK_FMAC_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_I32_I16"),
@@ -364,7 +368,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 323u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 325u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -636,6 +640,10 @@ int main() {
               "expected interpreter support for V_FMAC_F32") ||
       !Expect(interpreter.Supports("V_FMAC_F16"),
               "expected interpreter support for V_FMAC_F16") ||
+      !Expect(interpreter.Supports("V_FMAMK_F16"),
+              "expected interpreter support for V_FMAMK_F16") ||
+      !Expect(interpreter.Supports("V_FMAAK_F16"),
+              "expected interpreter support for V_FMAAK_F16") ||
       !Expect(interpreter.Supports("V_PK_FMAC_F16"),
               "expected interpreter support for V_PK_FMAC_F16") ||
       !Expect(interpreter.Supports("V_ADD_CO_CI_U32"),

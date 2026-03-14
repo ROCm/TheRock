@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 323> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 325> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -301,6 +301,8 @@ constexpr std::array<std::string_view, 323> kPhase0ExecutableOpcodes{{
     "V_SUBREV_F16",
     "V_MUL_F16",
     "V_FMAC_F16",
+    "V_FMAMK_F16",
+    "V_FMAAK_F16",
     "V_PK_FMAC_F16",
     "V_CVT_PK_RTZ_F16_F32",
     "V_LDEXP_F16",
@@ -530,6 +532,13 @@ InstructionOperand DescribeVectorDestinationOperand(InstructionOperand operand) 
       OperandAccess::kWrite));
 }
 
+InstructionOperand DescribeHalfVectorDestinationOperand(
+    InstructionOperand operand) {
+  return operand.WithDescriptor(MakeVectorRegisterDescriptor(
+      OperandRole::kDestination, OperandSlotKind::kDestination,
+      OperandAccess::kWrite, 16));
+}
+
 InstructionOperand DescribeReadWriteVectorOperand(InstructionOperand operand,
                                                   OperandRole role,
                                                   OperandSlotKind slot_kind,
@@ -728,6 +737,43 @@ bool DecodeVectorSource(std::uint32_t raw_value,
     }
     *operand = InstructionOperand::Imm32(literal_words.front());
     *literal_words_consumed = 1;
+  } else if (raw_value >= 256u &&
+             raw_value < 256u + WaveExecutionState::kVectorRegisterCount) {
+    *operand =
+        InstructionOperand::Vgpr(static_cast<std::uint16_t>(raw_value - 256u));
+  } else {
+    if (error_message != nullptr) {
+      *error_message = "unsupported vector source operand encoding";
+    }
+    return false;
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool DecodeVectorSourceUsingSharedLiteral(std::uint32_t raw_value,
+                                         std::uint32_t shared_literal,
+                                         InstructionOperand* operand,
+                                         std::string* error_message) {
+  if (operand == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "vector source output must not be null";
+    }
+    return false;
+  }
+
+  if (raw_value < WaveExecutionState::kScalarRegisterCount) {
+    *operand = InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_value));
+  } else if (raw_value == kSrcVcczSgprIndex || raw_value == kSrcExeczSgprIndex ||
+             raw_value == kSrcSccSgprIndex) {
+    *operand = InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_value));
+  } else if (IsInlineInteger(raw_value)) {
+    *operand = InstructionOperand::Imm32(DecodeInlineInteger(raw_value));
+  } else if (raw_value == 255u) {
+    *operand = InstructionOperand::Imm32(shared_literal);
   } else if (raw_value >= 256u &&
              raw_value < 256u + WaveExecutionState::kVectorRegisterCount) {
     *operand =
@@ -1523,6 +1569,44 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         DescribeSourceOperand(src1, OperandRole::kSource1,
                               OperandSlotKind::kSource1));
     *words_consumed = 1 + literal_words_consumed;
+  } else if (instruction_name == "V_FMAMK_F16" ||
+             instruction_name == "V_FMAAK_F16") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = "missing literal dword";
+      }
+      return false;
+    }
+
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(ExtractBits(word, 17, 8), &dst, error_message)) {
+      return false;
+    }
+
+    const std::uint32_t literal = words[1];
+
+    InstructionOperand src0;
+    if (!DecodeVectorSourceUsingSharedLiteral(ExtractBits(word, 0, 9), literal,
+                                             &src0, error_message)) {
+      return false;
+    }
+
+    InstructionOperand src1;
+    if (!DecodeVectorRegisterSource(ExtractBits(word, 9, 8), &src1,
+                                    error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::FourOperand(
+        instruction_name, DescribeHalfVectorDestinationOperand(dst),
+        DescribeSourceOperand(src0, OperandRole::kSource0,
+                              OperandSlotKind::kSource0, 16u),
+        DescribeSourceOperand(src1, OperandRole::kSource1,
+                              OperandSlotKind::kSource1, 16u),
+        DescribeSourceOperand(InstructionOperand::Imm32(literal),
+                              OperandRole::kSource2, OperandSlotKind::kSource2,
+                              16u));
+    *words_consumed = 2u;
   } else if (instruction_name == "V_PK_FMAC_F16") {
     InstructionOperand dst;
     if (!DecodeVectorDestination(ExtractBits(word, 17, 8), &dst, error_message)) {

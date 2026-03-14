@@ -20,7 +20,7 @@ int main() {
 
   const auto seeds = GetGfx1201Phase0ComputeDecoderSeeds();
   if (!Expect(seeds.size() == 12u, "expected 12 phase-0 compute encodings") ||
-      !Expect(GetGfx1201Phase0ComputeDecoderSeedEntries().size() == 1198u,
+      !Expect(GetGfx1201Phase0ComputeDecoderSeedEntries().size() == 1200u,
               "expected phase-0 compute seed entry count")) {
     return 1;
   }
@@ -29,6 +29,8 @@ int main() {
       FindGfx1201Phase0ComputeDecoderSeed("ENC_SOPP");
   const Gfx1201DecoderSeedEncoding* enc_sop1 =
       FindGfx1201Phase0ComputeDecoderSeed("ENC_SOP1");
+  const Gfx1201DecoderSeedEncoding* enc_vop2 =
+      FindGfx1201Phase0ComputeDecoderSeed("ENC_VOP2");
   const Gfx1201DecoderSeedEncoding* enc_vopc =
       FindGfx1201Phase0ComputeDecoderSeed("ENC_VOPC");
   const Gfx1201DecoderSeedEncoding* enc_vop3 =
@@ -40,6 +42,7 @@ int main() {
 
   if (!Expect(enc_sopp != nullptr, "expected ENC_SOPP seed") ||
       !Expect(enc_sop1 != nullptr, "expected ENC_SOP1 seed") ||
+      !Expect(enc_vop2 != nullptr, "expected ENC_VOP2 seed") ||
       !Expect(enc_vopc != nullptr, "expected ENC_VOPC seed") ||
       !Expect(enc_vop3 != nullptr, "expected ENC_VOP3 seed") ||
       !Expect(enc_vglobal != nullptr, "expected ENC_VGLOBAL seed") ||
@@ -61,6 +64,10 @@ int main() {
               "expected ENC_SOP1 semantic-work count") ||
       !Expect(enc_sop1->gfx1201_specific_count == 46u,
               "expected ENC_SOP1 gfx1201-specific count") ||
+      !Expect(enc_vop2->instruction_count == 47u,
+              "expected ENC_VOP2 instruction count") ||
+      !Expect(enc_vop2->gfx1201_specific_count == 17u,
+              "expected ENC_VOP2 gfx1201-specific count") ||
       !Expect(enc_vopc->transferable_with_decoder_work_count == 30u,
               "expected ENC_VOPC decoder-only count") ||
       !Expect(enc_vopc->transferable_with_decoder_and_semantic_work_count == 24u,
@@ -79,17 +86,29 @@ int main() {
   }
 
   const auto sopp_entries = GetGfx1201Phase0ComputeDecoderSeedEntries(*enc_sopp);
+  const auto vop2_entries = GetGfx1201Phase0ComputeDecoderSeedEntries(*enc_vop2);
   const auto vop3_entries = GetGfx1201Phase0ComputeDecoderSeedEntries(*enc_vop3);
   const Gfx1201DecoderSeedEntry* s_endpgm_entry = nullptr;
+  const Gfx1201DecoderSeedEntry* v_fmamk_f16_entry = nullptr;
   for (const Gfx1201DecoderSeedEntry& entry : sopp_entries) {
     if (entry.instruction_name == "S_ENDPGM") {
       s_endpgm_entry = &entry;
       break;
     }
   }
+  for (const Gfx1201DecoderSeedEntry& entry : vop2_entries) {
+    if (entry.instruction_name == "V_FMAMK_F16") {
+      v_fmamk_f16_entry = &entry;
+      break;
+    }
+  }
   if (!Expect(sopp_entries.size() == 41u, "expected ENC_SOPP entry count") ||
+      !Expect(vop2_entries.size() == 47u, "expected ENC_VOP2 entry count") ||
       !Expect(vop3_entries.size() == 434u, "expected ENC_VOP3 entry count") ||
       !Expect(s_endpgm_entry != nullptr, "expected S_ENDPGM seed entry") ||
+      !Expect(v_fmamk_f16_entry != nullptr, "expected V_FMAMK_F16 seed entry") ||
+      !Expect(v_fmamk_f16_entry->opcode == 55u,
+              "expected V_FMAMK_F16 opcode") ||
       !Expect(s_endpgm_entry->opcode == 48u,
               "expected S_ENDPGM opcode") ||
       !Expect(s_endpgm_entry->is_default_encoding,

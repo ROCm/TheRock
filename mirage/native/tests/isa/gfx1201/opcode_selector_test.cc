@@ -236,6 +236,8 @@ int main() {
   const auto smem_words = MakeSmem(0u, 1u, 0u, true, 0u);
   const std::uint32_t vop1_word = MakeVop1(1u, 1u, 2u);
   const std::uint32_t vop2_word = MakeVop2(3u, 1u, 2u, 3u);
+  const std::array<std::uint32_t, 2> vop2_literal_words{
+      MakeVop2(55u, 1u, 2u, 3u), 0x00003c00u};
   const std::uint32_t vopc_word = MakeVopc(18u, 1u, 2u);
   const auto vop3_words = MakeVop3(597u, 1u, 2u, 3u, 4u);
   const auto ds_words = MakeDs(0u, 1u, 2u, 3u, 4u, 0u);
@@ -307,6 +309,40 @@ int main() {
     return 1;
   }
 
+  Gfx1201OpcodeRoute vop2_literal_partial_route;
+  if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
+                  std::span<const std::uint32_t>(vop2_literal_words.data(), 1),
+                  &vop2_literal_partial_route, &error_message),
+              "expected one-word VOP2 literal route to classify") ||
+      !Expect(vop2_literal_partial_route.status ==
+                  Gfx1201OpcodeRouteStatus::kNeedsMoreWords,
+              "expected VOP2 literal route to require two dwords") ||
+      !Expect(vop2_literal_partial_route.seed_entry != nullptr &&
+                  vop2_literal_partial_route.seed_entry->instruction_name ==
+                      "V_FMAMK_F16",
+              "expected V_FMAMK_F16 seed entry on partial literal route") ||
+      !Expect(vop2_literal_partial_route.words_required == 2u,
+              "expected VOP2 literal route to advertise two dwords")) {
+    return 1;
+  }
+
+  Gfx1201OpcodeRoute vop2_literal_route;
+  if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
+                  std::span<const std::uint32_t>(vop2_literal_words.data(),
+                                                 vop2_literal_words.size()),
+                  &vop2_literal_route, &error_message),
+              "expected VOP2 literal route selection success") ||
+      !Expect(vop2_literal_route.status ==
+                  Gfx1201OpcodeRouteStatus::kMatchedSeedEntry,
+              "expected seeded VOP2 literal route") ||
+      !Expect(vop2_literal_route.selector_rule != nullptr &&
+                  vop2_literal_route.selector_rule->encoding_name == "ENC_VOP2",
+              "expected ENC_VOP2 selector rule for literal route") ||
+      !Expect(vop2_literal_route.opcode == 55u,
+              "expected VOP2 literal opcode extraction")) {
+    return 1;
+  }
+
   const std::uint32_t unknown_sopp_word = MakeSopp(127u);
   Gfx1201OpcodeRoute unknown_sopp_route;
   if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
@@ -370,6 +406,19 @@ int main() {
               "expected routed VOP3 message") ||
       !Expect(error_message.find("needs 2 dwords") != std::string::npos,
               "expected partial VOP3 word-count error")) {
+    return 1;
+  }
+
+  if (!Expect(!decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(vop2_literal_words.data(), 1),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected partial VOP2 literal decode failure") ||
+      !Expect(error_message.find("ENC_VOP2 opcode 55") != std::string::npos,
+              "expected routed VOP2 literal message") ||
+      !Expect(error_message.find("V_FMAMK_F16") != std::string::npos,
+              "expected V_FMAMK_F16 route detail") ||
+      !Expect(error_message.find("needs 2 dwords") != std::string::npos,
+              "expected partial VOP2 literal word-count error")) {
     return 1;
   }
 

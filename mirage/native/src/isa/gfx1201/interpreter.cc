@@ -45,7 +45,7 @@ float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 std::uint16_t CompressFloatToFp16BitsRtz(float value);
 
-constexpr std::array<std::string_view, 323> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 325> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -329,6 +329,8 @@ constexpr std::array<std::string_view, 323> kExecutableSeedOpcodes{{
     "V_SUBREV_F16",
     "V_MUL_F16",
     "V_FMAC_F16",
+    "V_FMAMK_F16",
+    "V_FMAAK_F16",
     "V_PK_FMAC_F16",
     "V_CVT_PK_RTZ_F16_F32",
     "V_LDEXP_F16",
@@ -1989,6 +1991,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVFmacF16;
     return true;
   }
+  if (opcode == "V_FMAMK_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVFmamkF16;
+    return true;
+  }
+  if (opcode == "V_FMAAK_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVFmaakF16;
+    return true;
+  }
   if (opcode == "V_PK_FMAC_F16") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVPkFmacF16;
     return true;
@@ -2796,6 +2806,24 @@ std::uint32_t EvaluateVectorFmacHalfSeedInstruction(std::uint32_t accum,
   const float lhs_value = ExpandFp16ToFloat(static_cast<std::uint16_t>(lhs));
   const float rhs_value = ExpandFp16ToFloat(static_cast<std::uint16_t>(rhs));
   return CompressFloatToFp16Bits(std::fma(lhs_value, rhs_value, accum_value));
+}
+
+std::uint32_t EvaluateVectorLiteralFmaHalfSeedInstruction(
+    std::string_view opcode,
+    std::uint32_t src0,
+    std::uint32_t src1,
+    std::uint32_t literal) {
+  const float src0_value = ExpandFp16ToFloat(static_cast<std::uint16_t>(src0));
+  const float src1_value = ExpandFp16ToFloat(static_cast<std::uint16_t>(src1));
+  const float literal_value =
+      ExpandFp16ToFloat(static_cast<std::uint16_t>(literal));
+  if (opcode == "V_FMAMK_F16") {
+    return CompressFloatToFp16Bits(std::fma(src0_value, literal_value, src1_value));
+  }
+  if (opcode == "V_FMAAK_F16") {
+    return CompressFloatToFp16Bits(std::fma(src0_value, src1_value, literal_value));
+  }
+  return 0u;
 }
 
 std::uint32_t EvaluateVectorBinaryF32SeedInstruction(std::string_view opcode,
@@ -4313,6 +4341,41 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     return true;
   }
 
+  if (instruction.opcode == "V_FMAMK_F16" ||
+      instruction.opcode == "V_FMAAK_F16") {
+    if (!ValidateOperandCount(instruction, 4, error_message)) {
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      const std::uint32_t src0 = ReadVectorOperand(instruction.operands[1], *state,
+                                                   lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t src1 = ReadVectorOperand(instruction.operands[2], *state,
+                                                   lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t literal = ReadVectorOperand(
+          instruction.operands[3], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t result = EvaluateVectorLiteralFmaHalfSeedInstruction(
+          instruction.opcode, src0, src1, literal);
+      if (!WriteVectorOperand(instruction.operands[0], lane_index, result, state,
+                              error_message)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   if (instruction.opcode == "V_PK_FMAC_F16") {
     if (!ValidateOperandCount(instruction, 3, error_message)) {
       return false;
@@ -5080,6 +5143,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVSubrevF16:
     case Gfx1201CompiledOpcode::kVMulF16:
     case Gfx1201CompiledOpcode::kVFmacF16:
+    case Gfx1201CompiledOpcode::kVFmamkF16:
+    case Gfx1201CompiledOpcode::kVFmaakF16:
     case Gfx1201CompiledOpcode::kVPkFmacF16:
     case Gfx1201CompiledOpcode::kVCvtPkRtzF16F32:
     case Gfx1201CompiledOpcode::kVLdexpF16:

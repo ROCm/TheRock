@@ -3,8 +3,8 @@
 ## Scope
 
 - Seeded encoding families: `ENC_SOPP`, `ENC_SOP1`, `ENC_SOP2`, `ENC_SOPC`, `ENC_SOPK`, `ENC_SMEM`, `ENC_VOP1`, `ENC_VOP2`, `ENC_VOPC`, `ENC_VOP3`, `ENC_VDS`, `ENC_VGLOBAL`
-- Unique seeded instructions: `909`
-- Seeded decode entries: `1198`
+- Unique seeded instructions: `911`
+- Seeded decode entries: `1200`
 
 ## Encoding Seeds
 
@@ -77,10 +77,11 @@
 
 - Example instruction: `V_ADD_F32`
 - Rationale: Core vector arithmetic used by both compute and graphics paths.
-- Unique instructions: `45`
-- Seed entries: `45` (`default=45`, `alternate=0`)
-- Support split: as-is `20`, decoder-only `0`, semantic-only `10`, decoder+semantic `0`, gfx1201-specific `15`
-- Sample worklist: as-is `V_CNDMASK_B32`, `V_ADD_F64`, `V_ADD_F32`, `V_SUB_F32`, decoder-only None, semantic-only `V_SUBREV_F32`, `V_MUL_I32_I24`, `V_MUL_HI_I32_I24`, `V_MUL_U32_U24`, decoder+semantic None, gfx1201-specific `V_MUL_DX9_ZERO_F32`, `V_MIN_NUM_F64`, `V_MAX_NUM_F64`, `V_MIN_NUM_F32`
+- Unique instructions: `47`
+- Seed entries: `47` (`default=47`, `alternate=0`)
+- Support split: as-is `20`, decoder-only `0`, semantic-only `10`, decoder+semantic `0`, gfx1201-specific `17`
+- Sample worklist: as-is `V_CNDMASK_B32`, `V_ADD_F64`, `V_ADD_F32`, `V_SUB_F32`, decoder-only None, semantic-only `V_SUBREV_F32`, `V_MUL_I32_I24`, `V_MUL_HI_I32_I24`, `V_MUL_U32_U24`, decoder+semantic None, gfx1201-specific `V_FMAMK_F16`, `V_FMAAK_F16`, `V_MUL_DX9_ZERO_F32`, `V_MIN_NUM_F64`
+- New literal-FMA seeds: `V_FMAMK_F16` and `V_FMAAK_F16` add the first `ENC_VOP2` entries on the current phase-0 path that require a shared trailing literal dword.
 
 ### ENC_VOPC
 
@@ -117,4 +118,3 @@
 - Seed entries: `65` (`default=65`, `alternate=0`)
 - Support split: as-is `3`, decoder-only `0`, semantic-only `0`, decoder+semantic `0`, gfx1201-specific `62`
 - Sample worklist: as-is `GLOBAL_ATOMIC_ADD_F32`, `GLOBAL_ATOMIC_PK_ADD_F16`, `GLOBAL_ATOMIC_PK_ADD_BF16`, decoder-only None, semantic-only None, decoder+semantic None, gfx1201-specific `GLOBAL_LOAD_U8`, `GLOBAL_LOAD_I8`, `GLOBAL_LOAD_U16`, `GLOBAL_LOAD_I16`
-
