@@ -1,0 +1,42 @@
+From 7bb2c09d4d79e2b8887af1dc65e7394bd8942144 Mon Sep 17 00:00:00 2001
+From: bluedragan <calvins@us.ibm.com>
+Date: Fri, 6 Mar 2026 19:51:50 +0000
+Subject: [PATCH] HIP: ppc64le
+
+---
+ projects/hip/VERSION                | 4 ++--
+ projects/hip/include/hip/hip_bf16.h | 4 ++++
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/projects/hip/VERSION b/projects/hip/VERSION
+index d93710f395..c7e6920e59 100644
+--- a/projects/hip/VERSION
++++ b/projects/hip/VERSION
+@@ -1,6 +1,6 @@
+ #HIP_VERSION_MAJOR
+ 7
+ #HIP_VERSION_MINOR
+-2
++12
+ #HIP_VERSION_PATCH
+-0
++60490
+diff --git a/projects/hip/include/hip/hip_bf16.h b/projects/hip/include/hip/hip_bf16.h
+index 7e6b827314..ecc11a5d7b 100644
+--- a/projects/hip/include/hip/hip_bf16.h
++++ b/projects/hip/include/hip/hip_bf16.h
+@@ -10,7 +10,11 @@
+ #include <hip/hip_common.h>
+ 
+ #if defined(__HIP_PLATFORM_AMD__) && !defined(__HIP_PLATFORM_NVIDIA__)
++#if defined(__powerpc64__) || defined(__PPC64__)
++#include <hip/amd_detail/amd_ppc64le_hip_bf16.h>
++#else
+ #include <hip/amd_detail/amd_hip_bf16.h>
++#endif
+ #elif !defined(__HIP_PLATFORM_AMD__) && defined(__HIP_PLATFORM_NVIDIA__)
+ #include <hip/nvidia_detail/nvidia_hip_bf16.h>
+ #else
+-- 
+2.50.1 (Apple Git-155)
+

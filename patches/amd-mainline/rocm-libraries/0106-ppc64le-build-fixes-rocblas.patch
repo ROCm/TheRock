@@ -1,0 +1,56 @@
+From cfc2871b4790f960c5fb5ac14ae023a10b1ea607 Mon Sep 17 00:00:00 2001
+From: bluedragan <calvins@us.ibm.com>
+Date: Thu, 5 Mar 2026 05:33:22 +0000
+Subject: [PATCH] rocblas: ppc64le
+
+---
+ projects/rocblas/CMakeLists.txt                   | 15 +++++++++++++++
+ .../rocblas/clients/common/cblas_interface.cpp    |  5 +++++
+ 2 files changed, 20 insertions(+)
+
+diff --git a/projects/rocblas/CMakeLists.txt b/projects/rocblas/CMakeLists.txt
+index 1651536f19..f2e158b88b 100644
+--- a/projects/rocblas/CMakeLists.txt
++++ b/projects/rocblas/CMakeLists.txt
+@@ -33,6 +33,21 @@ unset(ENV{ROCM_BUILD_ID})
+ 
+ project( rocblas LANGUAGES CXX )
+ 
++# Only apply this on PowerPC architectures
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++  # 1. The Alias: Map the problematic _Float16 to the supported __fp16
++  add_compile_definitions("$<$<COMPILE_LANGUAGE:CXX>:_Float16=__fp16>")
++
++  # 2. The Driver Flag: Tell Clang it's okay to pass these in registers
++  # Note: Using -Xclang because the driver was complaining earlier
++  set(PPC_PFE_FLAGS "-Xclang" "-fallow-half-arguments-and-returns")
++  add_compile_options("$<$<OR:$<COMPILE_LANGUAGE:CXX>,$<COMPILE_LANGUAGE:C>>:${PPC_PFE_FLAGS}>")
++
++  # 3. The Operator Block: Stop the headers from trying to use GPU-only math operators on host
++  add_compile_definitions("$<$<COMPILE_LANGUAGE:CXX>:__HIP_NO_HALF_OPERATORS__=1>")
++  add_compile_definitions("$<$<COMPILE_LANGUAGE:CXX>:__HIP_NO_HALF_CONVERSIONS__=1>")
++endif()
++
+ # Append our library helper cmake path and the cmake path for hip (for convenience)
+ list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
+ include(build-options) # library and client
+diff --git a/projects/rocblas/clients/common/cblas_interface.cpp b/projects/rocblas/clients/common/cblas_interface.cpp
+index ef31c58668..9c7d4e46fa 100644
+--- a/projects/rocblas/clients/common/cblas_interface.cpp
++++ b/projects/rocblas/clients/common/cblas_interface.cpp
+@@ -1553,7 +1553,12 @@ void ref_geam_min_plus(rocblas_operation transA,
+             {
+                 size_t idxA = TRANSA ? size_t(lda) * m1 + k1 : size_t(lda) * k1 + m1;
+                 size_t idxB = TRANSB ? size_t(ldb) * k1 + n1 : size_t(ldb) * n1 + k1;
++#if defined(__powerpc64__) || defined(__PPC64__)
++                auto val = alpha * (A[idxA] + B[idxB]);
++                D[idxD] = (val < (T)D[idxD]) ? (T)val : D[idxD];
++#else
+                 D[idxD]     = std::min(alpha * (A[idxA] + B[idxB]), D[idxD]);
++#endif
+             }
+         }
+     }
+-- 
+2.50.1 (Apple Git-155)
+

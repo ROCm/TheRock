@@ -1,0 +1,120 @@
+From cfc2871b4790f960c5fb5ac14ae023a10b1ea607 Mon Sep 17 00:00:00 2001
+From: bluedragan <calvins@us.ibm.com>
+Date: Thu, 5 Mar 2026 05:33:22 +0000
+Subject: [PATCH] hipsparselt: ppc64le
+
+---
+ projects/hipsparselt/CMakeLists.txt                       | 3 +++
+ projects/hipsparselt/clients/CMakeLists.txt               | 6 +++++-
+ projects/hipsparselt/clients/include/hipsparselt_math.hpp | 6 ++++++
+ projects/hipsparselt/clients/samples/CMakeLists.txt       | 6 +++++-
+ projects/hipsparselt/clients/test/CMakeLists.txt          | 7 +++++--
+ projects/hipsparselt/library/CMakeLists.txt               | 8 ++++++--
+ 6 files changed, 30 insertions(+), 6 deletions(-)
+
+diff --git a/projects/hipsparselt/CMakeLists.txt b/projects/hipsparselt/CMakeLists.txt
+index 9a62c0630c..b93d987ce7 100644
+--- a/projects/hipsparselt/CMakeLists.txt
++++ b/projects/hipsparselt/CMakeLists.txt
+@@ -6,6 +6,9 @@ cmake_minimum_required(VERSION 3.25.2)
+ option(CMAKE_EXPORT_COMPILE_COMMANDS "Generate compile commands json file." ON)
+ 
+ project(hipsparselt VERSION 0.2.7 LANGUAGES CXX)
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++  add_compile_options("-DNO_WARN_X86_INTRINSICS")
++endif()
+ 
+ if(POLICY CMP0135)
+     cmake_policy(SET CMP0135 NEW) # FetchContent timestamp handling
+diff --git a/projects/hipsparselt/clients/CMakeLists.txt b/projects/hipsparselt/clients/CMakeLists.txt
+index f8295a580d..0f37518e35 100644
+--- a/projects/hipsparselt/clients/CMakeLists.txt
++++ b/projects/hipsparselt/clients/CMakeLists.txt
+@@ -21,7 +21,11 @@ target_compile_features(hipsparselt-clients-common PRIVATE cxx_std_17)
+ target_compile_definitions(hipsparselt-clients-common PUBLIC HIPSPARSELT_INTERNAL_API)
+ 
+ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+-    target_compile_options(hipsparselt-clients-common PUBLIC -mf16c)
++    if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++        target_compile_options(hipsparselt-clients-common PUBLIC)
++    else()
++        target_compile_options(hipsparselt-clients-common PUBLIC -mf16c)
++    endif()
+ endif()
+ 
+ target_sources(
+diff --git a/projects/hipsparselt/clients/include/hipsparselt_math.hpp b/projects/hipsparselt/clients/include/hipsparselt_math.hpp
+index ed6159940a..2119f93e43 100644
+--- a/projects/hipsparselt/clients/include/hipsparselt_math.hpp
++++ b/projects/hipsparselt/clients/include/hipsparselt_math.hpp
+@@ -30,7 +30,13 @@
+ #include <cmath>
+ #include <hip/hip_runtime.h>
+ #include <hipsparselt/hipsparselt.h>
++#if defined(__powerpc64__) || defined(__PPC64__)
++#ifndef __HIP_DEVICE_COMPILE__
+ #include <immintrin.h>
++#endif // __HIP_DEVICE_COMPILE__
++#else
++#include <immintrin.h>
++#endif // defined(__powerpc64__) || defined(__PPC64__)
+ #include <type_traits>
+ 
+ /* ============================================================================================ */
+diff --git a/projects/hipsparselt/clients/samples/CMakeLists.txt b/projects/hipsparselt/clients/samples/CMakeLists.txt
+index aaa27c2ad9..fea9a86778 100644
+--- a/projects/hipsparselt/clients/samples/CMakeLists.txt
++++ b/projects/hipsparselt/clients/samples/CMakeLists.txt
+@@ -9,7 +9,11 @@ foreach(sample_name ${SAMPLE_EXECUTABLES})
+   target_compile_features(${sample_name} PRIVATE cxx_std_17)
+ 
+   if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+-    target_compile_options(${sample_name} PRIVATE -mf16c)
++    if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++      target_compile_options(${sample_name} PRIVATE)
++    else()
++      target_compile_options(${sample_name} PRIVATE -mf16c)
++    end()
+     target_compile_definitions(${sample_name} PRIVATE HIPSPARSELT_INTERNAL_API)
+   endif()
+ 
+diff --git a/projects/hipsparselt/clients/test/CMakeLists.txt b/projects/hipsparselt/clients/test/CMakeLists.txt
+index 9d320e4415..78decee4aa 100644
+--- a/projects/hipsparselt/clients/test/CMakeLists.txt
++++ b/projects/hipsparselt/clients/test/CMakeLists.txt
+@@ -20,8 +20,11 @@ target_compile_definitions(
+     hipsparselt-test PRIVATE GOOGLE_TEST ROCM_USE_FLOAT16 HIPSPARSELT_INTERNAL_API
+                              "__HIP_HCC_COMPAT_MODE__=1"
+ )
+-
+-target_compile_options(hipsparselt-test PRIVATE -mf16c)
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++    target_compile_options(hipsparselt-test PRIVATE)
++else()
++    target_compile_options(hipsparselt-test PRIVATE -mf16c)
++endif()
+ 
+ target_link_libraries(
+     hipsparselt-test PRIVATE hipsparselt-clients-common GTest::gtest GTest::gtest_main
+diff --git a/projects/hipsparselt/library/CMakeLists.txt b/projects/hipsparselt/library/CMakeLists.txt
+index 3660170961..c035bb2c20 100644
+--- a/projects/hipsparselt/library/CMakeLists.txt
++++ b/projects/hipsparselt/library/CMakeLists.txt
+@@ -29,8 +29,12 @@ if(HIPSPARSELT_ENABLE_HIP)
+ endif()
+ 
+ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+-    # Enable F16C intrinsics
+-    target_compile_options(hipsparselt PRIVATE -mf16c)
++    if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++       target_compile_options(hipsparselt PRIVATE)
++    else()
++        # Enable F16C intrinsics
++       target_compile_options(hipsparselt PRIVATE -mf16c)
++    endif()
+ endif()
+ 
+ if(HIPSPARSELT_ENABLE_ASAN)
+-- 
+2.50.1 (Apple Git-155)
+

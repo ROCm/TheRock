@@ -1,0 +1,135 @@
+From cfc2871b4790f960c5fb5ac14ae023a10b1ea607 Mon Sep 17 00:00:00 2001
+From: bluedragan <calvins@us.ibm.com>
+Date: Thu, 5 Mar 2026 05:33:22 +0000
+Subject: [PATCH] hipblas: ppc64le
+
+---
+ projects/hipblas/CMakeLists.txt               |  3 ++
+ .../hipblas/clients/benchmarks/CMakeLists.txt |  6 +++-
+ projects/hipblas/clients/gtest/CMakeLists.txt |  6 +++-
+ projects/hipblas/clients/include/type_utils.h | 32 +++++++++++++++++--
+ .../hipblas/clients/samples/CMakeLists.txt    |  7 +++-
+ 5 files changed, 49 insertions(+), 5 deletions(-)
+
+diff --git a/projects/hipblas/CMakeLists.txt b/projects/hipblas/CMakeLists.txt
+index 7a0e829a7f..2bad29d7aa 100644
+--- a/projects/hipblas/CMakeLists.txt
++++ b/projects/hipblas/CMakeLists.txt
+@@ -43,6 +43,9 @@ if( NOT DEFINED CMAKE_CONFIGURATION_TYPES AND NOT DEFINED CMAKE_BUILD_TYPE )
+ endif()
+ 
+ project( hipblas LANGUAGES CXX )
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++  add_compile_options("-DNO_WARN_X86_INTRINSICS")
++endif()
+ 
+ find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
+ 
+diff --git a/projects/hipblas/clients/benchmarks/CMakeLists.txt b/projects/hipblas/clients/benchmarks/CMakeLists.txt
+index 722b22dc97..24bc6dccad 100644
+--- a/projects/hipblas/clients/benchmarks/CMakeLists.txt
++++ b/projects/hipblas/clients/benchmarks/CMakeLists.txt
+@@ -66,7 +66,11 @@ target_include_directories( hipblas-bench
+ target_link_libraries( hipblas-bench PRIVATE roc::hipblas GTest::gtest GTest::gtest_main )
+ 
+ # need mf16c flag for float->half convertion
+-target_compile_options( hipblas-bench PRIVATE -mf16c ) # -Wno-deprecated-declarations )
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++  target_compile_options( hipblas-bench PRIVATE ) # -Wno-deprecated-declarations )
++else()
++  target_compile_options( hipblas-bench PRIVATE -mf16c ) # -Wno-deprecated-declarations )
++endif()
+ 
+ target_compile_options(hipblas-bench PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${COMMON_CXX_OPTIONS}>)
+ 
+diff --git a/projects/hipblas/clients/gtest/CMakeLists.txt b/projects/hipblas/clients/gtest/CMakeLists.txt
+index 275cf16e38..43ccc113eb 100644
+--- a/projects/hipblas/clients/gtest/CMakeLists.txt
++++ b/projects/hipblas/clients/gtest/CMakeLists.txt
+@@ -141,7 +141,11 @@ if (BUILD_FORTRAN_CLIENTS)
+ endif()
+ 
+ # need mf16c flag for float->half convertion
+-target_compile_options( hipblas-test PRIVATE -mf16c ) # -Wno-deprecated-declarations )
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++  target_compile_options( hipblas-test PRIVATE ) # -Wno-deprecated-declarations )
++else()
++  target_compile_options( hipblas-test PRIVATE -mf16c ) # -Wno-deprecated-declarations )
++endif()
+ 
+ # Workaround: Clang ASAN emits misaligned asan_globals metadata for
+ # compiler-generated .str literals from GTest macros in test TUs.
+diff --git a/projects/hipblas/clients/include/type_utils.h b/projects/hipblas/clients/include/type_utils.h
+index 32f2908d34..940888306f 100644
+--- a/projects/hipblas/clients/include/type_utils.h
++++ b/projects/hipblas/clients/include/type_utils.h
+@@ -75,9 +75,24 @@ inline hipblasHalf float_to_half(float val)
+ {
+ #ifdef HIPBLAS_USE_HIP_HALF
+     return __float2half(val);
+-#else
++#elif defined(__x86_64__) || defined(__i386__)
+     uint16_t a = _cvtss_sh(val, 0);
+     return a;
++#else
++    // Software fallback: Float32 (val) -> Half (a)
++    union { float f; uint32_t i; } u;
++    u.f = val; // Assign float
++    uint32_t i = u.i; // Get raw 32 bits
++
++    uint32_t s = (i >> 16) & 0x00008000;
++    uint32_t e = ((i >> 23) & 0x000000ff) - (127 - 15);
++    uint32_t m = i & 0x007fffff;
++    uint16_t a;
++
++    if (e <= 0) a = (uint16_t)s;
++    else if (e >= 31) a = (uint16_t)(s | 0x7c00);
++    else a = (uint16_t)(s | (e << 10) | (m >> 13));
++    return a;
+ #endif
+ }
+ 
+@@ -115,8 +130,21 @@ inline float half_to_float(hipblasHalf val)
+ {
+ #ifdef HIPBLAS_USE_HIP_HALF
+     return __half2float(val);
+-#else
++#elif defined(__x86_64__) || defined(__i386__)
+     return _cvtsh_ss(val);
++#else
++    // Software fallback: Half bits (val) -> Float32
++    uint32_t h = (uint32_t)val;
++    uint32_t s = (h & 0x8000) << 16;
++    uint32_t e = (h & 0x7c00) >> 10;
++    uint32_t m = (h & 0x03ff) << 13;
++    union { uint32_t i; float f; } u;
++
++    if (e == 0) u.i = s;
++    else if (e == 31) u.i = s | 0x7f800000 | m;
++    else u.i = s | ((e + (127 - 15)) << 23) | m;
++
++    return u.f;
+ #endif
+ }
+ 
+diff --git a/projects/hipblas/clients/samples/CMakeLists.txt b/projects/hipblas/clients/samples/CMakeLists.txt
+index b617e415a6..983f9ddf90 100644
+--- a/projects/hipblas/clients/samples/CMakeLists.txt
++++ b/projects/hipblas/clients/samples/CMakeLists.txt
+@@ -90,7 +90,12 @@ foreach( exe IN LISTS hipblas-example-executables)
+ 
+   target_include_directories( ${exe} PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> )
+ 
+-  target_compile_options( ${exe} PRIVATE -mf16c -DHIPBLAS_BFLOAT16_CLASS )
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++    target_compile_options( ${exe} PRIVATE -DHIPBLAS_BFLOAT16_CLASS )
++else()
++    target_compile_options( ${exe} PRIVATE -mf16c -DHIPBLAS_BFLOAT16_CLASS )
++endif()
++
+   target_compile_definitions( ${exe} PRIVATE HIPBLAS_NO_DEPRECATED_WARNINGS )
+ 
+   target_link_libraries( ${exe} PRIVATE roc::hipblas )
+-- 
+2.50.1 (Apple Git-155)
+
