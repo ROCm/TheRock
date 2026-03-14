@@ -359,6 +359,21 @@ std::uint32_t CountDescriptorsForRoleAndComponentCount(
   return count;
 }
 
+std::uint32_t CountDescriptorsForRoleAndSlotKind(
+    const StubDecodedInstruction& instruction,
+    StubOperandRole role,
+    StubOperandSlotKind slot_kind) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    const auto& descriptor = instruction.operand_descriptors.descriptors[i];
+    if (descriptor.role == role && descriptor.slot_kind == slot_kind) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 std::uint32_t CountOutputSlots(const StubDecodedInstruction& instruction) {
   std::uint32_t count = 0;
   for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
@@ -421,6 +436,21 @@ std::uint32_t CountSlotsOfKindAndComponentCount(
     const auto& binding = instruction.operand_slots.bindings[i];
     if (binding.slot_kind == slot_kind &&
         binding.component_count == component_count) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountSlotsOfKindAndLogicalOperandIndex(
+    const StubDecodedInstruction& instruction,
+    StubOperandSlotKind slot_kind,
+    std::uint32_t logical_operand_index) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    const auto& binding = instruction.operand_slots.bindings[i];
+    if (binding.slot_kind == slot_kind &&
+        binding.logical_operand_index == logical_operand_index) {
       ++count;
     }
   }
@@ -1712,6 +1742,36 @@ int main() {
                   "expected routed WMMA scale seed to keep scalar scale metadata")) {
         return 1;
       }
+      if (!Expect(
+              CountDescriptorsForRoleAndSlotKind(
+                  decoded, StubOperandRole::kDestination,
+                  StubOperandSlotKind::kDestination) == 1 &&
+                  CountDescriptorsForRoleAndSlotKind(
+                      decoded, StubOperandRole::kSource0,
+                      StubOperandSlotKind::kSource0) == 1 &&
+                  CountDescriptorsForRoleAndSlotKind(
+                      decoded, StubOperandRole::kSource1,
+                      StubOperandSlotKind::kSource1) == 1 &&
+                  CountDescriptorsForRoleAndSlotKind(
+                      decoded, StubOperandRole::kAccumulator,
+                      StubOperandSlotKind::kAccumulatorSource) == 1 &&
+                  CountDescriptorsForRoleAndSlotKind(
+                      decoded, StubOperandRole::kScale,
+                      StubOperandSlotKind::kScaleSource) == 1 &&
+                  CountSlotsOfKindAndLogicalOperandIndex(
+                      decoded, StubOperandSlotKind::kDestination, 0) == 1 &&
+                  CountSlotsOfKindAndLogicalOperandIndex(
+                      decoded, StubOperandSlotKind::kSource0, 1) == 1 &&
+                  CountSlotsOfKindAndLogicalOperandIndex(
+                      decoded, StubOperandSlotKind::kSource1, 2) == 1 &&
+                  CountSlotsOfKindAndLogicalOperandIndex(
+                      decoded, StubOperandSlotKind::kAccumulatorSource, 3) ==
+                      1 &&
+                  CountSlotsOfKindAndLogicalOperandIndex(
+                      decoded, StubOperandSlotKind::kScaleSource, 4) == 1,
+              "expected routed WMMA scale seed to keep exact role/slot and logical-index mapping")) {
+        return 1;
+      }
     } else {
       if (!Expect(decoded.operand_slots.binding_count == 4 &&
                       decoded.operand_descriptors.descriptor_count == 4 &&
@@ -1847,6 +1907,31 @@ int main() {
                           decoded,
                           StubOperandValueClass::kAccumulatorFragment, 1) == 1,
                   "expected routed WMMA/SWMMAC core seed to keep exact matrix composition")) {
+        return 1;
+      }
+      if (!Expect(
+              CountDescriptorsForRoleAndSlotKind(
+                  decoded, StubOperandRole::kDestination,
+                  StubOperandSlotKind::kDestination) == 1 &&
+                  CountDescriptorsForRoleAndSlotKind(
+                      decoded, StubOperandRole::kSource0,
+                      StubOperandSlotKind::kSource0) == 1 &&
+                  CountDescriptorsForRoleAndSlotKind(
+                      decoded, StubOperandRole::kSource1,
+                      StubOperandSlotKind::kSource1) == 1 &&
+                  CountDescriptorsForRoleAndSlotKind(
+                      decoded, StubOperandRole::kAccumulator,
+                      StubOperandSlotKind::kAccumulatorSource) == 1 &&
+                  CountSlotsOfKindAndLogicalOperandIndex(
+                      decoded, StubOperandSlotKind::kDestination, 0) == 1 &&
+                  CountSlotsOfKindAndLogicalOperandIndex(
+                      decoded, StubOperandSlotKind::kSource0, 1) == 1 &&
+                  CountSlotsOfKindAndLogicalOperandIndex(
+                      decoded, StubOperandSlotKind::kSource1, 2) == 1 &&
+                  CountSlotsOfKindAndLogicalOperandIndex(
+                      decoded, StubOperandSlotKind::kAccumulatorSource, 3) ==
+                      1,
+              "expected routed WMMA/SWMMAC core seed to keep exact role/slot and logical-index mapping")) {
         return 1;
       }
     }
@@ -3203,6 +3288,36 @@ int main() {
                 "expected routed tensor seed to keep exact descriptor/slot composition")) {
       return 1;
     }
+    if (!Expect(
+            CountDescriptorsForRoleAndSlotKind(
+                decoded, StubOperandRole::kTensorDescriptor,
+                StubOperandSlotKind::kTensorDescriptorSource) == 1 &&
+                CountDescriptorsForRoleAndSlotKind(
+                    decoded, StubOperandRole::kTensorCoordinate,
+                    StubOperandSlotKind::kTensorCoordinateSource) == 1 &&
+                CountDescriptorsForRoleAndSlotKind(
+                    decoded,
+                    instruction_name == "TENSOR_LOAD_TO_LDS"
+                        ? StubOperandRole::kLdsDestination
+                        : StubOperandRole::kLdsSource,
+                    instruction_name == "TENSOR_LOAD_TO_LDS"
+                        ? StubOperandSlotKind::kLdsDestination
+                        : StubOperandSlotKind::kLdsSource) == 1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kTensorDescriptorSource, 0) ==
+                    1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kTensorCoordinateSource, 1) ==
+                    1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded,
+                    instruction_name == "TENSOR_LOAD_TO_LDS"
+                        ? StubOperandSlotKind::kLdsDestination
+                        : StubOperandSlotKind::kLdsSource,
+                    2) == 1,
+            "expected routed tensor seed to keep exact role/slot and logical-index mapping")) {
+      return 1;
+    }
     if (instruction_name == "TENSOR_LOAD_TO_LDS") {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
@@ -3475,6 +3590,20 @@ int main() {
                 "expected routed VOP1 seed to keep source/destination descriptors")) {
       return 1;
     }
+    if (!Expect(
+            CountDescriptorsForRoleAndSlotKind(
+                decoded, StubOperandRole::kSource0,
+                StubOperandSlotKind::kSource0) == 1 &&
+                CountDescriptorsForRoleAndSlotKind(
+                    decoded, StubOperandRole::kDestination,
+                    StubOperandSlotKind::kDestination) == 1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kDestination, 0) == 1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kSource0, 1) == 1,
+            "expected routed VOP1 seed to keep exact role/slot and logical-index mapping")) {
+      return 1;
+    }
     if (instruction_name.find("PK_") != std::string_view::npos) {
       if (!Expect(
               ContainsSlot(decoded, StubOperandSlotKind::kSource0,
@@ -3710,6 +3839,35 @@ int main() {
                 "expected routed VOP3 SDST seed to keep non-matrix wave-size semantics")) {
       return 1;
     }
+    if (!Expect(
+            CountDescriptorsForRoleAndSlotKind(
+                decoded, StubOperandRole::kSource0,
+                StubOperandSlotKind::kSource0) == 1 &&
+                CountDescriptorsForRoleAndSlotKind(
+                    decoded, StubOperandRole::kSource1,
+                    StubOperandSlotKind::kSource1) == 1 &&
+                CountDescriptorsForRoleAndSlotKind(
+                    decoded, StubOperandRole::kScale,
+                    StubOperandSlotKind::kScaleSource) == 1 &&
+                CountDescriptorsForRoleAndSlotKind(
+                    decoded, StubOperandRole::kDestination,
+                    StubOperandSlotKind::kDestination) == 1 &&
+                CountDescriptorsForRoleAndSlotKind(
+                    decoded, StubOperandRole::kDestination,
+                    StubOperandSlotKind::kScalarDestination) == 1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kDestination, 0) == 1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kScalarDestination, 1) == 1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kSource0, 2) == 1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kSource1, 3) == 1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kScaleSource, 4) == 1,
+            "expected routed VOP3 SDST seed to keep exact role/slot and logical-index mapping")) {
+      return 1;
+    }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kScale) &&
                     HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
                     ContainsSlot(decoded, StubOperandSlotKind::kDestination,
@@ -3932,6 +4090,30 @@ int main() {
                     AllSlotWaveSizesAre(decoded, 0) &&
                     AllDescriptorWaveSizesAre(decoded, 0),
                 "expected paired-scale helper to keep non-matrix wave-size semantics")) {
+      return 1;
+    }
+    if (!Expect(
+            CountDescriptorsForRoleAndSlotKind(
+                decoded, StubOperandRole::kSource0,
+                StubOperandSlotKind::kSource0) == 1 &&
+                CountDescriptorsForRoleAndSlotKind(
+                    decoded, StubOperandRole::kScale,
+                    StubOperandSlotKind::kScaleSource) == 1 &&
+                CountDescriptorsForRoleAndSlotKind(
+                    decoded, StubOperandRole::kPairedScale,
+                    StubOperandSlotKind::kPairedScaleSource) == 1 &&
+                CountDescriptorsForRoleAndSlotKind(
+                    decoded, StubOperandRole::kDestination,
+                    StubOperandSlotKind::kDestination) == 1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kDestination, 0) == 1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kSource0, 1) == 1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kScaleSource, 2) == 1 &&
+                CountSlotsOfKindAndLogicalOperandIndex(
+                    decoded, StubOperandSlotKind::kPairedScaleSource, 3) == 1,
+            "expected paired-scale helper to keep exact role/slot and logical-index mapping")) {
       return 1;
     }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kSource0) &&
