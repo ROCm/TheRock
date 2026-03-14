@@ -312,6 +312,37 @@ std::uint32_t CountDescriptorsForRoleAndAccess(
   return count;
 }
 
+std::uint32_t CountDescriptorsForRoleAndValueClass(
+    const StubDecodedInstruction& instruction,
+    StubOperandRole role,
+    StubOperandValueClass value_class) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    const auto& descriptor = instruction.operand_descriptors.descriptors[i];
+    if (descriptor.role == role && descriptor.value_class == value_class) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountDescriptorsForRoleAndFragmentKind(
+    const StubDecodedInstruction& instruction,
+    StubOperandRole role,
+    StubFragmentKind fragment_kind) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    const auto& descriptor = instruction.operand_descriptors.descriptors[i];
+    if (descriptor.role == role &&
+        descriptor.fragment_shape.kind == fragment_kind) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 std::uint32_t CountOutputSlots(const StubDecodedInstruction& instruction) {
   std::uint32_t count = 0;
   for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
@@ -330,6 +361,35 @@ std::uint32_t CountSlotsOfKindWithOutputFlag(
   for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
     const auto& binding = instruction.operand_slots.bindings[i];
     if (binding.slot_kind == slot_kind && binding.is_output == is_output) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountSlotsOfKindAndValueClass(
+    const StubDecodedInstruction& instruction,
+    StubOperandSlotKind slot_kind,
+    StubOperandValueClass value_class) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    const auto& binding = instruction.operand_slots.bindings[i];
+    if (binding.slot_kind == slot_kind && binding.value_class == value_class) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountSlotsOfKindAndFragmentKind(
+    const StubDecodedInstruction& instruction,
+    StubOperandSlotKind slot_kind,
+    StubFragmentKind fragment_kind) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    const auto& binding = instruction.operand_slots.bindings[i];
+    if (binding.slot_kind == slot_kind &&
+        binding.fragment_shape.kind == fragment_kind) {
       ++count;
     }
   }
@@ -1470,9 +1530,69 @@ int main() {
                       CountDescriptorsForRoleAndAccess(
                           decoded, StubOperandRole::kAccumulator,
                           StubOperandAccess::kRead) == 1 &&
-                      CountDescriptorsForRoleAndAccess(
+                    CountDescriptorsForRoleAndAccess(
+                        decoded, StubOperandRole::kScale,
+                        StubOperandAccess::kRead) == 1 &&
+                      CountDescriptorsForRoleAndValueClass(
+                          decoded, StubOperandRole::kDestination,
+                          StubOperandValueClass::kMatrixFragment) == 1 &&
+                      CountDescriptorsForRoleAndValueClass(
+                          decoded, StubOperandRole::kSource0,
+                          StubOperandValueClass::kMatrixFragment) == 1 &&
+                      CountDescriptorsForRoleAndValueClass(
+                          decoded, StubOperandRole::kSource1,
+                          StubOperandValueClass::kMatrixFragment) == 1 &&
+                      CountDescriptorsForRoleAndValueClass(
+                          decoded, StubOperandRole::kAccumulator,
+                          StubOperandValueClass::kAccumulatorFragment) == 1 &&
+                      CountDescriptorsForRoleAndValueClass(
                           decoded, StubOperandRole::kScale,
-                          StubOperandAccess::kRead) == 1 &&
+                          StubOperandValueClass::kScalarRegister) == 1 &&
+                      CountDescriptorsForRoleAndFragmentKind(
+                          decoded, StubOperandRole::kDestination,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountDescriptorsForRoleAndFragmentKind(
+                          decoded, StubOperandRole::kSource0,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountDescriptorsForRoleAndFragmentKind(
+                          decoded, StubOperandRole::kSource1,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountDescriptorsForRoleAndFragmentKind(
+                          decoded, StubOperandRole::kAccumulator,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountDescriptorsForRoleAndFragmentKind(
+                          decoded, StubOperandRole::kScale,
+                          StubFragmentKind::kScalar) == 1 &&
+                      CountSlotsOfKindAndValueClass(
+                          decoded, StubOperandSlotKind::kDestination,
+                          StubOperandValueClass::kMatrixFragment) == 1 &&
+                      CountSlotsOfKindAndValueClass(
+                          decoded, StubOperandSlotKind::kSource0,
+                          StubOperandValueClass::kMatrixFragment) == 1 &&
+                      CountSlotsOfKindAndValueClass(
+                          decoded, StubOperandSlotKind::kSource1,
+                          StubOperandValueClass::kMatrixFragment) == 1 &&
+                      CountSlotsOfKindAndValueClass(
+                          decoded, StubOperandSlotKind::kAccumulatorSource,
+                          StubOperandValueClass::kAccumulatorFragment) == 1 &&
+                      CountSlotsOfKindAndValueClass(
+                          decoded, StubOperandSlotKind::kScaleSource,
+                          StubOperandValueClass::kScalarRegister) == 1 &&
+                      CountSlotsOfKindAndFragmentKind(
+                          decoded, StubOperandSlotKind::kDestination,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountSlotsOfKindAndFragmentKind(
+                          decoded, StubOperandSlotKind::kSource0,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountSlotsOfKindAndFragmentKind(
+                          decoded, StubOperandSlotKind::kSource1,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountSlotsOfKindAndFragmentKind(
+                          decoded, StubOperandSlotKind::kAccumulatorSource,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountSlotsOfKindAndFragmentKind(
+                          decoded, StubOperandSlotKind::kScaleSource,
+                          StubFragmentKind::kScalar) == 1 &&
                       CountSlotsOfKindWithOutputFlag(
                           decoded, StubOperandSlotKind::kDestination, true) == 1 &&
                       CountSlotsOfKindWithOutputFlag(
@@ -1574,6 +1694,54 @@ int main() {
                       CountDescriptorsForRoleAndAccess(
                           decoded, StubOperandRole::kAccumulator,
                           StubOperandAccess::kRead) == 1 &&
+                      CountDescriptorsForRoleAndValueClass(
+                          decoded, StubOperandRole::kDestination,
+                          StubOperandValueClass::kMatrixFragment) == 1 &&
+                      CountDescriptorsForRoleAndValueClass(
+                          decoded, StubOperandRole::kSource0,
+                          StubOperandValueClass::kMatrixFragment) == 1 &&
+                      CountDescriptorsForRoleAndValueClass(
+                          decoded, StubOperandRole::kSource1,
+                          StubOperandValueClass::kMatrixFragment) == 1 &&
+                      CountDescriptorsForRoleAndValueClass(
+                          decoded, StubOperandRole::kAccumulator,
+                          StubOperandValueClass::kAccumulatorFragment) == 1 &&
+                      CountDescriptorsForRoleAndFragmentKind(
+                          decoded, StubOperandRole::kDestination,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountDescriptorsForRoleAndFragmentKind(
+                          decoded, StubOperandRole::kSource0,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountDescriptorsForRoleAndFragmentKind(
+                          decoded, StubOperandRole::kSource1,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountDescriptorsForRoleAndFragmentKind(
+                          decoded, StubOperandRole::kAccumulator,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountSlotsOfKindAndValueClass(
+                          decoded, StubOperandSlotKind::kDestination,
+                          StubOperandValueClass::kMatrixFragment) == 1 &&
+                      CountSlotsOfKindAndValueClass(
+                          decoded, StubOperandSlotKind::kSource0,
+                          StubOperandValueClass::kMatrixFragment) == 1 &&
+                      CountSlotsOfKindAndValueClass(
+                          decoded, StubOperandSlotKind::kSource1,
+                          StubOperandValueClass::kMatrixFragment) == 1 &&
+                      CountSlotsOfKindAndValueClass(
+                          decoded, StubOperandSlotKind::kAccumulatorSource,
+                          StubOperandValueClass::kAccumulatorFragment) == 1 &&
+                      CountSlotsOfKindAndFragmentKind(
+                          decoded, StubOperandSlotKind::kDestination,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountSlotsOfKindAndFragmentKind(
+                          decoded, StubOperandSlotKind::kSource0,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountSlotsOfKindAndFragmentKind(
+                          decoded, StubOperandSlotKind::kSource1,
+                          StubFragmentKind::kMatrix) == 1 &&
+                      CountSlotsOfKindAndFragmentKind(
+                          decoded, StubOperandSlotKind::kAccumulatorSource,
+                          StubFragmentKind::kMatrix) == 1 &&
                       CountSlotsOfKindWithOutputFlag(
                           decoded, StubOperandSlotKind::kDestination, true) == 1 &&
                       CountSlotsOfKindWithOutputFlag(
@@ -2869,6 +3037,54 @@ int main() {
                         instruction_name == "TENSOR_LOAD_TO_LDS"
                             ? StubOperandAccess::kWrite
                             : StubOperandAccess::kRead) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kTensorDescriptor,
+                        StubOperandValueClass::kTensorDescriptor) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kTensorCoordinate,
+                        StubOperandValueClass::kTensorCoordinate) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded,
+                        instruction_name == "TENSOR_LOAD_TO_LDS"
+                            ? StubOperandRole::kLdsDestination
+                            : StubOperandRole::kLdsSource,
+                        StubOperandValueClass::kLdsAddress) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded, StubOperandRole::kTensorDescriptor,
+                        StubFragmentKind::kTensorDescriptor) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded, StubOperandRole::kTensorCoordinate,
+                        StubFragmentKind::kTensorCoordinate) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded,
+                        instruction_name == "TENSOR_LOAD_TO_LDS"
+                            ? StubOperandRole::kLdsDestination
+                            : StubOperandRole::kLdsSource,
+                        StubFragmentKind::kAddress) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kTensorDescriptorSource,
+                        StubOperandValueClass::kTensorDescriptor) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kTensorCoordinateSource,
+                        StubOperandValueClass::kTensorCoordinate) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded,
+                        instruction_name == "TENSOR_LOAD_TO_LDS"
+                            ? StubOperandSlotKind::kLdsDestination
+                            : StubOperandSlotKind::kLdsSource,
+                        StubOperandValueClass::kLdsAddress) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kTensorDescriptorSource,
+                        StubFragmentKind::kTensorDescriptor) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kTensorCoordinateSource,
+                        StubFragmentKind::kTensorCoordinate) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded,
+                        instruction_name == "TENSOR_LOAD_TO_LDS"
+                            ? StubOperandSlotKind::kLdsDestination
+                            : StubOperandSlotKind::kLdsSource,
+                        StubFragmentKind::kAddress) == 1 &&
                     CountSlotsOfKindWithOutputFlag(
                         decoded, StubOperandSlotKind::kTensorDescriptorSource,
                         false) == 1 &&
@@ -3093,6 +3309,46 @@ int main() {
                     CountDescriptorsForRoleAndAccess(
                         decoded, StubOperandRole::kDestination,
                         StubOperandAccess::kWrite) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kSource0,
+                        instruction_name.find("PK_") != std::string_view::npos
+                            ? StubOperandValueClass::kPackedVector
+                            : StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kDestination,
+                        instruction_name.find("PK_") != std::string_view::npos
+                            ? StubOperandValueClass::kPackedVector
+                            : StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded, StubOperandRole::kSource0,
+                        instruction_name.find("PK_") != std::string_view::npos
+                            ? StubFragmentKind::kPacked
+                            : StubFragmentKind::kScalar) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded, StubOperandRole::kDestination,
+                        instruction_name.find("PK_") != std::string_view::npos
+                            ? StubFragmentKind::kPacked
+                            : StubFragmentKind::kScalar) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kSource0,
+                        instruction_name.find("PK_") != std::string_view::npos
+                            ? StubOperandValueClass::kPackedVector
+                            : StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kDestination,
+                        instruction_name.find("PK_") != std::string_view::npos
+                            ? StubOperandValueClass::kPackedVector
+                            : StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kSource0,
+                        instruction_name.find("PK_") != std::string_view::npos
+                            ? StubFragmentKind::kPacked
+                            : StubFragmentKind::kScalar) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kDestination,
+                        instruction_name.find("PK_") != std::string_view::npos
+                            ? StubFragmentKind::kPacked
+                            : StubFragmentKind::kScalar) == 1 &&
                     CountSlotsOfKindWithOutputFlag(
                         decoded, StubOperandSlotKind::kSource0, false) == 1 &&
                     CountSlotsOfKindWithOutputFlag(
@@ -3253,6 +3509,63 @@ int main() {
                     CountDescriptorsForRoleAndAccess(
                         decoded, StubOperandRole::kDestination,
                         StubOperandAccess::kWrite) == 2 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kSource0,
+                        StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kSource1,
+                        StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kScale,
+                        StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kDestination,
+                        StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kDestination,
+                        StubOperandValueClass::kScalarRegister) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded, StubOperandRole::kSource0,
+                        StubFragmentKind::kScalar) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded, StubOperandRole::kSource1,
+                        StubFragmentKind::kScalar) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded, StubOperandRole::kScale,
+                        StubFragmentKind::kScalar) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded, StubOperandRole::kDestination,
+                        StubFragmentKind::kScalar) == 2 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kDestination,
+                        StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kScalarDestination,
+                        StubOperandValueClass::kScalarRegister) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kSource0,
+                        StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kSource1,
+                        StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kScaleSource,
+                        StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kDestination,
+                        StubFragmentKind::kScalar) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kScalarDestination,
+                        StubFragmentKind::kScalar) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kSource0,
+                        StubFragmentKind::kScalar) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kSource1,
+                        StubFragmentKind::kScalar) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kScaleSource,
+                        StubFragmentKind::kScalar) == 1 &&
                     CountSlotsOfKindWithOutputFlag(
                         decoded, StubOperandSlotKind::kDestination, true) == 1 &&
                     CountSlotsOfKindWithOutputFlag(
@@ -3416,6 +3729,54 @@ int main() {
                     CountDescriptorsForRoleAndAccess(
                         decoded, StubOperandRole::kDestination,
                         StubOperandAccess::kWrite) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kSource0,
+                        StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kScale,
+                        StubOperandValueClass::kScalarRegister) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kPairedScale,
+                        StubOperandValueClass::kScalarRegister) == 1 &&
+                    CountDescriptorsForRoleAndValueClass(
+                        decoded, StubOperandRole::kDestination,
+                        StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded, StubOperandRole::kSource0,
+                        StubFragmentKind::kVector) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded, StubOperandRole::kScale,
+                        StubFragmentKind::kScalar) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded, StubOperandRole::kPairedScale,
+                        StubFragmentKind::kScalar) == 1 &&
+                    CountDescriptorsForRoleAndFragmentKind(
+                        decoded, StubOperandRole::kDestination,
+                        StubFragmentKind::kVector) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kSource0,
+                        StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kScaleSource,
+                        StubOperandValueClass::kScalarRegister) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kPairedScaleSource,
+                        StubOperandValueClass::kScalarRegister) == 1 &&
+                    CountSlotsOfKindAndValueClass(
+                        decoded, StubOperandSlotKind::kDestination,
+                        StubOperandValueClass::kVectorRegister) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kSource0,
+                        StubFragmentKind::kVector) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kScaleSource,
+                        StubFragmentKind::kScalar) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kPairedScaleSource,
+                        StubFragmentKind::kScalar) == 1 &&
+                    CountSlotsOfKindAndFragmentKind(
+                        decoded, StubOperandSlotKind::kDestination,
+                        StubFragmentKind::kVector) == 1 &&
                     CountSlotsOfKindWithOutputFlag(
                         decoded, StubOperandSlotKind::kDestination, true) == 1 &&
                     CountSlotsOfKindWithOutputFlag(
