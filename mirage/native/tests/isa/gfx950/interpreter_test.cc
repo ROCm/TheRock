@@ -15038,17 +15038,10 @@ int main() {
     AtomicSemanticCase buffer_case = test_case;
     buffer_case.opcode = buffer_opcode;
     if (!RunBufferAtomicSemanticCase(interpreter, buffer_case, true, false) ||
-        !RunBufferAtomicSemanticCase(interpreter, buffer_case, true, true)) {
+        !RunBufferAtomicSemanticCase(interpreter, buffer_case, true, true) ||
+        !RunBufferAtomicSemanticCase(interpreter, buffer_case, false, false) ||
+        !RunBufferAtomicSemanticCase(interpreter, buffer_case, false, true)) {
       return 1;
-    }
-    if (test_case.opcode == "GLOBAL_ATOMIC_SWAP" ||
-        test_case.opcode == "GLOBAL_ATOMIC_CMPSWAP" ||
-        test_case.opcode == "GLOBAL_ATOMIC_SWAP_X2" ||
-        test_case.opcode == "GLOBAL_ATOMIC_CMPSWAP_X2") {
-      if (!RunBufferAtomicSemanticCase(interpreter, buffer_case, false, false) ||
-          !RunBufferAtomicSemanticCase(interpreter, buffer_case, false, true)) {
-        return 1;
-      }
     }
   }
 
