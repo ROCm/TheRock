@@ -42,7 +42,7 @@ float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 std::uint16_t CompressFloatToFp16BitsRtz(float value);
 
-constexpr std::array<std::string_view, 314> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 318> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -251,6 +251,10 @@ constexpr std::array<std::string_view, 314> kExecutableSeedOpcodes{{
     "V_CVT_F32_UBYTE3",
     "V_CVT_F32_I32",
     "V_CVT_F32_U32",
+    "V_CVT_F32_FP8",
+    "V_CVT_F32_BF8",
+    "V_CVT_PK_F32_FP8",
+    "V_CVT_PK_F32_BF8",
     "V_CVT_OFF_F32_I4",
     "V_CVT_F32_F16",
     "V_CVT_F32_F64",
@@ -468,6 +472,83 @@ std::uint32_t EvaluateCvtOffF32I4(std::uint32_t value) {
     default:
       return BitCast<std::uint32_t>(-0.0625f);
   }
+}
+
+float MakeSignedZeroF32(bool sign) {
+  return sign ? -0.0f : 0.0f;
+}
+
+float MakeSignedInfinityF32(bool sign) {
+  return sign ? -std::numeric_limits<float>::infinity()
+              : std::numeric_limits<float>::infinity();
+}
+
+float MakeSignedQuietNaNF32(bool sign) {
+  std::uint32_t bits = 0x7fc00000u;
+  if (sign) {
+    bits |= 0x80000000u;
+  }
+  return BitCast<float>(bits);
+}
+
+float ExpandFp8E4m3ToFloat(std::uint8_t bits) {
+  const bool sign = (bits & 0x80u) != 0;
+  const std::uint32_t exponent = (bits >> 3) & 0x0fu;
+  const std::uint32_t mantissa = bits & 0x07u;
+
+  if (exponent == 0x0fu && mantissa == 0x07u) {
+    return MakeSignedQuietNaNF32(sign);
+  }
+  if (exponent == 0u) {
+    if (mantissa == 0u) {
+      return MakeSignedZeroF32(sign);
+    }
+    const float value = std::ldexp(static_cast<float>(mantissa), -9);
+    return sign ? -value : value;
+  }
+
+  const float value =
+      std::ldexp(1.0f + static_cast<float>(mantissa) / 8.0f,
+                 static_cast<int>(exponent) - 7);
+  return sign ? -value : value;
+}
+
+float ExpandBf8E5m2ToFloat(std::uint8_t bits) {
+  const bool sign = (bits & 0x80u) != 0;
+  const std::uint32_t exponent = (bits >> 2) & 0x1fu;
+  const std::uint32_t mantissa = bits & 0x03u;
+
+  if (exponent == 0x1fu) {
+    if (mantissa == 0u) {
+      return MakeSignedInfinityF32(sign);
+    }
+    return MakeSignedQuietNaNF32(sign);
+  }
+  if (exponent == 0u) {
+    if (mantissa == 0u) {
+      return MakeSignedZeroF32(sign);
+    }
+    const float value = std::ldexp(static_cast<float>(mantissa), -16);
+    return sign ? -value : value;
+  }
+
+  const float value =
+      std::ldexp(1.0f + static_cast<float>(mantissa) / 4.0f,
+                 static_cast<int>(exponent) - 15);
+  return sign ? -value : value;
+}
+
+std::uint64_t ExpandPackedFp8PairToF32x2(std::uint32_t value, bool use_bf8) {
+  const auto convert = [use_bf8](std::uint8_t bits) {
+    return use_bf8 ? ExpandBf8E5m2ToFloat(bits) : ExpandFp8E4m3ToFloat(bits);
+  };
+
+  const std::uint32_t low_bits =
+      BitCast<std::uint32_t>(convert(static_cast<std::uint8_t>(value & 0xffu)));
+  const std::uint32_t high_bits = BitCast<std::uint32_t>(
+      convert(static_cast<std::uint8_t>((value >> 8) & 0xffu)));
+  return static_cast<std::uint64_t>(low_bits) |
+         (static_cast<std::uint64_t>(high_bits) << 32);
 }
 
 std::uint16_t NormalizeFloatToSnorm16(float input) {
@@ -1592,6 +1673,22 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtF32U32;
     return true;
   }
+  if (opcode == "V_CVT_F32_FP8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtF32Fp8;
+    return true;
+  }
+  if (opcode == "V_CVT_F32_BF8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtF32Bf8;
+    return true;
+  }
+  if (opcode == "V_CVT_PK_F32_FP8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtPkF32Fp8;
+    return true;
+  }
+  if (opcode == "V_CVT_PK_F32_BF8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtPkF32Bf8;
+    return true;
+  }
   if (opcode == "V_CVT_F32_F16") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtF32F16;
     return true;
@@ -2346,6 +2443,14 @@ std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
   if (opcode == "V_CVT_F32_U32") {
     return BitCast<std::uint32_t>(static_cast<float>(value));
   }
+  if (opcode == "V_CVT_F32_FP8") {
+    return BitCast<std::uint32_t>(
+        ExpandFp8E4m3ToFloat(static_cast<std::uint8_t>(value)));
+  }
+  if (opcode == "V_CVT_F32_BF8") {
+    return BitCast<std::uint32_t>(
+        ExpandBf8E5m2ToFloat(static_cast<std::uint8_t>(value)));
+  }
   if (opcode == "V_CVT_OFF_F32_I4") {
     return EvaluateCvtOffF32I4(value);
   }
@@ -2481,6 +2586,12 @@ std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
 
 std::uint64_t EvaluateWideVectorUnarySeedInstruction(std::string_view opcode,
                                                      std::uint32_t value) {
+  if (opcode == "V_CVT_PK_F32_FP8") {
+    return ExpandPackedFp8PairToF32x2(value, false);
+  }
+  if (opcode == "V_CVT_PK_F32_BF8") {
+    return ExpandPackedFp8PairToF32x2(value, true);
+  }
   if (opcode == "V_CVT_F64_F32") {
     return BitCast<std::uint64_t>(static_cast<double>(BitCast<float>(value)));
   }
@@ -4026,6 +4137,8 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "V_CVT_F32_UBYTE3" ||
       instruction.opcode == "V_CVT_F32_I32" ||
       instruction.opcode == "V_CVT_F32_U32" ||
+      instruction.opcode == "V_CVT_F32_FP8" ||
+      instruction.opcode == "V_CVT_F32_BF8" ||
       instruction.opcode == "V_CVT_OFF_F32_I4" ||
       instruction.opcode == "V_CVT_F32_F16" ||
       instruction.opcode == "V_CVT_F16_F32" ||
@@ -4096,7 +4209,9 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     return true;
   }
 
-  if (instruction.opcode == "V_CVT_F64_F32" ||
+  if (instruction.opcode == "V_CVT_PK_F32_FP8" ||
+      instruction.opcode == "V_CVT_PK_F32_BF8" ||
+      instruction.opcode == "V_CVT_F64_F32" ||
       instruction.opcode == "V_CVT_F64_I32" ||
       instruction.opcode == "V_CVT_F64_U32") {
     if (!ValidateOperandCount(instruction, 2, error_message)) {
@@ -4667,6 +4782,10 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCvtF32Ubyte3:
     case Gfx1201CompiledOpcode::kVCvtF32I32:
     case Gfx1201CompiledOpcode::kVCvtF32U32:
+    case Gfx1201CompiledOpcode::kVCvtF32Fp8:
+    case Gfx1201CompiledOpcode::kVCvtF32Bf8:
+    case Gfx1201CompiledOpcode::kVCvtPkF32Fp8:
+    case Gfx1201CompiledOpcode::kVCvtPkF32Bf8:
     case Gfx1201CompiledOpcode::kVCvtF32F16:
     case Gfx1201CompiledOpcode::kVCvtF32F64:
     case Gfx1201CompiledOpcode::kVCvtF16F32:

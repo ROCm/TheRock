@@ -1,4 +1,5 @@
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -28,6 +29,12 @@ bool Expect(bool condition, const char* message) {
 
 std::uint32_t FloatBits(float value) {
   std::uint32_t result = 0;
+  std::memcpy(&result, &value, sizeof(result));
+  return result;
+}
+
+float BitsToFloat(std::uint32_t value) {
+  float result = 0.0f;
   std::memcpy(&result, &value, sizeof(result));
   return result;
 }
@@ -2078,6 +2085,102 @@ int main() {
                                      OperandKind::kVgpr, 7u,
                                      OperandKind::kVgpr, 2u),
               "expected decoded V_CVT_F32_U32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_f32_fp8_words{
+      MakeVop1(108u, 30u, 257u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_f32_fp8_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_F32_FP8 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_F32_FP8",
+                                     OperandKind::kVgpr, 30u,
+                                     OperandKind::kVgpr, 1u),
+              "expected decoded V_CVT_F32_FP8 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_CVT_F32_FP8 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 8u, 1u, false),
+              "expected V_CVT_F32_FP8 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_f32_bf8_words{
+      MakeVop1(109u, 31u, 3u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_f32_bf8_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_F32_BF8 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_F32_BF8",
+                                     OperandKind::kVgpr, 31u,
+                                     OperandKind::kSgpr, 3u),
+              "expected decoded V_CVT_F32_BF8 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_CVT_F32_BF8 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 8u, 1u, false),
+              "expected V_CVT_F32_BF8 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_pk_f32_fp8_words{
+      MakeVop1(110u, 32u, 257u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_pk_f32_fp8_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_PK_F32_FP8 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_PK_F32_FP8",
+                                     OperandKind::kVgpr, 32u,
+                                     OperandKind::kVgpr, 1u),
+              "expected decoded V_CVT_PK_F32_FP8 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 32u, 2u, false),
+              "expected V_CVT_PK_F32_FP8 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kPackedVector, OperandAccess::kRead,
+                  FragmentKind::kPacked, 8u, 2u, false),
+              "expected V_CVT_PK_F32_FP8 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_pk_f32_bf8_words{
+      MakeVop1(111u, 33u, 3u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_pk_f32_bf8_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_PK_F32_BF8 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_PK_F32_BF8",
+                                     OperandKind::kVgpr, 33u,
+                                     OperandKind::kSgpr, 3u),
+              "expected decoded V_CVT_PK_F32_BF8 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 32u, 2u, false),
+              "expected V_CVT_PK_F32_BF8 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kPacked, 8u, 2u, false),
+              "expected V_CVT_PK_F32_BF8 source descriptor")) {
     return 1;
   }
 
@@ -5663,6 +5766,137 @@ int main() {
       !Expect(ExpectHalfPackExponentSeedState(
                   compiled_half_pack_exponent_state),
               "expected compiled half pack/exponent state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 5> fp8_bridge_words{
+      MakeVop1(108u, 103u, 257u),
+      MakeVop1(109u, 104u, 258u),
+      MakeVop1(110u, 105u, 259u),
+      MakeVop1(111u, 107u, 260u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> fp8_bridge_program;
+  if (!Expect(decoder.DecodeProgram(fp8_bridge_words, &fp8_bridge_program,
+                                    &error_message),
+              "expected FP8/BF8 bridge program decode success") ||
+      !Expect(fp8_bridge_program.size() == 5u,
+              "expected five decoded FP8/BF8 bridge instructions") ||
+      !Expect(fp8_bridge_program[0].opcode == "V_CVT_F32_FP8",
+              "expected decoded V_CVT_F32_FP8") ||
+      !Expect(fp8_bridge_program[1].opcode == "V_CVT_F32_BF8",
+              "expected decoded V_CVT_F32_BF8") ||
+      !Expect(fp8_bridge_program[2].opcode == "V_CVT_PK_F32_FP8",
+              "expected decoded V_CVT_PK_F32_FP8") ||
+      !Expect(fp8_bridge_program[3].opcode == "V_CVT_PK_F32_BF8",
+              "expected decoded V_CVT_PK_F32_BF8") ||
+      !Expect(fp8_bridge_program[4].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after FP8/BF8 bridge batch")) {
+    return 1;
+  }
+
+  auto initialize_fp8_bridge_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[1][0] = 0x0000003cu;
+    state->vgprs[1][1] = 0x000000bcu;
+    state->vgprs[1][2] = 0x11111111u;
+    state->vgprs[1][3] = 0x0000007fu;
+
+    state->vgprs[2][0] = 0x0000003eu;
+    state->vgprs[2][1] = 0x000000beu;
+    state->vgprs[2][2] = 0x22222222u;
+    state->vgprs[2][3] = 0x0000007cu;
+
+    state->vgprs[3][0] = 0x00007f3cu;
+    state->vgprs[3][1] = 0x0000bc3cu;
+    state->vgprs[3][2] = 0x33333333u;
+    state->vgprs[3][3] = 0x00000000u;
+
+    state->vgprs[4][0] = 0x00007c3eu;
+    state->vgprs[4][1] = 0x0000be3eu;
+    state->vgprs[4][2] = 0x44444444u;
+    state->vgprs[4][3] = 0x0000fc00u;
+
+    state->vgprs[103][2] = 0xa3a3a3a3u;
+    state->vgprs[104][2] = 0xa4a4a4a4u;
+    state->vgprs[105][2] = 0xa5a5a5a5u;
+    state->vgprs[106][2] = 0xa6a6a6a6u;
+    state->vgprs[107][2] = 0xa7a7a7a7u;
+    state->vgprs[108][2] = 0xa8a8a8a8u;
+  };
+
+  auto expect_fp8_bridge_state = [](const WaveExecutionState& state) {
+    return state.vgprs[103][0] == FloatBits(1.5f) &&
+           state.vgprs[103][1] == FloatBits(-1.5f) &&
+           state.vgprs[103][2] == 0xa3a3a3a3u &&
+           std::isnan(BitsToFloat(state.vgprs[103][3])) &&
+           state.vgprs[104][0] == FloatBits(1.5f) &&
+           state.vgprs[104][1] == FloatBits(-1.5f) &&
+           state.vgprs[104][2] == 0xa4a4a4a4u &&
+           std::isinf(BitsToFloat(state.vgprs[104][3])) &&
+           !std::signbit(BitsToFloat(state.vgprs[104][3])) &&
+           state.vgprs[105][0] == FloatBits(1.5f) &&
+           std::isnan(BitsToFloat(state.vgprs[106][0])) &&
+           state.vgprs[105][1] == FloatBits(1.5f) &&
+           state.vgprs[106][1] == FloatBits(-1.5f) &&
+           state.vgprs[105][2] == 0xa5a5a5a5u &&
+           state.vgprs[106][2] == 0xa6a6a6a6u &&
+           state.vgprs[105][3] == FloatBits(0.0f) &&
+           state.vgprs[106][3] == FloatBits(0.0f) &&
+           state.vgprs[107][0] == FloatBits(1.5f) &&
+           std::isinf(BitsToFloat(state.vgprs[108][0])) &&
+           !std::signbit(BitsToFloat(state.vgprs[108][0])) &&
+           state.vgprs[107][1] == FloatBits(1.5f) &&
+           state.vgprs[108][1] == FloatBits(-1.5f) &&
+           state.vgprs[107][2] == 0xa7a7a7a7u &&
+           state.vgprs[108][2] == 0xa8a8a8a8u &&
+           state.vgprs[107][3] == FloatBits(0.0f) &&
+           std::isinf(BitsToFloat(state.vgprs[108][3])) &&
+           std::signbit(BitsToFloat(state.vgprs[108][3]));
+  };
+
+  WaveExecutionState decoded_fp8_bridge_state;
+  initialize_fp8_bridge_state(&decoded_fp8_bridge_state);
+  if (!Expect(interpreter.ExecuteProgram(fp8_bridge_program,
+                                         &decoded_fp8_bridge_state,
+                                         &error_message),
+              "expected decoded FP8/BF8 bridge execution success") ||
+      !Expect(expect_fp8_bridge_state(decoded_fp8_bridge_state),
+              "expected decoded FP8/BF8 bridge state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_fp8_bridge_program;
+  if (!Expect(interpreter.CompileProgram(fp8_bridge_program,
+                                         &compiled_fp8_bridge_program,
+                                         &error_message),
+              "expected compiled FP8/BF8 bridge program success") ||
+      !Expect(compiled_fp8_bridge_program.size() == 5u,
+              "expected five compiled FP8/BF8 bridge instructions") ||
+      !Expect(compiled_fp8_bridge_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF32Fp8,
+              "expected compiled V_CVT_F32_FP8 opcode") ||
+      !Expect(compiled_fp8_bridge_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF32Bf8,
+              "expected compiled V_CVT_F32_BF8 opcode") ||
+      !Expect(compiled_fp8_bridge_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtPkF32Fp8,
+              "expected compiled V_CVT_PK_F32_FP8 opcode") ||
+      !Expect(compiled_fp8_bridge_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtPkF32Bf8,
+              "expected compiled V_CVT_PK_F32_BF8 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_fp8_bridge_state;
+  initialize_fp8_bridge_state(&compiled_fp8_bridge_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_fp8_bridge_program,
+                                         &compiled_fp8_bridge_state,
+                                         &error_message),
+              "expected compiled FP8/BF8 bridge execution success") ||
+      !Expect(expect_fp8_bridge_state(compiled_fp8_bridge_state),
+              "expected compiled FP8/BF8 bridge state")) {
     return 1;
   }
 

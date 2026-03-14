@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 314u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 318u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -175,6 +175,14 @@ int main() {
               "expected V_NOT_B16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_F32_I32"),
               "expected V_CVT_F32_I32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_F32_FP8"),
+              "expected V_CVT_F32_FP8 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_F32_BF8"),
+              "expected V_CVT_F32_BF8 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_PK_F32_FP8"),
+              "expected V_CVT_PK_F32_FP8 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_PK_F32_BF8"),
+              "expected V_CVT_PK_F32_BF8 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_NEAREST_I32_F32"),
               "expected V_CVT_NEAREST_I32_F32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_F16_F32"),
@@ -313,8 +321,8 @@ int main() {
               "expected V_CVT_I32_F32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_MOV_B32"),
               "expected S_MOV_B32 executable decode support") ||
-      !Expect(!decoder.SupportsPhase0ExecutableOpcode("V_CVT_F32_BF8"),
-              "expected V_CVT_F32_BF8 to remain outside executable decode slice")) {
+      !Expect(!decoder.SupportsPhase0ExecutableOpcode("V_MOVRELD_B32"),
+              "expected V_MOVRELD_B32 to remain outside executable decode slice")) {
     return 1;
   }
 
@@ -346,7 +354,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 314u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 318u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -450,6 +458,14 @@ int main() {
               "expected interpreter support for V_CVT_F32_UBYTE3") ||
       !Expect(interpreter.Supports("V_CVT_F32_I32"),
               "expected interpreter support for V_CVT_F32_I32") ||
+      !Expect(interpreter.Supports("V_CVT_F32_FP8"),
+              "expected interpreter support for V_CVT_F32_FP8") ||
+      !Expect(interpreter.Supports("V_CVT_F32_BF8"),
+              "expected interpreter support for V_CVT_F32_BF8") ||
+      !Expect(interpreter.Supports("V_CVT_PK_F32_FP8"),
+              "expected interpreter support for V_CVT_PK_F32_FP8") ||
+      !Expect(interpreter.Supports("V_CVT_PK_F32_BF8"),
+              "expected interpreter support for V_CVT_PK_F32_BF8") ||
       !Expect(interpreter.Supports("V_CVT_NEAREST_I32_F32"),
               "expected interpreter support for V_CVT_NEAREST_I32_F32") ||
       !Expect(interpreter.Supports("V_CVT_F16_F32"),
@@ -608,7 +624,7 @@ int main() {
               "expected interpreter support for V_SUB_CO_CI_U32") ||
       !Expect(interpreter.Supports("V_SUBREV_CO_CI_U32"),
               "expected interpreter support for V_SUBREV_CO_CI_U32") ||
-      !Expect(!interpreter.Supports("V_CVT_F32_BF8"),
+      !Expect(!interpreter.Supports("V_MOVRELD_B32"),
               "expected interpreter to reject unsupported seed opcode") ||
       !Expect(interpreter.CarryOverFamilyFocus().size() == 7u,
               "expected carry-over family focus list") ||
@@ -648,13 +664,13 @@ int main() {
   }
 
   const std::array<DecodedInstruction, 1> unsupported_program{
-      DecodedInstruction::Unary("V_CVT_F32_BF8", InstructionOperand::Vgpr(0),
+      DecodedInstruction::Unary("V_MOVRELD_B32", InstructionOperand::Vgpr(0),
                                 InstructionOperand::Vgpr(1)),
   };
   if (!Expect(!interpreter.CompileProgram(unsupported_program, &compiled_program,
                                           &error_message),
               "expected unsupported program compile failure") ||
-      !Expect(error_message.find("V_CVT_F32_BF8 is not in the executable seed slice") !=
+      !Expect(error_message.find("V_MOVRELD_B32 is not in the executable seed slice") !=
                   std::string::npos,
               "expected unsupported opcode message") ||
       !Expect(error_message.find("RDNA4 delta families") != std::string::npos,
