@@ -4,9 +4,6 @@
 # NOTE: not tested. just combining pytorch_2.7.py and pytorch_2.10.py to see if that resolves the OOM errors
 skip_tests = {
     "common": {
-        "autograd": [
-            "test_side_stream_backward_overlap",
-        ],
         "cuda": [
             # Explicitly deselected since giving segfault
             "test_unused_output_device_cuda",  # this test does not exist in nightly anymore

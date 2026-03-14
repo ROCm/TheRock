@@ -62,9 +62,6 @@ skip_tests = {
             # fixed or just good with no caching?
             # "test_reentrant_parent_error_on_cpu_cuda",
             # "test_multi_grad_all_hooks",
-            # flaky, was good some itme
-            "test_side_stream_backward_overlap",
-            "test_side_stream_backward_overlap_cuda"
             #
             #  Test run says they are good????
             # # AttributeError: 'torch._C._autograd.SavedTensor' object has no attribute 'data'
@@ -125,6 +122,10 @@ skip_tests = {
             "test_grad_scaling_autocast_foreach0_fused0_Adam_cuda_float32",
         ],
         "cuda": [
+            # Flaky? See https://github.com/ROCm/TheRock/issues/3724
+            # ROCm allocator does not raise OOM in the same path as CUDA
+            #   AssertionError: RuntimeError not raised
+            "test_out_of_memory_retry",
             # This test uses subprocess.run, so it hangs.
             # See https://github.com/ROCm/TheRock/issues/999.
             "test_pinned_memory_use_background_threads",

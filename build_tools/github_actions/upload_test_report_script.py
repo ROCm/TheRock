@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 """
-Uploads test reports to AWS S3 bucket for a GitHub run ID and AMD GPU family
+Uploads test reports to AWS S3 bucket for a GitHub run ID and AMD GPU family or report type.
 
 TODO: Migrate to StorageBackend (like post_build_upload.py) to replace the
 raw `aws s3 cp` calls and gain --output-dir / --dry-run support.
@@ -11,18 +11,21 @@ raw `aws s3 cp` calls and gain --output-dir / --dry-run support.
 
 import argparse
 import logging
-import os
 from pathlib import Path
 import platform
 import shlex
 import subprocess
 import sys
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from github_actions.github_actions_utils import gha_append_step_summary
 
 logging.basicConfig(level=logging.INFO)
 
-THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
+THEROCK_DIR = _BUILD_TOOLS_DIR.parent
 PLATFORM = platform.system().lower()
 
 # Importing indexer.py
@@ -48,9 +51,9 @@ def create_index_file(args: argparse.Namespace):
     process_dir(report_dir, indexer_args)
 
 
-def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
+def upload_test_report(report_dir: Path, dest_s3_uri: str):
     """
-    Upload all .html files from report_dir to bucket_uri (keeps filenames).
+    Upload all .html files from report_dir to dest_s3_uri (keeps filenames).
     """
     if not report_dir.exists() or not report_dir.is_dir():
         logging.error(
@@ -59,23 +62,17 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
         )
         return
 
-    # Join S3 bucket and log path cleanly by trimming slashes to avoid double “//”.
-    # Example: "s3://bucket//logs/" → "s3://bucket/logs/"
-    # Resulting upload path:
-    # s3://therock-ci-artifacts-external/ROCm-rccl/18718690315-linux/logs/gfx950-dcgpu/index_rccl_test_report.html
-    dest_uri = f"{bucket_uri.rstrip('/')}/{log_destination.lstrip('/')}"
     logging.info(
         "Uploading HTML reports from %s to %s",
         report_dir,
-        dest_uri,
+        dest_s3_uri,
     )
-    # Use a single AWS CLI call to copy only *.html files recursively
     cmd = [
         "aws",
         "s3",
         "cp",
         str(report_dir),
-        dest_uri,
+        dest_s3_uri.rstrip("/") + "/",
         "--recursive",
         "--exclude",
         "*",
@@ -85,14 +82,13 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
         "text/html",
     ]
     run_command(cmd, cwd=Path.cwd())
-    logging.info("Uploaded all .html files from %s to %s", report_dir, bucket_uri)
+    logging.info("Uploaded all .html files from %s to %s", report_dir, dest_s3_uri)
 
 
 def run(args: argparse.Namespace):
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id, platform=PLATFORM
     )
-    base_uri = f"s3://{output_root.bucket}/{output_root.prefix}"
 
     if not args.report_path.exists():
         logging.error(
@@ -100,8 +96,22 @@ def run(args: argparse.Namespace):
         )
         return
 
+    # Destination: canonical path from WorkflowOutputRoot when --log-destination
+    # is omitted or empty; otherwise legacy base_uri + log_destination (backward compat).
+    log_dest = (args.log_destination or "").strip()
+    if log_dest:
+        base_uri = f"s3://{output_root.bucket}/{output_root.prefix}"
+        dest_s3_uri = f"{base_uri.rstrip('/')}/{log_dest.lstrip('/')}"
+    else:
+        dest_s3_uri = output_root.log_dir(args.amdgpu_family).s3_uri
+
     create_index_file(args)
-    upload_test_report(args.report_path, base_uri, args.log_destination)
+    upload_test_report(args.report_path, dest_s3_uri)
+
+    report_url = output_root.log_file(
+        args.amdgpu_family, args.index_file_name
+    ).https_url
+    gha_append_step_summary(f"[Report (S3)]({report_url})")
 
 
 def main(argv):
@@ -111,7 +121,10 @@ def main(argv):
     )
 
     parser.add_argument(
-        "--amdgpu-family", type=str, required=True, help="AMD GPU family to upload"
+        "--amdgpu-family",
+        type=str,
+        required=True,
+        help="AMD GPU family or report/artifact group for log dir (e.g. gfx950-dcgpu or manifest-diff).",
     )
 
     parser.add_argument(
@@ -124,8 +137,11 @@ def main(argv):
     parser.add_argument(
         "--log-destination",
         type=str,
-        required=True,
-        help="Subdirectory in S3 to upload reports",
+        default=None,
+        help=(
+            "Subdirectory in S3 to upload reports (legacy). If omitted, destination "
+            "is derived from WorkflowOutputRoot.log_dir(amdgpu_family) per workflow_outputs."
+        ),
     )
 
     parser.add_argument(
