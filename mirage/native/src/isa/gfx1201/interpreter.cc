@@ -42,7 +42,7 @@ float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 std::uint16_t CompressFloatToFp16BitsRtz(float value);
 
-constexpr std::array<std::string_view, 307> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 314> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -316,6 +316,8 @@ constexpr std::array<std::string_view, 307> kExecutableSeedOpcodes{{
     "V_SUB_F16",
     "V_SUBREV_F16",
     "V_MUL_F16",
+    "V_FMAC_F16",
+    "V_PK_FMAC_F16",
     "V_CVT_PK_RTZ_F16_F32",
     "V_LDEXP_F16",
     "V_MIN_NUM_F16",
@@ -324,6 +326,8 @@ constexpr std::array<std::string_view, 307> kExecutableSeedOpcodes{{
     "V_SUB_F32",
     "V_SUBREV_F32",
     "V_MUL_F32",
+    "V_MUL_DX9_ZERO_F32",
+    "V_FMAC_F32",
     "V_MIN_NUM_F32",
     "V_MAX_NUM_F32",
     "V_ADD_F64",
@@ -336,6 +340,9 @@ constexpr std::array<std::string_view, 307> kExecutableSeedOpcodes{{
     "V_MUL_U32_U24",
     "V_MUL_HI_U32_U24",
     "V_LSHLREV_B64",
+    "V_ADD_CO_CI_U32",
+    "V_SUB_CO_CI_U32",
+    "V_SUBREV_CO_CI_U32",
     "V_ADD_U32",
     "V_SUB_U32",
     "V_SUBREV_U32",
@@ -1841,6 +1848,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVMulF16;
     return true;
   }
+  if (opcode == "V_FMAC_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVFmacF16;
+    return true;
+  }
+  if (opcode == "V_PK_FMAC_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVPkFmacF16;
+    return true;
+  }
   if (opcode == "V_CVT_PK_RTZ_F16_F32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtPkRtzF16F32;
     return true;
@@ -1871,6 +1886,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_MUL_F32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVMulF32;
+    return true;
+  }
+  if (opcode == "V_MUL_DX9_ZERO_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMulDx9ZeroF32;
+    return true;
+  }
+  if (opcode == "V_FMAC_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVFmacF32;
     return true;
   }
   if (opcode == "V_MIN_NUM_F32") {
@@ -1919,6 +1942,18 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_LSHLREV_B64") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVLshlrevB64;
+    return true;
+  }
+  if (opcode == "V_ADD_CO_CI_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVAddCoCiU32;
+    return true;
+  }
+  if (opcode == "V_SUB_CO_CI_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVSubCoCiU32;
+    return true;
+  }
+  if (opcode == "V_SUBREV_CO_CI_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVSubrevCoCiU32;
     return true;
   }
   if (opcode == "V_ADD_U32") {
@@ -2533,6 +2568,15 @@ std::uint32_t EvaluateVectorBinaryHalfSeedInstruction(std::string_view opcode,
   return 0u;
 }
 
+std::uint32_t EvaluateVectorFmacHalfSeedInstruction(std::uint32_t accum,
+                                                    std::uint32_t lhs,
+                                                    std::uint32_t rhs) {
+  const float accum_value = ExpandFp16ToFloat(static_cast<std::uint16_t>(accum));
+  const float lhs_value = ExpandFp16ToFloat(static_cast<std::uint16_t>(lhs));
+  const float rhs_value = ExpandFp16ToFloat(static_cast<std::uint16_t>(rhs));
+  return CompressFloatToFp16Bits(std::fma(lhs_value, rhs_value, accum_value));
+}
+
 std::uint32_t EvaluateVectorBinaryF32SeedInstruction(std::string_view opcode,
                                                      std::uint32_t lhs,
                                                      std::uint32_t rhs) {
@@ -2549,6 +2593,12 @@ std::uint32_t EvaluateVectorBinaryF32SeedInstruction(std::string_view opcode,
     return BitCast<std::uint32_t>(rhs_value - lhs_value);
   }
   if (opcode == "V_MUL_F32") {
+    return BitCast<std::uint32_t>(lhs_value * rhs_value);
+  }
+  if (opcode == "V_MUL_DX9_ZERO_F32") {
+    if (lhs_value == 0.0f || rhs_value == 0.0f) {
+      return 0u;
+    }
     return BitCast<std::uint32_t>(lhs_value * rhs_value);
   }
   if (opcode == "V_MIN_NUM_F32") {
@@ -2583,6 +2633,15 @@ std::uint32_t EvaluateVectorBinaryF32SeedInstruction(std::string_view opcode,
   return 0u;
 }
 
+std::uint32_t EvaluateVectorFmacF32SeedInstruction(std::uint32_t accum,
+                                                   std::uint32_t lhs,
+                                                   std::uint32_t rhs) {
+  const float accum_value = BitCast<float>(accum);
+  const float lhs_value = BitCast<float>(lhs);
+  const float rhs_value = BitCast<float>(rhs);
+  return BitCast<std::uint32_t>(std::fma(lhs_value, rhs_value, accum_value));
+}
+
 std::uint32_t EvaluateVectorPackedHalfBinarySeedInstruction(
     std::string_view opcode, std::uint32_t lhs, std::uint32_t rhs) {
   if (opcode == "V_CVT_PK_RTZ_F16_F32") {
@@ -2593,6 +2652,28 @@ std::uint32_t EvaluateVectorPackedHalfBinarySeedInstruction(
     return low | (high << 16);
   }
   return 0u;
+}
+
+std::uint32_t EvaluatePackedHalfFmacSeedInstruction(std::uint32_t accum,
+                                                    std::uint32_t lhs,
+                                                    std::uint32_t rhs) {
+  const float accum_low =
+      ExpandFp16ToFloat(static_cast<std::uint16_t>(accum & 0xffffu));
+  const float accum_high =
+      ExpandFp16ToFloat(static_cast<std::uint16_t>((accum >> 16) & 0xffffu));
+  const float lhs_low =
+      ExpandFp16ToFloat(static_cast<std::uint16_t>(lhs & 0xffffu));
+  const float lhs_high =
+      ExpandFp16ToFloat(static_cast<std::uint16_t>((lhs >> 16) & 0xffffu));
+  const float rhs_low =
+      ExpandFp16ToFloat(static_cast<std::uint16_t>(rhs & 0xffffu));
+  const float rhs_high =
+      ExpandFp16ToFloat(static_cast<std::uint16_t>((rhs >> 16) & 0xffffu));
+  const std::uint32_t low =
+      CompressFloatToFp16Bits(std::fma(lhs_low, rhs_low, accum_low));
+  const std::uint32_t high =
+      CompressFloatToFp16Bits(std::fma(lhs_high, rhs_high, accum_high));
+  return low | (high << 16);
 }
 
 std::uint32_t EvaluateVectorHalfLdexpSeedInstruction(std::uint32_t lhs,
@@ -2633,6 +2714,34 @@ std::uint64_t EvaluateWideVectorBinarySeedInstruction(std::string_view opcode,
   return 0u;
 }
 
+struct VectorCarryBinarySeedResult {
+  std::uint32_t value = 0;
+  bool carry_out = false;
+};
+
+VectorCarryBinarySeedResult EvaluateVectorCarryBinarySeedInstruction(
+    std::string_view opcode,
+    std::uint32_t lhs,
+    std::uint32_t rhs,
+    bool carry_in) {
+  if (opcode == "V_ADD_CO_CI_U32") {
+    const std::uint64_t wide = static_cast<std::uint64_t>(lhs) + rhs +
+                               static_cast<std::uint64_t>(carry_in ? 1u : 0u);
+    return {static_cast<std::uint32_t>(wide), wide > 0xffffffffULL};
+  }
+
+  const std::uint64_t carry_in_wide = carry_in ? 1u : 0u;
+  if (opcode == "V_SUB_CO_CI_U32") {
+    const std::uint64_t subtrahend = static_cast<std::uint64_t>(rhs) + carry_in_wide;
+    return {lhs - static_cast<std::uint32_t>(subtrahend), lhs >= subtrahend};
+  }
+  if (opcode == "V_SUBREV_CO_CI_U32") {
+    const std::uint64_t subtrahend = static_cast<std::uint64_t>(lhs) + carry_in_wide;
+    return {rhs - static_cast<std::uint32_t>(subtrahend), rhs >= subtrahend};
+  }
+  return {};
+}
+
 std::uint32_t EvaluateVectorBinarySeedInstruction(std::string_view opcode,
                                                   std::uint32_t lhs,
                                                   std::uint32_t rhs) {
@@ -2643,6 +2752,7 @@ std::uint32_t EvaluateVectorBinarySeedInstruction(std::string_view opcode,
   }
   if (opcode == "V_ADD_F32" || opcode == "V_SUB_F32" ||
       opcode == "V_SUBREV_F32" || opcode == "V_MUL_F32" ||
+      opcode == "V_MUL_DX9_ZERO_F32" ||
       opcode == "V_MIN_NUM_F32" || opcode == "V_MAX_NUM_F32" ||
       opcode == "V_XNOR_B32" || opcode == "V_MUL_I32_I24" ||
       opcode == "V_MUL_HI_I32_I24" || opcode == "V_MUL_U32_U24" ||
@@ -3832,6 +3942,76 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     return true;
   }
 
+  if (instruction.opcode == "V_FMAC_F16" || instruction.opcode == "V_FMAC_F32") {
+    if (!ValidateOperandCount(instruction, 3, error_message)) {
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      const std::uint32_t accum = ReadVectorOperand(
+          instruction.operands[0], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t lhs = ReadVectorOperand(
+          instruction.operands[1], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t rhs = ReadVectorOperand(
+          instruction.operands[2], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t result =
+          instruction.opcode == "V_FMAC_F16"
+              ? EvaluateVectorFmacHalfSeedInstruction(accum, lhs, rhs)
+              : EvaluateVectorFmacF32SeedInstruction(accum, lhs, rhs);
+      if (!WriteVectorOperand(instruction.operands[0], lane_index, result, state,
+                              error_message)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  if (instruction.opcode == "V_PK_FMAC_F16") {
+    if (!ValidateOperandCount(instruction, 3, error_message)) {
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      const std::uint32_t accum = ReadVectorOperand(
+          instruction.operands[0], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t lhs = ReadVectorOperand(
+          instruction.operands[1], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t rhs = ReadVectorOperand(
+          instruction.operands[2], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t result =
+          EvaluatePackedHalfFmacSeedInstruction(accum, lhs, rhs);
+      if (!WriteVectorOperand(instruction.operands[0], lane_index, result, state,
+                              error_message)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   if (instruction.opcode == "V_MOV_B32" || instruction.opcode == "V_MOV_B16" ||
       instruction.opcode == "V_PERMLANE64_B32" ||
       instruction.opcode == "V_NOT_B16" ||
@@ -4095,6 +4275,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "V_SUB_F32" ||
       instruction.opcode == "V_SUBREV_F32" ||
       instruction.opcode == "V_MUL_F32" ||
+      instruction.opcode == "V_MUL_DX9_ZERO_F32" ||
       instruction.opcode == "V_MIN_NUM_F32" ||
       instruction.opcode == "V_MAX_NUM_F32" ||
       instruction.opcode == "V_XNOR_B32" ||
@@ -4168,6 +4349,73 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
                                   state, error_message)) {
         return false;
       }
+    }
+    return true;
+  }
+
+  if (instruction.opcode == "V_ADD_CO_CI_U32" ||
+      instruction.opcode == "V_SUB_CO_CI_U32" ||
+      instruction.opcode == "V_SUBREV_CO_CI_U32") {
+    if (!ValidateOperandCount(instruction, 5, error_message)) {
+      return false;
+    }
+    if (instruction.operands[1].kind != OperandKind::kSgpr ||
+        instruction.operands[1].index != kImplicitVccPairSgprIndex) {
+      if (error_message != nullptr) {
+        *error_message = "expected implicit VCC destination operand";
+      }
+      return false;
+    }
+    if (instruction.operands[4].kind != OperandKind::kSgpr ||
+        instruction.operands[4].index != kImplicitVccPairSgprIndex) {
+      if (error_message != nullptr) {
+        *error_message = "expected implicit VCC source operand";
+      }
+      return false;
+    }
+
+    const std::uint64_t carry_in_mask =
+        ReadWideSourceOperand(instruction.operands[4], *state, 0, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    std::uint64_t next_vcc_mask = state->vcc_mask;
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      const std::uint32_t lhs = ReadVectorOperand(instruction.operands[2], *state,
+                                                  lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t rhs = ReadVectorOperand(instruction.operands[3], *state,
+                                                  lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+
+      const VectorCarryBinarySeedResult result =
+          EvaluateVectorCarryBinarySeedInstruction(
+              instruction.opcode, lhs, rhs,
+              ((carry_in_mask >> lane_index) & 1ULL) != 0);
+      if (!WriteVectorOperand(instruction.operands[0], lane_index, result.value,
+                              state, error_message)) {
+        return false;
+      }
+
+      const std::uint64_t lane_bit = 1ULL << lane_index;
+      if (result.carry_out) {
+        next_vcc_mask |= lane_bit;
+      } else {
+        next_vcc_mask &= ~lane_bit;
+      }
+    }
+    state->vcc_mask = next_vcc_mask;
+    state->ClampMasksToLaneCount();
+    if (error_message != nullptr) {
+      error_message->clear();
     }
     return true;
   }
@@ -4483,6 +4731,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVSubF16:
     case Gfx1201CompiledOpcode::kVSubrevF16:
     case Gfx1201CompiledOpcode::kVMulF16:
+    case Gfx1201CompiledOpcode::kVFmacF16:
+    case Gfx1201CompiledOpcode::kVPkFmacF16:
     case Gfx1201CompiledOpcode::kVCvtPkRtzF16F32:
     case Gfx1201CompiledOpcode::kVLdexpF16:
     case Gfx1201CompiledOpcode::kVMinNumF16:
@@ -4491,6 +4741,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVSubF32:
     case Gfx1201CompiledOpcode::kVSubrevF32:
     case Gfx1201CompiledOpcode::kVMulF32:
+    case Gfx1201CompiledOpcode::kVMulDx9ZeroF32:
+    case Gfx1201CompiledOpcode::kVFmacF32:
     case Gfx1201CompiledOpcode::kVMinNumF32:
     case Gfx1201CompiledOpcode::kVMaxNumF32:
     case Gfx1201CompiledOpcode::kVAddF64:
@@ -4503,6 +4755,9 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVMulU32U24:
     case Gfx1201CompiledOpcode::kVMulHiU32U24:
     case Gfx1201CompiledOpcode::kVLshlrevB64:
+    case Gfx1201CompiledOpcode::kVAddCoCiU32:
+    case Gfx1201CompiledOpcode::kVSubCoCiU32:
+    case Gfx1201CompiledOpcode::kVSubrevCoCiU32:
     case Gfx1201CompiledOpcode::kVAddU32:
     case Gfx1201CompiledOpcode::kVSubU32:
     case Gfx1201CompiledOpcode::kVSubrevU32:

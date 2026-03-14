@@ -848,6 +848,363 @@ bool ExpectF32VectorBinarySeedState(
          !state.waiting_on_barrier && state.pc == 6u;
 }
 
+bool ExpectDx9FmacSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[118][0] == 0u &&
+         state.vgprs[118][1] == 0u &&
+         state.vgprs[118][2] == 0xc9c9c9c9u &&
+         state.vgprs[118][3] == FloatBits(-8.0f) &&
+         state.vgprs[119][0] == FloatBits(7.0f) &&
+         state.vgprs[119][1] == FloatBits(-3.0f) &&
+         state.vgprs[119][2] == 0xd0d0d0d0u &&
+         state.vgprs[119][3] == FloatBits(7.0f) &&
+         state.vgprs[120][0] == 0x00004000u &&
+         state.vgprs[120][1] == 0x0000b800u &&
+         state.vgprs[120][2] == 0xd1d1d1d1u &&
+         state.vgprs[120][3] == 0x00004100u &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 3u;
+}
+
+bool RunDx9FmacBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  const std::array<std::uint32_t, 4> dx9_fmac_words{
+      MakeVop2(7u, 118u, 257u, 2u),
+      MakeVop2(43u, 119u, 259u, 4u),
+      MakeVop2(54u, 120u, 261u, 6u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> dx9_fmac_program;
+  if (!Expect(decoder.DecodeProgram(dx9_fmac_words, &dx9_fmac_program,
+                                    error_message),
+              "expected DX9/FMAC program decode success") ||
+      !Expect(dx9_fmac_program.size() == 4u,
+              "expected four decoded DX9/FMAC instructions") ||
+      !Expect(dx9_fmac_program[0].opcode == "V_MUL_DX9_ZERO_F32",
+              "expected decoded V_MUL_DX9_ZERO_F32") ||
+      !Expect(dx9_fmac_program[1].opcode == "V_FMAC_F32",
+              "expected decoded V_FMAC_F32") ||
+      !Expect(dx9_fmac_program[2].opcode == "V_FMAC_F16",
+              "expected decoded V_FMAC_F16") ||
+      !Expect(dx9_fmac_program[3].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after DX9/FMAC batch")) {
+    return false;
+  }
+
+  auto initialize_dx9_fmac_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[1][0] = 0u;
+    state->vgprs[1][1] = 0x80000000u;
+    state->vgprs[1][2] = 0x11111111u;
+    state->vgprs[1][3] = FloatBits(2.0f);
+
+    state->vgprs[2][0] = 0x7f800000u;
+    state->vgprs[2][1] = kQuietNaNF32Bits;
+    state->vgprs[2][2] = 0x22222222u;
+    state->vgprs[2][3] = FloatBits(-4.0f);
+
+    state->vgprs[119][0] = FloatBits(1.0f);
+    state->vgprs[119][1] = FloatBits(-1.0f);
+    state->vgprs[119][2] = 0xd0d0d0d0u;
+    state->vgprs[119][3] = FloatBits(10.0f);
+
+    state->vgprs[3][0] = FloatBits(2.0f);
+    state->vgprs[3][1] = FloatBits(4.0f);
+    state->vgprs[3][2] = 0x33333333u;
+    state->vgprs[3][3] = FloatBits(-2.0f);
+
+    state->vgprs[4][0] = FloatBits(3.0f);
+    state->vgprs[4][1] = FloatBits(-0.5f);
+    state->vgprs[4][2] = 0x44444444u;
+    state->vgprs[4][3] = FloatBits(1.5f);
+
+    state->vgprs[120][0] = 0x00003c00u;
+    state->vgprs[120][1] = 0x0000bc00u;
+    state->vgprs[120][2] = 0xd1d1d1d1u;
+    state->vgprs[120][3] = 0x00003800u;
+
+    state->vgprs[5][0] = 0x00003800u;
+    state->vgprs[5][1] = 0x00003c00u;
+    state->vgprs[5][2] = 0x55555555u;
+    state->vgprs[5][3] = 0x0000c000u;
+
+    state->vgprs[6][0] = 0x00004000u;
+    state->vgprs[6][1] = 0x00003800u;
+    state->vgprs[6][2] = 0x66666666u;
+    state->vgprs[6][3] = 0x0000bc00u;
+
+    state->vgprs[118][2] = 0xc9c9c9c9u;
+  };
+
+  WaveExecutionState decoded_dx9_fmac_state;
+  initialize_dx9_fmac_state(&decoded_dx9_fmac_state);
+  if (!Expect(interpreter.ExecuteProgram(dx9_fmac_program,
+                                         &decoded_dx9_fmac_state,
+                                         error_message),
+              "expected decoded DX9/FMAC execution success") ||
+      !Expect(ExpectDx9FmacSeedState(decoded_dx9_fmac_state),
+              "expected decoded DX9/FMAC state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_dx9_fmac_program;
+  if (!Expect(interpreter.CompileProgram(dx9_fmac_program,
+                                         &compiled_dx9_fmac_program,
+                                         error_message),
+              "expected compiled DX9/FMAC program success") ||
+      !Expect(compiled_dx9_fmac_program.size() == 4u,
+              "expected four compiled DX9/FMAC instructions") ||
+      !Expect(compiled_dx9_fmac_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVMulDx9ZeroF32,
+              "expected compiled V_MUL_DX9_ZERO_F32 opcode") ||
+      !Expect(compiled_dx9_fmac_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVFmacF32,
+              "expected compiled V_FMAC_F32 opcode") ||
+      !Expect(compiled_dx9_fmac_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVFmacF16,
+              "expected compiled V_FMAC_F16 opcode")) {
+    return false;
+  }
+
+  WaveExecutionState compiled_dx9_fmac_state;
+  initialize_dx9_fmac_state(&compiled_dx9_fmac_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_dx9_fmac_program,
+                                         &compiled_dx9_fmac_state,
+                                         error_message),
+              "expected compiled DX9/FMAC execution success") ||
+      !Expect(ExpectDx9FmacSeedState(compiled_dx9_fmac_state),
+              "expected compiled DX9/FMAC state")) {
+    return false;
+  }
+
+  return true;
+}
+
+bool ExpectPackedFmacSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[121][0] == 0xc0004000u &&
+         state.vgprs[121][1] == 0x40004100u &&
+         state.vgprs[121][2] == 0xc2c2c2c2u &&
+         state.vgprs[121][3] == 0x41003800u &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 1u;
+}
+
+bool RunPackedFmacBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  const std::array<std::uint32_t, 2> packed_fmac_words{
+      MakeVop2(60u, 121u, 257u, 2u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> packed_fmac_program;
+  if (!Expect(decoder.DecodeProgram(packed_fmac_words, &packed_fmac_program,
+                                    error_message),
+              "expected packed FMAC program decode success") ||
+      !Expect(packed_fmac_program.size() == 2u,
+              "expected two decoded packed FMAC instructions") ||
+      !Expect(packed_fmac_program[0].opcode == "V_PK_FMAC_F16",
+              "expected decoded V_PK_FMAC_F16") ||
+      !Expect(packed_fmac_program[1].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after packed FMAC batch")) {
+    return false;
+  }
+
+  auto initialize_packed_fmac_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[121][0] = 0xbc003c00u;
+    state->vgprs[121][1] = 0x3c003800u;
+    state->vgprs[121][2] = 0xc2c2c2c2u;
+    state->vgprs[121][3] = 0x3800b800u;
+
+    state->vgprs[1][0] = 0x40003800u;
+    state->vgprs[1][1] = 0x3c00c000u;
+    state->vgprs[1][2] = 0x11111111u;
+    state->vgprs[1][3] = 0xbc003c00u;
+
+    state->vgprs[2][0] = 0xb8004000u;
+    state->vgprs[2][1] = 0x3c00bc00u;
+    state->vgprs[2][2] = 0x22222222u;
+    state->vgprs[2][3] = 0xc0003c00u;
+  };
+
+  WaveExecutionState decoded_packed_fmac_state;
+  initialize_packed_fmac_state(&decoded_packed_fmac_state);
+  if (!Expect(interpreter.ExecuteProgram(packed_fmac_program,
+                                         &decoded_packed_fmac_state,
+                                         error_message),
+              "expected decoded packed FMAC execution success") ||
+      !Expect(ExpectPackedFmacSeedState(decoded_packed_fmac_state),
+              "expected decoded packed FMAC state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_packed_fmac_program;
+  if (!Expect(interpreter.CompileProgram(packed_fmac_program,
+                                         &compiled_packed_fmac_program,
+                                         error_message),
+              "expected compiled packed FMAC program success") ||
+      !Expect(compiled_packed_fmac_program.size() == 2u,
+              "expected two compiled packed FMAC instructions") ||
+      !Expect(compiled_packed_fmac_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVPkFmacF16,
+              "expected compiled V_PK_FMAC_F16 opcode")) {
+    return false;
+  }
+
+  WaveExecutionState compiled_packed_fmac_state;
+  initialize_packed_fmac_state(&compiled_packed_fmac_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_packed_fmac_program,
+                                         &compiled_packed_fmac_state,
+                                         error_message),
+              "expected compiled packed FMAC execution success") ||
+      !Expect(ExpectPackedFmacSeedState(compiled_packed_fmac_state),
+              "expected compiled packed FMAC state")) {
+    return false;
+  }
+
+  return true;
+}
+
+bool ExpectCarryChainSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[122][0] == 0u &&
+         state.vgprs[122][1] == 13u &&
+         state.vgprs[122][2] == 0xaaaaaaaau &&
+         state.vgprs[122][3] == 0xffffffffu &&
+         state.vgprs[123][0] == 6u &&
+         state.vgprs[123][1] == 0xfffffffdu &&
+         state.vgprs[123][2] == 0xbbbbbbbbu &&
+         state.vgprs[123][3] == 0u &&
+         state.vgprs[124][0] == 5u &&
+         state.vgprs[124][1] == 0xfffffffbu &&
+         state.vgprs[124][2] == 0xccccccccu &&
+         state.vgprs[124][3] == 0xffffffffu &&
+         state.vcc_mask == 0x5u && state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 3u;
+}
+
+bool RunCarryChainBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  const std::array<std::uint32_t, 4> carry_chain_words{
+      MakeVop2(32u, 122u, 257u, 2u),
+      MakeVop2(33u, 123u, 259u, 4u),
+      MakeVop2(34u, 124u, 261u, 6u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> carry_chain_program;
+  if (!Expect(decoder.DecodeProgram(carry_chain_words, &carry_chain_program,
+                                    error_message),
+              "expected carry-chain program decode success") ||
+      !Expect(carry_chain_program.size() == 4u,
+              "expected four decoded carry-chain instructions") ||
+      !Expect(carry_chain_program[0].opcode == "V_ADD_CO_CI_U32",
+              "expected decoded V_ADD_CO_CI_U32") ||
+      !Expect(carry_chain_program[1].opcode == "V_SUB_CO_CI_U32",
+              "expected decoded V_SUB_CO_CI_U32") ||
+      !Expect(carry_chain_program[2].opcode == "V_SUBREV_CO_CI_U32",
+              "expected decoded V_SUBREV_CO_CI_U32") ||
+      !Expect(carry_chain_program[3].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after carry-chain batch")) {
+    return false;
+  }
+
+  auto initialize_carry_chain_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+    state->vcc_mask = 0xeu;
+
+    state->vgprs[122][2] = 0xaaaaaaaau;
+    state->vgprs[123][2] = 0xbbbbbbbbu;
+    state->vgprs[124][2] = 0xccccccccu;
+
+    state->vgprs[1][0] = 0xffffffffu;
+    state->vgprs[1][1] = 5u;
+    state->vgprs[1][2] = 0x11111111u;
+    state->vgprs[1][3] = 0xfffffffeu;
+
+    state->vgprs[2][0] = 1u;
+    state->vgprs[2][1] = 7u;
+    state->vgprs[2][2] = 0x22222222u;
+    state->vgprs[2][3] = 0u;
+
+    state->vgprs[3][0] = 10u;
+    state->vgprs[3][1] = 2u;
+    state->vgprs[3][2] = 0x33333333u;
+    state->vgprs[3][3] = 0u;
+
+    state->vgprs[4][0] = 3u;
+    state->vgprs[4][1] = 5u;
+    state->vgprs[4][2] = 0x44444444u;
+    state->vgprs[4][3] = 0u;
+
+    state->vgprs[5][0] = 4u;
+    state->vgprs[5][1] = 8u;
+    state->vgprs[5][2] = 0x55555555u;
+    state->vgprs[5][3] = 0u;
+
+    state->vgprs[6][0] = 10u;
+    state->vgprs[6][1] = 3u;
+    state->vgprs[6][2] = 0x66666666u;
+    state->vgprs[6][3] = 0u;
+  };
+
+  WaveExecutionState decoded_carry_chain_state;
+  initialize_carry_chain_state(&decoded_carry_chain_state);
+  if (!Expect(interpreter.ExecuteProgram(carry_chain_program,
+                                         &decoded_carry_chain_state,
+                                         error_message),
+              "expected decoded carry-chain execution success") ||
+      !Expect(ExpectCarryChainSeedState(decoded_carry_chain_state),
+              "expected decoded carry-chain state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_carry_chain_program;
+  if (!Expect(interpreter.CompileProgram(carry_chain_program,
+                                         &compiled_carry_chain_program,
+                                         error_message),
+              "expected compiled carry-chain program success") ||
+      !Expect(compiled_carry_chain_program.size() == 4u,
+              "expected four compiled carry-chain instructions") ||
+      !Expect(compiled_carry_chain_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVAddCoCiU32,
+              "expected compiled V_ADD_CO_CI_U32 opcode") ||
+      !Expect(compiled_carry_chain_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVSubCoCiU32,
+              "expected compiled V_SUB_CO_CI_U32 opcode") ||
+      !Expect(compiled_carry_chain_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVSubrevCoCiU32,
+              "expected compiled V_SUBREV_CO_CI_U32 opcode")) {
+    return false;
+  }
+
+  WaveExecutionState compiled_carry_chain_state;
+  initialize_carry_chain_state(&compiled_carry_chain_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_carry_chain_program,
+                                         &compiled_carry_chain_state,
+                                         error_message),
+              "expected compiled carry-chain execution success") ||
+      !Expect(ExpectCarryChainSeedState(compiled_carry_chain_state),
+              "expected compiled carry-chain state")) {
+    return false;
+  }
+
+  return true;
+}
+
 bool ExpectF64VectorBinarySeedState(
     const mirage::sim::isa::WaveExecutionState& state) {
   std::uint32_t add_lane0_low, add_lane0_high;
@@ -2407,6 +2764,144 @@ int main() {
                                       OperandKind::kVgpr, 7u,
                                       OperandKind::kVgpr, 8u),
               "expected decoded V_LSHLREV_B64 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_mul_dx9_zero_f32_words{
+      MakeVop2(7u, 25u, 257u, 6u)};
+  if (!Expect(decoder.DecodeInstruction(vector_mul_dx9_zero_f32_words,
+                                        &instruction, &words_consumed,
+                                        &error_message),
+              "expected V_MUL_DX9_ZERO_F32 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_MUL_DX9_ZERO_F32",
+                                      OperandKind::kVgpr, 25u,
+                                      OperandKind::kVgpr, 1u,
+                                      OperandKind::kVgpr, 6u),
+              "expected decoded V_MUL_DX9_ZERO_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_fmac_f32_words{
+      MakeVop2(43u, 26u, 257u, 6u)};
+  if (!Expect(decoder.DecodeInstruction(vector_fmac_f32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_FMAC_F32 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_FMAC_F32",
+                                      OperandKind::kVgpr, 26u,
+                                      OperandKind::kVgpr, 1u,
+                                      OperandKind::kVgpr, 6u),
+              "expected decoded V_FMAC_F32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister,
+                  OperandAccess::kReadWrite, FragmentKind::kVector, 32u, 1u,
+                  false),
+              "expected V_FMAC_F32 destination readwrite descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_fmac_f16_words{
+      MakeVop2(54u, 27u, 258u, 7u)};
+  if (!Expect(decoder.DecodeInstruction(vector_fmac_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_FMAC_F16 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_FMAC_F16",
+                                      OperandKind::kVgpr, 27u,
+                                      OperandKind::kVgpr, 2u,
+                                      OperandKind::kVgpr, 7u),
+              "expected decoded V_FMAC_F16 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister,
+                  OperandAccess::kReadWrite, FragmentKind::kVector, 16u, 1u,
+                  false),
+              "expected V_FMAC_F16 destination readwrite descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_pk_fmac_f16_words{
+      MakeVop2(60u, 28u, 257u, 2u)};
+  if (!Expect(decoder.DecodeInstruction(vector_pk_fmac_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_PK_FMAC_F16 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_PK_FMAC_F16",
+                                      OperandKind::kVgpr, 28u,
+                                      OperandKind::kVgpr, 1u,
+                                      OperandKind::kVgpr, 2u),
+              "expected decoded V_PK_FMAC_F16 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kPackedVector,
+                  OperandAccess::kReadWrite, FragmentKind::kPacked, 16u, 2u,
+                  false),
+              "expected V_PK_FMAC_F16 destination packed readwrite descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kPackedVector, OperandAccess::kRead,
+                  FragmentKind::kPacked, 16u, 2u, false),
+              "expected V_PK_FMAC_F16 source0 packed descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kPackedVector, OperandAccess::kRead,
+                  FragmentKind::kPacked, 16u, 2u, false),
+              "expected V_PK_FMAC_F16 source1 packed descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_add_co_ci_u32_words{
+      MakeVop2(32u, 29u, 257u, 3u)};
+  if (!Expect(decoder.DecodeInstruction(vector_add_co_ci_u32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_ADD_CO_CI_U32 decode success") ||
+      !Expect(instruction.opcode == "V_ADD_CO_CI_U32",
+              "expected decoded V_ADD_CO_CI_U32 opcode") ||
+      !Expect(instruction.operand_count == 5u,
+              "expected five V_ADD_CO_CI_U32 operands") ||
+      !Expect(instruction.operands[0].kind == OperandKind::kVgpr &&
+                  instruction.operands[0].index == 29u,
+              "expected V_ADD_CO_CI_U32 VGPR destination") ||
+      !Expect(instruction.operands[1].kind == OperandKind::kSgpr &&
+                  instruction.operands[1].index == kImplicitVccPairSgprIndex,
+              "expected V_ADD_CO_CI_U32 implicit VCC destination") ||
+      !Expect(instruction.operands[2].kind == OperandKind::kVgpr &&
+                  instruction.operands[2].index == 1u,
+              "expected V_ADD_CO_CI_U32 source0") ||
+      !Expect(instruction.operands[3].kind == OperandKind::kVgpr &&
+                  instruction.operands[3].index == 3u,
+              "expected V_ADD_CO_CI_U32 source1") ||
+      !Expect(instruction.operands[4].kind == OperandKind::kSgpr &&
+                  instruction.operands[4].index == kImplicitVccPairSgprIndex,
+              "expected V_ADD_CO_CI_U32 implicit VCC source") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 64u, 2u, true),
+              "expected V_ADD_CO_CI_U32 implicit VCC destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[4], OperandRole::kSource2,
+                  OperandSlotKind::kSource2,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 64u, 2u, true),
+              "expected V_ADD_CO_CI_U32 implicit VCC source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> vector_subrev_co_ci_u32_words{
+      MakeVop2(34u, 31u, 257u, 6u)};
+  if (!Expect(decoder.DecodeInstruction(vector_subrev_co_ci_u32_words,
+                                        &instruction, &words_consumed,
+                                        &error_message),
+              "expected V_SUBREV_CO_CI_U32 decode success") ||
+      !Expect(instruction.opcode == "V_SUBREV_CO_CI_U32",
+              "expected decoded V_SUBREV_CO_CI_U32 opcode") ||
+      !Expect(instruction.operand_count == 5u,
+              "expected five V_SUBREV_CO_CI_U32 operands")) {
     return 1;
   }
 
@@ -5168,6 +5663,16 @@ int main() {
       !Expect(ExpectHalfPackExponentSeedState(
                   compiled_half_pack_exponent_state),
               "expected compiled half pack/exponent state")) {
+    return 1;
+  }
+
+  if (!RunDx9FmacBatchTest(decoder, interpreter, &error_message)) {
+    return 1;
+  }
+  if (!RunPackedFmacBatchTest(decoder, interpreter, &error_message)) {
+    return 1;
+  }
+  if (!RunCarryChainBatchTest(decoder, interpreter, &error_message)) {
     return 1;
   }
 
