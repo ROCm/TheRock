@@ -378,7 +378,8 @@ jobs:
               "release_type": "${{ env.RELEASE_TYPE }}",
               "artifact_run_id": "${{ github.run_id  }}",
               "ref": "${{ inputs.ref || '' }}",
-              "native_package_type": "rpm"
+              "native_package_type": "rpm",
+              "cloudfront_base_url": "${{ needs.setup_metadata.outputs.cloudfront_base_url }}"
             }
 
       - name: Trigger build native debian package
@@ -392,5 +393,6 @@ jobs:
               "release_type": "${{ env.RELEASE_TYPE }}",
               "artifact_run_id": "${{ github.run_id  }}",
               "ref": "${{ inputs.ref || '' }}",
-              "native_package_type": "deb"
+              "native_package_type": "deb",
+              "cloudfront_base_url": "${{ needs.setup_metadata.outputs.cloudfront_base_url }}"
             }
