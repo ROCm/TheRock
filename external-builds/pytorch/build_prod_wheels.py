@@ -966,19 +966,27 @@ def do_build_pytorch(
             ],
             cwd=pytorch_dir,
         )
-    print("+++ Building pytorch:")
-    remove_dir_if_exists(pytorch_dir / "dist")
-    if args.clean:
-        remove_dir_if_exists(pytorch_dir / "build")
-    run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
-    built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
-    print(f"Found built wheel: {built_wheel}")
-    copy_to_output(args, built_wheel)
+    if args.editable_torch:
+        print("+++ Editable-installing pytorch:")
+        run_command(
+            [sys.executable, "-m", "pip", "install", "-e", ".", "-v", "--no-build-isolation"],
+            cwd=pytorch_dir,
+            env=env,
+        )
+    else:
+        print("+++ Building pytorch:")
+        remove_dir_if_exists(pytorch_dir / "dist")
+        if args.clean:
+            remove_dir_if_exists(pytorch_dir / "build")
+        run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
+        built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
+        print(f"Found built wheel: {built_wheel}")
+        copy_to_output(args, built_wheel)
 
-    print("+++ Installing built torch:")
-    run_command(
-        [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
-    )
+        print("+++ Installing built torch:")
+        run_command(
+            [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
+        )
 
     print("+++ Sanity checking installed torch (unavailable is okay on CPU machines):")
     sanity_check_output = capture(
@@ -1143,6 +1151,12 @@ def main(argv: list[str]):
         type=Path,
         required=True,
         help="Directory to copy built wheels to",
+    )
+    build_p.add_argument(
+        "--editable-torch",
+        action="store_true",
+        default=False,
+        help="Editable install torch (pip install -e) instead of building a wheel",
     )
     cache_group = build_p.add_mutually_exclusive_group()
     cache_group.add_argument(
