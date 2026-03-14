@@ -359,6 +359,22 @@ std::uint32_t CountDescriptorsForRoleAndComponentCount(
   return count;
 }
 
+std::uint32_t CountDescriptorsForRoleAndWaveSize(
+    const StubDecodedInstruction& instruction,
+    StubOperandRole role,
+    std::uint8_t wave_size) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    const auto& descriptor = instruction.operand_descriptors.descriptors[i];
+    if (descriptor.role == role &&
+        descriptor.fragment_shape.wave_size == wave_size) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 std::uint32_t CountDescriptorsForRoleAndSlotKind(
     const StubDecodedInstruction& instruction,
     StubOperandRole role,
@@ -436,6 +452,21 @@ std::uint32_t CountSlotsOfKindAndComponentCount(
     const auto& binding = instruction.operand_slots.bindings[i];
     if (binding.slot_kind == slot_kind &&
         binding.component_count == component_count) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountSlotsOfKindAndWaveSize(
+    const StubDecodedInstruction& instruction,
+    StubOperandSlotKind slot_kind,
+    std::uint8_t wave_size) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    const auto& binding = instruction.operand_slots.bindings[i];
+    if (binding.slot_kind == slot_kind &&
+        binding.fragment_shape.wave_size == wave_size) {
       ++count;
     }
   }
@@ -1772,6 +1803,31 @@ int main() {
               "expected routed WMMA scale seed to keep exact role/slot and logical-index mapping")) {
         return 1;
       }
+      if (!Expect(
+              CountDescriptorsForRoleAndWaveSize(
+                  decoded, StubOperandRole::kDestination, 32) == 1 &&
+                  CountDescriptorsForRoleAndWaveSize(
+                      decoded, StubOperandRole::kSource0, 32) == 1 &&
+                  CountDescriptorsForRoleAndWaveSize(
+                      decoded, StubOperandRole::kSource1, 32) == 1 &&
+                  CountDescriptorsForRoleAndWaveSize(
+                      decoded, StubOperandRole::kAccumulator, 32) == 1 &&
+                  CountDescriptorsForRoleAndWaveSize(
+                      decoded, StubOperandRole::kScale, 0) == 1 &&
+                  CountSlotsOfKindAndWaveSize(
+                      decoded, StubOperandSlotKind::kDestination, 32) == 1 &&
+                  CountSlotsOfKindAndWaveSize(
+                      decoded, StubOperandSlotKind::kSource0, 32) == 1 &&
+                  CountSlotsOfKindAndWaveSize(
+                      decoded, StubOperandSlotKind::kSource1, 32) == 1 &&
+                  CountSlotsOfKindAndWaveSize(
+                      decoded, StubOperandSlotKind::kAccumulatorSource, 32) ==
+                      1 &&
+                  CountSlotsOfKindAndWaveSize(
+                      decoded, StubOperandSlotKind::kScaleSource, 0) == 1,
+              "expected routed WMMA scale seed to keep exact role/slot wave-size mapping")) {
+        return 1;
+      }
     } else {
       if (!Expect(decoded.operand_slots.binding_count == 4 &&
                       decoded.operand_descriptors.descriptor_count == 4 &&
@@ -1932,6 +1988,27 @@ int main() {
                       decoded, StubOperandSlotKind::kAccumulatorSource, 3) ==
                       1,
               "expected routed WMMA/SWMMAC core seed to keep exact role/slot and logical-index mapping")) {
+        return 1;
+      }
+      if (!Expect(
+              CountDescriptorsForRoleAndWaveSize(
+                  decoded, StubOperandRole::kDestination, 32) == 1 &&
+                  CountDescriptorsForRoleAndWaveSize(
+                      decoded, StubOperandRole::kSource0, 32) == 1 &&
+                  CountDescriptorsForRoleAndWaveSize(
+                      decoded, StubOperandRole::kSource1, 32) == 1 &&
+                  CountDescriptorsForRoleAndWaveSize(
+                      decoded, StubOperandRole::kAccumulator, 32) == 1 &&
+                  CountSlotsOfKindAndWaveSize(
+                      decoded, StubOperandSlotKind::kDestination, 32) == 1 &&
+                  CountSlotsOfKindAndWaveSize(
+                      decoded, StubOperandSlotKind::kSource0, 32) == 1 &&
+                  CountSlotsOfKindAndWaveSize(
+                      decoded, StubOperandSlotKind::kSource1, 32) == 1 &&
+                  CountSlotsOfKindAndWaveSize(
+                      decoded, StubOperandSlotKind::kAccumulatorSource, 32) ==
+                      1,
+              "expected routed WMMA/SWMMAC core seed to keep exact role/slot wave-size mapping")) {
         return 1;
       }
     }
@@ -3318,6 +3395,32 @@ int main() {
             "expected routed tensor seed to keep exact role/slot and logical-index mapping")) {
       return 1;
     }
+    if (!Expect(
+            CountDescriptorsForRoleAndWaveSize(
+                decoded, StubOperandRole::kTensorDescriptor, 0) == 1 &&
+                CountDescriptorsForRoleAndWaveSize(
+                    decoded, StubOperandRole::kTensorCoordinate, 0) == 1 &&
+                CountDescriptorsForRoleAndWaveSize(
+                    decoded,
+                    instruction_name == "TENSOR_LOAD_TO_LDS"
+                        ? StubOperandRole::kLdsDestination
+                        : StubOperandRole::kLdsSource,
+                    0) == 1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kTensorDescriptorSource, 0) ==
+                    1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kTensorCoordinateSource, 0) ==
+                    1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded,
+                    instruction_name == "TENSOR_LOAD_TO_LDS"
+                        ? StubOperandSlotKind::kLdsDestination
+                        : StubOperandSlotKind::kLdsSource,
+                    0) == 1,
+            "expected routed tensor seed to keep exact role/slot wave-size mapping")) {
+      return 1;
+    }
     if (instruction_name == "TENSOR_LOAD_TO_LDS") {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
@@ -3604,6 +3707,18 @@ int main() {
             "expected routed VOP1 seed to keep exact role/slot and logical-index mapping")) {
       return 1;
     }
+    if (!Expect(
+            CountDescriptorsForRoleAndWaveSize(
+                decoded, StubOperandRole::kSource0, 0) == 1 &&
+                CountDescriptorsForRoleAndWaveSize(
+                    decoded, StubOperandRole::kDestination, 0) == 1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kSource0, 0) == 1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kDestination, 0) == 1,
+            "expected routed VOP1 seed to keep exact role/slot wave-size mapping")) {
+      return 1;
+    }
     if (instruction_name.find("PK_") != std::string_view::npos) {
       if (!Expect(
               ContainsSlot(decoded, StubOperandSlotKind::kSource0,
@@ -3868,6 +3983,28 @@ int main() {
             "expected routed VOP3 SDST seed to keep exact role/slot and logical-index mapping")) {
       return 1;
     }
+    if (!Expect(
+            CountDescriptorsForRoleAndWaveSize(
+                decoded, StubOperandRole::kSource0, 0) == 1 &&
+                CountDescriptorsForRoleAndWaveSize(
+                    decoded, StubOperandRole::kSource1, 0) == 1 &&
+                CountDescriptorsForRoleAndWaveSize(
+                    decoded, StubOperandRole::kScale, 0) == 1 &&
+                CountDescriptorsForRoleAndWaveSize(
+                    decoded, StubOperandRole::kDestination, 0) == 2 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kDestination, 0) == 1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kScalarDestination, 0) == 1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kSource0, 0) == 1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kSource1, 0) == 1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kScaleSource, 0) == 1,
+            "expected routed VOP3 SDST seed to keep exact role/slot wave-size mapping")) {
+      return 1;
+    }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kScale) &&
                     HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
                     ContainsSlot(decoded, StubOperandSlotKind::kDestination,
@@ -4114,6 +4251,26 @@ int main() {
                 CountSlotsOfKindAndLogicalOperandIndex(
                     decoded, StubOperandSlotKind::kPairedScaleSource, 3) == 1,
             "expected paired-scale helper to keep exact role/slot and logical-index mapping")) {
+      return 1;
+    }
+    if (!Expect(
+            CountDescriptorsForRoleAndWaveSize(
+                decoded, StubOperandRole::kSource0, 0) == 1 &&
+                CountDescriptorsForRoleAndWaveSize(
+                    decoded, StubOperandRole::kScale, 0) == 1 &&
+                CountDescriptorsForRoleAndWaveSize(
+                    decoded, StubOperandRole::kPairedScale, 0) == 1 &&
+                CountDescriptorsForRoleAndWaveSize(
+                    decoded, StubOperandRole::kDestination, 0) == 1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kDestination, 0) == 1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kSource0, 0) == 1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kScaleSource, 0) == 1 &&
+                CountSlotsOfKindAndWaveSize(
+                    decoded, StubOperandSlotKind::kPairedScaleSource, 0) == 1,
+            "expected paired-scale helper to keep exact role/slot wave-size mapping")) {
       return 1;
     }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kSource0) &&
