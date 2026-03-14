@@ -1,0 +1,52 @@
+From 7bb2c09d4d79e2b8887af1dc65e7394bd8942144 Mon Sep 17 00:00:00 2001
+From: bluedragan <calvins@us.ibm.com>
+Date: Fri, 6 Mar 2026 19:51:50 +0000
+Subject: [PATCH] amdsmi: ppc64le
+
+---
+ projects/amdsmi/CMakeLists.txt | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/projects/amdsmi/CMakeLists.txt b/projects/amdsmi/CMakeLists.txt
+index 6b18fda9a1..1f7b775c10 100644
+--- a/projects/amdsmi/CMakeLists.txt
++++ b/projects/amdsmi/CMakeLists.txt
+@@ -40,6 +40,7 @@ generic_add_rocm()
+ 
+ # provide git to utilities
+ find_program(GIT NAMES git)
++find_package(Git REQUIRED)
+ 
+ # Set Lintian Support Flags
+ set(BUILD_ENABLE_LINTIAN_OVERRIDES
+@@ -55,6 +56,9 @@ set(BUILD_DEBIAN_PKGING_FLAG
+ 
+ ## Setup the package version based on git tags.
+ set(PKG_VERSION_GIT_TAG_PREFIX "amdsmi_pkg_ver")
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++    set(PKG_VERSION_GIT_TAG_PREFIX "hip-version_")
++endif()
+ get_version_from_file("include/amd_smi/amdsmi.h" "MAJOR")
+ get_version_from_file("include/amd_smi/amdsmi.h" "MINOR")
+ get_version_from_file("include/amd_smi/amdsmi.h" "RELEASE")
+@@ -249,6 +253,17 @@ if(ENABLE_ESMI_LIB)
+         endif()
+     endif()
+ 
++    if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
++        execute_process(
++            COMMAND ${GIT_EXECUTABLE} apply ${CMAKE_SOURCE_DIR}/../../../patches/esmi/esmi_ib_library_e_smi.c.patch
++            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/esmi_ib_library
++            RESULT_VARIABLE PATCH_RESULT
++            OUTPUT_VARIABLE PATCH_OUTPUT
++            ERROR_VARIABLE PATCH_ERROR
++            COMMAND_ERROR_IS_FATAL ANY
++        )
++    endif()
++
+     # Make sure to update the amd_hsmp.h file with the corresponding esmi version
+     file(COPY "${PROJECT_SOURCE_DIR}/include/amd_smi/impl/amd_hsmp.h"
+          DESTINATION "${PROJECT_SOURCE_DIR}/esmi_ib_library/include/asm")
+-- 
+2.50.1 (Apple Git-155)
+
