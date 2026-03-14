@@ -15,6 +15,7 @@
 namespace {
 
 constexpr std::uint16_t kImplicitVccPairSgprIndex = 248;
+constexpr std::uint16_t kM0RegisterIndex = 124;
 constexpr std::uint32_t kQuietNaNF16Bits = 0x00007e00u;
 constexpr std::uint32_t kQuietNaNF32Bits = 0x7fc00000u;
 constexpr std::uint64_t kQuietNaNF64Bits = 0x7ff8000000000000ULL;
@@ -209,6 +210,40 @@ bool ExpectBinaryInstruction(const mirage::sim::isa::DecodedInstruction& instruc
   return src0_matches && src1_matches;
 }
 
+bool ExpectThreeOperandInstruction(
+    const mirage::sim::isa::DecodedInstruction& instruction,
+    std::string_view expected_opcode,
+    mirage::sim::isa::OperandKind operand0_kind,
+    std::uint32_t operand0_value_or_index,
+    mirage::sim::isa::OperandKind operand1_kind,
+    std::uint32_t operand1_value_or_index,
+    mirage::sim::isa::OperandKind operand2_kind,
+    std::uint32_t operand2_value_or_index) {
+  using namespace mirage::sim::isa;
+  if (instruction.opcode != expected_opcode || instruction.operand_count != 3u ||
+      instruction.operands[0].kind != operand0_kind ||
+      instruction.operands[1].kind != operand1_kind ||
+      instruction.operands[2].kind != operand2_kind) {
+    return false;
+  }
+  const bool operand0_matches =
+      operand0_kind == OperandKind::kImm32
+          ? instruction.operands[0].imm32 == operand0_value_or_index
+          : instruction.operands[0].index ==
+                static_cast<std::uint16_t>(operand0_value_or_index);
+  const bool operand1_matches =
+      operand1_kind == OperandKind::kImm32
+          ? instruction.operands[1].imm32 == operand1_value_or_index
+          : instruction.operands[1].index ==
+                static_cast<std::uint16_t>(operand1_value_or_index);
+  const bool operand2_matches =
+      operand2_kind == OperandKind::kImm32
+          ? instruction.operands[2].imm32 == operand2_value_or_index
+          : instruction.operands[2].index ==
+                static_cast<std::uint16_t>(operand2_value_or_index);
+  return operand0_matches && operand1_matches && operand2_matches;
+}
+
 bool ExpectCompareInstruction(const mirage::sim::isa::DecodedInstruction& instruction,
                               std::string_view expected_opcode,
                               mirage::sim::isa::OperandKind src0_kind,
@@ -310,6 +345,59 @@ bool ExpectReadfirstlaneSeedState(
   return state.lane_count == 32u && state.exec_mask == (1ULL << 31) &&
          state.sgprs[60] == 0xfeedbeefu && state.halted &&
          !state.waiting_on_barrier && state.pc == 1u;
+}
+
+bool ExpectMovrelSeedState(const mirage::sim::isa::WaveExecutionState& state) {
+  return state.lane_count == 32u && state.sgprs[kM0RegisterIndex] == 0x00030001u &&
+         state.vgprs[10][0] == 0x10101010u &&
+         state.vgprs[10][1] == 0x20202020u &&
+         state.vgprs[10][2] == 0x30303030u &&
+         state.vgprs[10][3] == 0x40404040u &&
+         state.vgprs[11][0] == 0xcafef00du &&
+         state.vgprs[11][1] == 0xcafef00du &&
+         state.vgprs[11][2] == 0x11111111u &&
+         state.vgprs[11][3] == 0xcafef00du &&
+         state.vgprs[12][0] == 0xaaaa0001u &&
+         state.vgprs[12][1] == 0xbbbb0002u &&
+         state.vgprs[12][2] == 0x12121212u &&
+         state.vgprs[12][3] == 0xdddd0004u &&
+         state.vgprs[20][0] == 0x20200000u &&
+         state.vgprs[20][1] == 0x20200001u &&
+         state.vgprs[20][2] == 0x20200002u &&
+         state.vgprs[20][3] == 0x20200003u &&
+         state.vgprs[21][0] == 0xaaaa0001u &&
+         state.vgprs[21][1] == 0xbbbb0002u &&
+         state.vgprs[21][2] == 0x41414141u &&
+         state.vgprs[21][3] == 0xdddd0004u &&
+         state.vgprs[30][0] == 0x30300000u &&
+         state.vgprs[30][1] == 0x30300001u &&
+         state.vgprs[30][2] == 0x30300002u &&
+         state.vgprs[30][3] == 0x30300003u &&
+         state.vgprs[31][0] == 0x12340001u &&
+         state.vgprs[31][1] == 0x12340002u &&
+         state.vgprs[31][2] == 0x31313131u &&
+         state.vgprs[31][3] == 0x12340004u &&
+         state.vgprs[41][0] == 0x12340001u &&
+         state.vgprs[41][1] == 0x12340002u &&
+         state.vgprs[41][2] == 0x41414141u &&
+         state.vgprs[41][3] == 0x12340004u &&
+         state.vgprs[53][0] == 0x98760001u &&
+         state.vgprs[53][1] == 0x98760002u &&
+         state.vgprs[53][2] == 0x53535353u &&
+         state.vgprs[53][3] == 0x98760004u &&
+         state.vgprs[61][0] == 0x98760001u &&
+         state.vgprs[61][1] == 0x98760002u &&
+         state.vgprs[61][2] == 0x61616161u &&
+         state.vgprs[61][3] == 0x98760004u &&
+         state.vgprs[73][0] == 0x22220001u &&
+         state.vgprs[73][1] == 0x22220002u &&
+         state.vgprs[73][2] == 0x73737373u &&
+         state.vgprs[73][3] == 0x22220004u &&
+         state.vgprs[81][0] == 0x11110001u &&
+         state.vgprs[81][1] == 0x11110002u &&
+         state.vgprs[81][2] == 0x81818181u &&
+         state.vgprs[81][3] == 0x11110004u &&
+         state.halted && !state.waiting_on_barrier && state.pc == 5u;
 }
 
 bool ExpectConversionSeedState(const mirage::sim::isa::WaveExecutionState& state) {
@@ -1886,6 +1974,105 @@ int main() {
                   OperandValueClass::kVectorRegister, OperandAccess::kRead,
                   FragmentKind::kVector, 32u, 1u, false),
               "expected V_READFIRSTLANE_B32 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_movreld_words{MakeVop1(66u, 40u, 5u)};
+  if (!Expect(decoder.DecodeInstruction(v_movreld_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_MOVRELD_B32 decode success") ||
+      !Expect(ExpectThreeOperandInstruction(
+                  instruction, "V_MOVRELD_B32", OperandKind::kVgpr, 40u,
+                  OperandKind::kSgpr, 5u, OperandKind::kSgpr, kM0RegisterIndex),
+              "expected decoded V_MOVRELD_B32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_MOVRELD_B32 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected V_MOVRELD_B32 source descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, true),
+              "expected V_MOVRELD_B32 implicit M0 descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_movrels_words{MakeVop1(67u, 41u, 276u)};
+  if (!Expect(decoder.DecodeInstruction(v_movrels_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_MOVRELS_B32 decode success") ||
+      !Expect(ExpectThreeOperandInstruction(
+                  instruction, "V_MOVRELS_B32", OperandKind::kVgpr, 41u,
+                  OperandKind::kVgpr, 20u, OperandKind::kSgpr, kM0RegisterIndex),
+              "expected decoded V_MOVRELS_B32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, true),
+              "expected V_MOVRELS_B32 implicit M0 descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_movrelsd_words{MakeVop1(68u, 42u, 277u)};
+  if (!Expect(decoder.DecodeInstruction(v_movrelsd_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_MOVRELSD_B32 decode success") ||
+      !Expect(ExpectThreeOperandInstruction(
+                  instruction, "V_MOVRELSD_B32", OperandKind::kVgpr, 42u,
+                  OperandKind::kVgpr, 21u, OperandKind::kSgpr, kM0RegisterIndex),
+              "expected decoded V_MOVRELSD_B32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_movrelsd2_words{MakeVop1(72u, 43u, 278u)};
+  if (!Expect(decoder.DecodeInstruction(v_movrelsd2_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_MOVRELSD_2_B32 decode success") ||
+      !Expect(ExpectThreeOperandInstruction(
+                  instruction, "V_MOVRELSD_2_B32", OperandKind::kVgpr, 43u,
+                  OperandKind::kVgpr, 22u, OperandKind::kSgpr, kM0RegisterIndex),
+              "expected decoded V_MOVRELSD_2_B32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_swaprel_words{MakeVop1(104u, 44u, 279u)};
+  if (!Expect(decoder.DecodeInstruction(v_swaprel_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_SWAPREL_B32 decode success") ||
+      !Expect(ExpectThreeOperandInstruction(
+                  instruction, "V_SWAPREL_B32", OperandKind::kVgpr, 44u,
+                  OperandKind::kVgpr, 23u, OperandKind::kSgpr, kM0RegisterIndex),
+              "expected decoded V_SWAPREL_B32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister,
+                  OperandAccess::kReadWrite, FragmentKind::kVector, 32u, 1u,
+                  false),
+              "expected V_SWAPREL_B32 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kVectorRegister,
+                  OperandAccess::kReadWrite, FragmentKind::kVector, 32u, 1u,
+                  false),
+              "expected V_SWAPREL_B32 source descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, true),
+              "expected V_SWAPREL_B32 implicit M0 descriptor")) {
     return 1;
   }
 
@@ -5096,6 +5283,145 @@ int main() {
               "expected compiled readfirstlane execution success") ||
       !Expect(ExpectReadfirstlaneSeedState(compiled_readfirstlane_state),
               "expected compiled readfirstlane wave32 state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 6> movrel_words{
+      MakeVop1(66u, 10u, 5u),
+      MakeVop1(67u, 12u, 276u),
+      MakeVop1(68u, 30u, 296u),
+      MakeVop1(72u, 50u, 316u),
+      MakeVop1(104u, 70u, 336u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> movrel_program;
+  if (!Expect(decoder.DecodeProgram(movrel_words, &movrel_program, &error_message),
+              "expected movrel program decode success") ||
+      !Expect(movrel_program.size() == 6u,
+              "expected six decoded movrel instructions") ||
+      !Expect(movrel_program[0].opcode == "V_MOVRELD_B32",
+              "expected decoded V_MOVRELD_B32") ||
+      !Expect(movrel_program[1].opcode == "V_MOVRELS_B32",
+              "expected decoded V_MOVRELS_B32") ||
+      !Expect(movrel_program[2].opcode == "V_MOVRELSD_B32",
+              "expected decoded V_MOVRELSD_B32") ||
+      !Expect(movrel_program[3].opcode == "V_MOVRELSD_2_B32",
+              "expected decoded V_MOVRELSD_2_B32") ||
+      !Expect(movrel_program[4].opcode == "V_SWAPREL_B32",
+              "expected decoded V_SWAPREL_B32") ||
+      !Expect(movrel_program[5].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after movrel batch")) {
+    return 1;
+  }
+
+  auto initialize_movrel_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+    state->sgprs[5] = 0xcafef00du;
+    state->sgprs[kM0RegisterIndex] = 0x00030001u;
+
+    state->vgprs[10][0] = 0x10101010u;
+    state->vgprs[10][1] = 0x20202020u;
+    state->vgprs[10][2] = 0x30303030u;
+    state->vgprs[10][3] = 0x40404040u;
+
+    state->vgprs[11][0] = 0x11111111u;
+    state->vgprs[11][1] = 0x11111111u;
+    state->vgprs[11][2] = 0x11111111u;
+    state->vgprs[11][3] = 0x11111111u;
+
+    state->vgprs[12][0] = 0x12121212u;
+    state->vgprs[12][1] = 0x12121212u;
+    state->vgprs[12][2] = 0x12121212u;
+    state->vgprs[12][3] = 0x12121212u;
+
+    state->vgprs[20][0] = 0x20200000u;
+    state->vgprs[20][1] = 0x20200001u;
+    state->vgprs[20][2] = 0x20200002u;
+    state->vgprs[20][3] = 0x20200003u;
+
+    state->vgprs[21][0] = 0xaaaa0001u;
+    state->vgprs[21][1] = 0xbbbb0002u;
+    state->vgprs[21][2] = 0x41414141u;
+    state->vgprs[21][3] = 0xdddd0004u;
+
+    state->vgprs[30][0] = 0x30300000u;
+    state->vgprs[30][1] = 0x30300001u;
+    state->vgprs[30][2] = 0x30300002u;
+    state->vgprs[30][3] = 0x30300003u;
+
+    state->vgprs[31][0] = 0x31313131u;
+    state->vgprs[31][1] = 0x31313131u;
+    state->vgprs[31][2] = 0x31313131u;
+    state->vgprs[31][3] = 0x31313131u;
+
+    state->vgprs[41][0] = 0x12340001u;
+    state->vgprs[41][1] = 0x12340002u;
+    state->vgprs[41][2] = 0x41414141u;
+    state->vgprs[41][3] = 0x12340004u;
+
+    state->vgprs[53][0] = 0x53535353u;
+    state->vgprs[53][1] = 0x53535353u;
+    state->vgprs[53][2] = 0x53535353u;
+    state->vgprs[53][3] = 0x53535353u;
+
+    state->vgprs[61][0] = 0x98760001u;
+    state->vgprs[61][1] = 0x98760002u;
+    state->vgprs[61][2] = 0x61616161u;
+    state->vgprs[61][3] = 0x98760004u;
+
+    state->vgprs[73][0] = 0x11110001u;
+    state->vgprs[73][1] = 0x11110002u;
+    state->vgprs[73][2] = 0x73737373u;
+    state->vgprs[73][3] = 0x11110004u;
+
+    state->vgprs[81][0] = 0x22220001u;
+    state->vgprs[81][1] = 0x22220002u;
+    state->vgprs[81][2] = 0x81818181u;
+    state->vgprs[81][3] = 0x22220004u;
+  };
+
+  WaveExecutionState decoded_movrel_state;
+  initialize_movrel_state(&decoded_movrel_state);
+  if (!Expect(interpreter.ExecuteProgram(movrel_program, &decoded_movrel_state,
+                                         &error_message),
+              "expected decoded movrel execution success") ||
+      !Expect(ExpectMovrelSeedState(decoded_movrel_state),
+              "expected decoded movrel state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_movrel_program;
+  if (!Expect(interpreter.CompileProgram(movrel_program, &compiled_movrel_program,
+                                         &error_message),
+              "expected compiled movrel program success") ||
+      !Expect(compiled_movrel_program.size() == 6u,
+              "expected six compiled movrel instructions") ||
+      !Expect(compiled_movrel_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVMovreldB32,
+              "expected compiled V_MOVRELD_B32 opcode") ||
+      !Expect(compiled_movrel_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVMovrelsB32,
+              "expected compiled V_MOVRELS_B32 opcode") ||
+      !Expect(compiled_movrel_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVMovrelsdB32,
+              "expected compiled V_MOVRELSD_B32 opcode") ||
+      !Expect(compiled_movrel_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVMovrelsd2B32,
+              "expected compiled V_MOVRELSD_2_B32 opcode") ||
+      !Expect(compiled_movrel_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kVSwaprelB32,
+              "expected compiled V_SWAPREL_B32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_movrel_state;
+  initialize_movrel_state(&compiled_movrel_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_movrel_program,
+                                         &compiled_movrel_state,
+                                         &error_message),
+              "expected compiled movrel execution success") ||
+      !Expect(ExpectMovrelSeedState(compiled_movrel_state),
+              "expected compiled movrel state")) {
     return 1;
   }
 

@@ -22,6 +22,8 @@ To BitCast(From value) {
 }
 
 constexpr std::uint64_t kGfx1201Wave32Mask = 0xffffffffULL;
+constexpr std::uint32_t kMovrelOffsetMask = 0x3ffu;
+constexpr std::uint32_t kMovrelDestinationOffsetShift = 16u;
 
 constexpr std::uint64_t MaskToGfx1201Wave32(std::uint64_t mask) {
   return mask & kGfx1201Wave32Mask;
@@ -32,6 +34,7 @@ constexpr std::int32_t SignExtend24(std::uint32_t value) {
 }
 
 constexpr std::uint32_t kGfx1201LaneCount = 32;
+constexpr std::uint16_t kM0RegisterIndex = 124u;
 constexpr std::uint16_t kExecPairSgprIndex = 126;
 constexpr std::uint16_t kImplicitVccPairSgprIndex = 248;
 constexpr std::uint16_t kSrcVcczSgprIndex = 251;
@@ -42,7 +45,7 @@ float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 std::uint16_t CompressFloatToFp16BitsRtz(float value);
 
-constexpr std::array<std::string_view, 318> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 323> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -75,6 +78,11 @@ constexpr std::array<std::string_view, 318> kExecutableSeedOpcodes{{
     "V_MOV_B16",
     "V_PERMLANE64_B32",
     "V_READFIRSTLANE_B32",
+    "V_MOVRELD_B32",
+    "V_MOVRELS_B32",
+    "V_MOVRELSD_B32",
+    "V_MOVRELSD_2_B32",
+    "V_SWAPREL_B32",
     "V_SWAP_B32",
     "V_SWAP_B16",
     "V_CMP_EQ_I32",
@@ -736,6 +744,18 @@ std::size_t FindLowestActiveLane(std::uint64_t exec_mask) {
 #endif
 }
 
+constexpr std::uint32_t ExtractMovrelSourceOffset(std::uint32_t m0_value) {
+  return m0_value & kMovrelOffsetMask;
+}
+
+constexpr std::uint32_t ExtractMovrelDestinationOffset(std::uint32_t m0_value) {
+  return (m0_value >> kMovrelDestinationOffsetShift) & kMovrelOffsetMask;
+}
+
+bool IsImplicitM0SourceOperand(const InstructionOperand& operand) {
+  return operand.kind == OperandKind::kSgpr && operand.index == kM0RegisterIndex;
+}
+
 bool IsExecutableSeedOpcode(std::string_view opcode) {
   for (std::string_view supported_opcode : kExecutableSeedOpcodes) {
     if (supported_opcode == opcode) {
@@ -963,6 +983,26 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_READFIRSTLANE_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVReadfirstlaneB32;
+    return true;
+  }
+  if (opcode == "V_MOVRELD_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMovreldB32;
+    return true;
+  }
+  if (opcode == "V_MOVRELS_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMovrelsB32;
+    return true;
+  }
+  if (opcode == "V_MOVRELSD_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMovrelsdB32;
+    return true;
+  }
+  if (opcode == "V_MOVRELSD_2_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMovrelsd2B32;
+    return true;
+  }
+  if (opcode == "V_SWAPREL_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVSwaprelB32;
     return true;
   }
   if (opcode == "V_SWAP_B32") {
@@ -2388,6 +2428,76 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
   state->vgprs[operand.index][lane_index] = static_cast<std::uint32_t>(value);
   state->vgprs[operand.index + 1][lane_index] =
       static_cast<std::uint32_t>(value >> 32);
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool ResolveRelativeVectorRegisterIndex(const InstructionOperand& operand,
+                                        std::uint32_t relative_offset,
+                                        const WaveExecutionState& state,
+                                        std::uint16_t* resolved_index,
+                                        std::string* error_message) {
+  if (resolved_index == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "resolved register index output must not be null";
+    }
+    return false;
+  }
+  if (operand.kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "expected vector register operand";
+    }
+    return false;
+  }
+
+  const std::uint32_t register_index =
+      static_cast<std::uint32_t>(operand.index) + relative_offset;
+  if (register_index >= state.vgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "relative vector register index out of range";
+    }
+    return false;
+  }
+
+  *resolved_index = static_cast<std::uint16_t>(register_index);
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+std::uint32_t ReadRelativeVectorOperand(const InstructionOperand& operand,
+                                        std::uint32_t relative_offset,
+                                        const WaveExecutionState& state,
+                                        std::size_t lane_index,
+                                        std::string* error_message) {
+  std::uint16_t register_index = 0;
+  if (!ResolveRelativeVectorRegisterIndex(operand, relative_offset, state,
+                                          &register_index, error_message)) {
+    return 0;
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return state.vgprs[register_index][lane_index];
+}
+
+bool WriteRelativeVectorOperand(const InstructionOperand& operand,
+                                std::uint32_t relative_offset,
+                                std::size_t lane_index,
+                                std::uint32_t value,
+                                WaveExecutionState* state,
+                                std::string* error_message) {
+  std::uint16_t register_index = 0;
+  if (!ResolveRelativeVectorRegisterIndex(operand, relative_offset, *state,
+                                          &register_index, error_message)) {
+    return false;
+  }
+
+  state->vgprs[register_index][lane_index] = value;
   if (error_message != nullptr) {
     error_message->clear();
   }
@@ -4019,6 +4129,120 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
                               error_message);
   }
 
+  if (instruction.opcode == "V_MOVRELD_B32" ||
+      instruction.opcode == "V_MOVRELS_B32" ||
+      instruction.opcode == "V_MOVRELSD_B32" ||
+      instruction.opcode == "V_MOVRELSD_2_B32" ||
+      instruction.opcode == "V_SWAPREL_B32") {
+    if (!ValidateOperandCount(instruction, 3, error_message)) {
+      return false;
+    }
+    if (instruction.operands[0].kind != OperandKind::kVgpr) {
+      if (error_message != nullptr) {
+        *error_message = "expected vector destination operand";
+      }
+      return false;
+    }
+    if (!IsImplicitM0SourceOperand(instruction.operands[2])) {
+      if (error_message != nullptr) {
+        *error_message = "expected implicit M0 source operand";
+      }
+      return false;
+    }
+    if (instruction.opcode != "V_MOVRELD_B32" &&
+        instruction.operands[1].kind != OperandKind::kVgpr) {
+      if (error_message != nullptr) {
+        *error_message = "expected vector register source operand";
+      }
+      return false;
+    }
+
+    const std::uint32_t m0_value =
+        ReadScalarOperand(instruction.operands[2], *state, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    const std::uint32_t source_offset = ExtractMovrelSourceOffset(m0_value);
+    const std::uint32_t destination_offset =
+        (instruction.opcode == "V_MOVRELSD_2_B32" ||
+         instruction.opcode == "V_SWAPREL_B32")
+            ? ExtractMovrelDestinationOffset(m0_value)
+            : source_offset;
+
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+
+      if (instruction.opcode == "V_MOVRELD_B32") {
+        const std::uint32_t value = ReadVectorOperand(
+            instruction.operands[1], *state, lane_index, error_message);
+        if (error_message != nullptr && !error_message->empty()) {
+          return false;
+        }
+        if (!WriteRelativeVectorOperand(instruction.operands[0], destination_offset,
+                                        lane_index, value, state,
+                                        error_message)) {
+          return false;
+        }
+        continue;
+      }
+
+      if (instruction.opcode == "V_MOVRELS_B32") {
+        const std::uint32_t value = ReadRelativeVectorOperand(
+            instruction.operands[1], source_offset, *state, lane_index,
+            error_message);
+        if (error_message != nullptr && !error_message->empty()) {
+          return false;
+        }
+        if (!WriteVectorOperand(instruction.operands[0], lane_index, value, state,
+                                error_message)) {
+          return false;
+        }
+        continue;
+      }
+
+      if (instruction.opcode == "V_MOVRELSD_B32" ||
+          instruction.opcode == "V_MOVRELSD_2_B32") {
+        const std::uint32_t value = ReadRelativeVectorOperand(
+            instruction.operands[1], source_offset, *state, lane_index,
+            error_message);
+        if (error_message != nullptr && !error_message->empty()) {
+          return false;
+        }
+        if (!WriteRelativeVectorOperand(instruction.operands[0], destination_offset,
+                                        lane_index, value, state,
+                                        error_message)) {
+          return false;
+        }
+        continue;
+      }
+
+      const std::uint32_t dst_value = ReadRelativeVectorOperand(
+          instruction.operands[0], destination_offset, *state, lane_index,
+          error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t src_value = ReadRelativeVectorOperand(
+          instruction.operands[1], source_offset, *state, lane_index,
+          error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      if (!WriteRelativeVectorOperand(instruction.operands[0], destination_offset,
+                                      lane_index, src_value, state,
+                                      error_message) ||
+          !WriteRelativeVectorOperand(instruction.operands[1], source_offset,
+                                      lane_index, dst_value, state,
+                                      error_message)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   if (instruction.opcode == "V_SWAP_B32" || instruction.opcode == "V_SWAP_B16") {
     if (!ValidateOperandCount(instruction, 2, error_message)) {
       return false;
@@ -4605,6 +4829,11 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVMovB16:
     case Gfx1201CompiledOpcode::kVPermlane64B32:
     case Gfx1201CompiledOpcode::kVReadfirstlaneB32:
+    case Gfx1201CompiledOpcode::kVMovreldB32:
+    case Gfx1201CompiledOpcode::kVMovrelsB32:
+    case Gfx1201CompiledOpcode::kVMovrelsdB32:
+    case Gfx1201CompiledOpcode::kVMovrelsd2B32:
+    case Gfx1201CompiledOpcode::kVSwaprelB32:
     case Gfx1201CompiledOpcode::kVSwapB32:
     case Gfx1201CompiledOpcode::kVSwapB16:
     case Gfx1201CompiledOpcode::kVCvtOffF32I4:

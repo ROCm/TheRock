@@ -34,6 +34,11 @@
     "V_MOV_B16",
     "V_PERMLANE64_B32",
     "V_READFIRSTLANE_B32",
+    "V_MOVRELD_B32",
+    "V_MOVRELS_B32",
+    "V_MOVRELSD_B32",
+    "V_MOVRELSD_2_B32",
+    "V_SWAPREL_B32",
     "V_SWAP_B32",
     "V_SWAP_B16",
     "V_CMP_EQ_I32",
@@ -365,6 +370,11 @@
       "V_MOV_B16",
       "V_PERMLANE64_B32",
       "V_READFIRSTLANE_B32",
+      "V_MOVRELD_B32",
+      "V_MOVRELS_B32",
+      "V_MOVRELSD_B32",
+      "V_MOVRELSD_2_B32",
+      "V_SWAPREL_B32",
       "V_SWAP_B32",
       "V_SWAP_B16",
       "V_NOT_B16",
@@ -666,6 +676,7 @@
     "Decodes S_BRANCH, S_CBRANCH_SCC0, S_CBRANCH_SCC1, S_CBRANCH_VCCZ, S_CBRANCH_VCCNZ, S_CBRANCH_EXECZ, and S_CBRANCH_EXECNZ from ENC_SOPP with sign-extended relative deltas.",
     "Decodes SGPR, inline integer, and literal sources for S_MOV_B32 and V_MOV_B32.",
     "Decodes V_READFIRSTLANE_B32 from ENC_VOP1 with a scalar destination descriptor and a vector-register source descriptor on the current wave32-local path.",
+    "Decodes V_MOVRELD_B32, V_MOVRELS_B32, V_MOVRELSD_B32, V_MOVRELSD_2_B32, and V_SWAPREL_B32 from ENC_VOP1 with an implicit M0 source descriptor; V_SWAPREL_B32 keeps both explicit VGPR operands read/write on the current wave32-local path.",
     "Decodes V_NOT_B32, V_BFREV_B32, V_CLS_I32, V_CLZ_I32_U32, V_CTZ_I32_B32, and V_CVT_F32_UBYTE0/1/2/3 from ENC_VOP1.",
     "Decodes V_NOP from ENC_VOP1 as a nullary wave32-local no-op on the current seed path.",
     "Decodes V_PIPEFLUSH from ENC_VOP1 as a nullary local control seed on the current path.",
@@ -727,6 +738,7 @@
     "Executes V_PERMLANE64_B32 as a wave32-local identity move on the current seed path, matching the imported RDNA4 no-op behavior for wave32 mode.",
     "Executes exec-masked V_SWAP_B32 and V_SWAP_B16 by swapping full 32-bit values or low-16-bit payloads between the two explicit VGPR operands on the wave32 seed path.",
     "Executes V_READFIRSTLANE_B32 by reading the lowest active lane in the wave32 exec mask and writing the selected value into an SGPR.",
+    "Executes wave32-local V_MOVRELD_B32, V_MOVRELS_B32, V_MOVRELSD_B32, V_MOVRELSD_2_B32, and V_SWAPREL_B32 by using M0[9:0] as the source relative offset and M0[25:16] as the destination relative offset for the *_2 and swap forms, while preserving inactive lanes and checking VGPR-relative bounds.",
     "Executes exec-masked V_CMP_EQ/NE/LT/LE/GT/GE_I32 and V_CMP_EQ/NE/LT/LE/GT/GE_U32 while preserving inactive-lane VCC bits.",
     "Executes exec-masked V_CMPX_EQ/NE/LT/LE/GT/GE_I32 and V_CMPX_EQ/NE/LT/LE/GT/GE_U32 and materializes the resulting active-lane compare mask into both vcc_mask and exec_mask.",
     "Executes exec-masked V_CMP_EQ/NE/LT/LE/GT/GE_I16/U16 using low-16-bit signed and unsigned compare semantics while preserving inactive-lane VCC bits.",
@@ -780,6 +792,6 @@
     "ENC_VDS",
     "ENC_VGLOBAL",
     "The remaining ENC_VOPC surface outside this seed is now primarily packed and other wider forms not yet on the current local path.",
-    "The next coherent extension point is the remaining adjacent ENC_VOP1/ENC_VOP2 seed work after the local B16/F16 payload, swap, normalized bridge, the FP8/BF8 bridge, F16 unary math bridge, F16 VOP2 arithmetic bridge, the half-width and F32 FMAC bridge, the packed-half FMAC plus RTZ/ldexp bridge, the local F32/F64 VOP2 arithmetic bridge, the local XNOR/I24 VOP2 bridge, the local B64 shift bridge, and the wave32-local VCC carry-chain bridge, or the remaining packed/wider ENC_VOPC compare work, before ENC_VOP3/half-conversion work."
+    "The next coherent extension point is the remaining adjacent ENC_VOP1/ENC_VOP2 seed work after the local B16/F16 payload, swap, normalized bridge, the FP8/BF8 bridge, the wave32-local M0 relative-move bridge, F16 unary math bridge, F16 VOP2 arithmetic bridge, the half-width and F32 FMAC bridge, the packed-half FMAC plus RTZ/ldexp bridge, the local F32/F64 VOP2 arithmetic bridge, the local XNOR/I24 VOP2 bridge, the local B64 shift bridge, and the wave32-local VCC carry-chain bridge, or the remaining packed/wider ENC_VOPC compare work, before ENC_VOP3/half-conversion work."
   ]
 }

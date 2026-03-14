@@ -12,11 +12,12 @@ namespace mirage::sim::isa {
 namespace {
 
 constexpr std::uint16_t kImplicitVccPairSgprIndex = 248;
+constexpr std::uint16_t kM0RegisterIndex = 124;
 constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 318> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 323> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -49,6 +50,11 @@ constexpr std::array<std::string_view, 318> kPhase0ExecutableOpcodes{{
     "V_MOV_B16",
     "V_PERMLANE64_B32",
     "V_READFIRSTLANE_B32",
+    "V_MOVRELD_B32",
+    "V_MOVRELS_B32",
+    "V_MOVRELSD_B32",
+    "V_MOVRELSD_2_B32",
+    "V_SWAPREL_B32",
     "V_SWAP_B32",
     "V_SWAP_B16",
     "V_CMP_EQ_I32",
@@ -582,6 +588,14 @@ InstructionOperand MakeImplicitVccSourceOperand() {
                                    OperandAccess::kRead, 64, 2, true));
 }
 
+InstructionOperand MakeImplicitM0SourceOperand() {
+  return InstructionOperand::Sgpr(
+      kM0RegisterIndex,
+      MakeScalarRegisterDescriptor(OperandRole::kSource1,
+                                   OperandSlotKind::kSource1,
+                                   OperandAccess::kRead, 32, 1, true));
+}
+
 std::string BuildRouteMessage(const Gfx1201OpcodeRoute& route) {
   std::ostringstream stream;
   stream << "gfx1201 decoder stub routed phase-0 compute opcode to "
@@ -930,6 +944,47 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         instruction_name, DescribeScalarDestinationOperand(dst),
         DescribeSourceOperand(src0, OperandRole::kSource0,
                               OperandSlotKind::kSource0));
+    *words_consumed = 1 + literal_words_consumed;
+  } else if (instruction_name == "V_MOVRELD_B32" ||
+             instruction_name == "V_MOVRELS_B32" ||
+             instruction_name == "V_MOVRELSD_B32" ||
+             instruction_name == "V_MOVRELSD_2_B32" ||
+             instruction_name == "V_SWAPREL_B32") {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(ExtractBits(word, 17, 8), &dst, error_message)) {
+      return false;
+    }
+
+    std::size_t literal_words_consumed = 0;
+    InstructionOperand src0;
+    if (!DecodeVectorSource(ExtractBits(word, 0, 9), words.subspan(1),
+                            &literal_words_consumed, &src0, error_message)) {
+      return false;
+    }
+
+    if (instruction_name != "V_MOVRELD_B32" &&
+        src0.kind != OperandKind::kVgpr) {
+      if (error_message != nullptr) {
+        *error_message = "expected vector register source operand";
+      }
+      return false;
+    }
+
+    if (instruction_name == "V_SWAPREL_B32") {
+      *instruction = DecodedInstruction::ThreeOperand(
+          instruction_name,
+          DescribeReadWriteVectorOperand(dst, OperandRole::kDestination,
+                                         OperandSlotKind::kDestination),
+          DescribeReadWriteVectorOperand(src0, OperandRole::kSource0,
+                                         OperandSlotKind::kSource0),
+          MakeImplicitM0SourceOperand());
+    } else {
+      *instruction = DecodedInstruction::ThreeOperand(
+          instruction_name, DescribeVectorDestinationOperand(dst),
+          DescribeSourceOperand(src0, OperandRole::kSource0,
+                                OperandSlotKind::kSource0),
+          MakeImplicitM0SourceOperand());
+    }
     *words_consumed = 1 + literal_words_consumed;
   } else if (instruction_name == "V_SWAP_B32" ||
              instruction_name == "V_SWAP_B16") {
