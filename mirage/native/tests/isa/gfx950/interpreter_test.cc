@@ -13355,35 +13355,86 @@ int main() {
 
   const auto seed_subword_memory = [](LinearExecutionMemory* memory) -> bool {
     return memory != nullptr && WriteU8(memory, 0x600, 0x7au) &&
+           WriteU8(memory, 0x700, 0x12u) &&
+           WriteU8(memory, 0x800, 0xffu) &&
            WriteU8(memory, 0x610, 0x80u) &&
+           WriteU8(memory, 0x710, 0x7fu) &&
+           WriteU8(memory, 0x810, 0xfeu) &&
            WriteU16(memory, 0x620, 0x1234u) &&
+           WriteU16(memory, 0x720, 0x4567u) &&
+           WriteU16(memory, 0x820, 0x89abu) &&
            WriteU16(memory, 0x630, 0x8001u) &&
+           WriteU16(memory, 0x730, 0x7ffeu) &&
+           WriteU16(memory, 0x830, 0xfffeu) &&
            WriteU8(memory, 0xa20, 0xa5u) &&
+           WriteU8(memory, 0xaa0, 0x9bu) &&
+           WriteU8(memory, 0xb20, 0xdeu) &&
            WriteU8(memory, 0xa30, 0xf0u) &&
+           WriteU8(memory, 0xab0, 0x7eu) &&
+           WriteU8(memory, 0xb30, 0x80u) &&
            WriteU16(memory, 0xa40, 0x5678u) &&
-           WriteU16(memory, 0xa50, 0x8002u);
+           WriteU16(memory, 0xac0, 0x89abu) &&
+           WriteU16(memory, 0xb40, 0xcdefu) &&
+           WriteU16(memory, 0xa50, 0x8002u) &&
+           WriteU16(memory, 0xad0, 0x7ffdu) &&
+           WriteU16(memory, 0xb50, 0xfffeu);
   };
   const auto make_subword_state = []() {
     WaveExecutionState state{};
-    state.exec_mask = 0x1ULL;
+    state.exec_mask = 0b1011ULL;
     state.sgprs[0] = 0xa00;
     state.sgprs[1] = 0x0;
     state.vgprs[0][0] = 0x600;
+    state.vgprs[0][1] = 0x700;
+    state.vgprs[0][3] = 0x800;
     state.vgprs[2][0] = 0x610;
+    state.vgprs[2][1] = 0x710;
+    state.vgprs[2][3] = 0x810;
     state.vgprs[4][0] = 0x620;
+    state.vgprs[4][1] = 0x720;
+    state.vgprs[4][3] = 0x820;
     state.vgprs[6][0] = 0x630;
+    state.vgprs[6][1] = 0x730;
+    state.vgprs[6][3] = 0x830;
     state.vgprs[8][0] = 0x20;
+    state.vgprs[8][1] = 0xa0;
+    state.vgprs[8][3] = 0x120;
     state.vgprs[10][0] = 0x30;
+    state.vgprs[10][1] = 0xb0;
+    state.vgprs[10][3] = 0x130;
     state.vgprs[12][0] = 0x40;
+    state.vgprs[12][1] = 0xc0;
+    state.vgprs[12][3] = 0x140;
     state.vgprs[14][0] = 0x50;
+    state.vgprs[14][1] = 0xd0;
+    state.vgprs[14][3] = 0x150;
     state.vgprs[16][0] = 0x640;
+    state.vgprs[16][1] = 0x740;
+    state.vgprs[16][3] = 0x840;
     state.vgprs[18][0] = 0x650;
+    state.vgprs[18][1] = 0x750;
+    state.vgprs[18][3] = 0x850;
     state.vgprs[20][0] = 0x60;
+    state.vgprs[20][1] = 0xe0;
+    state.vgprs[20][3] = 0x160;
     state.vgprs[22][0] = 0x70;
+    state.vgprs[22][1] = 0xf0;
+    state.vgprs[22][3] = 0x170;
     state.vgprs[40][0] = 0x123456abu;
+    state.vgprs[40][1] = 0x55667788u;
+    state.vgprs[40][3] = 0x10203040u;
     state.vgprs[41][0] = 0x89abcdefu;
+    state.vgprs[41][1] = 0xa1b2c3d4u;
+    state.vgprs[41][3] = 0x55667788u;
     state.vgprs[42][0] = 0x55667788u;
+    state.vgprs[42][1] = 0xdeadbeefu;
+    state.vgprs[42][3] = 0x01234567u;
     state.vgprs[43][0] = 0xa1b2c3d4u;
+    state.vgprs[43][1] = 0x13579bdfu;
+    state.vgprs[43][3] = 0xc001d00du;
+    for (std::uint16_t reg = 30; reg <= 37; ++reg) {
+      state.vgprs[reg][2] = 0xdeadbeefu;
+    }
     return state;
   };
   const std::vector<DecodedInstruction> subword_program = {
@@ -13447,40 +13498,111 @@ int main() {
       [](const WaveExecutionState& state,
          const LinearExecutionMemory& memory,
          const char* mode) -> bool {
+    static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+    const auto expect_lane_values =
+        [&](std::uint16_t reg,
+            const std::array<std::uint32_t, kObservedLanes.size()>& expected,
+            const char* label) {
+          for (std::size_t index = 0; index < kObservedLanes.size(); ++index) {
+            if (!Expect(state.vgprs[reg][kObservedLanes[index]] == expected[index],
+                        label)) {
+              return false;
+            }
+          }
+          return true;
+        };
     std::uint8_t stored_byte = 0;
     std::uint16_t stored_short = 0;
-    return Expect(state.vgprs[30][0] == 0x7au,
-                  (std::string(mode) + " flat ubyte load result").c_str()) &&
-           Expect(state.vgprs[31][0] == 0xffffff80u,
-                  (std::string(mode) + " flat sbyte load result").c_str()) &&
-           Expect(state.vgprs[32][0] == 0x1234u,
-                  (std::string(mode) + " flat ushort load result").c_str()) &&
-           Expect(state.vgprs[33][0] == 0xffff8001u,
-                  (std::string(mode) + " flat sshort load result").c_str()) &&
-           Expect(state.vgprs[34][0] == 0xa5u,
-                  (std::string(mode) + " global ubyte load result").c_str()) &&
-           Expect(state.vgprs[35][0] == 0xfffffff0u,
-                  (std::string(mode) + " global sbyte load result").c_str()) &&
-           Expect(state.vgprs[36][0] == 0x5678u,
-                  (std::string(mode) + " global ushort load result").c_str()) &&
-           Expect(state.vgprs[37][0] == 0xffff8002u,
-                  (std::string(mode) + " global sshort load result").c_str()) &&
+    return expect_lane_values(
+               30, {0x7au, 0x12u, 0xffu},
+               (std::string(mode) + " flat ubyte load result").c_str()) &&
+           expect_lane_values(
+               31, {0xffffff80u, 0x7fu, 0xfffffffeu},
+               (std::string(mode) + " flat sbyte load result").c_str()) &&
+           expect_lane_values(
+               32, {0x1234u, 0x4567u, 0x89abu},
+               (std::string(mode) + " flat ushort load result").c_str()) &&
+           expect_lane_values(
+               33, {0xffff8001u, 0x7ffeu, 0xfffffffeu},
+               (std::string(mode) + " flat sshort load result").c_str()) &&
+           expect_lane_values(
+               34, {0xa5u, 0x9bu, 0xdeu},
+               (std::string(mode) + " global ubyte load result").c_str()) &&
+           expect_lane_values(
+               35, {0xfffffff0u, 0x7eu, 0xffffff80u},
+               (std::string(mode) + " global sbyte load result").c_str()) &&
+           expect_lane_values(
+               36, {0x5678u, 0x89abu, 0xcdefu},
+               (std::string(mode) + " global ushort load result").c_str()) &&
+           expect_lane_values(
+               37, {0xffff8002u, 0x7ffdu, 0xfffffffeu},
+               (std::string(mode) + " global sshort load result").c_str()) &&
+           Expect(state.vgprs[30][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive flat ubyte load result")
+                      .c_str()) &&
+           Expect(state.vgprs[37][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive global sshort load result")
+                      .c_str()) &&
            Expect(ReadU8(memory, 0x640, &stored_byte),
                   (std::string(mode) + " flat byte store read").c_str()) &&
            Expect(stored_byte == 0xabu,
                   (std::string(mode) + " flat byte store result").c_str()) &&
+           Expect(ReadU8(memory, 0x740, &stored_byte),
+                  (std::string(mode) + " flat byte store lane 1 read").c_str()) &&
+           Expect(stored_byte == 0x88u,
+                  (std::string(mode) + " flat byte store lane 1 result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x840, &stored_byte),
+                  (std::string(mode) + " flat byte store lane 3 read").c_str()) &&
+           Expect(stored_byte == 0x40u,
+                  (std::string(mode) + " flat byte store lane 3 result")
+                      .c_str()) &&
            Expect(ReadU16(memory, 0x650, &stored_short),
                   (std::string(mode) + " flat short store read").c_str()) &&
            Expect(stored_short == 0xcdefu,
                   (std::string(mode) + " flat short store result").c_str()) &&
+           Expect(ReadU16(memory, 0x750, &stored_short),
+                  (std::string(mode) + " flat short store lane 1 read").c_str()) &&
+           Expect(stored_short == 0xc3d4u,
+                  (std::string(mode) + " flat short store lane 1 result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x850, &stored_short),
+                  (std::string(mode) + " flat short store lane 3 read").c_str()) &&
+           Expect(stored_short == 0x7788u,
+                  (std::string(mode) + " flat short store lane 3 result")
+                      .c_str()) &&
            Expect(ReadU8(memory, 0xa60, &stored_byte),
                   (std::string(mode) + " global byte store read").c_str()) &&
            Expect(stored_byte == 0x88u,
                   (std::string(mode) + " global byte store result").c_str()) &&
+           Expect(ReadU8(memory, 0xae0, &stored_byte),
+                  (std::string(mode) + " global byte store lane 1 read")
+                      .c_str()) &&
+           Expect(stored_byte == 0xefu,
+                  (std::string(mode) + " global byte store lane 1 result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0xb60, &stored_byte),
+                  (std::string(mode) + " global byte store lane 3 read")
+                      .c_str()) &&
+           Expect(stored_byte == 0x67u,
+                  (std::string(mode) + " global byte store lane 3 result")
+                      .c_str()) &&
            Expect(ReadU16(memory, 0xa70, &stored_short),
                   (std::string(mode) + " global short store read").c_str()) &&
            Expect(stored_short == 0xc3d4u,
-                  (std::string(mode) + " global short store result").c_str());
+                  (std::string(mode) + " global short store result").c_str()) &&
+           Expect(ReadU16(memory, 0xaf0, &stored_short),
+                  (std::string(mode) + " global short store lane 1 read")
+                      .c_str()) &&
+           Expect(stored_short == 0x9bdfu,
+                  (std::string(mode) + " global short store lane 1 result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0xb70, &stored_short),
+                  (std::string(mode) + " global short store lane 3 read")
+                      .c_str()) &&
+           Expect(stored_short == 0xd00du,
+                  (std::string(mode) + " global short store lane 3 result")
+                      .c_str());
   };
   LinearExecutionMemory subword_memory(0x2000, 0);
   if (!Expect(seed_subword_memory(&subword_memory),
