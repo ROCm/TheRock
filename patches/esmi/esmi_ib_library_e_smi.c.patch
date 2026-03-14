@@ -1,0 +1,66 @@
+diff --git a/src/e_smi.c b/src/e_smi.c
+index 46723ff..accfb3b 100644
+--- a/src/e_smi.c
++++ b/src/e_smi.c
+@@ -4,7 +4,9 @@
+  * Copyright (c) 2020-2023, Advanced Micro Devices, Inc. All rights reserved.
+  *
+  */
++#if !defined(__powerpc64__)
+ #include <cpuid.h>
++#endif
+ #include <dirent.h>
+ #include <errno.h>
+ #include <math.h>
+@@ -309,6 +311,42 @@ static esmi_status_t create_cpu_mappings(struct system_metrics *psm)
+ 	return ESMI_SUCCESS;
+ }
+ 
++#if defined(__powerpc64__)
++static esmi_status_t detect_packages(struct system_metrics *psysm)
++{
++        int ret;
++        FILE *fp;
++        uint32_t pvr;
++        char str[CPU_INFO_LINE_SIZE];
++
++        fp = fopen(CPU_INFO_PATH, "r");
++        if (!fp) {
++                return ESMI_FILE_ERROR;
++        }
++
++        fclose(fp);
++
++
++        if (NULL == psysm) {
++                return ESMI_IO_ERROR;
++        }
++        asm volatile ("mfspr %0, 287" : "=r" (pvr));
++        psysm->cpu_family = pvr;
++        psysm->cpu_model = pvr;
++
++
++        ret = read_index(CPU_COUNT_PATH);
++        if(ret < 0) {
++                return ESMI_IO_ERROR;
++        }
++        psysm->total_cores = ret + 1;
++        // TODO: This does not get number of sockets. system() returns a status code!
++        psysm->total_sockets = system("lscpu | grep Socket | cut -d : -f 2|tr -d ' '");
++
++        return ESMI_SUCCESS;
++}
++
++#else
+ static esmi_status_t detect_packages(struct system_metrics *psm)
+ {
+ 	uint32_t eax, ebx, ecx,edx;
+@@ -352,7 +390,7 @@ static esmi_status_t detect_packages(struct system_metrics *psm)
+ 
+ 	return ESMI_SUCCESS;
+ }
+-
++#endif
+ static bool check_for_64bit_rapl_reg(struct system_metrics *psysm)
+ {
+ 	bool ret = true;
