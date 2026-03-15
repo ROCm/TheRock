@@ -29,6 +29,7 @@ include(therock_external_source)
 include(therock_features)
 include(therock_sanitizers)
 include(therock_subproject)
+include(therock_subproject_introspection)
 include(therock_job_pools)
 include(therock_testing)
 include("${CMAKE_CURRENT_SOURCE_DIR}/FLAGS.cmake")
@@ -488,3 +489,7 @@ endif()
 # Finalization
 ################################################################################
 therock_subproject_merge_compile_commands()
+
+if (THEROCK_INTROSPECTION)
+  therock_introspect_subprojects()
+endif()
