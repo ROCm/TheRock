@@ -192,13 +192,6 @@ endblock()
 # Project wide flags for controlling the build system.
 ################################################################################
 
-# Note that delay-loading is incompatible with ASAN until a more robust mechanism
-# is implemented. See: https://github.com/ROCm/TheRock/issues/1783
-cmake_dependent_option(
-  THEROCK_FLAG_COMGR_DELAY_LOAD
-  "Enables delay loading and linker namespacing of the amd_comgr library (Linux only)"
-  ON "LINUX" OFF)
-
 # Flag: -DTHEROCK_FLAG_INCLUDE_PROFILER=OFF
 # Note that the profiler is an integral part of the system and disabling it is not
 # fully supported. However, in early bringup, it can be useful to disable building
@@ -270,14 +263,6 @@ cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
 
 # Additional manual features that don't map to artifacts
-
-# Profiler Trace Decoder Binary (not an artifact, just a config option)
-if(THEROCK_FLAG_INCLUDE_PROFILER)
-  therock_add_feature(ROCPROF_TRACE_DECODER_BINARY
-    GROUP PROFILER
-    DESCRIPTION "Enables the closed-source rocprof trace decoder binary"
-  )
-endif()
 
 # Finalize all feature flags.
 therock_finalize_features()
