@@ -798,6 +798,7 @@
     "ENC_VDS",
     "ENC_VGLOBAL",
     "The remaining ENC_VOPC surface outside this seed is now primarily packed and other wider forms not yet on the current local path.",
-    "The next coherent extension point is the remaining adjacent ENC_VOP1/ENC_VOP2 seed work after the local B16/F16 payload, swap, normalized bridge, the FP8/BF8 bridge, the wave32-local M0 relative-move bridge, F16 unary math bridge, F16 VOP2 arithmetic bridge, the half-width and F32 FMAC bridge, the half-width literal-FMA bridge, the packed-half FMAC plus RTZ/ldexp bridge, the local F32/F64 VOP2 arithmetic bridge, the local XNOR/I24 VOP2 bridge, the local B64 shift bridge, and the wave32-local VCC carry-chain bridge, or the remaining packed/wider ENC_VOPC compare work, before ENC_VOP3/half-conversion work."
+    "The current wave32-local ENC_VOP1, ENC_VOP2, and ENC_VOPC seed surface is saturated: all currently seeded instruction/encoding pairs are executable on the local path.",
+    "The next coherent extension points now move into ENC_SMEM, ENC_VOP3, ENC_VDS, and ENC_VGLOBAL, or broader shared-layer work, rather than more narrow VOP1/VOP2/VOPC seed churn."
   ]
 }
