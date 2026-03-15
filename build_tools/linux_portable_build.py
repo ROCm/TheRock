@@ -66,6 +66,20 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
         ]
     )
 
+    # Add user-specified bind mounts.
+    if args.mounts:
+        for mount_spec in args.mounts:
+            if ":" in mount_spec:
+                src, dst = mount_spec.split(":", 1)
+            else:
+                src = dst = mount_spec
+            cl.extend(
+                [
+                    "--mount",
+                    f"type=bind,src={src},dst={dst}",
+                ]
+            )
+
     # Pass through environment variables that control build behavior.
     # These are set by CI workflows to enable features like build profiling.
     passthrough_env_vars = [
@@ -184,6 +198,12 @@ def main(argv: list[str]):
         default=Path(REPO_DIR / "output-linux-portable" / "build" / "artifacts"),
         type=Path,
         help="Source artifacts/ dir from a build",
+    )
+    p.add_argument(
+        "--mount",
+        action="append",
+        dest="mounts",
+        help="Additional bind mount in format src[:dst]. If dst omitted, uses src for both. Can be specified multiple times.",
     )
 
     args = p.parse_args(argv)
