@@ -14357,40 +14357,103 @@ int main() {
     return memory != nullptr &&
            memory->WriteU32(0x900, 0x10101010u) &&
            memory->WriteU32(0x904, 0x20202020u) &&
+           memory->WriteU32(0xa00, 0x11111111u) &&
+           memory->WriteU32(0xa04, 0x12121212u) &&
+           memory->WriteU32(0xb00, 0x13131313u) &&
+           memory->WriteU32(0xb04, 0x14141414u) &&
            memory->WriteU32(0x920, 0x30303030u) &&
            memory->WriteU32(0x924, 0x40404040u) &&
            memory->WriteU32(0x928, 0x50505050u) &&
+           memory->WriteU32(0xa20, 0x31313131u) &&
+           memory->WriteU32(0xa24, 0x41414141u) &&
+           memory->WriteU32(0xa28, 0x51515151u) &&
+           memory->WriteU32(0xb20, 0x32323232u) &&
+           memory->WriteU32(0xb24, 0x42424242u) &&
+           memory->WriteU32(0xb28, 0x52525252u) &&
            memory->WriteU32(0x940, 0x60606060u) &&
            memory->WriteU32(0x944, 0x70707070u) &&
            memory->WriteU32(0x948, 0x80808080u) &&
            memory->WriteU32(0x94c, 0x90909090u) &&
+           memory->WriteU32(0xa40, 0x61616161u) &&
+           memory->WriteU32(0xa44, 0x71717171u) &&
+           memory->WriteU32(0xa48, 0x81818181u) &&
+           memory->WriteU32(0xa4c, 0x91919191u) &&
+           memory->WriteU32(0xb40, 0x62626262u) &&
+           memory->WriteU32(0xb44, 0x72727272u) &&
+           memory->WriteU32(0xb48, 0x82828282u) &&
+           memory->WriteU32(0xb4c, 0x92929292u) &&
            memory->WriteU32(0xc20, 0xa0a0a0a0u) &&
            memory->WriteU32(0xc24, 0xb0b0b0b0u) &&
-           memory->WriteU32(0xc28, 0xc0c0c0c0u);
+           memory->WriteU32(0xc28, 0xc0c0c0c0u) &&
+           memory->WriteU32(0xd20, 0xa1a1a1a1u) &&
+           memory->WriteU32(0xd24, 0xb1b1b1b1u) &&
+           memory->WriteU32(0xd28, 0xc1c1c1c1u) &&
+           memory->WriteU32(0xe20, 0xa2a2a2a2u) &&
+           memory->WriteU32(0xe24, 0xb2b2b2b2u) &&
+           memory->WriteU32(0xe28, 0xc2c2c2c2u);
   };
   const auto make_mixed_width_state = []() {
     WaveExecutionState state{};
-    state.exec_mask = 0x1ULL;
+    state.exec_mask = 0b1011ULL;
     state.sgprs[0] = 0xc00;
     state.sgprs[1] = 0x0;
     state.vgprs[0][0] = 0x900;
+    state.vgprs[0][1] = 0xa00;
+    state.vgprs[0][3] = 0xb00;
     state.vgprs[2][0] = 0x980;
+    state.vgprs[2][1] = 0xa80;
+    state.vgprs[2][3] = 0xb80;
     state.vgprs[4][0] = 0x920;
+    state.vgprs[4][1] = 0xa20;
+    state.vgprs[4][3] = 0xb20;
     state.vgprs[6][0] = 0x9a0;
+    state.vgprs[6][1] = 0xaa0;
+    state.vgprs[6][3] = 0xba0;
     state.vgprs[8][0] = 0x940;
+    state.vgprs[8][1] = 0xa40;
+    state.vgprs[8][3] = 0xb40;
     state.vgprs[10][0] = 0x9c0;
+    state.vgprs[10][1] = 0xac0;
+    state.vgprs[10][3] = 0xbc0;
     state.vgprs[12][0] = 0x20;
+    state.vgprs[12][1] = 0x120;
+    state.vgprs[12][3] = 0x220;
     state.vgprs[14][0] = 0x40;
+    state.vgprs[14][1] = 0x140;
+    state.vgprs[14][3] = 0x240;
     state.vgprs[70][0] = 0xd1d2d3d4u;
+    state.vgprs[70][1] = 0x91929394u;
+    state.vgprs[70][3] = 0x55667788u;
     state.vgprs[71][0] = 0xe1e2e3e4u;
+    state.vgprs[71][1] = 0xa1a2a3a4u;
+    state.vgprs[71][3] = 0x99aabbccu;
     state.vgprs[72][0] = 0xf1f2f3f4u;
+    state.vgprs[72][1] = 0xb1b2b3b4u;
+    state.vgprs[72][3] = 0x0badc0deu;
     state.vgprs[73][0] = 0x11121314u;
+    state.vgprs[73][1] = 0xc1c2c3c4u;
+    state.vgprs[73][3] = 0x10213243u;
     state.vgprs[74][0] = 0x21222324u;
+    state.vgprs[74][1] = 0xd1d2d3d4u;
+    state.vgprs[74][3] = 0x54657687u;
     state.vgprs[75][0] = 0x31323334u;
+    state.vgprs[75][1] = 0xe1e2e3e4u;
+    state.vgprs[75][3] = 0x98a9bacbu;
     state.vgprs[76][0] = 0x41424344u;
+    state.vgprs[76][1] = 0xf1f2f3f4u;
+    state.vgprs[76][3] = 0xdcedfe0fu;
     state.vgprs[79][0] = 0x51525354u;
+    state.vgprs[79][1] = 0x01020304u;
+    state.vgprs[79][3] = 0x31415926u;
     state.vgprs[80][0] = 0x61626364u;
+    state.vgprs[80][1] = 0x11121314u;
+    state.vgprs[80][3] = 0x53589793u;
     state.vgprs[81][0] = 0x71727374u;
+    state.vgprs[81][1] = 0x21222324u;
+    state.vgprs[81][3] = 0x23846264u;
+    for (std::uint16_t reg = 50; reg <= 61; ++reg) {
+      state.vgprs[reg][2] = 0xdeadbeefu;
+    }
     return state;
   };
   const std::vector<DecodedInstruction> mixed_width_program = {
@@ -14434,79 +14497,115 @@ int main() {
       [](const WaveExecutionState& state,
          const LinearExecutionMemory& memory,
          const char* mode) -> bool {
-    std::uint32_t mixed_width_value = 0;
-    return Expect(state.vgprs[50][0] == 0x10101010u,
-                  (std::string(mode) + " flat x2 low load result").c_str()) &&
-           Expect(state.vgprs[51][0] == 0x20202020u,
-                  (std::string(mode) + " flat x2 high load result").c_str()) &&
-           Expect(state.vgprs[52][0] == 0x30303030u,
-                  (std::string(mode) + " flat x3 dword 0 load result").c_str()) &&
-           Expect(state.vgprs[53][0] == 0x40404040u,
-                  (std::string(mode) + " flat x3 dword 1 load result").c_str()) &&
-           Expect(state.vgprs[54][0] == 0x50505050u,
-                  (std::string(mode) + " flat x3 dword 2 load result").c_str()) &&
-           Expect(state.vgprs[55][0] == 0x60606060u,
-                  (std::string(mode) + " flat x4 dword 0 load result").c_str()) &&
-           Expect(state.vgprs[56][0] == 0x70707070u,
-                  (std::string(mode) + " flat x4 dword 1 load result").c_str()) &&
-           Expect(state.vgprs[57][0] == 0x80808080u,
-                  (std::string(mode) + " flat x4 dword 2 load result").c_str()) &&
-           Expect(state.vgprs[58][0] == 0x90909090u,
-                  (std::string(mode) + " flat x4 dword 3 load result").c_str()) &&
-           Expect(state.vgprs[59][0] == 0xa0a0a0a0u,
-                  (std::string(mode) + " global x3 dword 0 load result").c_str()) &&
-           Expect(state.vgprs[60][0] == 0xb0b0b0b0u,
-                  (std::string(mode) + " global x3 dword 1 load result").c_str()) &&
-           Expect(state.vgprs[61][0] == 0xc0c0c0c0u,
-                  (std::string(mode) + " global x3 dword 2 load result").c_str()) &&
-           Expect(memory.ReadU32(0x980, &mixed_width_value),
-                  (std::string(mode) + " flat x2 store dword 0 read").c_str()) &&
-           Expect(mixed_width_value == 0xd1d2d3d4u,
-                  (std::string(mode) + " flat x2 store dword 0 result").c_str()) &&
-           Expect(memory.ReadU32(0x984, &mixed_width_value),
-                  (std::string(mode) + " flat x2 store dword 1 read").c_str()) &&
-           Expect(mixed_width_value == 0xe1e2e3e4u,
-                  (std::string(mode) + " flat x2 store dword 1 result").c_str()) &&
-           Expect(memory.ReadU32(0x9a0, &mixed_width_value),
-                  (std::string(mode) + " flat x3 store dword 0 read").c_str()) &&
-           Expect(mixed_width_value == 0xf1f2f3f4u,
-                  (std::string(mode) + " flat x3 store dword 0 result").c_str()) &&
-           Expect(memory.ReadU32(0x9a4, &mixed_width_value),
-                  (std::string(mode) + " flat x3 store dword 1 read").c_str()) &&
-           Expect(mixed_width_value == 0x11121314u,
-                  (std::string(mode) + " flat x3 store dword 1 result").c_str()) &&
-           Expect(memory.ReadU32(0x9a8, &mixed_width_value),
-                  (std::string(mode) + " flat x3 store dword 2 read").c_str()) &&
-           Expect(mixed_width_value == 0x21222324u,
-                  (std::string(mode) + " flat x3 store dword 2 result").c_str()) &&
-           Expect(memory.ReadU32(0x9c0, &mixed_width_value),
-                  (std::string(mode) + " flat x4 store dword 0 read").c_str()) &&
-           Expect(mixed_width_value == 0x11121314u,
-                  (std::string(mode) + " flat x4 store dword 0 result").c_str()) &&
-           Expect(memory.ReadU32(0x9c4, &mixed_width_value),
-                  (std::string(mode) + " flat x4 store dword 1 read").c_str()) &&
-           Expect(mixed_width_value == 0x21222324u,
-                  (std::string(mode) + " flat x4 store dword 1 result").c_str()) &&
-           Expect(memory.ReadU32(0x9c8, &mixed_width_value),
-                  (std::string(mode) + " flat x4 store dword 2 read").c_str()) &&
-           Expect(mixed_width_value == 0x31323334u,
-                  (std::string(mode) + " flat x4 store dword 2 result").c_str()) &&
-           Expect(memory.ReadU32(0x9cc, &mixed_width_value),
-                  (std::string(mode) + " flat x4 store dword 3 read").c_str()) &&
-           Expect(mixed_width_value == 0x41424344u,
-                  (std::string(mode) + " flat x4 store dword 3 result").c_str()) &&
-           Expect(memory.ReadU32(0xc40, &mixed_width_value),
-                  (std::string(mode) + " global x3 store dword 0 read").c_str()) &&
-           Expect(mixed_width_value == 0x51525354u,
-                  (std::string(mode) + " global x3 store dword 0 result").c_str()) &&
-           Expect(memory.ReadU32(0xc44, &mixed_width_value),
-                  (std::string(mode) + " global x3 store dword 1 read").c_str()) &&
-           Expect(mixed_width_value == 0x61626364u,
-                  (std::string(mode) + " global x3 store dword 1 result").c_str()) &&
-           Expect(memory.ReadU32(0xc48, &mixed_width_value),
-                  (std::string(mode) + " global x3 store dword 2 read").c_str()) &&
-           Expect(mixed_width_value == 0x71727374u,
-                  (std::string(mode) + " global x3 store dword 2 result").c_str());
+    static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+    const auto expect_lane_values =
+        [&](std::uint16_t reg,
+            const std::array<std::uint32_t, kObservedLanes.size()>& expected,
+            const char* label) {
+          for (std::size_t index = 0; index < kObservedLanes.size(); ++index) {
+            if (!Expect(state.vgprs[reg][kObservedLanes[index]] == expected[index],
+                        label)) {
+              return false;
+            }
+          }
+          return true;
+        };
+    const auto expect_memory_dwords =
+        [&](std::uint32_t base_address,
+            std::initializer_list<std::uint32_t> expected_values,
+            const char* label) {
+          std::size_t index = 0;
+          for (std::uint32_t expected_value : expected_values) {
+            std::uint32_t observed_value = 0;
+            if (!Expect(memory.ReadU32(base_address + index * sizeof(std::uint32_t),
+                                       &observed_value),
+                        label) ||
+                !Expect(observed_value == expected_value, label)) {
+              return false;
+            }
+            ++index;
+          }
+          return true;
+        };
+    return expect_lane_values(
+               50, {0x10101010u, 0x11111111u, 0x13131313u},
+               (std::string(mode) + " flat x2 low load result").c_str()) &&
+           expect_lane_values(
+               51, {0x20202020u, 0x12121212u, 0x14141414u},
+               (std::string(mode) + " flat x2 high load result").c_str()) &&
+           expect_lane_values(
+               52, {0x30303030u, 0x31313131u, 0x32323232u},
+               (std::string(mode) + " flat x3 dword 0 load result").c_str()) &&
+           expect_lane_values(
+               53, {0x40404040u, 0x41414141u, 0x42424242u},
+               (std::string(mode) + " flat x3 dword 1 load result").c_str()) &&
+           expect_lane_values(
+               54, {0x50505050u, 0x51515151u, 0x52525252u},
+               (std::string(mode) + " flat x3 dword 2 load result").c_str()) &&
+           expect_lane_values(
+               55, {0x60606060u, 0x61616161u, 0x62626262u},
+               (std::string(mode) + " flat x4 dword 0 load result").c_str()) &&
+           expect_lane_values(
+               56, {0x70707070u, 0x71717171u, 0x72727272u},
+               (std::string(mode) + " flat x4 dword 1 load result").c_str()) &&
+           expect_lane_values(
+               57, {0x80808080u, 0x81818181u, 0x82828282u},
+               (std::string(mode) + " flat x4 dword 2 load result").c_str()) &&
+           expect_lane_values(
+               58, {0x90909090u, 0x91919191u, 0x92929292u},
+               (std::string(mode) + " flat x4 dword 3 load result").c_str()) &&
+           expect_lane_values(
+               59, {0xa0a0a0a0u, 0xa1a1a1a1u, 0xa2a2a2a2u},
+               (std::string(mode) + " global x3 dword 0 load result").c_str()) &&
+           expect_lane_values(
+               60, {0xb0b0b0b0u, 0xb1b1b1b1u, 0xb2b2b2b2u},
+               (std::string(mode) + " global x3 dword 1 load result").c_str()) &&
+           expect_lane_values(
+               61, {0xc0c0c0c0u, 0xc1c1c1c1u, 0xc2c2c2c2u},
+               (std::string(mode) + " global x3 dword 2 load result").c_str()) &&
+           Expect(state.vgprs[50][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive flat x2 lane remains untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[61][2] == 0xdeadbeefu,
+                  (std::string(mode) +
+                   " inactive global x3 lane remains untouched")
+                      .c_str()) &&
+           expect_memory_dwords(
+               0x980, {0xd1d2d3d4u, 0xe1e2e3e4u},
+               (std::string(mode) + " flat x2 store lane 0 result").c_str()) &&
+           expect_memory_dwords(
+               0xa80, {0x91929394u, 0xa1a2a3a4u},
+               (std::string(mode) + " flat x2 store lane 1 result").c_str()) &&
+           expect_memory_dwords(
+               0xb80, {0x55667788u, 0x99aabbccu},
+               (std::string(mode) + " flat x2 store lane 3 result").c_str()) &&
+           expect_memory_dwords(
+               0x9a0, {0xf1f2f3f4u, 0x11121314u, 0x21222324u},
+               (std::string(mode) + " flat x3 store lane 0 result").c_str()) &&
+           expect_memory_dwords(
+               0xaa0, {0xb1b2b3b4u, 0xc1c2c3c4u, 0xd1d2d3d4u},
+               (std::string(mode) + " flat x3 store lane 1 result").c_str()) &&
+           expect_memory_dwords(
+               0xba0, {0x0badc0deu, 0x10213243u, 0x54657687u},
+               (std::string(mode) + " flat x3 store lane 3 result").c_str()) &&
+           expect_memory_dwords(
+               0x9c0, {0x11121314u, 0x21222324u, 0x31323334u, 0x41424344u},
+               (std::string(mode) + " flat x4 store lane 0 result").c_str()) &&
+           expect_memory_dwords(
+               0xac0, {0xc1c2c3c4u, 0xd1d2d3d4u, 0xe1e2e3e4u, 0xf1f2f3f4u},
+               (std::string(mode) + " flat x4 store lane 1 result").c_str()) &&
+           expect_memory_dwords(
+               0xbc0, {0x10213243u, 0x54657687u, 0x98a9bacbu, 0xdcedfe0fu},
+               (std::string(mode) + " flat x4 store lane 3 result").c_str()) &&
+           expect_memory_dwords(
+               0xc40, {0x51525354u, 0x61626364u, 0x71727374u},
+               (std::string(mode) + " global x3 store lane 0 result").c_str()) &&
+           expect_memory_dwords(
+               0xd40, {0x01020304u, 0x11121314u, 0x21222324u},
+               (std::string(mode) + " global x3 store lane 1 result").c_str()) &&
+           expect_memory_dwords(
+               0xe40, {0x31415926u, 0x53589793u, 0x23846264u},
+               (std::string(mode) + " global x3 store lane 3 result").c_str());
   };
   LinearExecutionMemory mixed_width_memory(0x3000, 0);
   if (!Expect(seed_mixed_width_memory(&mixed_width_memory),
