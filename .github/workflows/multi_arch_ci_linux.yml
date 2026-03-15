@@ -22,12 +22,16 @@ on:
         type: string
       test_labels:
         type: string
-      artifact_run_id:
-        type: string
       expect_failure:
         type: boolean
-      use_prebuilt_artifacts:
+      prebuilt_stages:
         type: string
+        default: ""
+        description: "Comma-separated build stages to skip; artifacts are copied from baseline_run_id instead"
+      baseline_run_id:
+        type: string
+        default: ""
+        description: "Workflow run ID to copy prebuilt stage artifacts from"
       rocm_package_version:
         type: string
       test_type:
@@ -40,9 +44,50 @@ permissions:
   contents: read
 
 jobs:
+  copy_prebuilt_stages:
+    name: Copy Prebuilt Stages
+    if: ${{ inputs.prebuilt_stages != '' && inputs.baseline_run_id != '' }}
+    runs-on: azure-linux-scale-rocm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install artifact manager dependencies
+        run: pip install boto3
+
+      # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
+      # fall back to runner base credentials (therock-ci-artifacts-external).
+      #
+      # This is just needed for write access to the current run's bucket,
+      # all possible source run buckets have public read access.
+      - name: Configure AWS Credentials
+        if: ${{ github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
+      - name: Copy prebuilt stage artifacts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python build_tools/artifact_manager.py copy \
+            --source-run-id=${{ inputs.baseline_run_id }} \
+            --stage="${{ inputs.prebuilt_stages }}" \
+            --amdgpu-families="${{ inputs.dist_amdgpu_families }}"
+
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
-    if: ${{ inputs.use_prebuilt_artifacts == 'false' }}
+    needs: copy_prebuilt_stages
+    if: ${{ !cancelled() && !failure() }}
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
     secrets: inherit
     with:
@@ -53,7 +98,7 @@ jobs:
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       build_variant_suffix: ${{ inputs.build_variant_suffix }}
       expect_failure: ${{ inputs.expect_failure }}
-      use_prebuilt_artifacts: ${{ inputs.use_prebuilt_artifacts }}
+      prebuilt_stages: ${{ inputs.prebuilt_stages }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       test_type: ${{ inputs.test_type }}
     permissions:
@@ -63,39 +108,18 @@ jobs:
   validate_artifact_structure:
     needs: [build_multi_arch_stages]
     name: Validate Artifact Structure
-    if: >-
-      ${{
-        !failure() &&
-        !cancelled() &&
-        (
-          inputs.use_prebuilt_artifacts == 'false' ||
-          inputs.use_prebuilt_artifacts == 'true'
-        ) &&
-        inputs.expect_failure == false
-      }}
+    # If we are expecting a build failure, do not run tests to save machine capacity.
+    if: ${{ !failure() && !cancelled() && inputs.expect_failure == false }}
     uses: ./.github/workflows/test_artifacts_structure.yml
     with:
       artifact_group: ${{ inputs.artifact_group }}
-      artifact_run_id: ${{ inputs.artifact_run_id }}
       platform: linux
 
   test_artifacts_per_family:
-    needs: [build_multi_arch_stages]
+    needs: [copy_prebuilt_stages, build_multi_arch_stages]
     name: Test ${{ matrix.family_info.amdgpu_family }}
-    # If the dependent job failed/cancelled, this job will not be run
-    # The use_prebuilt_artifacts "or" statement ensures that tests will run if
-    # previous build step is run or skipped.
     # If we are expecting a build failure, do not run tests to save machine capacity.
-    if: >-
-      ${{
-        !failure() &&
-        !cancelled() &&
-        (
-          inputs.use_prebuilt_artifacts == 'false' ||
-          inputs.use_prebuilt_artifacts == 'true'
-        ) &&
-        inputs.expect_failure == false
-      }}
+    if: ${{ !failure() && !cancelled() && inputs.expect_failure == false }}
     strategy:
       fail-fast: false
       matrix:
@@ -104,7 +128,6 @@ jobs:
         exclude:
           - family_info:
               amdgpu_family: gfx950-dcgpu
-
     uses: ./.github/workflows/test_artifacts.yml
     with:
       # Use architecture-specific artifact group for fetching per-arch artifacts
@@ -112,7 +135,6 @@ jobs:
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
-      artifact_run_id: ${{ inputs.artifact_run_id }}
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
@@ -120,22 +142,9 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    # If the dependent job failed/cancelled, this job will not be run
-    # The use_prebuilt_artifacts "or" statement ensures that tests will run if
-    # previous build step is run or skipped.
-    if: >-
-      ${{
-        !failure() &&
-        !cancelled() &&
-        (
-          inputs.use_prebuilt_artifacts == 'false' ||
-          inputs.use_prebuilt_artifacts == 'true'
-        ) &&
-        inputs.expect_failure == false
-      }}
+    if: ${{ !failure() && !cancelled() && inputs.expect_failure == false }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
     with:
-      artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       multiarch_index: true
@@ -144,6 +153,26 @@ jobs:
       contents: read
       id-token: write
 
+  test_python_packages_per_family:
+    needs: [build_python_packages]
+    name: Test Python ${{ matrix.family_info.amdgpu_family }}
+    if: ${{ !failure() && !cancelled() && inputs.expect_failure == false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
+        # TODO(TheRock#3288): Re-enable gfx950-dcgpu runners once we get more capacity
+        exclude:
+          - family_info:
+              amdgpu_family: gfx950-dcgpu
+    uses: ./.github/workflows/test_rocm_wheels.yml
+    with:
+      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
+      test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      package_find_links_url: "${{ needs.build_python_packages.outputs.package_find_links_url }}/${{ matrix.family_info.amdgpu_family }}/index.html"
+      python_version: "3.12"
+      rocm_version: ${{ inputs.rocm_package_version }}
+
   # NOTE: Per-family PyTorch builds — each family gets its own wheel built
   # against that family's ROCm package index slice.
   # TODO(future): Consider adding a combined multi-arch pytorch build job
@@ -151,17 +180,7 @@ jobs:
   build_pytorch_wheels_per_family:
     needs: [build_python_packages]
     name: Build PyTorch | ${{ matrix.family_info.amdgpu_family }}
-    if: >-
-      ${{
-        !failure() &&
-        !cancelled() &&
-        (
-          inputs.use_prebuilt_artifacts == 'false' ||
-          inputs.use_prebuilt_artifacts == 'true'
-        ) &&
-        inputs.expect_failure == false &&
-        inputs.build_pytorch == true
-      }}
+    if: ${{ !failure() && !cancelled() && inputs.build_pytorch == false }}
     strategy:
       fail-fast: false
       matrix:
@@ -180,35 +199,3 @@ jobs:
     permissions:
       contents: read
       id-token: write
-
-  test_python_packages_per_family:
-    needs: [build_python_packages]
-    name: Test Python ${{ matrix.family_info.amdgpu_family }}
-    # If the dependent job failed/cancelled, this job will not be run
-    # The use_prebuilt_artifacts "or" statement ensures that tests will run if
-    # previous build step is run or skipped.
-    if: >-
-      ${{
-        !failure() &&
-        !cancelled() &&
-        (
-          inputs.use_prebuilt_artifacts == 'false' ||
-          inputs.use_prebuilt_artifacts == 'true'
-        ) &&
-        inputs.expect_failure == false
-      }}
-    strategy:
-      fail-fast: false
-      matrix:
-        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
-        # TODO(TheRock#3288): Re-enable gfx950-dcgpu runners once we get more capacity
-        exclude:
-          - family_info:
-              amdgpu_family: gfx950-dcgpu
-    uses: ./.github/workflows/test_rocm_wheels.yml
-    with:
-      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
-      test_runs_on: ${{ matrix.family_info.test-runs-on }}
-      package_find_links_url: "${{ needs.build_python_packages.outputs.package_find_links_url }}/${{ matrix.family_info.amdgpu_family }}/index.html"
-      python_version: "3.12"
-      rocm_version: ${{ inputs.rocm_package_version }}
