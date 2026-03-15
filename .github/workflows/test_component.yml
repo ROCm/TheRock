@@ -103,6 +103,11 @@ jobs:
         with:
           repository: "ROCm/TheRock"
 
+      - name: Fetch required submodules
+        if: ${{ fromJSON(inputs.component).submodules != '' }}
+        run: |
+          git submodule update --init --depth 1 --recursive ${{ fromJSON(inputs.component).submodules }}
+
       - name: Run setup test environment workflow
         timeout-minutes: 15
         uses: './.github/actions/setup_test_environment'
