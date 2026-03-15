@@ -202,37 +202,53 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _optional_str(val: str | None) -> str | None:
+    """Normalize optional string: None or blank -> None, otherwise stripped.
+
+    Workflow callers (e.g. GitHub Actions) may pass empty string for unused
+    optional inputs; treat those as not provided.
+    """
+    if val is None:
+        return None
+    s = val.strip()
+    return s if s else None
+
+
 def resolve_commits(args: argparse.Namespace) -> tuple[str, str]:
     """Resolve start and end commit SHAs from arguments."""
-    if args.start is None and args.find_last_successful is None:
+    start = _optional_str(args.start)
+    find_last = _optional_str(args.find_last_successful)
+    end = _optional_str(args.end)
+
+    if start is None and find_last is None:
         raise ValueError(
             "--start is required unless --find-last-successful is provided"
         )
+    if end is None:
+        raise ValueError("--end is required")
 
     therock_repo_full = f"{ROCM_ORG}/{THEROCK_REPO}"
 
     # Resolve start commit
-    if args.find_last_successful is not None:
+    if find_last is not None:
         last_run = gha_query_last_successful_workflow_run(
-            therock_repo_full, args.find_last_successful, branch=args.branch
+            therock_repo_full, find_last, branch=args.branch
         )
         if not last_run:
-            raise ValueError(
-                f"No previous successful run found for {args.find_last_successful}"
-            )
+            raise ValueError(f"No previous successful run found for {find_last}")
         start_sha = last_run["head_sha"]
     elif args.workflow_mode:
-        workflow_info = gha_query_workflow_run_by_id(therock_repo_full, args.start)
+        workflow_info = gha_query_workflow_run_by_id(therock_repo_full, start)
         start_sha = workflow_info.get("head_sha")
     else:
-        start_sha = args.start
+        start_sha = start
 
     # Resolve end commit
     if args.workflow_mode:
-        workflow_info = gha_query_workflow_run_by_id(therock_repo_full, args.end)
+        workflow_info = gha_query_workflow_run_by_id(therock_repo_full, end)
         end_sha = workflow_info.get("head_sha")
     else:
-        end_sha = args.end
+        end_sha = end
 
     return start_sha, end_sha
 
