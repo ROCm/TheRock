@@ -1,0 +1,33 @@
+@PACKAGE_INIT@
+
+# hip-config.cmake
+# CMake configuration for remote HIP client library
+
+include("${CMAKE_CURRENT_LIST_DIR}/hip-targets.cmake")
+
+# Provide compatibility variables
+set(HIP_FOUND TRUE)
+set(HIP_VERSION "@PROJECT_VERSION@")
+set(HIP_PLATFORM "amd")
+set(HIP_RUNTIME "remote")
+
+# Check for required components
+set(_HIP_NOTFOUND_MESSAGE)
+foreach(_comp ${hip_FIND_COMPONENTS})
+  if(_comp STREQUAL "hip")
+    # hip component is always available
+  else()
+    set(_HIP_NOTFOUND_MESSAGE "${_HIP_NOTFOUND_MESSAGE}  - ${_comp}\n")
+  endif()
+endforeach()
+
+if(_HIP_NOTFOUND_MESSAGE)
+  message(WARNING "Remote HIP does not provide the following components:\n${_HIP_NOTFOUND_MESSAGE}")
+endif()
+
+# Provide hip::hip alias for compatibility
+if(TARGET amdhip64 AND NOT TARGET hip::hip)
+  add_library(hip::hip ALIAS amdhip64)
+endif()
+
+check_required_components(hip)
