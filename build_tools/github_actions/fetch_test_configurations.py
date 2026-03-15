@@ -84,8 +84,6 @@ test_matrix = {
             "linux": 6,
             "windows": 1,
         },
-        # Windows: run quick only (avoids known failures in standard suite, e.g. SEH 0xc0000094 in axpy).
-        "test_type_windows": "quick",
     },
     "rocroller": {
         "job_name": "rocroller",
