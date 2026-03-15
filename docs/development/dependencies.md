@@ -49,6 +49,7 @@ project wide:
   - `THEROCK_BUNDLED_HWLOC`
   - `THEROCK_BUNDLED_LIBCAP`
   - `THEROCK_BUNDLED_LIBDRM`
+  - `THEROCK_BUNDLED_LIBFFI`
   - `THEROCK_BUNDLED_LIBLZMA`
   - `THEROCK_BUNDLED_NUMACTL`
   - `THEROCK_BUNDLED_SQLITE3`
@@ -88,6 +89,15 @@ Implementation notes for each library is below:
 
 - Canonical method: `find_package(hwloc CONFIG)`
 - Import library: `hwloc::hwloc`
+
+## libffi
+
+Portable foreign function interface library.
+
+- Canonical method: `find_package(FFI)` or `pkg_check_modules(FFI libffi)`
+- Import library: `FFI::ffi`
+- Vars: `FFI_LIBRARIES`, `FFI_INCLUDE_DIRS`
+- Notes: Used by LLVM OpenMP libomptarget host plugin for dynamic function invocation. LLVM provides its own FindFFI.cmake module.
 
 ## ELFUTILS
 

@@ -24,6 +24,11 @@ add_subdirectory(libpciaccess)
 # hwloc depends on numactl and libpciaccess.
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/hwloc" "${CMAKE_CURRENT_BINARY_DIR}/hwloc")
 
+# libffi for OpenMP libomptarget host plugin (Linux-only)
+if(THEROCK_ENABLE_SYSDEPS_LIBFFI)
+  add_subdirectory(libffi)
+endif()
+
 # Core sysdeps: This artifact includes libraries that are widely used and are typically
 # available on base systems. All of these should be small, fast to build, and high
 # fanout to the codebase at large.
@@ -142,5 +147,18 @@ if(THEROCK_ENABLE_SYSDEPS_HWLOC)
       lib
     SUBPROJECT_DEPS
       therock-hwloc
+  )
+endif()
+
+# Optional sysdep: libffi
+if(THEROCK_ENABLE_SYSDEPS_LIBFFI)
+  therock_provide_artifact(sysdeps-libffi
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-libffi.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-libffi
   )
 endif()
