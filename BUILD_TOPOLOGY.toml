@@ -147,6 +147,10 @@ artifact_groups = [
     "rocrtst"
 ]
 
+[build_stages.ml-libs-generic]
+description = "Architecture-neutral ML library API (hipDNN)"
+artifact_groups = ["ml-libs-generic"]
+
 [build_stages.math-libs]
 description = "Math and ML libraries per architecture"
 artifact_groups = ["math-libs", "ml-libs"]
@@ -176,7 +180,7 @@ description = "IREE compiler (parallel to math-libs)"
 artifact_groups = ["iree-compiler"]
 
 [build_stages.fusilli-libs]
-description = "Fusilli hipdnn provider (needs math-libs + iree-compiler)"
+description = "Fusilli hipdnn provider (needs ml-libs-generic + iree-compiler)"
 artifact_groups = ["fusilli-libs"]
 
 [build_stages.profiler-apps]
@@ -260,10 +264,17 @@ artifact_group_deps = ["hip-runtime", "profiler-core"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
 source_sets = ["rocm-libraries", "rocm-systems", "math-libs"]
 
+[artifact_groups.ml-libs-generic]
+description = "Architecture-neutral ML library API (hipDNN)"
+type = "generic"
+artifact_group_deps = ["hip-runtime", "third-party-libs"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["rocm-libraries", "rocm-systems"]
+
 [artifact_groups.ml-libs]
 description = "Machine learning libraries"
 type = "per-arch"
-artifact_group_deps = ["math-libs", "profiler-core"]
+artifact_group_deps = ["math-libs", "profiler-core", "ml-libs-generic"]
 source_sets = ["rocm-libraries", "ml-frameworks"]
 
 [artifact_groups.comm-libs]
@@ -308,7 +319,7 @@ source_sets = ["iree-libs", "rocm-systems"]
 [artifact_groups.fusilli-libs]
 description = "Fusilli hipdnn provider"
 type = "generic"
-artifact_group_deps = ["hip-runtime", "iree-compiler"]
+artifact_group_deps = ["hip-runtime", "iree-compiler", "ml-libs-generic"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
 source_sets = ["iree-libs", "rocm-libraries", "rocm-systems"]
 
@@ -585,7 +596,7 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand"
 split_databases = ["miopen"]
 
 [artifacts.hipdnn]
-artifact_group = "ml-libs"
+artifact_group = "ml-libs-generic"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "spdlog"]
 
