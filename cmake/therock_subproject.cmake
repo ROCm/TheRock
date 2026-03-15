@@ -869,6 +869,8 @@ function(therock_cmake_subproject_activate target_name)
   # Detect whether the stage dir has been pre-built.
   set(_prebuilt_file "${_stage_dir}.prebuilt")
 
+  list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
+
   # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
   set(_cmake_build_type "${${target_name}_BUILD_TYPE}")
@@ -955,6 +957,23 @@ function(therock_cmake_subproject_activate target_name)
       "STAGE_DESTINATION_DIR=${_rel_stage_destination_dir}"
     )
 
+    if (THEROCK_VERBOSE)
+        string(JOIN " " _cmd_string
+          ${_configure_log_prefix}
+          "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
+          "${CMAKE_COMMAND}"
+          "-G${CMAKE_GENERATOR}"
+          "-B${_binary_dir}"
+          "-S${_cmake_source_dir}"
+          "-DCMAKE_BUILD_TYPE=${_cmake_build_type}"
+          "-DCMAKE_INSTALL_PREFIX=${_stage_destination_dir}"
+          "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
+          "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
+          "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${_cmake_project_init_file}"
+          ${_cmake_args}
+        )
+        message(STATUS "add_custom_command OUTPUT \"${_configure_stamp_file}\" COMMAND ${_cmd_string}")
+    endif()
     # Configure command.
     add_custom_command(
       OUTPUT "${_configure_stamp_file}"
