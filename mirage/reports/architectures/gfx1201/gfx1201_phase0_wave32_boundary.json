@@ -1,0 +1,42 @@
+{
+  "target": "gfx1201",
+  "slice": "phase0_wave32_boundary",
+  "wave_size": 32,
+  "phase0_executable_count": 325,
+  "tracked_encodings": [
+    {
+      "encoding_name": "ENC_VOP1",
+      "seeded_instruction_count": 90,
+      "executable_instruction_count": 90,
+      "fully_executable": true
+    },
+    {
+      "encoding_name": "ENC_VOP2",
+      "seeded_instruction_count": 47,
+      "executable_instruction_count": 47,
+      "fully_executable": true
+    },
+    {
+      "encoding_name": "ENC_VOPC",
+      "seeded_instruction_count": 162,
+      "executable_instruction_count": 162,
+      "fully_executable": true
+    }
+  ],
+  "saturated_encodings": [
+    "ENC_VOP1",
+    "ENC_VOP2",
+    "ENC_VOPC"
+  ],
+  "next_risk_encodings": [
+    "ENC_SMEM",
+    "ENC_VOP3",
+    "ENC_VDS",
+    "ENC_VGLOBAL"
+  ],
+  "notes": [
+    "All currently seeded ENC_VOP1, ENC_VOP2, and ENC_VOPC instruction/encoding pairs are executable on the local wave32 path.",
+    "There are no remaining imported ENC_VOP1, ENC_VOP2, or ENC_VOPC instruction/encoding pairs outside the current seed surface.",
+    "The next coherent phase-0 extensions move into ENC_SMEM, ENC_VOP3, ENC_VDS, and ENC_VGLOBAL, or require broader shared-layer churn."
+  ]
+}
