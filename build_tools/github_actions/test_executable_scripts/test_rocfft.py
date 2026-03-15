@@ -27,13 +27,7 @@ test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
     test_filter = ["--smoketest"]
 else:
-    # "--test_prob" is the probability that a given test will run.
-    # Due to the large number of tests for rocFFT, we only run a subset.
-    test_filter = [
-        "--gtest_filter=-*multi_gpu*",
-        "--test_prob",
-        "0.02",
-    ]
+    test_filter = ["--gtest_filter=-*multi_gpu*"]
 
 cmd = [f"{THEROCK_BIN_DIR}/rocfft-test"] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
