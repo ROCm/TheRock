@@ -75,11 +75,13 @@ test_matrix = {
     "rocblas": {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocblas.py')}",
-        "platform": ["linux", "windows"],
+        # GHA step timeout: max category timeout in rocBLAS test_categories.yaml is 24h (full);
+        # 1440 min + 20% margin = 1728 min
+        "timeout_minutes": 1728,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 1,
+            "linux": 6,
             "windows": 1,
         },
     },
