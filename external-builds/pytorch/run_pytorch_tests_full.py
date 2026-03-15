@@ -75,6 +75,13 @@ AMDGPU_FAMILY_TO_BUILD_ENV = {
 }
 ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
 
+# Upstream PyTorch uses a separate BUILD_ENVIRONMENT for the inductor config
+# (e.g. inductor-rocm-mi300.yml vs rocm-mi300.yml), so test-times.json stores
+# inductor timings under different keys.
+AMDGPU_FAMILY_TO_INDUCTOR_BUILD_ENV = {
+    "gfx94X-dcgpu": "rocm-py3.12-inductor-mi300",
+}
+
 THEROCK_ENV_VARS = [
     "CI",
     "BUILD_ENVIRONMENT",
@@ -94,9 +101,17 @@ THEROCK_ENV_VARS = [
 
 def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
     os.environ.setdefault("CI", "1")
-    build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
-        amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
-    )
+    if test_config == "inductor":
+        build_env = AMDGPU_FAMILY_TO_INDUCTOR_BUILD_ENV.get(
+            amdgpu_family,
+            AMDGPU_FAMILY_TO_BUILD_ENV.get(
+                amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
+            ),
+        )
+    else:
+        build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
+            amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
+        )
     os.environ.setdefault("BUILD_ENVIRONMENT", build_env)
     os.environ.setdefault("PYTORCH_TEST_WITH_ROCM", "1")
     os.environ.setdefault("PYTORCH_TESTING_DEVICE_ONLY_FOR", "cuda")
@@ -329,9 +344,11 @@ def main(argv: list[str]) -> int:
 
     # Determine AMDGPU family and set HIP_VISIBLE_DEVICES BEFORE importing
     # torch or running pytest.  Once torch.cuda is initialized, changing
-    # HIP_VISIBLE_DEVICES has no effect.  For unit tests we run on a single
-    # device (policy="single") to avoid multi-GPU contention.
-    ((first_arch, _),) = set_gpu_execution_policy(args.amdgpu_family, policy="single")
+    # HIP_VISIBLE_DEVICES has no effect.  Distributed tests need all GPUs;
+    # other configs use a single device to avoid multi-GPU contention.
+    gpu_policy = "all" if args.test_config == "distributed" else "single"
+    selected = set_gpu_execution_policy(args.amdgpu_family, policy=gpu_policy)
+    first_arch = selected[0][0]
     print(f"Using AMDGPU family: {first_arch}")
 
     pytorch_version = args.pytorch_version
