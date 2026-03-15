@@ -391,6 +391,22 @@ std::uint32_t CountDescriptorsForRoleAndElementBitWidth(
   return count;
 }
 
+std::uint32_t CountDescriptorsForRoleAndPackedElements(
+    const StubDecodedInstruction& instruction,
+    StubOperandRole role,
+    std::uint8_t packed_elements) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    const auto& descriptor = instruction.operand_descriptors.descriptors[i];
+    if (descriptor.role == role &&
+        descriptor.fragment_shape.packed_elements == packed_elements) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 std::uint32_t CountDescriptorsForRoleAndSlotKind(
     const StubDecodedInstruction& instruction,
     StubOperandRole role,
@@ -498,6 +514,21 @@ std::uint32_t CountSlotsOfKindAndElementBitWidth(
     const auto& binding = instruction.operand_slots.bindings[i];
     if (binding.slot_kind == slot_kind &&
         binding.fragment_shape.element_bit_width == element_bit_width) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountSlotsOfKindAndPackedElements(
+    const StubDecodedInstruction& instruction,
+    StubOperandSlotKind slot_kind,
+    std::uint8_t packed_elements) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    const auto& binding = instruction.operand_slots.bindings[i];
+    if (binding.slot_kind == slot_kind &&
+        binding.fragment_shape.packed_elements == packed_elements) {
       ++count;
     }
   }
@@ -1934,6 +1965,31 @@ int main() {
               "expected routed WMMA scale seed to keep exact role/slot element-width mapping")) {
         return 1;
       }
+      if (!Expect(
+              CountDescriptorsForRoleAndPackedElements(
+                  decoded, StubOperandRole::kDestination, 0) == 1 &&
+                  CountDescriptorsForRoleAndPackedElements(
+                      decoded, StubOperandRole::kSource0, 0) == 1 &&
+                  CountDescriptorsForRoleAndPackedElements(
+                      decoded, StubOperandRole::kSource1, 0) == 1 &&
+                  CountDescriptorsForRoleAndPackedElements(
+                      decoded, StubOperandRole::kAccumulator, 0) == 1 &&
+                  CountDescriptorsForRoleAndPackedElements(
+                      decoded, StubOperandRole::kScale, 1) == 1 &&
+                  CountSlotsOfKindAndPackedElements(
+                      decoded, StubOperandSlotKind::kDestination, 0) == 1 &&
+                  CountSlotsOfKindAndPackedElements(
+                      decoded, StubOperandSlotKind::kSource0, 0) == 1 &&
+                  CountSlotsOfKindAndPackedElements(
+                      decoded, StubOperandSlotKind::kSource1, 0) == 1 &&
+                  CountSlotsOfKindAndPackedElements(
+                      decoded, StubOperandSlotKind::kAccumulatorSource, 0) ==
+                      1 &&
+                  CountSlotsOfKindAndPackedElements(
+                      decoded, StubOperandSlotKind::kScaleSource, 1) == 1,
+              "expected routed WMMA scale seed to keep exact role/slot packed-elements mapping")) {
+        return 1;
+      }
     } else {
       if (!Expect(decoded.operand_slots.binding_count == 4 &&
                       decoded.operand_descriptors.descriptor_count == 4 &&
@@ -2159,6 +2215,27 @@ int main() {
                       decoded, StubOperandSlotKind::kAccumulatorSource,
                       core_accumulator_element_bit_width) == 1,
               "expected routed WMMA/SWMMAC core seed to keep exact role/slot element-width mapping")) {
+        return 1;
+      }
+      if (!Expect(
+              CountDescriptorsForRoleAndPackedElements(
+                  decoded, StubOperandRole::kDestination, 0) == 1 &&
+                  CountDescriptorsForRoleAndPackedElements(
+                      decoded, StubOperandRole::kSource0, 0) == 1 &&
+                  CountDescriptorsForRoleAndPackedElements(
+                      decoded, StubOperandRole::kSource1, 0) == 1 &&
+                  CountDescriptorsForRoleAndPackedElements(
+                      decoded, StubOperandRole::kAccumulator, 0) == 1 &&
+                  CountSlotsOfKindAndPackedElements(
+                      decoded, StubOperandSlotKind::kDestination, 0) == 1 &&
+                  CountSlotsOfKindAndPackedElements(
+                      decoded, StubOperandSlotKind::kSource0, 0) == 1 &&
+                  CountSlotsOfKindAndPackedElements(
+                      decoded, StubOperandSlotKind::kSource1, 0) == 1 &&
+                  CountSlotsOfKindAndPackedElements(
+                      decoded, StubOperandSlotKind::kAccumulatorSource, 0) ==
+                      1,
+              "expected routed WMMA/SWMMAC core seed to keep exact role/slot packed-elements mapping")) {
         return 1;
       }
     }
@@ -3597,6 +3674,32 @@ int main() {
             "expected routed tensor seed to keep exact role/slot element-width mapping")) {
       return 1;
     }
+    if (!Expect(
+            CountDescriptorsForRoleAndPackedElements(
+                decoded, StubOperandRole::kTensorDescriptor, 1) == 1 &&
+                CountDescriptorsForRoleAndPackedElements(
+                    decoded, StubOperandRole::kTensorCoordinate, 1) == 1 &&
+                CountDescriptorsForRoleAndPackedElements(
+                    decoded,
+                    instruction_name == "TENSOR_LOAD_TO_LDS"
+                        ? StubOperandRole::kLdsDestination
+                        : StubOperandRole::kLdsSource,
+                    1) == 1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kTensorDescriptorSource, 1) ==
+                    1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kTensorCoordinateSource, 1) ==
+                    1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded,
+                    instruction_name == "TENSOR_LOAD_TO_LDS"
+                        ? StubOperandSlotKind::kLdsDestination
+                        : StubOperandSlotKind::kLdsSource,
+                    1) == 1,
+            "expected routed tensor seed to keep exact role/slot packed-elements mapping")) {
+      return 1;
+    }
     if (instruction_name == "TENSOR_LOAD_TO_LDS") {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
@@ -3911,6 +4014,28 @@ int main() {
                         ? 32
                         : 16) == 1,
             "expected routed VOP1 seed to keep exact role/slot element-width mapping")) {
+      return 1;
+    }
+    if (!Expect(
+            CountDescriptorsForRoleAndPackedElements(
+                decoded, StubOperandRole::kSource0,
+                instruction_name.find("PK_") != std::string_view::npos ? 2 : 1) ==
+                1 &&
+                CountDescriptorsForRoleAndPackedElements(
+                    decoded, StubOperandRole::kDestination,
+                    instruction_name.find("PK_") != std::string_view::npos ? 2
+                                                                           : 1) ==
+                    1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kSource0,
+                    instruction_name.find("PK_") != std::string_view::npos ? 2 : 1) ==
+                    1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kDestination,
+                    instruction_name.find("PK_") != std::string_view::npos ? 2
+                                                                           : 1) ==
+                    1,
+            "expected routed VOP1 seed to keep exact role/slot packed-elements mapping")) {
       return 1;
     }
     if (instruction_name.find("PK_") != std::string_view::npos) {
@@ -4235,6 +4360,28 @@ int main() {
             "expected routed VOP3 SDST seed to keep exact role/slot element-width mapping")) {
       return 1;
     }
+    if (!Expect(
+            CountDescriptorsForRoleAndPackedElements(
+                decoded, StubOperandRole::kSource0, 1) == 1 &&
+                CountDescriptorsForRoleAndPackedElements(
+                    decoded, StubOperandRole::kSource1, 1) == 1 &&
+                CountDescriptorsForRoleAndPackedElements(
+                    decoded, StubOperandRole::kScale, 1) == 1 &&
+                CountDescriptorsForRoleAndPackedElements(
+                    decoded, StubOperandRole::kDestination, 1) == 2 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kSource0, 1) == 1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kSource1, 1) == 1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kScaleSource, 1) == 1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kDestination, 1) == 1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kScalarDestination, 1) == 1,
+            "expected routed VOP3 SDST seed to keep exact role/slot packed-elements mapping")) {
+      return 1;
+    }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kScale) &&
                     HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
                     ContainsSlot(decoded, StubOperandSlotKind::kDestination,
@@ -4533,6 +4680,26 @@ int main() {
                     decoded, StubOperandSlotKind::kDestination,
                     paired_destination_element_bit_width) == 1,
             "expected paired-scale helper to keep exact role/slot element-width mapping")) {
+      return 1;
+    }
+    if (!Expect(
+            CountDescriptorsForRoleAndPackedElements(
+                decoded, StubOperandRole::kSource0, 1) == 1 &&
+                CountDescriptorsForRoleAndPackedElements(
+                    decoded, StubOperandRole::kScale, 1) == 1 &&
+                CountDescriptorsForRoleAndPackedElements(
+                    decoded, StubOperandRole::kPairedScale, 1) == 1 &&
+                CountDescriptorsForRoleAndPackedElements(
+                    decoded, StubOperandRole::kDestination, 1) == 1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kSource0, 1) == 1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kScaleSource, 1) == 1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kPairedScaleSource, 1) == 1 &&
+                CountSlotsOfKindAndPackedElements(
+                    decoded, StubOperandSlotKind::kDestination, 1) == 1,
+            "expected paired-scale helper to keep exact role/slot packed-elements mapping")) {
       return 1;
     }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kSource0) &&
