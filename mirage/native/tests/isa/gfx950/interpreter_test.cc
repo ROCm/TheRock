@@ -8283,17 +8283,33 @@ int main() {
   LinearExecutionMemory typed_buffer_low_component_memory(0x600, 0);
   if (!Expect(WriteU8(&typed_buffer_low_component_memory, 0x380u, 0x5au),
               "expected typed buffer x seed write") ||
+      !Expect(WriteU8(&typed_buffer_low_component_memory, 0x384u, 0x6bu),
+              "expected typed buffer x seed write") ||
+      !Expect(WriteU8(&typed_buffer_low_component_memory, 0x388u, 0x7cu),
+              "expected typed buffer x seed write") ||
       !Expect(WriteU8(&typed_buffer_low_component_memory, 0x3c0u, 0x09u),
               "expected typed buffer xy seed write") ||
       !Expect(WriteU8(&typed_buffer_low_component_memory, 0x3c1u, 0x0au),
               "expected typed buffer xy seed write") ||
+      !Expect(WriteU8(&typed_buffer_low_component_memory, 0x3c4u, 0x19u),
+              "expected typed buffer xy seed write") ||
+      !Expect(WriteU8(&typed_buffer_low_component_memory, 0x3c5u, 0x1au),
+              "expected typed buffer xy seed write") ||
+      !Expect(WriteU8(&typed_buffer_low_component_memory, 0x3c8u, 0x29u),
+              "expected typed buffer xy seed write") ||
+      !Expect(WriteU8(&typed_buffer_low_component_memory, 0x3c9u, 0x2au),
+              "expected typed buffer xy seed write") ||
       !Expect(WriteU16(&typed_buffer_low_component_memory, 0x400u, 0x1234u),
+              "expected typed buffer d16 x seed write") ||
+      !Expect(WriteU16(&typed_buffer_low_component_memory, 0x404u, 0x5678u),
+              "expected typed buffer d16 x seed write") ||
+      !Expect(WriteU16(&typed_buffer_low_component_memory, 0x408u, 0x9abcu),
               "expected typed buffer d16 x seed write")) {
     return 1;
   }
 
   WaveExecutionState typed_buffer_low_component_state{};
-  typed_buffer_low_component_state.exec_mask = 0x1ULL;
+  typed_buffer_low_component_state.exec_mask = 0b1011ULL;
   typed_buffer_low_component_state.sgprs[60] = 0x380u;
   typed_buffer_low_component_state.sgprs[61] = 0u;
   typed_buffer_low_component_state.sgprs[62] = 0x80u;
@@ -8309,15 +8325,36 @@ int main() {
   typed_buffer_low_component_state.sgprs[70] = 0x80u;
   typed_buffer_low_component_state.sgprs[71] =
       typed_buffer_low_component_dst_sel_word3;
+  typed_buffer_low_component_state.vgprs[0][0] = 0x0u;
+  typed_buffer_low_component_state.vgprs[0][1] = 0x4u;
+  typed_buffer_low_component_state.vgprs[0][3] = 0x8u;
+  typed_buffer_low_component_state.vgprs[1][0] = 0x0u;
+  typed_buffer_low_component_state.vgprs[1][1] = 0x4u;
+  typed_buffer_low_component_state.vgprs[1][3] = 0x8u;
+  typed_buffer_low_component_state.vgprs[2][0] = 0x0u;
+  typed_buffer_low_component_state.vgprs[2][1] = 0x4u;
+  typed_buffer_low_component_state.vgprs[2][3] = 0x8u;
+  typed_buffer_low_component_state.vgprs[10][2] = 0xdeadbeefu;
+  typed_buffer_low_component_state.vgprs[11][2] = 0xdeadbeefu;
+  typed_buffer_low_component_state.vgprs[12][2] = 0xdeadbeefu;
+  typed_buffer_low_component_state.vgprs[13][2] = 0xdeadbeefu;
   typed_buffer_low_component_state.vgprs[20][0] = 0x6bu;
+  typed_buffer_low_component_state.vgprs[20][1] = 0x7cu;
+  typed_buffer_low_component_state.vgprs[20][3] = 0x8du;
   typed_buffer_low_component_state.vgprs[21][0] = 0xcdu;
+  typed_buffer_low_component_state.vgprs[21][1] = 0x34u;
+  typed_buffer_low_component_state.vgprs[21][3] = 0x78u;
   typed_buffer_low_component_state.vgprs[22][0] = 0xefu;
+  typed_buffer_low_component_state.vgprs[22][1] = 0x56u;
+  typed_buffer_low_component_state.vgprs[22][3] = 0x9au;
   typed_buffer_low_component_state.vgprs[23][0] = 0x00005678u;
+  typed_buffer_low_component_state.vgprs[23][1] = 0x0000abcdu;
+  typed_buffer_low_component_state.vgprs[23][3] = 0x0000ef01u;
 
   const std::vector<DecodedInstruction> typed_buffer_low_component_program = {
       DecodedInstruction::SevenOperand("TBUFFER_LOAD_FORMAT_X",
                                        InstructionOperand::Vgpr(10),
-                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Vgpr(0),
                                        InstructionOperand::Sgpr(60),
                                        InstructionOperand::Imm32(0),
                                        InstructionOperand::Imm32(0),
@@ -8325,7 +8362,7 @@ int main() {
                                        InstructionOperand::Imm32(4)),
       DecodedInstruction::SevenOperand("TBUFFER_STORE_FORMAT_X",
                                        InstructionOperand::Vgpr(20),
-                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Vgpr(0),
                                        InstructionOperand::Sgpr(60),
                                        InstructionOperand::Imm32(0),
                                        InstructionOperand::Imm32(0x20),
@@ -8333,7 +8370,7 @@ int main() {
                                        InstructionOperand::Imm32(4)),
       DecodedInstruction::SevenOperand("TBUFFER_LOAD_FORMAT_XY",
                                        InstructionOperand::Vgpr(11),
-                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Vgpr(1),
                                        InstructionOperand::Sgpr(64),
                                        InstructionOperand::Imm32(0),
                                        InstructionOperand::Imm32(0),
@@ -8341,7 +8378,7 @@ int main() {
                                        InstructionOperand::Imm32(4)),
       DecodedInstruction::SevenOperand("TBUFFER_STORE_FORMAT_XY",
                                        InstructionOperand::Vgpr(21),
-                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Vgpr(1),
                                        InstructionOperand::Sgpr(64),
                                        InstructionOperand::Imm32(0),
                                        InstructionOperand::Imm32(0x20),
@@ -8349,7 +8386,7 @@ int main() {
                                        InstructionOperand::Imm32(4)),
       DecodedInstruction::SevenOperand("TBUFFER_LOAD_FORMAT_D16_X",
                                        InstructionOperand::Vgpr(13),
-                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Vgpr(2),
                                        InstructionOperand::Sgpr(68),
                                        InstructionOperand::Imm32(0),
                                        InstructionOperand::Imm32(0),
@@ -8357,7 +8394,7 @@ int main() {
                                        InstructionOperand::Imm32(4)),
       DecodedInstruction::SevenOperand("TBUFFER_STORE_FORMAT_D16_X",
                                        InstructionOperand::Vgpr(23),
-                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Vgpr(2),
                                        InstructionOperand::Sgpr(68),
                                        InstructionOperand::Imm32(0),
                                        InstructionOperand::Imm32(0x20),
@@ -8378,45 +8415,130 @@ int main() {
       typed_buffer_low_component_memory;
   const WaveExecutionState initial_typed_buffer_low_component_state =
       typed_buffer_low_component_state;
+  const auto validate_typed_buffer_low_component =
+      [](const WaveExecutionState& state,
+         const LinearExecutionMemory& memory,
+         const char* mode) -> bool {
+    static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+    const auto expect_lane_values =
+        [&](std::uint16_t reg,
+            const std::array<std::uint32_t, kObservedLanes.size()>& expected,
+            const char* label) {
+          for (std::size_t index = 0; index < kObservedLanes.size(); ++index) {
+            if (!Expect(state.vgprs[reg][kObservedLanes[index]] == expected[index],
+                        label)) {
+              return false;
+            }
+          }
+          return true;
+        };
+    std::uint8_t typed_buffer_low_component_byte = 0;
+    std::uint16_t typed_buffer_low_component_short = 0;
+    return Expect(state.halted,
+                  (std::string(mode) +
+                   " typed buffer low-component program to halt")
+                      .c_str()) &&
+           expect_lane_values(
+               10, {0x5au, 0x6bu, 0x7cu},
+               (std::string(mode) + " typed buffer x load result").c_str()) &&
+           expect_lane_values(
+               11, {0x09u, 0x19u, 0x29u},
+               (std::string(mode) + " typed buffer xy low load result").c_str()) &&
+           expect_lane_values(
+               12, {0x0au, 0x1au, 0x2au},
+               (std::string(mode) + " typed buffer xy high load result").c_str()) &&
+           expect_lane_values(
+               13, {0x00001234u, 0x00005678u, 0x00009abcu},
+               (std::string(mode) + " typed buffer d16 x load result").c_str()) &&
+           Expect(state.vgprs[10][2] == 0xdeadbeefu,
+                  (std::string(mode) +
+                   " inactive typed buffer x lane remains untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[13][2] == 0xdeadbeefu,
+                  (std::string(mode) +
+                   " inactive typed buffer d16 x lane remains untouched")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3a0u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer x store lane 0 read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x6bu,
+                  (std::string(mode) + " typed buffer x store lane 0 result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3a4u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer x store lane 1 read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x7cu,
+                  (std::string(mode) + " typed buffer x store lane 1 result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3a8u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer x store lane 3 read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x8du,
+                  (std::string(mode) + " typed buffer x store lane 3 result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3e0u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer xy store lane 0 low read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0xcdu,
+                  (std::string(mode) + " typed buffer xy store lane 0 low result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3e1u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer xy store lane 0 high read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0xefu,
+                  (std::string(mode) + " typed buffer xy store lane 0 high result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3e4u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer xy store lane 1 low read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x34u,
+                  (std::string(mode) + " typed buffer xy store lane 1 low result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3e5u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer xy store lane 1 high read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x56u,
+                  (std::string(mode) + " typed buffer xy store lane 1 high result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3e8u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer xy store lane 3 low read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x78u,
+                  (std::string(mode) + " typed buffer xy store lane 3 low result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3e9u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer xy store lane 3 high read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x9au,
+                  (std::string(mode) + " typed buffer xy store lane 3 high result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x420u, &typed_buffer_low_component_short),
+                  (std::string(mode) + " typed buffer d16 x store lane 0 read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_short == 0x5678u,
+                  (std::string(mode) + " typed buffer d16 x store lane 0 result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x424u, &typed_buffer_low_component_short),
+                  (std::string(mode) + " typed buffer d16 x store lane 1 read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_short == 0xabcdu,
+                  (std::string(mode) + " typed buffer d16 x store lane 1 result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x428u, &typed_buffer_low_component_short),
+                  (std::string(mode) + " typed buffer d16 x store lane 3 read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_short == 0xef01u,
+                  (std::string(mode) + " typed buffer d16 x store lane 3 result")
+                      .c_str());
+  };
   if (!Expect(interpreter.ExecuteProgram(typed_buffer_low_component_program,
                                          &typed_buffer_low_component_state,
                                          &typed_buffer_low_component_memory,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(typed_buffer_low_component_state.halted,
-              "expected typed buffer low-component program to halt") ||
-      !Expect(typed_buffer_low_component_state.vgprs[10][0] == 0x5au,
-              "expected typed buffer x load result") ||
-      !Expect(typed_buffer_low_component_state.vgprs[11][0] == 0x09u &&
-                  typed_buffer_low_component_state.vgprs[12][0] == 0x0au,
-              "expected typed buffer xy load result") ||
-      !Expect(typed_buffer_low_component_state.vgprs[13][0] == 0x00001234u,
-              "expected typed buffer d16 x load result")) {
-    return 1;
-  }
-
-  std::uint8_t typed_buffer_low_component_byte = 0;
-  std::uint16_t typed_buffer_low_component_short = 0;
-  if (!Expect(ReadU8(typed_buffer_low_component_memory, 0x3a0u,
-                     &typed_buffer_low_component_byte),
-              "expected typed buffer x store read") ||
-      !Expect(typed_buffer_low_component_byte == 0x6bu,
-              "expected typed buffer x store result") ||
-      !Expect(ReadU8(typed_buffer_low_component_memory, 0x3e0u,
-                     &typed_buffer_low_component_byte),
-              "expected typed buffer xy store read") ||
-      !Expect(typed_buffer_low_component_byte == 0xcdu,
-              "expected typed buffer xy store result") ||
-      !Expect(ReadU8(typed_buffer_low_component_memory, 0x3e1u,
-                     &typed_buffer_low_component_byte),
-              "expected typed buffer xy store read") ||
-      !Expect(typed_buffer_low_component_byte == 0xefu,
-              "expected typed buffer xy store result") ||
-      !Expect(ReadU16(typed_buffer_low_component_memory, 0x420u,
-                      &typed_buffer_low_component_short),
-              "expected typed buffer d16 x store read") ||
-      !Expect(typed_buffer_low_component_short == 0x5678u,
-              "expected typed buffer d16 x store result")) {
+      !validate_typed_buffer_low_component(typed_buffer_low_component_state,
+                                           typed_buffer_low_component_memory,
+                                           "decoded")) {
     return 1;
   }
 
@@ -8430,42 +8552,9 @@ int main() {
                   &compiled_typed_buffer_low_component_memory,
                   &error_message),
               error_message.c_str()) ||
-      !Expect(compiled_typed_buffer_low_component_state.halted,
-              "expected compiled typed buffer low-component program to halt") ||
-      !Expect(compiled_typed_buffer_low_component_state.vgprs[10][0] == 0x5au,
-              "expected compiled typed buffer x load result") ||
-      !Expect(compiled_typed_buffer_low_component_state.vgprs[11][0] == 0x09u &&
-                  compiled_typed_buffer_low_component_state.vgprs[12][0] ==
-                      0x0au,
-              "expected compiled typed buffer xy load result") ||
-      !Expect(compiled_typed_buffer_low_component_state.vgprs[13][0] ==
-                  0x00001234u,
-              "expected compiled typed buffer d16 x load result")) {
-    return 1;
-  }
-
-  std::uint8_t compiled_typed_buffer_low_component_byte = 0;
-  std::uint16_t compiled_typed_buffer_low_component_short = 0;
-  if (!Expect(ReadU8(compiled_typed_buffer_low_component_memory, 0x3a0u,
-                     &compiled_typed_buffer_low_component_byte),
-              "expected compiled typed buffer x store read") ||
-      !Expect(compiled_typed_buffer_low_component_byte == 0x6bu,
-              "expected compiled typed buffer x store result") ||
-      !Expect(ReadU8(compiled_typed_buffer_low_component_memory, 0x3e0u,
-                     &compiled_typed_buffer_low_component_byte),
-              "expected compiled typed buffer xy store read") ||
-      !Expect(compiled_typed_buffer_low_component_byte == 0xcdu,
-              "expected compiled typed buffer xy store result") ||
-      !Expect(ReadU8(compiled_typed_buffer_low_component_memory, 0x3e1u,
-                     &compiled_typed_buffer_low_component_byte),
-              "expected compiled typed buffer xy store read") ||
-      !Expect(compiled_typed_buffer_low_component_byte == 0xefu,
-              "expected compiled typed buffer xy store result") ||
-      !Expect(ReadU16(compiled_typed_buffer_low_component_memory, 0x420u,
-                      &compiled_typed_buffer_low_component_short),
-              "expected compiled typed buffer d16 x store read") ||
-      !Expect(compiled_typed_buffer_low_component_short == 0x5678u,
-              "expected compiled typed buffer d16 x store result")) {
+      !validate_typed_buffer_low_component(
+          compiled_typed_buffer_low_component_state,
+          compiled_typed_buffer_low_component_memory, "compiled")) {
     return 1;
   }
   }
