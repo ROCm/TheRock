@@ -1745,6 +1745,12 @@
             "Components": [
               "test"
             ]
+          },
+          {
+            "Name": "rccl-tests",
+            "Components": [
+              "test"
+            ]
           }
         ]
       }

@@ -15,6 +15,8 @@ class PackageList:
     built: List[str]
     # Base packages that were skipped
     skipped: List[str]
+    # Base packages that failed to produce any output
+    failed: List[str] = field(default_factory=list)
 
 
 def write_build_manifest(config: PackageConfig, pkg_list: PackageList):
@@ -32,9 +34,8 @@ def write_build_manifest(config: PackageConfig, pkg_list: PackageList):
     manifest_file = Path(config.dest_dir) / "built_packages.txt"
 
     total_basepkg = len(pkg_list.total) + len(pkg_list.skipped)
-    expected = 2 * len(pkg_list.total)
     built = len(pkg_list.built)
-    failed = expected - built
+    failed = len(pkg_list.failed)
 
     try:
         with open(manifest_file, "w", encoding="utf-8") as f:
@@ -47,9 +48,6 @@ def write_build_manifest(config: PackageConfig, pkg_list: PackageList):
             )
             f.write(f"# Total base packages: {total_basepkg}\n")
             f.write(f"# Skipped base packages: {len(pkg_list.skipped)}\n")
-            f.write(
-                f"# Total packages attempted (versioned + non-versioned): {expected}\n"
-            )
             f.write(f"# Successfully built: {built}\n")
             f.write(f"# Failed to build: {failed}\n")
             f.write(f"\n")
@@ -57,6 +55,11 @@ def write_build_manifest(config: PackageConfig, pkg_list: PackageList):
             if pkg_list.built:
                 f.write(f"# Created Packages:\n")
                 for pkg in sorted(pkg_list.built):
+                    f.write(f"{pkg}\n")
+
+            if pkg_list.failed:
+                f.write(f"\n# Failed Packages:\n")
+                for pkg in sorted(pkg_list.failed):
                     f.write(f"{pkg}\n")
 
             if pkg_list.skipped:
@@ -86,19 +89,22 @@ def print_build_status(config: PackageConfig, pkg_list: PackageList):
     print("=" * 80)
 
     total_basepkg = len(pkg_list.total) + len(pkg_list.skipped)
-    expected = 2 * len(pkg_list.total)
     built = len(pkg_list.built)
-    failed = expected - built
+    failed = len(pkg_list.failed)
 
     print(f"\nTotal base packages: {total_basepkg} ")
     print(f"⏭️ Skipped base packages: {len(pkg_list.skipped)}")
-    print(f"Total packages attempted (versioned + non-versioned): {expected}")
     print(f"✅ Successfully built: {built}")
     print(f"❌ Failed to build: {failed}")
 
     print(f"\nCreated packages")
     for pkg in sorted(pkg_list.built):
         print(f"   - {pkg}")
+
+    if pkg_list.failed:
+        print(f"\n❌ Failed packages")
+        for pkg in sorted(pkg_list.failed):
+            print(f"   - {pkg}")
 
     if pkg_list.skipped:
         print(f"\n⏭️   Skipped packages")

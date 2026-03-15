@@ -603,25 +603,44 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pkg-type", required=True, choices=["deb", "rpm"])
     parser.add_argument("--s3-bucket", required=True)
-    parser.add_argument("--amdgpu-family", required=True)
+    parser.add_argument(
+        "--amdgpu-family", required=False
+    )  # Kept for backward compatibility, not used
     parser.add_argument("--artifact-id", required=True)
     parser.add_argument(
         "--job",
         default="dev",
-        choices=["dev", "nightly", "prerelease"],
-        help="Enable dev or nightly shared repo",
+        choices=["dev", "nightly", "prerelease", "ci"],
+        help="Job type: dev, nightly, prerelease, or ci",
+    )
+    parser.add_argument(
+        "--s3-prefix",
+        required=False,
+        help="Override S3 prefix (for backward compatibility, auto-generated if not provided)",
     )
 
     args = parser.parse_args()
     package_dir = find_package_dir()
 
     # Setup the prefix based on build type
-    if args.job in ["nightly", "dev"]:
+    if args.s3_prefix:
+        # Use provided prefix (new behavior for multi-arch CI)
+        prefix = args.s3_prefix
+        dedupe = True
+    elif args.job in ["nightly", "dev"]:
+        # Legacy behavior: <pkg_type>/<YYYYMMDD>-<artifact_id>
         prefix = f"{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
         dedupe = True
     elif args.job == "prerelease":
+        # Legacy behavior: v3/packages/<pkg_type>
         prefix = f"v3/packages/{args.pkg_type}"
         dedupe = True
+    elif args.job == "ci":
+        # CI builds: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
+        prefix = f"v3/packages/{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
+        dedupe = True
+    else:
+        raise ValueError(f"Unknown job type: {args.job}")
 
     if args.pkg_type == "deb":
         create_deb_repo(package_dir, args.job)
