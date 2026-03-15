@@ -82,17 +82,12 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     # We have to patch the sources so make a fresh copy.
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
+    # Use copy_dir_with_timestamps.py instead of `cmake -E copy_directory` to
+    # preserve file modification timestamps, preventing autotools from trying
+    # to regenerate docs (which would require gettext/makeinfo etc).
+    "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/copy_dir_with_timestamps.py" "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s"
-  COMMAND
-    # CMake copy directory does not preserve timestamps. If the stamp-po is
-    # out of date, the build will try to regenerate docs, which requires a bunch
-    # of extra tools and fails mysteriously if not present with something like:
-    #   mv: cannot stat 't-de.gmo': No such file or directory
-    # Ensuring it has the most current timestamp post copy/patch disables doc
-    # regneration.
-    "${CMAKE_COMMAND}" -E touch "${CMAKE_CURRENT_BINARY_DIR}/s/po/stamp-po"
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
