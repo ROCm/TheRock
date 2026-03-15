@@ -34,6 +34,57 @@
     "ENC_VDS",
     "ENC_VGLOBAL"
   ],
+  "remaining_narrow_instruction_encoding_pairs": 0,
+  "next_risk_encoding_statuses": [
+    {
+      "encoding_name": "ENC_SMEM",
+      "example_instruction": "S_LOAD_B32",
+      "seeded_instruction_count": 28,
+      "transferable_as_is_count": 0,
+      "transferable_with_decoder_work_count": 0,
+      "transferable_with_semantic_work_count": 0,
+      "transferable_with_decoder_and_semantic_work_count": 3,
+      "transferable_with_decoder_rollup_count": 3,
+      "gfx1201_specific_count": 25,
+      "rationale": "RDNA4 scalar memory is a first architecture-local blocker."
+    },
+    {
+      "encoding_name": "ENC_VOP3",
+      "example_instruction": "V_ADD3_U32",
+      "seeded_instruction_count": 434,
+      "transferable_as_is_count": 232,
+      "transferable_with_decoder_work_count": 30,
+      "transferable_with_semantic_work_count": 24,
+      "transferable_with_decoder_and_semantic_work_count": 61,
+      "transferable_with_decoder_rollup_count": 91,
+      "gfx1201_specific_count": 87,
+      "rationale": "Largest instruction family and the main overlap with gfx950 precedent."
+    },
+    {
+      "encoding_name": "ENC_VDS",
+      "example_instruction": "DS_ADD_U32",
+      "seeded_instruction_count": 123,
+      "transferable_as_is_count": 27,
+      "transferable_with_decoder_work_count": 0,
+      "transferable_with_semantic_work_count": 0,
+      "transferable_with_decoder_and_semantic_work_count": 38,
+      "transferable_with_decoder_rollup_count": 38,
+      "gfx1201_specific_count": 58,
+      "rationale": "LDS data path with a small fully-supported carry-over subset."
+    },
+    {
+      "encoding_name": "ENC_VGLOBAL",
+      "example_instruction": "GLOBAL_LOAD_B32",
+      "seeded_instruction_count": 65,
+      "transferable_as_is_count": 3,
+      "transferable_with_decoder_work_count": 0,
+      "transferable_with_semantic_work_count": 0,
+      "transferable_with_decoder_and_semantic_work_count": 0,
+      "transferable_with_decoder_rollup_count": 0,
+      "gfx1201_specific_count": 62,
+      "rationale": "Global memory load/store family that replaces gfx950-specific naming."
+    }
+  ],
   "notes": [
     "All currently seeded ENC_VOP1, ENC_VOP2, and ENC_VOPC instruction/encoding pairs are executable on the local wave32 path.",
     "There are no remaining imported ENC_VOP1, ENC_VOP2, or ENC_VOPC instruction/encoding pairs outside the current seed surface.",

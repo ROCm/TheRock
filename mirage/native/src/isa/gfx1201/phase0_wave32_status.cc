@@ -70,6 +70,34 @@ BuildStatuses() {
   return statuses;
 }
 
+std::array<Gfx1201Wave32Phase0NextRiskEncodingStatus, kNextRiskEncodings.size()>
+BuildNextRiskStatuses() {
+  std::array<Gfx1201Wave32Phase0NextRiskEncodingStatus, kNextRiskEncodings.size()>
+      statuses{};
+
+  for (std::size_t i = 0; i < kNextRiskEncodings.size(); ++i) {
+    const Gfx1201DecoderSeedEncoding* seed =
+        FindGfx1201Phase0ComputeDecoderSeed(kNextRiskEncodings[i]);
+    if (seed == nullptr) {
+      continue;
+    }
+
+    statuses[i] = Gfx1201Wave32Phase0NextRiskEncodingStatus{
+        seed->encoding_name,
+        seed->example_instruction,
+        seed->rationale,
+        seed->instruction_count,
+        seed->transferable_as_is_count,
+        seed->transferable_with_decoder_work_count,
+        seed->transferable_with_semantic_work_count,
+        seed->transferable_with_decoder_and_semantic_work_count,
+        seed->gfx1201_specific_count,
+    };
+  }
+
+  return statuses;
+}
+
 }  // namespace
 
 std::span<const Gfx1201Wave32Phase0EncodingStatus>
@@ -82,6 +110,24 @@ const Gfx1201Wave32Phase0EncodingStatus* FindGfx1201Wave32Phase0EncodingStatus(
     std::string_view encoding_name) {
   for (const Gfx1201Wave32Phase0EncodingStatus& status :
        GetGfx1201Wave32Phase0EncodingStatuses()) {
+    if (status.encoding_name == encoding_name) {
+      return &status;
+    }
+  }
+  return nullptr;
+}
+
+std::span<const Gfx1201Wave32Phase0NextRiskEncodingStatus>
+GetGfx1201Wave32Phase0NextRiskEncodingStatuses() {
+  static const auto kStatuses = BuildNextRiskStatuses();
+  return kStatuses;
+}
+
+const Gfx1201Wave32Phase0NextRiskEncodingStatus*
+FindGfx1201Wave32Phase0NextRiskEncodingStatus(
+    std::string_view encoding_name) {
+  for (const Gfx1201Wave32Phase0NextRiskEncodingStatus& status :
+       GetGfx1201Wave32Phase0NextRiskEncodingStatuses()) {
     if (status.encoding_name == encoding_name) {
       return &status;
     }

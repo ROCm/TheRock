@@ -15,6 +15,7 @@ execution path.
 - Wave size: `32`
 - All currently seeded `ENC_VOP1`, `ENC_VOP2`, and `ENC_VOPC` instruction/encoding pairs are executable on the local path.
 - There are no remaining imported `ENC_VOP1`, `ENC_VOP2`, or `ENC_VOPC` instruction/encoding pairs outside the current seed surface.
+- Remaining narrow `ENC_VOP1`/`ENC_VOP2`/`ENC_VOPC` instruction/encoding pairs outside the current seed: `0`
 
 ## Next-Risk Encodings
 
@@ -22,6 +23,13 @@ execution path.
 - `ENC_VOP3`
 - `ENC_VDS`
 - `ENC_VGLOBAL`
+
+## Next-Risk Encoding Status
+
+- `ENC_SMEM`: example `S_LOAD_B32`, seeded `28`, as-is `0`, decoder-rollup `3`, semantic-only `0`, gfx1201-specific `25`
+- `ENC_VOP3`: example `V_ADD3_U32`, seeded `434`, as-is `232`, decoder-rollup `91`, semantic-only `24`, gfx1201-specific `87`
+- `ENC_VDS`: example `DS_ADD_U32`, seeded `123`, as-is `27`, decoder-rollup `38`, semantic-only `0`, gfx1201-specific `58`
+- `ENC_VGLOBAL`: example `GLOBAL_LOAD_B32`, seeded `65`, as-is `3`, decoder-rollup `0`, semantic-only `0`, gfx1201-specific `62`
 
 The next coherent phase-0 extensions now move into those encodings, or require
 broader shared-layer churn, rather than more narrow `VOP1`/`VOP2`/`VOPC` seed work.
