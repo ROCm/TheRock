@@ -164,7 +164,7 @@ def index_artifact_files(build_dir: Path):
     log(f"Creating index file at {str(artifacts_dir / 'index.html')}")
 
     indexer_args = argparse.Namespace()
-    indexer_args.filter = ["*.tar.xz*"]
+    indexer_args.filter = ["*.tar.xz*", "*.fprint"]
     indexer_args.output_file = "index.html"
     indexer_args.verbose = False
     indexer_args.recursive = False
@@ -177,7 +177,7 @@ def upload_artifacts(
     output_root: WorkflowOutputRoot,
     backend: StorageBackend,
 ):
-    """Upload build artifacts (.tar.xz archives and checksums) and index."""
+    """Upload build artifacts (.fprint, .tar.xz archives and checksums) and index."""
     artifacts_dir = build_dir / "artifacts"
     if not artifacts_dir.is_dir():
         log(f"[INFO] Artifacts directory {artifacts_dir} not found. Skipping.")
@@ -185,7 +185,7 @@ def upload_artifacts(
 
     log("Uploading artifacts")
     count = backend.upload_directory(
-        artifacts_dir, output_root.root(), include=["*.tar.xz*"]
+        artifacts_dir, output_root.root(), include=["*.tar.xz*", "*.fprint"]
     )
     log(f"[INFO] Uploaded {count} artifact files")
 

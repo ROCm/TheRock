@@ -118,7 +118,8 @@ def do_enable_disable(args: argparse.Namespace, enable_mode: bool):
                 changed = True
         else:
             if not prebuilt_file.exists():
-                prebuilt_file.touch()
+                # Write UNKNOWN instead of creating empty file
+                prebuilt_file.write_text("UNKNOWN")
                 changed = True
         print(f"[{'X' if action_enable else ' '}] {rp} {message}")
 
@@ -253,6 +254,9 @@ class BootstrappingPopulator(ArtifactPopulator):
     def __init__(self, output_path: Path, verbose: bool = False):
         super().__init__(output_path=output_path, verbose=verbose, flatten=False)
         self.created_markers: list[Path] = []
+        self.current_artifact_path: Optional[Path] = None
+        # Dictionary of subproject_name -> fingerprint loaded from fprint file
+        self.fingerprints: dict[str, str] = {}
 
     def on_first_relpath(self, relpath: str):
         if not relpath:
@@ -262,17 +266,155 @@ class BootstrappingPopulator(ArtifactPopulator):
         if full_path.exists():
             print(f"CLEANING: {full_path}")
             shutil.rmtree(full_path)
-        # Write the ".prebuilt" marker file
+        # Write the ".prebuilt" marker file with fingerprint content
         prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
         prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
-        prebuilt_path.touch()
+
+        # Look up fingerprint for this subproject from the loaded fprint data.
+        # The relpath is like "compiler/amd-llvm/stage" - we need to find
+        # the corresponding subproject name (e.g., "amd-llvm") in our fingerprints dict.
+        fingerprint = self._lookup_fingerprint_for_relpath(relpath)
+        if fingerprint:
+            prebuilt_path.write_text(fingerprint)
+            if self.verbose:
+                print(f"  Writing fingerprint to {prebuilt_path}")
+        else:
+            # No fingerprint available, write UNKNOWN
+            prebuilt_path.write_text("UNKNOWN")
+            if self.verbose:
+                print(f"  Writing UNKNOWN fingerprint to {prebuilt_path}")
+
         self.created_markers.append(prebuilt_path)
+
+    def _lookup_fingerprint_for_relpath(self, relpath: str) -> Optional[str]:
+        """Look up fingerprint for a relpath by matching against subproject names.
+
+        The relpath is like "compiler/amd-llvm/stage" and subproject names in the
+        fprint file are CMake target names like "amd-llvm". We try to match
+        the directory name component against the subproject names.
+        """
+        if not self.fingerprints:
+            return None
+
+        # Extract path components - the subproject is usually the second-to-last
+        # component (before "stage" or "dist")
+        parts = relpath.strip("/").split("/")
+        if len(parts) < 2:
+            return None
+
+        # Try different matching strategies
+        # 1. Match the second-to-last component (e.g., "amd-llvm" from "compiler/amd-llvm/stage")
+        subproject_candidate = parts[-2] if len(parts) >= 2 else parts[-1]
+        if subproject_candidate in self.fingerprints:
+            return self.fingerprints[subproject_candidate]
+
+        # 2. Try case-insensitive match (subproject names may vary in case)
+        for name, fprint in self.fingerprints.items():
+            if name.lower() == subproject_candidate.lower():
+                return fprint
+
+        # 3. Check if any subproject name is contained in the relpath
+        for name, fprint in self.fingerprints.items():
+            if name.lower() in relpath.lower():
+                return fprint
+
+        return None
+
+    def on_relpath(self, relpath: str):
+        """Process a relpath from artifact extraction."""
+        super().on_relpath(relpath)
+        # Fingerprint is now loaded at the slice level in _load_fingerprint()
+        # before extraction begins, so no need to look for it in extracted files.
 
     def on_artifact_dir(self, artifact_dir: Path):
         print(f"FLATTENING {artifact_dir.name}")
+        self.current_artifact_path = artifact_dir
+        self.fingerprints = {}
+        self._load_fingerprint()
 
     def on_artifact_archive(self, artifact_archive: Path):
         print(f"EXPANDING {artifact_archive.name}")
+        self.current_artifact_path = artifact_archive
+        self.fingerprints = {}
+        self._load_fingerprint()
+
+    def _load_fingerprint(self):
+        """Load fingerprints from slice-level .fprint file.
+
+        The fprint file contains key=value pairs (one per line) for each
+        subproject in the artifact. This allows each subproject's fingerprint
+        to be validated individually during bootstrap.
+
+        File format:
+            ARTIFACT={slice_name}
+            DESCRIPTOR={descriptor_hash}
+            {subproject_name}={subproject_fprint}
+            ...
+
+        For example, for artifact "amd-llvm_dev_generic", the fingerprint
+        file is at "artifacts/amd-llvm.fprint".
+        """
+        if self.current_artifact_path is None:
+            return
+
+        # Parse artifact name to get the slice name
+        an = ArtifactName.from_path(self.current_artifact_path)
+        if an is None:
+            if self.verbose:
+                print(f"  Could not parse artifact name: {self.current_artifact_path}")
+            return
+
+        # Look for slice-level fingerprint file
+        # The fprint file is in the same directory as the artifact
+        artifact_parent = self.current_artifact_path.parent
+        fprint_path = artifact_parent / f"{an.name}.fprint"
+
+        if fprint_path.exists():
+            self._parse_fprint_file(fprint_path)
+        else:
+            # Fallback: check for legacy .fprint inside the artifact directory
+            if self.current_artifact_path.is_dir():
+                legacy_fprint_path = self.current_artifact_path / ".fprint"
+                if legacy_fprint_path.exists():
+                    # Legacy format was a single SHA256 hash
+                    legacy_fprint = legacy_fprint_path.read_text().strip()
+                    if self.verbose:
+                        print(f"  Loaded fingerprint (legacy): {legacy_fprint[:16]}...")
+                    # Store as a single "legacy" entry
+                    self.fingerprints["_legacy"] = legacy_fprint
+                    return
+            if self.verbose:
+                print(f"  No .fprint file found for {an.name}")
+
+    def _parse_fprint_file(self, fprint_path: Path):
+        """Parse a .fprint file containing key=value pairs.
+
+        Populates self.fingerprints with subproject_name -> fingerprint mappings.
+        """
+        content = fprint_path.read_text().strip()
+        if content == "INVALID":
+            if self.verbose:
+                print(f"  Fingerprint file marked INVALID: {fprint_path.name}")
+            return
+
+        for line in content.splitlines():
+            line = line.strip()
+            if not line or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip()
+
+            # Skip metadata keys like ARTIFACT and DESCRIPTOR
+            if key in ("ARTIFACT", "DESCRIPTOR"):
+                continue
+
+            self.fingerprints[key] = value
+
+        if self.verbose and self.fingerprints:
+            print(
+                f"  Loaded {len(self.fingerprints)} fingerprints from {fprint_path.name}"
+            )
 
 
 def do_bootstrap(args: argparse.Namespace):
