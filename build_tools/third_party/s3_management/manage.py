@@ -28,11 +28,20 @@ CLIENT = boto3.client('s3')
 
 # bucket for TheRock
 # We also manage `therock-nightly-python` (not the default to make the script safer to test)
-BUCKET_NAME = getenv("S3_BUCKET_PY", "therock-dev-python")
-BUCKET = S3.Bucket(BUCKET_NAME)
-# TODO: bucket mirror just to hold index used with CDN
-# BUCKET_CDN = S3.Bucket('therock-nightly-python-testing')
-INDEX_BUCKETS = {BUCKET} #, BUCKET_CDN}
+
+def initialize_bucket(bucket_name: Optional[str]) -> None:
+    # Resolve and configure the S3 bucket used for index updates.
+    # CLI --bucket takes precedence over S3_BUCKET_PY; fails if neither is set.
+    global BUCKET_NAME, BUCKET, INDEX_BUCKETS
+
+    BUCKET_NAME = bucket_name or getenv("S3_BUCKET_PY")
+    if not BUCKET_NAME:
+        raise RuntimeError("Bucket must be provided via --bucket or S3_BUCKET_PY")
+
+    BUCKET = S3.Bucket(BUCKET_NAME)
+    # TODO: bucket mirror just to hold index used with CDN
+    # BUCKET_CDN = S3.Bucket('therock-nightly-python-testing')
+    INDEX_BUCKETS = {BUCKET}
 
 ACCEPTED_FILE_EXTENSIONS = ("whl", "zip", "tar.gz")
 PREFIXES = [
@@ -49,7 +58,6 @@ PREFIXES = [
     "v2/gfx94X-dcgpu",
     "v2/gfx950-dcgpu",
 ]
-
 CUSTOM_PREFIX = getenv('CUSTOM_PREFIX')
 if CUSTOM_PREFIX:
     PREFIXES.append(CUSTOM_PREFIX)
@@ -458,6 +466,26 @@ class S3Index:
             rc.fetch_pep658()
         return rc
 
+def update_pep503_index(prefix: str, compute_sha256: bool = False, upload: bool = True):
+    # Regenerates the PEP 503 simple index for a given S3 prefix.
+    # Fetches valid artifacts, applies allow-list filtering, optionally updates
+    # checksums, and uploads (or saves) the generated index.html files.
+    print(f"Processing prefix: {prefix}")
+    stime = time.time()
+
+    idx = S3Index.from_S3(prefix=prefix, with_metadata=compute_sha256)
+
+    etime = time.time()
+    print(f"Fetched {len(idx.objects)} objects for '{prefix}' in {etime-stime:.2f}s")
+
+    if compute_sha256:
+        idx.compute_sha256()
+    elif not upload:
+        idx.save_pep503_htmls()
+    else:
+        idx.upload_pep503_htmls()
+
+    return len(idx.objects)
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser("Manage S3 HTML indices for PyTorch")
@@ -466,6 +494,7 @@ def create_parser() -> argparse.ArgumentParser:
         type=str,
         choices=PREFIXES + ["all"]
     )
+    parser.add_argument("--bucket", type=str, help="S3 bucket name")
     parser.add_argument("--do-not-upload", action="store_true")
     parser.add_argument("--compute-sha256", action="store_true")
     return parser
@@ -474,23 +503,18 @@ def create_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = create_parser()
     args = parser.parse_args()
+    initialize_bucket(args.bucket)
     action = "Saving indices" if args.do_not_upload else "Uploading indices"
     if args.compute_sha256:
         action = "Computing checksums"
-
+    print(f"INFO: {action} for '{prefix}'")
     prefixes = PREFIXES if args.prefix == 'all' else [args.prefix]
     for prefix in prefixes:
-        print(f"INFO: {action} for '{prefix}'")
-        stime = time.time()
-        idx = S3Index.from_S3(prefix=prefix, with_metadata=True or args.compute_sha256)
-        etime = time.time()
-        print(f"DEBUG: Fetched {len(idx.objects)} objects for '{prefix}' in {etime-stime:.2f} seconds")
-        if args.compute_sha256:
-            idx.compute_sha256()
-        elif args.do_not_upload:
-            idx.save_pep503_htmls()
-        else:
-            idx.upload_pep503_htmls()
+        update_pep503_index(
+            prefix=prefix,
+            compute_sha256=args.compute_sha256,
+            upload=not args.do_not_upload
+        )
 
 if __name__ == "__main__":
     main()
