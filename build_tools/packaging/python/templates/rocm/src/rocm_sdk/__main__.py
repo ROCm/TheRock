@@ -7,6 +7,7 @@ import argparse
 import importlib.util
 import json
 from pathlib import Path
+import platform
 import sys
 
 from . import _dist_info as di
@@ -68,6 +69,12 @@ def _do_test(args: argparse.Namespace):
         ALL_TEST_MODULES.append("rocm_sdk.tests.libraries_test")
     else:
         print("NOTE: Skipping libraries tests (not installed for this arch)")
+
+    # Media libraries (rocdecode, rocjpeg) are Linux-only.
+    if platform.system() != "Windows":
+        ALL_TEST_MODULES.append("rocm_sdk.tests.media_test")
+    else:
+        print("NOTE: Skipping media tests (not supported on Windows)")
 
     # The devel platform package may not exist yet since it is populated on-demand,
     # so check that the pure package exists.
