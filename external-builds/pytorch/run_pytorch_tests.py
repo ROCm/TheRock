@@ -225,6 +225,9 @@ def main() -> int:
         )
         print(f"Using AMDGPU family: {first_arch}")
 
+        # get_tests amdgpu_family requires list[str]
+        first_arch = [first_arch]
+
         # Determine PyTorch version
         pytorch_version = args.pytorch_version
         if not pytorch_version:
