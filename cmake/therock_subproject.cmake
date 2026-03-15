@@ -763,6 +763,16 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "set(THEROCK_BUILD_STAMP_FILE \"@_build_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_STAGE_STAMP_FILE \"@_stage_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_SUBPROJECT_TARGET \"@target_name@\")\n")
+  # OpenBLASTargets.cmake hardcodes OpenMP::OpenMP_C in the INTERFACE_LINK_LIBRARIES
+  # of OpenBLAS::OpenBLAS when built with USE_OPENMP=ON. CMake errors at targets-file
+  # load time if this target does not exist, even in CXX-only projects that never
+  # call find_package(OpenMP). Create a stub IMPORTED target unconditionally so that
+  # OpenBLASTargets.cmake loads cleanly regardless of which find_package call triggers
+  # it (find_package(BLAS), find_package(LAPACK), find_package(OpenBLAS), find_package(cblas)).
+  # FindBLAS.cmake and FindLAPACK.cmake subsequently strip it from the interface.
+  string(APPEND _init_contents "if(NOT TARGET OpenMP::OpenMP_C)\n")
+  string(APPEND _init_contents "  add_library(OpenMP::OpenMP_C INTERFACE IMPORTED)\n")
+  string(APPEND _init_contents "endif()\n")
 
   # Support generator expressions in install CODE
   # We rely on this for debug symbol separation and some of our very old projects
