@@ -47,6 +47,8 @@ include = [
   "bin/hipblas_gtest.data",
   "bin/hipblas_v2-test*",
   "bin/hipblas_v2_gtest.data",
+  # Clients samples
+  "bin/hipblas-example*",
 ]
 
 # hipBLASLt
@@ -108,6 +110,8 @@ include = [
   "bin/rocblas_*.yaml",
   "bin/*_rtest.xml",
   "bin/*_rtest.py",
+  # Clients samples
+  "bin/rocblas-example*",
 ]
 
 # rocSOLVER
