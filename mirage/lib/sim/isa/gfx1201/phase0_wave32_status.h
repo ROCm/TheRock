@@ -40,6 +40,8 @@ GetGfx1201Wave32Phase0NextRiskEncodingStatuses();
 const Gfx1201Wave32Phase0NextRiskEncodingStatus*
 FindGfx1201Wave32Phase0NextRiskEncodingStatus(std::string_view encoding_name);
 std::span<const std::string_view> GetGfx1201Wave32Phase0NextRiskEncodings();
+std::span<const std::string_view> GetGfx1201Wave32Phase0FrontierOrder();
+std::string_view GetGfx1201Wave32Phase0RecommendedNextEncoding();
 bool IsGfx1201Wave32Phase0EncodingSaturated(std::string_view encoding_name);
 
 }  // namespace mirage::sim::isa

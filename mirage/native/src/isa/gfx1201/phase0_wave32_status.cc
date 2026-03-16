@@ -23,6 +23,13 @@ constexpr std::array<std::string_view, 4> kNextRiskEncodings{{
     "ENC_VGLOBAL",
 }};
 
+constexpr std::array<std::string_view, 4> kFrontierOrder{{
+    "ENC_SMEM",
+    "ENC_VGLOBAL",
+    "ENC_VDS",
+    "ENC_VOP3",
+}};
+
 std::uint32_t CountExecutableInstructions(const Gfx1201DecoderSeedEncoding& encoding,
                                           const Gfx1201BinaryDecoder& decoder) {
   std::vector<std::string_view> seen_instruction_names;
@@ -137,6 +144,14 @@ FindGfx1201Wave32Phase0NextRiskEncodingStatus(
 
 std::span<const std::string_view> GetGfx1201Wave32Phase0NextRiskEncodings() {
   return kNextRiskEncodings;
+}
+
+std::span<const std::string_view> GetGfx1201Wave32Phase0FrontierOrder() {
+  return kFrontierOrder;
+}
+
+std::string_view GetGfx1201Wave32Phase0RecommendedNextEncoding() {
+  return kFrontierOrder.front();
 }
 
 bool IsGfx1201Wave32Phase0EncodingSaturated(std::string_view encoding_name) {

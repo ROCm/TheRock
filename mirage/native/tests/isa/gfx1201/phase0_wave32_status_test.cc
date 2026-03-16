@@ -120,16 +120,34 @@ int main() {
       "ENC_VDS",
       "ENC_VGLOBAL",
   }};
+  constexpr std::array<const char*, 4> kExpectedFrontierOrder{{
+      "ENC_SMEM",
+      "ENC_VGLOBAL",
+      "ENC_VDS",
+      "ENC_VOP3",
+  }};
 
   const auto next_risk_encodings = GetGfx1201Wave32Phase0NextRiskEncodings();
+  const auto frontier_order = GetGfx1201Wave32Phase0FrontierOrder();
   if (!Expect(next_risk_encodings.size() == kExpectedNextRiskEncodings.size(),
-              "expected next-risk encoding count")) {
+              "expected next-risk encoding count") ||
+      !Expect(frontier_order.size() == kExpectedFrontierOrder.size(),
+              "expected frontier order count") ||
+      !Expect(GetGfx1201Wave32Phase0RecommendedNextEncoding() == "ENC_SMEM",
+              "expected ENC_SMEM as the recommended next frontier")) {
     return 1;
   }
 
   for (std::size_t i = 0; i < kExpectedNextRiskEncodings.size(); ++i) {
     if (!Expect(next_risk_encodings[i] == kExpectedNextRiskEncodings[i],
                 "unexpected next-risk encoding order")) {
+      return 1;
+    }
+  }
+
+  for (std::size_t i = 0; i < kExpectedFrontierOrder.size(); ++i) {
+    if (!Expect(frontier_order[i] == kExpectedFrontierOrder[i],
+                "unexpected frontier order")) {
       return 1;
     }
   }

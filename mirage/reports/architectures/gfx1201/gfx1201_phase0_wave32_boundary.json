@@ -34,6 +34,13 @@
     "ENC_VDS",
     "ENC_VGLOBAL"
   ],
+  "suggested_frontier_order": [
+    "ENC_SMEM",
+    "ENC_VGLOBAL",
+    "ENC_VDS",
+    "ENC_VOP3"
+  ],
+  "recommended_next_frontier": "ENC_SMEM",
   "remaining_narrow_instruction_encoding_pairs": 0,
   "next_risk_encoding_statuses": [
     {
@@ -88,6 +95,7 @@
   "notes": [
     "All currently seeded ENC_VOP1, ENC_VOP2, and ENC_VOPC instruction/encoding pairs are executable on the local wave32 path.",
     "There are no remaining imported ENC_VOP1, ENC_VOP2, or ENC_VOPC instruction/encoding pairs outside the current seed surface.",
+    "ENC_SMEM is the recommended next frontier because it is the smallest remaining seeded blocker and keeps the next phase architecture-local.",
     "The next coherent phase-0 extensions move into ENC_SMEM, ENC_VOP3, ENC_VDS, and ENC_VGLOBAL, or require broader shared-layer churn."
   ]
 }

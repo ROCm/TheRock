@@ -16,6 +16,7 @@ execution path.
 - All currently seeded `ENC_VOP1`, `ENC_VOP2`, and `ENC_VOPC` instruction/encoding pairs are executable on the local path.
 - There are no remaining imported `ENC_VOP1`, `ENC_VOP2`, or `ENC_VOPC` instruction/encoding pairs outside the current seed surface.
 - Remaining narrow `ENC_VOP1`/`ENC_VOP2`/`ENC_VOPC` instruction/encoding pairs outside the current seed: `0`
+- Recommended next frontier: `ENC_SMEM`
 
 ## Next-Risk Encodings
 
@@ -24,6 +25,13 @@ execution path.
 - `ENC_VDS`
 - `ENC_VGLOBAL`
 
+## Suggested Frontier Order
+
+- `ENC_SMEM`
+- `ENC_VGLOBAL`
+- `ENC_VDS`
+- `ENC_VOP3`
+
 ## Next-Risk Encoding Status
 
 - `ENC_SMEM`: example `S_LOAD_B32`, seeded `28`, as-is `0`, decoder-rollup `3`, semantic-only `0`, gfx1201-specific `25`
@@ -31,5 +39,7 @@ execution path.
 - `ENC_VDS`: example `DS_ADD_U32`, seeded `123`, as-is `27`, decoder-rollup `38`, semantic-only `0`, gfx1201-specific `58`
 - `ENC_VGLOBAL`: example `GLOBAL_LOAD_B32`, seeded `65`, as-is `3`, decoder-rollup `0`, semantic-only `0`, gfx1201-specific `62`
 
-The next coherent phase-0 extensions now move into those encodings, or require
-broader shared-layer churn, rather than more narrow `VOP1`/`VOP2`/`VOPC` seed work.
+`ENC_SMEM` is the recommended next frontier because it is the smallest remaining
+seeded blocker and keeps the next phase architecture-local. The later frontier
+steps move into broader decoder/execution churn, with `ENC_VOP3` remaining the
+largest and riskiest step.
