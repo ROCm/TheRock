@@ -422,39 +422,18 @@ class TestSelectTargets(unittest.TestCase):
 
 
 class TestExpandBuildConfigs(unittest.TestCase):
-    """Test build config expansion (_expand_build_config_for_platform and expand_build_configs)."""
+    """Test expand_build_configs: TargetSelection × build_variant → BuildConfigs.
 
-    def _expand(self, families, platform, build_variant):
-        """Helper: look up variant config and call _expand_build_config_for_platform."""
-        from amdgpu_family_matrix import (
-            all_build_variants,
-            get_all_families_for_trigger_types,
-        )
+    Tests verify structural properties of the output, not specific data values
+    from amdgpu_family_matrix.py. Changing a runner label or flipping
+    expect_failure in the matrix data should not require test updates here.
+    """
 
-        all_families = get_all_families_for_trigger_types(
-            ["presubmit", "postsubmit", "nightly"]
-        )
-        variant_config = all_build_variants.get(platform, {}).get(build_variant)
-        if not variant_config:
-            return None
-        return cm._expand_build_config_for_platform(
-            families=families,
-            platform=platform,
-            build_variant=build_variant,
-            all_families=all_families,
-            variant_config=variant_config,
-        )
-
-    def test_empty_families_returns_none(self):
-        """No families → None."""
-        result = self._expand([], "linux", "release")
-        self.assertIsNone(result)
-
-    def test_build_config_to_dict(self):
-        """BuildConfig.to_dict() produces the expected structure."""
+    def test_build_config_to_dict_round_trips(self):
+        """BuildConfig.to_dict() produces all expected keys."""
         config = cm.BuildConfig(
-            matrix_per_family_json='[{"amdgpu_family": "gfx94X-dcgpu"}]',
-            dist_amdgpu_families="gfx94X-dcgpu",
+            matrix_per_family_json="[]",
+            dist_amdgpu_families="",
             artifact_group="multi-arch-release",
             build_variant_label="release",
             build_variant_suffix="",
@@ -463,155 +442,122 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_pytorch=True,
         )
         d = config.to_dict()
-        self.assertEqual(d["artifact_group"], "multi-arch-release")
-        self.assertFalse(d["expect_failure"])
-        self.assertTrue(d["build_pytorch"])
+        expected_keys = {
+            "matrix_per_family_json",
+            "dist_amdgpu_families",
+            "artifact_group",
+            "build_variant_label",
+            "build_variant_suffix",
+            "build_variant_cmake_preset",
+            "expect_failure",
+            "build_pytorch",
+        }
+        self.assertEqual(set(d.keys()), expected_keys)
 
-    def test_linux_release_presubmit_families(self):
-        """Presubmit families on linux/release produces a BuildConfig with all families."""
-        config = self._expand(
-            ["gfx94x", "gfx110x", "gfx1151", "gfx120x"], "linux", "release"
-        )
-        self.assertIsNotNone(config)
-        self.assertEqual(config.build_variant_label, "release")
-        self.assertEqual(config.build_variant_suffix, "")
-        self.assertEqual(config.artifact_group, "multi-arch-release")
-        self.assertFalse(config.expect_failure)
-        self.assertTrue(config.build_pytorch)
-
-        per_family = json.loads(config.matrix_per_family_json)
-        family_names = [f["amdgpu_family"] for f in per_family]
-        self.assertIn("gfx94X-dcgpu", family_names)
-        self.assertIn("gfx110X-all", family_names)
-        self.assertIn("gfx1151", family_names)
-        self.assertIn("gfx120X-all", family_names)
-
-        self.assertEqual(
-            config.dist_amdgpu_families,
-            ";".join(family_names),
-        )
-
-    def test_windows_release_presubmit_families(self):
-        """Windows release with families that have windows entries."""
-        config = self._expand(["gfx110x", "gfx1151", "gfx120x"], "windows", "release")
-        self.assertIsNotNone(config)
-        per_family = json.loads(config.matrix_per_family_json)
-        family_names = [f["amdgpu_family"] for f in per_family]
-        self.assertIn("gfx110X-all", family_names)
-        self.assertIn("gfx1151", family_names)
-        self.assertIn("gfx120X-all", family_names)
-
-    def test_per_family_info_fields(self):
-        """Per-family info contains expected fields."""
-        config = self._expand(["gfx94x"], "linux", "release")
-        self.assertIsNotNone(config)
-        per_family = json.loads(config.matrix_per_family_json)
-        self.assertEqual(len(per_family), 1)
-        info = per_family[0]
-        self.assertEqual(info["amdgpu_family"], "gfx94X-dcgpu")
-        self.assertEqual(info["amdgpu_targets"], "gfx942")
-        self.assertEqual(info["test-runs-on"], "linux-mi325-1gpu-ossci-rocm")
-        self.assertFalse(info["sanity_check_only_for_family"])
-
-    def test_sanity_check_flag_propagated(self):
-        """sanity_check_only_for_family flows through to per-family info."""
-        config = self._expand(["gfx110x"], "linux", "release")
-        per_family = json.loads(config.matrix_per_family_json)
-        self.assertTrue(per_family[0]["sanity_check_only_for_family"])
-
-    def test_variant_not_supported_by_family(self):
-        """A family that doesn't support the requested variant → None."""
-        config = self._expand(["gfx110x"], "linux", "asan")
-        self.assertIsNone(config)
-
-    def test_asan_variant(self):
-        """ASAN variant produces a BuildConfig with correct metadata."""
-        config = self._expand(["gfx94x"], "linux", "asan")
-        self.assertIsNotNone(config)
-        self.assertEqual(config.build_variant_label, "asan")
-        self.assertEqual(config.build_variant_suffix, "asan")
-        self.assertEqual(config.artifact_group, "multi-arch-asan")
-        self.assertEqual(config.build_variant_cmake_preset, "linux-release-asan")
-        self.assertFalse(config.expect_failure)
-        self.assertTrue(config.build_pytorch)
-
-    def test_tsan_variant_expect_failure(self):
-        """TSAN variant has expect_failure=True and build_pytorch=False."""
-        config = self._expand(["gfx94x"], "linux", "tsan")
-        self.assertIsNotNone(config)
-        self.assertEqual(config.build_variant_label, "tsan")
-        self.assertTrue(config.expect_failure)
-        self.assertFalse(config.build_pytorch)
-
-    def test_unknown_family_raises(self):
-        """A family not in the matrix raises KeyError (upstream should filter)."""
-        with self.assertRaises(KeyError):
-            self._expand(["gfx_nonexistent"], "linux", "release")
-
-    def test_unknown_platform_returns_none(self):
-        """A platform with no build variants → None."""
-        config = self._expand(["gfx94x"], "macos", "release")
-        self.assertIsNone(config)
-
-    def test_nightly_family_expect_pytorch_failure(self):
-        """expect_pytorch_failure is per-family data, not per-variant config."""
-        config = self._expand(["gfx906"], "windows", "release")
-        self.assertIsNotNone(config)
-        self.assertTrue(config.build_pytorch)
-
-    def test_multiple_fetch_gfx_targets(self):
-        """Multiple fetch-gfx-targets are comma-joined in amdgpu_targets."""
-        config = self._expand(["gfx120x"], "linux", "release")
-        per_family = json.loads(config.matrix_per_family_json)
-        self.assertEqual(per_family[0]["amdgpu_targets"], "gfx1200,gfx1201")
-
-    # -- expand_matrices (both-platform wrapper) --
-
-    def test_expand_matrices_both_platforms(self):
-        """expand_matrices returns entries for both linux and windows."""
-        targets = cm.TargetSelection(
-            linux_families=["gfx94x", "gfx110x"],
-            windows_families=["gfx110x", "gfx1151"],
-        )
-        result = cm.expand_build_configs(targets=targets, build_variant="release")
-        self.assertIsNotNone(result.linux)
-        self.assertIsNotNone(result.windows)
-
-        linux_families = json.loads(result.linux.matrix_per_family_json)
-        linux_names = [f["amdgpu_family"] for f in linux_families]
-        self.assertIn("gfx94X-dcgpu", linux_names)
-        self.assertIn("gfx110X-all", linux_names)
-
-        windows_families = json.loads(result.windows.matrix_per_family_json)
-        windows_names = [f["amdgpu_family"] for f in windows_families]
-        self.assertIn("gfx110X-all", windows_names)
-        self.assertIn("gfx1151", windows_names)
-
-    def test_variant_not_on_windows(self):
-        """ASAN has no windows config → windows is None."""
-        targets = cm.TargetSelection(
-            linux_families=["gfx94x"],
-            windows_families=["gfx110x"],
-        )
-        result = cm.expand_build_configs(targets=targets, build_variant="asan")
-        self.assertIsNotNone(result.linux)
-        self.assertIsNone(result.windows)
-
-    def test_empty_targets(self):
+    def test_empty_targets_both_none(self):
         """Empty targets on both platforms → both None."""
         targets = cm.TargetSelection()
         result = cm.expand_build_configs(targets=targets, build_variant="release")
         self.assertIsNone(result.linux)
         self.assertIsNone(result.windows)
 
-    # -- Parity test --
+    def test_release_produces_configs_for_both_platforms(self):
+        """Release variant with families on both platforms produces both configs
+        with correctly structured per-family info."""
+        inputs = cm.CIInputs(
+            event_name="push",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        targets = cm.select_targets(inputs)
+        result = cm.expand_build_configs(targets=targets, build_variant="release")
+        required_keys = {
+            "amdgpu_family",
+            "amdgpu_targets",
+            "test-runs-on",
+            "sanity_check_only_for_family",
+        }
+        for config in [result.linux, result.windows]:
+            self.assertIsNotNone(config)
+            per_family = json.loads(config.matrix_per_family_json)
+            self.assertGreater(len(per_family), 0)
+            for entry in per_family:
+                self.assertEqual(
+                    set(entry.keys()),
+                    required_keys,
+                    f"unexpected keys in per-family info: {entry}",
+                )
+
+    def test_build_config_structure(self):
+        """BuildConfig has correct structure: families, metadata, consistency.
+
+        BuildConfig carries two representations of the family list for
+        different workflow consumers:
+
+        matrix_per_family_json — JSON array with per-family metadata for
+        test and per-arch artifact jobs (fromJSON matrix expansion):
+
+            [
+                {
+                    "amdgpu_family": "gfx94X-dcgpu",
+                    "amdgpu_targets": "gfx942",
+                    "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+                    "sanity_check_only_for_family": false
+                },
+                ...
+            ]
+
+        dist_amdgpu_families — semicolon-separated family names for CMake
+        (THEROCK_DIST_AMDGPU_TARGETS) and configure_stage.py:
+
+            "gfx94X-dcgpu;gfx110X-all"
+
+        Both must contain the same set of families.
+        """
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x", "gfx110x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(targets=targets, build_variant="release")
+
+        # All target families that support the variant appear in output.
+        linux_per_family = json.loads(result.linux.matrix_per_family_json)
+        self.assertEqual(len(linux_per_family), 2)
+        windows_per_family = json.loads(result.windows.matrix_per_family_json)
+        self.assertEqual(len(windows_per_family), 1)
+
+        # The two family representations carry the same set of families.
+        dist_set = set(result.linux.dist_amdgpu_families.split(";"))
+        json_set = {f["amdgpu_family"] for f in linux_per_family}
+        self.assertEqual(dist_set, json_set)
+
+        # Variant metadata is populated.
+        config = result.linux
+        self.assertTrue(len(config.build_variant_label) > 0)
+        self.assertIn("release", config.artifact_group)
+        self.assertIsInstance(config.expect_failure, bool)
+        self.assertIsInstance(config.build_pytorch, bool)
+
+    def test_variant_filters_by_platform_and_family_support(self):
+        """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
+        # gfx94x supports asan, gfx110x is release-only, windows has no asan variant.
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x", "gfx110x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(targets=targets, build_variant="asan")
+        # Only gfx94x on linux survives.
+        self.assertIsNotNone(result.linux)
+        linux_per_family = json.loads(result.linux.matrix_per_family_json)
+        self.assertEqual(len(linux_per_family), 1)
+        # Windows has no asan variant config at all.
+        self.assertIsNone(result.windows)
+
+    # -- Parity test (useful during transition, may be removed later) --
 
     def test_output_matches_generate_multi_arch_matrix(self):
-        """expand_build_configs output matches configure_ci.generate_multi_arch_matrix.
-
-        Parity test: the new functions should produce identical output
-        to the old one for the same inputs.
-        """
+        """expand_build_configs output matches configure_ci.generate_multi_arch_matrix."""
         from amdgpu_family_matrix import (
             all_build_variants,
             get_all_families_for_trigger_types,
@@ -649,7 +595,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 base_args={"build_variant": variant},
             )
             self.assertIsNotNone(new_config, f"expected config for {platform}")
-            # Old function returns a single-element list; compare the one entry.
             self.assertEqual(len(old_result), 1, f"expected 1 entry for {platform}")
             self.assertEqual(
                 old_result[0], new_config.to_dict(), f"mismatch on {platform}"
