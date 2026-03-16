@@ -10201,17 +10201,30 @@ int main() {
   }
 
   WaveExecutionState writer_wave;
-  writer_wave.exec_mask = 0x1ULL;
+  writer_wave.exec_mask = 0b1011ULL;
   writer_wave.workgroup_wave_count = 2;
   writer_wave.sgprs[0] = 0u;
   writer_wave.vgprs[0][0] = 0u;
+  writer_wave.vgprs[0][1] = 4u;
+  writer_wave.vgprs[0][3] = 12u;
   writer_wave.vgprs[1][0] = 99u;
+  writer_wave.vgprs[1][1] = 123u;
+  writer_wave.vgprs[1][3] = 456u;
+  writer_wave.vgprs[2][0] = 0xaaaabbbbu;
+  writer_wave.vgprs[2][1] = 0xccccddddu;
+  writer_wave.vgprs[2][2] = 0x12345678u;
+  writer_wave.vgprs[2][3] = 0xeeeeffffu;
   WaveExecutionState reader_wave;
-  reader_wave.exec_mask = 0x1ULL;
+  reader_wave.exec_mask = 0b1011ULL;
   reader_wave.workgroup_wave_count = 2;
   reader_wave.sgprs[0] = 1u;
   reader_wave.vgprs[0][0] = 0u;
-  reader_wave.vgprs[2][0] = 0xdeadbeefu;
+  reader_wave.vgprs[0][1] = 4u;
+  reader_wave.vgprs[0][3] = 12u;
+  reader_wave.vgprs[2][0] = 0xdead0000u;
+  reader_wave.vgprs[2][1] = 0xdead0001u;
+  reader_wave.vgprs[2][2] = 0xdeadbeefu;
+  reader_wave.vgprs[2][3] = 0xdead0003u;
   std::vector<std::byte> shared_lds(WaveExecutionState::kLdsSizeBytes);
   WorkgroupExecutionContext workgroup;
   workgroup.shared_lds = std::span<std::byte>(shared_lds.data(), shared_lds.size());
@@ -10277,15 +10290,32 @@ int main() {
     return 1;
   }
 
-  std::uint32_t shared_lds_value = 0;
-  std::memcpy(&shared_lds_value, shared_lds.data(), sizeof(shared_lds_value));
+  const auto read_shared_lds_u32 = [&](std::size_t address) {
+    std::uint32_t value = 0;
+    std::memcpy(&value, shared_lds.data() + address, sizeof(value));
+    return value;
+  };
   if (!Expect(writer_wave.halted, "expected writer wave to halt") ||
       !Expect(reader_wave.halted, "expected reader wave to halt") ||
       !Expect(reader_wave.vgprs[2][0] == 99u,
-              "expected reader wave to observe shared lds write") ||
-      !Expect(writer_wave.vgprs[2][0] == 0u,
-              "expected writer wave destination register to remain untouched") ||
-      !Expect(shared_lds_value == 99u, "expected shared lds value")) {
+              "expected reader wave lane 0 to observe shared lds write") ||
+      !Expect(reader_wave.vgprs[2][1] == 123u,
+              "expected reader wave lane 1 to observe shared lds write") ||
+      !Expect(reader_wave.vgprs[2][2] == 0xdeadbeefu,
+              "expected inactive reader lane to remain untouched") ||
+      !Expect(reader_wave.vgprs[2][3] == 456u,
+              "expected reader wave lane 3 to observe shared lds write") ||
+      !Expect(writer_wave.vgprs[2][0] == 0xaaaabbbbu,
+              "expected writer wave lane 0 destination register to remain untouched") ||
+      !Expect(writer_wave.vgprs[2][1] == 0xccccddddu,
+              "expected writer wave lane 1 destination register to remain untouched") ||
+      !Expect(writer_wave.vgprs[2][2] == 0x12345678u,
+              "expected inactive writer lane destination register to remain untouched") ||
+      !Expect(writer_wave.vgprs[2][3] == 0xeeeeffffu,
+              "expected writer wave lane 3 destination register to remain untouched") ||
+      !Expect(read_shared_lds_u32(0u) == 99u, "expected shared lds lane 0 value") ||
+      !Expect(read_shared_lds_u32(4u) == 123u, "expected shared lds lane 1 value") ||
+      !Expect(read_shared_lds_u32(12u) == 456u, "expected shared lds lane 3 value")) {
     return 1;
   }
 
