@@ -1,7 +1,7 @@
 # Releases
 
 This page describes how to install and use our release artifacts for ROCm and
-external builds like PyTorch. We produce build artifacts as part of our
+external builds like PyTorch and JAX. We produce build artifacts as part of our
 Continuous Integration (CI) build/test workflows as well as release artifacts as
 part of Continuous Delivery (CD) nightly releases. For the development-status of GPU architecture support in TheRock, please see the [SUPPORTED_GPUS.md](./SUPPORTED_GPUS.md) document, which tracks readiness and onboarding progress for each AMD GPU architecture.
 
@@ -27,6 +27,8 @@ Table of contents:
   - [Using ROCm Python packages](#using-rocm-python-packages)
   - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
   - [Using PyTorch Python packages](#using-pytorch-python-packages)
+  - [Installing JAX Python packages](#installing-jax-python-packages)
+  - [Using JAX Python packages](#using-jax-python-packages)
 - [Installing from tarballs](#installing-from-tarballs)
   - [Browsing release tarballs](#browsing-release-tarballs)
   - [Manual tarball extraction](#manual-tarball-extraction)
@@ -36,7 +38,7 @@ Table of contents:
 
 ## Installing releases using pip
 
-We recommend installing ROCm and projects like PyTorch via `pip`, the
+We recommend installing ROCm and projects like PyTorch and JAX via `pip`, the
 [Python package installer](https://packaging.python.org/en/latest/guides/tool-recommendations/).
 
 We currently support Python 3.10, 3.11, 3.12, and 3.13.
@@ -63,14 +65,14 @@ We currently support Python 3.10, 3.11, 3.12, and 3.13.
 >
 > ⚠️ Windows packages are new and may be unstable! ⚠️
 
-| Platform |                                                                                                                                                                                                                                         ROCm Python packages |                                                                                                                                                                                                                                               PyTorch Python packages |
-| -------- | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| Linux    | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) | [![Release Linux PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml?query=branch%3Amain) |
-| Windows  |                      [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain) |             [![Release Windows PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml?query=branch%3Amain) |
+| Platform |                                                                                                                                                                                                                                         ROCm Python packages |                                                                                                                                                                                                                                               PyTorch Python packages |                                                                                                                                                                                                                                       JAX Python packages |
+| -------- | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| Linux    | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) | [![Release Linux PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml?query=branch%3Amain) | [![Release Linux JAX Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_jax_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_jax_wheels.yml?query=branch%3Amain) |
+| Windows  |                      [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain) |             [![Release Windows PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml?query=branch%3Amain) |                                                                                                                                                                                                                                                         — |
 
 ### Index page listing
 
-For now, `rocm` and `torch` packages are published to GPU-architecture-specific index
+For now, `rocm`, `torch`, and `jax` packages are published to GPU-architecture-specific index
 pages and must be installed using an appropriate `--find-links` argument to `pip`.
 They may later be pushed to the
 [Python Package Index (PyPI)](https://pypi.org/) or other channels using a process
@@ -78,17 +80,17 @@ like https://wheelnext.dev/. **Please check back regularly
 as these instructions will change as we migrate to official indexes and adjust
 project layouts.**
 
-| Product Name                       | GFX Target | GFX Family   | Install instructions                                               |
-| ---------------------------------- | ---------- | ------------ | ------------------------------------------------------------------ |
-| MI300A/MI300X                      | gfx942     | gfx94X-dcgpu | [rocm](#rocm-for-gfx94X-dcgpu) // [torch](#torch-for-gfx94X-dcgpu) |
-| MI350X/MI355X                      | gfx950     | gfx950-dcgpu | [rocm](#rocm-for-gfx950-dcgpu) // [torch](#torch-for-gfx950-dcgpu) |
-| AMD RX 7900 XTX                    | gfx1100    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
-| AMD RX 7800 XT                     | gfx1101    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
-| AMD Radeon 780M Laptop iGPU        | gfx1103    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
-| AMD Strix Halo iGPU                | gfx1151    | gfx1151      | [rocm](#rocm-for-gfx1151) // [torch](#torch-for-gfx1151)           |
-| AMD RX 9060 / XT                   | gfx1200    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all)   |
-| AMD RX 9070 / XT                   | gfx1201    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all)   |
+| Product Name                       | GFX Target | GFX Family   | Install instructions                                                                               |
+| ---------------------------------- | ---------- | ------------ | -------------------------------------------------------------------------------------------------- |
+| MI300A/MI300X                      | gfx942     | gfx94X-dcgpu | [rocm](#rocm-for-gfx94X-dcgpu) // [torch](#torch-for-gfx94X-dcgpu) // [jax](#jax-for-gfx94X-dcgpu) |
+| MI350X/MI355X                      | gfx950     | gfx950-dcgpu | [rocm](#rocm-for-gfx950-dcgpu) // [torch](#torch-for-gfx950-dcgpu) // [jax](#jax-for-gfx950-dcgpu) |
+| AMD RX 7900 XTX                    | gfx1100    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all) // [jax](#jax-for-gfx110X-all)    |
+| AMD RX 7800 XT                     | gfx1101    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all) // [jax](#jax-for-gfx110X-all)    |
+| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all) // [jax](#jax-for-gfx110X-all)    |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all) // [jax](#jax-for-gfx110X-all)    |
+| AMD Strix Halo iGPU                | gfx1151    | gfx1151      | [rocm](#rocm-for-gfx1151) // [torch](#torch-for-gfx1151) // [jax](#jax-for-gfx1151)                |
+| AMD RX 9060 / XT                   | gfx1200    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all) // [jax](#jax-for-gfx120X-all)    |
+| AMD RX 9070 / XT                   | gfx1201    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all) // [jax](#jax-for-gfx120X-all)    |
 
 ### Installing ROCm Python packages
 
@@ -245,7 +247,7 @@ These contents are useful for using the package outside of Python and _lazily_ e
 first use when used from Python.
 
 Once you have verified your installation, you can continue to use it for
-standard ROCm development or install PyTorch or another supported Python ML
+standard ROCm development or install PyTorch, JAX, or another supported Python ML
 framework.
 
 ### Installing PyTorch Python packages
@@ -389,6 +391,127 @@ See also the
 [Testing the PyTorch installation](https://rocm.docs.amd.com/projects/install-on-linux/en/develop/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation)
 instructions in the AMD ROCm documentation.
 
+### Installing JAX Python packages
+
+Using the index pages [listed above](#installing-rocm-python-packages), you can
+also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
+
+> [!NOTE]
+> By default, pip will install the latest stable versions of each package.
+>
+> - If you want to install other versions, the currently supported versions are:
+>
+>   | jax version | jaxlib version |
+>   | ----------- | -------------- |
+>   | 0.8.2       | 0.8.2          |
+>   | 0.8.0       | 0.8.0          |
+>
+>   See also
+>
+>   - [Supported JAX versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/jax#supported-jax-versions)
+
+> [!WARNING]
+> Unlike PyTorch, the JAX wheels do **not** automatically install `rocm[libraries]`
+> as a dependency. You must have ROCm installed separately via a
+> [tarball installation](#installing-from-tarballs).
+
+> [!IMPORTANT]
+> The `jax` package itself is **not** published to the TheRock index.
+> After installing `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt` from the
+> GPU-family index, install `jax` from [PyPI](https://pypi.org/project/jax/):
+>
+> ```bash
+> pip install jax
+> ```
+
+#### jax for gfx94X-dcgpu
+
+Supported devices in this family:
+
+| Product Name  | GFX Target |
+| ------------- | ---------- |
+| MI300A/MI300X | gfx942     |
+
+```bash
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ jaxlib jax_rocm7_plugin jax_rocm7_pjrt
+# Install jax from PyPI
+pip install jax
+```
+
+#### jax for gfx950-dcgpu
+
+Supported devices in this family:
+
+| Product Name  | GFX Target |
+| ------------- | ---------- |
+| MI350X/MI355X | gfx950     |
+
+```bash
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ jaxlib jax_rocm7_plugin jax_rocm7_pjrt
+# Install jax from PyPI
+pip install jax
+```
+
+#### jax for gfx110X-all
+
+Supported devices in this family:
+
+| Product Name                       | GFX Target |
+| ---------------------------------- | ---------- |
+| AMD RX 7900 XTX                    | gfx1100    |
+| AMD RX 7800 XT                     | gfx1101    |
+| AMD RX 7700S / Framework Laptop 16 | gfx1102    |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    |
+
+```bash
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ jaxlib jax_rocm7_plugin jax_rocm7_pjrt
+# Install jax from PyPI
+pip install jax
+```
+
+#### jax for gfx1151
+
+Supported devices in this family:
+
+| Product Name        | GFX Target |
+| ------------------- | ---------- |
+| AMD Strix Halo iGPU | gfx1151    |
+
+```bash
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ jaxlib jax_rocm7_plugin jax_rocm7_pjrt
+# Install jax from PyPI
+pip install jax
+```
+
+#### jax for gfx120X-all
+
+Supported devices in this family:
+
+| Product Name     | GFX Target |
+| ---------------- | ---------- |
+| AMD RX 9060 / XT | gfx1200    |
+| AMD RX 9070 / XT | gfx1201    |
+
+```bash
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ jaxlib jax_rocm7_plugin jax_rocm7_pjrt
+# Install jax from PyPI
+pip install jax
+```
+
+### Using JAX Python packages
+
+After installing the JAX packages with ROCm support, JAX can be used normally:
+
+```python
+import jax
+
+print(jax.devices())
+# [RocmDevice(id=0)]
+```
+
+For building JAX from source or running the full JAX test suite, see the
+[external-builds/jax README](/external-builds/jax/README.md).
+
 ## Installing from tarballs
 
 Standalone "ROCm SDK tarballs" are a flattened view of ROCm
@@ -524,6 +647,7 @@ If your GPU is not recognized or you encounter issues:
   for GTT configuration on unified memory systems)
 - Ensure you have the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation)
   on Linux or [Adrenaline driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
-- For platform-specific troubleshooting when using PyTorch, see:
+- For platform-specific troubleshooting when using PyTorch or JAX, see:
   - [Using ROCm Python packages](#using-rocm-python-packages)
   - [Using PyTorch Python packages](#using-pytorch-python-packages)
+  - [Using JAX Python packages](#using-jax-python-packages)

@@ -364,37 +364,5 @@ def main(argv: list[str]) -> int:
     return result.returncode
 
 
-def force_exit_with_code(retcode: int) -> None:
-    """Forces termination to work around https://github.com/ROCm/TheRock/issues/999."""
-    import signal
-
-    # We're going to kill the current process with SIGTERM below, which will
-    # return exit code 15. This preserves the original exit code in a file.
-    # Note: this path is relative to CWD, *not the script directory*.
-    # TODO(#2258): output a test report file that can be inspected on both
-    #              Linux and Windows then remove this special file
-    retcode_file = Path("run_pytorch_tests_full_exit_code.txt")
-    retcode_int = int(retcode)
-    print(f"Writing retcode {retcode_int} to '{retcode_file}'")
-    retcode_file.write_text(str(retcode_int))
-
-    print("Forcefully terminating to avoid https://github.com/ROCm/TheRock/issues/999")
-
-    # Flush output before we force exit so no logs get missed.
-    sys.stdout.flush()
-
-    # In order from "asking nicely" to "tear down immediately":
-    #   1. `sys.exit(retcode)`
-    #   2. `os._exit(retcode)`
-    #   3. `os.kill(os.getpid(), signal.SIGTERM)`
-    #   4. `subprocess.Popen(f'taskkill /F /PID {os.getpid()}', shell=True)`
-    # As options (1) and (2) are not sufficient, we use option (3) here.
-    os.kill(os.getpid(), signal.SIGTERM)
-
-
 if __name__ == "__main__":
-    retcode = main(sys.argv[1:])
-    if platform.system() == "Windows":
-        force_exit_with_code(retcode)
-    else:
-        sys.exit(retcode)
+    sys.exit(main(sys.argv[1:]))

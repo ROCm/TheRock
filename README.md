@@ -22,6 +22,10 @@ TheRock includes:
 > See the [Releases Page](RELEASES.md) for instructions on how to install prebuilt
 > ROCm and PyTorch packages.
 
+## Project status
+
+See the unified project HUD at https://therock-hud-dev.amd.com/
+
 ### Nightly release status
 
 Packages and Python wheels:
