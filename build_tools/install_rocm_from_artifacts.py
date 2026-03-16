@@ -29,6 +29,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--miopenprovider | --no-miopenprovider]
     [--fusilliprovider | --no-fusilliprovider]
     [--hipblasltprovider | --no-hipblasltprovider]
+    [--hipkernelprovider | --no-hipkernelprovider]
     [--prim | --no-prim]
     [--rand | --no-rand]
     [--rccl | --no-rccl]
@@ -351,6 +352,7 @@ def retrieve_artifacts_by_run_id(args):
             args.fusilliprovider,
             args.iree_compiler,
             args.hipblasltprovider,
+            args.hipkernelprovider,
             args.prim,
             args.rand,
             args.rccl,
@@ -399,6 +401,8 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rand_dev")
         if args.miopenprovider:
             extra_artifacts.append("miopenprovider")
+        if args.hipkernelprovider:
+            extra_artifacts.append("hipkernelprovider")
         if args.fusilliprovider:
             extra_artifacts.append("fusilliprovider")
         if args.iree_compiler:
@@ -694,6 +698,13 @@ def main(argv):
         "--miopenprovider",
         default=False,
         help="Include 'miopenprovider' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hipkernelprovider",
+        default=False,
+        help="Include 'hipkernelprovider' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

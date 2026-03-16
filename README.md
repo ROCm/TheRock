@@ -200,11 +200,12 @@ minimal build):
 
 hipDNN provider plugins:
 
-| Provider flag                           | Description                              |
-| --------------------------------------- | ---------------------------------------- |
-| `-DTHEROCK_ENABLE_MIOPENPROVIDER=ON`    | Enables hipDNN MIOpen-provider plugin    |
-| `-DTHEROCK_ENABLE_HIPBLASLTPROVIDER=ON` | Enables hipDNN hipBLASLt-provider plugin |
-| `-DTHEROCK_ENABLE_FUSILLIPROVIDER=ON`   | Enables hipDNN Fusilli-provider plugin   |
+| Provider flag                           | Description                               |
+| --------------------------------------- | ----------------------------------------- |
+| `-DTHEROCK_ENABLE_MIOPENPROVIDER=ON`    | Enables hipDNN MIOpen-provider plugin     |
+| `-DTHEROCK_ENABLE_HIPBLASLTPROVIDER=ON` | Enables hipDNN hipBLASLt-provider plugin  |
+| `-DTHEROCK_ENABLE_FUSILLIPROVIDER=ON`   | Enables hipDNN Fusilli-provider plugin    |
+| `-DTHEROCK_ENABLE_HIPKERNELPROVIDER=ON` | Enables hipDNN hip kernel provider plugin |
 
 > [!TIP]
 > Enabling any features will implicitly enable their *minimum* dependencies. Some
