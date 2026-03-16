@@ -480,27 +480,46 @@ def run():
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = json.loads(os.getenv("TEST_LABELS") or "[]")
-    is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
-    run_functional_tests = str2bool(os.getenv("RUN_FUNCTIONAL_TESTS", "false"))
+    run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
-    # Determine which test matrix to use
-    if is_benchmark_workflow:
-        # For benchmark workflow, use ONLY benchmark_matrix
-        # Benchmarks don't use test_type/test_labels (all have total_shards=1, no filtering)
-        logging.info("Using benchmark_matrix only (benchmark tests)")
-        selected_matrix = benchmark_matrix.copy()
-    else:
-        # For regular workflow, use test_matrix
-        logging.info("Using test_matrix only (regular tests)")
-        selected_matrix = test_matrix.copy()
-        # For nightly/scheduled builds, merge functional tests into the test matrix
-        if run_functional_tests and functional_matrix:
+    # Build the test matrix: start with regular tests, then merge extended
+    # tests (functional + benchmarks) when enabled.
+    selected_matrix = test_matrix.copy()
+
+    if run_extended_tests:
+        if functional_matrix:
             logging.info(
                 f"Merging {len(functional_matrix)} functional test(s) into test matrix"
             )
             selected_matrix.update(functional_matrix)
+
+        if benchmark_matrix:
+            amdgpu_families_matrix = get_all_families_for_trigger_types(
+                ["presubmit", "postsubmit", "nightly"]
+            )
+            shortened_name = amdgpu_families.split("-")[0].lower()
+            benchmark_runner = (
+                amdgpu_families_matrix.get(shortened_name, {})
+                .get(platform, {})
+                .get("benchmark-runs-on", "")
+            )
+
+            if benchmark_runner:
+                logging.info(
+                    f"Merging {len(benchmark_matrix)} benchmark(s) into test matrix "
+                    f"with runner {benchmark_runner}"
+                )
+                for key, value in benchmark_matrix.items():
+                    merged = value.copy()
+                    merged["benchmark_runner"] = benchmark_runner
+                    selected_matrix[key] = merged
+            else:
+                logging.info(
+                    f"Skipping benchmarks: no benchmark runner for "
+                    f"{amdgpu_families} on {platform}"
+                )
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]

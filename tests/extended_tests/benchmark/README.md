@@ -2,6 +2,8 @@
 
 Automated benchmark testing framework for ROCm libraries with system detection, results collection, and performance tracking.
 
+> **Prerequisites:** See [Extended Tests Framework Overview](../README.md) for environment setup, CI/CD integration, and general architecture.
+
 ## Table of Contents
 
 - [Features](#features)
@@ -60,37 +62,7 @@ extended_tests/benchmark/                       # Benchmark test directory
 
 ## CI/CD Integration
 
-### When Benchmark Tests Run
-
-Benchmark tests run **only on nightly CI builds** to save time and resources on pull request validation:
-
-| Workflow Trigger           | Benchmark Tests                | Regular Tests          |
-| -------------------------- | ------------------------------ | ---------------------- |
-| **Pull Request (PR)**      | Skipped                        | Run (smoke: 1 shard)   |
-| **Nightly CI (scheduled)** | Run (in parallel, always full) | Run (full: all shards) |
-| **Push to main**           | Skipped                        | Run (smoke: 1 shard)   |
-| **Manual workflow**        | Optional                       | Optional               |
-
 **Note:** Benchmarks always run with `total_shards=1` and do not use `test_type` or `test_labels` filtering.
-
-### Parallel Execution Architecture
-
-Benchmarks run **in parallel** with regular tests for faster CI execution:
-
-```
-ci_nightly.yml → ci_linux.yml
-                   │
-                   ├─ build_artifacts (30 min)
-                   │
-                   ├─ test_artifacts (45 min) ────┐
-                   │   └─ Regular tests            │  Run in
-                   │      (rocblas, hipblas, ...)  │  PARALLEL
-                   │                                │
-                   └─ test_benchmarks (60 min) ────┘
-                        └─ Benchmark tests
-                           (hipblaslt_bench, rocfft_bench, ...)
-
-```
 
 ### Available Benchmark Tests in CI
 
@@ -131,22 +103,6 @@ The following benchmark tests are defined in `tests/extended_tests/benchmark/ben
 1. **Dedicated Runners:** Benchmarks can use dedicated GPU runners specified by `benchmark-runs-on` in `amdgpu_family_matrix.py`
 
 ## Architecture
-
-### Workflow Integration
-
-```
-.github/workflows/ci_nightly.yml
-  └─ calls → ci_linux.yml
-              ├─ job: build_artifacts
-              ├─ job: test_artifacts (parallel)
-              └─ job: test_benchmarks (parallel) ← NEW
-                    └─ calls → test_benchmarks.yml
-                                ├─ configure_benchmark_matrix
-                                │   └─ fetch_test_configurations.py
-                                │      (IS_BENCHMARK_WORKFLOW=true)
-                                └─ run_benchmarks
-                                    └─ test_component.yml (matrix)
-```
 
 ### Benchmark Script Execution Flow
 
@@ -247,12 +203,7 @@ Edit `tests/extended_tests/benchmark/benchmark_test_matrix.py`:
 },
 ```
 
-The benchmark will automatically be included in nightly CI runs:
-
-- `configure_ci.py` adds benchmark names to test labels
-- `ci_linux.yml` spawns `test_benchmarks` job
-- `test_benchmarks.yml` calls `fetch_test_configurations.py` with `IS_BENCHMARK_WORKFLOW=true`
-- Only benchmarks from `benchmark_test_matrix.py` are executed
+The benchmark will automatically be included in nightly CI runs. See [CI/CD Integration](../README.md#cicd-integration) for details.
 
 ### 3. Test Locally
 
@@ -265,9 +216,3 @@ export AMDGPU_FAMILIES=gfx950-dcgpu
 # Run the benchmark
 python3 tests/extended_tests/benchmark/scripts/test_your_benchmark.py
 ```
-
-## Related Documentation
-
-- [Utils Module Documentation](../utils/README.md) - Utility modules reference
-- [CI Nightly Workflow](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml) - GitHub Actions
-- [Test Benchmarks Workflow](../../.github/workflows/test_benchmarks.yml) - Benchmark execution workflow

@@ -25,9 +25,9 @@ on:
         type: string
       test_labels:
         type: string
-      run_functional_tests:
-        type: boolean
-        default: false
+      run_extended_tests:
+        type: string
+        default: 'false'
   workflow_call:
     inputs:
       artifact_group:
@@ -49,9 +49,9 @@ on:
         type: string
       test_labels:
         type: string
-      run_functional_tests:
-        type: boolean
-        default: false
+      run_extended_tests:
+        type: string
+        default: 'false'
   push:
     branches:
       - ADHOCBUILD
@@ -100,8 +100,7 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
-          # TODO(#3901): Consolidate run_functional_tests and benchmark_runs_on into a single run_extended_tests input.
-          RUN_FUNCTIONAL_TESTS: ${{ inputs.run_functional_tests }}
+          RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
   test_sanity_check:
@@ -127,15 +126,20 @@ jobs:
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
     uses: './.github/workflows/test_component.yml'
+    secrets: inherit
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      # If the test requires a multi GPU, use the multi GPU test runner
-      # Otherwise, use the standard test runner
+      # Runner selection priority:
+      # 1. Benchmark runner (for benchmark tests on dedicated performance runners)
+      # 2. Multi-GPU runner (for multi-GPU tests like RCCL)
+      # 3. Standard test runner (default)
       test_runs_on: >-
         ${{
+          matrix.components.benchmark_runner != '' &&
+            matrix.components.benchmark_runner ||
           matrix.components.multi_gpu_runner != '' &&
             matrix.components.multi_gpu_runner ||
             inputs.test_runs_on
