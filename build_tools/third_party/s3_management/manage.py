@@ -39,8 +39,6 @@ def initialize_bucket(bucket_name: Optional[str]) -> None:
         raise RuntimeError("Bucket must be provided via --bucket or S3_BUCKET_PY")
 
     BUCKET = S3.Bucket(BUCKET_NAME)
-    # TODO: bucket mirror just to hold index used with CDN
-    # BUCKET_CDN = S3.Bucket('therock-nightly-python-testing')
     INDEX_BUCKETS = {BUCKET}
 
 ACCEPTED_FILE_EXTENSIONS = ("whl", "zip", "tar.gz")
@@ -491,24 +489,89 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser("Manage S3 HTML indices for PyTorch")
     parser.add_argument(
         "prefix",
-        type=str,
-        choices=PREFIXES + ["all"]
+        nargs="?",
+        default=None,
+        help="Prefix to update (overrides defaults)"
     )
     parser.add_argument("--bucket", type=str, help="S3 bucket name")
+    parser.add_argument(
+        "--auto-detect-prefixes",
+        action="store_true",
+        help="Automatically detect all architecture prefixes from the bucket"
+    )
+    parser.add_argument(
+        "--starting-from",
+        type=str,
+        help="Base prefix for auto-detection (e.g. v2/ or v2-staging/)"
+    )
     parser.add_argument("--do-not-upload", action="store_true")
     parser.add_argument("--compute-sha256", action="store_true")
     return parser
 
+def resolve_prefixes(args) -> List[str]:
+    """
+    Determines which prefixes to update.
+
+    Priority:
+    1. Explicit CLI prefix
+    2. Auto-detection (if enabled)
+    3. Static PREFIXES list (+ CUSTOM_PREFIX)
+    """
+
+    # Explicit CLI prefix wins
+    if args.prefix:
+        return [args.prefix]
+
+    # Auto-detection (guarded by flag)
+    if args.auto_detect_prefixes:
+        base = args.starting_from
+        if not base:
+            raise RuntimeError("--starting-from must be provided when using --auto-detect-prefixes")
+
+        return detect_prefixes_from_bucket(base)
+
+    # Default static list
+    return PREFIXES
+
+def detect_prefixes_from_bucket(base_prefix: str) -> List[str]:
+    """
+    Detects architecture prefixes dynamically by listing common prefixes
+    under a base path (e.g. v2/, v2-staging/, v3/whl/).
+    """
+
+    print(f"INFO: Auto-detecting prefixes under '{base_prefix}'")
+
+    prefixes = set()
+
+    paginator = CLIENT.get_paginator("list_objects_v2")
+    page_iterator = paginator.paginate(
+        Bucket=BUCKET_NAME,
+        Prefix=base_prefix,
+        Delimiter="/"
+    )
+
+    for page in page_iterator:
+        for common_prefix in page.get("CommonPrefixes", []):
+            prefixes.add(common_prefix["Prefix"].rstrip("/"))
+
+    detected = sorted(prefixes)
+    print(f"INFO: Detected prefixes: {detected}")
+
+    return detected
 
 def main() -> None:
     parser = create_parser()
     args = parser.parse_args()
     initialize_bucket(args.bucket)
+
     action = "Saving indices" if args.do_not_upload else "Uploading indices"
     if args.compute_sha256:
         action = "Computing checksums"
-    print(f"INFO: {action} for '{prefix}'")
-    prefixes = PREFIXES if args.prefix == 'all' else [args.prefix]
+
+    prefixes = resolve_prefixes(args)
+
+    print(f"INFO: {action} for prefixes: {prefixes}")
+
     for prefix in prefixes:
         update_pep503_index(
             prefix=prefix,
