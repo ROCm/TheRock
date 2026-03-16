@@ -292,6 +292,31 @@ int main() {
     }
   }
 
+  const auto dcache_inv_words = MakeSmem(33u, 0u, 0u, true, 0u);
+  Gfx1201OpcodeRoute dcache_inv_route;
+  std::string dcache_error_message;
+  if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
+                  std::span<const std::uint32_t>(dcache_inv_words.data(),
+                                                 dcache_inv_words.size()),
+                  &dcache_inv_route, &dcache_error_message),
+              "expected S_DCACHE_INV route selection success") ||
+      !Expect(dcache_inv_route.status ==
+                  Gfx1201OpcodeRouteStatus::kMatchedSeedEntry,
+              "expected seeded S_DCACHE_INV route") ||
+      !Expect(dcache_inv_route.selector_rule != nullptr &&
+                  dcache_inv_route.selector_rule->encoding_name == "ENC_SMEM",
+              "expected ENC_SMEM selector rule") ||
+      !Expect(dcache_inv_route.seed_entry != nullptr &&
+                  dcache_inv_route.seed_entry->instruction_name ==
+                      "S_DCACHE_INV",
+              "expected S_DCACHE_INV seed entry") ||
+      !Expect(dcache_inv_route.opcode == 33u,
+              "expected S_DCACHE_INV opcode extraction") ||
+      !Expect(dcache_inv_route.words_required == 2u,
+              "expected S_DCACHE_INV to require two dwords")) {
+    return 1;
+  }
+
   Gfx1201OpcodeRoute vop3_partial_route;
   std::string error_message;
   if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
@@ -395,6 +420,17 @@ int main() {
       !Expect(decoded_instruction.opcode == "S_ENDPGM",
               "expected decoded S_ENDPGM opcode") ||
       !Expect(words_consumed == 1u, "expected one consumed dword")) {
+    return 1;
+  }
+
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(dcache_inv_words.data(),
+                                                 dcache_inv_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_DCACHE_INV decode success after route") ||
+      !Expect(decoded_instruction.opcode == "S_DCACHE_INV",
+              "expected decoded S_DCACHE_INV opcode") ||
+      !Expect(words_consumed == 2u, "expected two consumed dwords")) {
     return 1;
   }
 

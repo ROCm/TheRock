@@ -30,12 +30,17 @@ constexpr std::array<std::string_view, 4> kFrontierOrder{{
     "ENC_VOP3",
 }};
 
-std::uint32_t CountExecutableInstructions(const Gfx1201DecoderSeedEncoding& encoding,
-                                          const Gfx1201BinaryDecoder& decoder) {
+struct ExecutableInstructionSummary {
+  std::uint32_t executable_instruction_count = 0;
+  std::string_view first_executable_instruction;
+};
+
+ExecutableInstructionSummary SummarizeExecutableInstructions(
+    const Gfx1201DecoderSeedEncoding& encoding, const Gfx1201BinaryDecoder& decoder) {
   std::vector<std::string_view> seen_instruction_names;
   seen_instruction_names.reserve(encoding.instruction_count);
 
-  std::uint32_t executable_instruction_count = 0;
+  ExecutableInstructionSummary summary;
   for (const Gfx1201DecoderSeedEntry& entry :
        GetGfx1201Phase0ComputeDecoderSeedEntries(encoding)) {
     if (std::find(seen_instruction_names.begin(), seen_instruction_names.end(),
@@ -44,11 +49,14 @@ std::uint32_t CountExecutableInstructions(const Gfx1201DecoderSeedEncoding& enco
     }
     seen_instruction_names.push_back(entry.instruction_name);
     if (decoder.SupportsPhase0ExecutableOpcode(entry.instruction_name)) {
-      ++executable_instruction_count;
+      if (summary.executable_instruction_count == 0) {
+        summary.first_executable_instruction = entry.instruction_name;
+      }
+      ++summary.executable_instruction_count;
     }
   }
 
-  return executable_instruction_count;
+  return summary;
 }
 
 std::array<Gfx1201Wave32Phase0EncodingStatus, kTrackedEncodings.size()>
@@ -64,13 +72,13 @@ BuildStatuses() {
       continue;
     }
 
-    const std::uint32_t executable_instruction_count =
-        CountExecutableInstructions(*seed, decoder);
+    const ExecutableInstructionSummary executable_summary =
+        SummarizeExecutableInstructions(*seed, decoder);
     statuses[i] = Gfx1201Wave32Phase0EncodingStatus{
         seed->encoding_name,
         seed->instruction_count,
-        executable_instruction_count,
-        executable_instruction_count == seed->instruction_count,
+        executable_summary.executable_instruction_count,
+        executable_summary.executable_instruction_count == seed->instruction_count,
     };
   }
 
@@ -79,6 +87,7 @@ BuildStatuses() {
 
 std::array<Gfx1201Wave32Phase0NextRiskEncodingStatus, kNextRiskEncodings.size()>
 BuildNextRiskStatuses() {
+  Gfx1201BinaryDecoder decoder;
   std::array<Gfx1201Wave32Phase0NextRiskEncodingStatus, kNextRiskEncodings.size()>
       statuses{};
 
@@ -88,12 +97,16 @@ BuildNextRiskStatuses() {
     if (seed == nullptr) {
       continue;
     }
+    const ExecutableInstructionSummary executable_summary =
+        SummarizeExecutableInstructions(*seed, decoder);
 
     statuses[i] = Gfx1201Wave32Phase0NextRiskEncodingStatus{
         seed->encoding_name,
         seed->example_instruction,
         seed->rationale,
         seed->instruction_count,
+        executable_summary.executable_instruction_count,
+        executable_summary.first_executable_instruction,
         seed->transferable_as_is_count,
         seed->transferable_with_decoder_work_count,
         seed->transferable_with_semantic_work_count,

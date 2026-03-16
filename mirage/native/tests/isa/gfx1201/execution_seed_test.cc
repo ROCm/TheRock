@@ -157,6 +157,28 @@ constexpr std::uint32_t MakeVopc(std::uint32_t op,
   return word;
 }
 
+std::array<std::uint32_t, 2> MakeSmem(std::uint32_t op,
+                                      std::uint32_t sdata,
+                                      std::uint32_t sbase_start,
+                                      bool imm,
+                                      std::uint32_t offset_or_soffset,
+                                      bool soffset_en = false) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x30u) << 26;
+  word |= static_cast<std::uint64_t>(sbase_start >> 1);
+  word |= static_cast<std::uint64_t>(sdata) << 6;
+  word |= static_cast<std::uint64_t>(soffset_en ? 1u : 0u) << 14;
+  word |= static_cast<std::uint64_t>(imm ? 1u : 0u) << 17;
+  word |= static_cast<std::uint64_t>(op) << 18;
+  if (imm) {
+    word |= static_cast<std::uint64_t>(offset_or_soffset & 0x1fffffu) << 32;
+  } else if (soffset_en) {
+    word |= static_cast<std::uint64_t>(offset_or_soffset & 0x7fu) << 57;
+  }
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 bool ExpectUnaryInstruction(const mirage::sim::isa::DecodedInstruction& instruction,
                             std::string_view expected_opcode,
                             mirage::sim::isa::OperandKind dst_kind,
@@ -6738,6 +6760,94 @@ int main() {
       !Expect(ExpectI24VectorBinarySeedState(
                   compiled_i24_vector_binary_state),
               "expected compiled I24 vector binary state")) {
+    return 1;
+  }
+
+  const auto dcache_inv_words = MakeSmem(33u, 0u, 0u, true, 0u);
+  DecodedInstruction dcache_inv_instruction;
+  std::size_t dcache_inv_words_consumed = 0;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(dcache_inv_words.data(),
+                                                 dcache_inv_words.size()),
+                  &dcache_inv_instruction, &dcache_inv_words_consumed,
+                  &error_message),
+              "expected S_DCACHE_INV direct decode success") ||
+      !Expect(dcache_inv_instruction.opcode == "S_DCACHE_INV",
+              "expected decoded S_DCACHE_INV opcode") ||
+      !Expect(dcache_inv_instruction.operand_count == 0u,
+              "expected S_DCACHE_INV nullary decode") ||
+      !Expect(dcache_inv_words_consumed == 2u,
+              "expected S_DCACHE_INV to consume two dwords")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 3> dcache_inv_program_words{
+      dcache_inv_words[0],
+      dcache_inv_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> dcache_inv_program;
+  if (!Expect(decoder.DecodeProgram(dcache_inv_program_words, &dcache_inv_program,
+                                    &error_message),
+              "expected S_DCACHE_INV program decode success") ||
+      !Expect(dcache_inv_program.size() == 2u,
+              "expected two decoded S_DCACHE_INV program instructions") ||
+      !Expect(dcache_inv_program[0].opcode == "S_DCACHE_INV",
+              "expected decoded S_DCACHE_INV program opcode") ||
+      !Expect(dcache_inv_program[1].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after S_DCACHE_INV")) {
+    return 1;
+  }
+
+  auto initialize_dcache_inv_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+    state->sgprs[8] = 0x12345678u;
+    state->vgprs[3][0] = 0xaabbccddu;
+    state->vgprs[3][2] = 0x11223344u;
+  };
+  auto expect_dcache_inv_state = [](const WaveExecutionState& state) {
+    return state.lane_count == 32u && state.exec_mask == 0xbu &&
+           state.sgprs[8] == 0x12345678u &&
+           state.vgprs[3][0] == 0xaabbccddu &&
+           state.vgprs[3][2] == 0x11223344u && state.halted &&
+           !state.waiting_on_barrier && state.pc == 1u;
+  };
+
+  WaveExecutionState decoded_dcache_inv_state;
+  initialize_dcache_inv_state(&decoded_dcache_inv_state);
+  if (!Expect(interpreter.ExecuteProgram(dcache_inv_program,
+                                         &decoded_dcache_inv_state,
+                                         &error_message),
+              "expected decoded S_DCACHE_INV execution success") ||
+      !Expect(expect_dcache_inv_state(decoded_dcache_inv_state),
+              "expected decoded S_DCACHE_INV state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_dcache_inv_program;
+  if (!Expect(interpreter.CompileProgram(dcache_inv_program,
+                                         &compiled_dcache_inv_program,
+                                         &error_message),
+              "expected compiled S_DCACHE_INV program success") ||
+      !Expect(compiled_dcache_inv_program.size() == 2u,
+              "expected two compiled S_DCACHE_INV program instructions") ||
+      !Expect(compiled_dcache_inv_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled S_DCACHE_INV opcode") ||
+      !Expect(compiled_dcache_inv_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after S_DCACHE_INV")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_dcache_inv_state;
+  initialize_dcache_inv_state(&compiled_dcache_inv_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_dcache_inv_program,
+                                         &compiled_dcache_inv_state,
+                                         &error_message),
+              "expected compiled S_DCACHE_INV execution success") ||
+      !Expect(expect_dcache_inv_state(compiled_dcache_inv_state),
+              "expected compiled S_DCACHE_INV state")) {
     return 1;
   }
 

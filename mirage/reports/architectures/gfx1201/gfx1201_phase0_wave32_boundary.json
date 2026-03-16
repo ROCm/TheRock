@@ -2,7 +2,7 @@
   "target": "gfx1201",
   "slice": "phase0_wave32_boundary",
   "wave_size": 32,
-  "phase0_executable_count": 325,
+  "phase0_executable_count": 326,
   "tracked_encodings": [
     {
       "encoding_name": "ENC_VOP1",
@@ -47,6 +47,8 @@
       "encoding_name": "ENC_SMEM",
       "example_instruction": "S_LOAD_B32",
       "seeded_instruction_count": 28,
+      "executable_instruction_count": 1,
+      "first_executable_instruction": "S_DCACHE_INV",
       "transferable_as_is_count": 0,
       "transferable_with_decoder_work_count": 0,
       "transferable_with_semantic_work_count": 0,
@@ -59,6 +61,8 @@
       "encoding_name": "ENC_VOP3",
       "example_instruction": "V_ADD3_U32",
       "seeded_instruction_count": 434,
+      "executable_instruction_count": 0,
+      "first_executable_instruction": "",
       "transferable_as_is_count": 232,
       "transferable_with_decoder_work_count": 30,
       "transferable_with_semantic_work_count": 24,
@@ -71,6 +75,8 @@
       "encoding_name": "ENC_VDS",
       "example_instruction": "DS_ADD_U32",
       "seeded_instruction_count": 123,
+      "executable_instruction_count": 0,
+      "first_executable_instruction": "",
       "transferable_as_is_count": 27,
       "transferable_with_decoder_work_count": 0,
       "transferable_with_semantic_work_count": 0,
@@ -83,6 +89,8 @@
       "encoding_name": "ENC_VGLOBAL",
       "example_instruction": "GLOBAL_LOAD_B32",
       "seeded_instruction_count": 65,
+      "executable_instruction_count": 0,
+      "first_executable_instruction": "",
       "transferable_as_is_count": 3,
       "transferable_with_decoder_work_count": 0,
       "transferable_with_semantic_work_count": 0,
@@ -95,7 +103,8 @@
   "notes": [
     "All currently seeded ENC_VOP1, ENC_VOP2, and ENC_VOPC instruction/encoding pairs are executable on the local wave32 path.",
     "There are no remaining imported ENC_VOP1, ENC_VOP2, or ENC_VOPC instruction/encoding pairs outside the current seed surface.",
-    "ENC_SMEM is the recommended next frontier because it is the smallest remaining seeded blocker and keeps the next phase architecture-local.",
-    "The next coherent phase-0 extensions move into ENC_SMEM, ENC_VOP3, ENC_VDS, and ENC_VGLOBAL, or require broader shared-layer churn."
+    "ENC_SMEM now has a first local executable foothold via S_DCACHE_INV, but the remaining 27 seeded SMEM instructions stay scaffolded.",
+    "ENC_SMEM remains the recommended next frontier because it is the smallest remaining seeded blocker and the current local foothold keeps the next phase architecture-local.",
+    "The next coherent phase-0 extensions now deepen ENC_SMEM beyond S_DCACHE_INV, or move into ENC_VOP3, ENC_VDS, and ENC_VGLOBAL, or require broader shared-layer churn."
   ]
 }

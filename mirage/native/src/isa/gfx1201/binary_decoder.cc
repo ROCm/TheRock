@@ -17,9 +17,10 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 325> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 326> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
+    "S_DCACHE_INV",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -849,6 +850,15 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
             .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource0,
                                                    OperandSlotKind::kSource0)));
     *words_consumed = 1;
+  } else if (instruction_name == "S_DCACHE_INV") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = "S_DCACHE_INV requires 2 dwords";
+      }
+      return false;
+    }
+    *instruction = DecodedInstruction::Nullary(instruction_name);
+    *words_consumed = 2;
   } else if (instruction_name == "S_BRANCH" ||
              instruction_name == "S_CBRANCH_SCC0" ||
              instruction_name == "S_CBRANCH_SCC1" ||

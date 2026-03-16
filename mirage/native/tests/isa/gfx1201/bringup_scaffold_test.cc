@@ -49,6 +49,28 @@ constexpr std::uint32_t MakeSopk(std::uint32_t op,
   return word;
 }
 
+std::array<std::uint32_t, 2> MakeSmem(std::uint32_t op,
+                                      std::uint32_t sdata,
+                                      std::uint32_t sbase_start,
+                                      bool imm,
+                                      std::uint32_t offset_or_soffset,
+                                      bool soffset_en = false) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x30u) << 26;
+  word |= static_cast<std::uint64_t>(sbase_start >> 1);
+  word |= static_cast<std::uint64_t>(sdata) << 6;
+  word |= static_cast<std::uint64_t>(soffset_en ? 1u : 0u) << 14;
+  word |= static_cast<std::uint64_t>(imm ? 1u : 0u) << 17;
+  word |= static_cast<std::uint64_t>(op) << 18;
+  if (imm) {
+    word |= static_cast<std::uint64_t>(offset_or_soffset & 0x1fffffu) << 32;
+  } else if (soffset_en) {
+    word |= static_cast<std::uint64_t>(offset_or_soffset & 0x7fu) << 57;
+  }
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 }  // namespace
 
 int main() {
@@ -87,8 +109,10 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 325u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 326u,
               "expected phase-0 executable opcode slice") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
+              "expected S_DCACHE_INV executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_SUB_U32"),
@@ -367,11 +391,27 @@ int main() {
     return 1;
   }
 
+  const auto dcache_inv_words = MakeSmem(33u, 0u, 0u, true, 0u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(dcache_inv_words.data(),
+                                                 dcache_inv_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_DCACHE_INV decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "S_DCACHE_INV",
+              "expected S_DCACHE_INV opcode") ||
+      !Expect(decoded_instruction.operand_count == 0u,
+              "expected S_DCACHE_INV nullary decode")) {
+    return 1;
+  }
+
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 325u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 326u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
+      !Expect(interpreter.Supports("S_DCACHE_INV"),
+              "expected interpreter support for S_DCACHE_INV") ||
       !Expect(interpreter.Supports("S_ADD_U32"),
               "expected interpreter support for S_ADD_U32") ||
       !Expect(interpreter.Supports("S_ADD_I32"),
