@@ -101,6 +101,15 @@ std::uint32_t CountRoleBindingsWithOutputFlag(
   return count;
 }
 
+bool AllRoleBindingsExplicit(const StubDecodedInstruction& instruction) {
+  for (std::uint32_t i = 0; i < instruction.operand_roles.binding_count; ++i) {
+    if (instruction.operand_roles.bindings[i].is_implicit) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool ContainsSlot(const StubDecodedInstruction& instruction,
                   StubOperandSlotKind slot_kind,
                   StubOperandValueClass value_class,
@@ -2206,6 +2215,11 @@ int main() {
               "expected routed WMMA scale seed to keep exact operand-role binding mapping")) {
         return 1;
       }
+      if (!Expect(decoded.operand_roles.binding_count == 5 &&
+                      AllRoleBindingsExplicit(decoded),
+                  "expected routed WMMA scale seed to keep exact operand-role binding-count and explicitness")) {
+        return 1;
+      }
     } else {
       if (!Expect(decoded.operand_slots.binding_count == 4 &&
                       decoded.operand_descriptors.descriptor_count == 4 &&
@@ -2544,6 +2558,11 @@ int main() {
                   CountRoleBindingsWithOutputFlag(
                       decoded, StubOperandRole::kAccumulator, false) == 1,
               "expected routed WMMA/SWMMAC core seed to keep exact operand-role binding mapping")) {
+        return 1;
+      }
+      if (!Expect(decoded.operand_roles.binding_count == 4 &&
+                      AllRoleBindingsExplicit(decoded),
+                  "expected routed WMMA/SWMMAC core seed to keep exact operand-role binding-count and explicitness")) {
         return 1;
       }
     }
@@ -4066,6 +4085,11 @@ int main() {
             "expected routed tensor seed to keep exact operand-role binding mapping")) {
       return 1;
     }
+    if (!Expect(decoded.operand_roles.binding_count == 3 &&
+                    AllRoleBindingsExplicit(decoded),
+                "expected routed tensor seed to keep exact operand-role binding-count and explicitness")) {
+      return 1;
+    }
     if (instruction_name == "TENSOR_LOAD_TO_LDS") {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
@@ -4428,6 +4452,11 @@ int main() {
                 CountRoleBindingsWithOutputFlag(
                     decoded, StubOperandRole::kDestination, true) == 1,
             "expected routed VOP1 seed to keep exact operand-role binding mapping")) {
+      return 1;
+    }
+    if (!Expect(decoded.operand_roles.binding_count == 2 &&
+                    AllRoleBindingsExplicit(decoded),
+                "expected routed VOP1 seed to keep exact operand-role binding-count and explicitness")) {
       return 1;
     }
     if (instruction_name.find("PK_") != std::string_view::npos) {
@@ -4821,6 +4850,11 @@ int main() {
             "expected routed VOP3 SDST seed to keep exact operand-role binding mapping")) {
       return 1;
     }
+    if (!Expect(decoded.operand_roles.binding_count == 4 &&
+                    AllRoleBindingsExplicit(decoded),
+                "expected routed VOP3 SDST seed to keep exact operand-role binding-count and explicitness")) {
+      return 1;
+    }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kScale) &&
                     HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
                     ContainsSlot(decoded, StubOperandSlotKind::kDestination,
@@ -5185,6 +5219,11 @@ int main() {
                 CountRoleBindingsWithOutputFlag(
                     decoded, StubOperandRole::kDestination, true) == 1,
             "expected paired-scale helper to keep exact operand-role binding mapping")) {
+      return 1;
+    }
+    if (!Expect(decoded.operand_roles.binding_count == 4 &&
+                    AllRoleBindingsExplicit(decoded),
+                "expected paired-scale helper to keep exact operand-role binding-count and explicitness")) {
       return 1;
     }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kSource0) &&
