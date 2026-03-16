@@ -315,7 +315,7 @@ class ConfigureCITest(unittest.TestCase):
         configure_ci.main(base_args, {}, {})
 
     @patch("subprocess.run")
-    def test_valid_schedule_Ci_run(self, mock_run):
+    def test_valid_schedule_ci_run(self, mock_run):
         base_args = {
             "build_variant": "release",
             "github_event_name": "schedule",
@@ -324,7 +324,11 @@ class ConfigureCITest(unittest.TestCase):
         mock_process = MagicMock()
         mock_process.stdout = ".github/workflows/ci.yml"
         mock_run.return_value = mock_process
-        configure_ci.main(base_args, {}, {})
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            configure_ci.main(base_args, {}, {})
+        self.assertIn('"test_type": "comprehensive"', captured_out.getvalue())
 
     @patch("subprocess.run")
     def test_valid_workflow_dispatch_ci_run(self, mock_run):
