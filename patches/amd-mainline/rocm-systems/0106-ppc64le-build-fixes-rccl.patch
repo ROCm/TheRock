@@ -1,14 +1,14 @@
-From 7bb2c09d4d79e2b8887af1dc65e7394bd8942144 Mon Sep 17 00:00:00 2001
-From: bluedragan <calvins@us.ibm.com>
-Date: Fri, 6 Mar 2026 19:51:50 +0000
-Subject: [PATCH] RCCL: ppc64le
+From 8c6dbc4ce560ab2c2a0ab22fa8063102db5dcf90 Mon Sep 17 00:00:00 2001
+From: berichar <ben.richard@amd.com>
+Date: Mon, 16 Mar 2026 12:05:38 -0400
+Subject: [PATCH] rccl: ppc64le
 
 ---
  projects/rccl/src/init.cc | 8 +++++++-
  1 file changed, 7 insertions(+), 1 deletion(-)
 
 diff --git a/projects/rccl/src/init.cc b/projects/rccl/src/init.cc
-index 174eec546a..28a4c68ad5 100644
+index e4f70d0d34..7a79255157 100644
 --- a/projects/rccl/src/init.cc
 +++ b/projects/rccl/src/init.cc
 @@ -75,7 +75,9 @@
@@ -16,7 +16,7 @@ index 174eec546a..28a4c68ad5 100644
  #include "latency_profiler/CollTrace.h"
  #include "latency_profiler/CollTraceFunc.h"
 -#include  <cpuid.h>
-+#if !defined(__powerpc64__)
++#if defined(__x86_64__) || defined(__i386__)
 +#include <cpuid.h>
 +#endif
  
@@ -26,7 +26,7 @@ index 174eec546a..28a4c68ad5 100644
      INFO(NCCL_INIT, "Kernel version: %s", verStr);
      if (strstr(verStr, "cray") == NULL) {
        unsigned int eax, ebx, ecx, edx;
-+#if !defined(__powerpc64__) && !defined(__PPC64__)
++#if defined(__x86_64__) || defined(__i386__)
        if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx))
          ecx = 0; // cpuid not supported
 +#else
