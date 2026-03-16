@@ -4,9 +4,6 @@
 # NOTE: not tested. just combining pytorch_2.7.py and pytorch_2.10.py to see if that resolves the OOM errors
 skip_tests = {
     "common": {
-        "autograd": [
-            "test_side_stream_backward_overlap",
-        ],
         "cuda": [
             # Explicitly deselected since giving segfault
             "test_unused_output_device_cuda",  # this test does not exist in nightly anymore
@@ -44,6 +41,11 @@ skip_tests = {
             "test_fp32_precision_with_tf32",
             # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
             "test_invalid_status_for_legacy_api",
+            # Off-by-one due to float truncation (int() without round()) plus
+            # UnboundLocalError on cleanup when the assertion fails.
+            # Fixed upstream in pytorch#163297, landed in 2.10+.
+            # https://github.com/ROCm/pytorch/commit/66abba8f49f05b0998040443813380efc32844f6
+            "test_max_split_expandable",
         ],
     },
     "gfx94": {

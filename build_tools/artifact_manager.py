@@ -141,7 +141,7 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
         log("Using generic (host) artifacts only")
     else:
         if args.amdgpu_families:
-            target_families.extend(args.amdgpu_families.split(","))
+            target_families.extend(args.amdgpu_families.split(";"))
         if args.amdgpu_targets:
             target_families.extend(
                 t.strip() for t in args.amdgpu_targets.split(",") if t.strip()
@@ -356,6 +356,7 @@ def do_fetch(args: argparse.Namespace):
     download_dir.mkdir(parents=True, exist_ok=True)
 
     matched_filenames = find_available_artifacts(inbound, target_families, available)
+
     download_requests = [
         DownloadRequest(
             artifact_key=filename,
@@ -912,7 +913,7 @@ def do_info(args: argparse.Namespace):
 
     # Show target families if provided
     if args.amdgpu_families:
-        families = args.amdgpu_families.split(",")
+        families = args.amdgpu_families.split(";")
         target_families = ["generic"] + families
         log(f"\nTarget families: {', '.join(target_families)}")
 
@@ -953,7 +954,7 @@ def _add_target_args(parser: argparse.ArgumentParser):
     target_group.add_argument(
         "--amdgpu-families",
         type=str,
-        help="Comma-separated GPU families (e.g., gfx94X-dcgpu,gfx1100)",
+        help="Semicolon-separated GPU families (e.g., gfx94X-dcgpu;gfx1100)",
     )
     target_group.add_argument(
         "--generic-only",

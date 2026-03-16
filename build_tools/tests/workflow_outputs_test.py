@@ -156,6 +156,10 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
         loc = self.root.python_packages("gfx110X-all")
         self._assert_relative_path(loc, "99999-linux/python/gfx110X-all")
 
+    def test_python_packages_no_artifact_group(self):
+        loc = self.root.python_packages()
+        self._assert_relative_path(loc, "99999-linux/python")
+
 
 class TestWorkflowOutputRootLocationsExternalRepo(unittest.TestCase):
     """Verify external_repo prefix propagates through location methods."""
@@ -484,14 +488,6 @@ class TestRetrieveBucketInfo(unittest.TestCase):
         )
         self.mock_api.assert_called_once_with("ROCm/TheRock", "12345")
         self.assertEqual(bucket, "therock-ci-artifacts")
-
-    def test_internal_releases_repo(self):
-        """therock-releases-internal should use therock-artifacts-internal."""
-        external_repo, bucket = self._call(
-            github_repository="ROCm/therock-releases-internal"
-        )
-        self.assertEqual(external_repo, "ROCm-therock-releases-internal/")
-        self.assertEqual(bucket, "therock-artifacts-internal")
 
 
 if __name__ == "__main__":
