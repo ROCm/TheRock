@@ -306,6 +306,27 @@ class TestDecideJobs(unittest.TestCase):
                 self._inputs(pr_labels=["test_filter:bogus"]), git_context=git
             )
 
+    def test_explicit_prebuilt_stages(self):
+        """workflow_dispatch prebuilt_stages input → stage_decisions on BuildRocmDecision."""
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="workflow_dispatch",
+                prebuilt_stages="foundation,compiler-runtime",
+            ),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(
+            sorted(result.build_rocm.prebuilt_stages),
+            ["compiler-runtime", "foundation"],
+        )
+        self.assertEqual(result.build_rocm.rebuild_stages, [])
+
+    def test_no_prebuilt_stages_by_default(self):
+        """Without explicit prebuilt_stages, no stage decisions are set."""
+        result = cm.decide_jobs(self._inputs(), git_context=cm.GitContext())
+        self.assertEqual(result.build_rocm.prebuilt_stages, [])
+        self.assertEqual(result.build_rocm.stage_decisions, {})
+
     def test_build_rocm_stage_partitioning(self):
         """BuildRocmDecision correctly partitions stages into prebuilt/rebuild."""
         decision = cm.BuildRocmDecision(

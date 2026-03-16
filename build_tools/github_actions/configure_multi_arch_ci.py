@@ -293,6 +293,10 @@ class BuildRocmDecision(JobGroupDecision):
     """Build-rocm job group with per-stage granularity."""
 
     stage_decisions: dict[str, StageDecision] = field(default_factory=dict)
+    # Run ID to fetch prebuilt stage artifacts from. Currently passed through
+    # from workflow_dispatch input; TODO(#3399): derive automatically from
+    # the current commit's parent workflow run.
+    baseline_run_id: str = ""
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -411,6 +415,9 @@ class CIOutputs:
     is_ci_enabled: bool = True
     builds: BuildConfigs = field(default_factory=BuildConfigs)
     jobs: JobDecisions | None = None
+    # Test labels pass through from inputs to outputs for downstream workflows.
+    linux_test_labels: str = ""
+    windows_test_labels: str = ""
 
     @staticmethod
     def skipped(reason: str) -> "CIOutputs":
@@ -550,8 +557,24 @@ def decide_jobs(
         git_context=git_context,
     )
 
+    # Parse explicit prebuilt stages from workflow_dispatch input.
+    # TODO(#3399): Also derive prebuilt stages automatically from changed
+    # files and BUILD_TOPOLOGY.toml for pull_request triggers.
+    stage_decisions: dict[str, StageDecision] = {}
+    if ci_inputs.prebuilt_stages:
+        for stage in _parse_comma_list(ci_inputs.prebuilt_stages):
+            stage_decisions[stage] = StageDecision(
+                action="prebuilt",
+                reason="explicit workflow_dispatch input",
+            )
+
     return JobDecisions(
-        build_rocm=BuildRocmDecision(action="run", reason="default"),
+        build_rocm=BuildRocmDecision(
+            action="run",
+            reason="default",
+            stage_decisions=stage_decisions,
+            baseline_run_id=ci_inputs.baseline_run_id,
+        ),
         test_rocm=TestRocmDecision(
             action="run",
             reason="default",
@@ -848,6 +871,14 @@ def write_outputs(outputs: CIOutputs) -> None:
         # Workflow YAML references this as 'enable_build_jobs'
         "enable_build_jobs": json.dumps(outputs.is_ci_enabled),
         "test_type": test_type,
+        "linux_test_labels": outputs.linux_test_labels,
+        "windows_test_labels": outputs.windows_test_labels,
+        "prebuilt_stages": ",".join(
+            outputs.jobs.build_rocm.prebuilt_stages if outputs.jobs else []
+        ),
+        "baseline_run_id": (
+            outputs.jobs.build_rocm.baseline_run_id if outputs.jobs else ""
+        ),
     }
     gha_set_output(output_vars)
     gha_append_step_summary(format_summary(outputs))
@@ -892,6 +923,8 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         is_ci_enabled=True,
         builds=builds,
         jobs=jobs,
+        linux_test_labels=ci_inputs.linux_test_labels,
+        windows_test_labels=ci_inputs.windows_test_labels,
     )
 
 
