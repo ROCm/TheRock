@@ -604,6 +604,7 @@ def main(base_args, linux_families, windows_families):
     print(f"  is_schedule: {is_schedule}")
     print(f"  linux_use_prebuilt_artifacts: {linux_use_prebuilt_artifacts}")
     print(f"  windows_use_prebuilt_artifacts: {windows_use_prebuilt_artifacts}")
+    pr_labels = None
     if is_pull_request:
         pr_labels = get_pr_labels(base_args)
         print(f"  pr_labels: {pr_labels}")
