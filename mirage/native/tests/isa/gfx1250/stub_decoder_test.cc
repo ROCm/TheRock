@@ -34,6 +34,13 @@ using mirage::sim::isa::gfx1250::StubOperandSlotKind;
 using mirage::sim::isa::gfx1250::StubOperandValueClass;
 using mirage::sim::isa::gfx1250::StubOpcodeShape;
 
+struct ShapeExtents {
+  std::uint16_t rows = 0xffff;
+  std::uint16_t columns = 0xffff;
+  std::uint16_t depth = 0xffff;
+  bool valid = false;
+};
+
 bool Expect(bool condition, const char* message) {
   if (!condition) {
     std::cerr << message << '\n';
@@ -407,6 +414,25 @@ std::uint32_t CountDescriptorsForRoleAndPackedElements(
   return count;
 }
 
+std::uint32_t CountDescriptorsForRoleAndDimensions(
+    const StubDecodedInstruction& instruction,
+    StubOperandRole role,
+    std::uint16_t rows,
+    std::uint16_t columns,
+    std::uint16_t depth) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    const auto& descriptor = instruction.operand_descriptors.descriptors[i];
+    if (descriptor.role == role && descriptor.fragment_shape.rows == rows &&
+        descriptor.fragment_shape.columns == columns &&
+        descriptor.fragment_shape.depth == depth) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 std::uint32_t CountDescriptorsForRoleAndSlotKind(
     const StubDecodedInstruction& instruction,
     StubOperandRole role,
@@ -535,6 +561,24 @@ std::uint32_t CountSlotsOfKindAndPackedElements(
   return count;
 }
 
+std::uint32_t CountSlotsOfKindAndDimensions(
+    const StubDecodedInstruction& instruction,
+    StubOperandSlotKind slot_kind,
+    std::uint16_t rows,
+    std::uint16_t columns,
+    std::uint16_t depth) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    const auto& binding = instruction.operand_slots.bindings[i];
+    if (binding.slot_kind == slot_kind && binding.fragment_shape.rows == rows &&
+        binding.fragment_shape.columns == columns &&
+        binding.fragment_shape.depth == depth) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 std::uint32_t CountSlotsOfKindAndLogicalOperandIndex(
     const StubDecodedInstruction& instruction,
     StubOperandSlotKind slot_kind,
@@ -635,6 +679,30 @@ std::uint32_t CountDescriptorsWithValueClassAndComponentCount(
     }
   }
   return count;
+}
+
+ShapeExtents FindUniqueSlotShapeExtents(const StubDecodedInstruction& instruction,
+                                        StubOperandSlotKind slot_kind) {
+  ShapeExtents extents;
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    const auto& binding = instruction.operand_slots.bindings[i];
+    if (binding.slot_kind != slot_kind) {
+      continue;
+    }
+    if (!extents.valid) {
+      extents.rows = binding.fragment_shape.rows;
+      extents.columns = binding.fragment_shape.columns;
+      extents.depth = binding.fragment_shape.depth;
+      extents.valid = true;
+      continue;
+    }
+    if (binding.fragment_shape.rows != extents.rows ||
+        binding.fragment_shape.columns != extents.columns ||
+        binding.fragment_shape.depth != extents.depth) {
+      return {};
+    }
+  }
+  return extents;
 }
 
 std::uint8_t FindUniqueSlotElementBitWidth(
@@ -1990,6 +2058,86 @@ int main() {
               "expected routed WMMA scale seed to keep exact role/slot packed-elements mapping")) {
         return 1;
       }
+      const ShapeExtents scale_destination_extents =
+          FindUniqueSlotShapeExtents(decoded, StubOperandSlotKind::kDestination);
+      const ShapeExtents scale_source0_extents =
+          FindUniqueSlotShapeExtents(decoded, StubOperandSlotKind::kSource0);
+      const ShapeExtents scale_source1_extents =
+          FindUniqueSlotShapeExtents(decoded, StubOperandSlotKind::kSource1);
+      const ShapeExtents scale_accumulator_extents =
+          FindUniqueSlotShapeExtents(decoded, StubOperandSlotKind::kAccumulatorSource);
+      const ShapeExtents scale_scale_extents =
+          FindUniqueSlotShapeExtents(decoded, StubOperandSlotKind::kScaleSource);
+      if (!Expect(
+              scale_destination_extents.valid && scale_source0_extents.valid &&
+                  scale_source1_extents.valid && scale_accumulator_extents.valid &&
+                  scale_scale_extents.valid &&
+                  scale_destination_extents.rows == scale_source0_extents.rows &&
+                  scale_destination_extents.columns ==
+                      scale_source0_extents.columns &&
+                  scale_destination_extents.depth ==
+                      scale_source0_extents.depth &&
+                  scale_destination_extents.rows == scale_source1_extents.rows &&
+                  scale_destination_extents.columns ==
+                      scale_source1_extents.columns &&
+                  scale_destination_extents.depth ==
+                      scale_source1_extents.depth &&
+                  scale_destination_extents.rows ==
+                      scale_accumulator_extents.rows &&
+                  scale_destination_extents.columns ==
+                      scale_accumulator_extents.columns &&
+                  scale_destination_extents.depth ==
+                      scale_accumulator_extents.depth &&
+                  scale_scale_extents.rows == 1 &&
+                  scale_scale_extents.columns == 1 &&
+                  scale_scale_extents.depth == 1 &&
+                  CountDescriptorsForRoleAndDimensions(
+                      decoded, StubOperandRole::kDestination,
+                      scale_destination_extents.rows,
+                      scale_destination_extents.columns,
+                      scale_destination_extents.depth) == 1 &&
+                  CountDescriptorsForRoleAndDimensions(
+                      decoded, StubOperandRole::kSource0,
+                      scale_source0_extents.rows, scale_source0_extents.columns,
+                      scale_source0_extents.depth) == 1 &&
+                  CountDescriptorsForRoleAndDimensions(
+                      decoded, StubOperandRole::kSource1,
+                      scale_source1_extents.rows, scale_source1_extents.columns,
+                      scale_source1_extents.depth) == 1 &&
+                  CountDescriptorsForRoleAndDimensions(
+                      decoded, StubOperandRole::kAccumulator,
+                      scale_accumulator_extents.rows,
+                      scale_accumulator_extents.columns,
+                      scale_accumulator_extents.depth) == 1 &&
+                  CountDescriptorsForRoleAndDimensions(
+                      decoded, StubOperandRole::kScale,
+                      scale_scale_extents.rows, scale_scale_extents.columns,
+                      scale_scale_extents.depth) == 1 &&
+                  CountSlotsOfKindAndDimensions(
+                      decoded, StubOperandSlotKind::kDestination,
+                      scale_destination_extents.rows,
+                      scale_destination_extents.columns,
+                      scale_destination_extents.depth) == 1 &&
+                  CountSlotsOfKindAndDimensions(
+                      decoded, StubOperandSlotKind::kSource0,
+                      scale_source0_extents.rows, scale_source0_extents.columns,
+                      scale_source0_extents.depth) == 1 &&
+                  CountSlotsOfKindAndDimensions(
+                      decoded, StubOperandSlotKind::kSource1,
+                      scale_source1_extents.rows, scale_source1_extents.columns,
+                      scale_source1_extents.depth) == 1 &&
+                  CountSlotsOfKindAndDimensions(
+                      decoded, StubOperandSlotKind::kAccumulatorSource,
+                      scale_accumulator_extents.rows,
+                      scale_accumulator_extents.columns,
+                      scale_accumulator_extents.depth) == 1 &&
+                  CountSlotsOfKindAndDimensions(
+                      decoded, StubOperandSlotKind::kScaleSource,
+                      scale_scale_extents.rows, scale_scale_extents.columns,
+                      scale_scale_extents.depth) == 1,
+              "expected routed WMMA scale seed to keep exact role/slot dimension mapping")) {
+        return 1;
+      }
     } else {
       if (!Expect(decoded.operand_slots.binding_count == 4 &&
                       decoded.operand_descriptors.descriptor_count == 4 &&
@@ -2236,6 +2384,72 @@ int main() {
                       decoded, StubOperandSlotKind::kAccumulatorSource, 0) ==
                       1,
               "expected routed WMMA/SWMMAC core seed to keep exact role/slot packed-elements mapping")) {
+        return 1;
+      }
+      const ShapeExtents core_destination_extents =
+          FindUniqueSlotShapeExtents(decoded, StubOperandSlotKind::kDestination);
+      const ShapeExtents core_source0_extents =
+          FindUniqueSlotShapeExtents(decoded, StubOperandSlotKind::kSource0);
+      const ShapeExtents core_source1_extents =
+          FindUniqueSlotShapeExtents(decoded, StubOperandSlotKind::kSource1);
+      const ShapeExtents core_accumulator_extents =
+          FindUniqueSlotShapeExtents(decoded, StubOperandSlotKind::kAccumulatorSource);
+      if (!Expect(
+              core_destination_extents.valid && core_source0_extents.valid &&
+                  core_source1_extents.valid && core_accumulator_extents.valid &&
+                  core_destination_extents.rows == core_source0_extents.rows &&
+                  core_destination_extents.columns ==
+                      core_source0_extents.columns &&
+                  core_destination_extents.depth ==
+                      core_source0_extents.depth &&
+                  core_destination_extents.rows == core_source1_extents.rows &&
+                  core_destination_extents.columns ==
+                      core_source1_extents.columns &&
+                  core_destination_extents.depth ==
+                      core_source1_extents.depth &&
+                  core_destination_extents.rows ==
+                      core_accumulator_extents.rows &&
+                  core_destination_extents.columns ==
+                      core_accumulator_extents.columns &&
+                  core_destination_extents.depth ==
+                      core_accumulator_extents.depth &&
+                  CountDescriptorsForRoleAndDimensions(
+                      decoded, StubOperandRole::kDestination,
+                      core_destination_extents.rows,
+                      core_destination_extents.columns,
+                      core_destination_extents.depth) == 1 &&
+                  CountDescriptorsForRoleAndDimensions(
+                      decoded, StubOperandRole::kSource0,
+                      core_source0_extents.rows, core_source0_extents.columns,
+                      core_source0_extents.depth) == 1 &&
+                  CountDescriptorsForRoleAndDimensions(
+                      decoded, StubOperandRole::kSource1,
+                      core_source1_extents.rows, core_source1_extents.columns,
+                      core_source1_extents.depth) == 1 &&
+                  CountDescriptorsForRoleAndDimensions(
+                      decoded, StubOperandRole::kAccumulator,
+                      core_accumulator_extents.rows,
+                      core_accumulator_extents.columns,
+                      core_accumulator_extents.depth) == 1 &&
+                  CountSlotsOfKindAndDimensions(
+                      decoded, StubOperandSlotKind::kDestination,
+                      core_destination_extents.rows,
+                      core_destination_extents.columns,
+                      core_destination_extents.depth) == 1 &&
+                  CountSlotsOfKindAndDimensions(
+                      decoded, StubOperandSlotKind::kSource0,
+                      core_source0_extents.rows, core_source0_extents.columns,
+                      core_source0_extents.depth) == 1 &&
+                  CountSlotsOfKindAndDimensions(
+                      decoded, StubOperandSlotKind::kSource1,
+                      core_source1_extents.rows, core_source1_extents.columns,
+                      core_source1_extents.depth) == 1 &&
+                  CountSlotsOfKindAndDimensions(
+                      decoded, StubOperandSlotKind::kAccumulatorSource,
+                      core_accumulator_extents.rows,
+                      core_accumulator_extents.columns,
+                      core_accumulator_extents.depth) == 1,
+              "expected routed WMMA/SWMMAC core seed to keep exact role/slot dimension mapping")) {
         return 1;
       }
     }
@@ -3700,6 +3914,32 @@ int main() {
             "expected routed tensor seed to keep exact role/slot packed-elements mapping")) {
       return 1;
     }
+    if (!Expect(
+            CountDescriptorsForRoleAndDimensions(
+                decoded, StubOperandRole::kTensorDescriptor, 1, 1, 1) == 1 &&
+                CountDescriptorsForRoleAndDimensions(
+                    decoded, StubOperandRole::kTensorCoordinate, 1, 1, 1) == 1 &&
+                CountDescriptorsForRoleAndDimensions(
+                    decoded,
+                    instruction_name == "TENSOR_LOAD_TO_LDS"
+                        ? StubOperandRole::kLdsDestination
+                        : StubOperandRole::kLdsSource,
+                    1, 1, 1) == 1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kTensorDescriptorSource, 1, 1,
+                    1) == 1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kTensorCoordinateSource, 1, 1,
+                    1) == 1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded,
+                    instruction_name == "TENSOR_LOAD_TO_LDS"
+                        ? StubOperandSlotKind::kLdsDestination
+                        : StubOperandSlotKind::kLdsSource,
+                    1, 1, 1) == 1,
+            "expected routed tensor seed to keep exact role/slot dimension mapping")) {
+      return 1;
+    }
     if (instruction_name == "TENSOR_LOAD_TO_LDS") {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
@@ -4036,6 +4276,18 @@ int main() {
                                                                            : 1) ==
                     1,
             "expected routed VOP1 seed to keep exact role/slot packed-elements mapping")) {
+      return 1;
+    }
+    if (!Expect(
+            CountDescriptorsForRoleAndDimensions(
+                decoded, StubOperandRole::kSource0, 1, 1, 1) == 1 &&
+                CountDescriptorsForRoleAndDimensions(
+                    decoded, StubOperandRole::kDestination, 1, 1, 1) == 1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kSource0, 1, 1, 1) == 1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kDestination, 1, 1, 1) == 1,
+            "expected routed VOP1 seed to keep exact role/slot dimension mapping")) {
       return 1;
     }
     if (instruction_name.find("PK_") != std::string_view::npos) {
@@ -4382,6 +4634,29 @@ int main() {
             "expected routed VOP3 SDST seed to keep exact role/slot packed-elements mapping")) {
       return 1;
     }
+    if (!Expect(
+            CountDescriptorsForRoleAndDimensions(
+                decoded, StubOperandRole::kSource0, 1, 1, 1) == 1 &&
+                CountDescriptorsForRoleAndDimensions(
+                    decoded, StubOperandRole::kSource1, 1, 1, 1) == 1 &&
+                CountDescriptorsForRoleAndDimensions(
+                    decoded, StubOperandRole::kScale, 1, 1, 1) == 1 &&
+                CountDescriptorsForRoleAndDimensions(
+                    decoded, StubOperandRole::kDestination, 1, 1, 1) == 2 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kSource0, 1, 1, 1) == 1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kSource1, 1, 1, 1) == 1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kScaleSource, 1, 1, 1) == 1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kDestination, 1, 1, 1) == 1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kScalarDestination, 1, 1, 1) ==
+                    1,
+            "expected routed VOP3 SDST seed to keep exact role/slot dimension mapping")) {
+      return 1;
+    }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kScale) &&
                     HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
                     ContainsSlot(decoded, StubOperandSlotKind::kDestination,
@@ -4700,6 +4975,27 @@ int main() {
                 CountSlotsOfKindAndPackedElements(
                     decoded, StubOperandSlotKind::kDestination, 1) == 1,
             "expected paired-scale helper to keep exact role/slot packed-elements mapping")) {
+      return 1;
+    }
+    if (!Expect(
+            CountDescriptorsForRoleAndDimensions(
+                decoded, StubOperandRole::kSource0, 1, 1, 1) == 1 &&
+                CountDescriptorsForRoleAndDimensions(
+                    decoded, StubOperandRole::kScale, 1, 1, 1) == 1 &&
+                CountDescriptorsForRoleAndDimensions(
+                    decoded, StubOperandRole::kPairedScale, 1, 1, 1) == 1 &&
+                CountDescriptorsForRoleAndDimensions(
+                    decoded, StubOperandRole::kDestination, 1, 1, 1) == 1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kSource0, 1, 1, 1) == 1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kScaleSource, 1, 1, 1) == 1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kPairedScaleSource, 1, 1, 1) ==
+                    1 &&
+                CountSlotsOfKindAndDimensions(
+                    decoded, StubOperandSlotKind::kDestination, 1, 1, 1) == 1,
+            "expected paired-scale helper to keep exact role/slot dimension mapping")) {
       return 1;
     }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kSource0) &&
