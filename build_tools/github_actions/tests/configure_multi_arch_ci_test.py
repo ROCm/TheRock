@@ -175,7 +175,8 @@ class TestCheckSkipCI(unittest.TestCase):
     def test_skip_ci_label(self):
         """PR with skip-ci label skips CI regardless of changed files."""
         inputs = self._inputs(pr_labels=["skip-ci", "gfx950"])
-        result = cm.check_skip_ci(inputs, changed_files=["CMakeLists.txt"])
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.check_skip_ci(inputs, git)
         self.assertTrue(result.skip)
         self.assertIn("skip-ci", result.reason)
 
@@ -183,7 +184,8 @@ class TestCheckSkipCI(unittest.TestCase):
     def test_path_filter_says_skip(self, mock_filter):
         """When is_ci_run_required returns False, skip CI."""
         inputs = self._inputs()
-        result = cm.check_skip_ci(inputs, changed_files=["docs/README.md"])
+        git = cm.GitContext(changed_files=["docs/README.md"])
+        result = cm.check_skip_ci(inputs, git)
         self.assertTrue(result.skip)
         mock_filter.assert_called_once_with(["docs/README.md"])
 
@@ -191,14 +193,16 @@ class TestCheckSkipCI(unittest.TestCase):
     def test_path_filter_says_required(self, mock_filter):
         """When is_ci_run_required returns True, don't skip."""
         inputs = self._inputs()
-        result = cm.check_skip_ci(inputs, changed_files=["CMakeLists.txt"])
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.check_skip_ci(inputs, git)
         self.assertFalse(result.skip)
 
     @patch("configure_multi_arch_ci.is_ci_run_required")
     def test_none_changed_files_skips_path_filter(self, mock_filter):
         """schedule/workflow_dispatch pass None → path filter not called."""
         inputs = self._inputs(event_name="schedule")
-        result = cm.check_skip_ci(inputs, changed_files=None)
+        git = cm.GitContext()
+        result = cm.check_skip_ci(inputs, git)
         self.assertFalse(result.skip)
         mock_filter.assert_not_called()
 
@@ -209,17 +213,21 @@ class TestCheckSkipCI(unittest.TestCase):
 
 
 class TestDecideJobs(unittest.TestCase):
-    """Test job decision logic."""
+    """Test job decision logic and test_type determination."""
 
-    def test_stub_returns_job_decisions(self):
-        """Stub returns JobDecisions with all groups set to run."""
-        inputs = cm.CIInputs(
-            event_name="push",
-            branch_name="main",
-            base_ref="HEAD^1",
+    def _inputs(self, **kwargs):
+        defaults = dict(
+            event_name="pull_request",
+            branch_name="feature",
+            base_ref="HEAD^",
             build_variant="release",
         )
-        result = cm.decide_jobs(inputs, changed_files=None)
+        defaults.update(kwargs)
+        return cm.CIInputs(**defaults)
+
+    def test_all_job_groups_run(self):
+        """All job groups are set to run (subgraph selection is Phase 4)."""
+        result = cm.decide_jobs(self._inputs(), git_context=cm.GitContext())
         self.assertIsInstance(result, cm.JobDecisions)
         self.assertEqual(result.build_rocm.action, "run")
         self.assertEqual(result.test_rocm.action, "run")
@@ -227,17 +235,76 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.build_pytorch.action, "run")
         self.assertEqual(result.test_pytorch.action, "run")
 
-    def test_test_rocm_has_test_type(self):
-        """TestRocmDecision carries test_type details."""
-        inputs = cm.CIInputs(
-            event_name="push",
-            branch_name="main",
-            base_ref="HEAD^1",
-            build_variant="release",
+    def test_default_test_type_is_quick(self):
+        """Default test_type for PR/push with no special conditions."""
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.decide_jobs(self._inputs(), git_context=git)
+        self.assertEqual(result.test_rocm.test_type, "quick")
+
+    def test_schedule_is_comprehensive(self):
+        """Schedule trigger → comprehensive tests."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="schedule"), git_context=cm.GitContext()
         )
-        result = cm.decide_jobs(inputs, changed_files=None)
-        self.assertIsInstance(result.test_rocm, cm.TestRocmDecision)
-        self.assertEqual(result.test_rocm.test_type, "smoke")
+        self.assertEqual(result.test_rocm.test_type, "comprehensive")
+
+    def test_submodule_change_is_full(self):
+        """Changed files matching a submodule path → full tests."""
+        git = cm.GitContext(
+            changed_files=["rocm-libraries", "CMakeLists.txt"],
+            submodule_paths=["rocm-libraries", "rocm-systems"],
+        )
+        result = cm.decide_jobs(self._inputs(), git_context=git)
+        self.assertEqual(result.test_rocm.test_type, "full")
+        self.assertIn("submodule", result.test_rocm.test_type_reason)
+
+    def test_no_submodule_change_stays_quick(self):
+        """Changed files not matching any submodule → stays quick."""
+        git = cm.GitContext(
+            changed_files=["CMakeLists.txt"],
+            submodule_paths=["rocm-libraries", "rocm-systems"],
+        )
+        result = cm.decide_jobs(self._inputs(), git_context=git)
+        self.assertEqual(result.test_rocm.test_type, "quick")
+
+    def test_pr_test_label_is_full(self):
+        """PR with test:* label → full tests."""
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.decide_jobs(
+            self._inputs(pr_labels=["test:rocprim"]), git_context=git
+        )
+        self.assertEqual(result.test_rocm.test_type, "full")
+
+    def test_workflow_dispatch_test_labels_is_full(self):
+        """workflow_dispatch with test labels → full tests."""
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="workflow_dispatch",
+                linux_test_labels="test:rocprim",
+            ),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "full")
+
+    def test_test_filter_label_overrides(self):
+        """test_filter: PR label overrides the computed test_type."""
+        # Even though schedule would set comprehensive, test_filter overrides.
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="schedule",
+                pr_labels=["test_filter:standard"],
+            ),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "standard")
+
+    def test_test_filter_invalid_ignored(self):
+        """Unrecognized test_filter value is ignored."""
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.decide_jobs(
+            self._inputs(pr_labels=["test_filter:bogus"]), git_context=git
+        )
+        self.assertEqual(result.test_rocm.test_type, "quick")
 
     def test_build_rocm_stage_partitioning(self):
         """BuildRocmDecision correctly partitions stages into prebuilt/rebuild."""
@@ -688,7 +755,7 @@ class TestConfigurePipeline(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
         )
-        outputs = cm.configure(inputs)
+        outputs = cm.configure(inputs, cm.GitContext())
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
 
@@ -720,7 +787,7 @@ class TestConfigurePipeline(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
         )
-        outputs = cm.configure(inputs)
+        outputs = cm.configure(inputs, cm.GitContext())
 
         self.assertTrue(outputs.is_ci_enabled)
         self.assertIsNotNone(outputs.jobs)

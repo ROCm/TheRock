@@ -52,7 +52,11 @@ from pathlib import Path
 from typing import Literal
 
 from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
-from configure_ci_path_filters import get_git_modified_paths, is_ci_run_required
+from configure_ci_path_filters import (
+    get_git_modified_paths,
+    get_git_submodule_paths,
+    is_ci_run_required,
+)
 from github_actions_utils import gha_append_step_summary, gha_set_output
 
 # ---------------------------------------------------------------------------
@@ -177,6 +181,34 @@ class CIInputs:
 
 
 @dataclass(frozen=True)
+class GitContext:
+    """Git-derived data for the current commit/PR.
+
+    Separated from CIInputs because these require git operations to compute,
+    while CIInputs is parsed from the GitHub Actions environment. Tests
+    construct GitContext directly without touching git.
+    """
+
+    changed_files: list[str] | None = None
+    submodule_paths: list[str] | None = None
+
+    @staticmethod
+    def from_repo(base_ref: str) -> "GitContext":
+        """Compute from the actual repo. Only called from main()."""
+        changed_files = get_git_modified_paths(base_ref)
+        submodule_paths = list(get_git_submodule_paths() or [])
+        return GitContext(
+            changed_files=changed_files,
+            submodule_paths=submodule_paths,
+        )
+
+    @staticmethod
+    def empty() -> "GitContext":
+        """No git data (schedule/workflow_dispatch)."""
+        return GitContext()
+
+
+@dataclass(frozen=True)
 class SkipDecision:
     """Whether to skip CI entirely."""
 
@@ -241,9 +273,16 @@ class BuildRocmDecision(JobGroupDecision):
 
 @dataclass(frozen=True)
 class TestRocmDecision(JobGroupDecision):
-    """Test-rocm job group with test filtering details."""
+    """Test-rocm job group with test filtering details.
 
-    test_type: str = "smoke"  # smoke or full
+    test_type levels (from least to most testing):
+    - "quick"         — default for PRs and push
+    - "standard"      — via test_filter:standard PR label
+    - "comprehensive" — schedule/nightly
+    - "full"          — submodule changes, test:* labels, or test_filter:full
+    """
+
+    test_type: str = "quick"
     test_type_reason: str = "default"
 
 
@@ -321,8 +360,8 @@ class CIOutputs:
 
 
 def check_skip_ci(
-    inputs: CIInputs,
-    changed_files: list[str] | None,
+    ci_inputs: CIInputs,
+    git_context: GitContext,
 ) -> SkipDecision:
     """Determine whether CI should be skipped entirely.
 
@@ -334,11 +373,13 @@ def check_skip_ci(
     schedule and workflow_dispatch always proceed (changed_files is None
     for those triggers, and they have no PR labels).
     """
-    if "skip-ci" in inputs.pr_labels:
+    if "skip-ci" in ci_inputs.pr_labels:
         return SkipDecision(skip=True, reason="skip-ci label")
 
     # changed_files is None for schedule/workflow_dispatch — always proceed.
-    if changed_files is not None and not is_ci_run_required(changed_files):
+    if git_context.changed_files is not None and not is_ci_run_required(
+        git_context.changed_files
+    ):
         return SkipDecision(skip=True, reason="no CI-relevant files changed")
 
     return SkipDecision(skip=False, reason="")
@@ -349,23 +390,116 @@ def check_skip_ci(
 # ---------------------------------------------------------------------------
 
 
+_VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
+
+
+def _has_test_labels(ci_inputs: CIInputs) -> bool:
+    """Check whether any test labels were specified (workflow_dispatch or PR)."""
+    if ci_inputs.linux_test_labels or ci_inputs.windows_test_labels:
+        return True
+    return any(label.startswith("test:") for label in ci_inputs.pr_labels)
+
+
+def _determine_test_type(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> tuple[str, str]:
+    """Determine test_type and reason based on trigger, labels, and changed files.
+
+    Test types from least to most testing:
+
+    - "quick": Fast sanity checks. Default for PRs and push where only
+      build infra or non-submodule files changed. Keeps CI fast for
+      routine changes that are unlikely to break GPU-specific behavior.
+    - "standard": More thorough than quick, but not full nightly coverage.
+      Only available via explicit test_filter:standard PR label.
+    - "comprehensive": Full nightly test suite. Used for scheduled runs
+      to catch regressions across all components without requiring a
+      submodule change to trigger it.
+    - "full": Everything, including tests for specific components named
+      by test:* labels. Triggered when a submodule changes (the actual
+      GPU libraries changed, so we need thorough validation) or when
+      test labels explicitly request specific component tests.
+
+    The test_filter: PR label can override any of the above, giving
+    developers manual control (e.g. test_filter:comprehensive on a PR
+    to get nightly-level coverage before merge).
+
+    Returns (test_type, reason).
+    """
+    # Default: quick tests for fast CI feedback.
+    test_type = "quick"
+    reason = "default"
+
+    # Schedule runs the full nightly suite — comprehensive coverage on
+    # a cadence, catching regressions that quick tests miss.
+    if ci_inputs.is_schedule:
+        test_type = "comprehensive"
+        reason = "scheduled run"
+    elif (
+        git_context.changed_files is not None
+        and git_context.submodule_paths is not None
+    ):
+        # A submodule change means actual library code changed (e.g.
+        # rocBLAS, MIOpen). These need full testing since the change
+        # could affect any downstream consumer.
+        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
+        if matching:
+            test_type = "full"
+            reason = f"submodule(s) changed: {sorted(matching)}"
+
+    # test:* labels request specific component tests (e.g. test:rocprim).
+    # When someone explicitly asks for tests, run the full suite for those
+    # components — they're investigating something specific.
+    if _has_test_labels(ci_inputs):
+        test_type = "full"
+        reason = "test labels specified"
+
+    # test_filter: PR label gives developers manual override to any level.
+    # This is the escape hatch: run comprehensive on a PR before merge,
+    # or downgrade to quick if you know the change is safe.
+    for label in ci_inputs.pr_labels:
+        if not label.startswith("test_filter:"):
+            continue
+        filter_type = label.split(":")[1]
+        if filter_type in _VALID_TEST_FILTER_TYPES:
+            test_type = filter_type
+            reason = f"test_filter label: {label}"
+            break
+        print(f"  Ignoring unrecognized test_filter value: {filter_type!r}")
+
+    return test_type, reason
+
+
 def decide_jobs(
-    inputs: CIInputs,
-    changed_files: list[str] | None,
+    ci_inputs: CIInputs,
+    git_context: GitContext,
 ) -> JobDecisions:
     """Determine which job groups to run, skip, or satisfy with prebuilt files.
 
-    Currently returns "run everything, rebuild all stages" — subgraph
-    selection based on changed files comes later.
+    All job groups currently run unconditionally — subgraph selection based
+    on changed files (Phase 4) will add skip/prebuilt decisions.
+
+    test_type is determined here based on trigger type, labels, and
+    changed files.
     """
-    # TODO: Implement — classify changed files, find entry point in job DAG,
-    # propagate forward through reachable nodes, mark unreachable as skip
+    test_type, test_type_reason = _determine_test_type(
+        ci_inputs=ci_inputs,
+        git_context=git_context,
+    )
+    print(f"  test_type: {test_type} ({test_type_reason})")
+
     return JobDecisions(
-        build_rocm=BuildRocmDecision(action="run", reason="default (stub)"),
-        test_rocm=TestRocmDecision(action="run", reason="default (stub)"),
-        build_rocm_python=JobGroupDecision(action="run", reason="default (stub)"),
-        build_pytorch=JobGroupDecision(action="run", reason="default (stub)"),
-        test_pytorch=JobGroupDecision(action="run", reason="default (stub)"),
+        build_rocm=BuildRocmDecision(action="run", reason="default"),
+        test_rocm=TestRocmDecision(
+            action="run",
+            reason="default",
+            test_type=test_type,
+            test_type_reason=test_type_reason,
+        ),
+        build_rocm_python=JobGroupDecision(action="run", reason="default"),
+        build_pytorch=JobGroupDecision(action="run", reason="default"),
+        test_pytorch=JobGroupDecision(action="run", reason="default"),
     )
 
 
@@ -400,7 +534,7 @@ def _filter_families_by_platform(
     ]
 
 
-def select_targets(inputs: CIInputs) -> TargetSelection:
+def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     """Determine GPU families per platform based on trigger type and inputs.
 
     Trigger types run progressively larger sets of builds and tests:
@@ -427,20 +561,20 @@ def select_targets(inputs: CIInputs) -> TargetSelection:
 
     # Select family names per platform based on trigger type.
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
-    if inputs.is_workflow_dispatch:
+    if ci_inputs.is_workflow_dispatch:
         # Manual trigger: caller specifies exact families per platform.
         # Empty input means "no families for that platform" — the caller
         # has full control over what runs.
-        linux_names = list(inputs.linux_amdgpu_families)
-        windows_names = list(inputs.windows_amdgpu_families)
-    elif inputs.is_pull_request:
+        linux_names = list(ci_inputs.linux_amdgpu_families)
+        windows_names = list(ci_inputs.windows_amdgpu_families)
+    elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (gfx* for individual families, run-all-archs-ci
         # for everything).
         defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
         linux_names = list(defaults)
         windows_names = list(defaults)
-    elif inputs.is_push:
+    elif ci_inputs.is_push:
         # Broader than PR: presubmit + postsubmit. Code has landed, so
         # we validate on more targets (e.g. gfx950) without paying full
         # nightly cost.
@@ -449,17 +583,17 @@ def select_targets(inputs: CIInputs) -> TargetSelection:
         )
         linux_names = list(defaults)
         windows_names = list(defaults)
-    elif inputs.is_schedule:
+    elif ci_inputs.is_schedule:
         # Full nightly coverage: every known family, including targets
         # that are too slow or expensive for per-push CI.
         linux_names = list(all_families.keys())
         windows_names = list(all_families.keys())
     else:
-        raise ValueError(f"Unsupported event type: {inputs.event_name!r}")
+        raise ValueError(f"Unsupported event type: {ci_inputs.event_name!r}")
 
     # PR labels can extend the family set (both platforms)
-    if inputs.is_pull_request:
-        for label in inputs.pr_labels:
+    if ci_inputs.is_pull_request:
+        for label in ci_inputs.pr_labels:
             if label == "run-all-archs-ci":
                 # Override to all families.
                 linux_names = list(all_families.keys())
@@ -635,7 +769,7 @@ def write_outputs(outputs: CIOutputs) -> None:
 
     This is the only function with side effects (besides from_environ).
     """
-    test_type = outputs.jobs.test_rocm.test_type if outputs.jobs else "smoke"
+    test_type = outputs.jobs.test_rocm.test_type if outputs.jobs else "quick"
     linux = outputs.builds.linux
     windows = outputs.builds.windows
     output_vars = {
@@ -656,34 +790,28 @@ def write_outputs(outputs: CIOutputs) -> None:
 # ---------------------------------------------------------------------------
 
 
-def configure(inputs: CIInputs) -> CIOutputs:
+def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     """Main pipeline. Each step feeds the next.
 
-    This function is the primary entry point for testing — construct a
-    CIInputs and assert on the returned CIOutputs.
+    This function is the primary entry point for testing — construct
+    CIInputs and GitContext directly and assert on the returned CIOutputs.
+    No git operations or environment access needed.
     """
-    # Step 1 already done — inputs is the parsed CIInputs.
-
     # Step 2: Gate — should we skip CI entirely?
-    # For schedule and workflow_dispatch, always proceed.
-    changed_files: list[str] | None = None
-    if inputs.is_pull_request or inputs.is_push:
-        changed_files = get_git_modified_paths(inputs.base_ref)
-
-    skip_decision = check_skip_ci(inputs=inputs, changed_files=changed_files)
+    skip_decision = check_skip_ci(ci_inputs=ci_inputs, git_context=git_context)
     if skip_decision.skip:
         print(f"Skipping CI: {skip_decision.reason}")
         return CIOutputs.skipped(skip_decision.reason)
 
     # Steps 3 and 4 are independent: job decisions (which job groups run)
     # and target selection (which GPU families) are orthogonal concerns.
-    jobs = decide_jobs(inputs=inputs, changed_files=changed_files)
-    targets = select_targets(inputs)
+    jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context)
+    targets = select_targets(ci_inputs)
 
     # Step 5: Build configs per platform
     builds = expand_build_configs(
         targets=targets,
-        build_variant=inputs.build_variant,
+        build_variant=ci_inputs.build_variant,
     )
 
     return CIOutputs(
@@ -699,17 +827,25 @@ def configure(inputs: CIInputs) -> CIOutputs:
 
 
 def main():
-    inputs = CIInputs.from_environ()
+    ci_inputs = CIInputs.from_environ()
 
     print("Multi-arch CI configuration")
-    print(f"  event: {inputs.event_name}")
-    print(f"  branch: {inputs.branch_name}")
-    print(f"  variant: {inputs.build_variant}")
-    if inputs.pr_labels:
-        print(f"  pr_labels: {inputs.pr_labels}")
+    print(f"  event: {ci_inputs.event_name}")
+    print(f"  branch: {ci_inputs.branch_name}")
+    print(f"  variant: {ci_inputs.build_variant}")
+    if ci_inputs.pr_labels:
+        print(f"  pr_labels: {ci_inputs.pr_labels}")
     print()
 
-    outputs = configure(inputs)
+    # Build git context for push/PR triggers (need changed files for
+    # skip-ci and test_type decisions). Schedule/workflow_dispatch don't
+    # need git data.
+    if ci_inputs.is_pull_request or ci_inputs.is_push:
+        git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)
+    else:
+        git_context = GitContext.empty()
+
+    outputs = configure(ci_inputs, git_context)
     write_outputs(outputs)
 
 
