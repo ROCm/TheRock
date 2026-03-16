@@ -10,7 +10,7 @@ This script is a pipeline of data transformations:
     2. Check Skip CI   — gate: should we skip CI entirely?
     3. Decide Jobs     — changed files + topology → per-job-group decisions
     4. Select Targets  — trigger type + labels → per-platform GPU families
-    5. Expand Matrix   — families × variant → matrix entries
+    5. Build Configs   — families × variant → per-platform build configs
     6. Write Outputs   — JSON → GITHUB_OUTPUT + GITHUB_STEP_SUMMARY
 
 Each step (except 1 and 6) is a pure function of typed dataclasses,
@@ -36,10 +36,12 @@ Inputs:
     BUILD_VARIANT       : Build variant (workflow_call input, not in event payload)
 
 Outputs (written to GITHUB_OUTPUT):
-    linux_variants      : JSON array of matrix entries
-    windows_variants    : JSON array of matrix entries
-    enable_build_jobs   : "true" or "false"
-    test_type           : "smoke" or "full"
+    linux_build_config    : JSON object with build config, or "" if skipped
+    windows_build_config  : JSON object with build config, or "" if skipped
+    linux_build_enabled   : "true" or "false"
+    windows_build_enabled : "true" or "false"
+    enable_build_jobs     : "true" or "false"
+    test_type             : "smoke" or "full"
 """
 
 import json
@@ -261,8 +263,12 @@ class JobDecisions:
 
 
 @dataclass(frozen=True)
-class MatrixEntry:
-    """One row of the GitHub Actions build matrix."""
+class BuildConfig:
+    """Build configuration for one platform.
+
+    Produced by expand_matrices, one per platform. Contains per-family info
+    for downstream per-architecture job expansion and variant metadata.
+    """
 
     matrix_per_family_json: str  # JSON array of per-family info
     dist_amdgpu_families: str  # Semicolon-separated
@@ -288,11 +294,11 @@ class MatrixEntry:
 
 
 @dataclass(frozen=True)
-class MatrixExpansion:
-    """Matrix entries for both platforms, produced by expand_matrices."""
+class BuildConfigs:
+    """Build configurations for both platforms, produced by expand_matrices."""
 
-    linux_variants: list[MatrixEntry] = field(default_factory=list)
-    windows_variants: list[MatrixEntry] = field(default_factory=list)
+    linux: BuildConfig | None = None
+    windows: BuildConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -300,8 +306,7 @@ class CIOutputs:
     """All outputs from the CI configuration pipeline."""
 
     is_ci_enabled: bool = True
-    linux_variants: list[MatrixEntry] = field(default_factory=list)
-    windows_variants: list[MatrixEntry] = field(default_factory=list)
+    builds: BuildConfigs = field(default_factory=BuildConfigs)
     jobs: JobDecisions | None = None
 
     @staticmethod
@@ -477,22 +482,21 @@ def select_targets(inputs: CIInputs) -> TargetSelection:
 
 
 # ---------------------------------------------------------------------------
-# Step 5: Expand Matrix
+# Step 5: Build Configs
 # ---------------------------------------------------------------------------
 
 
-def _expand_matrix_for_platform(
+def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
     build_variant: str,
     all_families: dict[str, dict],
     variant_config: dict,
-) -> list[MatrixEntry]:
-    """Expand families into a single multi-arch matrix entry for one platform.
+) -> BuildConfig | None:
+    """Build a BuildConfig for one platform, or None if no families match.
 
     Collects per-family info for all families that support the requested
-    build variant, then bundles them into one MatrixEntry. Returns an empty
-    list if no families match (e.g. variant not available on this platform).
+    build variant on this platform, then bundles them into a BuildConfig.
 
     Per-family info fields:
     - amdgpu_family: family name for THEROCK_AMDGPU_FAMILIES
@@ -528,43 +532,40 @@ def _expand_matrix_for_platform(
         )
 
     if not per_family_info:
-        return []
+        return None
 
     family_names = [f["amdgpu_family"] for f in per_family_info]
     expect_failure = variant_config.get("expect_failure", False)
     expect_pytorch_failure = variant_config.get("expect_pytorch_failure", False)
     suffix = variant_config.get("build_variant_suffix", "")
 
-    return [
-        MatrixEntry(
-            matrix_per_family_json=json.dumps(per_family_info),
-            dist_amdgpu_families=";".join(family_names),
-            artifact_group=f"multi-arch-{suffix or 'release'}",
-            build_variant_label=variant_config["build_variant_label"],
-            build_variant_suffix=suffix,
-            build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-            expect_failure=expect_failure,
-            build_pytorch=not expect_failure and not expect_pytorch_failure,
-        )
-    ]
+    return BuildConfig(
+        matrix_per_family_json=json.dumps(per_family_info),
+        dist_amdgpu_families=";".join(family_names),
+        artifact_group=f"multi-arch-{suffix or 'release'}",
+        build_variant_label=variant_config["build_variant_label"],
+        build_variant_suffix=suffix,
+        build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
+        expect_failure=expect_failure,
+        build_pytorch=not expect_failure and not expect_pytorch_failure,
+    )
 
 
-def expand_matrices(
+def expand_build_configs(
     targets: TargetSelection,
     build_variant: str,
-) -> MatrixExpansion:
-    """Expand target families into matrix entries for both platforms.
+) -> BuildConfigs:
+    """Build a BuildConfig for each platform that supports the variant.
 
-    Each platform gets either a single-element list (one MatrixEntry bundling
-    all families) or an empty list (if the build variant isn't available on
-    that platform or no families match).
+    Returns BuildConfigs with a BuildConfig per platform, or None for
+    platforms where the variant isn't available or no families match.
     """
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
     )
 
-    linux_variants: list[MatrixEntry] = []
-    windows_variants: list[MatrixEntry] = []
+    linux_config: BuildConfig | None = None
+    windows_config: BuildConfig | None = None
 
     for platform, families in [
         ("linux", targets.linux_families),
@@ -574,10 +575,10 @@ def expand_matrices(
         if not variant_config:
             print(
                 f"  Platform {platform} has no config for build variant "
-                f"{build_variant}, skipping matrix expansion"
+                f"{build_variant}, skipping"
             )
             continue
-        entries = _expand_matrix_for_platform(
+        config = _expand_build_config_for_platform(
             families=families,
             platform=platform,
             build_variant=build_variant,
@@ -585,13 +586,13 @@ def expand_matrices(
             variant_config=variant_config,
         )
         if platform == "linux":
-            linux_variants = entries
+            linux_config = config
         else:
-            windows_variants = entries
+            windows_config = config
 
-    return MatrixExpansion(
-        linux_variants=linux_variants,
-        windows_variants=windows_variants,
+    return BuildConfigs(
+        linux=linux_config,
+        windows=windows_config,
     )
 
 
@@ -626,13 +627,13 @@ def write_outputs(outputs: CIOutputs) -> None:
     This is the only function with side effects (besides from_environ).
     """
     test_type = outputs.jobs.test_rocm.test_type if outputs.jobs else "smoke"
+    linux = outputs.builds.linux
+    windows = outputs.builds.windows
     output_vars = {
-        "linux_variants": json.dumps(
-            [entry.to_dict() for entry in outputs.linux_variants]
-        ),
-        "windows_variants": json.dumps(
-            [entry.to_dict() for entry in outputs.windows_variants]
-        ),
+        "linux_build_config": json.dumps(linux.to_dict()) if linux else "",
+        "windows_build_config": json.dumps(windows.to_dict()) if windows else "",
+        "linux_build_enabled": json.dumps(linux is not None),
+        "windows_build_enabled": json.dumps(windows is not None),
         # Workflow YAML references this as 'enable_build_jobs'
         "enable_build_jobs": json.dumps(outputs.is_ci_enabled),
         "test_type": test_type,
@@ -670,16 +671,15 @@ def configure(inputs: CIInputs) -> CIOutputs:
     jobs = decide_jobs(inputs=inputs, changed_files=changed_files)
     targets = select_targets(inputs)
 
-    # Step 5: Expand matrix
-    matrices = expand_matrices(
+    # Step 5: Build configs per platform
+    builds = expand_build_configs(
         targets=targets,
         build_variant=inputs.build_variant,
     )
 
     return CIOutputs(
         is_ci_enabled=True,
-        linux_variants=matrices.linux_variants,
-        windows_variants=matrices.windows_variants,
+        builds=builds,
         jobs=jobs,
     )
 
