@@ -179,6 +179,23 @@ std::array<std::uint32_t, 2> MakeSmem(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeSmemPrefetchPcRel(std::uint32_t op,
+                                                   std::int32_t ioffset,
+                                                   std::uint32_t soffset,
+                                                   std::int32_t sdata) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x30u) << 26;
+  word |= static_cast<std::uint64_t>(op & 0xffu) << 18;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(sdata) & 0x1fu)
+          << 6;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(ioffset) &
+                                     0x00ffffffu)
+          << 32;
+  word |= static_cast<std::uint64_t>(soffset & 0x7fu) << 57;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 bool ExpectUnaryInstruction(const mirage::sim::isa::DecodedInstruction& instruction,
                             std::string_view expected_opcode,
                             mirage::sim::isa::OperandKind dst_kind,
@@ -6848,6 +6865,125 @@ int main() {
               "expected compiled S_DCACHE_INV execution success") ||
       !Expect(expect_dcache_inv_state(compiled_dcache_inv_state),
               "expected compiled S_DCACHE_INV state")) {
+    return 1;
+  }
+
+  const auto prefetch_inst_pc_rel_words =
+      MakeSmemPrefetchPcRel(37u, -32, 9u, -3);
+  const auto prefetch_data_pc_rel_words =
+      MakeSmemPrefetchPcRel(40u, 48, 5u, 7);
+  DecodedInstruction prefetch_inst_pc_rel_instruction;
+  std::size_t prefetch_words_consumed = 0;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      prefetch_inst_pc_rel_words.data(),
+                      prefetch_inst_pc_rel_words.size()),
+                  &prefetch_inst_pc_rel_instruction, &prefetch_words_consumed,
+                  &error_message),
+              "expected S_PREFETCH_INST_PC_REL direct decode success") ||
+      !Expect(ExpectThreeOperandInstruction(
+                  prefetch_inst_pc_rel_instruction, "S_PREFETCH_INST_PC_REL",
+                  OperandKind::kImm32, static_cast<std::uint32_t>(-32),
+                  OperandKind::kSgpr, 9u, OperandKind::kImm32,
+                  static_cast<std::uint32_t>(-3)),
+              "expected decoded S_PREFETCH_INST_PC_REL operands") ||
+      !Expect(prefetch_words_consumed == 2u,
+              "expected S_PREFETCH_INST_PC_REL to consume two dwords")) {
+    return 1;
+  }
+
+  DecodedInstruction prefetch_data_pc_rel_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      prefetch_data_pc_rel_words.data(),
+                      prefetch_data_pc_rel_words.size()),
+                  &prefetch_data_pc_rel_instruction, &prefetch_words_consumed,
+                  &error_message),
+              "expected S_PREFETCH_DATA_PC_REL direct decode success") ||
+      !Expect(ExpectThreeOperandInstruction(
+                  prefetch_data_pc_rel_instruction, "S_PREFETCH_DATA_PC_REL",
+                  OperandKind::kImm32, 48u, OperandKind::kSgpr, 5u,
+                  OperandKind::kImm32, 7u),
+              "expected decoded S_PREFETCH_DATA_PC_REL operands") ||
+      !Expect(prefetch_words_consumed == 2u,
+              "expected S_PREFETCH_DATA_PC_REL to consume two dwords")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 5> prefetch_pc_rel_program_words{
+      prefetch_inst_pc_rel_words[0], prefetch_inst_pc_rel_words[1],
+      prefetch_data_pc_rel_words[0], prefetch_data_pc_rel_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> prefetch_pc_rel_program;
+  if (!Expect(decoder.DecodeProgram(prefetch_pc_rel_program_words,
+                                    &prefetch_pc_rel_program, &error_message),
+              "expected PC-relative prefetch program decode success") ||
+      !Expect(prefetch_pc_rel_program.size() == 3u,
+              "expected three decoded PC-relative prefetch program "
+              "instructions") ||
+      !Expect(prefetch_pc_rel_program[0].opcode == "S_PREFETCH_INST_PC_REL",
+              "expected decoded S_PREFETCH_INST_PC_REL program opcode") ||
+      !Expect(prefetch_pc_rel_program[1].opcode == "S_PREFETCH_DATA_PC_REL",
+              "expected decoded S_PREFETCH_DATA_PC_REL program opcode") ||
+      !Expect(prefetch_pc_rel_program[2].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after PC-relative prefetch ops")) {
+    return 1;
+  }
+
+  auto initialize_prefetch_pc_rel_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x9u;
+    state->sgprs[5] = 0x11111111u;
+    state->sgprs[9] = 0x22222222u;
+    state->vgprs[7][0] = 0xabcdef01u;
+  };
+  auto expect_prefetch_pc_rel_state = [](const WaveExecutionState& state) {
+    return state.lane_count == 32u && state.exec_mask == 0x9u &&
+           state.sgprs[5] == 0x11111111u &&
+           state.sgprs[9] == 0x22222222u &&
+           state.vgprs[7][0] == 0xabcdef01u && state.halted &&
+           !state.waiting_on_barrier && state.pc == 2u;
+  };
+
+  WaveExecutionState decoded_prefetch_pc_rel_state;
+  initialize_prefetch_pc_rel_state(&decoded_prefetch_pc_rel_state);
+  if (!Expect(interpreter.ExecuteProgram(prefetch_pc_rel_program,
+                                         &decoded_prefetch_pc_rel_state,
+                                         &error_message),
+              "expected decoded PC-relative prefetch execution success") ||
+      !Expect(expect_prefetch_pc_rel_state(decoded_prefetch_pc_rel_state),
+              "expected decoded PC-relative prefetch state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_prefetch_pc_rel_program;
+  if (!Expect(interpreter.CompileProgram(prefetch_pc_rel_program,
+                                         &compiled_prefetch_pc_rel_program,
+                                         &error_message),
+              "expected compiled PC-relative prefetch program success") ||
+      !Expect(compiled_prefetch_pc_rel_program.size() == 3u,
+              "expected three compiled PC-relative prefetch program "
+              "instructions") ||
+      !Expect(compiled_prefetch_pc_rel_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled S_PREFETCH_INST_PC_REL opcode") ||
+      !Expect(compiled_prefetch_pc_rel_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled S_PREFETCH_DATA_PC_REL opcode") ||
+      !Expect(compiled_prefetch_pc_rel_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after PC-relative prefetch ops")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_prefetch_pc_rel_state;
+  initialize_prefetch_pc_rel_state(&compiled_prefetch_pc_rel_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_prefetch_pc_rel_program,
+                                         &compiled_prefetch_pc_rel_state,
+                                         &error_message),
+              "expected compiled PC-relative prefetch execution success") ||
+      !Expect(expect_prefetch_pc_rel_state(compiled_prefetch_pc_rel_state),
+              "expected compiled PC-relative prefetch state")) {
     return 1;
   }
 

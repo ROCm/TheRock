@@ -74,7 +74,7 @@ int main() {
 
   if (!Expect(smem->seeded_instruction_count == 28u,
               "expected ENC_SMEM seeded instruction count") ||
-      !Expect(smem->executable_instruction_count == 1u,
+      !Expect(smem->executable_instruction_count == 3u,
               "expected ENC_SMEM executable foothold count") ||
       !Expect(smem->HasExecutableFoothold(),
               "expected ENC_SMEM executable foothold helper") ||
@@ -105,7 +105,7 @@ int main() {
     return 1;
   }
 
-  if (!Expect(decoder.Phase0ExecutableOpcodes().size() == 326u,
+  if (!Expect(decoder.Phase0ExecutableOpcodes().size() == 328u,
               "expected phase-0 executable opcode count") ||
       !Expect(IsGfx1201Wave32Phase0EncodingSaturated("ENC_VOP1"),
               "expected ENC_VOP1 saturation helper") ||

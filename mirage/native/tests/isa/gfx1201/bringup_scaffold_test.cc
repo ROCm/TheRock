@@ -71,6 +71,23 @@ std::array<std::uint32_t, 2> MakeSmem(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeSmemPrefetchPcRel(std::uint32_t op,
+                                                   std::int32_t ioffset,
+                                                   std::uint32_t soffset,
+                                                   std::int32_t sdata) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x30u) << 26;
+  word |= static_cast<std::uint64_t>(op & 0xffu) << 18;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(sdata) & 0x1fu)
+          << 6;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(ioffset) &
+                                     0x00ffffffu)
+          << 32;
+  word |= static_cast<std::uint64_t>(soffset & 0x7fu) << 57;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 }  // namespace
 
 int main() {
@@ -109,10 +126,14 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 326u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 328u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_PREFETCH_INST_PC_REL"),
+              "expected S_PREFETCH_INST_PC_REL executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_PREFETCH_DATA_PC_REL"),
+              "expected S_PREFETCH_DATA_PC_REL executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_SUB_U32"),
@@ -405,13 +426,43 @@ int main() {
     return 1;
   }
 
+  const auto prefetch_inst_pc_rel_words =
+      MakeSmemPrefetchPcRel(37u, -32, 9u, -3);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(prefetch_inst_pc_rel_words.data(),
+                                                 prefetch_inst_pc_rel_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_PREFETCH_INST_PC_REL decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "S_PREFETCH_INST_PC_REL",
+              "expected S_PREFETCH_INST_PC_REL opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected S_PREFETCH_INST_PC_REL ternary decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[0].imm32 ==
+                      static_cast<std::uint32_t>(-32),
+              "expected sign-extended S_PREFETCH_INST_PC_REL ioffset") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[1].index == 9u,
+              "expected S_PREFETCH_INST_PC_REL soffset register") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[2].imm32 ==
+                      static_cast<std::uint32_t>(-3),
+              "expected sign-extended S_PREFETCH_INST_PC_REL sdata")) {
+    return 1;
+  }
+
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 326u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 328u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
       !Expect(interpreter.Supports("S_DCACHE_INV"),
               "expected interpreter support for S_DCACHE_INV") ||
+      !Expect(interpreter.Supports("S_PREFETCH_INST_PC_REL"),
+              "expected interpreter support for S_PREFETCH_INST_PC_REL") ||
+      !Expect(interpreter.Supports("S_PREFETCH_DATA_PC_REL"),
+              "expected interpreter support for S_PREFETCH_DATA_PC_REL") ||
       !Expect(interpreter.Supports("S_ADD_U32"),
               "expected interpreter support for S_ADD_U32") ||
       !Expect(interpreter.Supports("S_ADD_I32"),

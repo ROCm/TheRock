@@ -153,6 +153,23 @@ std::array<std::uint32_t, 2> MakeSmem(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeSmemPrefetchPcRel(std::uint32_t op,
+                                                   std::int32_t ioffset,
+                                                   std::uint32_t soffset,
+                                                   std::int32_t sdata) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x30u) << 26;
+  word |= static_cast<std::uint64_t>(op & 0xffu) << 18;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(sdata) & 0x1fu)
+          << 6;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(ioffset) &
+                                     0x00ffffffu)
+          << 32;
+  word |= static_cast<std::uint64_t>(soffset & 0x7fu) << 57;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 std::array<std::uint32_t, 2> MakeDs(std::uint32_t op,
                                     std::uint32_t vdst,
                                     std::uint32_t addr,
@@ -293,6 +310,10 @@ int main() {
   }
 
   const auto dcache_inv_words = MakeSmem(33u, 0u, 0u, true, 0u);
+  const auto prefetch_inst_pc_rel_words =
+      MakeSmemPrefetchPcRel(37u, -32, 9u, -3);
+  const auto prefetch_data_pc_rel_words =
+      MakeSmemPrefetchPcRel(40u, 48, 5u, 7);
   Gfx1201OpcodeRoute dcache_inv_route;
   std::string dcache_error_message;
   if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
@@ -314,6 +335,50 @@ int main() {
               "expected S_DCACHE_INV opcode extraction") ||
       !Expect(dcache_inv_route.words_required == 2u,
               "expected S_DCACHE_INV to require two dwords")) {
+    return 1;
+  }
+
+  Gfx1201OpcodeRoute prefetch_inst_pc_rel_route;
+  if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
+                  std::span<const std::uint32_t>(
+                      prefetch_inst_pc_rel_words.data(),
+                      prefetch_inst_pc_rel_words.size()),
+                  &prefetch_inst_pc_rel_route, &dcache_error_message),
+              "expected S_PREFETCH_INST_PC_REL route selection success") ||
+      !Expect(prefetch_inst_pc_rel_route.status ==
+                  Gfx1201OpcodeRouteStatus::kMatchedSeedEntry,
+              "expected seeded S_PREFETCH_INST_PC_REL route") ||
+      !Expect(prefetch_inst_pc_rel_route.selector_rule != nullptr &&
+                  prefetch_inst_pc_rel_route.selector_rule->encoding_name ==
+                      "ENC_SMEM",
+              "expected ENC_SMEM selector rule for S_PREFETCH_INST_PC_REL") ||
+      !Expect(prefetch_inst_pc_rel_route.seed_entry != nullptr &&
+                  prefetch_inst_pc_rel_route.seed_entry->instruction_name ==
+                      "S_PREFETCH_INST_PC_REL",
+              "expected S_PREFETCH_INST_PC_REL seed entry") ||
+      !Expect(prefetch_inst_pc_rel_route.opcode == 37u,
+              "expected S_PREFETCH_INST_PC_REL opcode extraction") ||
+      !Expect(prefetch_inst_pc_rel_route.words_required == 2u,
+              "expected S_PREFETCH_INST_PC_REL to require two dwords")) {
+    return 1;
+  }
+
+  Gfx1201OpcodeRoute prefetch_data_pc_rel_route;
+  if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
+                  std::span<const std::uint32_t>(
+                      prefetch_data_pc_rel_words.data(),
+                      prefetch_data_pc_rel_words.size()),
+                  &prefetch_data_pc_rel_route, &dcache_error_message),
+              "expected S_PREFETCH_DATA_PC_REL route selection success") ||
+      !Expect(prefetch_data_pc_rel_route.status ==
+                  Gfx1201OpcodeRouteStatus::kMatchedSeedEntry,
+              "expected seeded S_PREFETCH_DATA_PC_REL route") ||
+      !Expect(prefetch_data_pc_rel_route.seed_entry != nullptr &&
+                  prefetch_data_pc_rel_route.seed_entry->instruction_name ==
+                      "S_PREFETCH_DATA_PC_REL",
+              "expected S_PREFETCH_DATA_PC_REL seed entry") ||
+      !Expect(prefetch_data_pc_rel_route.opcode == 40u,
+              "expected S_PREFETCH_DATA_PC_REL opcode extraction")) {
     return 1;
   }
 
@@ -431,6 +496,20 @@ int main() {
       !Expect(decoded_instruction.opcode == "S_DCACHE_INV",
               "expected decoded S_DCACHE_INV opcode") ||
       !Expect(words_consumed == 2u, "expected two consumed dwords")) {
+    return 1;
+  }
+
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      prefetch_inst_pc_rel_words.data(),
+                      prefetch_inst_pc_rel_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_PREFETCH_INST_PC_REL decode success after route") ||
+      !Expect(decoded_instruction.opcode == "S_PREFETCH_INST_PC_REL",
+              "expected decoded S_PREFETCH_INST_PC_REL opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected decoded S_PREFETCH_INST_PC_REL operand count") ||
+      !Expect(words_consumed == 2u, "expected two consumed dwords for prefetch")) {
     return 1;
   }
 

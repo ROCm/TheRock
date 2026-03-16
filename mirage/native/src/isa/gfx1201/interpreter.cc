@@ -45,10 +45,12 @@ float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 std::uint16_t CompressFloatToFp16BitsRtz(float value);
 
-constexpr std::array<std::string_view, 326> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 328> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
+    "S_PREFETCH_INST_PC_REL",
+    "S_PREFETCH_DATA_PC_REL",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -869,6 +871,11 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     return true;
   }
   if (opcode == "S_DCACHE_INV") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSNop;
+    return true;
+  }
+  if (opcode == "S_PREFETCH_INST_PC_REL" ||
+      opcode == "S_PREFETCH_DATA_PC_REL") {
     *compiled_opcode = Gfx1201CompiledOpcode::kSNop;
     return true;
   }
@@ -3959,6 +3966,11 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
 
   if (instruction.opcode == "S_DCACHE_INV") {
     return ValidateOperandCount(instruction, 0, error_message);
+  }
+
+  if (instruction.opcode == "S_PREFETCH_INST_PC_REL" ||
+      instruction.opcode == "S_PREFETCH_DATA_PC_REL") {
+    return ValidateOperandCount(instruction, 3, error_message);
   }
 
   if (instruction.opcode == "V_NOP" ||

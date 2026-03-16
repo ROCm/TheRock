@@ -17,10 +17,12 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 326> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 328> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
+    "S_PREFETCH_INST_PC_REL",
+    "S_PREFETCH_DATA_PC_REL",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -370,6 +372,14 @@ constexpr std::uint32_t DecodeInlineInteger(std::uint32_t raw_value) {
 
 constexpr std::int32_t SignExtend16(std::uint32_t value) {
   return static_cast<std::int32_t>(static_cast<std::int16_t>(value & 0xffffu));
+}
+
+constexpr std::int32_t SignExtend24(std::uint32_t value) {
+  return static_cast<std::int32_t>(value << 8) >> 8;
+}
+
+constexpr std::int32_t SignExtend5(std::uint32_t value) {
+  return static_cast<std::int32_t>(value << 27) >> 27;
 }
 
 bool IsPhase0ExecutableOpcode(std::string_view opcode) {
@@ -815,6 +825,37 @@ bool DecodeVectorRegisterSource(std::uint32_t raw_value,
   return true;
 }
 
+bool DecodeSmemOffsetNokOperand(std::uint32_t raw_value,
+                                InstructionOperand* operand,
+                                std::string* error_message) {
+  if (operand == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "smem offset output must not be null";
+    }
+    return false;
+  }
+
+  // The common operand model does not yet expose a dedicated SQ_NULL SMEM
+  // offset kind, so keep the sentinel as an immediate on the phase-0 path.
+  if (raw_value == 124u) {
+    *operand = InstructionOperand::Imm32(raw_value);
+  } else if (raw_value == 125u) {
+    *operand = InstructionOperand::Sgpr(kM0RegisterIndex);
+  } else if (raw_value < WaveExecutionState::kScalarRegisterCount) {
+    *operand = InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_value));
+  } else {
+    if (error_message != nullptr) {
+      *error_message = "unsupported SMEM SOFFSET_NOK encoding";
+    }
+    return false;
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
 bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
                                         std::span<const std::uint32_t> words,
                                         DecodedInstruction* instruction,
@@ -858,6 +899,34 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       return false;
     }
     *instruction = DecodedInstruction::Nullary(instruction_name);
+    *words_consumed = 2;
+  } else if (instruction_name == "S_PREFETCH_INST_PC_REL" ||
+             instruction_name == "S_PREFETCH_DATA_PC_REL") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+
+    InstructionOperand soffset;
+    if (!DecodeSmemOffsetNokOperand(ExtractBits(words[1], 25, 7), &soffset,
+                                    error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::ThreeOperand(
+        instruction_name,
+        InstructionOperand::Imm32(static_cast<std::uint32_t>(
+            SignExtend24(ExtractBits(words[1], 0, 24))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource0,
+                                                   OperandSlotKind::kSource0)),
+        DescribeSourceOperand(soffset, OperandRole::kSource1,
+                              OperandSlotKind::kSource1),
+        InstructionOperand::Imm32(static_cast<std::uint32_t>(
+            SignExtend5(ExtractBits(word, 6, 5))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource2,
+                                                   OperandSlotKind::kSource2)));
     *words_consumed = 2;
   } else if (instruction_name == "S_BRANCH" ||
              instruction_name == "S_CBRANCH_SCC0" ||
