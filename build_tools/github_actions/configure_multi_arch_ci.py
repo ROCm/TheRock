@@ -381,11 +381,20 @@ def _filter_families_by_platform(
 def select_targets(inputs: CIInputs) -> TargetSelection:
     """Determine GPU families per platform based on trigger type and inputs.
 
-    Policy:
-    - workflow_dispatch: explicit per-platform family inputs
-    - pull_request: presubmit defaults + PR label opt-ins
-    - push: presubmit+postsubmit families
-    - schedule: all families (presubmit+postsubmit+nightly)
+    Trigger types run progressively larger sets of builds and tests:
+
+    - pull_request: Smallest default set (presubmit families). Designed for
+      fast feedback on proposed changes. PR labels can opt in to additional
+      families (gfx* labels) or the full set (run-all-archs-ci).
+    - push: Broader coverage (presubmit + postsubmit families). Runs on
+      code that has landed, so we want more thorough validation than PRs
+      without paying the full nightly cost.
+    - schedule: Full coverage (all families including nightly-only). Catches
+      regressions on targets that are too slow or expensive for every push.
+    - workflow_dispatch: Full manual control. Per-platform family inputs are
+      taken directly from the workflow inputs, giving the caller the ability
+      to either replicate what CI does on PRs/push or build/test a narrow
+      set of targets for investigation.
 
     Returns per-platform family lists, filtered to only include families
     that have a platform entry in amdgpu_family_matrix.py.
@@ -394,25 +403,33 @@ def select_targets(inputs: CIInputs) -> TargetSelection:
         ["presubmit", "postsubmit", "nightly"]
     )
 
-    # Select family names per platform based on trigger type
+    # Select family names per platform based on trigger type.
+    # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
     if inputs.is_workflow_dispatch:
-        # workflow_dispatch: Family names are taken directly from workflow inputs.
+        # Manual trigger: caller specifies exact families per platform.
+        # Empty input means "no families for that platform" — the caller
+        # has full control over what runs.
         linux_names = list(inputs.linux_amdgpu_families)
         windows_names = list(inputs.windows_amdgpu_families)
     elif inputs.is_pull_request:
-        # pull_request: presubmit only; PR labels can extend below.
+        # Smallest default set for fast PR feedback. PR labels can extend
+        # the set below (gfx* for individual families, run-all-archs-ci
+        # for everything).
         defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
         linux_names = list(defaults)
         windows_names = list(defaults)
     elif inputs.is_push:
-        # push: Include presubmit _and_ postsubmit.
+        # Broader than PR: presubmit + postsubmit. Code has landed, so
+        # we validate on more targets (e.g. gfx950) without paying full
+        # nightly cost.
         defaults = list(
             get_all_families_for_trigger_types(["presubmit", "postsubmit"]).keys()
         )
         linux_names = list(defaults)
         windows_names = list(defaults)
     elif inputs.is_schedule:
-        # schedule: Include all families.
+        # Full nightly coverage: every known family, including targets
+        # that are too slow or expensive for per-push CI.
         linux_names = list(all_families.keys())
         windows_names = list(all_families.keys())
     else:
@@ -441,6 +458,7 @@ def select_targets(inputs: CIInputs) -> TargetSelection:
     # TODO: For workflow_dispatch, a family requested for a specific platform
     # but not available there (e.g. gfx94x on windows) is silently dropped.
     # Consider validating per-platform and reporting the mismatch.
+    # We could also filter per-platform in get_all_families_for_trigger_types.
     linux_names = _filter_families_by_platform(linux_names, "linux", all_families)
     windows_names = _filter_families_by_platform(windows_names, "windows", all_families)
 
