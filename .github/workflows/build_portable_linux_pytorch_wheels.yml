@@ -116,7 +116,7 @@ run-name: Build portable Linux PyTorch Wheels (${{ inputs.amdgpu_family }}, ${{ 
 jobs:
   build_pytorch_wheels:
     name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    runs-on: aws-linux-scale-rocm-dev-useast
     permissions:
       id-token: write
       contents: read

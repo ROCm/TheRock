@@ -48,7 +48,7 @@ on:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    runs-on: azure-linux-scale-rocm
+    runs-on: aws-linux-scale-rocm-dev-useast
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       id-token: write
