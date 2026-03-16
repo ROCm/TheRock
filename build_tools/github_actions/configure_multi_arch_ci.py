@@ -52,7 +52,7 @@ from pathlib import Path
 from typing import Literal
 
 from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
-from configure_ci_path_filters import get_git_modified_paths
+from configure_ci_path_filters import get_git_modified_paths, is_ci_run_required
 from github_actions_utils import gha_append_step_summary, gha_set_output
 
 # ---------------------------------------------------------------------------
@@ -330,8 +330,17 @@ def check_skip_ci(
     - 'skip-ci' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
+
+    schedule and workflow_dispatch always proceed (changed_files is None
+    for those triggers, and they have no PR labels).
     """
-    # TODO: Implement — check skip-ci label, call is_ci_run_required()
+    if "skip-ci" in inputs.pr_labels:
+        return SkipDecision(skip=True, reason="skip-ci label")
+
+    # changed_files is None for schedule/workflow_dispatch — always proceed.
+    if changed_files is not None and not is_ci_run_required(changed_files):
+        return SkipDecision(skip=True, reason="no CI-relevant files changed")
+
     return SkipDecision(skip=False, reason="")
 
 
@@ -661,10 +670,10 @@ def configure(inputs: CIInputs) -> CIOutputs:
     if inputs.is_pull_request or inputs.is_push:
         changed_files = get_git_modified_paths(inputs.base_ref)
 
-    skip = check_skip_ci(inputs=inputs, changed_files=changed_files)
-    if skip.skip:
-        print(f"Skipping CI: {skip.reason}")
-        return CIOutputs.skipped(skip.reason)
+    skip_decision = check_skip_ci(inputs=inputs, changed_files=changed_files)
+    if skip_decision.skip:
+        print(f"Skipping CI: {skip_decision.reason}")
+        return CIOutputs.skipped(skip_decision.reason)
 
     # Steps 3 and 4 are independent: job decisions (which job groups run)
     # and target selection (which GPU families) are orthogonal concerns.

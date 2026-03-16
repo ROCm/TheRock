@@ -155,21 +155,52 @@ class TestCIInputsFromEnviron(unittest.TestCase):
 
 
 class TestCheckSkipCI(unittest.TestCase):
-    """Test the skip CI gate."""
+    """Test the skip CI gate.
 
-    def test_no_skip_by_default(self):
-        """Default stub does not skip."""
-        inputs = cm.CIInputs(
+    Path filtering logic is tested in configure_ci_path_filters_test.py.
+    These tests mock is_ci_run_required and verify check_skip_ci's own
+    logic: label handling, None changed_files passthrough, and delegation.
+    """
+
+    def _inputs(self, **kwargs):
+        defaults = dict(
             event_name="pull_request",
             branch_name="feature",
             base_ref="HEAD^",
             build_variant="release",
         )
-        result = cm.check_skip_ci(inputs, changed_files=["some/file.cpp"])
+        defaults.update(kwargs)
+        return cm.CIInputs(**defaults)
+
+    def test_skip_ci_label(self):
+        """PR with skip-ci label skips CI regardless of changed files."""
+        inputs = self._inputs(pr_labels=["skip-ci", "gfx950"])
+        result = cm.check_skip_ci(inputs, changed_files=["CMakeLists.txt"])
+        self.assertTrue(result.skip)
+        self.assertIn("skip-ci", result.reason)
+
+    @patch("configure_multi_arch_ci.is_ci_run_required", return_value=False)
+    def test_path_filter_says_skip(self, mock_filter):
+        """When is_ci_run_required returns False, skip CI."""
+        inputs = self._inputs()
+        result = cm.check_skip_ci(inputs, changed_files=["docs/README.md"])
+        self.assertTrue(result.skip)
+        mock_filter.assert_called_once_with(["docs/README.md"])
+
+    @patch("configure_multi_arch_ci.is_ci_run_required", return_value=True)
+    def test_path_filter_says_required(self, mock_filter):
+        """When is_ci_run_required returns True, don't skip."""
+        inputs = self._inputs()
+        result = cm.check_skip_ci(inputs, changed_files=["CMakeLists.txt"])
         self.assertFalse(result.skip)
 
-    # TODO: Tests for skip-ci label, docs-only changes, no files changed
-    # These will be filled in when check_skip_ci is implemented (Phase 2).
+    @patch("configure_multi_arch_ci.is_ci_run_required")
+    def test_none_changed_files_skips_path_filter(self, mock_filter):
+        """schedule/workflow_dispatch pass None → path filter not called."""
+        inputs = self._inputs(event_name="schedule")
+        result = cm.check_skip_ci(inputs, changed_files=None)
+        self.assertFalse(result.skip)
+        mock_filter.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
