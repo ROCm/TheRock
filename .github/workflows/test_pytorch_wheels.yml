@@ -154,21 +154,7 @@ jobs:
             --log-cli-level=INFO \
             -v
 
-      - name: (Linux) Run PyTorch tests
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          python ./external-builds/pytorch/run_pytorch_tests.py -- \
-            --continue-on-collection-errors \
-            --import-mode=importlib \
-            -v
-
-      # Windows testing is a recent addition and is being enabled incrementally.
-      # See https://github.com/ROCm/TheRock/issues/2258.
-      #
-      # Many tests are failing on torch 2.10+ so we limit testing to 2.9.
-      # (Obviously that's not ideal, but we need to start somewhere)
-      - name: (Windows) Run PyTorch tests
-        if: ${{ runner.os == 'Windows' && contains(inputs.torch_version, '2.9') }}
+      - name: Run PyTorch tests
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py -- \
             --continue-on-collection-errors \

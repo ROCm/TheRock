@@ -3,6 +3,7 @@ author: Joseph Macaranas (jayhawk-commits)
 created: 2026-03-11
 modified: 2026-03-11
 status: draft
+discussion: https://github.com/ROCm/TheRock/discussions/3964
 ---
 
 # Migrate Test Executable Scripts to Owning Project Repositories
