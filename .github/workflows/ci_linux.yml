@@ -218,3 +218,33 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  build_native_linux_packages:
+    needs: [build_portable_linux_artifacts]
+    name: Build Native Packages (${{ matrix.package_type }})
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package_type: [deb, rpm]
+    uses: ./.github/workflows/build_native_linux_packages.yml
+    secrets: inherit
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      artifact_run_id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+      rocm_version: ${{ inputs.rocm_package_version }}
+      native_package_type: ${{ matrix.package_type }}
+      package_suffix: ${{ inputs.build_variant_suffix }}
+      upload_packages: false
+    permissions:
+      contents: read
+      id-token: write
