@@ -98,6 +98,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     RUNTIME_DEPS
       aqlprofile
       hip-clr
+      rocprof-trace-decoder
       rocprofiler-register
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
