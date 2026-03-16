@@ -9606,71 +9606,102 @@ int main() {
   };
   auto make_ds_b64_update_state = []() {
     WaveExecutionState state;
-    state.exec_mask = 0x1ULL;
+    state.exec_mask = 0b1011ULL;
     auto write_lds_u64 = [](WaveExecutionState* wave,
                             std::uint64_t address,
                             std::uint64_t value) {
       std::memcpy(wave->lds_bytes.data() + address, &value, sizeof(value));
     };
+    auto set_lane_vgpr_u64 = [](WaveExecutionState* wave,
+                                std::uint16_t reg,
+                                std::size_t lane,
+                                std::uint64_t value) {
+      std::uint32_t low = 0;
+      std::uint32_t high = 0;
+      SplitU64(value, &low, &high);
+      wave->vgprs[reg][lane] = low;
+      wave->vgprs[static_cast<std::uint16_t>(reg + 1u)][lane] = high;
+    };
+    static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+    static constexpr std::array<std::uint64_t, 3> kLaneOffsets = {0u, 0x200u,
+                                                                  0x400u};
+    const auto set_active_addresses = [&](std::uint16_t reg,
+                                          std::uint64_t base_address) {
+      for (std::size_t index = 0; index < kObservedLanes.size(); ++index) {
+        state.vgprs[reg][kObservedLanes[index]] =
+            static_cast<std::uint32_t>(base_address + kLaneOffsets[index]);
+      }
+    };
+    const auto set_active_values = [&](std::uint16_t reg, std::uint64_t value) {
+      for (std::size_t lane : kObservedLanes) {
+        set_lane_vgpr_u64(&state, reg, lane, value);
+      }
+    };
+    const auto seed_active_lds = [&](std::uint64_t base_address,
+                                     std::uint64_t value) {
+      for (std::uint64_t offset : kLaneOffsets) {
+        write_lds_u64(&state, base_address + offset, value);
+      }
+    };
 
-    state.vgprs[0][0] = 0u;
-    SetLane0VgprU64(&state, 1, 5u);
-    state.vgprs[3][0] = 16u;
-    SetLane0VgprU64(&state, 4, 6u);
-    state.vgprs[6][0] = 32u;
-    SetLane0VgprU64(&state, 7, 10u);
-    state.vgprs[9][0] = 48u;
-    SetLane0VgprU64(&state, 10, 7u);
-    state.vgprs[12][0] = 64u;
-    SetLane0VgprU64(&state, 13, 11u);
-    state.vgprs[15][0] = 80u;
-    SetLane0VgprU64(&state, 16, 2u);
-    state.vgprs[18][0] = 96u;
-    SetLane0VgprU64(&state, 19, 2u);
-    state.vgprs[21][0] = 112u;
-    SetLane0VgprU64(&state, 22, 4u);
-    state.vgprs[24][0] = 128u;
-    SetLane0VgprU64(&state, 25, 14u);
-    state.vgprs[27][0] = 144u;
-    SetLane0VgprU64(&state, 28, 0x0f0f0f0f0f0f0f0fULL);
-    state.vgprs[30][0] = 160u;
-    SetLane0VgprU64(&state, 31, 0x1100110011001100ULL);
-    state.vgprs[33][0] = 176u;
-    SetLane0VgprU64(&state, 34, 0x00ff00ff00ff00ffULL);
-    state.vgprs[36][0] = 192u;
-    SetLane0VgprU64(&state, 37, 0xff00ff0000ff00ffULL);
-    SetLane0VgprU64(&state, 39, 0x005500aa550000aaULL);
-    state.vgprs[42][0] = 208u;
-    SetLane0VgprU64(&state, 43, 0x1122334455667788ULL);
-    SetLane0VgprU64(&state, 45, 0x8877665544332211ULL);
-    state.vgprs[48][0] = 224u;
-    SetLane0VgprU64(&state, 49, DoubleBits(3.5));
-    SetLane0VgprU64(&state, 51, DoubleBits(9.0));
-    state.vgprs[54][0] = 240u;
-    SetLane0VgprU64(&state, 55, DoubleBits(2.25));
-    state.vgprs[57][0] = 256u;
-    SetLane0VgprU64(&state, 58, DoubleBits(-1.0));
-    state.vgprs[60][0] = 272u;
-    SetLane0VgprU64(&state, 61, DoubleBits(8.0));
+    set_active_addresses(0u, 0u);
+    set_active_values(1u, 5u);
+    set_active_addresses(3u, 16u);
+    set_active_values(4u, 6u);
+    set_active_addresses(6u, 32u);
+    set_active_values(7u, 10u);
+    set_active_addresses(9u, 48u);
+    set_active_values(10u, 7u);
+    set_active_addresses(12u, 64u);
+    set_active_values(13u, 11u);
+    set_active_addresses(15u, 80u);
+    set_active_values(16u, 2u);
+    set_active_addresses(18u, 96u);
+    set_active_values(19u, 2u);
+    set_active_addresses(21u, 112u);
+    set_active_values(22u, 4u);
+    set_active_addresses(24u, 128u);
+    set_active_values(25u, 14u);
+    set_active_addresses(27u, 144u);
+    set_active_values(28u, 0x0f0f0f0f0f0f0f0fULL);
+    set_active_addresses(30u, 160u);
+    set_active_values(31u, 0x1100110011001100ULL);
+    set_active_addresses(33u, 176u);
+    set_active_values(34u, 0x00ff00ff00ff00ffULL);
+    set_active_addresses(36u, 192u);
+    set_active_values(37u, 0xff00ff0000ff00ffULL);
+    set_active_values(39u, 0x005500aa550000aaULL);
+    set_active_addresses(42u, 208u);
+    set_active_values(43u, 0x1122334455667788ULL);
+    set_active_values(45u, 0x8877665544332211ULL);
+    set_active_addresses(48u, 224u);
+    set_active_values(49u, DoubleBits(3.5));
+    set_active_values(51u, DoubleBits(9.0));
+    set_active_addresses(54u, 240u);
+    set_active_values(55u, DoubleBits(2.25));
+    set_active_addresses(57u, 256u);
+    set_active_values(58u, DoubleBits(-1.0));
+    set_active_addresses(60u, 272u);
+    set_active_values(61u, DoubleBits(8.0));
 
-    write_lds_u64(&state, 0u, 10u);
-    write_lds_u64(&state, 16u, 20u);
-    write_lds_u64(&state, 32u, 4u);
-    write_lds_u64(&state, 48u, 7u);
-    write_lds_u64(&state, 64u, 0u);
-    write_lds_u64(&state, 80u, 0xfffffffffffffffcULL);
-    write_lds_u64(&state, 96u, 0xfffffffffffffffdULL);
-    write_lds_u64(&state, 112u, 9u);
-    write_lds_u64(&state, 128u, 9u);
-    write_lds_u64(&state, 144u, 0xff00ff00ff00ff00ULL);
-    write_lds_u64(&state, 160u, 0x0011001100110011ULL);
-    write_lds_u64(&state, 176u, 0xffff0000ffff0000ULL);
-    write_lds_u64(&state, 192u, 0xffff0000aaaa5555ULL);
-    write_lds_u64(&state, 208u, 0x1122334455667788ULL);
-    write_lds_u64(&state, 224u, DoubleBits(2.5));
-    write_lds_u64(&state, 240u, DoubleBits(1.5));
-    write_lds_u64(&state, 256u, DoubleBits(4.0));
-    write_lds_u64(&state, 272u, DoubleBits(4.0));
+    seed_active_lds(0u, 10u);
+    seed_active_lds(16u, 20u);
+    seed_active_lds(32u, 4u);
+    seed_active_lds(48u, 7u);
+    seed_active_lds(64u, 0u);
+    seed_active_lds(80u, 0xfffffffffffffffcULL);
+    seed_active_lds(96u, 0xfffffffffffffffdULL);
+    seed_active_lds(112u, 9u);
+    seed_active_lds(128u, 9u);
+    seed_active_lds(144u, 0xff00ff00ff00ff00ULL);
+    seed_active_lds(160u, 0x0011001100110011ULL);
+    seed_active_lds(176u, 0xffff0000ffff0000ULL);
+    seed_active_lds(192u, 0xffff0000aaaa5555ULL);
+    seed_active_lds(208u, 0x1122334455667788ULL);
+    seed_active_lds(224u, DoubleBits(2.5));
+    seed_active_lds(240u, DoubleBits(1.5));
+    seed_active_lds(256u, DoubleBits(4.0));
+    seed_active_lds(272u, DoubleBits(4.0));
     return state;
   };
   auto validate_ds_b64_update_state = [&](const WaveExecutionState& state,
@@ -9684,6 +9715,8 @@ int main() {
       std::memcpy(&value, state.lds_bytes.data() + address, sizeof(value));
       return value;
     };
+    static constexpr std::array<std::uint64_t, 3> kLaneOffsets = {0u, 0x200u,
+                                                                  0x400u};
     const std::array<DsLds64Expectation, 18> expectations = {{
         {0u, 15u, "expected ds_add_u64 result"},
         {16u, 14u, "expected ds_sub_u64 result"},
@@ -9708,10 +9741,14 @@ int main() {
         {272u, DoubleBits(8.0), "expected ds_max_f64 result"},
     }};
     for (const DsLds64Expectation& expectation : expectations) {
-      if (!Expect(read_lds_u64(expectation.address) == expectation.expected,
-                  expectation.label)) {
-        std::cerr << mode << " address=" << expectation.address << '\n';
-        return false;
+      for (std::uint64_t offset : kLaneOffsets) {
+        if (!Expect(read_lds_u64(expectation.address + offset) ==
+                        expectation.expected,
+                    expectation.label)) {
+          std::cerr << mode << " address=" << expectation.address + offset
+                    << '\n';
+          return false;
+        }
       }
     }
     return true;
@@ -9833,78 +9870,109 @@ int main() {
   };
   auto make_ds_b64_return_state = []() {
     WaveExecutionState state;
-    state.exec_mask = 0x1ULL;
+    state.exec_mask = 0b1011ULL;
     auto write_lds_u64 = [](WaveExecutionState* wave,
                             std::uint64_t address,
                             std::uint64_t value) {
       std::memcpy(wave->lds_bytes.data() + address, &value, sizeof(value));
     };
+    auto set_lane_vgpr_u64 = [](WaveExecutionState* wave,
+                                std::uint16_t reg,
+                                std::size_t lane,
+                                std::uint64_t value) {
+      std::uint32_t low = 0;
+      std::uint32_t high = 0;
+      SplitU64(value, &low, &high);
+      wave->vgprs[reg][lane] = low;
+      wave->vgprs[static_cast<std::uint16_t>(reg + 1u)][lane] = high;
+    };
+    static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+    static constexpr std::array<std::uint64_t, 3> kLaneOffsets = {0u, 0x200u,
+                                                                  0x400u};
+    const auto set_active_addresses = [&](std::uint16_t reg,
+                                          std::uint64_t base_address) {
+      for (std::size_t index = 0; index < kObservedLanes.size(); ++index) {
+        state.vgprs[reg][kObservedLanes[index]] =
+            static_cast<std::uint32_t>(base_address + kLaneOffsets[index]);
+      }
+    };
+    const auto set_active_values = [&](std::uint16_t reg, std::uint64_t value) {
+      for (std::size_t lane : kObservedLanes) {
+        set_lane_vgpr_u64(&state, reg, lane, value);
+      }
+    };
+    const auto seed_active_lds = [&](std::uint64_t base_address,
+                                     std::uint64_t value) {
+      for (std::uint64_t offset : kLaneOffsets) {
+        write_lds_u64(&state, base_address + offset, value);
+      }
+    };
 
-    state.vgprs[0][0] = 0u;
-    SetLane0VgprU64(&state, 1, 5u);
-    state.vgprs[3][0] = 16u;
-    SetLane0VgprU64(&state, 4, 6u);
-    state.vgprs[6][0] = 32u;
-    SetLane0VgprU64(&state, 7, 10u);
-    state.vgprs[9][0] = 48u;
-    SetLane0VgprU64(&state, 10, 7u);
-    state.vgprs[12][0] = 64u;
-    SetLane0VgprU64(&state, 13, 11u);
-    state.vgprs[15][0] = 80u;
-    SetLane0VgprU64(&state, 16, 2u);
-    state.vgprs[18][0] = 96u;
-    SetLane0VgprU64(&state, 19, 2u);
-    state.vgprs[21][0] = 112u;
-    SetLane0VgprU64(&state, 22, 4u);
-    state.vgprs[24][0] = 128u;
-    SetLane0VgprU64(&state, 25, 14u);
-    state.vgprs[27][0] = 144u;
-    SetLane0VgprU64(&state, 28, 0x0f0f0f0f0f0f0f0fULL);
-    state.vgprs[30][0] = 160u;
-    SetLane0VgprU64(&state, 31, 0x1100110011001100ULL);
-    state.vgprs[33][0] = 176u;
-    SetLane0VgprU64(&state, 34, 0x00ff00ff00ff00ffULL);
-    state.vgprs[36][0] = 192u;
-    SetLane0VgprU64(&state, 37, 0xfedcba9876543210ULL);
-    state.vgprs[42][0] = 208u;
-    SetLane0VgprU64(&state, 43, DoubleBits(2.25));
-    state.vgprs[45][0] = 224u;
-    SetLane0VgprU64(&state, 46, DoubleBits(-1.0));
-    state.vgprs[48][0] = 240u;
-    SetLane0VgprU64(&state, 49, DoubleBits(8.0));
-    state.vgprs[51][0] = 256u;
-    SetLane0VgprU64(&state, 52, 0xff00ff0000ff00ffULL);
-    SetLane0VgprU64(&state, 54, 0x005500aa550000aaULL);
-    state.vgprs[57][0] = 272u;
-    SetLane0VgprU64(&state, 58, 0x1122334455667788ULL);
-    SetLane0VgprU64(&state, 60, 0x8877665544332211ULL);
-    state.vgprs[63][0] = 288u;
-    SetLane0VgprU64(&state, 64, DoubleBits(3.5));
-    SetLane0VgprU64(&state, 66, DoubleBits(9.0));
+    set_active_addresses(0u, 0u);
+    set_active_values(1u, 5u);
+    set_active_addresses(3u, 16u);
+    set_active_values(4u, 6u);
+    set_active_addresses(6u, 32u);
+    set_active_values(7u, 10u);
+    set_active_addresses(9u, 48u);
+    set_active_values(10u, 7u);
+    set_active_addresses(12u, 64u);
+    set_active_values(13u, 11u);
+    set_active_addresses(15u, 80u);
+    set_active_values(16u, 2u);
+    set_active_addresses(18u, 96u);
+    set_active_values(19u, 2u);
+    set_active_addresses(21u, 112u);
+    set_active_values(22u, 4u);
+    set_active_addresses(24u, 128u);
+    set_active_values(25u, 14u);
+    set_active_addresses(27u, 144u);
+    set_active_values(28u, 0x0f0f0f0f0f0f0f0fULL);
+    set_active_addresses(30u, 160u);
+    set_active_values(31u, 0x1100110011001100ULL);
+    set_active_addresses(33u, 176u);
+    set_active_values(34u, 0x00ff00ff00ff00ffULL);
+    set_active_addresses(36u, 192u);
+    set_active_values(37u, 0xfedcba9876543210ULL);
+    set_active_addresses(42u, 208u);
+    set_active_values(43u, DoubleBits(2.25));
+    set_active_addresses(45u, 224u);
+    set_active_values(46u, DoubleBits(-1.0));
+    set_active_addresses(48u, 240u);
+    set_active_values(49u, DoubleBits(8.0));
+    set_active_addresses(51u, 256u);
+    set_active_values(52u, 0xff00ff0000ff00ffULL);
+    set_active_values(54u, 0x005500aa550000aaULL);
+    set_active_addresses(57u, 272u);
+    set_active_values(58u, 0x1122334455667788ULL);
+    set_active_values(60u, 0x8877665544332211ULL);
+    set_active_addresses(63u, 288u);
+    set_active_values(64u, DoubleBits(3.5));
+    set_active_values(66u, DoubleBits(9.0));
 
-    for (std::uint16_t reg = 68; reg <= 125; ++reg) {
-      state.vgprs[reg][0] = 0xdead0000u + reg;
+    for (std::uint16_t reg = 68; reg <= 126; ++reg) {
+      state.vgprs[reg][2] = 0xdead0000u + reg;
     }
 
-    write_lds_u64(&state, 0u, 10u);
-    write_lds_u64(&state, 16u, 20u);
-    write_lds_u64(&state, 32u, 4u);
-    write_lds_u64(&state, 48u, 7u);
-    write_lds_u64(&state, 64u, 0u);
-    write_lds_u64(&state, 80u, 0xfffffffffffffffcULL);
-    write_lds_u64(&state, 96u, 0xfffffffffffffffdULL);
-    write_lds_u64(&state, 112u, 9u);
-    write_lds_u64(&state, 128u, 9u);
-    write_lds_u64(&state, 144u, 0xff00ff00ff00ff00ULL);
-    write_lds_u64(&state, 160u, 0x0011001100110011ULL);
-    write_lds_u64(&state, 176u, 0xffff0000ffff0000ULL);
-    write_lds_u64(&state, 192u, 0x0123456789abcdefULL);
-    write_lds_u64(&state, 208u, DoubleBits(1.5));
-    write_lds_u64(&state, 224u, DoubleBits(4.0));
-    write_lds_u64(&state, 240u, DoubleBits(4.0));
-    write_lds_u64(&state, 256u, 0xffff0000aaaa5555ULL);
-    write_lds_u64(&state, 272u, 0x1122334455667788ULL);
-    write_lds_u64(&state, 288u, DoubleBits(2.5));
+    seed_active_lds(0u, 10u);
+    seed_active_lds(16u, 20u);
+    seed_active_lds(32u, 4u);
+    seed_active_lds(48u, 7u);
+    seed_active_lds(64u, 0u);
+    seed_active_lds(80u, 0xfffffffffffffffcULL);
+    seed_active_lds(96u, 0xfffffffffffffffdULL);
+    seed_active_lds(112u, 9u);
+    seed_active_lds(128u, 9u);
+    seed_active_lds(144u, 0xff00ff00ff00ff00ULL);
+    seed_active_lds(160u, 0x0011001100110011ULL);
+    seed_active_lds(176u, 0xffff0000ffff0000ULL);
+    seed_active_lds(192u, 0x0123456789abcdefULL);
+    seed_active_lds(208u, DoubleBits(1.5));
+    seed_active_lds(224u, DoubleBits(4.0));
+    seed_active_lds(240u, DoubleBits(4.0));
+    seed_active_lds(256u, 0xffff0000aaaa5555ULL);
+    seed_active_lds(272u, 0x1122334455667788ULL);
+    seed_active_lds(288u, DoubleBits(2.5));
     return state;
   };
   auto validate_ds_b64_return_state = [&](const WaveExecutionState& state,
@@ -9918,6 +9986,13 @@ int main() {
       std::memcpy(&value, state.lds_bytes.data() + address, sizeof(value));
       return value;
     };
+    const auto read_lane_vgpr_u64 = [&](std::uint16_t reg, std::size_t lane) {
+      return ComposeU64(state.vgprs[reg][lane],
+                        state.vgprs[static_cast<std::uint16_t>(reg + 1u)][lane]);
+    };
+    static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+    static constexpr std::array<std::uint64_t, 3> kLaneOffsets = {0u, 0x200u,
+                                                                  0x400u};
     const std::array<DsReturn64Expectation, 19> expectations = {{
         {80u, 10u, 0u, 15u, "expected ds_add_rtn_u64 return",
          "expected ds_add_rtn_u64 memory"},
@@ -9962,14 +10037,30 @@ int main() {
          "expected ds_cmpst_rtn_f64 return", "expected ds_cmpst_rtn_f64 memory"},
     }};
     for (const DsReturn64Expectation& expectation : expectations) {
-      if (!Expect(ReadLane0VgprU64(state, expectation.destination_reg) ==
-                      expectation.expected_return,
-                  expectation.return_label) ||
-          !Expect(read_lds_u64(expectation.address) == expectation.expected_memory,
-                  expectation.memory_label)) {
-        std::cerr << mode << " dest=" << expectation.destination_reg << '\n';
-        return false;
+      for (std::size_t index = 0; index < kObservedLanes.size(); ++index) {
+        if (!Expect(read_lane_vgpr_u64(expectation.destination_reg,
+                                       kObservedLanes[index]) ==
+                        expectation.expected_return,
+                    expectation.return_label) ||
+            !Expect(read_lds_u64(expectation.address + kLaneOffsets[index]) ==
+                        expectation.expected_memory,
+                    expectation.memory_label)) {
+          std::cerr << mode << " dest=" << expectation.destination_reg
+                    << " lane=" << kObservedLanes[index] << '\n';
+          return false;
+        }
       }
+    }
+    if (!Expect(state.vgprs[80][2] == 0xdead0050u,
+                "expected inactive ds_add_rtn_u64 low lane to remain untouched") ||
+        !Expect(state.vgprs[81][2] == 0xdead0051u,
+                "expected inactive ds_add_rtn_u64 high lane to remain untouched") ||
+        !Expect(state.vgprs[125][2] == 0xdead007du,
+                "expected inactive ds_max_rtn_f64 low lane to remain untouched") ||
+        !Expect(state.vgprs[126][2] == 0xdead007eu,
+                "expected inactive ds_max_rtn_f64 high lane to remain untouched")) {
+      std::cerr << mode << '\n';
+      return false;
     }
     return true;
   };
@@ -10011,29 +10102,68 @@ int main() {
   };
   auto make_ds_condxchg32_rtn_b64_state = []() {
     WaveExecutionState state;
-    state.exec_mask = 0x1ULL;
-    state.vgprs[0][0] = 64u;
-    SetLane0VgprU64(&state, 1, ComposeU64(0x80000033u, 0x00000044u));
-    state.vgprs[4][0] = 0xdeadbeefu;
-    state.vgprs[5][0] = 0xcafebabeu;
+    state.exec_mask = 0b1011ULL;
+    auto set_lane_vgpr_u64 = [](WaveExecutionState* wave,
+                                std::uint16_t reg,
+                                std::size_t lane,
+                                std::uint64_t value) {
+      std::uint32_t low = 0;
+      std::uint32_t high = 0;
+      SplitU64(value, &low, &high);
+      wave->vgprs[reg][lane] = low;
+      wave->vgprs[static_cast<std::uint16_t>(reg + 1u)][lane] = high;
+    };
+    static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+    static constexpr std::array<std::uint32_t, 3> kLaneAddresses = {64u, 128u,
+                                                                    192u};
+    for (std::size_t index = 0; index < kObservedLanes.size(); ++index) {
+      state.vgprs[0][kObservedLanes[index]] = kLaneAddresses[index];
+      set_lane_vgpr_u64(&state, 1u, kObservedLanes[index],
+                        ComposeU64(0x80000033u, 0x00000044u));
+      state.vgprs[4][kObservedLanes[index]] = 0xdeadbeefu;
+      state.vgprs[5][kObservedLanes[index]] = 0xcafebabeu;
+    }
+    state.vgprs[4][2] = 0xdeadbeefu;
+    state.vgprs[5][2] = 0xcafebabeu;
     const std::uint64_t initial_value = ComposeU64(0x11111111u, 0x22222222u);
-    std::memcpy(state.lds_bytes.data() + 64u, &initial_value, sizeof(initial_value));
+    for (std::uint32_t address : kLaneAddresses) {
+      std::memcpy(state.lds_bytes.data() + address, &initial_value,
+                  sizeof(initial_value));
+    }
     return state;
   };
   auto validate_ds_condxchg32_rtn_b64_state =
       [&](const WaveExecutionState& state, const char* mode) {
+        const auto read_lane_vgpr_u64 = [&](std::uint16_t reg, std::size_t lane) {
+          return ComposeU64(
+              state.vgprs[reg][lane],
+              state.vgprs[static_cast<std::uint16_t>(reg + 1u)][lane]);
+        };
+        static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+        static constexpr std::array<std::uint32_t, 3> kLaneAddresses = {64u, 128u,
+                                                                        192u};
         if (!Expect(state.halted,
-                    "expected ds condxchg32 rtn b64 program to halt") ||
-            !Expect(ReadLane0VgprU64(state, 4) ==
-                        ComposeU64(0x11111111u, 0x22222222u),
-                    "expected ds condxchg32 rtn b64 return value")) {
+                    "expected ds condxchg32 rtn b64 program to halt")) {
           std::cerr << mode << '\n';
           return false;
         }
-        std::uint64_t lds_value = 0;
-        std::memcpy(&lds_value, state.lds_bytes.data() + 64u, sizeof(lds_value));
-        if (!Expect(lds_value == ComposeU64(0x80000033u, 0x22222222u),
-                    "expected ds condxchg32 rtn b64 final value")) {
+        for (std::size_t index = 0; index < kObservedLanes.size(); ++index) {
+          std::uint64_t lds_value = 0;
+          std::memcpy(&lds_value, state.lds_bytes.data() + kLaneAddresses[index],
+                      sizeof(lds_value));
+          if (!Expect(read_lane_vgpr_u64(4u, kObservedLanes[index]) ==
+                          ComposeU64(0x11111111u, 0x22222222u),
+                      "expected ds condxchg32 rtn b64 return value") ||
+              !Expect(lds_value == ComposeU64(0x80000033u, 0x22222222u),
+                      "expected ds condxchg32 rtn b64 final value")) {
+            std::cerr << mode << " lane=" << kObservedLanes[index] << '\n';
+            return false;
+          }
+        }
+        if (!Expect(state.vgprs[4][2] == 0xdeadbeefu,
+                    "expected inactive ds condxchg32 rtn b64 low lane untouched") ||
+            !Expect(state.vgprs[5][2] == 0xcafebabeu,
+                    "expected inactive ds condxchg32 rtn b64 high lane untouched")) {
           std::cerr << mode << '\n';
           return false;
         }
