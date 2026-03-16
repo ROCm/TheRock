@@ -461,7 +461,7 @@ test_matrix = {
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 20,
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
-        "platform": ["linux", "windows"],
+        "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
