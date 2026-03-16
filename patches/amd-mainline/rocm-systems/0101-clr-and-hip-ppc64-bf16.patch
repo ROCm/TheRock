@@ -1,14 +1,16 @@
-From 106f57460b902e189f5778078c305ed0eefea5fa Mon Sep 17 00:00:00 2001
+From c07434cf2a2098282baaaff1b949891be7365d7b Mon Sep 17 00:00:00 2001
 From: berichar <ben.richard@amd.com>
-Date: Wed, 11 Mar 2026 17:16:00 -0400
-Subject: [PATCH] clr: ppc64le
+Date: Sun, 15 Mar 2026 20:25:30 -0400
+Subject: [PATCH] bf16 support for ppc64le
 
 ---
  .../include/hip/amd_detail/amd_hip_fp8.h      |    4 +
  .../hip/amd_detail/amd_hip_ocp_types.h        |   19 +
  .../hip/amd_detail/amd_ppc64le_hip_bf16.h     | 2199 +++++++++++++++++
  .../module/perf/OCLPerfKernelThroughput.h     |    4 +
- 4 files changed, 2226 insertions(+)
+ projects/hip/VERSION                          |    4 +-
+ projects/hip/include/hip/hip_bf16.h           |    4 +
+ 6 files changed, 2232 insertions(+), 2 deletions(-)
  create mode 100644 projects/clr/hipamd/include/hip/amd_detail/amd_ppc64le_hip_bf16.h
 
 diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h
@@ -2306,6 +2308,35 @@ index 0cc55f8045..01c5717afa 100644
  
  class OCLPerfKernelThroughput : public OCLTestImp {
   public:
+diff --git a/projects/hip/VERSION b/projects/hip/VERSION
+index d93710f395..c7e6920e59 100644
+--- a/projects/hip/VERSION
++++ b/projects/hip/VERSION
+@@ -1,6 +1,6 @@
+ #HIP_VERSION_MAJOR
+ 7
+ #HIP_VERSION_MINOR
+-2
++12
+ #HIP_VERSION_PATCH
+-0
++60490
+diff --git a/projects/hip/include/hip/hip_bf16.h b/projects/hip/include/hip/hip_bf16.h
+index 17839460be..ee8053770f 100644
+--- a/projects/hip/include/hip/hip_bf16.h
++++ b/projects/hip/include/hip/hip_bf16.h
+@@ -26,7 +26,11 @@ THE SOFTWARE.
+ #include <hip/hip_common.h>
+ 
+ #if defined(__HIP_PLATFORM_AMD__) && !defined(__HIP_PLATFORM_NVIDIA__)
++#if defined(__powerpc64__) || defined(__PPC64__)
++#include <hip/amd_detail/amd_ppc64le_hip_bf16.h>
++#else
+ #include <hip/amd_detail/amd_hip_bf16.h>
++#endif
+ #elif !defined(__HIP_PLATFORM_AMD__) && defined(__HIP_PLATFORM_NVIDIA__)
+ #include <hip/nvidia_detail/nvidia_hip_bf16.h>
+ #else
 -- 
 2.50.1 (Apple Git-155)
 
