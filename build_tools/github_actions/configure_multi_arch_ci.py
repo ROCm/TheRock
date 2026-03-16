@@ -425,50 +425,47 @@ def _determine_test_type(
     developers manual control (e.g. test_filter:comprehensive on a PR
     to get nightly-level coverage before merge).
 
-    Returns (test_type, reason).
+    Returns (test_type, reason). Checked in priority order — highest
+    priority overrides win and return early.
     """
-    # Default: quick tests for fast CI feedback.
-    test_type = "quick"
-    reason = "default"
-
-    # Schedule runs the full nightly suite — comprehensive coverage on
-    # a cadence, catching regressions that quick tests miss.
-    if ci_inputs.is_schedule:
-        test_type = "comprehensive"
-        reason = "scheduled run"
-    elif (
-        git_context.changed_files is not None
-        and git_context.submodule_paths is not None
-    ):
-        # A submodule change means actual library code changed (e.g.
-        # rocBLAS, MIOpen). These need full testing since the change
-        # could affect any downstream consumer.
-        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
-        if matching:
-            test_type = "full"
-            reason = f"submodule(s) changed: {sorted(matching)}"
-
-    # test:* labels request specific component tests (e.g. test:rocprim).
-    # When someone explicitly asks for tests, run the full suite for those
-    # components — they're investigating something specific.
-    if _has_test_labels(ci_inputs):
-        test_type = "full"
-        reason = "test labels specified"
-
-    # test_filter: PR label gives developers manual override to any level.
+    # Priority 1: test_filter: PR label is an explicit manual override.
     # This is the escape hatch: run comprehensive on a PR before merge,
     # or downgrade to quick if you know the change is safe.
     for label in ci_inputs.pr_labels:
         if not label.startswith("test_filter:"):
             continue
         filter_type = label.split(":")[1]
-        if filter_type in _VALID_TEST_FILTER_TYPES:
-            test_type = filter_type
-            reason = f"test_filter label: {label}"
-            break
-        print(f"  Ignoring unrecognized test_filter value: {filter_type!r}")
+        if filter_type not in _VALID_TEST_FILTER_TYPES:
+            raise ValueError(
+                f"Unrecognized test_filter value: {filter_type!r}. "
+                f"Valid values: {sorted(_VALID_TEST_FILTER_TYPES)}"
+            )
+        return filter_type, f"test_filter label: {label}"
 
-    return test_type, reason
+    # Priority 2: test:* labels request specific component tests (e.g.
+    # test:rocprim). When someone explicitly asks for tests, run the full
+    # suite — they're investigating something specific.
+    if _has_test_labels(ci_inputs):
+        return "full", "test labels specified"
+
+    # Priority 3: schedule runs the full nightly suite — comprehensive
+    # coverage on a cadence, catching regressions that quick tests miss.
+    if ci_inputs.is_schedule:
+        return "comprehensive", "scheduled run"
+
+    # Priority 4: a submodule change means actual library code changed
+    # (e.g. rocBLAS, MIOpen). These need full testing since the change
+    # could affect any downstream consumer.
+    if (
+        git_context.changed_files is not None
+        and git_context.submodule_paths is not None
+    ):
+        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
+        if matching:
+            return "full", f"submodule(s) changed: {sorted(matching)}"
+
+    # Default: quick tests for fast CI feedback.
+    return "quick", "default"
 
 
 def decide_jobs(

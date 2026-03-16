@@ -298,13 +298,13 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.test_type, "standard")
 
-    def test_test_filter_invalid_ignored(self):
-        """Unrecognized test_filter value is ignored."""
+    def test_test_filter_invalid_raises(self):
+        """Unrecognized test_filter value raises ValueError."""
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
-        result = cm.decide_jobs(
-            self._inputs(pr_labels=["test_filter:bogus"]), git_context=git
-        )
-        self.assertEqual(result.test_rocm.test_type, "quick")
+        with self.assertRaises(ValueError, msg="Unrecognized test_filter"):
+            cm.decide_jobs(
+                self._inputs(pr_labels=["test_filter:bogus"]), git_context=git
+            )
 
     def test_build_rocm_stage_partitioning(self):
         """BuildRocmDecision correctly partitions stages into prebuilt/rebuild."""
