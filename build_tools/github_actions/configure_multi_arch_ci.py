@@ -49,7 +49,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from amdgpu_family_matrix import get_all_families_for_trigger_types
+from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
 from configure_ci_path_filters import get_git_modified_paths
 from github_actions_utils import gha_append_step_summary, gha_set_output
 
@@ -480,11 +480,91 @@ def expand_matrix(
 ) -> list[MatrixEntry]:
     """Expand families into multi-arch matrix entries for one platform.
 
-    Groups all families into one entry per build variant (the multi-arch
-    format), rather than one entry per family (single-arch format).
+    In multi-arch mode, all families that support the requested build variant
+    are grouped into a single matrix entry. This produces one entry per
+    build variant (typically just one — "release"), containing a JSON array
+    of per-family info that downstream jobs matrix-expand over for
+    per-architecture stages.
+
+    The per-family info includes:
+    - amdgpu_family: family name for THEROCK_AMDGPU_FAMILIES
+    - amdgpu_targets: comma-separated gfx targets for split artifact fetching
+    - test-runs-on: runner label for testing (empty = no test runner available)
+    - sanity_check_only_for_family: whether to limit test scope
     """
-    # TODO: Implement — port generate_multi_arch_matrix logic
-    return []
+    all_families = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit", "nightly"]
+    )
+    platform_build_variants = all_build_variants.get(platform, {})
+
+    # Collect per-family info, grouped by build variant. Each family may
+    # support multiple variants (e.g. gfx94x supports release + asan + tsan),
+    # but we only keep families that match the requested build_variant.
+    variant_family_info: dict[str, list[dict]] = {}
+    variant_config: dict[str, dict] = {}
+
+    for family_name in families:
+        family_entry = all_families.get(family_name)
+        if not family_entry or platform not in family_entry:
+            continue
+        platform_info = family_entry[platform]
+
+        for supported_variant in platform_info.get("build_variants", []):
+            if supported_variant != build_variant:
+                continue
+
+            if supported_variant not in variant_family_info:
+                variant_family_info[supported_variant] = []
+                variant_config[supported_variant] = platform_build_variants.get(
+                    supported_variant, {}
+                )
+
+            # De-dup by family name (a family can appear once per variant).
+            existing = [
+                f["amdgpu_family"] for f in variant_family_info[supported_variant]
+            ]
+            amdgpu_family = platform_info["family"]
+            if amdgpu_family in existing:
+                continue
+
+            fetch_gfx_targets = platform_info.get("fetch-gfx-targets", [])
+            variant_family_info[supported_variant].append(
+                {
+                    "amdgpu_family": amdgpu_family,
+                    "amdgpu_targets": ",".join(fetch_gfx_targets),
+                    "test-runs-on": platform_info.get("test-runs-on", ""),
+                    "sanity_check_only_for_family": platform_info.get(
+                        "sanity_check_only_for_family", False
+                    ),
+                }
+            )
+
+    # Create one MatrixEntry per build variant.
+    entries: list[MatrixEntry] = []
+    for variant_name, family_info_list in variant_family_info.items():
+        config = variant_config[variant_name]
+        if not config:
+            continue
+
+        family_names = [f["amdgpu_family"] for f in family_info_list]
+        expect_failure = config.get("expect_failure", False)
+        expect_pytorch_failure = config.get("expect_pytorch_failure", False)
+        suffix = config.get("build_variant_suffix", "")
+
+        entries.append(
+            MatrixEntry(
+                matrix_per_family_json=json.dumps(family_info_list),
+                dist_amdgpu_families=";".join(family_names),
+                artifact_group=f"multi-arch-{suffix or 'release'}",
+                build_variant_label=config["build_variant_label"],
+                build_variant_suffix=suffix,
+                build_variant_cmake_preset=config["build_variant_cmake_preset"],
+                expect_failure=expect_failure,
+                build_pytorch=not expect_failure and not expect_pytorch_failure,
+            )
+        )
+
+    return entries
 
 
 # ---------------------------------------------------------------------------
