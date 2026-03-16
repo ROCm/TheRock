@@ -501,29 +501,26 @@ def _expand_matrix_for_platform(
     - sanity_check_only_for_family: whether to limit test scope
     """
     per_family_info: list[dict] = []
-    seen_families: set[str] = set()
 
     for family_name in families:
-        family_entry = all_families.get(family_name)
-        if not family_entry or platform not in family_entry:
-            continue
-        platform_info = family_entry[platform]
+        # select_targets already validates family names and filters by
+        # platform availability. Family name uniqueness is validated by
+        # amdgpu_family_matrix_test.py. We can index directly here.
+        platform_info = all_families[family_name][platform]
 
-        # Skip families that don't support this build variant.
-        if build_variant not in platform_info.get("build_variants", []):
+        # Filter out families missing the build variant (e.g. 'asan').
+        if build_variant not in platform_info["build_variants"]:
+            print(
+                f"  Family {family_name} does not support variant "
+                f"{build_variant} on {platform}, skipping"
+            )
             continue
 
-        amdgpu_family = platform_info["family"]
-        if amdgpu_family in seen_families:
-            continue
-        seen_families.add(amdgpu_family)
-
-        fetch_gfx_targets = platform_info.get("fetch-gfx-targets", [])
         per_family_info.append(
             {
-                "amdgpu_family": amdgpu_family,
-                "amdgpu_targets": ",".join(fetch_gfx_targets),
-                "test-runs-on": platform_info.get("test-runs-on", ""),
+                "amdgpu_family": platform_info["family"],
+                "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
+                "test-runs-on": platform_info["test-runs-on"],
                 "sanity_check_only_for_family": platform_info.get(
                     "sanity_check_only_for_family", False
                 ),
