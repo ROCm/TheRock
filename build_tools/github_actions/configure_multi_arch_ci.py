@@ -104,6 +104,25 @@ class CIInputs:
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
 
+    def log(self) -> None:
+        """Log parsed inputs for CI diagnostics."""
+        print("CIInputs:")
+        print(f"  event: {self.event_name}")
+        print(f"  branch: {self.branch_name}")
+        print(f"  variant: {self.build_variant}")
+        if self.pr_labels:
+            print(f"  pr_labels: {self.pr_labels}")
+        if self.linux_amdgpu_families:
+            print(f"  linux_amdgpu_families: {self.linux_amdgpu_families}")
+        if self.windows_amdgpu_families:
+            print(f"  windows_amdgpu_families: {self.windows_amdgpu_families}")
+        if self.linux_test_labels:
+            print(f"  linux_test_labels: {self.linux_test_labels}")
+        if self.windows_test_labels:
+            print(f"  windows_test_labels: {self.windows_test_labels}")
+        if self.prebuilt_stages:
+            print(f"  prebuilt_stages: {self.prebuilt_stages}")
+
     @property
     def is_pull_request(self) -> bool:
         return self.event_name == "pull_request"
@@ -207,6 +226,17 @@ class GitContext:
         """No git data (schedule/workflow_dispatch)."""
         return GitContext()
 
+    def log(self) -> None:
+        """Log git context for CI diagnostics."""
+        if self.changed_files is None:
+            print("GitContext: no changed files (schedule/workflow_dispatch)")
+            return
+        print(f"GitContext: {len(self.changed_files)} changed file(s)")
+        for path in self.changed_files[:20]:
+            print(f"  {path}")
+        if len(self.changed_files) > 20:
+            print(f"  ... and {len(self.changed_files) - 20} more")
+
 
 @dataclass(frozen=True)
 class SkipDecision:
@@ -222,6 +252,12 @@ class TargetSelection:
 
     linux_families: list[str] = field(default_factory=list)
     windows_families: list[str] = field(default_factory=list)
+
+    def log(self) -> None:
+        """Log selected targets for CI diagnostics."""
+        print("TargetSelection:")
+        print(f"  linux: {self.linux_families}")
+        print(f"  windows: {self.windows_families}")
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +336,19 @@ class JobDecisions:
     build_pytorch: JobGroupDecision
     test_pytorch: JobGroupDecision
 
+    def log(self) -> None:
+        """Log job decisions for CI diagnostics."""
+        print("JobDecisions:")
+        print(
+            f"  test_type: {self.test_rocm.test_type} "
+            f"({self.test_rocm.test_type_reason})"
+        )
+        print(f"  build_rocm: {self.build_rocm.action}")
+        print(f"  test_rocm: {self.test_rocm.action}")
+        print(f"  build_rocm_python: {self.build_rocm_python.action}")
+        print(f"  build_pytorch: {self.build_pytorch.action}")
+        print(f"  test_pytorch: {self.test_pytorch.action}")
+
 
 @dataclass(frozen=True)
 class BuildConfig:
@@ -334,10 +383,25 @@ class BuildConfig:
 
 @dataclass(frozen=True)
 class BuildConfigs:
-    """Build configurations for both platforms, produced by expand_matrices."""
+    """Build configurations for both platforms, produced by expand_build_configs."""
 
     linux: BuildConfig | None = None
     windows: BuildConfig | None = None
+
+    def _log_platform(self, name: str, config: BuildConfig | None) -> None:
+        if config is None:
+            print(f"  {name}: skipped")
+        else:
+            print(
+                f"  {name}: {config.artifact_group} "
+                f"families={config.dist_amdgpu_families}"
+            )
+
+    def log(self) -> None:
+        """Log build configs for CI diagnostics."""
+        print("BuildConfigs:")
+        self._log_platform("linux", self.linux)
+        self._log_platform("windows", self.windows)
 
 
 @dataclass(frozen=True)
@@ -474,17 +538,17 @@ def decide_jobs(
 ) -> JobDecisions:
     """Determine which job groups to run, skip, or satisfy with prebuilt files.
 
-    All job groups currently run unconditionally — subgraph selection based
-    on changed files (Phase 4) will add skip/prebuilt decisions.
+    All job groups currently run unconditionally. test_type is determined
+    based on trigger type, labels, and changed files.
 
-    test_type is determined here based on trigger type, labels, and
-    changed files.
+    TODO(#3399): Use changed files and BUILD_TOPOLOGY.toml to set per-stage
+    prebuilt decisions in BuildRocmDecision.stage_decisions, and skip job
+    groups that aren't reachable from the changed files.
     """
     test_type, test_type_reason = _determine_test_type(
         ci_inputs=ci_inputs,
         git_context=git_context,
     )
-    print(f"  test_type: {test_type} ({test_type_reason})")
 
     return JobDecisions(
         build_rocm=BuildRocmDecision(action="run", reason="default"),
@@ -748,16 +812,23 @@ def format_summary(outputs: CIOutputs) -> str:
     lines.append("")
     lines.append(f"* `is_ci_enabled`: {outputs.is_ci_enabled}")
     if outputs.jobs:
-        lines.append(f"* `test_type`: {outputs.jobs.test_rocm.test_type}")
-        for name in (
-            "build_rocm",
-            "test_rocm",
-            "build_rocm_python",
-            "build_pytorch",
-            "test_pytorch",
-        ):
-            decision = getattr(outputs.jobs, name)
-            lines.append(f"* `{name}`: {decision.action} — {decision.reason}")
+        jobs = outputs.jobs
+        lines.append(f"* `test_type`: {jobs.test_rocm.test_type}")
+        lines.append(
+            f"* `build_rocm`: {jobs.build_rocm.action} — {jobs.build_rocm.reason}"
+        )
+        lines.append(
+            f"* `test_rocm`: {jobs.test_rocm.action} — {jobs.test_rocm.reason}"
+        )
+        lines.append(
+            f"* `build_rocm_python`: {jobs.build_rocm_python.action} — {jobs.build_rocm_python.reason}"
+        )
+        lines.append(
+            f"* `build_pytorch`: {jobs.build_pytorch.action} — {jobs.build_pytorch.reason}"
+        )
+        lines.append(
+            f"* `test_pytorch`: {jobs.test_pytorch.action} — {jobs.test_pytorch.reason}"
+        )
     return "\n".join(lines)
 
 
@@ -794,6 +865,9 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     CIInputs and GitContext directly and assert on the returned CIOutputs.
     No git operations or environment access needed.
     """
+    ci_inputs.log()
+    git_context.log()
+
     # Step 2: Gate — should we skip CI entirely?
     skip_decision = check_skip_ci(ci_inputs=ci_inputs, git_context=git_context)
     if skip_decision.skip:
@@ -803,13 +877,16 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     # Steps 3 and 4 are independent: job decisions (which job groups run)
     # and target selection (which GPU families) are orthogonal concerns.
     jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context)
+    jobs.log()
     targets = select_targets(ci_inputs)
+    targets.log()
 
     # Step 5: Build configs per platform
     builds = expand_build_configs(
         targets=targets,
         build_variant=ci_inputs.build_variant,
     )
+    builds.log()
 
     return CIOutputs(
         is_ci_enabled=True,
@@ -825,14 +902,6 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 
 def main():
     ci_inputs = CIInputs.from_environ()
-
-    print("Multi-arch CI configuration")
-    print(f"  event: {ci_inputs.event_name}")
-    print(f"  branch: {ci_inputs.branch_name}")
-    print(f"  variant: {ci_inputs.build_variant}")
-    if ci_inputs.pr_labels:
-        print(f"  pr_labels: {ci_inputs.pr_labels}")
-    print()
 
     # Build git context for push/PR triggers (need changed files for
     # skip-ci and test_type decisions). Schedule/workflow_dispatch don't
