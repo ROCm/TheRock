@@ -63,6 +63,44 @@ bool ContainsRole(const StubDecodedInstruction& instruction,
   return false;
 }
 
+std::uint32_t CountRoleBindings(const StubDecodedInstruction& instruction,
+                                StubOperandRole role) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_roles.binding_count; ++i) {
+    if (instruction.operand_roles.bindings[i].role == role) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountRoleBindingsWithCount(const StubDecodedInstruction& instruction,
+                                         StubOperandRole role,
+                                         std::uint32_t binding_count_value) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_roles.binding_count; ++i) {
+    const auto& binding = instruction.operand_roles.bindings[i];
+    if (binding.role == role && binding.count == binding_count_value) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountRoleBindingsWithOutputFlag(
+    const StubDecodedInstruction& instruction,
+    StubOperandRole role,
+    bool is_output) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_roles.binding_count; ++i) {
+    const auto& binding = instruction.operand_roles.bindings[i];
+    if (binding.role == role && binding.is_output == is_output) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 bool ContainsSlot(const StubDecodedInstruction& instruction,
                   StubOperandSlotKind slot_kind,
                   StubOperandValueClass value_class,
@@ -2138,6 +2176,36 @@ int main() {
               "expected routed WMMA scale seed to keep exact role/slot dimension mapping")) {
         return 1;
       }
+      if (!Expect(
+              CountRoleBindings(decoded, StubOperandRole::kDestination) == 1 &&
+                  CountRoleBindings(decoded, StubOperandRole::kSource0) == 1 &&
+                  CountRoleBindings(decoded, StubOperandRole::kSource1) == 1 &&
+                  CountRoleBindings(decoded, StubOperandRole::kAccumulator) == 1 &&
+                  CountRoleBindings(decoded, StubOperandRole::kScale) == 1 &&
+                  CountRoleBindingsWithCount(decoded, StubOperandRole::kDestination,
+                                             1) == 1 &&
+                  CountRoleBindingsWithCount(decoded, StubOperandRole::kSource0,
+                                             1) == 1 &&
+                  CountRoleBindingsWithCount(decoded, StubOperandRole::kSource1,
+                                             1) == 1 &&
+                  CountRoleBindingsWithCount(decoded,
+                                             StubOperandRole::kAccumulator,
+                                             1) == 1 &&
+                  CountRoleBindingsWithCount(decoded, StubOperandRole::kScale,
+                                             1) == 1 &&
+                  CountRoleBindingsWithOutputFlag(
+                      decoded, StubOperandRole::kDestination, true) == 1 &&
+                  CountRoleBindingsWithOutputFlag(
+                      decoded, StubOperandRole::kSource0, false) == 1 &&
+                  CountRoleBindingsWithOutputFlag(
+                      decoded, StubOperandRole::kSource1, false) == 1 &&
+                  CountRoleBindingsWithOutputFlag(
+                      decoded, StubOperandRole::kAccumulator, false) == 1 &&
+                  CountRoleBindingsWithOutputFlag(
+                      decoded, StubOperandRole::kScale, false) == 1,
+              "expected routed WMMA scale seed to keep exact operand-role binding mapping")) {
+        return 1;
+      }
     } else {
       if (!Expect(decoded.operand_slots.binding_count == 4 &&
                       decoded.operand_descriptors.descriptor_count == 4 &&
@@ -2450,6 +2518,32 @@ int main() {
                       core_accumulator_extents.columns,
                       core_accumulator_extents.depth) == 1,
               "expected routed WMMA/SWMMAC core seed to keep exact role/slot dimension mapping")) {
+        return 1;
+      }
+      if (!Expect(
+              CountRoleBindings(decoded, StubOperandRole::kDestination) == 1 &&
+                  CountRoleBindings(decoded, StubOperandRole::kSource0) == 1 &&
+                  CountRoleBindings(decoded, StubOperandRole::kSource1) == 1 &&
+                  CountRoleBindings(decoded, StubOperandRole::kAccumulator) == 1 &&
+                  CountRoleBindings(decoded, StubOperandRole::kScale) == 0 &&
+                  CountRoleBindingsWithCount(decoded, StubOperandRole::kDestination,
+                                             1) == 1 &&
+                  CountRoleBindingsWithCount(decoded, StubOperandRole::kSource0,
+                                             1) == 1 &&
+                  CountRoleBindingsWithCount(decoded, StubOperandRole::kSource1,
+                                             1) == 1 &&
+                  CountRoleBindingsWithCount(decoded,
+                                             StubOperandRole::kAccumulator,
+                                             1) == 1 &&
+                  CountRoleBindingsWithOutputFlag(
+                      decoded, StubOperandRole::kDestination, true) == 1 &&
+                  CountRoleBindingsWithOutputFlag(
+                      decoded, StubOperandRole::kSource0, false) == 1 &&
+                  CountRoleBindingsWithOutputFlag(
+                      decoded, StubOperandRole::kSource1, false) == 1 &&
+                  CountRoleBindingsWithOutputFlag(
+                      decoded, StubOperandRole::kAccumulator, false) == 1,
+              "expected routed WMMA/SWMMAC core seed to keep exact operand-role binding mapping")) {
         return 1;
       }
     }
@@ -3940,6 +4034,38 @@ int main() {
             "expected routed tensor seed to keep exact role/slot dimension mapping")) {
       return 1;
     }
+    if (!Expect(
+            CountRoleBindings(decoded, StubOperandRole::kTensorDescriptor) == 1 &&
+                CountRoleBindings(decoded, StubOperandRole::kTensorCoordinate) ==
+                    1 &&
+                CountRoleBindings(
+                    decoded,
+                    instruction_name == "TENSOR_LOAD_TO_LDS"
+                        ? StubOperandRole::kLdsDestination
+                        : StubOperandRole::kLdsSource) == 1 &&
+                CountRoleBindingsWithCount(
+                    decoded, StubOperandRole::kTensorDescriptor, 1) == 1 &&
+                CountRoleBindingsWithCount(
+                    decoded, StubOperandRole::kTensorCoordinate, 1) == 1 &&
+                CountRoleBindingsWithCount(
+                    decoded,
+                    instruction_name == "TENSOR_LOAD_TO_LDS"
+                        ? StubOperandRole::kLdsDestination
+                        : StubOperandRole::kLdsSource,
+                    1) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded, StubOperandRole::kTensorDescriptor, false) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded, StubOperandRole::kTensorCoordinate, false) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded,
+                    instruction_name == "TENSOR_LOAD_TO_LDS"
+                        ? StubOperandRole::kLdsDestination
+                        : StubOperandRole::kLdsSource,
+                    instruction_name == "TENSOR_LOAD_TO_LDS") == 1,
+            "expected routed tensor seed to keep exact operand-role binding mapping")) {
+      return 1;
+    }
     if (instruction_name == "TENSOR_LOAD_TO_LDS") {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
@@ -4288,6 +4414,20 @@ int main() {
                 CountSlotsOfKindAndDimensions(
                     decoded, StubOperandSlotKind::kDestination, 1, 1, 1) == 1,
             "expected routed VOP1 seed to keep exact role/slot dimension mapping")) {
+      return 1;
+    }
+    if (!Expect(
+            CountRoleBindings(decoded, StubOperandRole::kSource0) == 1 &&
+                CountRoleBindings(decoded, StubOperandRole::kDestination) == 1 &&
+                CountRoleBindingsWithCount(decoded, StubOperandRole::kSource0,
+                                           1) == 1 &&
+                CountRoleBindingsWithCount(
+                    decoded, StubOperandRole::kDestination, 1) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded, StubOperandRole::kSource0, false) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded, StubOperandRole::kDestination, true) == 1,
+            "expected routed VOP1 seed to keep exact operand-role binding mapping")) {
       return 1;
     }
     if (instruction_name.find("PK_") != std::string_view::npos) {
@@ -4657,6 +4797,30 @@ int main() {
             "expected routed VOP3 SDST seed to keep exact role/slot dimension mapping")) {
       return 1;
     }
+    if (!Expect(
+            CountRoleBindings(decoded, StubOperandRole::kSource0) == 1 &&
+                CountRoleBindings(decoded, StubOperandRole::kSource1) == 1 &&
+                CountRoleBindings(decoded, StubOperandRole::kScale) == 1 &&
+                CountRoleBindings(decoded, StubOperandRole::kDestination) == 1 &&
+                CountRoleBindingsWithCount(decoded, StubOperandRole::kSource0,
+                                           1) == 1 &&
+                CountRoleBindingsWithCount(decoded, StubOperandRole::kSource1,
+                                           1) == 1 &&
+                CountRoleBindingsWithCount(decoded, StubOperandRole::kScale,
+                                           1) == 1 &&
+                CountRoleBindingsWithCount(
+                    decoded, StubOperandRole::kDestination, 1) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded, StubOperandRole::kSource0, false) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded, StubOperandRole::kSource1, false) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded, StubOperandRole::kScale, false) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded, StubOperandRole::kDestination, true) == 1,
+            "expected routed VOP3 SDST seed to keep exact operand-role binding mapping")) {
+      return 1;
+    }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kScale) &&
                     HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
                     ContainsSlot(decoded, StubOperandSlotKind::kDestination,
@@ -4996,6 +5160,31 @@ int main() {
                 CountSlotsOfKindAndDimensions(
                     decoded, StubOperandSlotKind::kDestination, 1, 1, 1) == 1,
             "expected paired-scale helper to keep exact role/slot dimension mapping")) {
+      return 1;
+    }
+    if (!Expect(
+            CountRoleBindings(decoded, StubOperandRole::kSource0) == 1 &&
+                CountRoleBindings(decoded, StubOperandRole::kScale) == 1 &&
+                CountRoleBindings(decoded, StubOperandRole::kPairedScale) == 1 &&
+                CountRoleBindings(decoded, StubOperandRole::kDestination) == 1 &&
+                CountRoleBindingsWithCount(decoded, StubOperandRole::kSource0,
+                                           1) == 1 &&
+                CountRoleBindingsWithCount(decoded, StubOperandRole::kScale,
+                                           1) == 1 &&
+                CountRoleBindingsWithCount(decoded,
+                                           StubOperandRole::kPairedScale,
+                                           1) == 1 &&
+                CountRoleBindingsWithCount(
+                    decoded, StubOperandRole::kDestination, 1) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded, StubOperandRole::kSource0, false) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded, StubOperandRole::kScale, false) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded, StubOperandRole::kPairedScale, false) == 1 &&
+                CountRoleBindingsWithOutputFlag(
+                    decoded, StubOperandRole::kDestination, true) == 1,
+            "expected paired-scale helper to keep exact operand-role binding mapping")) {
       return 1;
     }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kSource0) &&

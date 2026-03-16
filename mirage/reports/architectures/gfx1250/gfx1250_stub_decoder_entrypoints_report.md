@@ -33,6 +33,7 @@
   - route-wide exact descriptor role-to-element-bit-width and slot-kind-to-element-bit-width validation across the current routed matrix and non-matrix seed sets
   - route-wide exact descriptor role-to-packed-elements and slot-kind-to-packed-elements validation across the current routed matrix and non-matrix seed sets
   - route-wide exact descriptor role-to-dimensions and slot-kind-to-dimensions validation across the current routed matrix and non-matrix seed sets
+  - route-wide exact operand-role binding count and output-flag validation across the current routed matrix and non-matrix seed sets
 
 ## Routed Seed Metadata Coverage
 
@@ -173,6 +174,7 @@
     - route-wide exact descriptor role-to-element-bit-width and slot-kind-to-element-bit-width checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact descriptor role-to-packed-elements and slot-kind-to-packed-elements checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact descriptor role-to-dimensions and slot-kind-to-dimensions checks across current routed non-scale `V_WMMA_*` seeds
+    - route-wide exact operand-role binding count and output-flag checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide role-specific wave32 checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide wave32 validation across current routed `V_WMMA_*` seeds except paired-load helpers
 - WMMA scale:
@@ -208,6 +210,7 @@
     - route-wide exact descriptor role-to-element-bit-width and slot-kind-to-element-bit-width checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact descriptor role-to-packed-elements and slot-kind-to-packed-elements checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact descriptor role-to-dimensions and slot-kind-to-dimensions checks across current routed `V_WMMA_SCALE*` seeds
+    - route-wide exact operand-role binding count and output-flag checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide scalar scale-slot and scale-descriptor checks across current routed `V_WMMA_SCALE*` seeds
 - WMMA scale paired loads:
   - `V_WMMA_LD_SCALE_PAIRED_B32` -> `kWmmaLdScalePairedB32`
@@ -238,6 +241,7 @@
     - route-wide exact descriptor role-to-element-bit-width and slot-kind-to-element-bit-width checks across current paired scale-load helpers
     - route-wide exact descriptor role-to-packed-elements and slot-kind-to-packed-elements checks across current paired scale-load helpers
     - route-wide exact descriptor role-to-dimensions and slot-kind-to-dimensions checks across current paired scale-load helpers
+    - route-wide exact operand-role binding count and output-flag checks across current paired scale-load helpers
     - route-wide exact vector source/destination and scalar scale / paired-scale slot-shape checks across current paired scale-load helpers
     - route-wide exact scalar scale / paired-scale and width-specific destination descriptor-shape checks across current paired scale-load helpers
     - route-wide explicit slot/descriptor validation across current paired scale-load helpers
@@ -282,6 +286,7 @@
     - route-wide exact descriptor role-to-element-bit-width and slot-kind-to-element-bit-width checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact descriptor role-to-packed-elements and slot-kind-to-packed-elements checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact descriptor role-to-dimensions and slot-kind-to-dimensions checks across current routed `V_SWMMAC_*` seeds
+    - route-wide exact operand-role binding count and output-flag checks across current routed `V_SWMMAC_*` seeds
     - route-wide role-specific wave32 checks across current routed `V_SWMMAC_*` seeds
     - route-wide wave32 validation across current routed `V_SWMMAC_*` seeds
 - Tensor routes:
@@ -314,6 +319,7 @@
     - route-wide exact descriptor role-to-element-bit-width and slot-kind-to-element-bit-width checks across the current tensor route set
     - route-wide exact descriptor role-to-packed-elements and slot-kind-to-packed-elements checks across the current tensor route set
     - route-wide exact descriptor role-to-dimensions and slot-kind-to-dimensions checks across the current tensor route set
+    - route-wide exact operand-role binding count and output-flag checks across the current tensor route set
     - route-wide exact tensor-descriptor, tensor-coordinate, and LDS address slot-shape checks across the current tensor route set
     - route-wide exact tensor-descriptor, tensor-coordinate, and LDS address descriptor-shape checks across the current tensor route set
     - route-wide explicit slot/descriptor validation across the current tensor route set
@@ -345,6 +351,7 @@
     - route-wide exact descriptor role-to-element-bit-width and slot-kind-to-element-bit-width checks across the current VOP1 route set
     - route-wide exact descriptor role-to-packed-elements and slot-kind-to-packed-elements checks across the current VOP1 route set
     - route-wide exact descriptor role-to-dimensions and slot-kind-to-dimensions checks across the current VOP1 route set
+    - route-wide exact operand-role binding count and output-flag checks across the current VOP1 route set
     - route-wide exact scalar and packed source/destination slot-shape checks across the current VOP1 route set
     - route-wide exact scalar and packed source/destination descriptor-shape checks across the current VOP1 route set
     - route-wide explicit slot/descriptor validation across the current VOP1 route set
@@ -374,6 +381,7 @@
     - route-wide exact descriptor role-to-element-bit-width and slot-kind-to-element-bit-width checks across the current VOP3 SDST route set
     - route-wide exact descriptor role-to-packed-elements and slot-kind-to-packed-elements checks across the current VOP3 SDST route set
     - route-wide exact descriptor role-to-dimensions and slot-kind-to-dimensions checks across the current VOP3 SDST route set
+    - route-wide exact operand-role binding count and output-flag checks across the current VOP3 SDST route set
     - route-wide exact source, scale, and vector/scalar destination slot-shape checks across the current VOP3 SDST route set
     - route-wide exact scale-source and vector/scalar destination descriptor-shape checks across the current VOP3 SDST route set
     - route-wide explicit slot/descriptor validation across the current VOP3 SDST route set
