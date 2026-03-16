@@ -288,6 +288,14 @@ class MatrixEntry:
 
 
 @dataclass(frozen=True)
+class MatrixExpansion:
+    """Matrix entries for both platforms, produced by expand_matrices."""
+
+    linux_variants: list[MatrixEntry] = field(default_factory=list)
+    windows_variants: list[MatrixEntry] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class CIOutputs:
     """All outputs from the CI configuration pipeline."""
 
@@ -473,35 +481,27 @@ def select_targets(inputs: CIInputs) -> TargetSelection:
 # ---------------------------------------------------------------------------
 
 
-def expand_matrix(
+def _expand_matrix_for_platform(
     families: list[str],
     platform: str,
     build_variant: str,
+    all_families: dict[str, dict],
+    variant_config: dict,
 ) -> list[MatrixEntry]:
-    """Expand families into multi-arch matrix entries for one platform.
+    """Expand families into a single multi-arch matrix entry for one platform.
 
-    In multi-arch mode, all families that support the requested build variant
-    are grouped into a single matrix entry. This produces one entry per
-    build variant (typically just one — "release"), containing a JSON array
-    of per-family info that downstream jobs matrix-expand over for
-    per-architecture stages.
+    Collects per-family info for all families that support the requested
+    build variant, then bundles them into one MatrixEntry. Returns an empty
+    list if no families match (e.g. variant not available on this platform).
 
-    The per-family info includes:
+    Per-family info fields:
     - amdgpu_family: family name for THEROCK_AMDGPU_FAMILIES
     - amdgpu_targets: comma-separated gfx targets for split artifact fetching
     - test-runs-on: runner label for testing (empty = no test runner available)
     - sanity_check_only_for_family: whether to limit test scope
     """
-    all_families = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit", "nightly"]
-    )
-    platform_build_variants = all_build_variants.get(platform, {})
-
-    # Collect per-family info, grouped by build variant. Each family may
-    # support multiple variants (e.g. gfx94x supports release + asan + tsan),
-    # but we only keep families that match the requested build_variant.
-    variant_family_info: dict[str, list[dict]] = {}
-    variant_config: dict[str, dict] = {}
+    per_family_info: list[dict] = []
+    seen_families: set[str] = set()
 
     for family_name in families:
         family_entry = all_families.get(family_name)
@@ -509,62 +509,93 @@ def expand_matrix(
             continue
         platform_info = family_entry[platform]
 
-        for supported_variant in platform_info.get("build_variants", []):
-            if supported_variant != build_variant:
-                continue
-
-            if supported_variant not in variant_family_info:
-                variant_family_info[supported_variant] = []
-                variant_config[supported_variant] = platform_build_variants.get(
-                    supported_variant, {}
-                )
-
-            # De-dup by family name (a family can appear once per variant).
-            existing = [
-                f["amdgpu_family"] for f in variant_family_info[supported_variant]
-            ]
-            amdgpu_family = platform_info["family"]
-            if amdgpu_family in existing:
-                continue
-
-            fetch_gfx_targets = platform_info.get("fetch-gfx-targets", [])
-            variant_family_info[supported_variant].append(
-                {
-                    "amdgpu_family": amdgpu_family,
-                    "amdgpu_targets": ",".join(fetch_gfx_targets),
-                    "test-runs-on": platform_info.get("test-runs-on", ""),
-                    "sanity_check_only_for_family": platform_info.get(
-                        "sanity_check_only_for_family", False
-                    ),
-                }
-            )
-
-    # Create one MatrixEntry per build variant.
-    entries: list[MatrixEntry] = []
-    for variant_name, family_info_list in variant_family_info.items():
-        config = variant_config[variant_name]
-        if not config:
+        # Skip families that don't support this build variant.
+        if build_variant not in platform_info.get("build_variants", []):
             continue
 
-        family_names = [f["amdgpu_family"] for f in family_info_list]
-        expect_failure = config.get("expect_failure", False)
-        expect_pytorch_failure = config.get("expect_pytorch_failure", False)
-        suffix = config.get("build_variant_suffix", "")
+        amdgpu_family = platform_info["family"]
+        if amdgpu_family in seen_families:
+            continue
+        seen_families.add(amdgpu_family)
 
-        entries.append(
-            MatrixEntry(
-                matrix_per_family_json=json.dumps(family_info_list),
-                dist_amdgpu_families=";".join(family_names),
-                artifact_group=f"multi-arch-{suffix or 'release'}",
-                build_variant_label=config["build_variant_label"],
-                build_variant_suffix=suffix,
-                build_variant_cmake_preset=config["build_variant_cmake_preset"],
-                expect_failure=expect_failure,
-                build_pytorch=not expect_failure and not expect_pytorch_failure,
-            )
+        fetch_gfx_targets = platform_info.get("fetch-gfx-targets", [])
+        per_family_info.append(
+            {
+                "amdgpu_family": amdgpu_family,
+                "amdgpu_targets": ",".join(fetch_gfx_targets),
+                "test-runs-on": platform_info.get("test-runs-on", ""),
+                "sanity_check_only_for_family": platform_info.get(
+                    "sanity_check_only_for_family", False
+                ),
+            }
         )
 
-    return entries
+    if not per_family_info:
+        return []
+
+    family_names = [f["amdgpu_family"] for f in per_family_info]
+    expect_failure = variant_config.get("expect_failure", False)
+    expect_pytorch_failure = variant_config.get("expect_pytorch_failure", False)
+    suffix = variant_config.get("build_variant_suffix", "")
+
+    return [
+        MatrixEntry(
+            matrix_per_family_json=json.dumps(per_family_info),
+            dist_amdgpu_families=";".join(family_names),
+            artifact_group=f"multi-arch-{suffix or 'release'}",
+            build_variant_label=variant_config["build_variant_label"],
+            build_variant_suffix=suffix,
+            build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
+            expect_failure=expect_failure,
+            build_pytorch=not expect_failure and not expect_pytorch_failure,
+        )
+    ]
+
+
+def expand_matrices(
+    targets: TargetSelection,
+    build_variant: str,
+) -> MatrixExpansion:
+    """Expand target families into matrix entries for both platforms.
+
+    Each platform gets either a single-element list (one MatrixEntry bundling
+    all families) or an empty list (if the build variant isn't available on
+    that platform or no families match).
+    """
+    all_families = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit", "nightly"]
+    )
+
+    linux_variants: list[MatrixEntry] = []
+    windows_variants: list[MatrixEntry] = []
+
+    for platform, families in [
+        ("linux", targets.linux_families),
+        ("windows", targets.windows_families),
+    ]:
+        variant_config = all_build_variants.get(platform, {}).get(build_variant)
+        if not variant_config:
+            print(
+                f"  Platform {platform} has no config for build variant "
+                f"{build_variant}, skipping matrix expansion"
+            )
+            continue
+        entries = _expand_matrix_for_platform(
+            families=families,
+            platform=platform,
+            build_variant=build_variant,
+            all_families=all_families,
+            variant_config=variant_config,
+        )
+        if platform == "linux":
+            linux_variants = entries
+        else:
+            windows_variants = entries
+
+    return MatrixExpansion(
+        linux_variants=linux_variants,
+        windows_variants=windows_variants,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -643,21 +674,15 @@ def configure(inputs: CIInputs) -> CIOutputs:
     targets = select_targets(inputs)
 
     # Step 5: Expand matrix
-    linux_matrix = expand_matrix(
-        families=targets.linux_families,
-        platform="linux",
-        build_variant=inputs.build_variant,
-    )
-    windows_matrix = expand_matrix(
-        families=targets.windows_families,
-        platform="windows",
+    matrices = expand_matrices(
+        targets=targets,
         build_variant=inputs.build_variant,
     )
 
     return CIOutputs(
         is_ci_enabled=True,
-        linux_variants=linux_matrix,
-        windows_variants=windows_matrix,
+        linux_variants=matrices.linux_variants,
+        windows_variants=matrices.windows_variants,
         jobs=jobs,
     )
 

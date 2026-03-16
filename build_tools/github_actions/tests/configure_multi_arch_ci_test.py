@@ -422,13 +422,32 @@ class TestSelectTargets(unittest.TestCase):
 
 
 class TestExpandMatrix(unittest.TestCase):
-    """Test matrix expansion."""
+    """Test matrix expansion (_expand_matrix_for_platform and expand_matrices)."""
+
+    def _expand(self, families, platform, build_variant):
+        """Helper: look up variant config and call _expand_matrix_for_platform."""
+        from amdgpu_family_matrix import (
+            all_build_variants,
+            get_all_families_for_trigger_types,
+        )
+
+        all_families = get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
+        variant_config = all_build_variants.get(platform, {}).get(build_variant)
+        if not variant_config:
+            return []
+        return cm._expand_matrix_for_platform(
+            families=families,
+            platform=platform,
+            build_variant=build_variant,
+            all_families=all_families,
+            variant_config=variant_config,
+        )
 
     def test_empty_families_returns_empty(self):
         """No families → no matrix entries."""
-        result = cm.expand_matrix(
-            families=[], platform="linux", build_variant="release"
-        )
+        result = self._expand([], "linux", "release")
         self.assertEqual(result, [])
 
     def test_matrix_entry_to_dict(self):
@@ -450,10 +469,8 @@ class TestExpandMatrix(unittest.TestCase):
 
     def test_linux_release_presubmit_families(self):
         """Presubmit families on linux/release produces one entry with all families."""
-        result = cm.expand_matrix(
-            families=["gfx94x", "gfx110x", "gfx1151", "gfx120x"],
-            platform="linux",
-            build_variant="release",
+        result = self._expand(
+            ["gfx94x", "gfx110x", "gfx1151", "gfx120x"], "linux", "release"
         )
         self.assertEqual(len(result), 1)
         entry = result[0]
@@ -479,14 +496,11 @@ class TestExpandMatrix(unittest.TestCase):
 
     def test_windows_release_presubmit_families(self):
         """Windows release includes only families with a windows platform entry."""
-        result = cm.expand_matrix(
-            families=["gfx94x", "gfx110x", "gfx1151", "gfx120x"],
-            platform="windows",
-            build_variant="release",
+        result = self._expand(
+            ["gfx94x", "gfx110x", "gfx1151", "gfx120x"], "windows", "release"
         )
         self.assertEqual(len(result), 1)
-        entry = result[0]
-        per_family = json.loads(entry.matrix_per_family_json)
+        per_family = json.loads(result[0].matrix_per_family_json)
         family_names = [f["amdgpu_family"] for f in per_family]
         # gfx94x has no windows entry in the matrix.
         self.assertNotIn("gfx94X-dcgpu", family_names)
@@ -497,11 +511,7 @@ class TestExpandMatrix(unittest.TestCase):
 
     def test_per_family_info_fields(self):
         """Per-family info contains expected fields."""
-        result = cm.expand_matrix(
-            families=["gfx94x"],
-            platform="linux",
-            build_variant="release",
-        )
+        result = self._expand(["gfx94x"], "linux", "release")
         self.assertEqual(len(result), 1)
         per_family = json.loads(result[0].matrix_per_family_json)
         self.assertEqual(len(per_family), 1)
@@ -513,31 +523,19 @@ class TestExpandMatrix(unittest.TestCase):
 
     def test_sanity_check_flag_propagated(self):
         """sanity_check_only_for_family flows through to per-family info."""
-        result = cm.expand_matrix(
-            families=["gfx110x"],
-            platform="linux",
-            build_variant="release",
-        )
+        result = self._expand(["gfx110x"], "linux", "release")
         per_family = json.loads(result[0].matrix_per_family_json)
         self.assertTrue(per_family[0]["sanity_check_only_for_family"])
 
     def test_variant_not_supported_by_family(self):
         """A family that doesn't support the requested variant is excluded."""
         # gfx110x only supports "release", not "asan".
-        result = cm.expand_matrix(
-            families=["gfx110x"],
-            platform="linux",
-            build_variant="asan",
-        )
+        result = self._expand(["gfx110x"], "linux", "asan")
         self.assertEqual(result, [])
 
     def test_asan_variant(self):
-        """ASAN variant produces a separate entry with correct metadata."""
-        result = cm.expand_matrix(
-            families=["gfx94x"],
-            platform="linux",
-            build_variant="asan",
-        )
+        """ASAN variant produces an entry with correct metadata."""
+        result = self._expand(["gfx94x"], "linux", "asan")
         self.assertEqual(len(result), 1)
         entry = result[0]
         self.assertEqual(entry.build_variant_label, "asan")
@@ -549,11 +547,7 @@ class TestExpandMatrix(unittest.TestCase):
 
     def test_tsan_variant_expect_failure(self):
         """TSAN variant has expect_failure=True and build_pytorch=False."""
-        result = cm.expand_matrix(
-            families=["gfx94x"],
-            platform="linux",
-            build_variant="tsan",
-        )
+        result = self._expand(["gfx94x"], "linux", "tsan")
         self.assertEqual(len(result), 1)
         entry = result[0]
         self.assertEqual(entry.build_variant_label, "tsan")
@@ -562,54 +556,76 @@ class TestExpandMatrix(unittest.TestCase):
 
     def test_unknown_family_skipped(self):
         """A family not in the matrix is silently skipped."""
-        result = cm.expand_matrix(
-            families=["gfx_nonexistent"],
-            platform="linux",
-            build_variant="release",
-        )
+        result = self._expand(["gfx_nonexistent"], "linux", "release")
         self.assertEqual(result, [])
 
     def test_unknown_platform_returns_empty(self):
         """A platform with no build variants returns empty."""
-        result = cm.expand_matrix(
-            families=["gfx94x"],
-            platform="macos",
-            build_variant="release",
-        )
+        result = self._expand(["gfx94x"], "macos", "release")
         self.assertEqual(result, [])
 
     def test_nightly_family_expect_pytorch_failure(self):
-        """Nightly families with expect_pytorch_failure set build_pytorch=False."""
+        """expect_pytorch_failure is per-family data, not per-variant config."""
         # gfx906 on windows has expect_pytorch_failure in the family matrix data,
         # but that's per-family, not per-variant. The variant config for
         # windows/release doesn't set expect_pytorch_failure, so build_pytorch
-        # should be True. (expect_pytorch_failure is a per-family flag handled
-        # downstream, not in expand_matrix's variant config.)
-        result = cm.expand_matrix(
-            families=["gfx906"],
-            platform="windows",
-            build_variant="release",
-        )
+        # is True at the matrix level.
+        result = self._expand(["gfx906"], "windows", "release")
         self.assertEqual(len(result), 1)
-        # The variant config (windows/release) has no expect_pytorch_failure,
-        # so build_pytorch is True at the matrix level.
         self.assertTrue(result[0].build_pytorch)
 
     def test_multiple_fetch_gfx_targets(self):
         """Multiple fetch-gfx-targets are comma-joined in amdgpu_targets."""
-        result = cm.expand_matrix(
-            families=["gfx120x"],
-            platform="linux",
-            build_variant="release",
-        )
+        result = self._expand(["gfx120x"], "linux", "release")
         per_family = json.loads(result[0].matrix_per_family_json)
         # gfx120x has fetch-gfx-targets: ["gfx1200", "gfx1201"]
         self.assertEqual(per_family[0]["amdgpu_targets"], "gfx1200,gfx1201")
 
-    def test_output_matches_generate_multi_arch_matrix(self):
-        """expand_matrix output matches configure_ci.generate_multi_arch_matrix.
+    # -- expand_matrices (both-platform wrapper) --
 
-        This is a parity test: the new function should produce identical output
+    def test_expand_matrices_both_platforms(self):
+        """expand_matrices returns entries for both linux and windows."""
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x", "gfx110x"],
+            windows_families=["gfx110x", "gfx1151"],
+        )
+        result = cm.expand_matrices(targets=targets, build_variant="release")
+        self.assertEqual(len(result.linux_variants), 1)
+        self.assertEqual(len(result.windows_variants), 1)
+
+        linux_families = json.loads(result.linux_variants[0].matrix_per_family_json)
+        linux_names = [f["amdgpu_family"] for f in linux_families]
+        self.assertIn("gfx94X-dcgpu", linux_names)
+        self.assertIn("gfx110X-all", linux_names)
+
+        windows_families = json.loads(result.windows_variants[0].matrix_per_family_json)
+        windows_names = [f["amdgpu_family"] for f in windows_families]
+        self.assertIn("gfx110X-all", windows_names)
+        self.assertIn("gfx1151", windows_names)
+
+    def test_expand_matrices_variant_not_on_windows(self):
+        """ASAN has no windows config → windows list is empty."""
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_matrices(targets=targets, build_variant="asan")
+        self.assertEqual(len(result.linux_variants), 1)
+        self.assertEqual(result.windows_variants, [])
+
+    def test_expand_matrices_empty_targets(self):
+        """Empty targets on both platforms → both lists empty."""
+        targets = cm.TargetSelection()
+        result = cm.expand_matrices(targets=targets, build_variant="release")
+        self.assertEqual(result.linux_variants, [])
+        self.assertEqual(result.windows_variants, [])
+
+    # -- Parity test --
+
+    def test_output_matches_generate_multi_arch_matrix(self):
+        """expand_matrices output matches configure_ci.generate_multi_arch_matrix.
+
+        Parity test: the new functions should produce identical output
         to the old one for the same inputs.
         """
         from amdgpu_family_matrix import (
@@ -619,28 +635,34 @@ class TestExpandMatrix(unittest.TestCase):
         from configure_ci import generate_multi_arch_matrix
 
         families = ["gfx94x", "gfx110x", "gfx1151", "gfx120x"]
-        platform = "linux"
         variant = "release"
-
         lookup_matrix = get_all_families_for_trigger_types(
             ["presubmit", "postsubmit", "nightly"]
         )
-        old_result = generate_multi_arch_matrix(
-            target_names=families,
-            lookup_matrix=lookup_matrix,
-            platform=platform,
-            platform_build_variants=all_build_variants[platform],
-            base_args={"build_variant": variant},
-        )
 
-        new_result = cm.expand_matrix(
-            families=families, platform=platform, build_variant=variant
+        targets = cm.TargetSelection(
+            linux_families=families,
+            windows_families=families,
         )
-        new_as_dicts = [entry.to_dict() for entry in new_result]
+        result = cm.expand_matrices(targets=targets, build_variant=variant)
 
-        self.assertEqual(len(old_result), len(new_as_dicts))
-        for old_entry, new_entry in zip(old_result, new_as_dicts):
-            self.assertEqual(old_entry, new_entry)
+        for platform, new_result in [
+            ("linux", result.linux_variants),
+            ("windows", result.windows_variants),
+        ]:
+            old_result = generate_multi_arch_matrix(
+                target_names=families,
+                lookup_matrix=lookup_matrix,
+                platform=platform,
+                platform_build_variants=all_build_variants[platform],
+                base_args={"build_variant": variant},
+            )
+            new_as_dicts = [entry.to_dict() for entry in new_result]
+            self.assertEqual(
+                len(old_result), len(new_as_dicts), f"length mismatch on {platform}"
+            )
+            for old_entry, new_entry in zip(old_result, new_as_dicts):
+                self.assertEqual(old_entry, new_entry, f"entry mismatch on {platform}")
 
 
 # ---------------------------------------------------------------------------
@@ -706,7 +728,7 @@ class TestConfigurePipeline(unittest.TestCase):
     @patch("configure_multi_arch_ci.check_skip_ci")
     @patch("configure_multi_arch_ci.select_targets")
     @patch("configure_multi_arch_ci.decide_jobs")
-    @patch("configure_multi_arch_ci.expand_matrix")
+    @patch("configure_multi_arch_ci.expand_matrices")
     def test_pipeline_calls_all_steps(
         self, mock_expand, mock_jobs, mock_targets, mock_skip
     ):
@@ -723,7 +745,7 @@ class TestConfigurePipeline(unittest.TestCase):
             build_pytorch=cm.JobGroupDecision(action="run", reason="default"),
             test_pytorch=cm.JobGroupDecision(action="run", reason="default"),
         )
-        mock_expand.return_value = []
+        mock_expand.return_value = cm.MatrixExpansion()
 
         inputs = cm.CIInputs(
             event_name="workflow_dispatch",
@@ -737,8 +759,7 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertIsNotNone(outputs.jobs)
         mock_targets.assert_called_once()
         mock_jobs.assert_called_once()
-        # expand_matrix called twice: once for linux, once for windows
-        self.assertEqual(mock_expand.call_count, 2)
+        mock_expand.assert_called_once()
 
 
 if __name__ == "__main__":
