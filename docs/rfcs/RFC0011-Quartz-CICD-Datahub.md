@@ -2,7 +2,7 @@
 
 - **Author:** Laura Promberger (HereThereBeDragons)
 - **Created:** 2026-03-03
-- **Modified:** 2026-03-03
+- **Modified:** 2026-03-16
 - **Status:** Draft
 - **Discussion:** https://github.com/ROCm/TheRock/discussions/3782
 
@@ -12,7 +12,7 @@ This RFC proposes Quartz, a central CI/CD data hub that collects TheRock build a
 
 TheRock CI produces build and test results continuously, but there is no unified place to observe them, no mechanism for downstream projects to be automatically notified when a (nightly) build succeeds, and no way for downstream projects to report their test results back. Each project polls GitHub, scrapes logs, or relies on manual handoff.
 
-Quartz closes this gap. It is implemented as GitHub Actions workflows in a dedicated `ROCm/quartz` repository. All ingestion, validation, and notification logic is written in Python. As a backend it will use a database (choice: ClickHouse Cloud). Four GitHub Apps handle authenticated data transport between repositories.
+Quartz closes this gap. It is implemented as GitHub Actions workflows in a dedicated `ROCm/quartz` repository. All ingestion, validation, and notification logic is written in Python. ClickHouse Cloud is used as the database backend. Four GitHub Apps handle authenticated data transport between repositories.
 
 ## Goals
 
@@ -102,7 +102,8 @@ ROCm/quartz/
 ├── scripts/
 │   ├── validate_allowlist.py
 │   ├── validate_schema.py
-│   └── insert_database.py
+│   ├── insert_therock_data.py
+│   └── generate_status_json.py
 │
 ├── release-nightly/
 │   ├── 20260215/
@@ -139,7 +140,7 @@ Tier 1 uses a single shared app across all ROCm-org projects — simpler onboard
 **Authentication:** Every incoming `workflow_dispatch` to Quartz must pass two independent checks:
 
 1. **GitHub App token** — GitHub validates the token before accepting the dispatch; cannot be forged.
-1. **Allowlist match** — `github.event.installation.id` must match the expected App ID for that repository in `config/allow-list/<project>.yml`.
+1. **App ID match** — `github.event.installation.id` must match the expected App ID. For downstream projects this is declared in `config/allow-list/<project>.yml`. For Quartz Hauly (TheRock → Quartz), the verification mechanism — hardcoded App ID in the workflow vs. a dedicated allow-list entry — is to be decided during implementation.
 
 A project claiming to be `ROCm/vllm` with the wrong App ID is rejected. A project not in the allowlist is rejected and should trigger a security alert.
 
@@ -160,7 +161,11 @@ ClickHouse's ReplacingMergeTree engine is used for both tables: inserts are alwa
 
 ### Race Conditions and Out-of-Order Messages
 
-Jobs from the same workflow run arrive concurrently and potentially out of order. Each job writes to its own independent row. The workflow adds a current timestamp before sending to Quartz — newest timestamp wins regardless of processing order.
+Jobs from the same workflow run arrive concurrently and potentially out of order. Each job writes to its own independent row.
+
+**Deduplication strategy:** ReplacingMergeTree uses a `version` integer column (not a timestamp) to determine which row wins. The version is computed as `run_attempt * 2 + signal_type`, where `signal_type` is 0 for START and 1 for FINISH. This guarantees FINISH always wins over START within the same attempt, and later attempts always win over earlier ones — with no dependency on runner clocks.
+
+**Timestamps:** `started_at` and `completed_at` are not taken from the runner clock. `send_to_quartz.py` fetches them from the GitHub API using the `job_id`, ensuring they come from GitHub's infrastructure. For FINISH signals, Quartz fetches `completed_at` via the GitHub API when processing the dispatch — by the time a Quartz runner is assigned, the TheRock job has already completed and `completed_at` is available. If it is not yet recorded, Quartz retries the API call with a short backoff.
 
 ### Lost and Stuck Messages
 
@@ -176,7 +181,7 @@ Downstream projects install the Quartz Conveyor GitHub App and declare their sub
 
 Projects that prefer not to appear publicly in `subscriber.yml` can store their details as a GitHub secret on the Quartz repository; `subscriber.yml` then references the secret.
 
-*Note: Whether Quartz Conveyor uses `workflow_dispatch` (targets a single named workflow) or `repository_dispatch` (triggers all listening workflows) is to be decided during Phase 2 design.*
+*Note: Quartz Conveyor uses `workflow_dispatch` (targets a single named workflow) as the starting point. `repository_dispatch` (triggers all listening workflows) may be added on request.*
 
 ### Pull (status.json)
 
@@ -220,6 +225,8 @@ Blast radius is limited to `ROCm/quartz` only — apps are installed on Quartz a
 
 Quartz is delivered in five phases, each building on the previous.
 
+Across all phases, a dedicated test repository mocks TheRock and downstream project workflows to allow development and validation in a non-production environment before changes are applied to the real pipelines.
+
 **Phase 1 — TheRock release workflows → Quartz + status.json**
 Create the `ROCm/quartz` repository and database, stand up the Quartz Hauly GitHub App, and implement the TheRock data ingest workflow. Scope is limited to nightly and prerelease workflows. Publish `status.json` artifacts so downstream projects can begin polling immediately.
 
@@ -234,6 +241,72 @@ Define the downstream callback schema and implement the Quartz Hunt (Tier 1) and
 
 **Phase 5 — Expand Notification system to PR-Subscriptions**
 When a downstream project PR triggers a TheRock CI run, notify that project automatically on completion. Covered by a follow-up RFC — see Scope and Deferred Work.
+
+## Phase 1 Implementation Plan
+
+*Detailed implementation plans are provided for Phase 1 and Phase 2 only. Phases 3–5 will be detailed in a follow-up.*
+
+### A. Infrastructure
+
+- Create `ROCm/quartz` repository *(completed)*
+- Register and install GitHub Apps (Quartz Hauly, Quartz Conveyor, Quartz Hunt) *(completed)*
+  - Store secrets of them in relevant repositories *(completed)*
+- Create test repository with mock TheRock and downstream workflows for development and validation in a non-production environment *(completed)*
+- Quartz repository access control: branch protection on `main`, CODEOWNERS for `.github/workflows/`, `scripts/`, `config/allow-list/`, explicit `permissions:` on all workflows
+- Database setup:
+  - Provision ClickHouse Cloud service
+  - Create database and deploy schema: `therock_workflow_runs`, `therock_workflow_jobs`
+  - Create read/write service account for Quartz workflows
+  - Store database credentials as secrets in the Quartz repository
+
+### B. Quartz Repository: Database Ingest
+
+- `receive-therock-data.yml`: accepts `workflow_dispatch` from TheRock, verifies Quartz Hauly App ID (`github.event.installation.id`) as first step, calls Python scripts. Permissions: `contents: write`, all others `none`
+- `scripts/validate_schema.py`: Pydantic validation of the incoming payload; rejects malformed or out-of-range values before any database write
+- `scripts/insert_therock_data.py`: inserts rows into `therock_workflow_runs` and `therock_workflow_jobs`; on failure, marks the workflow run as failed
+
+### C. Quartz Repository: Updating/Creating status.json
+
+- Updated on every incoming TheRock signal via `scripts/generate_status_json.py`
+- `scripts/generate_status_json.py`: reads current `status.json` as a Python dict, applies the new job's data, writes back as JSON, commits. Uses a git retry loop (pull → update → push, up to 5 retries with random 1–3 s backoff) to handle concurrent updates. A `status.json` commit that exhausts all retries opens a GitHub Issue and marks the workflow run as failed
+- Structure: per platform → architecture → pipeline (rocm / pytorch / jax) → job list
+- Published to:
+  - `release-nightly/<date>/status.json`
+  - `prerelease/<version>/status.json`
+  - `latest.json` → most recent nightly
+  - `latest_good.json` → most recent fully-passing nightly *(definition of "fully passing" to be decided: e.g. all architectures pass, or a required subset; PyTorch and JAX included or ROCm only)*
+- Add pull subscriber onboarding template: `templates/subscriber-pull.yml` — scheduled workflow polling `status.json`
+
+### D. TheRock Repository Changes
+
+- Develop and validate dispatch steps against the test repository before applying to production TheRock workflows
+- Instrumented workflows: nightly and prerelease
+- `send_to_quartz.py`: aggregates and dispatches job data to Quartz via the Quartz Hauly app. A single script handles all contexts via arguments (pipeline: rocm/pytorch/jax, job type: build/test, signal: start/finish). Fetches `started_at` and `completed_at` from the GitHub API using `job_id` — no runner clock used. Sets `version = run_attempt * 2 + signal_type` for deduplication
+- Add dispatch step calling `send_to_quartz.py` to each ROCm, PyTorch, and JAX build and test job: fires on job start and on job finish (`if: always()`)
+- Add workflow-level completion signal: a final step with `if: always()` dispatches after all jobs — Quartz uses this to mark any unreported jobs for this `run_id` as `timed_out`
+
+## Phase 2 Implementation Plan
+
+### A. Quartz Conveyor: Downstream Subscription and Notification
+
+- Dispatch mechanism: `workflow_dispatch`; `repository_dispatch` maybe available on request
+- `notify-downstream.yml`: triggered on relevant TheRock status changes, reads `config/subscriber.yml`, dispatches to each subscriber via Quartz Conveyor app.
+- `scripts/notify_subscribers.py`: reads subscriber config, sends `workflow_dispatch` to each subscribed workflow
+- Add push subscriber onboarding template:
+  - PR template and GitHub App installation instructions and implications to be added as subscriber
+  - `templates/subscriber-push.yml` — workflow triggered by Quartz Conveyor
+
+### B. Validation on Test Repository
+
+- Validate full push notification flow end-to-end using the test repository mocking TheRock and a downstream subscriber
+- Onboard real subscribers (starting with rocm-examples) only after successful validation
+
+### C. Grafana Dashboards
+
+- Create read-only ClickHouse service account for Grafana
+- Create ClickHouse materialized views for pre-aggregated dashboard queries (pass rates per architecture, nightly history, build duration trends)
+- Connect Grafana to ClickHouse using the read-only account
+- Create new dashboards or update existing ones to use ClickHouse as the data backend, querying the materialized views
 
 ## Alternatives Considered
 
@@ -290,3 +363,4 @@ Quartz provides the ROCm ecosystem with a unified CI/CD data hub: TheRock result
 
 - 2026-03-03: Initial draft (Laura Promberger)
 - 2026-03-05: Address feedback, add URL to discussion, adjust GitHub App names, add using secrets for subscriptions (Laura Promberger)
+- 2026-03-16: Add Phase 1 and Phase 2 implementation plans; update deduplication strategy to version integer with GitHub API timestamps; resolve dispatch mechanism to `workflow_dispatch`; various consistency fixes (Laura Promberger)
