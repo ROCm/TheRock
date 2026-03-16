@@ -11,6 +11,11 @@ THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
+# Some of our runtime kernel compilations have been relying on either ROCM_PATH being set, or ROCm being installed at
+# /opt/rocm. Neither of these is true in TheRock so we need to supply ROCM_PATH to our tests.
+ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
+environ_vars["ROCM_PATH"] = str(ROCM_PATH)
+
 logging.basicConfig(level=logging.INFO)
 
 cmd = [
