@@ -489,14 +489,6 @@ class TestRetrieveBucketInfo(unittest.TestCase):
         self.mock_api.assert_called_once_with("ROCm/TheRock", "12345")
         self.assertEqual(bucket, "therock-ci-artifacts")
 
-    def test_internal_releases_repo(self):
-        """therock-releases-internal should use therock-artifacts-internal."""
-        external_repo, bucket = self._call(
-            github_repository="ROCm/therock-releases-internal"
-        )
-        self.assertEqual(external_repo, "ROCm-therock-releases-internal/")
-        self.assertEqual(bucket, "therock-artifacts-internal")
-
 
 if __name__ == "__main__":
     unittest.main()

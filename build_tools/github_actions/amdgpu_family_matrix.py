@@ -69,17 +69,25 @@ amdgpu_family_info_matrix dictionary fields:
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            # Due to migrating MI325s, we have lost capacity as of 3/13/2026 11:41am PST
+            # Labels are:
+            # "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            # "test-runs-on-sandbox": "linux-mi325-8gpu-ossci-rocm-sandbox",
+            # "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
+            # "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
+            "test-runs-on": "",
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "linux-mi325-8gpu-ossci-rocm-sandbox",
-            "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
+            "test-runs-on-sandbox": "",
+            "test-runs-on-multi-gpu": "",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
+            "benchmark-runs-on": "",
             "family": "gfx94X-dcgpu",
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
             "build_variants": ["release", "asan", "tsan"],
+            # Due to no MI325s, we will continue to release artifacts
+            "bypass_tests_for_releases": True,
         }
     },
     "gfx110x": {
@@ -126,7 +134,9 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx120x": {
         "linux": {
-            "test-runs-on": "linux-gfx120X-gpu-rocm",
+            # TODO(#2683): Re-enable label once stable
+            # Label is linux-gfx120X-gpu-rocm
+            "test-runs-on": "",
             "family": "gfx120X-all",
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
@@ -159,6 +169,23 @@ amdgpu_family_info_matrix_postsubmit = {
 
 # The 'nightly' matrix runs on 'schedule' triggers.
 amdgpu_family_info_matrix_nightly = {
+    "gfx900": {
+        "linux": {
+            # Disabled due to hardware availability
+            "test-runs-on": "",
+            "family": "gfx900",
+            "fetch-gfx-targets": [],
+            "sanity_check_only_for_family": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx900",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "expect_pytorch_failure": True,
+        },
+    },
     # gfx906/908/90a split into separate families - each has different instruction
     # support (e.g., fp8 variants, WMMA) so CK/MIOpen need to build/test individually.
     "gfx906": {

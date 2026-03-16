@@ -338,12 +338,6 @@ def _retrieve_bucket_info(
             bucket = "therock-ci-artifacts"
             if curr_commit_dt and curr_commit_dt <= _BUCKET_CUTOVER_DATE:
                 bucket = "therock-artifacts"
-        elif (
-            repo_name == "therock-releases-internal"
-            and owner == "ROCm"
-            and not is_pr_from_fork
-        ):
-            bucket = "therock-artifacts-internal"
         else:
             bucket = "therock-ci-artifacts-external"
             if curr_commit_dt and curr_commit_dt <= _BUCKET_CUTOVER_DATE:

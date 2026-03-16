@@ -33,6 +33,15 @@ class ComponentDefaults:
         return ComponentDefaults.ALL.get(name) or ComponentDefaults(name)
 
 
+# Component extends chain (each component skips files claimed by predecessors):
+#
+#   lib → run → dbg → dev → doc → test
+#
+# Artifact TOML descriptors should list components in this order so that
+# the file layout mirrors the processing priority.
+#
+# See docs/development/artifacts.md for full documentation.
+
 # Lib components include shared libraries, dlls and any assets needed for use
 # of shared libraries at runtime. Files are included by name pattern and
 # descriptors should include/exclude non-standard variations.
@@ -47,6 +56,7 @@ ComponentDefaults(
     ],
     excludes=[],
 )
+
 # Run components layer on top of 'lib' components and also include executables
 # and tools that are not needed by library consumers. Descriptors should
 # explicitly include "bin" directory contents as needed.
@@ -58,8 +68,7 @@ ComponentDefaults(
 # content is expected.
 ComponentDefaults("run", extends=["lib"])
 
-
-# Debug components collect all platform specific dbg file patterns.
+# Debug components collect all platform-specific debug file patterns.
 ComponentDefaults(
     "dbg",
     includes=[
@@ -69,11 +78,10 @@ ComponentDefaults(
     extends=["run"],
 )
 
-# Dev components include all static library based file patterns and
-# exclude file name patterns implicitly included for "run" and "lib".
-# Descriptors should explicitly include header file any package file
-# sub-trees that do not have an explicit "cmake" or "include" path components
-# in them.
+# Dev components include static libraries, build-time configuration files
+# (cmake, pkgconfig, modulefiles), and headers. Descriptors should explicitly
+# include header or package file sub-trees that do not have an explicit "cmake"
+# or "include" path component in them.
 ComponentDefaults(
     "dev",
     includes=[
@@ -87,12 +95,12 @@ ComponentDefaults(
     excludes=[],
     extends=["dbg"],
 )
+
+# Doc components collect documentation files (typically under share/doc/).
 ComponentDefaults("doc", includes=["**/share/doc/**"], extends=["dev"])
 
-# Test components extend the full chain (lib → run → dbg → dev → doc → test)
-# so they automatically skip files claimed by earlier components. Descriptors
-# that want specific files in test (instead of run) must exclude those files
-# from run — see docs/development/artifacts.md for details.
+# Test components are last in the extends chain. Descriptors that want specific
+# files in test (instead of run) must exclude those files from run.
 ComponentDefaults("test", extends=["doc"])
 
 
