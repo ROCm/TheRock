@@ -213,7 +213,7 @@ jobs:
           echo "=========================================================================="
           echo ""
 
-          CMD="python build_tools/packaging/linux/native_linux_packages_test.py"
+          CMD="python build_tools/packaging/linux/native_linux_package_install_test.py"
           CMD="$CMD --os-profile ${{ inputs.os_profile }}"
           CMD="$CMD --repo-url \"${{ env.REPO_URL }}\""
           CMD="$CMD --gfx-arch ${{ env.GFX_ARCH }}"

@@ -125,8 +125,8 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
-# TODO: remove repo-metadata once s3_prefix is available PR#3561,
-# repo-metadata is a work around only for generating s3_prefix.
+      # TODO: remove repo-metadata once s3_prefix is available PR#3561,
+      # repo-metadata is a work around only for generating s3_prefix.
       - name: Set repo_sub_folder
         id: repo-metadata
         run: |
@@ -181,7 +181,7 @@ jobs:
       - name: Simulated install Test
         id: test-packages
         run: |
-          python ./build_tools/packaging/linux/native_linux_packages_test.py \
+          python ./build_tools/packaging/linux/native_linux_package_install_test.py \
             --test-type simulate \
             --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --pkg-type ${{ inputs.native_package_type }}
@@ -244,8 +244,8 @@ jobs:
     needs: [build_native_packages, get_install_test_profiles]
     strategy:
       fail-fast: false
-      matrix:
-        os_profile: ${{ fromJson(needs.get_install_test_profiles.outputs.os_profiles) }}
+    matrix:
+      os_profile: ${{ fromJson(needs.get_install_test_profiles.outputs.os_profiles) }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       repo_base_url: ${{ needs.get_install_test_profiles.outputs.repo_base_url }}
