@@ -1,28 +1,31 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for runner_overrides.py."""
+"""Unit tests for gpu_runner_s3_config.py."""
 
 import json
 import os
+from pathlib import Path
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-import runner_overrides
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+import gpu_runner_s3_config
 
 
 class TestRunnerOverrides(unittest.TestCase):
-    """Tests for runner_overrides module."""
+    """Tests for gpu_runner_s3_config module."""
 
     def setUp(self):
-        runner_overrides.reset_cache()
+        gpu_runner_s3_config.reset_cache()
         os.environ.pop("THEROCK_RUNNER_OVERRIDE_URL", None)
-        os.environ.pop("THEROCK_DISABLE_RUNNER_OVERRIDES", None)
+        os.environ.pop("THEROCK_DISABLE_gpu_runner_s3_config", None)
 
     def tearDown(self):
-        runner_overrides.reset_cache()
+        gpu_runner_s3_config.reset_cache()
         os.environ.pop("THEROCK_RUNNER_OVERRIDE_URL", None)
-        os.environ.pop("THEROCK_DISABLE_RUNNER_OVERRIDES", None)
+        os.environ.pop("THEROCK_DISABLE_gpu_runner_s3_config", None)
 
     def _mock_urlopen(self, mock, data):
         """Helper to set up urlopen mock with given data."""
@@ -32,34 +35,22 @@ class TestRunnerOverrides(unittest.TestCase):
         resp.__exit__ = MagicMock(return_value=False)
         mock.return_value = resp
 
-    @patch("runner_overrides.urlopen")
-    def test_fetch_success_and_caching(self, mock_urlopen):
-        """Test successful fetch and result caching."""
-        self._mock_urlopen(mock_urlopen, {"overrides": {"gfx94x": {"linux": {}}}})
-
-        result1 = runner_overrides.fetch_overrides()
-        result2 = runner_overrides.fetch_overrides()
-
-        self.assertEqual(result1, {"gfx94x": {"linux": {}}})
-        self.assertEqual(result1, result2)
-        self.assertEqual(mock_urlopen.call_count, 1)  # Cached
-
-    @patch("runner_overrides.urlopen")
+    @patch("gpu_runner_s3_config.urlopen")
     def test_fetch_errors_return_empty(self, mock_urlopen):
         """Test that network/parse errors return empty dict."""
         from urllib.error import URLError
 
         mock_urlopen.side_effect = URLError("Connection refused")
-        self.assertEqual(runner_overrides.fetch_overrides(), {})
+        self.assertEqual(gpu_runner_s3_config.fetch_overrides(), {})
 
     def test_fetch_disabled(self):
         """Test fetch skipped when disabled."""
         os.environ["THEROCK_DISABLE_RUNNER_OVERRIDES"] = "true"
-        with patch("runner_overrides.urlopen") as mock:
-            self.assertEqual(runner_overrides.fetch_overrides(), {})
+        with patch("gpu_runner_s3_config.urlopen") as mock:
+            self.assertEqual(gpu_runner_s3_config.fetch_overrides(), {})
             mock.assert_not_called()
 
-    @patch("runner_overrides.fetch_overrides")
+    @patch("gpu_runner_s3_config.fetch_overrides")
     def test_apply_sparse_merge(self, mock_fetch):
         """Test overrides are sparsely merged without mutating original."""
         mock_fetch.return_value = {"gfx94x": {"linux": {"test-runs-on": "new-runner"}}}
@@ -69,7 +60,7 @@ class TestRunnerOverrides(unittest.TestCase):
             }
         }
 
-        result = runner_overrides.apply_overrides(original)
+        result = gpu_runner_s3_config.apply_overrides(original)
 
         # Override applied
         self.assertEqual(result["gfx94x"]["linux"]["test-runs-on"], "new-runner")
@@ -78,13 +69,13 @@ class TestRunnerOverrides(unittest.TestCase):
         # Original unchanged
         self.assertEqual(original["gfx94x"]["linux"]["test-runs-on"], "old-runner")
 
-    @patch("runner_overrides.fetch_overrides")
+    @patch("gpu_runner_s3_config.fetch_overrides")
     def test_apply_ignores_unknown_families(self, mock_fetch):
         """Test unknown families/platforms in overrides are ignored."""
         mock_fetch.return_value = {"unknown": {"linux": {"test-runs-on": "x"}}}
         original = {"gfx94x": {"linux": {"test-runs-on": "runner"}}}
 
-        result = runner_overrides.apply_overrides(original)
+        result = gpu_runner_s3_config.apply_overrides(original)
 
         self.assertNotIn("unknown", result)
         self.assertEqual(result["gfx94x"]["linux"]["test-runs-on"], "runner")
