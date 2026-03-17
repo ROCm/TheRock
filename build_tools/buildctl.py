@@ -390,12 +390,18 @@ class BootstrappingPopulator(ArtifactPopulator):
             if "/" in value:
                 path_part, _, fingerprint = value.rpartition("/")
                 # Store mappings
-                self.fingerprints[key] = fingerprint  # subproject_name -> fingerprint (for legacy lookups)
-                self.path_to_fingerprint[path_part] = fingerprint  # path -> fingerprint (primary lookup)
+                self.fingerprints[key] = (
+                    fingerprint  # subproject_name -> fingerprint (for legacy lookups)
+                )
+                self.path_to_fingerprint[path_part] = (
+                    fingerprint  # path -> fingerprint (primary lookup)
+                )
             else:
                 # Malformed entry - log a warning but continue
                 if self.verbose:
-                    print(f"Warning: Malformed fprint entry '{key}={value}' - expected path/fingerprint format")
+                    print(
+                        f"Warning: Malformed fprint entry '{key}={value}' - expected path/fingerprint format"
+                    )
 
         if self.verbose and self.fingerprints:
             print(

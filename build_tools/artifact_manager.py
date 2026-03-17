@@ -371,11 +371,17 @@ class BootstrappingPopulator(ArtifactPopulator):
             if "/" in value:
                 path_part, _, fingerprint = value.rpartition("/")
                 # Store mappings
-                self.fingerprints[key] = fingerprint  # subproject_name -> fingerprint (for legacy lookups)
-                self.path_to_fingerprint[path_part] = fingerprint  # path -> fingerprint (primary lookup)
+                self.fingerprints[key] = (
+                    fingerprint  # subproject_name -> fingerprint (for legacy lookups)
+                )
+                self.path_to_fingerprint[path_part] = (
+                    fingerprint  # path -> fingerprint (primary lookup)
+                )
             else:
                 # Malformed entry - log a warning but continue
-                print(f"Warning: Malformed fprint entry '{key}={value}' - expected path/fingerprint format")
+                print(
+                    f"Warning: Malformed fprint entry '{key}={value}' - expected path/fingerprint format"
+                )
 
 
 def extract_artifact(request: ExtractRequest) -> Optional[Path]:
@@ -496,8 +502,12 @@ def do_fetch(args: argparse.Namespace):
 
     # Download all .fprint files FIRST before concurrent download/extract pipeline
     # This ensures fingerprints are available when extraction starts
-    fprint_requests = [req for req in download_requests if req.artifact_key.endswith('.fprint')]
-    archive_requests = [req for req in download_requests if not req.artifact_key.endswith('.fprint')]
+    fprint_requests = [
+        req for req in download_requests if req.artifact_key.endswith(".fprint")
+    ]
+    archive_requests = [
+        req for req in download_requests if not req.artifact_key.endswith(".fprint")
+    ]
 
     if fprint_requests:
         log(f"Downloading {len(fprint_requests)} fingerprint files first...")
@@ -512,8 +522,7 @@ def do_fetch(args: argparse.Namespace):
         max_workers=args.download_concurrency
     ) as download_executor:
         download_futures = [
-            download_executor.submit(download_artifact, req)
-            for req in archive_requests
+            download_executor.submit(download_artifact, req) for req in archive_requests
         ]
 
         if args.no_extract:
