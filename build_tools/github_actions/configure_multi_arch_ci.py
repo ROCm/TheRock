@@ -64,11 +64,11 @@ from github_actions_utils import gha_append_step_summary, gha_set_output
 
 
 def _parse_comma_list(raw: str) -> list[str]:
-    """Parse a comma-separated string into a list of stripped, non-empty names.
+    """Parse a comma-separated string into a list of stripped, lowercased, non-empty names.
 
-    Example: "gfx94X, gfx120X" → ["gfx94X", "gfx120X"]
+    Example: "gfx94X, gfx120X" → ["gfx94x", "gfx120x"]
     """
-    return [name.strip() for name in raw.split(",") if name.strip()]
+    return [name.strip().lower() for name in raw.split(",") if name.strip()]
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +166,7 @@ class CIInputs:
 
         if event_name == "pull_request":
             pr_obj = event.get("pull_request", {})
-            pr_labels = [label["name"] for label in pr_obj.get("labels", [])]
+            pr_labels = [label["name"].lower() for label in pr_obj.get("labels", [])]
             # The merge commit's first parent is the PR base
             base_ref = "HEAD^"
         elif event_name == "push":
