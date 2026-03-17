@@ -8432,6 +8432,11 @@ int main() {
           }
           return true;
         };
+    const auto expect_inactive_lane_preserved = [&](std::uint16_t reg,
+                                                    const char* label) {
+      return Expect(state.vgprs[reg][2] == 0xdeadbeefu,
+                    (std::string(mode) + label).c_str());
+    };
     std::uint8_t typed_buffer_low_component_byte = 0;
     std::uint16_t typed_buffer_low_component_short = 0;
     return Expect(state.halted,
@@ -8450,14 +8455,14 @@ int main() {
            expect_lane_values(
                13, {0x00001234u, 0x00005678u, 0x00009abcu},
                (std::string(mode) + " typed buffer d16 x load result").c_str()) &&
-           Expect(state.vgprs[10][2] == 0xdeadbeefu,
-                  (std::string(mode) +
-                   " inactive typed buffer x lane remains untouched")
-                      .c_str()) &&
-           Expect(state.vgprs[13][2] == 0xdeadbeefu,
-                  (std::string(mode) +
-                   " inactive typed buffer d16 x lane remains untouched")
-                      .c_str()) &&
+           expect_inactive_lane_preserved(
+               10, " inactive typed buffer x lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               11, " inactive typed buffer xy low lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               12, " inactive typed buffer xy high lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               13, " inactive typed buffer d16 x lane remains untouched") &&
            Expect(ReadU8(memory, 0x3a0u, &typed_buffer_low_component_byte),
                   (std::string(mode) + " typed buffer x store lane 0 read")
                       .c_str()) &&
@@ -12016,6 +12021,11 @@ int main() {
   buffer_memory_state.vgprs[61][3] = 0x61000004u;
   buffer_memory_state.vgprs[62][3] = 0x62000004u;
   buffer_memory_state.vgprs[63][3] = 0x63000004u;
+  for (std::uint16_t vgpr : {20u, 24u, 25u, 30u, 31u, 32u, 40u, 41u, 42u,
+                             43u}) {
+    buffer_memory_state.vgprs[vgpr][2] =
+        (vgpr & 1u) == 0u ? 0xdeadbeefu : 0xcafebabeu;
+  }
 
   const std::vector<DecodedInstruction> buffer_memory_program = {
       DecodedInstruction::FiveOperand("BUFFER_LOAD_DWORD",
@@ -12087,7 +12097,7 @@ int main() {
                   (std::string(mode) + " buffer load lane 0 result").c_str()) &&
            Expect(state.vgprs[20][1] == 0x11111111u,
                   (std::string(mode) + " buffer load lane 1 result").c_str()) &&
-           Expect(state.vgprs[20][2] == 0u,
+           Expect(state.vgprs[20][2] == 0xdeadbeefu,
                   (std::string(mode) +
                    " inactive buffer load lane to remain untouched")
                       .c_str()) &&
@@ -12102,15 +12112,42 @@ int main() {
            Expect(state.vgprs[24][3] == 0x22220031u &&
                       state.vgprs[25][3] == 0x22220032u,
                   (std::string(mode) + " buffer loadx2 lane 3 result").c_str()) &&
+           Expect(state.vgprs[24][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive buffer loadx2 low lane remains untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[25][2] == 0xcafebabeu,
+                  (std::string(mode) + " inactive buffer loadx2 high lane remains untouched")
+                      .c_str()) &&
            Expect(state.vgprs[30][1] == 0x33330011u &&
                       state.vgprs[31][1] == 0x33330012u &&
                       state.vgprs[32][1] == 0x33330013u,
                   (std::string(mode) + " buffer loadx3 lane 1 result").c_str()) &&
+           Expect(state.vgprs[30][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive buffer loadx3 dword 0 remains untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[31][2] == 0xcafebabeu,
+                  (std::string(mode) + " inactive buffer loadx3 dword 1 remains untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[32][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive buffer loadx3 dword 2 remains untouched")
+                      .c_str()) &&
            Expect(state.vgprs[40][3] == 0x44440031u &&
                       state.vgprs[41][3] == 0x44440032u &&
                       state.vgprs[42][3] == 0x44440033u &&
                       state.vgprs[43][3] == 0x44440034u,
                   (std::string(mode) + " buffer loadx4 lane 3 result").c_str()) &&
+           Expect(state.vgprs[40][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive buffer loadx4 dword 0 remains untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[41][2] == 0xcafebabeu,
+                  (std::string(mode) + " inactive buffer loadx4 dword 1 remains untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[42][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive buffer loadx4 dword 2 remains untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[43][2] == 0xcafebabeu,
+                  (std::string(mode) + " inactive buffer loadx4 dword 3 remains untouched")
+                      .c_str()) &&
            Expect(memory.ReadU32(0x1c0u, &value),
                   (std::string(mode) + " buffer store read").c_str()) &&
            Expect(value == 0x50000004u,
@@ -12249,6 +12286,10 @@ int main() {
   buffer_subword_state.vgprs[43][0] = 0x24680000u;
   buffer_subword_state.vgprs[43][1] = 0x13570000u;
   buffer_subword_state.vgprs[43][3] = 0xabcd0000u;
+  for (std::uint16_t vgpr = 60; vgpr <= 69; ++vgpr) {
+    buffer_subword_state.vgprs[vgpr][2] =
+        (vgpr & 1u) == 0u ? 0xdeadbeefu : 0xcafebabeu;
+  }
 
   const std::vector<DecodedInstruction> buffer_subword_program = {
       DecodedInstruction::FiveOperand("BUFFER_LOAD_UBYTE",
@@ -12356,42 +12397,72 @@ int main() {
            Expect(state.vgprs[60][0] == 0x7au && state.vgprs[60][1] == 0x7au &&
                       state.vgprs[60][3] == 0x7au,
                   (std::string(mode) + " buffer ubyte load result").c_str()) &&
+           Expect(state.vgprs[60][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive buffer ubyte lane remains untouched")
+                      .c_str()) &&
            Expect(state.vgprs[61][0] == 0xffffff80u &&
                       state.vgprs[61][1] == 0x0000007fu &&
                       state.vgprs[61][3] == 0xfffffffeu,
                   (std::string(mode) + " buffer sbyte load result").c_str()) &&
+           Expect(state.vgprs[61][2] == 0xcafebabeu,
+                  (std::string(mode) + " inactive buffer sbyte lane remains untouched")
+                      .c_str()) &&
            Expect(state.vgprs[62][1] == 0x5678u &&
                       state.vgprs[62][3] == 0xabcdu,
                   (std::string(mode) + " buffer ushort load result").c_str()) &&
+           Expect(state.vgprs[62][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive buffer ushort lane remains untouched")
+                      .c_str()) &&
            Expect(state.vgprs[63][0] == 0xffff8001u &&
                       state.vgprs[63][1] == 0x00007fffu &&
                       state.vgprs[63][3] == 0xffffff00u,
                   (std::string(mode) + " buffer sshort load result").c_str()) &&
+           Expect(state.vgprs[63][2] == 0xcafebabeu,
+                  (std::string(mode) + " inactive buffer sshort lane remains untouched")
+                      .c_str()) &&
            Expect(state.vgprs[64][0] == 0x00000034u &&
                       state.vgprs[64][1] == 0x00000056u &&
                       state.vgprs[64][3] == 0x00000078u,
                   (std::string(mode) + " buffer ubyte d16 load result").c_str()) &&
+           Expect(state.vgprs[64][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive buffer ubyte d16 lane remains untouched")
+                      .c_str()) &&
            Expect(state.vgprs[65][0] == 0x009a0000u &&
                       state.vgprs[65][1] == 0x00bc0000u &&
                       state.vgprs[65][3] == 0x00de0000u,
                   (std::string(mode) + " buffer ubyte d16 hi load result")
                       .c_str()) &&
+           Expect(state.vgprs[65][2] == 0xcafebabeu,
+                  (std::string(mode) + " inactive buffer ubyte d16 hi lane remains untouched")
+                      .c_str()) &&
            Expect(state.vgprs[66][0] == 0x0000ff81u &&
                       state.vgprs[66][1] == 0x0000ff82u &&
                       state.vgprs[66][3] == 0x0000007fu,
                   (std::string(mode) + " buffer sbyte d16 load result").c_str()) &&
+           Expect(state.vgprs[66][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive buffer sbyte d16 lane remains untouched")
+                      .c_str()) &&
            Expect(state.vgprs[67][0] == 0xfffe0000u &&
                       state.vgprs[67][1] == 0xff800000u &&
                       state.vgprs[67][3] == 0x00010000u,
                   (std::string(mode) + " buffer sbyte d16 hi load result")
                       .c_str()) &&
+           Expect(state.vgprs[67][2] == 0xcafebabeu,
+                  (std::string(mode) + " inactive buffer sbyte d16 hi lane remains untouched")
+                      .c_str()) &&
            Expect(state.vgprs[68][1] == 0x00003344u &&
                       state.vgprs[68][3] == 0x00005566u,
                   (std::string(mode) + " buffer short d16 load result").c_str()) &&
+           Expect(state.vgprs[68][2] == 0xdeadbeefu,
+                  (std::string(mode) + " inactive buffer short d16 lane remains untouched")
+                      .c_str()) &&
            Expect(state.vgprs[69][0] == 0x89ab0000u &&
                       state.vgprs[69][1] == 0xcdef0000u &&
                       state.vgprs[69][3] == 0x13570000u,
                   (std::string(mode) + " buffer short d16 hi load result")
+                      .c_str()) &&
+           Expect(state.vgprs[69][2] == 0xcafebabeu,
+                  (std::string(mode) + " inactive buffer short d16 hi lane remains untouched")
                       .c_str()) &&
            Expect(ReadU8(memory, 0x380u, &stored_byte),
                   (std::string(mode) + " buffer byte store read").c_str()) &&
@@ -13412,6 +13483,11 @@ int main() {
           }
           return true;
         };
+    const auto expect_inactive_lane_preserved = [&](std::uint16_t reg,
+                                                    const char* label) {
+      return Expect(state.vgprs[reg][2] == 0xdeadbeefu,
+                    (std::string(mode) + label).c_str());
+    };
     std::uint8_t byte_value = 0;
     std::uint16_t short_value = 0;
     std::uint32_t dword_value = 0;
@@ -13458,14 +13534,30 @@ int main() {
                85, {0xc0004000u, 0x40003c00u, 0x48004600u},
                (std::string(mode) + " buffer format d16 xyzw packed zw result")
                    .c_str()) &&
-           Expect(state.vgprs[71][2] == 0xdeadbeefu,
-                  (std::string(mode) +
-                   " inactive buffer format xyzw lane remains untouched")
-                      .c_str()) &&
-           Expect(state.vgprs[84][2] == 0xdeadbeefu,
-                  (std::string(mode) +
-                   " inactive buffer format d16 xyzw lane remains untouched")
-                      .c_str()) &&
+           expect_inactive_lane_preserved(
+               71, " inactive buffer format xyzw x lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               72, " inactive buffer format xyzw y lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               73, " inactive buffer format xyzw z lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               74, " inactive buffer format xyzw w lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               75, " inactive buffer format xyz x lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               76, " inactive buffer format xyz y lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               77, " inactive buffer format xyz z lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               80, " inactive buffer format d16 xy lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               81, " inactive buffer format d16 xyz packed xy lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               82, " inactive buffer format d16 xyz z lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               84, " inactive buffer format d16 xyzw packed xy lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               85, " inactive buffer format d16 xyzw packed zw lane remains untouched") &&
            Expect(ReadU8(memory, 0x160u, &byte_value),
                   (std::string(mode) + " buffer format xyzw store lane 0 x read")
                       .c_str()) &&
@@ -13996,6 +14088,11 @@ int main() {
           }
           return true;
         };
+    const auto expect_inactive_lane_preserved = [&](std::uint16_t reg,
+                                                    const char* label) {
+      return Expect(state.vgprs[reg][2] == 0xdeadbeefu,
+                    (std::string(mode) + label).c_str());
+    };
     std::uint8_t byte_value = 0;
     std::uint16_t short_value = 0;
     return Expect(state.halted,
@@ -14018,14 +14115,16 @@ int main() {
                83, {0x33440000u, 0x55660000u, 0x77880000u},
                (std::string(mode) + " buffer format d16 hi load result")
                    .c_str()) &&
-           Expect(state.vgprs[70][2] == 0xdeadbeefu,
-                  (std::string(mode) +
-                   " inactive buffer format x lane remains untouched")
-                      .c_str()) &&
-           Expect(state.vgprs[83][2] == 0xdeadbeefu,
-                  (std::string(mode) +
-                   " inactive buffer format d16 hi lane remains untouched")
-                      .c_str()) &&
+           expect_inactive_lane_preserved(
+               70, " inactive buffer format x lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               78, " inactive buffer format xy low lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               79, " inactive buffer format xy high lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               83, " inactive buffer format d16 hi lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               86, " inactive buffer format d16 x lane remains untouched") &&
            Expect(ReadU8(memory, 0x120u, &byte_value),
                   (std::string(mode) + " buffer format x store lane 0 read")
                       .c_str()) &&
@@ -14457,6 +14556,11 @@ int main() {
           }
           return true;
         };
+    const auto expect_inactive_lane_preserved = [&](std::uint16_t reg,
+                                                    const char* label) {
+      return Expect(state.vgprs[reg][2] == 0xdeadbeefu,
+                    (std::string(mode) + label).c_str());
+    };
     std::uint8_t byte_value = 0;
     std::uint16_t short_value = 0;
     std::uint32_t dword_value = 0;
@@ -14501,14 +14605,30 @@ int main() {
                105, {0xc0004000u, 0x48004600u, 0x50004e00u},
                (std::string(mode) + " typed buffer d16 xyzw packed zw result")
                    .c_str()) &&
-           Expect(state.vgprs[90][2] == 0xdeadbeefu,
-                  (std::string(mode) +
-                   " inactive typed buffer xyzw lane remains untouched")
-                      .c_str()) &&
-           Expect(state.vgprs[98][2] == 0xdeadbeefu,
-                  (std::string(mode) +
-                   " inactive typed buffer d16 xyz lane remains untouched")
-                      .c_str()) &&
+           expect_inactive_lane_preserved(
+               90, " inactive typed buffer xyzw x lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               91, " inactive typed buffer xyzw y lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               92, " inactive typed buffer xyzw z lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               93, " inactive typed buffer xyzw w lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               94, " inactive typed buffer xyz x lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               95, " inactive typed buffer xyz y lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               96, " inactive typed buffer xyz z lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               97, " inactive typed buffer d16 xy lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               98, " inactive typed buffer d16 xyz packed xy lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               99, " inactive typed buffer d16 xyz z lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               104, " inactive typed buffer d16 xyzw packed xy lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               105, " inactive typed buffer d16 xyzw packed zw lane remains untouched") &&
            Expect(ReadU8(memory, 0x2a0u, &byte_value),
                   (std::string(mode) + " typed buffer xyzw store lane 0 x read")
                       .c_str()) &&
