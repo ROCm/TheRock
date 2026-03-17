@@ -16,10 +16,6 @@ on:
         required: true
         type: string
         default: "linux-mi325-1gpu-ossci-rocm"
-      distributed_test_runs_on:
-        description: Runner label for distributed config (multi-GPU)
-        type: string
-        default: "linux-mi325-8gpu-ossci-rocm"
       package_index_url:
         description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
         required: true
@@ -53,8 +49,6 @@ on:
         type: string
       test_runs_on:
         required: true
-        type: string
-      distributed_test_runs_on:
         type: string
       package_index_url:
         required: true
@@ -93,36 +87,23 @@ jobs:
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+          sparse-checkout: external-builds/pytorch/generate_matrix.py
+
       - id: generate
         run: |
-          get_num_shards() {
-            case "$1" in
-              default)     echo 6 ;;
-              distributed) echo 3 ;;
-              inductor)    echo 2 ;;
-              *)           echo 4 ;;
-            esac
-          }
-          matrix='{"include":['
-          first=true
-          for config in ${{ inputs.test_configs }}; do
-            num_shards=$(get_num_shards "$config")
-            for shard in $(seq 1 $num_shards); do
-              if [ "$first" = true ]; then
-                first=false
-              else
-                matrix="$matrix,"
-              fi
-              matrix="$matrix{\"test_config\":\"$config\",\"shard\":$shard,\"num_shards\":$num_shards}"
-            done
-          done
-          matrix="$matrix]}"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          python external-builds/pytorch/generate_matrix.py \
+            --test-configs '${{ inputs.test_configs }}' \
+            --default-runner '${{ inputs.test_runs_on }}'
 
   test_wheels:
     needs: prepare_matrix
     name: Test PyTorch Full | ${{ inputs.amdgpu_family }} / ${{ matrix.test_config }} (shard ${{ matrix.shard }}/${{ matrix.num_shards }})
-    runs-on: ${{ matrix.test_config == 'distributed' && inputs.distributed_test_runs_on || inputs.test_runs_on }}
+    runs-on: ${{ matrix.runs_on }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
