@@ -39,7 +39,6 @@ all_build_variants = {
             "build_variant_label": "tsan",
             "build_variant_suffix": "tsan",
             "build_variant_cmake_preset": "linux-release-tsan",
-            "expect_failure": True,
         },
     },
     "windows": {
@@ -77,7 +76,7 @@ amdgpu_family_info_matrix_presubmit = {
             # "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
             "test-runs-on": "",
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "",
+            "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
             "test-runs-on-multi-gpu": "",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "",
@@ -128,7 +127,7 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx1151",
             "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
-            # TODO(#3299): Re-enable smoke tests once capacity is available for Windows gfx1151
+            # TODO(#3299): Re-enable quick tests once capacity is available for Windows gfx1151
             "run-full-tests-only": True,
         },
     },
@@ -225,7 +224,9 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx90a": {
         "linux": {
-            "test-runs-on": "linux-gfx90a-gpu-rocm",
+            # Label is linux-gfx90a-gpu-rocm
+            # Downtime in 3/17/26 - 3/18/26 for maintenance
+            "test-runs-on": "",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "sanity_check_only_for_family": True,
