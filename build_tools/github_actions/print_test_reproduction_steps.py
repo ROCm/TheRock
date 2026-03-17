@@ -117,7 +117,7 @@ if __name__ == "__main__":
         "--test-type",
         type=str,
         default="full",
-        help="Test type (e.g., full, smoke)",
+        help="Test type (e.g., full, quick)",
     )
     parser.add_argument(
         "--container-image",

@@ -329,6 +329,7 @@ def retrieve_artifacts_by_run_id(args):
         "core-amdsmi_lib",
         "core-hip_lib",
         "core-hip_dev",
+        "core-kpack_lib",
         "core-ocl_lib",
         "core-ocl_dev",
         "rocprofiler-sdk_lib",

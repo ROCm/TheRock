@@ -4,6 +4,7 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import shlex
@@ -132,7 +133,12 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
     return [str(p.relative_to(repo_dir)) for p in sorted(base.glob("*.patch"))]
 
 
-def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
+def build_manifest_schema(
+    repo_root: Path,
+    the_rock_commit: str,
+    github_run_id: str | None = None,
+    rocm_package_version: str | None = None,
+) -> dict:
 
     # Enumerate submodules from .gitmodules at the specified commit.
     entries = list_submodules_from_gitmodules_at_commit(repo_root, the_rock_commit)
@@ -151,10 +157,18 @@ def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
             }
         )
 
-    return {
+    manifest = {
         "the_rock_commit": the_rock_commit,
-        "submodules": rows,
     }
+
+    if github_run_id:
+        manifest["github_run_id"] = github_run_id
+
+    if rocm_package_version:
+        manifest["rocm_package_version"] = rocm_package_version
+
+    manifest["submodules"] = rows
+    return manifest
 
 
 def write_manifest_json(out_path: Path, manifest: dict) -> None:
@@ -182,12 +196,23 @@ def main():
         help="Path to flag_settings.json to include in the manifest",
         default=None,
     )
+    ap.add_argument(
+        "--rocm-package-version",
+        help="ROCm package version to include in the manifest",
+        default=None,
+    )
     args = ap.parse_args()
 
     repo_root = git_root()
     the_rock_commit = _run(["git", "rev-parse", args.commit], cwd=repo_root)
+    github_run_id = os.getenv("GITHUB_RUN_ID")
 
-    manifest = build_manifest_schema(repo_root, the_rock_commit)
+    manifest = build_manifest_schema(
+        repo_root,
+        the_rock_commit,
+        github_run_id,
+        args.rocm_package_version,
+    )
 
     # Merge flag settings into the manifest if provided.
     if args.flag_settings:
