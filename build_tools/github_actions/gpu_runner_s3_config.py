@@ -80,18 +80,7 @@ def fetch_overrides() -> dict:
 
 
 def apply_overrides(family_matrix: dict) -> dict:
-    """Apply S3 overrides to a family matrix.
-
-    This function performs a sparse merge - only specified fields in the override
-    are applied, leaving other fields unchanged.
-
-    Args:
-        family_matrix: The family matrix dict to apply overrides to.
-                      This is deep-copied to avoid mutating the original.
-
-    Returns:
-        A new dict with overrides applied.
-    """
+    """Apply S3 overrides to a family matrix."""
     overrides = fetch_overrides()
 
     if not overrides:
@@ -128,14 +117,7 @@ def reset_cache() -> None:
 
 
 def generate_overrides_json() -> str:
-    """Generate runner-overrides.json content from amdgpu_family_matrix.py.
-
-    Run locally to create the JSON for uploading to S3:
-        python -c "from runner_overrides import generate_overrides_json; print(generate_overrides_json())"
-
-    Returns:
-        Prettified JSON string ready for S3 upload.
-    """
+    """Generate runner-overrides.json content from amdgpu_family_matrix.py."""
     from amdgpu_family_matrix import (
         amdgpu_family_info_matrix_nightly,
         amdgpu_family_info_matrix_postsubmit,
