@@ -244,8 +244,8 @@ jobs:
     needs: [build_native_packages, get_install_test_profiles]
     strategy:
       fail-fast: false
-    matrix:
-      os_profile: ${{ fromJson(needs.get_install_test_profiles.outputs.os_profiles) }}
+      matrix:
+        os_profile: ${{ fromJson(needs.get_install_test_profiles.outputs.os_profiles) }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       repo_base_url: ${{ needs.get_install_test_profiles.outputs.repo_base_url }}
