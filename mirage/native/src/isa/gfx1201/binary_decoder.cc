@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 356> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 364> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -51,6 +51,14 @@ constexpr std::array<std::string_view, 356> kPhase0ExecutableOpcodes{{
     "GLOBAL_INV",
     "GLOBAL_WB",
     "GLOBAL_WBINV",
+    "GLOBAL_LOAD_U8",
+    "GLOBAL_LOAD_I8",
+    "GLOBAL_LOAD_U16",
+    "GLOBAL_LOAD_I16",
+    "GLOBAL_LOAD_B32",
+    "GLOBAL_LOAD_B64",
+    "GLOBAL_LOAD_B96",
+    "GLOBAL_LOAD_B128",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -410,6 +418,10 @@ constexpr std::int32_t SignExtend21(std::uint32_t value) {
   return static_cast<std::int32_t>(value << 11) >> 11;
 }
 
+constexpr std::int32_t SignExtend13(std::uint32_t value) {
+  return static_cast<std::int32_t>(value << 19) >> 19;
+}
+
 constexpr std::int32_t SignExtend5(std::uint32_t value) {
   return static_cast<std::int32_t>(value << 27) >> 27;
 }
@@ -632,6 +644,14 @@ InstructionOperand DescribeVectorPairDestinationOperand(InstructionOperand opera
   return operand.WithDescriptor(MakeVectorRegisterDescriptor(
       OperandRole::kDestination, OperandSlotKind::kDestination,
       OperandAccess::kWrite, 32, 2));
+}
+
+InstructionOperand DescribeWideVectorDestinationOperand(
+    InstructionOperand operand,
+    std::uint8_t component_count) {
+  return operand.WithDescriptor(MakeVectorRegisterDescriptor(
+      OperandRole::kDestination, OperandSlotKind::kDestination,
+      OperandAccess::kWrite, 32, component_count));
 }
 
 InstructionOperand MakeImplicitVccDestinationOperand() {
@@ -1003,6 +1023,64 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       return false;
     }
     *instruction = DecodedInstruction::Nullary(instruction_name);
+    *words_consumed = 2;
+  } else if (instruction_name == "GLOBAL_LOAD_U8" ||
+             instruction_name == "GLOBAL_LOAD_I8" ||
+             instruction_name == "GLOBAL_LOAD_U16" ||
+             instruction_name == "GLOBAL_LOAD_I16" ||
+             instruction_name == "GLOBAL_LOAD_B32" ||
+             instruction_name == "GLOBAL_LOAD_B64" ||
+             instruction_name == "GLOBAL_LOAD_B96" ||
+             instruction_name == "GLOBAL_LOAD_B128") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(ExtractBits(words[1], 24, 8), &dst,
+                                 error_message)) {
+      return false;
+    }
+
+    InstructionOperand vaddr;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 0, 8), &vaddr,
+                                    error_message)) {
+      return false;
+    }
+
+    const std::uint32_t raw_saddr = ExtractBits(words[1], 16, 7);
+    if (raw_saddr >= WaveExecutionState::kScalarRegisterCount) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL load scalar address out of range";
+      }
+      return false;
+    }
+    const InstructionOperand saddr =
+        InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_saddr));
+
+    InstructionOperand described_dst = DescribeVectorDestinationOperand(dst);
+    if (instruction_name == "GLOBAL_LOAD_B64") {
+      described_dst = DescribeVectorPairDestinationOperand(dst);
+    } else if (instruction_name == "GLOBAL_LOAD_B96") {
+      described_dst = DescribeWideVectorDestinationOperand(dst, 3u);
+    } else if (instruction_name == "GLOBAL_LOAD_B128") {
+      described_dst = DescribeWideVectorDestinationOperand(dst, 4u);
+    }
+
+    *instruction = DecodedInstruction::FourOperand(
+        instruction_name, described_dst,
+        DescribeSourceOperand(vaddr, OperandRole::kSource0,
+                              OperandSlotKind::kSource0),
+        DescribeSourceOperand(saddr, OperandRole::kSource1,
+                              OperandSlotKind::kSource1),
+        InstructionOperand::Imm32(static_cast<std::uint32_t>(
+            SignExtend13(ExtractBits(word, 0, 13))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource2,
+                                                   OperandSlotKind::kSource2,
+                                                   13u)));
     *words_consumed = 2;
   } else if (instruction_name == "S_PREFETCH_INST_PC_REL" ||
              instruction_name == "S_PREFETCH_DATA_PC_REL") {

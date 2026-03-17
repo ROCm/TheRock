@@ -2,7 +2,7 @@
 
 This report captures the current executable `gfx1201` seed slice layered on top of the
 existing phase-0 compute selector and seed catalog. The local seed surface now covers
-356 executable phase-0 ops without leaving architecture-local `gfx1201` files, and
+364 executable phase-0 ops without leaving architecture-local `gfx1201` files, and
 the local interpreter continues to normalize execution to wave32.
 
 ## Executable opcodes
@@ -40,6 +40,14 @@ the local interpreter continues to normalize execution to wave32.
 - `GLOBAL_INV`
 - `GLOBAL_WB`
 - `GLOBAL_WBINV`
+- `GLOBAL_LOAD_U8`
+- `GLOBAL_LOAD_I8`
+- `GLOBAL_LOAD_U16`
+- `GLOBAL_LOAD_I16`
+- `GLOBAL_LOAD_B32`
+- `GLOBAL_LOAD_B64`
+- `GLOBAL_LOAD_B96`
+- `GLOBAL_LOAD_B128`
 - `S_ADD_U32`
 - `S_ADD_I32`
 - `S_SUB_U32`
@@ -448,7 +456,8 @@ the local interpreter continues to normalize execution to wave32.
 - `S_ATC_PROBE` and `S_ATC_PROBE_BUFFER` now execute as wave32-local no-op scalar cache-probe hints on both the decoded and compiled seed paths, extending the local `ENC_SMEM` foothold without committing to shared scalar-memory dataflow semantics.
 - `S_LOAD_B32`, `S_LOAD_B64`, `S_LOAD_B96`, `S_LOAD_B128`, `S_LOAD_B256`, `S_LOAD_B512`, `S_LOAD_I8`, `S_LOAD_U8`, `S_LOAD_I16`, and `S_LOAD_U16` now execute as the current real wave32-local scalar-memory reads on both the decoded and compiled seed paths, using `ExecutionMemory` plus local sign/zero extension and wide sequential SGPR writes without widening shared scalar-memory state.
 - `S_BUFFER_LOAD_B32`, `S_BUFFER_LOAD_B64`, `S_BUFFER_LOAD_B96`, `S_BUFFER_LOAD_B128`, `S_BUFFER_LOAD_B256`, `S_BUFFER_LOAD_B512`, `S_BUFFER_LOAD_I8`, `S_BUFFER_LOAD_U8`, `S_BUFFER_LOAD_I16`, and `S_BUFFER_LOAD_U16` now execute as the matching wave32-local buffer-backed scalar-memory reads on both the decoded and compiled seed paths, using the low 64 bits of the local 128-bit resource descriptor as a base address plus architecture-local `IOFFSET`/`SOFFSET` address formation.
-- `GLOBAL_INV`, `GLOBAL_WB`, and `GLOBAL_WBINV` now execute as wave32-local no-op global cache-management hints on both the decoded and compiled seed paths, establishing the first real `ENC_VGLOBAL` footholds without committing to vector-memory lane semantics.
+- `GLOBAL_INV`, `GLOBAL_WB`, and `GLOBAL_WBINV` now execute as wave32-local no-op global cache-management hints on both the decoded and compiled seed paths, preserving the first architecture-local `ENC_VGLOBAL` cache-management footholds.
+- `GLOBAL_LOAD_U8`, `GLOBAL_LOAD_I8`, `GLOBAL_LOAD_U16`, `GLOBAL_LOAD_I16`, `GLOBAL_LOAD_B32`, `GLOBAL_LOAD_B64`, `GLOBAL_LOAD_B96`, and `GLOBAL_LOAD_B128` now decode and execute as the first real wave32-local per-lane global-memory reads on both the decoded and compiled seed paths, combining `VADDR`, scalar `SADDR`, and inline offsets through `ExecutionMemory` while keeping stores and atomics out of scope.
 - Scalar add/sub updates `SCC` using the imported carry/borrow behavior.
 - `V_MOV_B32` execution respects `exec_mask`.
 - `V_NOP` now executes as a wave32-local no-op on both the decoded and compiled seed paths.
@@ -507,7 +516,7 @@ the local interpreter continues to normalize execution to wave32.
 - Route-matched but non-executable phase-0 compute instructions continue to fail with
   the existing selector-aware stub errors.
 - `ENC_SMEM` is now fully bootstrapped through `S_DCACHE_INV`, `S_PREFETCH_INST`, `S_PREFETCH_INST_PC_REL`, `S_PREFETCH_DATA`, `S_BUFFER_PREFETCH_DATA`, `S_PREFETCH_DATA_PC_REL`, `S_ATC_PROBE`, `S_ATC_PROBE_BUFFER`, the full non-buffer `S_LOAD_*` slice, and the matching `S_BUFFER_LOAD_*` slice, leaving no scalar-memory seed instructions scaffolded.
-- `ENC_VGLOBAL` now has its first executable footholds through `GLOBAL_INV`, `GLOBAL_WB`, and `GLOBAL_WBINV`, but the remaining global-memory load/store/atomic seed surface is still route-only in this slice.
+- `ENC_VGLOBAL` now has executable footholds through `GLOBAL_INV`, `GLOBAL_WB`, `GLOBAL_WBINV`, and the plain `GLOBAL_LOAD_U8`/`I8`/`U16`/`I16`/`B32`/`B64`/`B96`/`B128` slice, but the broader global-memory store/atomic seed surface is still route-only in this slice.
 - `ENC_VOP3` and `ENC_VDS` remain route-only in this slice.
 - The remaining `ENC_VOPC` surface outside this seed is now primarily packed and other wider forms not yet on the current local path.
 - The current wave32-local `ENC_VOP1`, `ENC_VOP2`, and `ENC_VOPC` seed surface is saturated: all currently seeded instruction/encoding pairs are executable on the local path.

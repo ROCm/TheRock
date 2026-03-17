@@ -33,6 +33,10 @@ constexpr std::int32_t SignExtend24(std::uint32_t value) {
   return static_cast<std::int32_t>(value << 8) >> 8;
 }
 
+constexpr std::int32_t SignExtend13(std::uint32_t value) {
+  return static_cast<std::int32_t>(value << 19) >> 19;
+}
+
 constexpr std::uint32_t kGfx1201LaneCount = 32;
 constexpr std::uint16_t kM0RegisterIndex = 124u;
 constexpr std::uint16_t kExecPairSgprIndex = 126;
@@ -44,8 +48,13 @@ constexpr std::uint16_t kSrcSccSgprIndex = 253;
 float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 std::uint16_t CompressFloatToFp16BitsRtz(float value);
+bool WriteWideVectorOperand(const InstructionOperand& operand,
+                            std::size_t lane_index,
+                            std::uint64_t value,
+                            WaveExecutionState* state,
+                            std::string* error_message);
 
-constexpr std::array<std::string_view, 356> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 364> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -79,6 +88,14 @@ constexpr std::array<std::string_view, 356> kExecutableSeedOpcodes{{
     "GLOBAL_INV",
     "GLOBAL_WB",
     "GLOBAL_WBINV",
+    "GLOBAL_LOAD_U8",
+    "GLOBAL_LOAD_I8",
+    "GLOBAL_LOAD_U16",
+    "GLOBAL_LOAD_I16",
+    "GLOBAL_LOAD_B32",
+    "GLOBAL_LOAD_B64",
+    "GLOBAL_LOAD_B96",
+    "GLOBAL_LOAD_B128",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -905,6 +922,38 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   if (opcode == "GLOBAL_INV" || opcode == "GLOBAL_WB" ||
       opcode == "GLOBAL_WBINV") {
     *compiled_opcode = Gfx1201CompiledOpcode::kSNop;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_U8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadU8;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_I8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadI8;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_U16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadU16;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_I16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadI16;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadB32;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadB64;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_B96") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadB96;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_B128") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadB128;
     return true;
   }
   if (opcode == "S_LOAD_B32") {
@@ -2597,6 +2646,81 @@ bool WriteVectorOperand(const InstructionOperand& operand,
   return true;
 }
 
+bool WriteVectorOperandSequence(const InstructionOperand& operand,
+                                std::size_t lane_index,
+                                std::span<const std::uint32_t> values,
+                                WaveExecutionState* state,
+                                std::string* error_message) {
+  if (operand.kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "expected vector destination operand";
+    }
+    return false;
+  }
+
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    if (!WriteVectorOperand(
+            InstructionOperand::Vgpr(
+                static_cast<std::uint16_t>(operand.index + i)),
+            lane_index, values[i], state, error_message)) {
+      return false;
+    }
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool ComputeVglobalAddress(const DecodedInstruction& instruction,
+                           const WaveExecutionState& state,
+                           std::size_t lane_index,
+                           std::uint64_t* address,
+                           std::string* error_message) {
+  if (address == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "VGLOBAL address output must not be null";
+    }
+    return false;
+  }
+
+  const std::uint32_t vaddr =
+      ReadVectorOperand(instruction.operands[1], state, lane_index,
+                        error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+  const std::uint32_t saddr =
+      ReadScalarOperand(instruction.operands[2], state, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+  const std::int64_t signed_offset =
+      static_cast<std::int64_t>(static_cast<std::int32_t>(
+          ReadScalarOperand(instruction.operands[3], state, error_message)));
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+
+  const std::int64_t signed_address =
+      static_cast<std::int64_t>(static_cast<std::uint64_t>(saddr)) +
+      static_cast<std::int64_t>(static_cast<std::uint64_t>(vaddr)) +
+      signed_offset;
+  if (signed_address < 0) {
+    if (error_message != nullptr) {
+      *error_message = std::string(instruction.opcode) + " computed negative address";
+    }
+    return false;
+  }
+
+  *address = static_cast<std::uint64_t>(signed_address);
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
 bool ComputeSmemAddress(const DecodedInstruction& instruction,
                         const WaveExecutionState& state,
                         std::uint64_t* address,
@@ -2765,6 +2889,94 @@ bool ExecuteScalarSmemLoadAtAddress(const DecodedInstruction& instruction,
           : static_cast<std::uint32_t>(value);
   return WriteScalarOperand(instruction.operands[0], extended, state,
                             error_message);
+}
+
+bool ExecuteVectorGlobalLoadAtAddress(const DecodedInstruction& instruction,
+                                      std::uint64_t address,
+                                      std::size_t lane_index,
+                                      WaveExecutionState* state,
+                                      ExecutionMemory* memory,
+                                      std::string* error_message) {
+  const std::string_view opcode = instruction.opcode;
+
+  if (opcode == "GLOBAL_LOAD_B32") {
+    std::uint32_t value = 0;
+    if (!memory->LoadU32(address, &value)) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL_LOAD_B32 memory read failed";
+      }
+      return false;
+    }
+    return WriteVectorOperand(instruction.operands[0], lane_index, value, state,
+                              error_message);
+  }
+
+  if (opcode == "GLOBAL_LOAD_B64") {
+    std::uint64_t value = 0;
+    std::uint32_t low = 0;
+    std::uint32_t high = 0;
+    if (!memory->LoadU32(address, &low) ||
+        !memory->LoadU32(address + 4u, &high)) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL_LOAD_B64 memory read failed";
+      }
+      return false;
+    }
+    value = static_cast<std::uint64_t>(low) |
+            (static_cast<std::uint64_t>(high) << 32);
+    return WriteWideVectorOperand(instruction.operands[0], lane_index, value,
+                                  state, error_message);
+  }
+
+  if (opcode == "GLOBAL_LOAD_B96" || opcode == "GLOBAL_LOAD_B128") {
+    const std::size_t word_count = opcode == "GLOBAL_LOAD_B96" ? 3u : 4u;
+    std::array<std::uint32_t, 4> values{};
+    for (std::size_t i = 0; i < word_count; ++i) {
+      if (!memory->LoadU32(address + static_cast<std::uint64_t>(i * 4u),
+                           &values[i])) {
+        if (error_message != nullptr) {
+          *error_message = std::string(opcode) + " memory read failed";
+        }
+        return false;
+      }
+    }
+    return WriteVectorOperandSequence(
+        instruction.operands[0], lane_index,
+        std::span<const std::uint32_t>(values.data(), word_count), state,
+        error_message);
+  }
+
+  if (opcode == "GLOBAL_LOAD_I8" || opcode == "GLOBAL_LOAD_U8") {
+    std::uint8_t value = 0;
+    if (!memory->LoadU8(address, &value)) {
+      if (error_message != nullptr) {
+        *error_message = std::string(opcode) + " memory read failed";
+      }
+      return false;
+    }
+    const std::uint32_t extended =
+        opcode == "GLOBAL_LOAD_I8"
+            ? static_cast<std::uint32_t>(
+                  static_cast<std::int32_t>(static_cast<std::int8_t>(value)))
+            : static_cast<std::uint32_t>(value);
+    return WriteVectorOperand(instruction.operands[0], lane_index, extended,
+                              state, error_message);
+  }
+
+  std::uint16_t value = 0;
+  if (!memory->LoadU16(address, &value)) {
+    if (error_message != nullptr) {
+      *error_message = std::string(opcode) + " memory read failed";
+    }
+    return false;
+  }
+  const std::uint32_t extended =
+      opcode == "GLOBAL_LOAD_I16"
+          ? static_cast<std::uint32_t>(
+                static_cast<std::int32_t>(static_cast<std::int16_t>(value)))
+          : static_cast<std::uint32_t>(value);
+  return WriteVectorOperand(instruction.operands[0], lane_index, extended,
+                            state, error_message);
 }
 
 bool WriteWideVectorOperand(const InstructionOperand& operand,
@@ -4310,6 +4522,44 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "GLOBAL_WBINV") {
     return ValidateOperandCount(instruction, 0, error_message);
   }
+  if (instruction.opcode == "GLOBAL_LOAD_U8" ||
+      instruction.opcode == "GLOBAL_LOAD_I8" ||
+      instruction.opcode == "GLOBAL_LOAD_U16" ||
+      instruction.opcode == "GLOBAL_LOAD_I16" ||
+      instruction.opcode == "GLOBAL_LOAD_B32" ||
+      instruction.opcode == "GLOBAL_LOAD_B64" ||
+      instruction.opcode == "GLOBAL_LOAD_B96" ||
+      instruction.opcode == "GLOBAL_LOAD_B128") {
+    if (!ValidateOperandCount(instruction, 4, error_message)) {
+      return false;
+    }
+    if (memory == nullptr) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " requires execution memory";
+      }
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < kGfx1201LaneCount;
+         ++lane_index) {
+      if ((MaskToGfx1201Wave32(state->exec_mask) & (1ull << lane_index)) == 0u) {
+        continue;
+      }
+      std::uint64_t address = 0;
+      if (!ComputeVglobalAddress(instruction, *state, lane_index, &address,
+                                 error_message)) {
+        return false;
+      }
+      if (!ExecuteVectorGlobalLoadAtAddress(instruction, address, lane_index,
+                                            state, memory, error_message)) {
+        return false;
+      }
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
 
   if (instruction.opcode == "S_PREFETCH_INST_PC_REL" ||
       instruction.opcode == "S_PREFETCH_DATA_PC_REL") {
@@ -5296,6 +5546,14 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
   switch (instruction.opcode) {
     case Gfx1201CompiledOpcode::kSEndpgm:
     case Gfx1201CompiledOpcode::kSNop:
+    case Gfx1201CompiledOpcode::kGlobalLoadU8:
+    case Gfx1201CompiledOpcode::kGlobalLoadI8:
+    case Gfx1201CompiledOpcode::kGlobalLoadU16:
+    case Gfx1201CompiledOpcode::kGlobalLoadI16:
+    case Gfx1201CompiledOpcode::kGlobalLoadB32:
+    case Gfx1201CompiledOpcode::kGlobalLoadB64:
+    case Gfx1201CompiledOpcode::kGlobalLoadB96:
+    case Gfx1201CompiledOpcode::kGlobalLoadB128:
     case Gfx1201CompiledOpcode::kSLoadB32:
     case Gfx1201CompiledOpcode::kSLoadB64:
     case Gfx1201CompiledOpcode::kSLoadB96:
