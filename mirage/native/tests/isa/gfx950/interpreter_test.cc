@@ -12068,67 +12068,101 @@ int main() {
                                       InstructionOperand::Imm32(0)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
+  std::vector<CompiledInstruction> compiled_buffer_memory_program;
+  if (!Expect(interpreter.CompileProgram(buffer_memory_program,
+                                         &compiled_buffer_memory_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  const LinearExecutionMemory initial_buffer_memory = buffer_memory;
+  const WaveExecutionState initial_buffer_memory_state = buffer_memory_state;
+  const auto validate_buffer_memory =
+      [](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+         const char* mode) -> bool {
+    std::uint32_t value = 0;
+    return Expect(state.halted,
+                  (std::string(mode) + " buffer memory program to halt").c_str()) &&
+           Expect(state.vgprs[20][0] == 0x11111111u,
+                  (std::string(mode) + " buffer load lane 0 result").c_str()) &&
+           Expect(state.vgprs[20][1] == 0x11111111u,
+                  (std::string(mode) + " buffer load lane 1 result").c_str()) &&
+           Expect(state.vgprs[20][2] == 0u,
+                  (std::string(mode) +
+                   " inactive buffer load lane to remain untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[20][3] == 0x11111111u,
+                  (std::string(mode) + " buffer load lane 3 result").c_str()) &&
+           Expect(state.vgprs[24][0] == 0x22220001u &&
+                      state.vgprs[25][0] == 0x22220002u,
+                  (std::string(mode) + " buffer loadx2 lane 0 result").c_str()) &&
+           Expect(state.vgprs[24][1] == 0x22220011u &&
+                      state.vgprs[25][1] == 0x22220012u,
+                  (std::string(mode) + " buffer loadx2 lane 1 result").c_str()) &&
+           Expect(state.vgprs[24][3] == 0x22220031u &&
+                      state.vgprs[25][3] == 0x22220032u,
+                  (std::string(mode) + " buffer loadx2 lane 3 result").c_str()) &&
+           Expect(state.vgprs[30][1] == 0x33330011u &&
+                      state.vgprs[31][1] == 0x33330012u &&
+                      state.vgprs[32][1] == 0x33330013u,
+                  (std::string(mode) + " buffer loadx3 lane 1 result").c_str()) &&
+           Expect(state.vgprs[40][3] == 0x44440031u &&
+                      state.vgprs[41][3] == 0x44440032u &&
+                      state.vgprs[42][3] == 0x44440033u &&
+                      state.vgprs[43][3] == 0x44440034u,
+                  (std::string(mode) + " buffer loadx4 lane 3 result").c_str()) &&
+           Expect(memory.ReadU32(0x1c0u, &value),
+                  (std::string(mode) + " buffer store read").c_str()) &&
+           Expect(value == 0x50000004u,
+                  (std::string(mode) +
+                   " scalar-address buffer store last-lane result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x1d0u, &value),
+                  (std::string(mode) + " buffer storex2 read").c_str()) &&
+           Expect(value == 0x52000001u,
+                  (std::string(mode) + " buffer storex2 lane 0 result").c_str()) &&
+           Expect(memory.ReadU32(0x1d4u, &value),
+                  (std::string(mode) + " buffer storex2 read").c_str()) &&
+           Expect(value == 0x53000001u,
+                  (std::string(mode) + " buffer storex2 lane 0 result").c_str()) &&
+           Expect(memory.ReadU32(0x1e0u, &value),
+                  (std::string(mode) + " buffer storex2 read").c_str()) &&
+           Expect(value == 0x52000002u,
+                  (std::string(mode) + " buffer storex2 lane 1 result").c_str()) &&
+           Expect(memory.ReadU32(0x1f0u, &value),
+                  (std::string(mode) + " buffer storex3 read").c_str()) &&
+           Expect(value == 0x56000001u,
+                  (std::string(mode) + " buffer storex3 lane 0 result").c_str()) &&
+           Expect(memory.ReadU32(0x1f8u, &value),
+                  (std::string(mode) + " buffer storex3 read").c_str()) &&
+           Expect(value == 0x58000001u,
+                  (std::string(mode) + " buffer storex3 lane 0 result").c_str()) &&
+           Expect(memory.ReadU32(0x200u, &value),
+                  (std::string(mode) + " buffer storex4 read").c_str()) &&
+           Expect(value == 0x60000001u,
+                  (std::string(mode) + " buffer storex4 lane 0 result").c_str()) &&
+           Expect(memory.ReadU32(0x22cu, &value),
+                  (std::string(mode) + " buffer storex4 read").c_str()) &&
+           Expect(value == 0x63000004u,
+                  (std::string(mode) + " buffer storex4 lane 3 result").c_str());
+  };
   if (!Expect(interpreter.ExecuteProgram(buffer_memory_program,
                                          &buffer_memory_state, &buffer_memory,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(buffer_memory_state.halted,
-              "expected buffer memory program to halt") ||
-      !Expect(buffer_memory_state.vgprs[20][0] == 0x11111111u,
-              "expected buffer load lane 0 result") ||
-      !Expect(buffer_memory_state.vgprs[20][1] == 0x11111111u,
-              "expected buffer load lane 1 result") ||
-      !Expect(buffer_memory_state.vgprs[20][2] == 0u,
-              "expected inactive buffer load lane to remain untouched") ||
-      !Expect(buffer_memory_state.vgprs[20][3] == 0x11111111u,
-              "expected buffer load lane 3 result") ||
-      !Expect(buffer_memory_state.vgprs[24][0] == 0x22220001u &&
-                  buffer_memory_state.vgprs[25][0] == 0x22220002u,
-              "expected buffer loadx2 lane 0 result") ||
-      !Expect(buffer_memory_state.vgprs[24][1] == 0x22220011u &&
-                  buffer_memory_state.vgprs[25][1] == 0x22220012u,
-              "expected buffer loadx2 lane 1 result") ||
-      !Expect(buffer_memory_state.vgprs[24][3] == 0x22220031u &&
-                  buffer_memory_state.vgprs[25][3] == 0x22220032u,
-              "expected buffer loadx2 lane 3 result") ||
-      !Expect(buffer_memory_state.vgprs[30][1] == 0x33330011u &&
-                  buffer_memory_state.vgprs[31][1] == 0x33330012u &&
-                  buffer_memory_state.vgprs[32][1] == 0x33330013u,
-              "expected buffer loadx3 lane 1 result") ||
-      !Expect(buffer_memory_state.vgprs[40][3] == 0x44440031u &&
-                  buffer_memory_state.vgprs[41][3] == 0x44440032u &&
-                  buffer_memory_state.vgprs[42][3] == 0x44440033u &&
-                  buffer_memory_state.vgprs[43][3] == 0x44440034u,
-              "expected buffer loadx4 lane 3 result")) {
+      !validate_buffer_memory(buffer_memory_state, buffer_memory, "decoded")) {
     return 1;
   }
 
-  std::uint32_t value = 0;
-  if (!Expect(buffer_memory.ReadU32(0x1c0u, &value),
-              "expected buffer store read") ||
-      !Expect(value == 0x50000004u,
-              "expected scalar-address buffer store last-lane result") ||
-      !Expect(buffer_memory.ReadU32(0x1d0u, &value),
-              "expected buffer storex2 read") ||
-      !Expect(value == 0x52000001u, "expected buffer storex2 lane 0 result") ||
-      !Expect(buffer_memory.ReadU32(0x1d4u, &value),
-              "expected buffer storex2 read") ||
-      !Expect(value == 0x53000001u, "expected buffer storex2 lane 0 result") ||
-      !Expect(buffer_memory.ReadU32(0x1e0u, &value),
-              "expected buffer storex2 read") ||
-      !Expect(value == 0x52000002u, "expected buffer storex2 lane 1 result") ||
-      !Expect(buffer_memory.ReadU32(0x1f0u, &value),
-              "expected buffer storex3 read") ||
-      !Expect(value == 0x56000001u, "expected buffer storex3 lane 0 result") ||
-      !Expect(buffer_memory.ReadU32(0x1f8u, &value),
-              "expected buffer storex3 read") ||
-      !Expect(value == 0x58000001u, "expected buffer storex3 lane 0 result") ||
-      !Expect(buffer_memory.ReadU32(0x200u, &value),
-              "expected buffer storex4 read") ||
-      !Expect(value == 0x60000001u, "expected buffer storex4 lane 0 result") ||
-      !Expect(buffer_memory.ReadU32(0x22cu, &value),
-              "expected buffer storex4 read") ||
-      !Expect(value == 0x63000004u, "expected buffer storex4 lane 3 result")) {
+  LinearExecutionMemory compiled_buffer_memory = initial_buffer_memory;
+  WaveExecutionState compiled_buffer_memory_state = initial_buffer_memory_state;
+  if (!Expect(interpreter.ExecuteProgram(compiled_buffer_memory_program,
+                                         &compiled_buffer_memory_state,
+                                         &compiled_buffer_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_buffer_memory(compiled_buffer_memory_state,
+                              compiled_buffer_memory, "compiled")) {
     return 1;
   }
   }
@@ -12303,101 +12337,141 @@ int main() {
                                       InstructionOperand::Imm32(0x320)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
+  std::vector<CompiledInstruction> compiled_buffer_subword_program;
+  if (!Expect(interpreter.CompileProgram(buffer_subword_program,
+                                         &compiled_buffer_subword_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  const LinearExecutionMemory initial_buffer_subword_memory = buffer_subword_memory;
+  const WaveExecutionState initial_buffer_subword_state = buffer_subword_state;
+  const auto validate_buffer_subword =
+      [](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+         const char* mode) -> bool {
+    std::uint8_t stored_byte = 0;
+    std::uint16_t stored_short = 0;
+    return Expect(state.halted,
+                  (std::string(mode) + " buffer subword program to halt").c_str()) &&
+           Expect(state.vgprs[60][0] == 0x7au && state.vgprs[60][1] == 0x7au &&
+                      state.vgprs[60][3] == 0x7au,
+                  (std::string(mode) + " buffer ubyte load result").c_str()) &&
+           Expect(state.vgprs[61][0] == 0xffffff80u &&
+                      state.vgprs[61][1] == 0x0000007fu &&
+                      state.vgprs[61][3] == 0xfffffffeu,
+                  (std::string(mode) + " buffer sbyte load result").c_str()) &&
+           Expect(state.vgprs[62][1] == 0x5678u &&
+                      state.vgprs[62][3] == 0xabcdu,
+                  (std::string(mode) + " buffer ushort load result").c_str()) &&
+           Expect(state.vgprs[63][0] == 0xffff8001u &&
+                      state.vgprs[63][1] == 0x00007fffu &&
+                      state.vgprs[63][3] == 0xffffff00u,
+                  (std::string(mode) + " buffer sshort load result").c_str()) &&
+           Expect(state.vgprs[64][0] == 0x00000034u &&
+                      state.vgprs[64][1] == 0x00000056u &&
+                      state.vgprs[64][3] == 0x00000078u,
+                  (std::string(mode) + " buffer ubyte d16 load result").c_str()) &&
+           Expect(state.vgprs[65][0] == 0x009a0000u &&
+                      state.vgprs[65][1] == 0x00bc0000u &&
+                      state.vgprs[65][3] == 0x00de0000u,
+                  (std::string(mode) + " buffer ubyte d16 hi load result")
+                      .c_str()) &&
+           Expect(state.vgprs[66][0] == 0x0000ff81u &&
+                      state.vgprs[66][1] == 0x0000ff82u &&
+                      state.vgprs[66][3] == 0x0000007fu,
+                  (std::string(mode) + " buffer sbyte d16 load result").c_str()) &&
+           Expect(state.vgprs[67][0] == 0xfffe0000u &&
+                      state.vgprs[67][1] == 0xff800000u &&
+                      state.vgprs[67][3] == 0x00010000u,
+                  (std::string(mode) + " buffer sbyte d16 hi load result")
+                      .c_str()) &&
+           Expect(state.vgprs[68][1] == 0x00003344u &&
+                      state.vgprs[68][3] == 0x00005566u,
+                  (std::string(mode) + " buffer short d16 load result").c_str()) &&
+           Expect(state.vgprs[69][0] == 0x89ab0000u &&
+                      state.vgprs[69][1] == 0xcdef0000u &&
+                      state.vgprs[69][3] == 0x13570000u,
+                  (std::string(mode) + " buffer short d16 hi load result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x380u, &stored_byte),
+                  (std::string(mode) + " buffer byte store read").c_str()) &&
+           Expect(stored_byte == 0xabu,
+                  (std::string(mode) + " buffer byte store lane 0 result").c_str()) &&
+           Expect(ReadU8(memory, 0x390u, &stored_byte),
+                  (std::string(mode) + " buffer byte store read").c_str()) &&
+           Expect(stored_byte == 0xbcu,
+                  (std::string(mode) + " buffer byte store lane 1 result").c_str()) &&
+           Expect(ReadU8(memory, 0x3a0u, &stored_byte),
+                  (std::string(mode) + " buffer byte store read").c_str()) &&
+           Expect(stored_byte == 0xdeu,
+                  (std::string(mode) + " buffer byte store lane 3 result").c_str()) &&
+           Expect(ReadU8(memory, 0x3b0u, &stored_byte),
+                  (std::string(mode) + " buffer byte d16 hi store read").c_str()) &&
+           Expect(stored_byte == 0x34u,
+                  (std::string(mode) + " buffer byte d16 hi store lane 0 result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3c0u, &stored_byte),
+                  (std::string(mode) + " buffer byte d16 hi store read").c_str()) &&
+           Expect(stored_byte == 0xabu,
+                  (std::string(mode) + " buffer byte d16 hi store lane 1 result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3d0u, &stored_byte),
+                  (std::string(mode) + " buffer byte d16 hi store read").c_str()) &&
+           Expect(stored_byte == 0xfeu,
+                  (std::string(mode) + " buffer byte d16 hi store lane 3 result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x3f0u, &stored_short),
+                  (std::string(mode) + " buffer short store read").c_str()) &&
+           Expect(stored_short == 0x89abu,
+                  (std::string(mode) + " buffer short store lane 0 result").c_str()) &&
+           Expect(ReadU16(memory, 0x400u, &stored_short),
+                  (std::string(mode) + " buffer short store read").c_str()) &&
+           Expect(stored_short == 0xcdefu,
+                  (std::string(mode) + " buffer short store lane 1 result").c_str()) &&
+           Expect(ReadU16(memory, 0x410u, &stored_short),
+                  (std::string(mode) + " buffer short store read").c_str()) &&
+           Expect(stored_short == 0x1357u,
+                  (std::string(mode) + " buffer short store lane 3 result").c_str()) &&
+           Expect(ReadU16(memory, 0x430u, &stored_short),
+                  (std::string(mode) + " buffer short d16 hi store read").c_str()) &&
+           Expect(stored_short == 0x2468u,
+                  (std::string(mode) +
+                   " buffer short d16 hi store lane 0 result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x440u, &stored_short),
+                  (std::string(mode) + " buffer short d16 hi store read").c_str()) &&
+           Expect(stored_short == 0x1357u,
+                  (std::string(mode) +
+                   " buffer short d16 hi store lane 1 result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x450u, &stored_short),
+                  (std::string(mode) + " buffer short d16 hi store read").c_str()) &&
+           Expect(stored_short == 0xabcdu,
+                  (std::string(mode) +
+                   " buffer short d16 hi store lane 3 result")
+                      .c_str());
+  };
   if (!Expect(interpreter.ExecuteProgram(buffer_subword_program,
                                          &buffer_subword_state,
                                          &buffer_subword_memory,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(buffer_subword_state.halted,
-              "expected buffer subword program to halt") ||
-      !Expect(buffer_subword_state.vgprs[60][0] == 0x7au &&
-                  buffer_subword_state.vgprs[60][1] == 0x7au &&
-                  buffer_subword_state.vgprs[60][3] == 0x7au,
-              "expected buffer ubyte load result") ||
-      !Expect(buffer_subword_state.vgprs[61][0] == 0xffffff80u &&
-                  buffer_subword_state.vgprs[61][1] == 0x0000007fu &&
-                  buffer_subword_state.vgprs[61][3] == 0xfffffffeu,
-              "expected buffer sbyte load result") ||
-      !Expect(buffer_subword_state.vgprs[62][1] == 0x5678u &&
-                  buffer_subword_state.vgprs[62][3] == 0xabcdu,
-              "expected buffer ushort load result") ||
-      !Expect(buffer_subword_state.vgprs[63][0] == 0xffff8001u &&
-                  buffer_subword_state.vgprs[63][1] == 0x00007fffu &&
-                  buffer_subword_state.vgprs[63][3] == 0xffffff00u,
-              "expected buffer sshort load result") ||
-      !Expect(buffer_subword_state.vgprs[64][0] == 0x00000034u &&
-                  buffer_subword_state.vgprs[64][1] == 0x00000056u &&
-                  buffer_subword_state.vgprs[64][3] == 0x00000078u,
-              "expected buffer ubyte d16 load result") ||
-      !Expect(buffer_subword_state.vgprs[65][0] == 0x009a0000u &&
-                  buffer_subword_state.vgprs[65][1] == 0x00bc0000u &&
-                  buffer_subword_state.vgprs[65][3] == 0x00de0000u,
-              "expected buffer ubyte d16 hi load result") ||
-      !Expect(buffer_subword_state.vgprs[66][0] == 0x0000ff81u &&
-                  buffer_subword_state.vgprs[66][1] == 0x0000ff82u &&
-                  buffer_subword_state.vgprs[66][3] == 0x0000007fu,
-              "expected buffer sbyte d16 load result") ||
-      !Expect(buffer_subword_state.vgprs[67][0] == 0xfffe0000u &&
-                  buffer_subword_state.vgprs[67][1] == 0xff800000u &&
-                  buffer_subword_state.vgprs[67][3] == 0x00010000u,
-              "expected buffer sbyte d16 hi load result") ||
-      !Expect(buffer_subword_state.vgprs[68][1] == 0x00003344u &&
-                  buffer_subword_state.vgprs[68][3] == 0x00005566u,
-              "expected buffer short d16 load result") ||
-      !Expect(buffer_subword_state.vgprs[69][0] == 0x89ab0000u &&
-                  buffer_subword_state.vgprs[69][1] == 0xcdef0000u &&
-                  buffer_subword_state.vgprs[69][3] == 0x13570000u,
-              "expected buffer short d16 hi load result")) {
+      !validate_buffer_subword(buffer_subword_state, buffer_subword_memory,
+                               "decoded")) {
     return 1;
   }
 
-  std::uint8_t stored_byte = 0;
-  std::uint16_t stored_short = 0;
-  if (!Expect(ReadU8(buffer_subword_memory, 0x380u, &stored_byte),
-              "expected buffer byte store read") ||
-      !Expect(stored_byte == 0xabu, "expected buffer byte store lane 0 result") ||
-      !Expect(ReadU8(buffer_subword_memory, 0x390u, &stored_byte),
-              "expected buffer byte store read") ||
-      !Expect(stored_byte == 0xbcu, "expected buffer byte store lane 1 result") ||
-      !Expect(ReadU8(buffer_subword_memory, 0x3a0u, &stored_byte),
-              "expected buffer byte store read") ||
-      !Expect(stored_byte == 0xdeu, "expected buffer byte store lane 3 result") ||
-      !Expect(ReadU8(buffer_subword_memory, 0x3b0u, &stored_byte),
-              "expected buffer byte d16 hi store read") ||
-      !Expect(stored_byte == 0x34u,
-              "expected buffer byte d16 hi store lane 0 result") ||
-      !Expect(ReadU8(buffer_subword_memory, 0x3c0u, &stored_byte),
-              "expected buffer byte d16 hi store read") ||
-      !Expect(stored_byte == 0xabu,
-              "expected buffer byte d16 hi store lane 1 result") ||
-      !Expect(ReadU8(buffer_subword_memory, 0x3d0u, &stored_byte),
-              "expected buffer byte d16 hi store read") ||
-      !Expect(stored_byte == 0xfeu,
-              "expected buffer byte d16 hi store lane 3 result") ||
-      !Expect(ReadU16(buffer_subword_memory, 0x3f0u, &stored_short),
-              "expected buffer short store read") ||
-      !Expect(stored_short == 0x89abu,
-              "expected buffer short store lane 0 result") ||
-      !Expect(ReadU16(buffer_subword_memory, 0x400u, &stored_short),
-              "expected buffer short store read") ||
-      !Expect(stored_short == 0xcdefu,
-              "expected buffer short store lane 1 result") ||
-      !Expect(ReadU16(buffer_subword_memory, 0x410u, &stored_short),
-              "expected buffer short store read") ||
-      !Expect(stored_short == 0x1357u,
-              "expected buffer short store lane 3 result") ||
-      !Expect(ReadU16(buffer_subword_memory, 0x430u, &stored_short),
-              "expected buffer short d16 hi store read") ||
-      !Expect(stored_short == 0x2468u,
-              "expected buffer short d16 hi store lane 0 result") ||
-      !Expect(ReadU16(buffer_subword_memory, 0x440u, &stored_short),
-              "expected buffer short d16 hi store read") ||
-      !Expect(stored_short == 0x1357u,
-              "expected buffer short d16 hi store lane 1 result") ||
-      !Expect(ReadU16(buffer_subword_memory, 0x450u, &stored_short),
-              "expected buffer short d16 hi store read") ||
-      !Expect(stored_short == 0xabcdu,
-              "expected buffer short d16 hi store lane 3 result")) {
+  LinearExecutionMemory compiled_buffer_subword_memory =
+      initial_buffer_subword_memory;
+  WaveExecutionState compiled_buffer_subword_state =
+      initial_buffer_subword_state;
+  if (!Expect(interpreter.ExecuteProgram(compiled_buffer_subword_program,
+                                         &compiled_buffer_subword_state,
+                                         &compiled_buffer_subword_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_buffer_subword(compiled_buffer_subword_state,
+                               compiled_buffer_subword_memory, "compiled")) {
     return 1;
   }
   }
