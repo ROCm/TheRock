@@ -13,8 +13,10 @@ using mirage::sim::isa::gfx1250::DecodeVop3SdstStub;
 using mirage::sim::isa::gfx1250::DecodeVop3pStub;
 using mirage::sim::isa::gfx1250::FindStubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteInfo;
+using mirage::sim::isa::gfx1250::FindStubDecoderRouteManifest;
 using mirage::sim::isa::gfx1250::GetStubDecoderEntrypointManifests;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteInstructions;
+using mirage::sim::isa::gfx1250::GetStubDecoderRouteManifests;
 using mirage::sim::isa::gfx1250::GetStubExecutionDomainName;
 using mirage::sim::isa::gfx1250::GetStubOperandLayoutName;
 using mirage::sim::isa::gfx1250::GetStubOperandRoleName;
@@ -27,6 +29,7 @@ using mirage::sim::isa::gfx1250::StubDecodeStatus;
 using mirage::sim::isa::gfx1250::StubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::StubDecoderRoute;
 using mirage::sim::isa::gfx1250::StubDecoderRouteInfo;
+using mirage::sim::isa::gfx1250::StubDecoderRouteManifest;
 using mirage::sim::isa::gfx1250::StubExecutionDomain;
 using mirage::sim::isa::gfx1250::StubOperandAccess;
 using mirage::sim::isa::gfx1250::StubFragmentKind;
@@ -254,6 +257,41 @@ bool MatchesRouteInfoPayload(const StubDecodedInstruction& instruction,
          instruction.rdna4_operand_count == route_info.rdna4_operand_count &&
          instruction.appears_in_rdna4_xml == route_info.appears_in_rdna4_xml &&
          instruction.is_target_specific == route_info.is_target_specific;
+}
+
+std::uint32_t CountRouteInfosForRoute(StubDecoderRoute route) {
+  std::uint32_t count = 0;
+  for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
+    if (route_info.route == route) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountRouteInfosForRouteWithXmlFlag(StubDecoderRoute route,
+                                                 bool appears_in_rdna4_xml) {
+  std::uint32_t count = 0;
+  for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
+    if (route_info.route == route &&
+        route_info.appears_in_rdna4_xml == appears_in_rdna4_xml) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountRouteInfosForRouteWithTargetSpecificFlag(
+    StubDecoderRoute route,
+    bool is_target_specific) {
+  std::uint32_t count = 0;
+  for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
+    if (route_info.route == route &&
+        route_info.is_target_specific == is_target_specific) {
+      ++count;
+    }
+  }
+  return count;
 }
 
 bool ContainsSlot(const StubDecodedInstruction& instruction,
@@ -6190,6 +6228,75 @@ int main() {
   if (!Expect(total_manifest_instructions ==
                   GetStubDecoderRouteInfos().size(),
               "expected entrypoint manifests to cover all routed seeds")) {
+    return 1;
+  }
+
+  if (!Expect(GetStubDecoderRouteManifests().size() == 4,
+              "expected four route manifests")) {
+    return 1;
+  }
+  for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
+    if (!Expect(
+            manifest.instruction_count ==
+                    GetStubDecoderRouteInstructions(manifest.route).size() &&
+                manifest.instruction_count ==
+                    CountRouteInfosForRoute(manifest.route) &&
+                manifest.xml_backed_count ==
+                    CountRouteInfosForRouteWithXmlFlag(manifest.route, true) &&
+                manifest.llvm_only_count ==
+                    CountRouteInfosForRouteWithXmlFlag(manifest.route, false) &&
+                manifest.target_specific_count ==
+                    CountRouteInfosForRouteWithTargetSpecificFlag(
+                        manifest.route, true) &&
+                manifest.xml_backed_count + manifest.llvm_only_count ==
+                    manifest.instruction_count,
+            "expected route manifest counts to match routed instruction and provenance totals")) {
+      return 1;
+    }
+  }
+
+  const StubDecoderRouteManifest* vop3p_route_manifest =
+      FindStubDecoderRouteManifest(StubDecoderRoute::kVop3p);
+  if (!Expect(vop3p_route_manifest != nullptr,
+              "expected VOP3P route manifest")) {
+    return 1;
+  }
+  if (!Expect(vop3p_route_manifest->route_name == "kVop3p" &&
+                  vop3p_route_manifest->route_priority == 1,
+              "expected VOP3P route manifest metadata")) {
+    return 1;
+  }
+  const StubDecoderRouteManifest* tensor_route_manifest =
+      FindStubDecoderRouteManifest(StubDecoderRoute::kMimgTensor);
+  if (!Expect(tensor_route_manifest != nullptr,
+              "expected tensor route manifest")) {
+    return 1;
+  }
+  if (!Expect(tensor_route_manifest->route_name == "kMimgTensor" &&
+                  tensor_route_manifest->route_priority == 2,
+              "expected tensor route manifest metadata")) {
+    return 1;
+  }
+  const StubDecoderRouteManifest* vop1_route_manifest =
+      FindStubDecoderRouteManifest(StubDecoderRoute::kVop1);
+  if (!Expect(vop1_route_manifest != nullptr,
+              "expected VOP1 route manifest")) {
+    return 1;
+  }
+  if (!Expect(vop1_route_manifest->route_name == "kVop1" &&
+                  vop1_route_manifest->route_priority == 3,
+              "expected VOP1 route manifest metadata")) {
+    return 1;
+  }
+  const StubDecoderRouteManifest* sdst_route_manifest =
+      FindStubDecoderRouteManifest(StubDecoderRoute::kVop3Sdst);
+  if (!Expect(sdst_route_manifest != nullptr,
+              "expected VOP3 SDST route manifest")) {
+    return 1;
+  }
+  if (!Expect(sdst_route_manifest->route_name == "kVop3Sdst" &&
+                  sdst_route_manifest->route_priority == 4,
+              "expected VOP3 SDST route manifest metadata")) {
     return 1;
   }
 

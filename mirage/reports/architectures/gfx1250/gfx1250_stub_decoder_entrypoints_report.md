@@ -38,8 +38,12 @@
   - route-wide exact operand-role, slot-binding, and descriptor ordering validation across the current routed matrix and non-matrix seed sets
   - route-wide exact route metadata and operand-layout validation across the current routed matrix and non-matrix seed sets
   - route-wide exact route-info and RDNA4 provenance parity validation across the current routed matrix and non-matrix seed sets
+  - exact route-manifest parity validation across the current routed family set
 
 ## Routed Seed Metadata Coverage
+
+- Route manifests:
+  - route-wide exact instruction-count, XML-backed vs LLVM-only count, target-specific count, route-name, and route-priority parity checks across `kVop3p`, `kMimgTensor`, `kVop1`, and `kVop3Sdst`
 
 - `VOP3P` packed BF16 slice:
   - `V_PK_ADD_BF16`
