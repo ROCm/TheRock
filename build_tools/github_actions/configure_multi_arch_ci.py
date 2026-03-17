@@ -109,18 +109,13 @@ class CIInputs:
         print(f"  event: {self.event_name}")
         print(f"  branch: {self.branch_name}")
         print(f"  variant: {self.build_variant}")
-        if self.pr_labels:
-            print(f"  pr_labels: {self.pr_labels}")
-        if self.linux_amdgpu_families:
-            print(f"  linux_amdgpu_families: {self.linux_amdgpu_families}")
-        if self.windows_amdgpu_families:
-            print(f"  windows_amdgpu_families: {self.windows_amdgpu_families}")
-        if self.linux_test_labels:
-            print(f"  linux_test_labels: {self.linux_test_labels}")
-        if self.windows_test_labels:
-            print(f"  windows_test_labels: {self.windows_test_labels}")
-        if self.prebuilt_stages:
-            print(f"  prebuilt_stages: {self.prebuilt_stages}")
+        print(f"  pr_labels: {self.pr_labels}")
+        print(f"  linux_amdgpu_families: {self.linux_amdgpu_families}")
+        print(f"  windows_amdgpu_families: {self.windows_amdgpu_families}")
+        print(f"  linux_test_labels: {self.linux_test_labels!r}")
+        print(f"  windows_test_labels: {self.windows_test_labels!r}")
+        print(f"  prebuilt_stages: {self.prebuilt_stages!r}")
+        print(f"  baseline_run_id: {self.baseline_run_id!r}")
 
     @property
     def is_pull_request(self) -> bool:
@@ -440,13 +435,17 @@ def check_skip_ci(
     for those triggers, and they have no PR labels).
     """
     if "skip-ci" in ci_inputs.pr_labels:
+        print("  Found 'skip-ci' PR label")
         return SkipDecision(skip=True, reason="skip-ci label")
 
     # changed_files is None for schedule/workflow_dispatch — always proceed.
-    if git_context.changed_files is not None and not is_ci_run_required(
-        git_context.changed_files
-    ):
-        return SkipDecision(skip=True, reason="no CI-relevant files changed")
+    if git_context.changed_files is not None:
+        print(
+            f"  Checking {len(git_context.changed_files)} changed file(s) "
+            f"against path filters..."
+        )
+        if not is_ci_run_required(git_context.changed_files):
+            return SkipDecision(skip=True, reason="no CI-relevant files changed")
 
     return SkipDecision(skip=False, reason="")
 
@@ -879,23 +878,26 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     CIInputs and GitContext directly and assert on the returned CIOutputs.
     No git operations or environment access needed.
     """
+    print("=== Inputs ===")
     ci_inputs.log()
     git_context.log()
 
-    # Step 2: Gate — should we skip CI entirely?
+    print("\n=== Checking if CI should run ===")
     skip_decision = check_skip_ci(ci_inputs=ci_inputs, git_context=git_context)
     if skip_decision.skip:
-        print(f"Skipping CI: {skip_decision.reason}")
+        print(f"Result: skipping CI ({skip_decision.reason})")
         return CIOutputs.skipped(skip_decision.reason)
+    print("Result: CI will run")
 
-    # Steps 3 and 4 are independent: job decisions (which job groups run)
-    # and target selection (which GPU families) are orthogonal concerns.
+    print("\n=== Deciding job configuration ===")
     jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context)
     jobs.log()
+
+    print("\n=== Selecting GPU target families ===")
     targets = select_targets(ci_inputs)
     targets.log()
 
-    # Step 5: Build configs per platform
+    print("\n=== Building per-platform configs ===")
     builds = expand_build_configs(
         targets=targets,
         build_variant=ci_inputs.build_variant,
