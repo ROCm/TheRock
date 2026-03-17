@@ -337,7 +337,7 @@ def get_all_families_for_trigger_types(trigger_types):
     """
     import copy
 
-    from runner_overrides import apply_overrides
+    from gpu_runner_s3_config import apply_overrides
 
     result = {}
     matrix_map = {
