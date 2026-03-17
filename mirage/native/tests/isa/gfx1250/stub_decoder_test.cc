@@ -259,6 +259,17 @@ bool MatchesRouteInfoPayload(const StubDecodedInstruction& instruction,
          instruction.is_target_specific == route_info.is_target_specific;
 }
 
+bool MatchesTopLevelFlags(const StubDecodedInstruction& instruction,
+                          bool uses_accumulator,
+                          bool uses_tensor_memory,
+                          bool uses_scale_path,
+                          bool uses_paired_operands) {
+  return instruction.uses_accumulator == uses_accumulator &&
+         instruction.uses_tensor_memory == uses_tensor_memory &&
+         instruction.uses_scale_path == uses_scale_path &&
+         instruction.uses_paired_operands == uses_paired_operands;
+}
+
 std::uint32_t CountRouteInfosForRoute(StubDecoderRoute route) {
   std::uint32_t count = 0;
   for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
@@ -1173,6 +1184,10 @@ int main() {
             "expected routed packed VOP3P seed to keep exact top-level route/layout metadata")) {
       return 1;
     }
+    if (!Expect(MatchesTopLevelFlags(decoded, false, false, false, true),
+                "expected routed packed VOP3P seed to keep exact top-level flag composition")) {
+      return 1;
+    }
   }
 
   const StubDecodedInstruction wmma =
@@ -1982,6 +1997,10 @@ int main() {
               "expected routed WMMA scale seed to keep exact top-level route/layout metadata")) {
         return 1;
       }
+      if (!Expect(MatchesTopLevelFlags(decoded, true, false, true, false),
+                  "expected routed WMMA scale seed to keep exact top-level flag composition")) {
+        return 1;
+      }
     } else {
       if (!Expect(
               decoded.execution_domain == StubExecutionDomain::kMatrix &&
@@ -1998,6 +2017,10 @@ int main() {
                   !decoded.operand_layout.touches_lds &&
                   !decoded.operand_layout.is_store,
               "expected routed WMMA/SWMMAC core seed to keep exact top-level route/layout metadata")) {
+        return 1;
+      }
+      if (!Expect(MatchesTopLevelFlags(decoded, true, false, false, false),
+                  "expected routed WMMA/SWMMAC core seed to keep exact top-level flag composition")) {
         return 1;
       }
     }
@@ -4223,6 +4246,10 @@ int main() {
             "expected routed tensor seed to keep exact top-level route/layout metadata")) {
       return 1;
     }
+    if (!Expect(MatchesTopLevelFlags(decoded, false, true, false, false),
+                "expected routed tensor seed to keep exact top-level flag composition")) {
+      return 1;
+    }
     if (!Expect(decoded.uses_tensor_memory &&
                     decoded.operand_layout.has_tensor_descriptor &&
                     decoded.operand_layout.touches_lds &&
@@ -4840,10 +4867,17 @@ int main() {
                      0,
                      false,
                      false,
-                     false,
-                     false,
-                     false}),
+                                     false,
+                                     false,
+                                     false}),
             "expected routed VOP1 seed to keep exact top-level route/layout metadata")) {
+      return 1;
+    }
+    if (!Expect(
+            MatchesTopLevelFlags(decoded, false, false, false,
+                                 instruction_name.find("PK_") !=
+                                     std::string_view::npos),
+            "expected routed VOP1 seed to keep exact top-level flag composition")) {
       return 1;
     }
     if (!Expect(decoded.execution_domain == StubExecutionDomain::kConversion &&
@@ -5263,6 +5297,10 @@ int main() {
                                false,
                                false}),
             "expected routed VOP3 SDST seed to keep exact top-level route/layout metadata")) {
+      return 1;
+    }
+    if (!Expect(MatchesTopLevelFlags(decoded, false, false, true, false),
+                "expected routed VOP3 SDST seed to keep exact top-level flag composition")) {
       return 1;
     }
     if (!Expect(decoded.uses_scale_path && !HasMatrixSlot(decoded) &&
@@ -5754,6 +5792,10 @@ int main() {
                      false,
                      false}),
             "expected routed paired-scale seed to keep exact top-level route/layout metadata")) {
+      return 1;
+    }
+    if (!Expect(MatchesTopLevelFlags(decoded, false, false, true, true),
+                "expected routed paired-scale seed to keep exact top-level flag composition")) {
       return 1;
     }
     if (!Expect(decoded.uses_scale_path && decoded.uses_paired_operands &&
