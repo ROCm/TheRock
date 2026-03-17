@@ -432,7 +432,6 @@ def main(argv):
                     "third_party/benchmark",
                     "third_party/llvm-project",
                     "third_party/torch-mlir",
-                    "third_party/printf",
                 ],
             )
         ],
