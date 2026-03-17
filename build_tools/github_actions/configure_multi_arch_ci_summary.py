@@ -8,7 +8,6 @@ design rationale and example outputs.
 import json
 
 from configure_multi_arch_ci import (
-    BuildConfig,
     CIInputs,
     CIOutputs,
     GitContext,
@@ -43,7 +42,7 @@ def format_summary(
 
     # One-liner: trigger, branch, variant
     lines.append(
-        f"Trigger: `{ci_inputs.event_name}` on `{ci_inputs.branch_name}`, "
+        f"Trigger: `{ci_inputs.event_name}` on `{ci_inputs.branch_name}` branch, "
         f"`{ci_inputs.build_variant}` variant."
     )
     lines.append("")
@@ -99,12 +98,12 @@ def _non_default_callouts(ci_inputs: CIInputs, outputs: CIOutputs) -> list[str]:
         if ci_inputs.linux_amdgpu_families or ci_inputs.windows_amdgpu_families:
             parts = []
             if ci_inputs.linux_amdgpu_families:
-                fams = ", ".join(f"`{f}`" for f in ci_inputs.linux_amdgpu_families)
-                parts.append(f"Linux ({fams})")
+                fams = ", ".join(ci_inputs.linux_amdgpu_families)
+                parts.append(f"Linux: `[{fams}]`")
             if ci_inputs.windows_amdgpu_families:
-                fams = ", ".join(f"`{f}`" for f in ci_inputs.windows_amdgpu_families)
-                parts.append(f"Windows ({fams})")
-            callouts.append(f"Explicit family selection: {', '.join(parts)}")
+                fams = ", ".join(ci_inputs.windows_amdgpu_families)
+                parts.append(f"Windows: `[{fams}]`")
+            callouts.append(f"Explicit family selection — {', '.join(parts)}")
 
     # PR labels that affect behavior
     for label in ci_inputs.pr_labels:
@@ -122,11 +121,11 @@ def _non_default_callouts(ci_inputs: CIInputs, outputs: CIOutputs) -> list[str]:
 
     # Prebuilt stages
     if jobs and jobs.build_rocm.prebuilt_stages:
-        stages = ", ".join(f"`{s}`" for s in jobs.build_rocm.prebuilt_stages)
+        stage_list = ", ".join(jobs.build_rocm.prebuilt_stages)
         run_id = jobs.build_rocm.baseline_run_id
         repo = _repo_slug()
         callouts.append(
-            f"Prebuilt stages: {stages} from run "
+            f"Prebuilt stages: `[{stage_list}]` from run "
             f"[{run_id}](https://github.com/{repo}/actions/runs/{run_id})"
         )
 
@@ -176,7 +175,7 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
     test_rocm = jobs.test_rocm
 
     lines.append(
-        f"Test level: **{test_rocm.test_type}** ({test_rocm.test_type_reason})."
+        f"Test level: **{test_rocm.test_type}** ({test_rocm.test_type_reason})"
     )
 
     # Component test labels
@@ -187,7 +186,7 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
         test_labels.append(outputs.windows_test_labels)
     if test_labels:
         labels_str = ", ".join(f"`{t}`" for t in test_labels)
-        lines.append(f"Component tests: {labels_str}.")
+        lines.append(f"Component tests: {labels_str}")
     lines.append("")
 
     # Per-family test runner table
