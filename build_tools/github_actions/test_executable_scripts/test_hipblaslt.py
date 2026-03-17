@@ -32,7 +32,7 @@ if is_asan():
     environ_vars["HSA_XNACK"] = "1"
     environ_vars["OMP_NUM_THREADS"] = "1"
 
-# If smoke tests are enabled, we run smoke tests only.
+# If quick tests are enabled, we run quick tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 
@@ -41,7 +41,7 @@ if AMDGPU_FAMILIES == "gfx1151" and platform == "windows":
     test_type = "quick"
 
 test_filter = []
-if test_type == "smoke":
+if test_type == "quick":
     test_filter.append("--gtest_filter=*smoke*")
 elif test_type == "quick":
     test_filter.append("--gtest_filter=*quick*")

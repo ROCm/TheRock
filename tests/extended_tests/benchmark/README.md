@@ -62,8 +62,6 @@ extended_tests/benchmark/                       # Benchmark test directory
 
 ## CI/CD Integration
 
-**Note:** Benchmarks always run with `total_shards=1` and do not use `test_type` or `test_labels` filtering.
-
 ### Available Benchmark Tests in CI
 
 The following benchmark tests are defined in `tests/extended_tests/benchmark/benchmark_test_matrix.py`:

@@ -8,7 +8,7 @@ TEST_COMPONENT: Job name of the component to test (e.g., "miopen", "rocrand", "h
     This is automatically set by the GitHub Actions workflow from the job_name field.
     The script maps these job names to actual test directory names (e.g., "miopen" -> "MIOpen")
     Defaults to "miopen" if not set.
-TEST_TYPE: "smoke" runs tests with "quick" category, otherwise runs "standard" category
+TEST_TYPE: "quick" runs tests with "quick" category, otherwise runs "standard" category
 AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
 
 The script discovers GPU-specific labels via ctest --print-labels and runs the appropriate tests for the current GPU architecture.
@@ -23,13 +23,10 @@ import logging
 import shlex
 from pathlib import Path
 
-sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
-from github_actions_utils import find_matching_gpu_arch
-
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-TEST_TYPE = os.getenv("TEST_TYPE", "smoke")
+TEST_TYPE = os.getenv("TEST_TYPE", "quick")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 # Map job names to actual test directory names
@@ -87,6 +84,31 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
 logging.basicConfig(level=logging.INFO)
 ##############################################
+
+
+def find_matching_gpu_arch(gpu_arch: str, available_gpu_archs: set[str]) -> str | None:
+    """
+    Find the most specific GPU architecture in the set that matches the given GPU.
+
+    Tries in order from most specific to least specific:
+    # Example:
+    # find_matching_gpu_arch('gfx1151', {'gfx1151', 'gfx115X', 'gfx11X'}) gives 'gfx1151'
+    # find_matching_gpu_arch('gfx1151', {'gfx1150', 'gfx94X', 'gfx11X'}) gives 'gfx11X'
+    - Wildcard matches (gfx115X, gfx11X, etc.)
+
+    Returns the matching architecture string or None if no match found.
+    """
+    if gpu_arch in available_gpu_archs:
+        return gpu_arch
+
+    # Start matching from the end (gfx115X) and go back till the 5th character (gfx11X)
+    # Return the top matching pattern
+    for i in range(len(gpu_arch) - 1, 4, -1):
+        pattern = gpu_arch[:i] + "X"
+        if pattern in available_gpu_archs:
+            return pattern
+
+    return None
 
 
 def get_available_gpu_suite_tests():
@@ -197,7 +219,7 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
 
 def main():
     # Use only two categories for now - quick and standard - depending on TEST_TYPE.
-    if TEST_TYPE and TEST_TYPE.lower() == "smoke":
+    if TEST_TYPE and TEST_TYPE.lower() == "quick":
         category = "quick"
     else:
         category = "standard"
