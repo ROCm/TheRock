@@ -215,10 +215,6 @@ jobs:
             --output-dir "${DEST}"
           # Create symlink so that hardcoded RUNPATH /opt/rocm/lib in JAX wheels resolves
           ln -sfn "${DEST}" /opt/rocm
-          # Set ROCm environment variables for dynamic linker.
-          # Both lib paths are required: main ROCm libs + vendored sysdeps libs
-          echo "ROCM_PATH=${DEST}" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=${DEST}/lib:${DEST}/lib/rocm_sysdeps/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
       - name: Determine JAX package versions
         run: |
