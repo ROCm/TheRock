@@ -244,7 +244,9 @@ def run_windows(args: argparse.Namespace) -> int:
         )
 
     # Check which choco packages need installing
-    choco_packages = [p for p in ["git", "python", "cmake", "ninja", "ccache"] if p in missing]
+    choco_packages = [
+        p for p in ["git", "python", "cmake", "ninja", "ccache"] if p in missing
+    ]
     if choco_packages:
         steps.append(
             ("Installing dependencies", f"choco install -y {' '.join(choco_packages)}")
@@ -266,23 +268,31 @@ def run_windows(args: argparse.Namespace) -> int:
             )
         )
 
-    steps.extend([
-        ("Creating virtual environment", "uv venv .venv; .venv\\Scripts\\Activate.ps1"),
-        ("Installing Python dependencies", "uv pip install -r requirements-test.txt"),
-        ("Downloading artifacts", fetch_cmd),
-        (
-            "Setting environment variables",
-            "; ".join(
-                [
-                    "$env:THEROCK_BIN_DIR='./therock-build/bin'",
-                    "$env:OUTPUT_ARTIFACTS_DIR='./therock-build'",
-                    f"$env:SHARD_INDEX='{args.shard_index}'",
-                    f"$env:TOTAL_SHARDS='{args.total_shards}'",
-                    f"$env:TEST_TYPE='{args.test_type}'",
-                ]
+    steps.extend(
+        [
+            (
+                "Creating virtual environment",
+                "uv venv .venv; .venv\\Scripts\\Activate.ps1",
             ),
-        ),
-    ])
+            (
+                "Installing Python dependencies",
+                "uv pip install -r requirements-test.txt",
+            ),
+            ("Downloading artifacts", fetch_cmd),
+            (
+                "Setting environment variables",
+                "; ".join(
+                    [
+                        "$env:THEROCK_BIN_DIR='./therock-build/bin'",
+                        "$env:OUTPUT_ARTIFACTS_DIR='./therock-build'",
+                        f"$env:SHARD_INDEX='{args.shard_index}'",
+                        f"$env:TOTAL_SHARDS='{args.total_shards}'",
+                        f"$env:TEST_TYPE='{args.test_type}'",
+                    ]
+                ),
+            ),
+        ]
+    )
 
     if args.setup_only:
         steps.append(("Setup complete", f"Write-Host 'Run: {args.test_script}'"))
