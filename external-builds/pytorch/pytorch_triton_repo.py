@@ -86,7 +86,9 @@ def do_checkout(args: argparse.Namespace):
                 pin_version = get_triton_version(torch_dir)
                 pin_major, pin_minor, *_ = pin_version.split(".")
                 args.repo_hashtag = f"release/{pin_major}.{pin_minor}.x"
-                print(f"Triton version pin: {args.triton_version} -> {args.repo_hashtag}")
+                print(
+                    f"Triton version pin: {args.triton_version} -> {args.repo_hashtag}"
+                )
             else:
                 # Derive the commit pin base on ci commit.
                 args.repo_hashtag = get_triton_pin(torch_dir)

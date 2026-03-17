@@ -729,15 +729,17 @@ def do_build_triton(
         # Prepare environment for triton-windows build.
         # Note: MSVC environment (vcvars64.bat) must already be set up.
         windows_env = dict(os.environ)
-        windows_env.update({
-            "PYTHONUTF8": "1",
-            "LLVM_BUILD_DIR": str(llvm_build_dir),
-            "LLVM_INCLUDE_DIRS": str(llvm_build_dir / "include"),
-            "LLVM_LIBRARY_DIR": str(llvm_build_dir / "lib"),
-            "LLVM_SYSPATH": str(llvm_build_dir),
-            "TRITON_BUILD_PROTON": "OFF",
-            "TRITON_APPEND_CMAKE_ARGS": "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE",
-        })
+        windows_env.update(
+            {
+                "PYTHONUTF8": "1",
+                "LLVM_BUILD_DIR": str(llvm_build_dir),
+                "LLVM_INCLUDE_DIRS": str(llvm_build_dir / "include"),
+                "LLVM_LIBRARY_DIR": str(llvm_build_dir / "lib"),
+                "LLVM_SYSPATH": str(llvm_build_dir),
+                "TRITON_BUILD_PROTON": "OFF",
+                "TRITON_APPEND_CMAKE_ARGS": "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE",
+            }
+        )
 
         print("+++ Installing build dependencies:")
         run_command(
