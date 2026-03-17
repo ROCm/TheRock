@@ -1,4 +1,5 @@
 #include <iostream>
+#include <initializer_list>
 #include <string_view>
 
 #include "lib/sim/isa/gfx1250/stub_decoder.h"
@@ -39,6 +40,50 @@ struct ShapeExtents {
   std::uint16_t columns = 0xffff;
   std::uint16_t depth = 0xffff;
   bool valid = false;
+};
+
+struct ExpectedRoleBinding {
+  StubOperandRole role;
+  std::uint32_t count;
+  bool is_output;
+  bool is_implicit;
+};
+
+struct ExpectedSlotBinding {
+  StubOperandSlotKind slot_kind;
+  StubOperandValueClass value_class;
+  std::uint32_t logical_operand_index;
+  std::uint32_t component_count;
+  bool is_output;
+  bool is_implicit;
+};
+
+struct ExpectedDescriptorBinding {
+  StubOperandRole role;
+  StubOperandSlotKind slot_kind;
+  StubOperandValueClass value_class;
+  StubOperandAccess access;
+  std::uint8_t component_count;
+  bool is_implicit;
+};
+
+struct ExpectedRouteMetadata {
+  StubDecoderRoute route;
+  std::string_view route_name;
+  std::string_view entrypoint_name;
+  std::uint32_t route_priority;
+};
+
+struct ExpectedLayout {
+  StubOperandLayoutKind layout_kind = StubOperandLayoutKind::kUnknown;
+  std::uint32_t source_count = 0;
+  std::uint32_t destination_count = 0;
+  std::uint32_t accumulator_source_count = 0;
+  bool has_scale_operand = false;
+  bool has_paired_scale_operand = false;
+  bool has_tensor_descriptor = false;
+  bool touches_lds = false;
+  bool is_store = false;
 };
 
 bool Expect(bool condition, const char* message) {
@@ -108,6 +153,93 @@ bool AllRoleBindingsExplicit(const StubDecodedInstruction& instruction) {
     }
   }
   return true;
+}
+
+bool MatchesRoleBindingSequence(
+    const StubDecodedInstruction& instruction,
+    std::initializer_list<ExpectedRoleBinding> expected_bindings) {
+  if (instruction.operand_roles.binding_count != expected_bindings.size()) {
+    return false;
+  }
+  std::uint32_t index = 0;
+  for (const ExpectedRoleBinding& expected : expected_bindings) {
+    const auto& binding = instruction.operand_roles.bindings[index++];
+    if (binding.role != expected.role || binding.count != expected.count ||
+        binding.is_output != expected.is_output ||
+        binding.is_implicit != expected.is_implicit) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool MatchesSlotBindingSequence(
+    const StubDecodedInstruction& instruction,
+    std::initializer_list<ExpectedSlotBinding> expected_bindings) {
+  if (instruction.operand_slots.binding_count != expected_bindings.size()) {
+    return false;
+  }
+  std::uint32_t index = 0;
+  for (const ExpectedSlotBinding& expected : expected_bindings) {
+    const auto& binding = instruction.operand_slots.bindings[index++];
+    if (binding.slot_kind != expected.slot_kind ||
+        binding.value_class != expected.value_class ||
+        binding.logical_operand_index != expected.logical_operand_index ||
+        binding.component_count != expected.component_count ||
+        binding.is_output != expected.is_output ||
+        binding.is_implicit != expected.is_implicit) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool MatchesDescriptorSequence(
+    const StubDecodedInstruction& instruction,
+    std::initializer_list<ExpectedDescriptorBinding> expected_bindings) {
+  if (instruction.operand_descriptors.descriptor_count !=
+      expected_bindings.size()) {
+    return false;
+  }
+  std::uint32_t index = 0;
+  for (const ExpectedDescriptorBinding& expected : expected_bindings) {
+    const auto& descriptor = instruction.operand_descriptors.descriptors[index++];
+    if (descriptor.role != expected.role ||
+        descriptor.slot_kind != expected.slot_kind ||
+        descriptor.value_class != expected.value_class ||
+        descriptor.access != expected.access ||
+        descriptor.component_count != expected.component_count ||
+        descriptor.is_implicit != expected.is_implicit) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool MatchesRouteMetadata(const StubDecodedInstruction& instruction,
+                          const ExpectedRouteMetadata& expected) {
+  return instruction.route == expected.route &&
+         instruction.route_name == expected.route_name &&
+         instruction.entrypoint_name == expected.entrypoint_name &&
+         instruction.route_priority == expected.route_priority;
+}
+
+bool MatchesLayout(const StubDecodedInstruction& instruction,
+                   const ExpectedLayout& expected) {
+  return instruction.operand_layout.layout_kind == expected.layout_kind &&
+         instruction.operand_layout.source_count == expected.source_count &&
+         instruction.operand_layout.destination_count ==
+             expected.destination_count &&
+         instruction.operand_layout.accumulator_source_count ==
+             expected.accumulator_source_count &&
+         instruction.operand_layout.has_scale_operand ==
+             expected.has_scale_operand &&
+         instruction.operand_layout.has_paired_scale_operand ==
+             expected.has_paired_scale_operand &&
+         instruction.operand_layout.has_tensor_descriptor ==
+             expected.has_tensor_descriptor &&
+         instruction.operand_layout.touches_lds == expected.touches_lds &&
+         instruction.operand_layout.is_store == expected.is_store;
 }
 
 bool ContainsSlot(const StubDecodedInstruction& instruction,
@@ -1708,9 +1840,50 @@ int main() {
                 "expected routed WMMA/SWMMAC seed to decode")) {
       return 1;
     }
+    if (!Expect(
+            MatchesRouteMetadata(
+                decoded,
+                {StubDecoderRoute::kVop3p, "kVop3p", "DecodeVop3pStub", 1}),
+            "expected routed WMMA/SWMMAC seed to keep exact route metadata")) {
+      return 1;
+    }
     if (!Expect(HasMatrixSlot(decoded) && HasMatrixDescriptor(decoded),
                 "expected routed WMMA/SWMMAC seed to materialize matrix metadata")) {
       return 1;
+    }
+    if (decoded.uses_scale_path) {
+      if (!Expect(
+              decoded.execution_domain == StubExecutionDomain::kMatrix &&
+                  decoded.opcode_shape == StubOpcodeShape::kWmmaScale &&
+                  decoded.operand_layout.source_count == 3 &&
+                  decoded.operand_layout.destination_count == 1 &&
+                  decoded.operand_layout.accumulator_source_count == 1 &&
+                  decoded.operand_layout.has_scale_operand &&
+                  !decoded.operand_layout.has_paired_scale_operand &&
+                  !decoded.operand_layout.has_tensor_descriptor &&
+                  !decoded.operand_layout.touches_lds &&
+                  !decoded.operand_layout.is_store,
+              "expected routed WMMA scale seed to keep exact top-level route/layout metadata")) {
+        return 1;
+      }
+    } else {
+      if (!Expect(
+              decoded.execution_domain == StubExecutionDomain::kMatrix &&
+                  decoded.opcode_shape ==
+                      (instruction_name.rfind("V_SWMMAC_", 0) == 0
+                           ? StubOpcodeShape::kSwmmacCore
+                           : StubOpcodeShape::kWmmaCore) &&
+                  decoded.operand_layout.source_count == 2 &&
+                  decoded.operand_layout.destination_count == 1 &&
+                  decoded.operand_layout.accumulator_source_count == 1 &&
+                  !decoded.operand_layout.has_scale_operand &&
+                  !decoded.operand_layout.has_paired_scale_operand &&
+                  !decoded.operand_layout.has_tensor_descriptor &&
+                  !decoded.operand_layout.touches_lds &&
+                  !decoded.operand_layout.is_store,
+              "expected routed WMMA/SWMMAC core seed to keep exact top-level route/layout metadata")) {
+        return 1;
+      }
     }
     if (!Expect(AllSlotsExplicit(decoded) &&
                     AllDescriptorsExplicit(decoded) &&
@@ -2220,6 +2393,81 @@ int main() {
                   "expected routed WMMA scale seed to keep exact operand-role binding-count and explicitness")) {
         return 1;
       }
+      if (!Expect(
+              MatchesRoleBindingSequence(
+                  decoded,
+                  {{StubOperandRole::kSource0, 1, false, false},
+                   {StubOperandRole::kSource1, 1, false, false},
+                   {StubOperandRole::kAccumulator, 1, false, false},
+                   {StubOperandRole::kScale, 1, false, false},
+                   {StubOperandRole::kDestination, 1, true, false}}) &&
+                  MatchesSlotBindingSequence(
+                      decoded,
+                      {{StubOperandSlotKind::kDestination,
+                        StubOperandValueClass::kMatrixFragment,
+                        0,
+                        1,
+                        true,
+                        false},
+                       {StubOperandSlotKind::kSource0,
+                        StubOperandValueClass::kMatrixFragment,
+                        1,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kSource1,
+                        StubOperandValueClass::kMatrixFragment,
+                        2,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kAccumulatorSource,
+                        StubOperandValueClass::kAccumulatorFragment,
+                        3,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kScaleSource,
+                        StubOperandValueClass::kScalarRegister,
+                        4,
+                        1,
+                        false,
+                        false}}) &&
+                  MatchesDescriptorSequence(
+                      decoded,
+                      {{StubOperandRole::kDestination,
+                        StubOperandSlotKind::kDestination,
+                        StubOperandValueClass::kMatrixFragment,
+                        StubOperandAccess::kWrite,
+                        1,
+                        false},
+                       {StubOperandRole::kSource0,
+                        StubOperandSlotKind::kSource0,
+                        StubOperandValueClass::kMatrixFragment,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kSource1,
+                        StubOperandSlotKind::kSource1,
+                        StubOperandValueClass::kMatrixFragment,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kAccumulator,
+                        StubOperandSlotKind::kAccumulatorSource,
+                        StubOperandValueClass::kAccumulatorFragment,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kScale,
+                        StubOperandSlotKind::kScaleSource,
+                        StubOperandValueClass::kScalarRegister,
+                        StubOperandAccess::kRead,
+                        1,
+                        false}}),
+              "expected routed WMMA scale seed to keep exact operand-role, slot, and descriptor order")) {
+        return 1;
+      }
     } else {
       if (!Expect(decoded.operand_slots.binding_count == 4 &&
                       decoded.operand_descriptors.descriptor_count == 4 &&
@@ -2563,6 +2811,68 @@ int main() {
       if (!Expect(decoded.operand_roles.binding_count == 4 &&
                       AllRoleBindingsExplicit(decoded),
                   "expected routed WMMA/SWMMAC core seed to keep exact operand-role binding-count and explicitness")) {
+        return 1;
+      }
+      if (!Expect(
+              MatchesRoleBindingSequence(
+                  decoded,
+                  {{StubOperandRole::kSource0, 1, false, false},
+                   {StubOperandRole::kSource1, 1, false, false},
+                   {StubOperandRole::kAccumulator, 1, false, false},
+                   {StubOperandRole::kDestination, 1, true, false}}) &&
+                  MatchesSlotBindingSequence(
+                      decoded,
+                      {{StubOperandSlotKind::kDestination,
+                        StubOperandValueClass::kMatrixFragment,
+                        0,
+                        1,
+                        true,
+                        false},
+                       {StubOperandSlotKind::kSource0,
+                        StubOperandValueClass::kMatrixFragment,
+                        1,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kSource1,
+                        StubOperandValueClass::kMatrixFragment,
+                        2,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kAccumulatorSource,
+                        StubOperandValueClass::kAccumulatorFragment,
+                        3,
+                        1,
+                        false,
+                        false}}) &&
+                  MatchesDescriptorSequence(
+                      decoded,
+                      {{StubOperandRole::kDestination,
+                        StubOperandSlotKind::kDestination,
+                        StubOperandValueClass::kMatrixFragment,
+                        StubOperandAccess::kWrite,
+                        1,
+                        false},
+                       {StubOperandRole::kSource0,
+                        StubOperandSlotKind::kSource0,
+                        StubOperandValueClass::kMatrixFragment,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kSource1,
+                        StubOperandSlotKind::kSource1,
+                        StubOperandValueClass::kMatrixFragment,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kAccumulator,
+                        StubOperandSlotKind::kAccumulatorSource,
+                        StubOperandValueClass::kAccumulatorFragment,
+                        StubOperandAccess::kRead,
+                        1,
+                        false}}),
+              "expected routed WMMA/SWMMAC core seed to keep exact operand-role, slot, and descriptor order")) {
         return 1;
       }
     }
@@ -3759,6 +4069,37 @@ int main() {
                 "expected routed tensor seed to decode")) {
       return 1;
     }
+    if (!Expect(
+            MatchesRouteMetadata(decoded,
+                                 {StubDecoderRoute::kMimgTensor,
+                                  "kMimgTensor",
+                                  "DecodeMimgTensorStub",
+                                  2}),
+            "expected routed tensor seed to keep exact route metadata")) {
+      return 1;
+    }
+    if (!Expect(
+            decoded.execution_domain == StubExecutionDomain::kTensorMemory &&
+                decoded.opcode_shape ==
+                    (instruction_name == "TENSOR_LOAD_TO_LDS"
+                         ? StubOpcodeShape::kTensorLoadToLds
+                         : StubOpcodeShape::kTensorStoreFromLds) &&
+                MatchesLayout(
+                    decoded,
+                    {instruction_name == "TENSOR_LOAD_TO_LDS"
+                         ? StubOperandLayoutKind::kTensorLoadToLds
+                         : StubOperandLayoutKind::kTensorStoreFromLds,
+                     2,
+                     0,
+                     0,
+                     false,
+                     false,
+                     true,
+                     true,
+                     instruction_name == "TENSOR_STORE_FROM_LDS"}),
+            "expected routed tensor seed to keep exact top-level route/layout metadata")) {
+      return 1;
+    }
     if (!Expect(decoded.uses_tensor_memory &&
                     decoded.operand_layout.has_tensor_descriptor &&
                     decoded.operand_layout.touches_lds &&
@@ -4091,6 +4432,107 @@ int main() {
       return 1;
     }
     if (instruction_name == "TENSOR_LOAD_TO_LDS") {
+      if (!Expect(
+              MatchesRoleBindingSequence(
+                  decoded,
+                  {{StubOperandRole::kTensorDescriptor, 1, false, false},
+                   {StubOperandRole::kTensorCoordinate, 1, false, false},
+                   {StubOperandRole::kLdsDestination, 1, true, false}}) &&
+                  MatchesSlotBindingSequence(
+                      decoded,
+                      {{StubOperandSlotKind::kTensorDescriptorSource,
+                        StubOperandValueClass::kTensorDescriptor,
+                        0,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kTensorCoordinateSource,
+                        StubOperandValueClass::kTensorCoordinate,
+                        1,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kLdsDestination,
+                        StubOperandValueClass::kLdsAddress,
+                        2,
+                        1,
+                        true,
+                        false}}) &&
+                  MatchesDescriptorSequence(
+                      decoded,
+                      {{StubOperandRole::kTensorDescriptor,
+                        StubOperandSlotKind::kTensorDescriptorSource,
+                        StubOperandValueClass::kTensorDescriptor,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kTensorCoordinate,
+                        StubOperandSlotKind::kTensorCoordinateSource,
+                        StubOperandValueClass::kTensorCoordinate,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kLdsDestination,
+                        StubOperandSlotKind::kLdsDestination,
+                        StubOperandValueClass::kLdsAddress,
+                        StubOperandAccess::kWrite,
+                        1,
+                        false}}),
+              "expected routed tensor-load seed to keep exact operand-role, slot, and descriptor order")) {
+        return 1;
+      }
+    } else {
+      if (!Expect(
+              MatchesRoleBindingSequence(
+                  decoded,
+                  {{StubOperandRole::kTensorDescriptor, 1, false, false},
+                   {StubOperandRole::kTensorCoordinate, 1, false, false},
+                   {StubOperandRole::kLdsSource, 1, false, false}}) &&
+                  MatchesSlotBindingSequence(
+                      decoded,
+                      {{StubOperandSlotKind::kTensorDescriptorSource,
+                        StubOperandValueClass::kTensorDescriptor,
+                        0,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kTensorCoordinateSource,
+                        StubOperandValueClass::kTensorCoordinate,
+                        1,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kLdsSource,
+                        StubOperandValueClass::kLdsAddress,
+                        2,
+                        1,
+                        false,
+                        false}}) &&
+                  MatchesDescriptorSequence(
+                      decoded,
+                      {{StubOperandRole::kTensorDescriptor,
+                        StubOperandSlotKind::kTensorDescriptorSource,
+                        StubOperandValueClass::kTensorDescriptor,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kTensorCoordinate,
+                        StubOperandSlotKind::kTensorCoordinateSource,
+                        StubOperandValueClass::kTensorCoordinate,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kLdsSource,
+                        StubOperandSlotKind::kLdsSource,
+                        StubOperandValueClass::kLdsAddress,
+                        StubOperandAccess::kRead,
+                        1,
+                        false}}),
+              "expected routed tensor-store seed to keep exact operand-role, slot, and descriptor order")) {
+        return 1;
+      }
+    }
+    if (instruction_name == "TENSOR_LOAD_TO_LDS") {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
                       HasDescriptorRole(decoded, StubOperandRole::kLdsDestination) &&
@@ -4234,6 +4676,44 @@ int main() {
     const StubDecodedInstruction decoded = DecodeVop1Stub(instruction_name);
     if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
                 "expected routed VOP1 seed to decode")) {
+      return 1;
+    }
+    if (!Expect(
+            MatchesRouteMetadata(
+                decoded,
+                {StubDecoderRoute::kVop1, "kVop1", "DecodeVop1Stub", 3}),
+            "expected routed VOP1 seed to keep exact route metadata")) {
+      return 1;
+    }
+    if (!Expect(
+            decoded.execution_domain == StubExecutionDomain::kConversion &&
+                decoded.opcode_shape ==
+                    (instruction_name == "V_CVT_F16_FP8" ||
+                             instruction_name == "V_CVT_F16_BF8"
+                         ? StubOpcodeShape::kFp8ConvertToF16
+                         : instruction_name == "V_CVT_F32_FP8"
+                               ? StubOpcodeShape::kFp8ConvertToF32
+                               : StubOpcodeShape::kFp8PackedConvert) &&
+                MatchesLayout(
+                    decoded,
+                    {instruction_name == "V_CVT_F16_FP8"
+                         ? StubOperandLayoutKind::kCvtF16Fp8
+                         : instruction_name == "V_CVT_F16_BF8"
+                               ? StubOperandLayoutKind::kCvtF16Bf8
+                               : instruction_name == "V_CVT_F32_FP8"
+                                     ? StubOperandLayoutKind::kCvtF32Fp8
+                                     : instruction_name == "V_CVT_PK_F16_FP8"
+                                           ? StubOperandLayoutKind::kCvtPkF16Fp8
+                                           : StubOperandLayoutKind::kCvtPkF16Bf8,
+                     1,
+                     1,
+                     0,
+                     false,
+                     false,
+                     false,
+                     false,
+                     false}),
+            "expected routed VOP1 seed to keep exact top-level route/layout metadata")) {
       return 1;
     }
     if (!Expect(decoded.execution_domain == StubExecutionDomain::kConversion &&
@@ -4459,6 +4939,58 @@ int main() {
                 "expected routed VOP1 seed to keep exact operand-role binding-count and explicitness")) {
       return 1;
     }
+    if (!Expect(
+            MatchesRoleBindingSequence(
+                decoded,
+                {{StubOperandRole::kSource0, 1, false, false},
+                 {StubOperandRole::kDestination, 1, true, false}}) &&
+                MatchesSlotBindingSequence(
+                    decoded,
+                    {{StubOperandSlotKind::kDestination,
+                      instruction_name.find("PK_") != std::string_view::npos
+                          ? StubOperandValueClass::kPackedVector
+                          : StubOperandValueClass::kVectorRegister,
+                      0,
+                      instruction_name.find("PK_") != std::string_view::npos ? 2u
+                                                                              : 1u,
+                      true,
+                      false},
+                     {StubOperandSlotKind::kSource0,
+                      instruction_name.find("PK_") != std::string_view::npos
+                          ? StubOperandValueClass::kPackedVector
+                          : StubOperandValueClass::kVectorRegister,
+                      1,
+                      instruction_name.find("PK_") != std::string_view::npos ? 2u
+                                                                              : 1u,
+                      false,
+                      false}}) &&
+                MatchesDescriptorSequence(
+                    decoded,
+                    {{StubOperandRole::kDestination,
+                      StubOperandSlotKind::kDestination,
+                      instruction_name.find("PK_") != std::string_view::npos
+                          ? StubOperandValueClass::kPackedVector
+                          : StubOperandValueClass::kVectorRegister,
+                      StubOperandAccess::kWrite,
+                      static_cast<std::uint8_t>(
+                          instruction_name.find("PK_") != std::string_view::npos
+                              ? 2u
+                              : 1u),
+                      false},
+                     {StubOperandRole::kSource0,
+                      StubOperandSlotKind::kSource0,
+                      instruction_name.find("PK_") != std::string_view::npos
+                          ? StubOperandValueClass::kPackedVector
+                          : StubOperandValueClass::kVectorRegister,
+                      StubOperandAccess::kRead,
+                      static_cast<std::uint8_t>(
+                          instruction_name.find("PK_") != std::string_view::npos
+                              ? 2u
+                              : 1u),
+                      false}}),
+            "expected routed VOP1 seed to keep exact operand-role, slot, and descriptor order")) {
+      return 1;
+    }
     if (instruction_name.find("PK_") != std::string_view::npos) {
       if (!Expect(
               ContainsSlot(decoded, StubOperandSlotKind::kSource0,
@@ -4569,6 +5101,31 @@ int main() {
     const StubDecodedInstruction decoded = DecodeVop3SdstStub(instruction_name);
     if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
                 "expected routed VOP3 SDST seed to decode")) {
+      return 1;
+    }
+    if (!Expect(
+            MatchesRouteMetadata(decoded,
+                                 {StubDecoderRoute::kVop3Sdst,
+                                  "kVop3Sdst",
+                                  "DecodeVop3SdstStub",
+                                  4}),
+            "expected routed VOP3 SDST seed to keep exact route metadata")) {
+      return 1;
+    }
+    if (!Expect(
+            decoded.execution_domain == StubExecutionDomain::kScaleAssist &&
+                decoded.opcode_shape == StubOpcodeShape::kVop3SdstScale &&
+                MatchesLayout(decoded,
+                              {StubOperandLayoutKind::kVDivScaleF64,
+                               3,
+                               2,
+                               0,
+                               true,
+                               false,
+                               false,
+                               false,
+                               false}),
+            "expected routed VOP3 SDST seed to keep exact top-level route/layout metadata")) {
       return 1;
     }
     if (!Expect(decoded.uses_scale_path && !HasMatrixSlot(decoded) &&
@@ -4855,6 +5412,80 @@ int main() {
                 "expected routed VOP3 SDST seed to keep exact operand-role binding-count and explicitness")) {
       return 1;
     }
+    if (!Expect(
+            MatchesRoleBindingSequence(
+                decoded,
+                {{StubOperandRole::kSource0, 1, false, false},
+                 {StubOperandRole::kSource1, 1, false, false},
+                 {StubOperandRole::kScale, 1, false, false},
+                 {StubOperandRole::kDestination, 1, true, false}}) &&
+                MatchesSlotBindingSequence(
+                    decoded,
+                    {{StubOperandSlotKind::kDestination,
+                      StubOperandValueClass::kVectorRegister,
+                      0,
+                      2,
+                      true,
+                      false},
+                     {StubOperandSlotKind::kScalarDestination,
+                      StubOperandValueClass::kScalarRegister,
+                      1,
+                      1,
+                      true,
+                      false},
+                     {StubOperandSlotKind::kSource0,
+                      StubOperandValueClass::kVectorRegister,
+                      2,
+                      2,
+                      false,
+                      false},
+                     {StubOperandSlotKind::kSource1,
+                      StubOperandValueClass::kVectorRegister,
+                      3,
+                      2,
+                      false,
+                      false},
+                     {StubOperandSlotKind::kScaleSource,
+                      StubOperandValueClass::kVectorRegister,
+                      4,
+                      2,
+                      false,
+                      false}}) &&
+                MatchesDescriptorSequence(
+                    decoded,
+                    {{StubOperandRole::kDestination,
+                      StubOperandSlotKind::kDestination,
+                      StubOperandValueClass::kVectorRegister,
+                      StubOperandAccess::kWrite,
+                      2,
+                      false},
+                     {StubOperandRole::kDestination,
+                      StubOperandSlotKind::kScalarDestination,
+                      StubOperandValueClass::kScalarRegister,
+                      StubOperandAccess::kWrite,
+                      1,
+                      false},
+                     {StubOperandRole::kSource0,
+                      StubOperandSlotKind::kSource0,
+                      StubOperandValueClass::kVectorRegister,
+                      StubOperandAccess::kRead,
+                      2,
+                      false},
+                     {StubOperandRole::kSource1,
+                      StubOperandSlotKind::kSource1,
+                      StubOperandValueClass::kVectorRegister,
+                      StubOperandAccess::kRead,
+                      2,
+                      false},
+                     {StubOperandRole::kScale,
+                      StubOperandSlotKind::kScaleSource,
+                      StubOperandValueClass::kVectorRegister,
+                      StubOperandAccess::kRead,
+                      2,
+                      false}}),
+            "expected routed VOP3 SDST seed to keep exact operand-role, slot, and descriptor order")) {
+      return 1;
+    }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kScale) &&
                     HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
                     ContainsSlot(decoded, StubOperandSlotKind::kDestination,
@@ -4953,6 +5584,32 @@ int main() {
     const StubDecodedInstruction decoded = DecodeVop3pStub(instruction_name);
     if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
                 "expected routed paired-scale seed to decode")) {
+      return 1;
+    }
+    if (!Expect(
+            MatchesRouteMetadata(
+                decoded,
+                {StubDecoderRoute::kVop3p, "kVop3p", "DecodeVop3pStub", 1}),
+            "expected routed paired-scale seed to keep exact route metadata")) {
+      return 1;
+    }
+    if (!Expect(
+            decoded.execution_domain == StubExecutionDomain::kMatrix &&
+                decoded.opcode_shape == StubOpcodeShape::kWmmaScalePairedLoad &&
+                MatchesLayout(
+                    decoded,
+                    {instruction_name == "V_WMMA_LD_SCALE_PAIRED_B32"
+                         ? StubOperandLayoutKind::kWmmaLdScalePairedB32
+                         : StubOperandLayoutKind::kWmmaLdScale16PairedB64,
+                     2,
+                     1,
+                     0,
+                     true,
+                     true,
+                     false,
+                     false,
+                     false}),
+            "expected routed paired-scale seed to keep exact top-level route/layout metadata")) {
       return 1;
     }
     if (!Expect(decoded.uses_scale_path && decoded.uses_paired_operands &&
@@ -5224,6 +5881,68 @@ int main() {
     if (!Expect(decoded.operand_roles.binding_count == 4 &&
                     AllRoleBindingsExplicit(decoded),
                 "expected paired-scale helper to keep exact operand-role binding-count and explicitness")) {
+      return 1;
+    }
+    if (!Expect(
+            MatchesRoleBindingSequence(
+                decoded,
+                {{StubOperandRole::kSource0, 1, false, false},
+                 {StubOperandRole::kScale, 1, false, false},
+                 {StubOperandRole::kPairedScale, 1, false, false},
+                 {StubOperandRole::kDestination, 1, true, false}}) &&
+                MatchesSlotBindingSequence(
+                    decoded,
+                    {{StubOperandSlotKind::kDestination,
+                      StubOperandValueClass::kVectorRegister,
+                      0,
+                      1,
+                      true,
+                      false},
+                     {StubOperandSlotKind::kSource0,
+                      StubOperandValueClass::kVectorRegister,
+                      1,
+                      1,
+                      false,
+                      false},
+                     {StubOperandSlotKind::kScaleSource,
+                      StubOperandValueClass::kScalarRegister,
+                      2,
+                      1,
+                      false,
+                      false},
+                     {StubOperandSlotKind::kPairedScaleSource,
+                      StubOperandValueClass::kScalarRegister,
+                      3,
+                      1,
+                      false,
+                      false}}) &&
+                MatchesDescriptorSequence(
+                    decoded,
+                    {{StubOperandRole::kDestination,
+                      StubOperandSlotKind::kDestination,
+                      StubOperandValueClass::kVectorRegister,
+                      StubOperandAccess::kWrite,
+                      1,
+                      false},
+                     {StubOperandRole::kSource0,
+                      StubOperandSlotKind::kSource0,
+                      StubOperandValueClass::kVectorRegister,
+                      StubOperandAccess::kRead,
+                      1,
+                      false},
+                     {StubOperandRole::kScale,
+                      StubOperandSlotKind::kScaleSource,
+                      StubOperandValueClass::kScalarRegister,
+                      StubOperandAccess::kRead,
+                      1,
+                      false},
+                     {StubOperandRole::kPairedScale,
+                      StubOperandSlotKind::kPairedScaleSource,
+                      StubOperandValueClass::kScalarRegister,
+                      StubOperandAccess::kRead,
+                      1,
+                      false}}),
+            "expected paired-scale helper to keep exact operand-role, slot, and descriptor order")) {
       return 1;
     }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kSource0) &&
