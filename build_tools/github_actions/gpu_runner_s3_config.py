@@ -23,7 +23,7 @@ from github_actions_utils import str2bool
 
 # Public HTTPS URL (no auth needed for reads)
 DEFAULT_OVERRIDE_URL = (
-    "https://therock-ci-config.s3.amazonaws.com/runner-overrides.json"
+    "https://therock-ci-config.s3.amazonaws.com/therock-runner-config.json"
 )
 
 # Module-level cache (one fetch per process)
@@ -157,3 +157,5 @@ def generate_overrides_json() -> str:
                 overrides[family_key][platform] = dict(config)
 
     return json.dumps({"overrides": overrides}, indent=2, sort_keys=True)
+
+print(generate_overrides_json())
