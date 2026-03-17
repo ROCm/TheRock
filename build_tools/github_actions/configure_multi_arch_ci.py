@@ -823,30 +823,63 @@ def expand_build_configs(
 # ---------------------------------------------------------------------------
 
 
+def _format_build_config_rows(label: str, config: BuildConfig | None) -> str:
+    """Format one platform's build config as a markdown table row."""
+    if config is None:
+        return f"| {label} | — | — | — |"
+    families = config.dist_amdgpu_families.replace(";", ", ")
+    variant = config.build_variant_label
+    if config.expect_failure:
+        variant += " (expect failure)"
+    return f"| {label} | {families} | {variant} | {config.artifact_group} |"
+
+
 def format_summary(outputs: CIOutputs) -> str:
-    """Generate human-readable markdown summary. Pure function."""
-    # TODO: Implement — structured markdown with families, stages, reasons
-    lines = ["## Multi-Arch CI Configuration"]
+    """Generate human-readable markdown summary for GITHUB_STEP_SUMMARY."""
+    lines = ["## Multi-Arch CI Configuration", ""]
+
+    if not outputs.is_ci_enabled:
+        lines.append("**CI skipped.**")
+        return "\n".join(lines)
+
+    if not outputs.jobs:
+        return "\n".join(lines)
+
+    jobs = outputs.jobs
+
+    # Test type
+    lines.append(
+        f"**Test type:** `{jobs.test_rocm.test_type}` "
+        f"({jobs.test_rocm.test_type_reason})"
+    )
     lines.append("")
-    lines.append(f"* `is_ci_enabled`: {outputs.is_ci_enabled}")
-    if outputs.jobs:
-        jobs = outputs.jobs
-        lines.append(f"* `test_type`: {jobs.test_rocm.test_type}")
+
+    # Platform build configs
+    lines.append("| Platform | Families | Variant | Artifact Group |")
+    lines.append("|----------|----------|---------|----------------|")
+    lines.append(_format_build_config_rows("Linux", outputs.builds.linux))
+    lines.append(_format_build_config_rows("Windows", outputs.builds.windows))
+    lines.append("")
+
+    # Job group decisions
+    lines.append("| Job Group | Decision |")
+    lines.append("|-----------|----------|")
+    lines.append(f"| build-rocm | {jobs.build_rocm.action} |")
+    lines.append(f"| test-rocm | {jobs.test_rocm.action} |")
+    lines.append(f"| build-rocm-python | {jobs.build_rocm_python.action} |")
+    lines.append(f"| build-pytorch | {jobs.build_pytorch.action} |")
+    lines.append(f"| test-pytorch | {jobs.test_pytorch.action} |")
+    lines.append("")
+
+    # Prebuilt stages
+    prebuilt = jobs.build_rocm.prebuilt_stages
+    if prebuilt:
         lines.append(
-            f"* `build_rocm`: {jobs.build_rocm.action} — {jobs.build_rocm.reason}"
+            f"**Prebuilt stages:** {', '.join(prebuilt)} "
+            f"(baseline run: `{jobs.build_rocm.baseline_run_id or 'none'}`)"
         )
-        lines.append(
-            f"* `test_rocm`: {jobs.test_rocm.action} — {jobs.test_rocm.reason}"
-        )
-        lines.append(
-            f"* `build_rocm_python`: {jobs.build_rocm_python.action} — {jobs.build_rocm_python.reason}"
-        )
-        lines.append(
-            f"* `build_pytorch`: {jobs.build_pytorch.action} — {jobs.build_pytorch.reason}"
-        )
-        lines.append(
-            f"* `test_pytorch`: {jobs.test_pytorch.action} — {jobs.test_pytorch.reason}"
-        )
+        lines.append("")
+
     return "\n".join(lines)
 
 
