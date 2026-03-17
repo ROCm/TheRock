@@ -683,7 +683,8 @@ sudo apt install -y ca-certificates
 echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/${RELEASE_ID} stable main" \
   | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
 sudo apt update
-sudo apt install amdrocm-${GFX_ARCH} amdrocm-core-sdk-${GFX_ARCH}
+sudo apt install amdrocm-core-sdk-${GFX_ARCH}
+# If only runtime is needed, install amdrocm-${GFX_ARCH} instead
 ```
 
 ### Installing on RPM-based systems (RHEL, SLES, AlmaLinux etc.)
@@ -711,7 +712,8 @@ enabled=1
 gpgcheck=0
 priority=50
 EOF
-sudo dnf install amdrocm-${GFX_ARCH} amdrocm-core-sdk-${GFX_ARCH}
+sudo dnf install amdrocm-core-sdk-${GFX_ARCH}
+# If only runtime is needed, install amdrocm-${GFX_ARCH} instead
 ```
 
 ## Verifying your installation
