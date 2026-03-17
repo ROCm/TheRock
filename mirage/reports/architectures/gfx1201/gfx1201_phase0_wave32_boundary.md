@@ -12,7 +12,7 @@ execution path.
 
 ## Summary
 
-- Phase-0 executable opcodes: `353`
+- Phase-0 executable opcodes: `356`
 - Wave size: `32`
 - All currently seeded `ENC_VOP1`, `ENC_VOP2`, `ENC_VOPC`, and `ENC_SMEM` instruction/encoding pairs are executable on the local path.
 - There are no remaining imported `ENC_VOP1`, `ENC_VOP2`, `ENC_VOPC`, or `ENC_SMEM` instruction/encoding pairs outside the current seed surface.
@@ -39,10 +39,10 @@ execution path.
 - `ENC_SMEM`: example `S_LOAD_B32`, seeded `28`, executable `28` via `S_ATC_PROBE`, as-is `0`, decoder-rollup `3`, semantic-only `0`, gfx1201-specific `25`
 - `ENC_VOP3`: example `V_ADD3_U32`, seeded `434`, executable `0`, as-is `232`, decoder-rollup `91`, semantic-only `24`, gfx1201-specific `87`
 - `ENC_VDS`: example `DS_ADD_U32`, seeded `123`, executable `0`, as-is `27`, decoder-rollup `38`, semantic-only `0`, gfx1201-specific `58`
-- `ENC_VGLOBAL`: example `GLOBAL_LOAD_B32`, seeded `65`, executable `0`, as-is `3`, decoder-rollup `0`, semantic-only `0`, gfx1201-specific `62`
+- `ENC_VGLOBAL`: example `GLOBAL_LOAD_B32`, seeded `65`, executable `3`, as-is `3`, decoder-rollup `0`, semantic-only `0`, gfx1201-specific `62`
 
-`ENC_VGLOBAL` is now the recommended next frontier because `ENC_SMEM` is saturated and
-it is the next smallest remaining seeded blocker that still keeps the
-next phase architecture-local. The later frontier steps move into broader
+`ENC_VGLOBAL` remains the recommended next frontier because `ENC_SMEM` is saturated,
+and the first local footholds now exist through `GLOBAL_INV`, `GLOBAL_WB`, and
+`GLOBAL_WBINV` without committing to broader vector-memory semantics. The later frontier steps move into broader
 decoder/execution churn, with `ENC_VOP3` remaining the largest and riskiest
 step.

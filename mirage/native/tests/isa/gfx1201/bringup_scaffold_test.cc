@@ -125,6 +125,26 @@ std::array<std::uint32_t, 2> MakeSmemBufferLoad(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeGlobal(std::uint32_t op,
+                                        std::uint32_t vdst,
+                                        std::uint32_t addr,
+                                        std::uint32_t data,
+                                        std::uint32_t saddr,
+                                        std::int32_t offset) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(55u) << 26;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(offset) &
+                                     0x1fffu) << 0;
+  word |= static_cast<std::uint64_t>(2u) << 14;
+  word |= static_cast<std::uint64_t>(op & 0x7fu) << 18;
+  word |= static_cast<std::uint64_t>(addr & 0xffu) << 32;
+  word |= static_cast<std::uint64_t>(data & 0xffu) << 40;
+  word |= static_cast<std::uint64_t>(saddr & 0x7fu) << 48;
+  word |= static_cast<std::uint64_t>(vdst & 0xffu) << 56;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 }  // namespace
 
 int main() {
@@ -163,10 +183,16 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 353u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 356u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_INV"),
+              "expected GLOBAL_INV executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_WB"),
+              "expected GLOBAL_WB executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_WBINV"),
+              "expected GLOBAL_WBINV executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B32"),
               "expected S_LOAD_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B64"),
@@ -513,6 +539,20 @@ int main() {
     return 1;
   }
 
+  const auto global_inv_words = MakeGlobal(43u, 0u, 0u, 0u, 0u, 0);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(global_inv_words.data(),
+                                                 global_inv_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected GLOBAL_INV decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "GLOBAL_INV",
+              "expected GLOBAL_INV opcode") ||
+      !Expect(decoded_instruction.operand_count == 0u,
+              "expected GLOBAL_INV nullary decode")) {
+    return 1;
+  }
+
   const auto load_b32_words = MakeSmem(0u, 18u, 4u, true, 12u);
   if (!Expect(decoder.DecodeInstruction(
                   std::span<const std::uint32_t>(load_b32_words.data(),
@@ -814,12 +854,18 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 353u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 356u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
       !Expect(interpreter.Supports("S_DCACHE_INV"),
               "expected interpreter support for S_DCACHE_INV") ||
+      !Expect(interpreter.Supports("GLOBAL_INV"),
+              "expected interpreter support for GLOBAL_INV") ||
+      !Expect(interpreter.Supports("GLOBAL_WB"),
+              "expected interpreter support for GLOBAL_WB") ||
+      !Expect(interpreter.Supports("GLOBAL_WBINV"),
+              "expected interpreter support for GLOBAL_WBINV") ||
       !Expect(interpreter.Supports("S_LOAD_B32"),
               "expected interpreter support for S_LOAD_B32") ||
       !Expect(interpreter.Supports("S_LOAD_B64"),

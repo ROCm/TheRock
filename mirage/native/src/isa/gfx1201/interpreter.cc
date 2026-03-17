@@ -45,7 +45,7 @@ float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 std::uint16_t CompressFloatToFp16BitsRtz(float value);
 
-constexpr std::array<std::string_view, 353> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 356> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -76,6 +76,9 @@ constexpr std::array<std::string_view, 353> kExecutableSeedOpcodes{{
     "S_BUFFER_LOAD_U8",
     "S_BUFFER_LOAD_I16",
     "S_BUFFER_LOAD_U16",
+    "GLOBAL_INV",
+    "GLOBAL_WB",
+    "GLOBAL_WBINV",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -896,6 +899,11 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     return true;
   }
   if (opcode == "S_DCACHE_INV") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSNop;
+    return true;
+  }
+  if (opcode == "GLOBAL_INV" || opcode == "GLOBAL_WB" ||
+      opcode == "GLOBAL_WBINV") {
     *compiled_opcode = Gfx1201CompiledOpcode::kSNop;
     return true;
   }
@@ -4296,6 +4304,10 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
   }
 
   if (instruction.opcode == "S_DCACHE_INV") {
+    return ValidateOperandCount(instruction, 0, error_message);
+  }
+  if (instruction.opcode == "GLOBAL_INV" || instruction.opcode == "GLOBAL_WB" ||
+      instruction.opcode == "GLOBAL_WBINV") {
     return ValidateOperandCount(instruction, 0, error_message);
   }
 

@@ -234,6 +234,26 @@ std::array<std::uint32_t, 2> MakeSmemBufferLoad(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeGlobal(std::uint32_t op,
+                                        std::uint32_t vdst,
+                                        std::uint32_t addr,
+                                        std::uint32_t data,
+                                        std::uint32_t saddr,
+                                        std::int32_t offset) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(55u) << 26;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(offset) &
+                                     0x1fffu) << 0;
+  word |= static_cast<std::uint64_t>(2u) << 14;
+  word |= static_cast<std::uint64_t>(op & 0x7fu) << 18;
+  word |= static_cast<std::uint64_t>(addr & 0xffu) << 32;
+  word |= static_cast<std::uint64_t>(data & 0xffu) << 40;
+  word |= static_cast<std::uint64_t>(saddr & 0x7fu) << 48;
+  word |= static_cast<std::uint64_t>(vdst & 0xffu) << 56;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 bool ExpectUnaryInstruction(const mirage::sim::isa::DecodedInstruction& instruction,
                             std::string_view expected_opcode,
                             mirage::sim::isa::OperandKind dst_kind,
@@ -6903,6 +6923,106 @@ int main() {
               "expected compiled S_DCACHE_INV execution success") ||
       !Expect(expect_dcache_inv_state(compiled_dcache_inv_state),
               "expected compiled S_DCACHE_INV state")) {
+    return 1;
+  }
+
+  const auto global_inv_words = MakeGlobal(43u, 0u, 0u, 0u, 0u, 0);
+  const auto global_wb_words = MakeGlobal(44u, 0u, 0u, 0u, 0u, 0);
+  const auto global_wbinv_words = MakeGlobal(79u, 0u, 0u, 0u, 0u, 0);
+  DecodedInstruction global_inv_instruction;
+  std::size_t global_words_consumed = 0;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(global_inv_words.data(),
+                                                 global_inv_words.size()),
+                  &global_inv_instruction, &global_words_consumed,
+                  &error_message),
+              "expected GLOBAL_INV direct decode success") ||
+      !Expect(global_inv_instruction.opcode == "GLOBAL_INV",
+              "expected decoded GLOBAL_INV opcode") ||
+      !Expect(global_inv_instruction.operand_count == 0u,
+              "expected GLOBAL_INV nullary decode") ||
+      !Expect(global_words_consumed == 2u,
+              "expected GLOBAL_INV to consume two dwords")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 7> global_hint_program_words{
+      global_inv_words[0], global_inv_words[1], global_wb_words[0],
+      global_wb_words[1], global_wbinv_words[0], global_wbinv_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> global_hint_program;
+  if (!Expect(decoder.DecodeProgram(global_hint_program_words,
+                                    &global_hint_program, &error_message),
+              "expected GLOBAL hint program decode success") ||
+      !Expect(global_hint_program.size() == 4u,
+              "expected four decoded GLOBAL hint program instructions") ||
+      !Expect(global_hint_program[0].opcode == "GLOBAL_INV",
+              "expected decoded GLOBAL_INV program opcode") ||
+      !Expect(global_hint_program[1].opcode == "GLOBAL_WB",
+              "expected decoded GLOBAL_WB program opcode") ||
+      !Expect(global_hint_program[2].opcode == "GLOBAL_WBINV",
+              "expected decoded GLOBAL_WBINV program opcode") ||
+      !Expect(global_hint_program[3].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after GLOBAL hints")) {
+    return 1;
+  }
+
+  auto initialize_global_hint_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x9u;
+    state->sgprs[8] = 0x12345678u;
+    state->vgprs[3][0] = 0xaabbccddu;
+    state->vgprs[3][3] = 0x11223344u;
+  };
+  auto expect_global_hint_state = [](const WaveExecutionState& state) {
+    return state.lane_count == 32u && state.exec_mask == 0x9u &&
+           state.sgprs[8] == 0x12345678u &&
+           state.vgprs[3][0] == 0xaabbccddu &&
+           state.vgprs[3][3] == 0x11223344u && state.halted &&
+           !state.waiting_on_barrier && state.pc == 3u;
+  };
+
+  WaveExecutionState decoded_global_hint_state;
+  initialize_global_hint_state(&decoded_global_hint_state);
+  if (!Expect(interpreter.ExecuteProgram(global_hint_program,
+                                         &decoded_global_hint_state,
+                                         &error_message),
+              "expected decoded GLOBAL hint execution success") ||
+      !Expect(expect_global_hint_state(decoded_global_hint_state),
+              "expected decoded GLOBAL hint state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_global_hint_program;
+  if (!Expect(interpreter.CompileProgram(global_hint_program,
+                                         &compiled_global_hint_program,
+                                         &error_message),
+              "expected compiled GLOBAL hint program success") ||
+      !Expect(compiled_global_hint_program.size() == 4u,
+              "expected four compiled GLOBAL hint program instructions") ||
+      !Expect(compiled_global_hint_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled GLOBAL_INV opcode") ||
+      !Expect(compiled_global_hint_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled GLOBAL_WB opcode") ||
+      !Expect(compiled_global_hint_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled GLOBAL_WBINV opcode") ||
+      !Expect(compiled_global_hint_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after GLOBAL hints")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_global_hint_state;
+  initialize_global_hint_state(&compiled_global_hint_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_global_hint_program,
+                                         &compiled_global_hint_state,
+                                         &error_message),
+              "expected compiled GLOBAL hint execution success") ||
+      !Expect(expect_global_hint_state(compiled_global_hint_state),
+              "expected compiled GLOBAL hint state")) {
     return 1;
   }
 

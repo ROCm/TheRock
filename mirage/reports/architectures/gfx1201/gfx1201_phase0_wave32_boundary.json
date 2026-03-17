@@ -2,7 +2,7 @@
   "target": "gfx1201",
   "slice": "phase0_wave32_boundary",
   "wave_size": 32,
-  "phase0_executable_count": 353,
+  "phase0_executable_count": 356,
   "tracked_encodings": [
     {
       "encoding_name": "ENC_VOP1",
@@ -96,8 +96,8 @@
       "encoding_name": "ENC_VGLOBAL",
       "example_instruction": "GLOBAL_LOAD_B32",
       "seeded_instruction_count": 65,
-      "executable_instruction_count": 0,
-      "first_executable_instruction": "",
+      "executable_instruction_count": 3,
+      "first_executable_instruction": "GLOBAL_INV",
       "transferable_as_is_count": 3,
       "transferable_with_decoder_work_count": 0,
       "transferable_with_semantic_work_count": 0,
@@ -111,7 +111,7 @@
     "All currently seeded ENC_VOP1, ENC_VOP2, ENC_VOPC, and ENC_SMEM instruction/encoding pairs are executable on the local wave32 path.",
     "There are no remaining imported ENC_VOP1, ENC_VOP2, ENC_VOPC, or ENC_SMEM instruction/encoding pairs outside the current seed surface.",
     "ENC_SMEM is now saturated through S_DCACHE_INV, the prefetch and ATC-probe footholds, the full non-buffer S_LOAD_* slice, and the matching S_BUFFER_LOAD_* slice, leaving no seeded scalar-memory instructions scaffolded.",
-    "ENC_VGLOBAL is now the recommended next frontier because ENC_SMEM is saturated and VGLOBAL is the next smallest remaining seeded blocker that still keeps the next phase architecture-local.",
-    "The next coherent phase-0 extensions now move past saturated ENC_SMEM into ENC_VGLOBAL, ENC_VDS, and ENC_VOP3, or require broader shared-layer churn."
+    "ENC_VGLOBAL remains the recommended next frontier because ENC_SMEM is saturated and the first local VGLOBAL footholds now exist through GLOBAL_INV, GLOBAL_WB, and GLOBAL_WBINV without committing to broader vector-memory semantics.",
+    "The next coherent phase-0 extensions stay on ENC_VGLOBAL first, then move onward into ENC_VDS and ENC_VOP3, or require broader shared-layer churn."
   ]
 }

@@ -107,6 +107,10 @@ int main() {
               "expected ENC_VDS gfx1201-specific count") ||
       !Expect(vglobal->seeded_instruction_count == 65u,
               "expected ENC_VGLOBAL seeded instruction count") ||
+      !Expect(vglobal->executable_instruction_count == 3u,
+              "expected ENC_VGLOBAL executable foothold count") ||
+      !Expect(vglobal->HasExecutableFoothold(),
+              "expected ENC_VGLOBAL executable foothold helper") ||
       !Expect(vglobal->transferable_as_is_count == 3u,
               "expected ENC_VGLOBAL as-is count") ||
       !Expect(vglobal->gfx1201_specific_count == 62u,
@@ -114,7 +118,7 @@ int main() {
     return 1;
   }
 
-  if (!Expect(decoder.Phase0ExecutableOpcodes().size() == 353u,
+  if (!Expect(decoder.Phase0ExecutableOpcodes().size() == 356u,
               "expected phase-0 executable opcode count") ||
       !Expect(IsGfx1201Wave32Phase0EncodingSaturated("ENC_VOP1"),
               "expected ENC_VOP1 saturation helper") ||
@@ -176,7 +180,9 @@ int main() {
       !Expect(vds->example_instruction == "DS_ADD_U32",
               "expected ENC_VDS example instruction") ||
       !Expect(vglobal->example_instruction == "GLOBAL_LOAD_B32",
-              "expected ENC_VGLOBAL example instruction")) {
+              "expected ENC_VGLOBAL example instruction") ||
+      !Expect(vglobal->first_executable_instruction == "GLOBAL_INV",
+              "expected ENC_VGLOBAL executable example")) {
     return 1;
   }
 

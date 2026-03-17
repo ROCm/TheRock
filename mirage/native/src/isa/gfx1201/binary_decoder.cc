@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 353> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 356> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -48,6 +48,9 @@ constexpr std::array<std::string_view, 353> kPhase0ExecutableOpcodes{{
     "S_BUFFER_LOAD_U8",
     "S_BUFFER_LOAD_I16",
     "S_BUFFER_LOAD_U16",
+    "GLOBAL_INV",
+    "GLOBAL_WB",
+    "GLOBAL_WBINV",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -985,6 +988,17 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
     if (words.size() < 2u) {
       if (error_message != nullptr) {
         *error_message = "S_DCACHE_INV requires 2 dwords";
+      }
+      return false;
+    }
+    *instruction = DecodedInstruction::Nullary(instruction_name);
+    *words_consumed = 2;
+  } else if (instruction_name == "GLOBAL_INV" ||
+             instruction_name == "GLOBAL_WB" ||
+             instruction_name == "GLOBAL_WBINV") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
       }
       return false;
     }

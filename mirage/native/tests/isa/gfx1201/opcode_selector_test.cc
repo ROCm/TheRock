@@ -347,6 +347,7 @@ int main() {
   }
 
   const auto dcache_inv_words = MakeSmem(33u, 0u, 0u, true, 0u);
+  const auto global_inv_words = MakeGlobal(43u, 0u, 0u, 0u, 0u, 0);
   const auto load_b64_words = MakeSmem(1u, 12u, 8u, false, 31u, true);
   const auto load_b128_words = MakeSmem(2u, 20u, 10u, true, 16u);
   const auto buffer_load_b32_words = MakeSmemBufferLoad(16u, 24u, 12u, 20, 17u);
@@ -381,6 +382,29 @@ int main() {
               "expected S_DCACHE_INV opcode extraction") ||
       !Expect(dcache_inv_route.words_required == 2u,
               "expected S_DCACHE_INV to require two dwords")) {
+    return 1;
+  }
+
+  Gfx1201OpcodeRoute global_inv_route;
+  if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
+                  std::span<const std::uint32_t>(global_inv_words.data(),
+                                                 global_inv_words.size()),
+                  &global_inv_route, &dcache_error_message),
+              "expected GLOBAL_INV route selection success") ||
+      !Expect(global_inv_route.status ==
+                  Gfx1201OpcodeRouteStatus::kMatchedSeedEntry,
+              "expected seeded GLOBAL_INV route") ||
+      !Expect(global_inv_route.selector_rule != nullptr &&
+                  global_inv_route.selector_rule->encoding_name ==
+                      "ENC_VGLOBAL",
+              "expected ENC_VGLOBAL selector rule") ||
+      !Expect(global_inv_route.seed_entry != nullptr &&
+                  global_inv_route.seed_entry->instruction_name == "GLOBAL_INV",
+              "expected GLOBAL_INV seed entry") ||
+      !Expect(global_inv_route.opcode == 43u,
+              "expected GLOBAL_INV opcode extraction") ||
+      !Expect(global_inv_route.words_required == 2u,
+              "expected GLOBAL_INV to require two dwords")) {
     return 1;
   }
 
