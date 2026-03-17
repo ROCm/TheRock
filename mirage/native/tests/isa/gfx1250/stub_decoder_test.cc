@@ -270,6 +270,119 @@ bool MatchesTopLevelFlags(const StubDecodedInstruction& instruction,
          instruction.uses_paired_operands == uses_paired_operands;
 }
 
+bool MatchesFragmentShape(
+    const mirage::sim::isa::gfx1250::StubFragmentShape& lhs,
+    const mirage::sim::isa::gfx1250::StubFragmentShape& rhs) {
+  return lhs.kind == rhs.kind && lhs.rows == rhs.rows &&
+         lhs.columns == rhs.columns && lhs.depth == rhs.depth &&
+         lhs.element_bit_width == rhs.element_bit_width &&
+         lhs.packed_elements == rhs.packed_elements &&
+         lhs.wave_size == rhs.wave_size;
+}
+
+bool MatchesOperandRoleRecord(
+    const mirage::sim::isa::gfx1250::StubOperandRoleRecord& lhs,
+    const mirage::sim::isa::gfx1250::StubOperandRoleRecord& rhs) {
+  if (lhs.binding_count != rhs.binding_count) {
+    return false;
+  }
+  for (std::uint32_t i = 0; i < lhs.binding_count; ++i) {
+    const auto& lhs_binding = lhs.bindings[i];
+    const auto& rhs_binding = rhs.bindings[i];
+    if (lhs_binding.role != rhs_binding.role ||
+        lhs_binding.count != rhs_binding.count ||
+        lhs_binding.is_output != rhs_binding.is_output ||
+        lhs_binding.is_implicit != rhs_binding.is_implicit) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool MatchesOperandSlotRecord(
+    const mirage::sim::isa::gfx1250::StubOperandSlotRecord& lhs,
+    const mirage::sim::isa::gfx1250::StubOperandSlotRecord& rhs) {
+  if (lhs.binding_count != rhs.binding_count) {
+    return false;
+  }
+  for (std::uint32_t i = 0; i < lhs.binding_count; ++i) {
+    const auto& lhs_binding = lhs.bindings[i];
+    const auto& rhs_binding = rhs.bindings[i];
+    if (lhs_binding.slot_kind != rhs_binding.slot_kind ||
+        lhs_binding.value_class != rhs_binding.value_class ||
+        lhs_binding.logical_operand_index != rhs_binding.logical_operand_index ||
+        lhs_binding.component_count != rhs_binding.component_count ||
+        lhs_binding.is_output != rhs_binding.is_output ||
+        lhs_binding.is_implicit != rhs_binding.is_implicit ||
+        !MatchesFragmentShape(lhs_binding.fragment_shape,
+                              rhs_binding.fragment_shape)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool MatchesOperandDescriptorRecord(
+    const mirage::sim::isa::gfx1250::StubOperandDescriptorRecord& lhs,
+    const mirage::sim::isa::gfx1250::StubOperandDescriptorRecord& rhs) {
+  if (lhs.descriptor_count != rhs.descriptor_count) {
+    return false;
+  }
+  for (std::uint32_t i = 0; i < lhs.descriptor_count; ++i) {
+    const auto& lhs_descriptor = lhs.descriptors[i];
+    const auto& rhs_descriptor = rhs.descriptors[i];
+    if (lhs_descriptor.role != rhs_descriptor.role ||
+        lhs_descriptor.slot_kind != rhs_descriptor.slot_kind ||
+        lhs_descriptor.value_class != rhs_descriptor.value_class ||
+        lhs_descriptor.access != rhs_descriptor.access ||
+        lhs_descriptor.component_count != rhs_descriptor.component_count ||
+        lhs_descriptor.is_implicit != rhs_descriptor.is_implicit ||
+        !MatchesFragmentShape(lhs_descriptor.fragment_shape,
+                              rhs_descriptor.fragment_shape)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool MatchesDecodedInstruction(const StubDecodedInstruction& lhs,
+                               const StubDecodedInstruction& rhs) {
+  return lhs.instruction_name == rhs.instruction_name &&
+         lhs.status == rhs.status && lhs.route == rhs.route &&
+         lhs.route_name == rhs.route_name &&
+         lhs.entrypoint_name == rhs.entrypoint_name &&
+         lhs.route_priority == rhs.route_priority &&
+         lhs.rdna4_encoding_name == rhs.rdna4_encoding_name &&
+         lhs.rdna4_opcode == rhs.rdna4_opcode &&
+         lhs.rdna4_operand_count == rhs.rdna4_operand_count &&
+         lhs.appears_in_rdna4_xml == rhs.appears_in_rdna4_xml &&
+         lhs.is_target_specific == rhs.is_target_specific &&
+         lhs.opcode_shape == rhs.opcode_shape &&
+         lhs.execution_domain == rhs.execution_domain &&
+         lhs.uses_accumulator == rhs.uses_accumulator &&
+         lhs.uses_tensor_memory == rhs.uses_tensor_memory &&
+         lhs.uses_scale_path == rhs.uses_scale_path &&
+         lhs.uses_paired_operands == rhs.uses_paired_operands &&
+         lhs.operand_layout.layout_kind == rhs.operand_layout.layout_kind &&
+         lhs.operand_layout.source_count == rhs.operand_layout.source_count &&
+         lhs.operand_layout.destination_count ==
+             rhs.operand_layout.destination_count &&
+         lhs.operand_layout.accumulator_source_count ==
+             rhs.operand_layout.accumulator_source_count &&
+         lhs.operand_layout.has_scale_operand ==
+             rhs.operand_layout.has_scale_operand &&
+         lhs.operand_layout.has_paired_scale_operand ==
+             rhs.operand_layout.has_paired_scale_operand &&
+         lhs.operand_layout.has_tensor_descriptor ==
+             rhs.operand_layout.has_tensor_descriptor &&
+         lhs.operand_layout.touches_lds == rhs.operand_layout.touches_lds &&
+         lhs.operand_layout.is_store == rhs.operand_layout.is_store &&
+         MatchesOperandRoleRecord(lhs.operand_roles, rhs.operand_roles) &&
+         MatchesOperandSlotRecord(lhs.operand_slots, rhs.operand_slots) &&
+         MatchesOperandDescriptorRecord(lhs.operand_descriptors,
+                                        rhs.operand_descriptors);
+}
+
 std::uint32_t CountRouteInfosForRoute(StubDecoderRoute route) {
   std::uint32_t count = 0;
   for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
@@ -6340,6 +6453,16 @@ int main() {
                   sdst_route_manifest->route_priority == 4,
               "expected VOP3 SDST route manifest metadata")) {
     return 1;
+  }
+
+  for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
+    const StubDecodedInstruction via_name =
+        DecodeStubInstruction(route_info.instruction_name);
+    const StubDecodedInstruction via_info = DecodeStubInstruction(route_info);
+    if (!Expect(MatchesDecodedInstruction(via_name, via_info),
+                "expected route-info-based decode to match name-based decode across routed seeds")) {
+      return 1;
+    }
   }
 
   const auto* route_info = FindStubDecoderRouteInfo("V_WMMA_F32_16X16X4_F32_w32");
