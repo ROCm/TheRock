@@ -8,9 +8,22 @@ Outputs a ``matrix`` variable via $GITHUB_OUTPUT suitable for consumption by
 
 Usage (in a workflow step)::
 
-    python external-builds/pytorch/generate_matrix.py \
-        --test-configs 'default distributed inductor' \
-        --default-runner 'linux-rocm-docker-mi300-1gpu-ossci'
+    python external-builds/pytorch/generate_test_sharding_matrix.py \\
+        --test-configs 'default distributed inductor' \\
+        --default-runner 'linux-rocm-docker-mi300-1gpu-ossci' \\
+        --multi-gpu-runner 'linux-rocm-docker-mi300-8gpu-ossci'
+
+Example output (written to $GITHUB_OUTPUT as ``matrix=<json>``)::
+
+    {"include":[
+      {"test_config":"default","shard":1,"num_shards":6,"runs_on":"linux-rocm-docker-mi300-1gpu-ossci"},
+      {"test_config":"default","shard":2,"num_shards":6,"runs_on":"linux-rocm-docker-mi300-1gpu-ossci"},
+      ...
+      {"test_config":"distributed","shard":1,"num_shards":3,"runs_on":"linux-rocm-docker-mi300-8gpu-ossci"},
+      ...
+      {"test_config":"inductor","shard":1,"num_shards":2,"runs_on":"linux-rocm-docker-mi300-1gpu-ossci"},
+      {"test_config":"inductor","shard":2,"num_shards":2,"runs_on":"linux-rocm-docker-mi300-1gpu-ossci"}
+    ]}
 """
 
 from __future__ import annotations
@@ -18,13 +31,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 
-# Shard counts are chosen to keep each shard under ~6 h on current runners.
-# They mirror the parallelism used by upstream PyTorch CI for the
+# Shard counts mirror the parallelism used by upstream PyTorch CI for the
 # corresponding ROCm test configurations (rocm-mi300.yml and
-# inductor-rocm-mi300.yml).
+# inductor-rocm-mi300.yml as of March 2026).  Chosen to keep each shard
+# under ~3 h on MI300 1-GPU runners (default/inductor) and MI300 8-GPU
+# runners (distributed).
 SHARDS_PER_CONFIG: dict[str, int] = {
     "default": 6,
     "distributed": 3,
@@ -32,23 +45,19 @@ SHARDS_PER_CONFIG: dict[str, int] = {
 }
 DEFAULT_SHARDS = 4
 
-
-def derive_runner(default_runner: str, config: str) -> str:
-    """Return the runner label for *config*.
-
-    Distributed tests need multiple GPUs, so we derive the multi-GPU runner
-    label by replacing "1gpu" with "8gpu" in the default runner label.
-    """
-    if config == "distributed":
-        return re.sub(r"\d+gpu", "8gpu", default_runner)
-    return default_runner
+# Configs that require a multi-GPU runner.
+MULTI_GPU_CONFIGS = {"distributed"}
 
 
-def build_matrix(test_configs: list[str], default_runner: str) -> dict:
+def build_matrix(
+    test_configs: list[str],
+    default_runner: str,
+    multi_gpu_runner: str,
+) -> dict:
     includes = []
     for config in test_configs:
         num_shards = SHARDS_PER_CONFIG.get(config, DEFAULT_SHARDS)
-        runner = derive_runner(default_runner, config)
+        runner = multi_gpu_runner if config in MULTI_GPU_CONFIGS else default_runner
         for shard in range(1, num_shards + 1):
             includes.append(
                 {
@@ -71,7 +80,20 @@ def main() -> None:
     parser.add_argument(
         "--default-runner",
         required=True,
-        help="Default runner label (e.g. 'linux-rocm-docker-mi300-1gpu-ossci')",
+        help=(
+            "Runner label for single-GPU configs. Corresponds to "
+            "'test-runs-on' in amdgpu_family_matrix.py "
+            "(e.g. 'linux-rocm-docker-mi300-1gpu-ossci')"
+        ),
+    )
+    parser.add_argument(
+        "--multi-gpu-runner",
+        required=True,
+        help=(
+            "Runner label for multi-GPU configs (e.g. distributed). Corresponds to "
+            "'test-runs-on-multi-gpu' in amdgpu_family_matrix.py "
+            "(e.g. 'linux-rocm-docker-mi300-8gpu-ossci')"
+        ),
     )
     args = parser.parse_args()
 
@@ -80,7 +102,7 @@ def main() -> None:
         print("Error: --test-configs must not be empty", file=sys.stderr)
         sys.exit(1)
 
-    matrix = build_matrix(configs, args.default_runner)
+    matrix = build_matrix(configs, args.default_runner, args.multi_gpu_runner)
     matrix_json = json.dumps(matrix, separators=(",", ":"))
 
     print(f"Generated matrix with {len(matrix['include'])} jobs:")

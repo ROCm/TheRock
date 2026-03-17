@@ -334,7 +334,13 @@ def main(argv: list[str]) -> int:
     gpu_policy = "all" if args.test_config == "distributed" else "single"
     selected = set_gpu_execution_policy(args.amdgpu_family, policy=gpu_policy)
     first_arch = selected[0][0]
-    print(f"Using AMDGPU family: {first_arch}")
+    unique_archs = sorted(set(arch for arch, _ in selected))
+    device_ids = [str(dev_id) for _, dev_id in selected]
+    print(
+        f"Selected {len(selected)} GPU(s): "
+        f"arch(es)={', '.join(unique_archs)}, "
+        f"device(s)={', '.join(device_ids)}"
+    )
 
     pytorch_version = args.pytorch_version
     if not pytorch_version:
