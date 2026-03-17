@@ -47,6 +47,11 @@ def format_summary(
     )
     lines.append("")
 
+    # Nothing to build (e.g. workflow_dispatch with no families selected)
+    if outputs.builds.linux is None and outputs.builds.windows is None:
+        lines.append("No GPU families selected — nothing to build or test.")
+        return "\n".join(lines)
+
     # Non-default callout
     callouts = _non_default_callouts(ci_inputs, outputs)
     if callouts:
@@ -161,7 +166,7 @@ def _append_build_rocm(
         ("Windows", outputs.builds.windows),
     ]:
         if config is None:
-            lines.append(f"| {platform} | — (no `{build_variant}` config) | — |")
+            lines.append(f"| {platform} | — | — |")
         else:
             families = ", ".join(
                 f"`{f}`" for f in config.dist_amdgpu_families.split(";")
