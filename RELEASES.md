@@ -635,26 +635,26 @@ published for Debian-based and RPM-based distributions.
 
 ### GPU family and package mapping
 
-| Product Name                       | GFX Target | GFX Family | Package Name    |
-| ---------------------------------- | ---------- | ---------- | --------------- |
-| MI300A/MI300X                      | gfx942     | gfx94X     | amdrocm-gfx94x  |
-| MI350X/MI355X                      | gfx950     | gfx950     | amdrocm-gfx950  |
-| AMD RX 7900 XTX                    | gfx1100    | gfx110x    | amdrocm-gfx110x |
-| AMD RX 7800 XT                     | gfx1101    | gfx110x    | amdrocm-gfx110x |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110x    | amdrocm-gfx110x |
-| AMD Radeon 780M Laptop iGPU        | gfx1103    | gfx110x    | amdrocm-gfx110x |
-| AMD Strix Point iGPU               | gfx1150    | gfx1150    | amdrocm-gfx1150 |
-| AMD Strix Halo iGPU                | gfx1151    | gfx1151    | amdrocm-gfx1151 |
-| AMD Fire Range iGPU                | gfx1152    | gfx1152    | amdrocm-gfx1152 |
-| AMD Strix Halo XT                  | gfx1153    | gfx1153    | amdrocm-gfx1153 |
-| AMD RX 9060 / XT                   | gfx1200    | gfx120X    | amdrocm-gfx120x |
-| AMD RX 9070 / XT                   | gfx1201    | gfx120X    | amdrocm-gfx120x |
-| Radeon VII                         | gfx906     | gfx906     | amdrocm-gfx906  |
-| MI100                              | gfx908     | gfx908     | amdrocm-gfx908  |
-| MI200 series                       | gfx90a     | gfx90a     | amdrocm-gfx90a  |
-| AMD RX 5700 XT                     | gfx1010    | gfx101x    | amdrocm-gfx101x |
-| AMD RX 6900 XT                     | gfx1030    | gfx103x    | amdrocm-gfx103x |
-| AMD RX 6800 XT                     | gfx1031    | gfx103x    | amdrocm-gfx103x |
+| Product Name                       | GFX Target | GFX Family | Runtime Package | Development Package      |
+| ---------------------------------- | ---------- | ---------- | --------------- | ------------------------ |
+| MI300A/MI300X                      | gfx942     | gfx94X     | amdrocm-gfx94x  | amdrocm-core-sdk-gfx94x  |
+| MI350X/MI355X                      | gfx950     | gfx950     | amdrocm-gfx950  | amdrocm-core-sdk-gfx950  |
+| AMD RX 7900 XTX                    | gfx1100    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
+| AMD RX 7800 XT                     | gfx1101    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
+| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
+| AMD Strix Point iGPU               | gfx1150    | gfx1150    | amdrocm-gfx1150 | amdrocm-core-sdk-gfx1150 |
+| AMD Strix Halo iGPU                | gfx1151    | gfx1151    | amdrocm-gfx1151 | amdrocm-core-sdk-gfx1151 |
+| AMD Fire Range iGPU                | gfx1152    | gfx1152    | amdrocm-gfx1152 | amdrocm-core-sdk-gfx1152 |
+| AMD Strix Halo XT                  | gfx1153    | gfx1153    | amdrocm-gfx1153 | amdrocm-core-sdk-gfx1153 |
+| AMD RX 9060 / XT                   | gfx1200    | gfx120X    | amdrocm-gfx120x | amdrocm-core-sdk-gfx120x |
+| AMD RX 9070 / XT                   | gfx1201    | gfx120X    | amdrocm-gfx120x | amdrocm-core-sdk-gfx120x |
+| Radeon VII                         | gfx906     | gfx906     | amdrocm-gfx906  | amdrocm-core-sdk-gfx906  |
+| MI100                              | gfx908     | gfx908     | amdrocm-gfx908  | amdrocm-core-sdk-gfx908  |
+| MI200 series                       | gfx90a     | gfx90a     | amdrocm-gfx90a  | amdrocm-core-sdk-gfx90a  |
+| AMD RX 5700 XT                     | gfx1010    | gfx101x    | amdrocm-gfx101x | amdrocm-core-sdk-gfx101x |
+| AMD RX 6900 XT                     | gfx1030    | gfx103x    | amdrocm-gfx103x | amdrocm-core-sdk-gfx103x |
+| AMD RX 6800 XT                     | gfx1031    | gfx103x    | amdrocm-gfx103x | amdrocm-core-sdk-gfx103x |
 
 > [!TIP]
 > To find the latest available release:
@@ -670,11 +670,12 @@ published for Debian-based and RPM-based distributions.
 ```bash
 # Step 1: Find the latest release from https://rocm.nightlies.amd.com/deb/
 #         Look for directories like "20260310-12345678"
-# Step 2: Find your package name from the table above
+# Step 2: Look at the "GPU family and package mapping" table above to find
+#         the GFX Family for your GPU (e.g., gfx94x, gfx110x, gfx1151)
 # Step 3: Set the variables below
 
 export RELEASE_ID=20260310-12345678  # Replace with actual date-runid
-export GFX_ARCH=gfx110x              # Replace with your arch (e.g., gfx94x, gfx110x, gfx1151)
+export GFX_ARCH=gfx110x              # Replace with GFX Family from the mapping table
 
 # Step 4: Add repository and install
 sudo apt update
@@ -682,7 +683,7 @@ sudo apt install -y ca-certificates
 echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/${RELEASE_ID} stable main" \
   | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
 sudo apt update
-sudo apt install amdrocm-${GFX_ARCH}
+sudo apt install amdrocm-${GFX_ARCH} amdrocm-core-sdk-${GFX_ARCH}
 ```
 
 ### Installing on RPM-based systems (RHEL, SLES, AlmaLinux etc.)
@@ -693,11 +694,12 @@ sudo apt install amdrocm-${GFX_ARCH}
 ```bash
 # Step 1: Find the latest release from https://rocm.nightlies.amd.com/rpm/
 #         Look for directories like "20260310-12345678"
-# Step 2: Find your package name from the table above
+# Step 2: Look at the "GPU family and package mapping" table above to find
+#         the GFX Family for your GPU (e.g., gfx94x, gfx110x, gfx1151)
 # Step 3: Set the variables below
 
 export RELEASE_ID=20260310-12345678  # Replace with actual date-runid
-export GFX_ARCH=gfx110x              # Replace with your arch (e.g., gfx94x, gfx110x, gfx1151)
+export GFX_ARCH=gfx110x              # Replace with GFX Family from the mapping table
 
 # Step 4: Add repository and install
 sudo dnf install -y ca-certificates
@@ -707,9 +709,9 @@ name=ROCm Nightly Repository
 baseurl=https://rocm.nightlies.amd.com/rpm/${RELEASE_ID}/x86_64
 enabled=1
 gpgcheck=0
-repo_gpgcheck=0
+priority=50
 EOF
-sudo dnf install amdrocm-${GFX_ARCH}
+sudo dnf install amdrocm-${GFX_ARCH} amdrocm-core-sdk-${GFX_ARCH}
 ```
 
 ## Verifying your installation
