@@ -1,12 +1,12 @@
 # hipDNN
-[components.dbg."ml-libs/hipDNN/stage"]
-[components.dev."ml-libs/hipDNN/stage"]
-[components.doc."ml-libs/hipDNN/stage"]
 [components.lib."ml-libs/hipDNN/stage"]
 exclude = [
   "lib/libhipdnn_backend_private.a",
   "lib/test_plugins/**",
 ]
+[components.dbg."ml-libs/hipDNN/stage"]
+[components.dev."ml-libs/hipDNN/stage"]
+[components.doc."ml-libs/hipDNN/stage"]
 [components.test."ml-libs/hipDNN/stage"]
 include = [
   "bin/*hipdnn_*_test*",

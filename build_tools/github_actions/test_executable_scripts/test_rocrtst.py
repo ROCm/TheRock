@@ -5,13 +5,12 @@ import logging
 import os
 import shlex
 import subprocess
-import sys
 from pathlib import Path
-
-sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
-from github_actions_utils import get_first_gpu_architecture
+import platform
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+os_type = platform.system().lower()
 
 logging.basicConfig(level=logging.INFO)
 
@@ -27,10 +26,30 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 cwd_dir = Path(THEROCK_BIN_DIR)
 cmd = ["./rocrtst64"]
 
-# Excluded tests (flaky or disabled in CI).
-EXCLUDED_TESTS = [
-    "-rocrtstFunc.Memory_Max_Mem",
-]
+# TODO(#3851): Excluded tests (flaky or disabled in CI).
+TEST_TO_IGNORE = {
+    "gfx94X-dcgpu": {
+        "linux": [
+            "rocrtstFunc.Memory_Max_Mem",
+        ]
+    },
+    "gfx950-dcgpu": {
+        "linux": [
+            "rocrtstFunc.GpuCoreDump_DefaultPattern",
+            "rocrtstFunc.Memory_Max_Mem",
+        ]
+    },
+    "gfx110X-all": {
+        "windows": [
+            "rocrtstFunc.Memory_Max_Mem",
+        ]
+    },
+    "gfx1151": {
+        "windows": [
+            "rocrtstFunc.Memory_Max_Mem",
+        ]
+    },
+}
 
 # If smoke tests are enabled, run smoke tests only. Otherwise, run the full suite.
 SMOKE_TESTS = [
@@ -50,8 +69,12 @@ SMOKE_TESTS = [
     "rocrtstFunc.Memory_Atomic_Add_Test",
     "rocrtstFunc.Memory_Atomic_Xchg_Test",
 ]
+
+if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
+    ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
+    exclude_filter = "-" + ":".join(ignored_tests)
+
 test_type = os.getenv("TEST_TYPE", "full")
-exclude_filter = ":".join(EXCLUDED_TESTS)
 
 if test_type == "smoke":
     environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS) + ":" + exclude_filter

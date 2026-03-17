@@ -20,6 +20,7 @@ on:
           - gfx1152
           - gfx1153
           - gfx120X-all
+          - gfx900
           - gfx906
           - gfx908
           - gfx90a

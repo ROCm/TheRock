@@ -596,6 +596,40 @@ def get_first_gpu_architecture(env=None, therock_bin_dir: str | None = None) -> 
     raise RuntimeError("No GPU architecture found in rocminfo output")
 
 
+def find_matching_gpu_arch(gpu_arch: str, available_gpu_archs: set[str]) -> str | None:
+    """
+    Find the most specific GPU architecture in the set that matches the given GPU.
+
+    Tries in order from most specific to least specific:
+    # Example:
+    # find_matching_gpu_arch('gfx1151', {'gfx1151', 'gfx115X', 'gfx11X'}) gives 'gfx1151'
+    # find_matching_gpu_arch('gfx1151', {'gfx1150', 'gfx94X', 'gfx11X'}) gives 'gfx11X'
+    - Wildcard matches (gfx115X, gfx11X, etc.)
+
+    Returns the matching architecture string or None if no match found.
+    """
+    # First, try exact match
+    if gpu_arch in available_gpu_archs:
+        return gpu_arch
+
+    # Generate possible wildcard patterns from most specific to least specific
+    # For gfx1151: try gfx115X, gfx11X
+    possible_patterns = []
+    arch_str = gpu_arch
+
+    # Generate patterns by replacing characters with X from right to left
+    for i in range(len(arch_str) - 1, 1, -1):
+        pattern = arch_str[:i] + "X"
+        possible_patterns.append(pattern)
+
+    # Try each pattern
+    for pattern in possible_patterns:
+        if pattern in available_gpu_archs:
+            return pattern
+
+    return None
+
+
 def is_asan():
     """Using artifact_group, determines if this is an asan build"""
     ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP", "")

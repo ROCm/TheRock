@@ -46,17 +46,13 @@ skip_tests = {
             "test_cpp_warnings_have_python_context_cuda",
         ],
     },
-    "gfx120": {
-        "autograd": [
-            # AssertionError: False is not true
-            "test_side_stream_backward_overlap_cuda"
-        ],
-        # "unary_ufuncs": [
-        #     # this failed only once. maybe python version dependent? probably the run was python 3.13
-        #     # AssertionError: Tensor-likes are not close!
-        #     "test_batch_vs_slicing_polygamma_polygamma_n_2_cuda_float16",
-        # ],
-    },
+    # "gfx120": {
+    #     "unary_ufuncs": [
+    #         # this failed only once. maybe python version dependent? probably the run was python 3.13
+    #         # AssertionError: Tensor-likes are not close!
+    #         "test_batch_vs_slicing_polygamma_polygamma_n_2_cuda_float16",
+    #     ],
+    # },
     # "windows": {
     #     empty for the moment
     # },
