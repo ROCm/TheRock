@@ -1,17 +1,30 @@
 #!/usr/bin/env python3
 """
-This is a generic test runner that can test multiple components.
-This works on components in rocm-libraries/rocm-systems which use test_categories.yml for test categorization.
+Generic test runner for multiple components in rocm-libraries/rocm-systems.
 
-Environment variables used:
-TEST_COMPONENT: Job name of the component to test (e.g., "miopen", "rocrand", "hiprand")
-    This is automatically set by the GitHub Actions workflow from the job_name field.
-    The script maps these job names to actual test directory names (e.g., "miopen" -> "MIOpen")
-    Defaults to "miopen" if not set.
-TEST_TYPE: "quick" runs tests with "quick" category, otherwise runs "standard" category
-AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
+Each component is expected to register its tests as ctest entries with labels derived from
+test_categories.yml. The labeling convention is:
 
-The script discovers GPU-specific labels via ctest --print-labels and runs the appropriate tests for the current GPU architecture.
+  - Category labels: Each test is labeled with its category (e.g. "quick", "standard").
+    The runner uses `ctest -L <category>` to select tests matching the chosen category.
+
+  - Category exclude labels: A component may optionally label specific tests with
+    `{category}_exclude` (e.g. "quick_exclude"). When such a label is detected via
+    `ctest --print-labels`, the runner adds `ctest -LE {category}_exclude` to skip those
+    tests for that category.
+
+  - GPU suite labels: Tests targeting specific GPU architectures are labeled as
+    `ex_gpu_{gpu_arch}` (e.g. "ex_gpu_gfx110X", "ex_gpu_gfx950"). The runner matches
+    the current GPU against available labels (with wildcard fallback, e.g. gfx115X -> gfx11X)
+    and uses `ctest -L ex_gpu_{matched_arch}` to include the right GPU suite, or
+    `ctest -LE ex_gpu` to exclude all GPU-specific tests when no match is found.
+
+Environment variables:
+  TEST_COMPONENT: Job name of the component to test (e.g., "miopen", "rocrand", "hiprand").
+      Automatically set by the GitHub Actions workflow from the job_name field.
+      The script maps these job names to actual test directory names (e.g., "miopen" -> "MIOpen").
+  TEST_TYPE: "quick" runs tests with "quick" category, otherwise runs "standard" category.
+  AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151").
 """
 
 import sys
@@ -127,12 +140,17 @@ def find_matching_gpu_arch(gpu_arch: str, available_gpu_archs: set[str]) -> str 
     return None
 
 
-def get_available_gpu_suite_tests():
+def check_available_labels():
     """
-    Get all available GPU architecture labels from ctest --print-labels.
+    Discover GPU architecture labels and category exclude labels from ctest --print-labels.
 
-    Parses labels of the form ex_gpu_{gpu_arch} (e.g. ex_gpu_gfx110X, ex_gpu_gfx950).
-    Returns a set of gpu_arch strings (e.g., 'gfx110X', 'gfx115X', 'gfx950').
+    Parses labels of the form:
+    - ex_gpu_{gpu_arch} (e.g. ex_gpu_gfx110X, ex_gpu_gfx950)
+    - {category}_exclude (e.g. quick_exclude, standard_exclude)
+
+    Returns (gpu_archs, exclude_labels) where:
+    - gpu_archs is a set of gpu_arch strings (e.g., 'gfx110X', 'gfx115X', 'gfx950')
+    - exclude_labels is a set of exclude label strings (e.g., 'quick_exclude', 'standard_exclude')
     """
     test_dir = Path(TEST_DIR)
     if not test_dir.exists() or not test_dir.is_dir():
@@ -140,7 +158,6 @@ def get_available_gpu_suite_tests():
         sys.exit(1)
 
     try:
-        # Ensure the component has at least one test
         list_result = subprocess.run(
             ["ctest", "-N", "--test-dir", str(test_dir)],
             capture_output=True,
@@ -167,15 +184,19 @@ def get_available_gpu_suite_tests():
         )
 
         gpu_archs = set()
-        prefix = "ex_gpu_"
+        exclude_labels = set()
+        gpu_prefix = "ex_gpu_"
+        exclude_suffix = "_exclude"
         for line in result.stdout.splitlines():
             label = line.strip()
-            if label.startswith(prefix):
-                gpu_arch = label[len(prefix) :]
+            if label.startswith(gpu_prefix):
+                gpu_arch = label[len(gpu_prefix) :]
                 if gpu_arch.startswith("gfx"):
                     gpu_archs.add(gpu_arch)
+            elif label.endswith(exclude_suffix):
+                exclude_labels.add(label)
 
-        return gpu_archs
+        return gpu_archs, exclude_labels
     except subprocess.CalledProcessError as e:
         print(f"Error running ctest --print-labels: {e}", file=sys.stderr)
         sys.exit(1)
@@ -187,7 +208,7 @@ def get_available_gpu_suite_tests():
         sys.exit(1)
 
 
-def build_ctest_command(category, gpu_arch, available_gpu_archs):
+def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels):
     """
     Build the appropriate ctest command based on the category and GPU architecture.
 
@@ -211,6 +232,12 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
             f"{SHARD_INDEX},,{TOTAL_SHARDS}",
         ]
     )
+
+    # Exclude tests labeled with {category}_exclude if that label exists
+    category_exclude_label = f"{category}_exclude"
+    if category_exclude_label in exclude_labels:
+        cmd.extend(["-LE", category_exclude_label])
+        print(f"# Excluding tests with label: {category_exclude_label}")
 
     if gpu_arch.lower() in ["generic", "none", ""]:
         # For generic/unspecified GPU, exclude all GPU-specific suite tests
@@ -258,19 +285,21 @@ def main():
     print(f"# AMDGPU_FAMILIES: {AMDGPU_FAMILIES} -> GPU Architecture: {gpu_arch}")
     print()
 
-    # Get available GPU suite tests from ctest
-    print("# Discovering available GPU suite tests...")
-    available_gpu_archs = get_available_gpu_suite_tests()
+    # Discover available labels from ctest
+    print("# Discovering available test labels...")
+    available_gpu_archs, exclude_labels = check_available_labels()
 
     if available_gpu_archs:
         print(f"# Found {len(available_gpu_archs)} GPU suite test(s)")
         print(f"# Available GPU architectures: {sorted(available_gpu_archs)}")
     else:
         print("# Warning: No GPU specific test suites available")
+    if exclude_labels:
+        print(f"# Found exclude labels: {sorted(exclude_labels)}")
     print()
 
     # Build the ctest command
-    cmd = build_ctest_command(category, gpu_arch, available_gpu_archs)
+    cmd = build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
 
     print(f"# Running: {' '.join(cmd)}")
     print()
