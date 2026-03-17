@@ -82,6 +82,22 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
+
+TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
+
+# Add component-specific environment variables here
+if test_component_job_name == "rocprofiler-compute":
+    TEST_DIR = str(ROCM_PATH / "libexec" / "rocprofiler-compute")
+    rocm_bin = str(ROCM_PATH / "bin")
+    rocm_lib = str(ROCM_PATH / "lib")
+    sysdeps_lib = str(ROCM_PATH / "lib" / "rocm_sysdeps" / "lib")
+    environ_vars["PATH"] = ":".join(
+        filter(None, [rocm_bin, environ_vars.get("PATH", "")])
+    )
+    environ_vars["LD_LIBRARY_PATH"] = ":".join(
+        filter(None, [rocm_lib, sysdeps_lib, environ_vars.get("LD_LIBRARY_PATH", "")])
+    )
+
 logging.basicConfig(level=logging.INFO)
 ##############################################
 
@@ -118,7 +134,7 @@ def get_available_gpu_suite_tests():
     Parses labels of the form ex_gpu_{gpu_arch} (e.g. ex_gpu_gfx110X, ex_gpu_gfx950).
     Returns a set of gpu_arch strings (e.g., 'gfx110X', 'gfx115X', 'gfx950').
     """
-    test_dir = Path(THEROCK_BIN_DIR) / TEST_COMPONENT
+    test_dir = Path(TEST_DIR)
     if not test_dir.exists() or not test_dir.is_dir():
         print(f"Error: Test directory does not exist: {test_dir}", file=sys.stderr)
         sys.exit(1)
@@ -188,7 +204,7 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
             "--timeout",
             str(ctest_timeout_seconds),
             "--test-dir",
-            f"{THEROCK_BIN_DIR}/{TEST_COMPONENT}",
+            TEST_DIR,
             "-V",  # Always run in verbose mode
             # Shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)
             "--tests-information",
@@ -237,9 +253,7 @@ def main():
                 f"# Warning: Could not extract GPU architecture from AMDGPU_FAMILIES='{AMDGPU_FAMILIES}', using default '{gpu_arch}'"
             )
 
-    print(
-        f"# TEST_COMPONENT: {test_component_job_name} -> Test Directory: {TEST_COMPONENT}"
-    )
+    print(f"# TEST_COMPONENT: {test_component_job_name} -> Test Directory: {TEST_DIR}")
     print(f"# TEST_TYPE: {TEST_TYPE} -> Category: {category}")
     print(f"# AMDGPU_FAMILIES: {AMDGPU_FAMILIES} -> GPU Architecture: {gpu_arch}")
     print()
