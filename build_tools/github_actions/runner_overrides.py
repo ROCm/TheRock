@@ -19,6 +19,8 @@ import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from github_actions_utils import str2bool
+
 # Public HTTPS URL (no auth needed for reads)
 DEFAULT_OVERRIDE_URL = (
     "https://therock-ci-config.s3.amazonaws.com/runner-overrides.json"
@@ -36,7 +38,7 @@ def _get_override_url() -> str:
 
 def _is_disabled() -> bool:
     """Check if runner overrides are disabled via environment variable."""
-    return os.environ.get("THEROCK_DISABLE_RUNNER_OVERRIDES", "") == "1"
+    return str2bool(os.environ.get("THEROCK_DISABLE_RUNNER_OVERRIDES", "false"))
 
 
 def fetch_overrides() -> dict:
@@ -123,3 +125,35 @@ def reset_cache() -> None:
     global _cached_overrides, _fetch_attempted
     _cached_overrides = None
     _fetch_attempted = False
+
+
+def generate_overrides_json() -> str:
+    """Generate runner-overrides.json content from amdgpu_family_matrix.py.
+
+    Run locally to create the JSON for uploading to S3:
+        python -c "from runner_overrides import generate_overrides_json; print(generate_overrides_json())"
+
+    Returns:
+        Prettified JSON string ready for S3 upload.
+    """
+    from amdgpu_family_matrix import (
+        amdgpu_family_info_matrix_nightly,
+        amdgpu_family_info_matrix_postsubmit,
+        amdgpu_family_info_matrix_presubmit,
+    )
+
+    overrides = {}
+    matrices = [
+        amdgpu_family_info_matrix_presubmit,
+        amdgpu_family_info_matrix_postsubmit,
+        amdgpu_family_info_matrix_nightly,
+    ]
+
+    for matrix in matrices:
+        for family_key, platforms in matrix.items():
+            if family_key not in overrides:
+                overrides[family_key] = {}
+            for platform, config in platforms.items():
+                overrides[family_key][platform] = dict(config)
+
+    return json.dumps({"overrides": overrides}, indent=2, sort_keys=True)

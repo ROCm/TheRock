@@ -76,6 +76,8 @@ jobs:
       - name: Configuring CI options
         id: configure
         env:
+          # TheRock is the source of truth for runner labels; disable S3 overrides
+          THEROCK_DISABLE_RUNNER_OVERRIDES: "true"
           INPUT_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.linux_amdgpu_families }}
           LINUX_TEST_LABELS: ${{ github.event.inputs.linux_test_labels }}
           LINUX_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.linux_use_prebuilt_artifacts }}
