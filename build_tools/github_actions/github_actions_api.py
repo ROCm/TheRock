@@ -559,9 +559,8 @@ def str2bool(value: str | None) -> bool:
     raise ValueError(f"Invalid string value for boolean conversion: {value}")
 
 
-# TODO: Move get_visible_gpu_count, get_first_gpu_architecture, and
-# find_matching_gpu_arch to a GPU/rocminfo utils module. They are not specific
-# to GitHub Actions.
+# TODO: Move get_visible_gpu_count and get_first_gpu_architecture to a
+# GPU/rocminfo utils module. They are not specific to GitHub Actions.
 # TODO(#3489): Refactor get_visible_gpu_count and get_first_gpu_architecture to share a
 # common helper that runs rocminfo and returns matching lines; both functions duplicate the first ~12 lines.
 def get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
