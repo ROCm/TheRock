@@ -30,11 +30,11 @@ on:
         description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         required: false
         type: string
-      upload_packages:
-        description: Whether to upload packages to S3. Set to false when called from test workflows.
+      skip_package_upload:
+        description: Skip uploading packages to S3. Set to true when called from test workflows.
         required: false
         type: boolean
-        default: true
+        default: false
       repository:
           description: "Repository to checkout. Otherwise, defaults to `github.repository`."
           type: string
@@ -69,10 +69,10 @@ on:
         description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
-      upload_packages:
-        description: Whether to upload packages to S3. Set to false when called from test workflows.
+      skip_package_upload:
+        description: Skip uploading packages to S3. Set to true when called from test workflows.
         type: boolean
-        default: true
+        default: false
       ref:
           description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
           type: string
@@ -145,14 +145,14 @@ jobs:
             --version-suffix ${{ env.ARTIFACT_RUN_ID }}
 
       - name: Configure AWS Credentials
-        if: ${{ inputs.upload_packages != false }}
+        if: ${{ !inputs.skip_package_upload }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
 
       - name: Upload Package repo to S3
-        if: ${{ inputs.upload_packages != false }}
+        if: ${{ !inputs.skip_package_upload }}
         id: upload-packages
         run: |
           echo "Uploading to s3 bucket : ${{ inputs.release_type }}"
