@@ -651,22 +651,13 @@ def main(base_args, linux_families, windows_families):
     test_type_reason = "default (quick tests)"
     run_extended_tests = False
 
-    if is_schedule:
+    if is_schedule or is_workflow_dispatch:
         # Always build and run full tests on scheduled runs.
         enable_build_jobs = True
         test_type = "comprehensive"
         test_type_reason = "scheduled run triggers comprehensive tests"
         # Extended tests (functional + benchmarks) run on nightly/scheduled builds
         run_extended_tests = True
-    elif is_workflow_dispatch:
-        # Always build and conditionally run full tests for workflow dispatch.
-        enable_build_jobs = True
-        if linux_test_output or windows_test_output:
-            combined_test_labels = list(set(linux_test_output + windows_test_output))
-            test_type = "full"
-            test_type_reason = f"test label(s) specified: {combined_test_labels}"
-            # Extended tests (functional + benchmarks) run on workflow dispatch with test labels
-            run_extended_tests = True
     else:
         # Conditionally build and conditionally run full tests for other
         # triggers (pull_request), based on modified paths and other inputs.
