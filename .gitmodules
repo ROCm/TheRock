@@ -17,7 +17,7 @@
 [submodule "rocm-libraries"]
 	path = rocm-libraries
 	url = https://github.com/ROCm/rocm-libraries
-	branch = develop
+	branch = users/rsrimant/asan-1057-0315-398
 [submodule "rocm-systems"]
 	path = rocm-systems
 	url = https://github.com/ROCm/rocm-systems.git
