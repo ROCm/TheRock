@@ -17,12 +17,17 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 328> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 333> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
+    "S_PREFETCH_INST",
     "S_PREFETCH_INST_PC_REL",
+    "S_PREFETCH_DATA",
+    "S_BUFFER_PREFETCH_DATA",
     "S_PREFETCH_DATA_PC_REL",
+    "S_ATC_PROBE",
+    "S_ATC_PROBE_BUFFER",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -378,6 +383,10 @@ constexpr std::int32_t SignExtend24(std::uint32_t value) {
   return static_cast<std::int32_t>(value << 8) >> 8;
 }
 
+constexpr std::int32_t SignExtend21(std::uint32_t value) {
+  return static_cast<std::int32_t>(value << 11) >> 11;
+}
+
 constexpr std::int32_t SignExtend5(std::uint32_t value) {
   return static_cast<std::int32_t>(value << 27) >> 27;
 }
@@ -526,6 +535,16 @@ InstructionOperand DescribeWideSourceOperand(InstructionOperand operand,
         MakeVectorRegisterDescriptor(role, slot_kind, OperandAccess::kRead, 64, 2));
   }
   return operand.WithDescriptor(MakeImmediateDescriptor(role, slot_kind, 64));
+}
+
+InstructionOperand DescribeWideScalarSourceOperand(InstructionOperand operand,
+                                                   OperandRole role,
+                                                   OperandSlotKind slot_kind,
+                                                   std::uint8_t element_bit_width,
+                                                   std::uint8_t component_count) {
+  return operand.WithDescriptor(
+      MakeScalarRegisterDescriptor(role, slot_kind, OperandAccess::kRead,
+                                   element_bit_width, component_count));
 }
 
 InstructionOperand DescribeScalarDestinationOperand(InstructionOperand operand,
@@ -856,6 +875,57 @@ bool DecodeSmemOffsetNokOperand(std::uint32_t raw_value,
   return true;
 }
 
+bool DecodeSmemBaseOperand(std::uint32_t raw_value,
+                           InstructionOperand* operand,
+                           std::string* error_message) {
+  if (operand == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "smem base output must not be null";
+    }
+    return false;
+  }
+
+  *operand = InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_value << 1));
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool DecodeSmemOffsetOperand(std::uint32_t instruction_word,
+                             std::uint32_t instruction_word_hi,
+                             InstructionOperand* operand,
+                             std::string* error_message) {
+  if (operand == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "smem offset output must not be null";
+    }
+    return false;
+  }
+
+  const bool use_inline_immediate = ExtractBits(instruction_word, 17, 1) != 0u;
+  const bool use_soffset_register = ExtractBits(instruction_word, 14, 1) != 0u;
+
+  if (use_inline_immediate) {
+    *operand = InstructionOperand::Imm32(static_cast<std::uint32_t>(
+        SignExtend21(ExtractBits(instruction_word_hi, 0, 21))));
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (use_soffset_register) {
+    return DecodeSmemOffsetNokOperand(ExtractBits(instruction_word_hi, 25, 7),
+                                      operand, error_message);
+  }
+
+  if (error_message != nullptr) {
+    *error_message = "smem offset mode is not implemented";
+  }
+  return false;
+}
+
 bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
                                         std::span<const std::uint32_t> words,
                                         DecodedInstruction* instruction,
@@ -927,6 +997,85 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
             SignExtend5(ExtractBits(word, 6, 5))))
             .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource2,
                                                    OperandSlotKind::kSource2)));
+    *words_consumed = 2;
+  } else if (instruction_name == "S_PREFETCH_INST" ||
+             instruction_name == "S_PREFETCH_DATA" ||
+             instruction_name == "S_BUFFER_PREFETCH_DATA") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+
+    InstructionOperand sbase;
+    if (!DecodeSmemBaseOperand(ExtractBits(word, 0, 6), &sbase, error_message)) {
+      return false;
+    }
+
+    InstructionOperand soffset;
+    if (!DecodeSmemOffsetNokOperand(ExtractBits(words[1], 25, 7), &soffset,
+                                    error_message)) {
+      return false;
+    }
+
+    const InstructionOperand described_sbase =
+        instruction_name == "S_BUFFER_PREFETCH_DATA"
+            ? DescribeWideScalarSourceOperand(sbase, OperandRole::kSource0,
+                                              OperandSlotKind::kSource0, 128u,
+                                              4u)
+            : DescribeWideSourceOperand(sbase, OperandRole::kSource0,
+                                        OperandSlotKind::kSource0);
+
+    *instruction = DecodedInstruction::FourOperand(
+        instruction_name, described_sbase,
+        InstructionOperand::Imm32(static_cast<std::uint32_t>(
+            SignExtend24(ExtractBits(words[1], 0, 24))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource1,
+                                                   OperandSlotKind::kSource1)),
+        DescribeSourceOperand(soffset, OperandRole::kSource2,
+                              OperandSlotKind::kSource2),
+        InstructionOperand::Imm32(static_cast<std::uint32_t>(
+            SignExtend5(ExtractBits(word, 6, 5))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kUnknown,
+                                                   OperandSlotKind::kUnknown)));
+    *words_consumed = 2;
+  } else if (instruction_name == "S_ATC_PROBE" ||
+             instruction_name == "S_ATC_PROBE_BUFFER") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+
+    InstructionOperand sbase;
+    if (!DecodeSmemBaseOperand(ExtractBits(word, 0, 6), &sbase, error_message)) {
+      return false;
+    }
+
+    InstructionOperand offset;
+    if (!DecodeSmemOffsetOperand(word, words[1], &offset, error_message)) {
+      return false;
+    }
+
+    const InstructionOperand described_sbase =
+        instruction_name == "S_ATC_PROBE_BUFFER"
+            ? DescribeWideScalarSourceOperand(sbase, OperandRole::kSource1,
+                                              OperandSlotKind::kSource1, 128u,
+                                              4u)
+            : DescribeWideSourceOperand(sbase, OperandRole::kSource1,
+                                        OperandSlotKind::kSource1);
+
+    *instruction = DecodedInstruction::ThreeOperand(
+        instruction_name,
+        InstructionOperand::Imm32(ExtractBits(word, 6, 7))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource0,
+                                                   OperandSlotKind::kSource0,
+                                                   8u)),
+        described_sbase,
+        DescribeSourceOperand(offset, OperandRole::kSource2,
+                              OperandSlotKind::kSource2));
     *words_consumed = 2;
   } else if (instruction_name == "S_BRANCH" ||
              instruction_name == "S_CBRANCH_SCC0" ||

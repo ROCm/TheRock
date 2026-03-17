@@ -170,6 +170,25 @@ std::array<std::uint32_t, 2> MakeSmemPrefetchPcRel(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeSmemBasePrefetch(std::uint32_t op,
+                                                  std::uint32_t sbase_start,
+                                                  std::int32_t ioffset,
+                                                  std::uint32_t soffset,
+                                                  std::int32_t sdata) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x30u) << 26;
+  word |= static_cast<std::uint64_t>(sbase_start >> 1);
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(sdata) & 0x1fu)
+          << 6;
+  word |= static_cast<std::uint64_t>(op & 0xffu) << 18;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(ioffset) &
+                                     0x00ffffffu)
+          << 32;
+  word |= static_cast<std::uint64_t>(soffset & 0x7fu) << 57;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 std::array<std::uint32_t, 2> MakeDs(std::uint32_t op,
                                     std::uint32_t vdst,
                                     std::uint32_t addr,
@@ -310,6 +329,12 @@ int main() {
   }
 
   const auto dcache_inv_words = MakeSmem(33u, 0u, 0u, true, 0u);
+  const auto prefetch_inst_words = MakeSmemBasePrefetch(36u, 8u, -16, 11u, -4);
+  const auto atc_probe_words = MakeSmem(34u, 42u, 6u, false, 17u, true);
+  const auto atc_probe_buffer_words = MakeSmem(35u, 55u, 10u, true, 0x1abcdu);
+  const auto prefetch_data_words = MakeSmemBasePrefetch(38u, 12u, 64, 7u, 3);
+  const auto buffer_prefetch_words =
+      MakeSmemBasePrefetch(39u, 20u, 24, 13u, -1);
   const auto prefetch_inst_pc_rel_words =
       MakeSmemPrefetchPcRel(37u, -32, 9u, -3);
   const auto prefetch_data_pc_rel_words =
@@ -363,6 +388,26 @@ int main() {
     return 1;
   }
 
+  Gfx1201OpcodeRoute prefetch_inst_route;
+  if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
+                  std::span<const std::uint32_t>(prefetch_inst_words.data(),
+                                                 prefetch_inst_words.size()),
+                  &prefetch_inst_route, &dcache_error_message),
+              "expected S_PREFETCH_INST route selection success") ||
+      !Expect(prefetch_inst_route.status ==
+                  Gfx1201OpcodeRouteStatus::kMatchedSeedEntry,
+              "expected seeded S_PREFETCH_INST route") ||
+      !Expect(prefetch_inst_route.seed_entry != nullptr &&
+                  prefetch_inst_route.seed_entry->instruction_name ==
+                      "S_PREFETCH_INST",
+              "expected S_PREFETCH_INST seed entry") ||
+      !Expect(prefetch_inst_route.opcode == 36u,
+              "expected S_PREFETCH_INST opcode extraction") ||
+      !Expect(prefetch_inst_route.words_required == 2u,
+              "expected S_PREFETCH_INST to require two dwords")) {
+    return 1;
+  }
+
   Gfx1201OpcodeRoute prefetch_data_pc_rel_route;
   if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
                   std::span<const std::uint32_t>(
@@ -379,6 +424,88 @@ int main() {
               "expected S_PREFETCH_DATA_PC_REL seed entry") ||
       !Expect(prefetch_data_pc_rel_route.opcode == 40u,
               "expected S_PREFETCH_DATA_PC_REL opcode extraction")) {
+    return 1;
+  }
+
+  Gfx1201OpcodeRoute prefetch_data_route;
+  if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
+                  std::span<const std::uint32_t>(prefetch_data_words.data(),
+                                                 prefetch_data_words.size()),
+                  &prefetch_data_route, &dcache_error_message),
+              "expected S_PREFETCH_DATA route selection success") ||
+      !Expect(prefetch_data_route.status ==
+                  Gfx1201OpcodeRouteStatus::kMatchedSeedEntry,
+              "expected seeded S_PREFETCH_DATA route") ||
+      !Expect(prefetch_data_route.seed_entry != nullptr &&
+                  prefetch_data_route.seed_entry->instruction_name ==
+                      "S_PREFETCH_DATA",
+              "expected S_PREFETCH_DATA seed entry") ||
+      !Expect(prefetch_data_route.opcode == 38u,
+              "expected S_PREFETCH_DATA opcode extraction") ||
+      !Expect(prefetch_data_route.words_required == 2u,
+              "expected S_PREFETCH_DATA to require two dwords")) {
+    return 1;
+  }
+
+  Gfx1201OpcodeRoute buffer_prefetch_route;
+  if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
+                  std::span<const std::uint32_t>(buffer_prefetch_words.data(),
+                                                 buffer_prefetch_words.size()),
+                  &buffer_prefetch_route, &dcache_error_message),
+              "expected S_BUFFER_PREFETCH_DATA route selection success") ||
+      !Expect(buffer_prefetch_route.status ==
+                  Gfx1201OpcodeRouteStatus::kMatchedSeedEntry,
+              "expected seeded S_BUFFER_PREFETCH_DATA route") ||
+      !Expect(buffer_prefetch_route.seed_entry != nullptr &&
+                  buffer_prefetch_route.seed_entry->instruction_name ==
+                      "S_BUFFER_PREFETCH_DATA",
+              "expected S_BUFFER_PREFETCH_DATA seed entry") ||
+      !Expect(buffer_prefetch_route.opcode == 39u,
+              "expected S_BUFFER_PREFETCH_DATA opcode extraction") ||
+      !Expect(buffer_prefetch_route.words_required == 2u,
+              "expected S_BUFFER_PREFETCH_DATA to require two dwords")) {
+    return 1;
+  }
+
+  Gfx1201OpcodeRoute atc_probe_route;
+  if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
+                  std::span<const std::uint32_t>(atc_probe_words.data(),
+                                                 atc_probe_words.size()),
+                  &atc_probe_route, &dcache_error_message),
+              "expected S_ATC_PROBE route selection success") ||
+      !Expect(atc_probe_route.status ==
+                  Gfx1201OpcodeRouteStatus::kMatchedSeedEntry,
+              "expected seeded S_ATC_PROBE route") ||
+      !Expect(atc_probe_route.selector_rule != nullptr &&
+                  atc_probe_route.selector_rule->encoding_name == "ENC_SMEM",
+              "expected ENC_SMEM selector rule for S_ATC_PROBE") ||
+      !Expect(atc_probe_route.seed_entry != nullptr &&
+                  atc_probe_route.seed_entry->instruction_name == "S_ATC_PROBE",
+              "expected S_ATC_PROBE seed entry") ||
+      !Expect(atc_probe_route.opcode == 34u,
+              "expected S_ATC_PROBE opcode extraction") ||
+      !Expect(atc_probe_route.words_required == 2u,
+              "expected S_ATC_PROBE to require two dwords")) {
+    return 1;
+  }
+
+  Gfx1201OpcodeRoute atc_probe_buffer_route;
+  if (!Expect(SelectGfx1201Phase0ComputeOpcodeRoute(
+                  std::span<const std::uint32_t>(atc_probe_buffer_words.data(),
+                                                 atc_probe_buffer_words.size()),
+                  &atc_probe_buffer_route, &dcache_error_message),
+              "expected S_ATC_PROBE_BUFFER route selection success") ||
+      !Expect(atc_probe_buffer_route.status ==
+                  Gfx1201OpcodeRouteStatus::kMatchedSeedEntry,
+              "expected seeded S_ATC_PROBE_BUFFER route") ||
+      !Expect(atc_probe_buffer_route.seed_entry != nullptr &&
+                  atc_probe_buffer_route.seed_entry->instruction_name ==
+                      "S_ATC_PROBE_BUFFER",
+              "expected S_ATC_PROBE_BUFFER seed entry") ||
+      !Expect(atc_probe_buffer_route.opcode == 35u,
+              "expected S_ATC_PROBE_BUFFER opcode extraction") ||
+      !Expect(atc_probe_buffer_route.words_required == 2u,
+              "expected S_ATC_PROBE_BUFFER to require two dwords")) {
     return 1;
   }
 
@@ -510,6 +637,48 @@ int main() {
       !Expect(decoded_instruction.operand_count == 3u,
               "expected decoded S_PREFETCH_INST_PC_REL operand count") ||
       !Expect(words_consumed == 2u, "expected two consumed dwords for prefetch")) {
+    return 1;
+  }
+
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(prefetch_inst_words.data(),
+                                                 prefetch_inst_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_PREFETCH_INST decode success after route") ||
+      !Expect(decoded_instruction.opcode == "S_PREFETCH_INST",
+              "expected decoded S_PREFETCH_INST opcode") ||
+      !Expect(decoded_instruction.operand_count == 4u,
+              "expected decoded S_PREFETCH_INST operand count") ||
+      !Expect(words_consumed == 2u,
+              "expected two consumed dwords for S_PREFETCH_INST")) {
+    return 1;
+  }
+
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(buffer_prefetch_words.data(),
+                                                 buffer_prefetch_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_BUFFER_PREFETCH_DATA decode success after route") ||
+      !Expect(decoded_instruction.opcode == "S_BUFFER_PREFETCH_DATA",
+              "expected decoded S_BUFFER_PREFETCH_DATA opcode") ||
+      !Expect(decoded_instruction.operand_count == 4u,
+              "expected decoded S_BUFFER_PREFETCH_DATA operand count") ||
+      !Expect(words_consumed == 2u,
+              "expected two consumed dwords for S_BUFFER_PREFETCH_DATA")) {
+    return 1;
+  }
+
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(atc_probe_buffer_words.data(),
+                                                 atc_probe_buffer_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_ATC_PROBE_BUFFER decode success after route") ||
+      !Expect(decoded_instruction.opcode == "S_ATC_PROBE_BUFFER",
+              "expected decoded S_ATC_PROBE_BUFFER opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected decoded S_ATC_PROBE_BUFFER operand count") ||
+      !Expect(words_consumed == 2u,
+              "expected two consumed dwords for S_ATC_PROBE_BUFFER")) {
     return 1;
   }
 

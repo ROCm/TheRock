@@ -88,6 +88,25 @@ std::array<std::uint32_t, 2> MakeSmemPrefetchPcRel(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeSmemBasePrefetch(std::uint32_t op,
+                                                  std::uint32_t sbase_start,
+                                                  std::int32_t ioffset,
+                                                  std::uint32_t soffset,
+                                                  std::int32_t sdata) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x30u) << 26;
+  word |= static_cast<std::uint64_t>(sbase_start >> 1);
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(sdata) & 0x1fu)
+          << 6;
+  word |= static_cast<std::uint64_t>(op & 0xffu) << 18;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(ioffset) &
+                                     0x00ffffffu)
+          << 32;
+  word |= static_cast<std::uint64_t>(soffset & 0x7fu) << 57;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 }  // namespace
 
 int main() {
@@ -126,14 +145,24 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 328u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 333u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_PREFETCH_INST"),
+              "expected S_PREFETCH_INST executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_PREFETCH_INST_PC_REL"),
               "expected S_PREFETCH_INST_PC_REL executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_PREFETCH_DATA"),
+              "expected S_PREFETCH_DATA executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_BUFFER_PREFETCH_DATA"),
+              "expected S_BUFFER_PREFETCH_DATA executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_PREFETCH_DATA_PC_REL"),
               "expected S_PREFETCH_DATA_PC_REL executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ATC_PROBE"),
+              "expected S_ATC_PROBE executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ATC_PROBE_BUFFER"),
+              "expected S_ATC_PROBE_BUFFER executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_SUB_U32"),
@@ -452,17 +481,155 @@ int main() {
     return 1;
   }
 
+  const auto prefetch_inst_words = MakeSmemBasePrefetch(36u, 8u, -16, 11u, -4);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(prefetch_inst_words.data(),
+                                                 prefetch_inst_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_PREFETCH_INST decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "S_PREFETCH_INST",
+              "expected S_PREFETCH_INST opcode") ||
+      !Expect(decoded_instruction.operand_count == 4u,
+              "expected S_PREFETCH_INST four-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[0].index == 8u,
+              "expected S_PREFETCH_INST 64-bit scalar base") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[1].imm32 ==
+                      static_cast<std::uint32_t>(-16),
+              "expected sign-extended S_PREFETCH_INST ioffset") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[2].index == 11u,
+              "expected S_PREFETCH_INST scalar offset register") ||
+      !Expect(decoded_instruction.operands[3].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[3].imm32 ==
+                      static_cast<std::uint32_t>(-4),
+              "expected sign-extended S_PREFETCH_INST sdata")) {
+    return 1;
+  }
+
+  const auto prefetch_data_words = MakeSmemBasePrefetch(38u, 12u, 64, 7u, 3);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(prefetch_data_words.data(),
+                                                 prefetch_data_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_PREFETCH_DATA decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "S_PREFETCH_DATA",
+              "expected S_PREFETCH_DATA opcode") ||
+      !Expect(decoded_instruction.operand_count == 4u,
+              "expected S_PREFETCH_DATA four-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[0].index == 12u,
+              "expected S_PREFETCH_DATA 64-bit scalar base") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[1].imm32 == 64u,
+              "expected S_PREFETCH_DATA ioffset") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[2].index == 7u,
+              "expected S_PREFETCH_DATA scalar offset register") ||
+      !Expect(decoded_instruction.operands[3].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[3].imm32 == 3u,
+              "expected S_PREFETCH_DATA sdata")) {
+    return 1;
+  }
+
+  const auto buffer_prefetch_words =
+      MakeSmemBasePrefetch(39u, 20u, 24, 13u, -1);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(buffer_prefetch_words.data(),
+                                                 buffer_prefetch_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_BUFFER_PREFETCH_DATA decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "S_BUFFER_PREFETCH_DATA",
+              "expected S_BUFFER_PREFETCH_DATA opcode") ||
+      !Expect(decoded_instruction.operand_count == 4u,
+              "expected S_BUFFER_PREFETCH_DATA four-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[0].index == 20u,
+              "expected S_BUFFER_PREFETCH_DATA 128-bit scalar base") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[1].imm32 == 24u,
+              "expected S_BUFFER_PREFETCH_DATA ioffset") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[2].index == 13u,
+              "expected S_BUFFER_PREFETCH_DATA scalar offset register") ||
+      !Expect(decoded_instruction.operands[3].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[3].imm32 ==
+                      static_cast<std::uint32_t>(-1),
+              "expected sign-extended S_BUFFER_PREFETCH_DATA sdata")) {
+    return 1;
+  }
+
+  const auto atc_probe_words = MakeSmem(34u, 42u, 6u, false, 17u, true);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(atc_probe_words.data(),
+                                                 atc_probe_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_ATC_PROBE decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "S_ATC_PROBE",
+              "expected S_ATC_PROBE opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected S_ATC_PROBE ternary decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[0].imm32 == 42u,
+              "expected S_ATC_PROBE immediate sdata") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[1].index == 6u,
+              "expected S_ATC_PROBE 64-bit scalar base") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[2].index == 17u,
+              "expected S_ATC_PROBE scalar offset register")) {
+    return 1;
+  }
+
+  const auto atc_probe_buffer_words = MakeSmem(35u, 55u, 10u, true, 0x1abcdu);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(atc_probe_buffer_words.data(),
+                                                 atc_probe_buffer_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_ATC_PROBE_BUFFER decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "S_ATC_PROBE_BUFFER",
+              "expected S_ATC_PROBE_BUFFER opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected S_ATC_PROBE_BUFFER ternary decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[0].imm32 == 55u,
+              "expected S_ATC_PROBE_BUFFER immediate sdata") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[1].index == 10u,
+              "expected S_ATC_PROBE_BUFFER 128-bit scalar base") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[2].imm32 == 0x1abcdu,
+              "expected S_ATC_PROBE_BUFFER inline offset")) {
+    return 1;
+  }
+
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 328u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 333u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
       !Expect(interpreter.Supports("S_DCACHE_INV"),
               "expected interpreter support for S_DCACHE_INV") ||
+      !Expect(interpreter.Supports("S_PREFETCH_INST"),
+              "expected interpreter support for S_PREFETCH_INST") ||
       !Expect(interpreter.Supports("S_PREFETCH_INST_PC_REL"),
               "expected interpreter support for S_PREFETCH_INST_PC_REL") ||
+      !Expect(interpreter.Supports("S_PREFETCH_DATA"),
+              "expected interpreter support for S_PREFETCH_DATA") ||
+      !Expect(interpreter.Supports("S_BUFFER_PREFETCH_DATA"),
+              "expected interpreter support for S_BUFFER_PREFETCH_DATA") ||
       !Expect(interpreter.Supports("S_PREFETCH_DATA_PC_REL"),
               "expected interpreter support for S_PREFETCH_DATA_PC_REL") ||
+      !Expect(interpreter.Supports("S_ATC_PROBE"),
+              "expected interpreter support for S_ATC_PROBE") ||
+      !Expect(interpreter.Supports("S_ATC_PROBE_BUFFER"),
+              "expected interpreter support for S_ATC_PROBE_BUFFER") ||
       !Expect(interpreter.Supports("S_ADD_U32"),
               "expected interpreter support for S_ADD_U32") ||
       !Expect(interpreter.Supports("S_ADD_I32"),

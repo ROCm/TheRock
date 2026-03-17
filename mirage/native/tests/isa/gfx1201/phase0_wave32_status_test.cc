@@ -74,7 +74,7 @@ int main() {
 
   if (!Expect(smem->seeded_instruction_count == 28u,
               "expected ENC_SMEM seeded instruction count") ||
-      !Expect(smem->executable_instruction_count == 3u,
+      !Expect(smem->executable_instruction_count == 8u,
               "expected ENC_SMEM executable foothold count") ||
       !Expect(smem->HasExecutableFoothold(),
               "expected ENC_SMEM executable foothold helper") ||
@@ -105,7 +105,7 @@ int main() {
     return 1;
   }
 
-  if (!Expect(decoder.Phase0ExecutableOpcodes().size() == 328u,
+  if (!Expect(decoder.Phase0ExecutableOpcodes().size() == 333u,
               "expected phase-0 executable opcode count") ||
       !Expect(IsGfx1201Wave32Phase0EncodingSaturated("ENC_VOP1"),
               "expected ENC_VOP1 saturation helper") ||
@@ -158,7 +158,7 @@ int main() {
 
   if (!Expect(smem->example_instruction == "S_LOAD_B32",
               "expected ENC_SMEM example instruction") ||
-      !Expect(smem->first_executable_instruction == "S_DCACHE_INV",
+      !Expect(smem->first_executable_instruction == "S_ATC_PROBE",
               "expected ENC_SMEM executable example") ||
       !Expect(vop3->example_instruction == "V_ADD3_U32",
               "expected ENC_VOP3 example instruction") ||

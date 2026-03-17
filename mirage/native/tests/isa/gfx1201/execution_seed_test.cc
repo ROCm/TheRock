@@ -196,6 +196,25 @@ std::array<std::uint32_t, 2> MakeSmemPrefetchPcRel(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeSmemBasePrefetch(std::uint32_t op,
+                                                  std::uint32_t sbase_start,
+                                                  std::int32_t ioffset,
+                                                  std::uint32_t soffset,
+                                                  std::int32_t sdata) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x30u) << 26;
+  word |= static_cast<std::uint64_t>(sbase_start >> 1);
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(sdata) & 0x1fu)
+          << 6;
+  word |= static_cast<std::uint64_t>(op & 0xffu) << 18;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(ioffset) &
+                                     0x00ffffffu)
+          << 32;
+  word |= static_cast<std::uint64_t>(soffset & 0x7fu) << 57;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 bool ExpectUnaryInstruction(const mirage::sim::isa::DecodedInstruction& instruction,
                             std::string_view expected_opcode,
                             mirage::sim::isa::OperandKind dst_kind,
@@ -6872,6 +6891,12 @@ int main() {
       MakeSmemPrefetchPcRel(37u, -32, 9u, -3);
   const auto prefetch_data_pc_rel_words =
       MakeSmemPrefetchPcRel(40u, 48, 5u, 7);
+  const auto prefetch_inst_words = MakeSmemBasePrefetch(36u, 8u, -16, 11u, -4);
+  const auto prefetch_data_words = MakeSmemBasePrefetch(38u, 12u, 64, 7u, 3);
+  const auto buffer_prefetch_words =
+      MakeSmemBasePrefetch(39u, 20u, 24, 13u, -1);
+  const auto atc_probe_words = MakeSmem(34u, 42u, 6u, false, 17u, true);
+  const auto atc_probe_buffer_words = MakeSmem(35u, 55u, 10u, true, 0x1abcdu);
   DecodedInstruction prefetch_inst_pc_rel_instruction;
   std::size_t prefetch_words_consumed = 0;
   if (!Expect(decoder.DecodeInstruction(
@@ -6907,6 +6932,95 @@ int main() {
               "expected decoded S_PREFETCH_DATA_PC_REL operands") ||
       !Expect(prefetch_words_consumed == 2u,
               "expected S_PREFETCH_DATA_PC_REL to consume two dwords")) {
+    return 1;
+  }
+
+  DecodedInstruction prefetch_inst_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(prefetch_inst_words.data(),
+                                                 prefetch_inst_words.size()),
+                  &prefetch_inst_instruction, &prefetch_words_consumed,
+                  &error_message),
+              "expected S_PREFETCH_INST direct decode success") ||
+      !Expect(ExpectFourOperandInstruction(
+                  prefetch_inst_instruction, "S_PREFETCH_INST",
+                  OperandKind::kSgpr, 8u, OperandKind::kImm32,
+                  static_cast<std::uint32_t>(-16), OperandKind::kSgpr, 11u,
+                  OperandKind::kImm32, static_cast<std::uint32_t>(-4)),
+              "expected decoded S_PREFETCH_INST operands") ||
+      !Expect(prefetch_words_consumed == 2u,
+              "expected S_PREFETCH_INST to consume two dwords") ||
+      !Expect(ExpectOperandDescriptor(
+                  prefetch_inst_instruction.operands[0],
+                  OperandRole::kSource0, OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 64u, 2u, false),
+              "expected S_PREFETCH_INST base descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  prefetch_inst_instruction.operands[1],
+                  OperandRole::kSource1, OperandSlotKind::kSource1,
+                  OperandValueClass::kUnknown, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected S_PREFETCH_INST ioffset descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  prefetch_inst_instruction.operands[2],
+                  OperandRole::kSource2, OperandSlotKind::kSource2,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected S_PREFETCH_INST soffset descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  prefetch_inst_instruction.operands[3],
+                  OperandRole::kUnknown, OperandSlotKind::kUnknown,
+                  OperandValueClass::kUnknown, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected S_PREFETCH_INST sdata descriptor")) {
+    return 1;
+  }
+
+  DecodedInstruction prefetch_data_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(prefetch_data_words.data(),
+                                                 prefetch_data_words.size()),
+                  &prefetch_data_instruction, &prefetch_words_consumed,
+                  &error_message),
+              "expected S_PREFETCH_DATA direct decode success") ||
+      !Expect(ExpectFourOperandInstruction(
+                  prefetch_data_instruction, "S_PREFETCH_DATA",
+                  OperandKind::kSgpr, 12u, OperandKind::kImm32, 64u,
+                  OperandKind::kSgpr, 7u, OperandKind::kImm32, 3u),
+              "expected decoded S_PREFETCH_DATA operands") ||
+      !Expect(prefetch_words_consumed == 2u,
+              "expected S_PREFETCH_DATA to consume two dwords")) {
+    return 1;
+  }
+
+  DecodedInstruction buffer_prefetch_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(buffer_prefetch_words.data(),
+                                                 buffer_prefetch_words.size()),
+                  &buffer_prefetch_instruction, &prefetch_words_consumed,
+                  &error_message),
+              "expected S_BUFFER_PREFETCH_DATA direct decode success") ||
+      !Expect(ExpectFourOperandInstruction(
+                  buffer_prefetch_instruction, "S_BUFFER_PREFETCH_DATA",
+                  OperandKind::kSgpr, 20u, OperandKind::kImm32, 24u,
+                  OperandKind::kSgpr, 13u, OperandKind::kImm32,
+                  static_cast<std::uint32_t>(-1)),
+              "expected decoded S_BUFFER_PREFETCH_DATA operands") ||
+      !Expect(prefetch_words_consumed == 2u,
+              "expected S_BUFFER_PREFETCH_DATA to consume two dwords") ||
+      !Expect(ExpectOperandDescriptor(
+                  buffer_prefetch_instruction.operands[0],
+                  OperandRole::kSource0, OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 128u, 4u, false),
+              "expected S_BUFFER_PREFETCH_DATA base descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  buffer_prefetch_instruction.operands[3],
+                  OperandRole::kUnknown, OperandSlotKind::kUnknown,
+                  OperandValueClass::kUnknown, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected S_BUFFER_PREFETCH_DATA sdata descriptor")) {
     return 1;
   }
 
@@ -6984,6 +7098,256 @@ int main() {
               "expected compiled PC-relative prefetch execution success") ||
       !Expect(expect_prefetch_pc_rel_state(compiled_prefetch_pc_rel_state),
               "expected compiled PC-relative prefetch state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 7> prefetch_base_program_words{
+      prefetch_inst_words[0], prefetch_inst_words[1], prefetch_data_words[0],
+      prefetch_data_words[1], buffer_prefetch_words[0], buffer_prefetch_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> prefetch_base_program;
+  if (!Expect(decoder.DecodeProgram(prefetch_base_program_words,
+                                    &prefetch_base_program, &error_message),
+              "expected base prefetch program decode success") ||
+      !Expect(prefetch_base_program.size() == 4u,
+              "expected four decoded base prefetch program instructions") ||
+      !Expect(prefetch_base_program[0].opcode == "S_PREFETCH_INST",
+              "expected decoded S_PREFETCH_INST program opcode") ||
+      !Expect(prefetch_base_program[1].opcode == "S_PREFETCH_DATA",
+              "expected decoded S_PREFETCH_DATA program opcode") ||
+      !Expect(prefetch_base_program[2].opcode == "S_BUFFER_PREFETCH_DATA",
+              "expected decoded S_BUFFER_PREFETCH_DATA program opcode") ||
+      !Expect(prefetch_base_program[3].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after base prefetch ops")) {
+    return 1;
+  }
+
+  auto initialize_prefetch_base_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x15u;
+    state->sgprs[7] = 0x01010101u;
+    state->sgprs[8] = 0x11111111u;
+    state->sgprs[9] = 0x22222222u;
+    state->sgprs[11] = 0x33333333u;
+    state->sgprs[12] = 0x44444444u;
+    state->sgprs[13] = 0x55555555u;
+    state->sgprs[20] = 0x66666666u;
+    state->sgprs[21] = 0x77777777u;
+    state->sgprs[22] = 0x88888888u;
+    state->sgprs[23] = 0x99999999u;
+    state->vgprs[9][0] = 0xabcdef01u;
+  };
+  auto expect_prefetch_base_state = [](const WaveExecutionState& state) {
+    return state.lane_count == 32u && state.exec_mask == 0x15u &&
+           state.sgprs[7] == 0x01010101u &&
+           state.sgprs[8] == 0x11111111u &&
+           state.sgprs[9] == 0x22222222u &&
+           state.sgprs[11] == 0x33333333u &&
+           state.sgprs[12] == 0x44444444u &&
+           state.sgprs[13] == 0x55555555u &&
+           state.sgprs[20] == 0x66666666u &&
+           state.sgprs[21] == 0x77777777u &&
+           state.sgprs[22] == 0x88888888u &&
+           state.sgprs[23] == 0x99999999u &&
+           state.vgprs[9][0] == 0xabcdef01u && state.halted &&
+           !state.waiting_on_barrier && state.pc == 3u;
+  };
+
+  WaveExecutionState decoded_prefetch_base_state;
+  initialize_prefetch_base_state(&decoded_prefetch_base_state);
+  if (!Expect(interpreter.ExecuteProgram(prefetch_base_program,
+                                         &decoded_prefetch_base_state,
+                                         &error_message),
+              "expected decoded base prefetch execution success") ||
+      !Expect(expect_prefetch_base_state(decoded_prefetch_base_state),
+              "expected decoded base prefetch state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_prefetch_base_program;
+  if (!Expect(interpreter.CompileProgram(prefetch_base_program,
+                                         &compiled_prefetch_base_program,
+                                         &error_message),
+              "expected compiled base prefetch program success") ||
+      !Expect(compiled_prefetch_base_program.size() == 4u,
+              "expected four compiled base prefetch program instructions") ||
+      !Expect(compiled_prefetch_base_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled S_PREFETCH_INST opcode") ||
+      !Expect(compiled_prefetch_base_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled S_PREFETCH_DATA opcode") ||
+      !Expect(compiled_prefetch_base_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled S_BUFFER_PREFETCH_DATA opcode") ||
+      !Expect(compiled_prefetch_base_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after base prefetch ops")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_prefetch_base_state;
+  initialize_prefetch_base_state(&compiled_prefetch_base_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_prefetch_base_program,
+                                         &compiled_prefetch_base_state,
+                                         &error_message),
+              "expected compiled base prefetch execution success") ||
+      !Expect(expect_prefetch_base_state(compiled_prefetch_base_state),
+              "expected compiled base prefetch state")) {
+    return 1;
+  }
+
+  DecodedInstruction atc_probe_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(atc_probe_words.data(),
+                                                 atc_probe_words.size()),
+                  &atc_probe_instruction, &prefetch_words_consumed,
+                  &error_message),
+              "expected S_ATC_PROBE direct decode success") ||
+      !Expect(ExpectThreeOperandInstruction(atc_probe_instruction,
+                                            "S_ATC_PROBE", OperandKind::kImm32,
+                                            42u, OperandKind::kSgpr, 6u,
+                                            OperandKind::kSgpr, 17u),
+              "expected decoded S_ATC_PROBE operands") ||
+      !Expect(prefetch_words_consumed == 2u,
+              "expected S_ATC_PROBE to consume two dwords") ||
+      !Expect(ExpectOperandDescriptor(
+                  atc_probe_instruction.operands[0], OperandRole::kSource0,
+                  OperandSlotKind::kSource0, OperandValueClass::kUnknown,
+                  OperandAccess::kRead, FragmentKind::kScalar, 8u, 1u, false),
+              "expected S_ATC_PROBE sdata descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  atc_probe_instruction.operands[1], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 64u, 2u, false),
+              "expected S_ATC_PROBE base descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  atc_probe_instruction.operands[2], OperandRole::kSource2,
+                  OperandSlotKind::kSource2,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected S_ATC_PROBE offset descriptor")) {
+    return 1;
+  }
+
+  DecodedInstruction atc_probe_buffer_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(atc_probe_buffer_words.data(),
+                                                 atc_probe_buffer_words.size()),
+                  &atc_probe_buffer_instruction, &prefetch_words_consumed,
+                  &error_message),
+              "expected S_ATC_PROBE_BUFFER direct decode success") ||
+      !Expect(ExpectThreeOperandInstruction(
+                  atc_probe_buffer_instruction, "S_ATC_PROBE_BUFFER",
+                  OperandKind::kImm32, 55u, OperandKind::kSgpr, 10u,
+                  OperandKind::kImm32, 0x1abcdu),
+              "expected decoded S_ATC_PROBE_BUFFER operands") ||
+      !Expect(prefetch_words_consumed == 2u,
+              "expected S_ATC_PROBE_BUFFER to consume two dwords") ||
+      !Expect(ExpectOperandDescriptor(
+                  atc_probe_buffer_instruction.operands[0],
+                  OperandRole::kSource0, OperandSlotKind::kSource0,
+                  OperandValueClass::kUnknown, OperandAccess::kRead,
+                  FragmentKind::kScalar, 8u, 1u, false),
+              "expected S_ATC_PROBE_BUFFER sdata descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  atc_probe_buffer_instruction.operands[1],
+                  OperandRole::kSource1, OperandSlotKind::kSource1,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 128u, 4u, false),
+              "expected S_ATC_PROBE_BUFFER base descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  atc_probe_buffer_instruction.operands[2],
+                  OperandRole::kSource2, OperandSlotKind::kSource2,
+                  OperandValueClass::kUnknown, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected S_ATC_PROBE_BUFFER offset descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 5> atc_probe_program_words{
+      atc_probe_words[0],        atc_probe_words[1],
+      atc_probe_buffer_words[0], atc_probe_buffer_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> atc_probe_program;
+  if (!Expect(decoder.DecodeProgram(atc_probe_program_words, &atc_probe_program,
+                                    &error_message),
+              "expected ATC probe program decode success") ||
+      !Expect(atc_probe_program.size() == 3u,
+              "expected three decoded ATC probe program instructions") ||
+      !Expect(atc_probe_program[0].opcode == "S_ATC_PROBE",
+              "expected decoded S_ATC_PROBE program opcode") ||
+      !Expect(atc_probe_program[1].opcode == "S_ATC_PROBE_BUFFER",
+              "expected decoded S_ATC_PROBE_BUFFER program opcode") ||
+      !Expect(atc_probe_program[2].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after ATC probe ops")) {
+    return 1;
+  }
+
+  auto initialize_atc_probe_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xdu;
+    state->sgprs[6] = 0x11111111u;
+    state->sgprs[7] = 0x22222222u;
+    state->sgprs[17] = 0x33333333u;
+    state->sgprs[10] = 0x44444444u;
+    state->sgprs[11] = 0x55555555u;
+    state->sgprs[12] = 0x66666666u;
+    state->sgprs[13] = 0x77777777u;
+    state->vgprs[4][0] = 0x12345678u;
+  };
+  auto expect_atc_probe_state = [](const WaveExecutionState& state) {
+    return state.lane_count == 32u && state.exec_mask == 0xdu &&
+           state.sgprs[6] == 0x11111111u &&
+           state.sgprs[7] == 0x22222222u &&
+           state.sgprs[17] == 0x33333333u &&
+           state.sgprs[10] == 0x44444444u &&
+           state.sgprs[11] == 0x55555555u &&
+           state.sgprs[12] == 0x66666666u &&
+           state.sgprs[13] == 0x77777777u &&
+           state.vgprs[4][0] == 0x12345678u && state.halted &&
+           !state.waiting_on_barrier && state.pc == 2u;
+  };
+
+  WaveExecutionState decoded_atc_probe_state;
+  initialize_atc_probe_state(&decoded_atc_probe_state);
+  if (!Expect(interpreter.ExecuteProgram(atc_probe_program,
+                                         &decoded_atc_probe_state,
+                                         &error_message),
+              "expected decoded ATC probe execution success") ||
+      !Expect(expect_atc_probe_state(decoded_atc_probe_state),
+              "expected decoded ATC probe state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_atc_probe_program;
+  if (!Expect(interpreter.CompileProgram(atc_probe_program,
+                                         &compiled_atc_probe_program,
+                                         &error_message),
+              "expected compiled ATC probe program success") ||
+      !Expect(compiled_atc_probe_program.size() == 3u,
+              "expected three compiled ATC probe program instructions") ||
+      !Expect(compiled_atc_probe_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled S_ATC_PROBE opcode") ||
+      !Expect(compiled_atc_probe_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled S_ATC_PROBE_BUFFER opcode") ||
+      !Expect(compiled_atc_probe_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after ATC probe ops")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_atc_probe_state;
+  initialize_atc_probe_state(&compiled_atc_probe_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_atc_probe_program,
+                                         &compiled_atc_probe_state,
+                                         &error_message),
+              "expected compiled ATC probe execution success") ||
+      !Expect(expect_atc_probe_state(compiled_atc_probe_state),
+              "expected compiled ATC probe state")) {
     return 1;
   }
 

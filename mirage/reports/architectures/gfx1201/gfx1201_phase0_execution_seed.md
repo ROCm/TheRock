@@ -2,7 +2,7 @@
 
 This report captures the current executable `gfx1201` seed slice layered on top of the
 existing phase-0 compute selector and seed catalog. The local seed surface now covers
-328 executable phase-0 ops without leaving architecture-local `gfx1201` files, and
+333 executable phase-0 ops without leaving architecture-local `gfx1201` files, and
 the local interpreter continues to normalize execution to wave32.
 
 ## Executable opcodes
@@ -10,8 +10,13 @@ the local interpreter continues to normalize execution to wave32.
 - `S_ENDPGM`
 - `S_NOP`
 - `S_DCACHE_INV`
+- `S_PREFETCH_INST`
 - `S_PREFETCH_INST_PC_REL`
+- `S_PREFETCH_DATA`
+- `S_BUFFER_PREFETCH_DATA`
 - `S_PREFETCH_DATA_PC_REL`
+- `S_ATC_PROBE`
+- `S_ATC_PROBE_BUFFER`
 - `S_ADD_U32`
 - `S_ADD_I32`
 - `S_SUB_U32`
@@ -343,7 +348,7 @@ the local interpreter continues to normalize execution to wave32.
 - `ENC_SOPC`: `S_CMP_EQ_I32`, `S_CMP_LG_I32`, `S_CMP_GT_I32`, `S_CMP_EQ_U32`, `S_CMP_LG_U32`, `S_CMP_GE_I32`, `S_CMP_LT_I32`, `S_CMP_LE_I32`, `S_CMP_GT_U32`, `S_CMP_GE_U32`, `S_CMP_LT_U32`, `S_CMP_LE_U32`
 - `ENC_SOP1`: `S_MOV_B32`
 - `ENC_SOPK`: `S_MOVK_I32`
-- `ENC_SMEM`: `S_DCACHE_INV`, `S_PREFETCH_INST_PC_REL`, `S_PREFETCH_DATA_PC_REL`
+- `ENC_SMEM`: `S_DCACHE_INV`, `S_PREFETCH_INST`, `S_PREFETCH_INST_PC_REL`, `S_PREFETCH_DATA`, `S_BUFFER_PREFETCH_DATA`, `S_PREFETCH_DATA_PC_REL`, `S_ATC_PROBE`, `S_ATC_PROBE_BUFFER`
 - `ENC_VOP1`: `V_NOP`, `V_PIPEFLUSH`, `V_MOV_B32`, `V_MOV_B16`, `V_PERMLANE64_B32`, `V_READFIRSTLANE_B32`, `V_MOVRELD_B32`, `V_MOVRELS_B32`, `V_MOVRELSD_B32`, `V_MOVRELSD_2_B32`, `V_SWAPREL_B32`, `V_SWAP_B32`, `V_SWAP_B16`, `V_NOT_B16`, `V_NOT_B32`, `V_BFREV_B32`, `V_CLS_I32`, `V_CLZ_I32_U32`, `V_CTZ_I32_B32`, `V_CVT_F32_UBYTE0`, `V_CVT_F32_UBYTE1`, `V_CVT_F32_UBYTE2`, `V_CVT_F32_UBYTE3`, `V_CVT_F32_I32`, `V_CVT_F32_U32`, `V_CVT_F32_FP8`, `V_CVT_F32_BF8`, `V_CVT_PK_F32_FP8`, `V_CVT_PK_F32_BF8`, `V_CVT_OFF_F32_I4`, `V_CVT_F32_F16`, `V_CVT_F32_F64`, `V_CVT_F16_F32`, `V_CVT_F16_I16`, `V_CVT_F16_U16`, `V_CVT_I16_F16`, `V_CVT_U16_F16`, `V_SAT_PK_U8_I16`, `V_CVT_NORM_I16_F16`, `V_CVT_NORM_U16_F16`, `V_CVT_F64_F32`, `V_CVT_F64_I32`, `V_CVT_F64_U32`, `V_CVT_U32_F32`, `V_CVT_U32_F64`, `V_CVT_I32_F32`, `V_CVT_FLOOR_I32_F32`, `V_CVT_NEAREST_I32_F32`, `V_CVT_I32_I16`, `V_CVT_U32_U16`, `V_CVT_I32_F64`, `V_EXP_F32`, `V_LOG_F32`, `V_RCP_F32`, `V_RCP_IFLAG_F32`, `V_RSQ_F32`, `V_SQRT_F32`, `V_SIN_F32`, `V_COS_F32`, `V_RCP_F64`, `V_RSQ_F64`, `V_SQRT_F64`, `V_FREXP_EXP_I32_F32`, `V_FREXP_MANT_F32`, `V_FRACT_F32`, `V_FREXP_EXP_I32_F64`, `V_FREXP_MANT_F64`, `V_FRACT_F64`, `V_TRUNC_F32`, `V_CEIL_F32`, `V_RNDNE_F32`, `V_FLOOR_F32`, `V_TRUNC_F64`, `V_CEIL_F64`, `V_RNDNE_F64`, `V_FLOOR_F64`, `V_EXP_F16`, `V_LOG_F16`, `V_RCP_F16`, `V_RSQ_F16`, `V_SQRT_F16`, `V_SIN_F16`, `V_COS_F16`, `V_FREXP_EXP_I16_F16`, `V_FREXP_MANT_F16`, `V_FRACT_F16`, `V_TRUNC_F16`, `V_CEIL_F16`, `V_RNDNE_F16`, `V_FLOOR_F16`
 - `ENC_VOP2`: `V_ADD_F16`, `V_SUB_F16`, `V_SUBREV_F16`, `V_MUL_F16`, `V_FMAC_F16`, `V_FMAMK_F16`, `V_FMAAK_F16`, `V_PK_FMAC_F16`, `V_CVT_PK_RTZ_F16_F32`, `V_LDEXP_F16`, `V_MIN_NUM_F16`, `V_MAX_NUM_F16`, `V_ADD_F32`, `V_SUB_F32`, `V_SUBREV_F32`, `V_MUL_F32`, `V_MUL_DX9_ZERO_F32`, `V_FMAC_F32`, `V_MIN_NUM_F32`, `V_MAX_NUM_F32`, `V_ADD_F64`, `V_MUL_F64`, `V_MIN_NUM_F64`, `V_MAX_NUM_F64`, `V_XNOR_B32`, `V_MUL_I32_I24`, `V_MUL_HI_I32_I24`, `V_MUL_U32_U24`, `V_MUL_HI_U32_U24`, `V_LSHLREV_B64`, `V_ADD_CO_CI_U32`, `V_SUB_CO_CI_U32`, `V_SUBREV_CO_CI_U32`, imported `V_ADD_NC_U32`, `V_SUB_NC_U32`, `V_SUBREV_NC_U32` normalized to `V_ADD_U32`, `V_SUB_U32`, `V_SUBREV_U32`; plus `V_MIN_I32`, `V_MAX_I32`, `V_MIN_U32`, `V_MAX_U32`, `V_CNDMASK_B32`, `V_LSHRREV_B32`, `V_ASHRREV_I32`, `V_LSHLREV_B32`, `V_AND_B32`, `V_OR_B32`, `V_XOR_B32`
 - `ENC_VOPC`: `V_CMP_EQ/NE/LT/LE/GT/GE_I32`, `V_CMP_EQ/NE/LT/LE/GT/GE_U32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_I32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_U32`, the local 16-bit integer subset `V_CMP_EQ/NE/LT/LE/GT/GE_I16/U16` and `V_CMPX_EQ/NE/LT/LE/GT/GE_I16/U16`, the local wide integer subset `V_CMP_EQ/NE/LT/LE/GT/GE_I64/U64` and `V_CMPX_EQ/NE/LT/LE/GT/GE_I64/U64`, the local F16 compare/class subset now brought onto the same path: `V_CMP_CLASS_F16`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F16`, `V_CMPX_CLASS_F16`, and `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F16`, the full local F32 compare/class subset currently present in the 1-dword seed path, and the local F64 compare/class subset now brought onto the same path: `V_CMP_CLASS_F64`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64`, `V_CMPX_CLASS_F64`, and `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64`
@@ -357,7 +362,9 @@ the local interpreter continues to normalize execution to wave32.
 - The full 32-bit `SOPC` compare set now decodes locally: `S_CMP_EQ/LG/GT/GE/LT/LE` across signed and unsigned `U32/I32` forms.
 - `S_BRANCH`, `S_CBRANCH_SCC0`, `S_CBRANCH_SCC1`, `S_CBRANCH_VCCZ`, `S_CBRANCH_VCCNZ`, `S_CBRANCH_EXECZ`, and `S_CBRANCH_EXECNZ` decode from `ENC_SOPP` with sign-extended relative deltas.
 - `S_DCACHE_INV` now decodes from `ENC_SMEM` as the first local scalar-memory executable foothold, consuming the full two-dword `SMEM` route while remaining a nullary cache-hint op on the current path.
+- `S_PREFETCH_INST`, `S_PREFETCH_DATA`, and `S_BUFFER_PREFETCH_DATA` now decode from `ENC_SMEM` as operand-carrying base-address cache-hint seeds, keeping their `SBASE`, `IOFFSET`, `SOFFSET`, and `SDATA` fields local to the phase-0 path while explicitly tracking 64-bit and 128-bit scalar base descriptors.
 - `S_PREFETCH_INST_PC_REL` and `S_PREFETCH_DATA_PC_REL` now decode from `ENC_SMEM` as operand-carrying PC-relative cache-hint seeds, keeping their `IOFFSET`, `SOFFSET`, and `SDATA` fields local to the phase-0 path without widening shared scalar-memory state.
+- `S_ATC_PROBE` and `S_ATC_PROBE_BUFFER` now decode from `ENC_SMEM` as operand-carrying scalar cache-probe hints, keeping their `SDATA`, `SBASE`, and `SOFFSET` fields architecture-local while explicitly tracking 64-bit and 128-bit scalar base descriptors on the current path.
 - `S_MOV_B32` and `V_MOV_B32` accept SGPR sources, inline integer sources, and literal dwords.
 - `V_NOT_B32`, `V_BFREV_B32`, `V_CLS_I32`, `V_CLZ_I32_U32`, `V_CTZ_I32_B32`, and `V_CVT_F32_UBYTE0/1/2/3` decode from `ENC_VOP1` on the same source path as `V_MOV_B32`.
 - `V_NOP` now decodes from `ENC_VOP1` as a nullary wave32-local no-op on the current seed path.
@@ -411,7 +418,9 @@ the local interpreter continues to normalize execution to wave32.
 - Scalar compare updates `SCC` across the full local 32-bit signed/unsigned compare set.
 - `S_BRANCH`, `S_CBRANCH_SCC0`, `S_CBRANCH_SCC1`, `S_CBRANCH_VCCZ`, `S_CBRANCH_VCCNZ`, `S_CBRANCH_EXECZ`, and `S_CBRANCH_EXECNZ` update `pc` on the compiled seed path using relative instruction deltas.
 - `S_DCACHE_INV` now executes as a wave32-local no-op cache invalidation hint on both the decoded and compiled seed paths, establishing the first local `ENC_SMEM` foothold without widening shared memory state.
+- `S_PREFETCH_INST`, `S_PREFETCH_DATA`, and `S_BUFFER_PREFETCH_DATA` now execute as wave32-local no-op scalar-memory prefetch hints on both the decoded and compiled seed paths, extending the local `ENC_SMEM` foothold while keeping base-address memory semantics architecture-local.
 - `S_PREFETCH_INST_PC_REL` and `S_PREFETCH_DATA_PC_REL` now execute as wave32-local no-op scalar-memory prefetch hints on both the decoded and compiled seed paths, deepening the local `ENC_SMEM` foothold while keeping address semantics architecture-local.
+- `S_ATC_PROBE` and `S_ATC_PROBE_BUFFER` now execute as wave32-local no-op scalar cache-probe hints on both the decoded and compiled seed paths, extending the local `ENC_SMEM` foothold without committing to shared scalar-memory dataflow semantics.
 - Scalar add/sub updates `SCC` using the imported carry/borrow behavior.
 - `V_MOV_B32` execution respects `exec_mask`.
 - `V_NOP` now executes as a wave32-local no-op on both the decoded and compiled seed paths.
@@ -469,8 +478,8 @@ the local interpreter continues to normalize execution to wave32.
 
 - Route-matched but non-executable phase-0 compute instructions continue to fail with
   the existing selector-aware stub errors.
-- `ENC_SMEM` is now partially bootstrapped through `S_DCACHE_INV`, `S_PREFETCH_INST_PC_REL`, and `S_PREFETCH_DATA_PC_REL`, but the remaining `25` scalar-memory seed instructions stay scaffolded.
+- `ENC_SMEM` is now partially bootstrapped through `S_DCACHE_INV`, `S_PREFETCH_INST`, `S_PREFETCH_INST_PC_REL`, `S_PREFETCH_DATA`, `S_BUFFER_PREFETCH_DATA`, `S_PREFETCH_DATA_PC_REL`, `S_ATC_PROBE`, and `S_ATC_PROBE_BUFFER`, but the remaining `20` scalar-memory seed instructions stay scaffolded.
 - `ENC_VOP3`, `ENC_VDS`, and `ENC_VGLOBAL` remain route-only in this slice.
 - The remaining `ENC_VOPC` surface outside this seed is now primarily packed and other wider forms not yet on the current local path.
 - The current wave32-local `ENC_VOP1`, `ENC_VOP2`, and `ENC_VOPC` seed surface is saturated: all currently seeded instruction/encoding pairs are executable on the local path.
-- The next coherent extension points now deepen `ENC_SMEM` beyond the current cache-hint footholds, or move into `ENC_VOP3`, `ENC_VDS`, and `ENC_VGLOBAL`, rather than more narrow `VOP1`/`VOP2`/`VOPC` seed churn.
+- The next coherent extension points now deepen `ENC_SMEM` beyond the current cache-hint/probe footholds, or move into `ENC_VOP3`, `ENC_VDS`, and `ENC_VGLOBAL`, rather than more narrow `VOP1`/`VOP2`/`VOPC` seed churn.
