@@ -10,7 +10,7 @@ endif()
 
 # Disable composable kernel on GPU families that are explicitly unsupported
 if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
-  set(_ck_unsupported_gfx_targets gfx906 gfx1010 gfx1011 gfx1012 gfx1033)
+  set(_ck_unsupported_gfx_targets gfx900 gfx906 gfx1010 gfx1011 gfx1012 gfx1030 gfx1031 gfx1032 gfx1033 gfx1034)
   set(_ck_is_unsupported OFF)
   foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
     if(_gfx_target IN_LIST _ck_unsupported_gfx_targets)

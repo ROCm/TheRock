@@ -8,10 +8,13 @@
 # New patches are strongly discouraged. See patches/README.md.
 /patches/               @ScottTodd @marbre
 
+# This is for _github actions APIs_, not a general dumping ground for random utils.
+/build_tools/github_actions/github_actions_utils.py     @ScottTodd
+
 # Debug tools configs and ROCgdb cmake wrapper.
-/debug-tools            @ROCm/TheRock-infra-write @ROCm-DevTools-Debugger
-/debig-tools/rocgdb     @ROCm/TheRock-infra-write @ROCm-DevTools-Debugger
+/debug-tools            @ROCm/TheRock-infra-write @ROCm/ROCm-DevTools-Debugger
+/debug-tools/rocgdb     @ROCm/TheRock-infra-write @ROCm/ROCm-DevTools-Debugger
 
 # Debug tools testing scripts.
-/build_tools/github_actions/test_executable_scripts/test_rocgdb.py           @ROCm-DevTools-Debugger
-/build_tools/github_actions/test_executable_scripts/test_rocr-debug-agent.py @ROCm-DevTools-Debugger
+/build_tools/github_actions/test_executable_scripts/test_rocgdb.py           @ROCm/ROCm-DevTools-Debugger
+/build_tools/github_actions/test_executable_scripts/test_rocr-debug-agent.py @ROCm/ROCm-DevTools-Debugger

@@ -189,7 +189,7 @@ jobs:
       EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
       THEROCK_BUILD_PROF_LOG_DIR: ${{ github.workspace }}/output/build/logs/therock-build-prof
       CCACHE_DIR: ${{ github.workspace }}/output/caches/ccache
-      PIP_CACHE_DIR: ${{ github.workspace }}/output/caches/pip
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
 
     steps:
       - name: "Checking out repository"
@@ -206,19 +206,19 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
+      # Set up ccache with a custom configuration.
+      - name: Setup ccache
+        env:
+          CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
+        run: |
+          ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-${{ env.CI_TYPE }}" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CCACHE_DIR"
+
       - name: Runner health status
         run: |
           ./build_tools/health_status.py
-
-      # TODO: We shouldn't be using a cache on actual release branches, but it
-      # really helps for iteration time.
-      - name: Enable cache
-        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: ${{ env.OUTPUT_DIR }}/caches
-          key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
-          restore-keys: |
-            portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
 
       - name: Install the AWS tool
         run: ./dockerfiles/install_awscli.sh
@@ -245,6 +245,7 @@ jobs:
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
+          ccache -s
 
       - name: Build Python Packages
         run: |
@@ -393,10 +394,3 @@ jobs:
               "ref": "${{ inputs.ref || '' }}",
               "native_package_type": "deb"
             }
-
-      - name: Save cache
-        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        if: ${{ !cancelled() }}
-        with:
-          path: ${{ env.OUTPUT_DIR }}/caches
-          key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}

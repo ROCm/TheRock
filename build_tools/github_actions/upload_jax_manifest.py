@@ -16,6 +16,11 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import create_storage_backend
 
+from github_actions.manifest_utils import (
+    normalize_python_version_for_filename,
+    normalize_ref_for_filename,
+)
+
 
 PLATFORM = platform.system().lower()
 
@@ -23,30 +28,6 @@ PLATFORM = platform.system().lower()
 def _log(*args: object) -> None:
     print(*args)
     sys.stdout.flush()
-
-
-def normalize_python_version_for_filename(python_version: str) -> str:
-    """Normalize python version strings for filenames.
-
-    Examples:
-      "py3.12" -> "3.12"
-      "3.12"   -> "3.12"
-    """
-    py = python_version.strip()
-    if py.startswith("py"):
-        py = py[2:]
-    return py
-
-
-def sanitize_ref_for_filename(jax_git_ref: str) -> str:
-    """Sanitize a git ref for filenames by replacing '/' with '-'.
-
-    Examples:
-      "nightly"                -> "nightly"
-      "release/0.4.28"         -> "release-0.4.28"
-      "users/alice/experiment" -> "users-alice-experiment"
-    """
-    return jax_git_ref.replace("/", "-")
 
 
 def _make_output_root(
@@ -121,7 +102,7 @@ def main(argv: list[str]) -> None:
     args = parse_args(argv)
 
     py = normalize_python_version_for_filename(args.python_version)
-    track = sanitize_ref_for_filename(args.jax_git_ref)
+    track = normalize_ref_for_filename(args.jax_git_ref)
 
     manifest_name = f"therock-manifest_jax_py{py}_{track}.json"
     manifest_path = (args.dist_dir / "manifests" / manifest_name).resolve()

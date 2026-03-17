@@ -15,7 +15,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO)
 
-SMOKE_TESTS = [
+QUICK_TESTS = [
     "AllocatorTests.*",
     "AsyncExclusiveScan*",
     "AsyncInclusiveScan*",
@@ -138,12 +138,12 @@ cmd = [
     "300",
 ]
 
-# If smoke tests are enabled, we run smoke tests only.
+# If quick tests are enabled, we run quick tests only.
 # Otherwise, we run the normal test suite
 environ_vars = os.environ.copy()
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
-    environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS)
+if test_type == "quick":
+    environ_vars["GTEST_FILTER"] = ":".join(QUICK_TESTS)
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
