@@ -45,7 +45,7 @@ float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 std::uint16_t CompressFloatToFp16BitsRtz(float value);
 
-constexpr std::array<std::string_view, 343> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 353> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -62,10 +62,20 @@ constexpr std::array<std::string_view, 343> kExecutableSeedOpcodes{{
     "S_LOAD_B128",
     "S_LOAD_B256",
     "S_LOAD_B512",
+    "S_BUFFER_LOAD_B32",
+    "S_BUFFER_LOAD_B64",
+    "S_BUFFER_LOAD_B96",
+    "S_BUFFER_LOAD_B128",
+    "S_BUFFER_LOAD_B256",
+    "S_BUFFER_LOAD_B512",
     "S_LOAD_I8",
     "S_LOAD_U8",
     "S_LOAD_I16",
     "S_LOAD_U16",
+    "S_BUFFER_LOAD_I8",
+    "S_BUFFER_LOAD_U8",
+    "S_BUFFER_LOAD_I16",
+    "S_BUFFER_LOAD_U16",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -913,6 +923,30 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kSLoadB512;
     return true;
   }
+  if (opcode == "S_BUFFER_LOAD_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSBufferLoadB32;
+    return true;
+  }
+  if (opcode == "S_BUFFER_LOAD_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSBufferLoadB64;
+    return true;
+  }
+  if (opcode == "S_BUFFER_LOAD_B96") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSBufferLoadB96;
+    return true;
+  }
+  if (opcode == "S_BUFFER_LOAD_B128") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSBufferLoadB128;
+    return true;
+  }
+  if (opcode == "S_BUFFER_LOAD_B256") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSBufferLoadB256;
+    return true;
+  }
+  if (opcode == "S_BUFFER_LOAD_B512") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSBufferLoadB512;
+    return true;
+  }
   if (opcode == "S_LOAD_I8") {
     *compiled_opcode = Gfx1201CompiledOpcode::kSLoadI8;
     return true;
@@ -927,6 +961,22 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "S_LOAD_U16") {
     *compiled_opcode = Gfx1201CompiledOpcode::kSLoadU16;
+    return true;
+  }
+  if (opcode == "S_BUFFER_LOAD_I8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSBufferLoadI8;
+    return true;
+  }
+  if (opcode == "S_BUFFER_LOAD_U8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSBufferLoadU8;
+    return true;
+  }
+  if (opcode == "S_BUFFER_LOAD_I16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSBufferLoadI16;
+    return true;
+  }
+  if (opcode == "S_BUFFER_LOAD_U16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSBufferLoadU16;
     return true;
   }
   if (opcode == "S_PREFETCH_INST_PC_REL" ||
@@ -2570,6 +2620,145 @@ bool ComputeSmemAddress(const DecodedInstruction& instruction,
   return true;
 }
 
+bool ComputeSmemBufferAddress(const DecodedInstruction& instruction,
+                              const WaveExecutionState& state,
+                              std::uint64_t* address,
+                              std::string* error_message) {
+  if (address == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "SMEM buffer address output must not be null";
+    }
+    return false;
+  }
+
+  const std::uint64_t base =
+      ReadWideSourceOperand(instruction.operands[1], state, 0, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+  const std::uint32_t raw_ioffset =
+      ReadScalarOperand(instruction.operands[2], state, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+  const std::uint32_t raw_soffset =
+      ReadScalarOperand(instruction.operands[3], state, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+
+  const std::int64_t signed_offset =
+      static_cast<std::int64_t>(static_cast<std::int32_t>(raw_ioffset)) +
+      static_cast<std::int64_t>(static_cast<std::int32_t>(raw_soffset));
+  *address = base + static_cast<std::uint64_t>(signed_offset);
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool ExecuteScalarSmemLoadAtAddress(const DecodedInstruction& instruction,
+                                    std::uint64_t address,
+                                    WaveExecutionState* state,
+                                    ExecutionMemory* memory,
+                                    std::string* error_message) {
+  const std::string_view opcode = instruction.opcode;
+
+  if (opcode == "S_LOAD_B32" || opcode == "S_BUFFER_LOAD_B32") {
+    std::uint32_t value = 0;
+    if (!memory->LoadU32(address, &value)) {
+      if (error_message != nullptr) {
+        *error_message = std::string(opcode) + " memory read failed";
+      }
+      return false;
+    }
+    return WriteScalarOperand(instruction.operands[0], value, state,
+                              error_message);
+  }
+
+  if (opcode == "S_LOAD_B64" || opcode == "S_BUFFER_LOAD_B64") {
+    std::uint32_t low = 0;
+    std::uint32_t high = 0;
+    if (!memory->LoadU32(address, &low) ||
+        !memory->LoadU32(address + 4u, &high)) {
+      if (error_message != nullptr) {
+        *error_message = std::string(opcode) + " memory read failed";
+      }
+      return false;
+    }
+    return WriteWideScalarOperand(
+        instruction.operands[0],
+        static_cast<std::uint64_t>(low) |
+            (static_cast<std::uint64_t>(high) << 32),
+        state, error_message);
+  }
+
+  if (opcode == "S_LOAD_B96" || opcode == "S_BUFFER_LOAD_B96" ||
+      opcode == "S_LOAD_B128" || opcode == "S_BUFFER_LOAD_B128" ||
+      opcode == "S_LOAD_B256" || opcode == "S_BUFFER_LOAD_B256" ||
+      opcode == "S_LOAD_B512" || opcode == "S_BUFFER_LOAD_B512") {
+    std::size_t word_count = 0;
+    if (opcode == "S_LOAD_B96" || opcode == "S_BUFFER_LOAD_B96") {
+      word_count = 3u;
+    } else if (opcode == "S_LOAD_B128" || opcode == "S_BUFFER_LOAD_B128") {
+      word_count = 4u;
+    } else if (opcode == "S_LOAD_B256" || opcode == "S_BUFFER_LOAD_B256") {
+      word_count = 8u;
+    } else {
+      word_count = 16u;
+    }
+
+    std::array<std::uint32_t, 16> values{};
+    for (std::size_t i = 0; i < word_count; ++i) {
+      if (!memory->LoadU32(address + static_cast<std::uint64_t>(i * 4u),
+                           &values[i])) {
+        if (error_message != nullptr) {
+          *error_message = std::string(opcode) + " memory read failed";
+        }
+        return false;
+      }
+    }
+
+    return WriteScalarOperandSequence(
+        instruction.operands[0],
+        std::span<const std::uint32_t>(values.data(), word_count), state,
+        error_message);
+  }
+
+  if (opcode == "S_LOAD_I8" || opcode == "S_BUFFER_LOAD_I8" ||
+      opcode == "S_LOAD_U8" || opcode == "S_BUFFER_LOAD_U8") {
+    std::uint8_t value = 0;
+    if (!memory->LoadU8(address, &value)) {
+      if (error_message != nullptr) {
+        *error_message = std::string(opcode) + " memory read failed";
+      }
+      return false;
+    }
+    const std::uint32_t extended =
+        (opcode == "S_LOAD_I8" || opcode == "S_BUFFER_LOAD_I8")
+            ? static_cast<std::uint32_t>(
+                  static_cast<std::int32_t>(static_cast<std::int8_t>(value)))
+            : static_cast<std::uint32_t>(value);
+    return WriteScalarOperand(instruction.operands[0], extended, state,
+                              error_message);
+  }
+
+  std::uint16_t value = 0;
+  if (!memory->LoadU16(address, &value)) {
+    if (error_message != nullptr) {
+      *error_message = std::string(opcode) + " memory read failed";
+    }
+    return false;
+  }
+  const std::uint32_t extended =
+      (opcode == "S_LOAD_I16" || opcode == "S_BUFFER_LOAD_I16")
+          ? static_cast<std::uint32_t>(
+                static_cast<std::int32_t>(static_cast<std::int16_t>(value)))
+          : static_cast<std::uint32_t>(value);
+  return WriteScalarOperand(instruction.operands[0], extended, state,
+                            error_message);
+}
+
 bool WriteWideVectorOperand(const InstructionOperand& operand,
                             std::size_t lane_index,
                             std::uint64_t value,
@@ -4148,99 +4337,38 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     if (!ComputeSmemAddress(instruction, *state, &address, error_message)) {
       return false;
     }
+    return ExecuteScalarSmemLoadAtAddress(instruction, address, state, memory,
+                                          error_message);
+  }
 
-    if (instruction.opcode == "S_LOAD_B32") {
-      std::uint32_t value = 0;
-      if (!memory->LoadU32(address, &value)) {
-        if (error_message != nullptr) {
-          *error_message = "S_LOAD_B32 memory read failed";
-        }
-        return false;
-      }
-      return WriteScalarOperand(instruction.operands[0], value, state,
-                                error_message);
+  if (instruction.opcode == "S_BUFFER_LOAD_B32" ||
+      instruction.opcode == "S_BUFFER_LOAD_B64" ||
+      instruction.opcode == "S_BUFFER_LOAD_B96" ||
+      instruction.opcode == "S_BUFFER_LOAD_B128" ||
+      instruction.opcode == "S_BUFFER_LOAD_B256" ||
+      instruction.opcode == "S_BUFFER_LOAD_B512" ||
+      instruction.opcode == "S_BUFFER_LOAD_I8" ||
+      instruction.opcode == "S_BUFFER_LOAD_U8" ||
+      instruction.opcode == "S_BUFFER_LOAD_I16" ||
+      instruction.opcode == "S_BUFFER_LOAD_U16") {
+    if (!ValidateOperandCount(instruction, 4, error_message)) {
+      return false;
     }
-    if (instruction.opcode == "S_LOAD_B64") {
-      std::uint32_t low = 0;
-      std::uint32_t high = 0;
-      if (!memory->LoadU32(address, &low) || !memory->LoadU32(address + 4u, &high)) {
-        if (error_message != nullptr) {
-          *error_message = "S_LOAD_B64 memory read failed";
-        }
-        return false;
-      }
-      return WriteWideScalarOperand(
-          instruction.operands[0],
-          static_cast<std::uint64_t>(low) |
-              (static_cast<std::uint64_t>(high) << 32),
-          state, error_message);
-    }
-    if (instruction.opcode == "S_LOAD_B96" ||
-        instruction.opcode == "S_LOAD_B128" ||
-        instruction.opcode == "S_LOAD_B256" ||
-        instruction.opcode == "S_LOAD_B512") {
-      std::size_t word_count = 0;
-      if (instruction.opcode == "S_LOAD_B96") {
-        word_count = 3u;
-      } else if (instruction.opcode == "S_LOAD_B128") {
-        word_count = 4u;
-      } else if (instruction.opcode == "S_LOAD_B256") {
-        word_count = 8u;
-      } else {
-        word_count = 16u;
-      }
-
-      std::array<std::uint32_t, 16> values{};
-      for (std::size_t i = 0; i < word_count; ++i) {
-        if (!memory->LoadU32(address + static_cast<std::uint64_t>(i * 4u),
-                             &values[i])) {
-          if (error_message != nullptr) {
-            *error_message = std::string(instruction.opcode) +
-                             " memory read failed";
-          }
-          return false;
-        }
-      }
-
-      return WriteScalarOperandSequence(
-          instruction.operands[0],
-          std::span<const std::uint32_t>(values.data(), word_count), state,
-          error_message);
-    }
-    if (instruction.opcode == "S_LOAD_I8" ||
-        instruction.opcode == "S_LOAD_U8") {
-      std::uint8_t value = 0;
-      if (!memory->LoadU8(address, &value)) {
-        if (error_message != nullptr) {
-          *error_message = std::string(instruction.opcode) +
-                           " memory read failed";
-        }
-        return false;
-      }
-      const std::uint32_t extended =
-          instruction.opcode == "S_LOAD_I8"
-              ? static_cast<std::uint32_t>(
-                    static_cast<std::int32_t>(static_cast<std::int8_t>(value)))
-              : static_cast<std::uint32_t>(value);
-      return WriteScalarOperand(instruction.operands[0], extended, state,
-                                error_message);
-    }
-
-    std::uint16_t value = 0;
-    if (!memory->LoadU16(address, &value)) {
+    if (memory == nullptr) {
       if (error_message != nullptr) {
         *error_message = std::string(instruction.opcode) +
-                         " memory read failed";
+                         " requires execution memory";
       }
       return false;
     }
-    const std::uint32_t extended =
-        instruction.opcode == "S_LOAD_I16"
-            ? static_cast<std::uint32_t>(
-                  static_cast<std::int32_t>(static_cast<std::int16_t>(value)))
-            : static_cast<std::uint32_t>(value);
-    return WriteScalarOperand(instruction.operands[0], extended, state,
-                              error_message);
+
+    std::uint64_t address = 0;
+    if (!ComputeSmemBufferAddress(instruction, *state, &address,
+                                  error_message)) {
+      return false;
+    }
+    return ExecuteScalarSmemLoadAtAddress(instruction, address, state, memory,
+                                          error_message);
   }
 
   if (instruction.opcode == "V_NOP" ||
@@ -5162,10 +5290,20 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kSLoadB128:
     case Gfx1201CompiledOpcode::kSLoadB256:
     case Gfx1201CompiledOpcode::kSLoadB512:
+    case Gfx1201CompiledOpcode::kSBufferLoadB32:
+    case Gfx1201CompiledOpcode::kSBufferLoadB64:
+    case Gfx1201CompiledOpcode::kSBufferLoadB96:
+    case Gfx1201CompiledOpcode::kSBufferLoadB128:
+    case Gfx1201CompiledOpcode::kSBufferLoadB256:
+    case Gfx1201CompiledOpcode::kSBufferLoadB512:
     case Gfx1201CompiledOpcode::kSLoadI8:
     case Gfx1201CompiledOpcode::kSLoadU8:
     case Gfx1201CompiledOpcode::kSLoadI16:
     case Gfx1201CompiledOpcode::kSLoadU16:
+    case Gfx1201CompiledOpcode::kSBufferLoadI8:
+    case Gfx1201CompiledOpcode::kSBufferLoadU8:
+    case Gfx1201CompiledOpcode::kSBufferLoadI16:
+    case Gfx1201CompiledOpcode::kSBufferLoadU16:
     case Gfx1201CompiledOpcode::kSAddU32:
     case Gfx1201CompiledOpcode::kSAddI32:
     case Gfx1201CompiledOpcode::kSSubU32:

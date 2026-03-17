@@ -189,6 +189,24 @@ std::array<std::uint32_t, 2> MakeSmemBasePrefetch(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeSmemBufferLoad(std::uint32_t op,
+                                                std::uint32_t sdst,
+                                                std::uint32_t sbase_start,
+                                                std::int32_t ioffset,
+                                                std::uint32_t soffset) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x30u) << 26;
+  word |= static_cast<std::uint64_t>(sbase_start >> 1);
+  word |= static_cast<std::uint64_t>(sdst) << 6;
+  word |= static_cast<std::uint64_t>(op & 0xffu) << 18;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(ioffset) &
+                                     0x00ffffffu)
+          << 32;
+  word |= static_cast<std::uint64_t>(soffset & 0x7fu) << 57;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 std::array<std::uint32_t, 2> MakeDs(std::uint32_t op,
                                     std::uint32_t vdst,
                                     std::uint32_t addr,
@@ -331,6 +349,7 @@ int main() {
   const auto dcache_inv_words = MakeSmem(33u, 0u, 0u, true, 0u);
   const auto load_b64_words = MakeSmem(1u, 12u, 8u, false, 31u, true);
   const auto load_b128_words = MakeSmem(2u, 20u, 10u, true, 16u);
+  const auto buffer_load_b32_words = MakeSmemBufferLoad(16u, 24u, 12u, 20, 17u);
   const auto prefetch_inst_words = MakeSmemBasePrefetch(36u, 8u, -16, 11u, -4);
   const auto atc_probe_words = MakeSmem(34u, 42u, 6u, false, 17u, true);
   const auto atc_probe_buffer_words = MakeSmem(35u, 55u, 10u, true, 0x1abcdu);
@@ -667,6 +686,20 @@ int main() {
               "expected decoded S_LOAD_B128 operand count") ||
       !Expect(words_consumed == 2u,
               "expected two consumed dwords for S_LOAD_B128")) {
+    return 1;
+  }
+
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(buffer_load_b32_words.data(),
+                                                 buffer_load_b32_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_BUFFER_LOAD_B32 decode success after route") ||
+      !Expect(decoded_instruction.opcode == "S_BUFFER_LOAD_B32",
+              "expected decoded S_BUFFER_LOAD_B32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 4u,
+              "expected decoded S_BUFFER_LOAD_B32 operand count") ||
+      !Expect(words_consumed == 2u,
+              "expected two consumed dwords for S_BUFFER_LOAD_B32")) {
     return 1;
   }
 

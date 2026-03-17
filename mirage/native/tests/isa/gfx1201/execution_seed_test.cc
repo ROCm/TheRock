@@ -216,6 +216,24 @@ std::array<std::uint32_t, 2> MakeSmemBasePrefetch(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeSmemBufferLoad(std::uint32_t op,
+                                                std::uint32_t sdst,
+                                                std::uint32_t sbase_start,
+                                                std::int32_t ioffset,
+                                                std::uint32_t soffset) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x30u) << 26;
+  word |= static_cast<std::uint64_t>(sbase_start >> 1);
+  word |= static_cast<std::uint64_t>(sdst) << 6;
+  word |= static_cast<std::uint64_t>(op & 0xffu) << 18;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(ioffset) &
+                                     0x00ffffffu)
+          << 32;
+  word |= static_cast<std::uint64_t>(soffset & 0x7fu) << 57;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 bool ExpectUnaryInstruction(const mirage::sim::isa::DecodedInstruction& instruction,
                             std::string_view expected_opcode,
                             mirage::sim::isa::OperandKind dst_kind,
@@ -7263,6 +7281,340 @@ int main() {
               "expected compiled SMEM load execution success") ||
       !Expect(expect_smem_load_state(compiled_smem_load_state),
               "expected compiled SMEM load state")) {
+    return 1;
+  }
+
+  const auto buffer_load_b32_words = MakeSmemBufferLoad(16u, 76u, 40u, 4, 30u);
+  const auto buffer_load_b64_words = MakeSmemBufferLoad(17u, 77u, 44u, 8, 31u);
+  const auto buffer_load_b96_words = MakeSmemBufferLoad(21u, 79u, 48u, 16, 32u);
+  const auto buffer_load_b128_words =
+      MakeSmemBufferLoad(18u, 82u, 52u, 12, 33u);
+  const auto buffer_load_b256_words =
+      MakeSmemBufferLoad(19u, 86u, 56u, 24, 34u);
+  const auto buffer_load_b512_words =
+      MakeSmemBufferLoad(20u, 94u, 60u, 28, 35u);
+  const auto buffer_load_i8_words = MakeSmemBufferLoad(24u, 72u, 64u, 0, 36u);
+  const auto buffer_load_u8_words = MakeSmemBufferLoad(25u, 73u, 64u, 1, 36u);
+  const auto buffer_load_i16_words =
+      MakeSmemBufferLoad(26u, 74u, 64u, 2, 36u);
+  const auto buffer_load_u16_words =
+      MakeSmemBufferLoad(27u, 75u, 64u, 4, 36u);
+
+  DecodedInstruction buffer_load_b32_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(buffer_load_b32_words.data(),
+                                                 buffer_load_b32_words.size()),
+                  &buffer_load_b32_instruction, &load_words_consumed,
+                  &error_message),
+              "expected S_BUFFER_LOAD_B32 direct decode success") ||
+      !Expect(ExpectFourOperandInstruction(
+                  buffer_load_b32_instruction, "S_BUFFER_LOAD_B32",
+                  OperandKind::kSgpr, 76u, OperandKind::kSgpr, 40u,
+                  OperandKind::kImm32, 4u, OperandKind::kSgpr, 30u),
+              "expected decoded S_BUFFER_LOAD_B32 operands") ||
+      !Expect(load_words_consumed == 2u,
+              "expected S_BUFFER_LOAD_B32 to consume two dwords") ||
+      !Expect(ExpectOperandDescriptor(
+                  buffer_load_b32_instruction.operands[1],
+                  OperandRole::kSource0, OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 128u, 4u, false),
+              "expected S_BUFFER_LOAD_B32 base descriptor")) {
+    return 1;
+  }
+
+  DecodedInstruction buffer_load_b128_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(buffer_load_b128_words.data(),
+                                                 buffer_load_b128_words.size()),
+                  &buffer_load_b128_instruction, &load_words_consumed,
+                  &error_message),
+              "expected S_BUFFER_LOAD_B128 direct decode success") ||
+      !Expect(ExpectFourOperandInstruction(
+                  buffer_load_b128_instruction, "S_BUFFER_LOAD_B128",
+                  OperandKind::kSgpr, 82u, OperandKind::kSgpr, 52u,
+                  OperandKind::kImm32, 12u, OperandKind::kSgpr, 33u),
+              "expected decoded S_BUFFER_LOAD_B128 operands") ||
+      !Expect(load_words_consumed == 2u,
+              "expected S_BUFFER_LOAD_B128 to consume two dwords") ||
+      !Expect(ExpectOperandDescriptor(
+                  buffer_load_b128_instruction.operands[0],
+                  OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 128u, 4u, false),
+              "expected S_BUFFER_LOAD_B128 destination descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 21> buffer_load_program_words{{
+      buffer_load_b32_words[0],  buffer_load_b32_words[1],
+      buffer_load_b64_words[0],  buffer_load_b64_words[1],
+      buffer_load_b96_words[0],  buffer_load_b96_words[1],
+      buffer_load_b128_words[0], buffer_load_b128_words[1],
+      buffer_load_b256_words[0], buffer_load_b256_words[1],
+      buffer_load_b512_words[0], buffer_load_b512_words[1],
+      buffer_load_i8_words[0],   buffer_load_i8_words[1],
+      buffer_load_u8_words[0],   buffer_load_u8_words[1],
+      buffer_load_i16_words[0],  buffer_load_i16_words[1],
+      buffer_load_u16_words[0],  buffer_load_u16_words[1],
+      MakeSopp(48u),
+  }};
+  std::vector<DecodedInstruction> buffer_load_program;
+  if (!Expect(decoder.DecodeProgram(buffer_load_program_words,
+                                    &buffer_load_program, &error_message),
+              "expected buffer SMEM load program decode success") ||
+      !Expect(buffer_load_program.size() == 11u,
+              "expected eleven decoded buffer SMEM load instructions") ||
+      !Expect(buffer_load_program[0].opcode == "S_BUFFER_LOAD_B32",
+              "expected decoded S_BUFFER_LOAD_B32 program opcode") ||
+      !Expect(buffer_load_program[1].opcode == "S_BUFFER_LOAD_B64",
+              "expected decoded S_BUFFER_LOAD_B64 program opcode") ||
+      !Expect(buffer_load_program[2].opcode == "S_BUFFER_LOAD_B96",
+              "expected decoded S_BUFFER_LOAD_B96 program opcode") ||
+      !Expect(buffer_load_program[3].opcode == "S_BUFFER_LOAD_B128",
+              "expected decoded S_BUFFER_LOAD_B128 program opcode") ||
+      !Expect(buffer_load_program[4].opcode == "S_BUFFER_LOAD_B256",
+              "expected decoded S_BUFFER_LOAD_B256 program opcode") ||
+      !Expect(buffer_load_program[5].opcode == "S_BUFFER_LOAD_B512",
+              "expected decoded S_BUFFER_LOAD_B512 program opcode") ||
+      !Expect(buffer_load_program[6].opcode == "S_BUFFER_LOAD_I8",
+              "expected decoded S_BUFFER_LOAD_I8 program opcode") ||
+      !Expect(buffer_load_program[7].opcode == "S_BUFFER_LOAD_U8",
+              "expected decoded S_BUFFER_LOAD_U8 program opcode") ||
+      !Expect(buffer_load_program[8].opcode == "S_BUFFER_LOAD_I16",
+              "expected decoded S_BUFFER_LOAD_I16 program opcode") ||
+      !Expect(buffer_load_program[9].opcode == "S_BUFFER_LOAD_U16",
+              "expected decoded S_BUFFER_LOAD_U16 program opcode") ||
+      !Expect(buffer_load_program[10].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after buffer SMEM loads")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 3> expected_buffer_load_b96{{
+      0x11110001u,
+      0x11110002u,
+      0x11110003u,
+  }};
+  const std::array<std::uint32_t, 4> expected_buffer_load_b128{{
+      0x22220001u,
+      0x22220002u,
+      0x22220003u,
+      0x22220004u,
+  }};
+  const std::array<std::uint32_t, 8> expected_buffer_load_b256{{
+      0x33330001u,
+      0x33330002u,
+      0x33330003u,
+      0x33330004u,
+      0x33330005u,
+      0x33330006u,
+      0x33330007u,
+      0x33330008u,
+  }};
+  const std::array<std::uint32_t, 16> expected_buffer_load_b512{{
+      0x44440001u,
+      0x44440002u,
+      0x44440003u,
+      0x44440004u,
+      0x44440005u,
+      0x44440006u,
+      0x44440007u,
+      0x44440008u,
+      0x44440009u,
+      0x4444000au,
+      0x4444000bu,
+      0x4444000cu,
+      0x4444000du,
+      0x4444000eu,
+      0x4444000fu,
+      0x44440010u,
+  }};
+
+  auto initialize_buffer_load_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x3u;
+    state->sgprs[40] = 0x2000u;
+    state->sgprs[41] = 0u;
+    state->sgprs[42] = 0u;
+    state->sgprs[43] = 0u;
+    state->sgprs[44] = 0x2020u;
+    state->sgprs[45] = 0u;
+    state->sgprs[46] = 0u;
+    state->sgprs[47] = 0u;
+    state->sgprs[48] = 0x2040u;
+    state->sgprs[49] = 0u;
+    state->sgprs[50] = 0u;
+    state->sgprs[51] = 0u;
+    state->sgprs[52] = 0x2060u;
+    state->sgprs[53] = 0u;
+    state->sgprs[54] = 0u;
+    state->sgprs[55] = 0u;
+    state->sgprs[56] = 0x2080u;
+    state->sgprs[57] = 0u;
+    state->sgprs[58] = 0u;
+    state->sgprs[59] = 0u;
+    state->sgprs[60] = 0x2100u;
+    state->sgprs[61] = 0u;
+    state->sgprs[62] = 0u;
+    state->sgprs[63] = 0u;
+    state->sgprs[64] = 0x2200u;
+    state->sgprs[65] = 0u;
+    state->sgprs[66] = 0u;
+    state->sgprs[67] = 0u;
+    state->sgprs[30] = 8u;
+    state->sgprs[31] = 12u;
+    state->sgprs[32] = 0u;
+    state->sgprs[33] = 12u;
+    state->sgprs[34] = 16u;
+    state->sgprs[35] = 8u;
+    state->sgprs[36] = 0u;
+  };
+  auto expect_buffer_load_state = [&](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == 0x3u &&
+          state.sgprs[76] == 0x01234567u &&
+          state.sgprs[77] == 0x89abcdefu &&
+          state.sgprs[78] == 0x13579bdfu &&
+          state.sgprs[72] == 0xffffff81u &&
+          state.sgprs[73] == 0x7eu &&
+          state.sgprs[74] == 0xffff8002u &&
+          state.sgprs[75] == 0x8124u && state.halted &&
+          !state.waiting_on_barrier && state.pc == 10u)) {
+      return false;
+    }
+    for (std::size_t i = 0; i < expected_buffer_load_b96.size(); ++i) {
+      if (state.sgprs[79u + i] != expected_buffer_load_b96[i]) {
+        return false;
+      }
+    }
+    for (std::size_t i = 0; i < expected_buffer_load_b128.size(); ++i) {
+      if (state.sgprs[82u + i] != expected_buffer_load_b128[i]) {
+        return false;
+      }
+    }
+    for (std::size_t i = 0; i < expected_buffer_load_b256.size(); ++i) {
+      if (state.sgprs[86u + i] != expected_buffer_load_b256[i]) {
+        return false;
+      }
+    }
+    for (std::size_t i = 0; i < expected_buffer_load_b512.size(); ++i) {
+      if (state.sgprs[94u + i] != expected_buffer_load_b512[i]) {
+        return false;
+      }
+    }
+    return true;
+  };
+  LinearExecutionMemory buffer_load_memory(0x300u, 0x2000u);
+  if (!Expect(buffer_load_memory.WriteU32(0x200cu, 0x01234567u),
+              "expected buffer SMEM test write for S_BUFFER_LOAD_B32") ||
+      !Expect(buffer_load_memory.WriteU32(0x2034u, 0x89abcdefu),
+              "expected buffer SMEM test write for S_BUFFER_LOAD_B64 low") ||
+      !Expect(buffer_load_memory.WriteU32(0x2038u, 0x13579bdfu),
+              "expected buffer SMEM test write for S_BUFFER_LOAD_B64 high") ||
+      !Expect(buffer_load_memory.StoreU8(0x2200u, 0x81u),
+              "expected buffer SMEM test write for S_BUFFER_LOAD_I8") ||
+      !Expect(buffer_load_memory.StoreU8(0x2201u, 0x7eu),
+              "expected buffer SMEM test write for S_BUFFER_LOAD_U8") ||
+      !Expect(buffer_load_memory.StoreU16(0x2202u, 0x8002u),
+              "expected buffer SMEM test write for S_BUFFER_LOAD_I16") ||
+      !Expect(buffer_load_memory.StoreU16(0x2204u, 0x8124u),
+              "expected buffer SMEM test write for S_BUFFER_LOAD_U16")) {
+    return 1;
+  }
+  for (std::size_t i = 0; i < expected_buffer_load_b96.size(); ++i) {
+    if (!Expect(buffer_load_memory.WriteU32(
+                    0x2050u + static_cast<std::uint32_t>(i * 4u),
+                    expected_buffer_load_b96[i]),
+                "expected buffer SMEM test write for S_BUFFER_LOAD_B96")) {
+      return 1;
+    }
+  }
+  for (std::size_t i = 0; i < expected_buffer_load_b128.size(); ++i) {
+    if (!Expect(buffer_load_memory.WriteU32(
+                    0x2078u + static_cast<std::uint32_t>(i * 4u),
+                    expected_buffer_load_b128[i]),
+                "expected buffer SMEM test write for S_BUFFER_LOAD_B128")) {
+      return 1;
+    }
+  }
+  for (std::size_t i = 0; i < expected_buffer_load_b256.size(); ++i) {
+    if (!Expect(buffer_load_memory.WriteU32(
+                    0x20a8u + static_cast<std::uint32_t>(i * 4u),
+                    expected_buffer_load_b256[i]),
+                "expected buffer SMEM test write for S_BUFFER_LOAD_B256")) {
+      return 1;
+    }
+  }
+  for (std::size_t i = 0; i < expected_buffer_load_b512.size(); ++i) {
+    if (!Expect(buffer_load_memory.WriteU32(
+                    0x2124u + static_cast<std::uint32_t>(i * 4u),
+                    expected_buffer_load_b512[i]),
+                "expected buffer SMEM test write for S_BUFFER_LOAD_B512")) {
+      return 1;
+    }
+  }
+
+  WaveExecutionState decoded_buffer_load_state;
+  initialize_buffer_load_state(&decoded_buffer_load_state);
+  if (!Expect(interpreter.ExecuteProgram(buffer_load_program,
+                                         &decoded_buffer_load_state,
+                                         &buffer_load_memory, &error_message),
+              "expected decoded buffer SMEM load execution success") ||
+      !Expect(expect_buffer_load_state(decoded_buffer_load_state),
+              "expected decoded buffer SMEM load state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_buffer_load_program;
+  if (!Expect(interpreter.CompileProgram(buffer_load_program,
+                                         &compiled_buffer_load_program,
+                                         &error_message),
+              "expected compiled buffer SMEM load program success") ||
+      !Expect(compiled_buffer_load_program.size() == 11u,
+              "expected eleven compiled buffer SMEM load instructions") ||
+      !Expect(compiled_buffer_load_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kSBufferLoadB32,
+              "expected compiled S_BUFFER_LOAD_B32 opcode") ||
+      !Expect(compiled_buffer_load_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSBufferLoadB64,
+              "expected compiled S_BUFFER_LOAD_B64 opcode") ||
+      !Expect(compiled_buffer_load_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kSBufferLoadB96,
+              "expected compiled S_BUFFER_LOAD_B96 opcode") ||
+      !Expect(compiled_buffer_load_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kSBufferLoadB128,
+              "expected compiled S_BUFFER_LOAD_B128 opcode") ||
+      !Expect(compiled_buffer_load_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kSBufferLoadB256,
+              "expected compiled S_BUFFER_LOAD_B256 opcode") ||
+      !Expect(compiled_buffer_load_program[5].opcode ==
+                  Gfx1201CompiledOpcode::kSBufferLoadB512,
+              "expected compiled S_BUFFER_LOAD_B512 opcode") ||
+      !Expect(compiled_buffer_load_program[6].opcode ==
+                  Gfx1201CompiledOpcode::kSBufferLoadI8,
+              "expected compiled S_BUFFER_LOAD_I8 opcode") ||
+      !Expect(compiled_buffer_load_program[7].opcode ==
+                  Gfx1201CompiledOpcode::kSBufferLoadU8,
+              "expected compiled S_BUFFER_LOAD_U8 opcode") ||
+      !Expect(compiled_buffer_load_program[8].opcode ==
+                  Gfx1201CompiledOpcode::kSBufferLoadI16,
+              "expected compiled S_BUFFER_LOAD_I16 opcode") ||
+      !Expect(compiled_buffer_load_program[9].opcode ==
+                  Gfx1201CompiledOpcode::kSBufferLoadU16,
+              "expected compiled S_BUFFER_LOAD_U16 opcode") ||
+      !Expect(compiled_buffer_load_program[10].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after buffer SMEM loads")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_buffer_load_state;
+  initialize_buffer_load_state(&compiled_buffer_load_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_buffer_load_program,
+                                         &compiled_buffer_load_state,
+                                         &buffer_load_memory, &error_message),
+              "expected compiled buffer SMEM load execution success") ||
+      !Expect(expect_buffer_load_state(compiled_buffer_load_state),
+              "expected compiled buffer SMEM load state")) {
     return 1;
   }
 

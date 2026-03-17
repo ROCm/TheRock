@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 343> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 353> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -34,10 +34,20 @@ constexpr std::array<std::string_view, 343> kPhase0ExecutableOpcodes{{
     "S_LOAD_B128",
     "S_LOAD_B256",
     "S_LOAD_B512",
+    "S_BUFFER_LOAD_B32",
+    "S_BUFFER_LOAD_B64",
+    "S_BUFFER_LOAD_B96",
+    "S_BUFFER_LOAD_B128",
+    "S_BUFFER_LOAD_B256",
+    "S_BUFFER_LOAD_B512",
     "S_LOAD_I8",
     "S_LOAD_U8",
     "S_LOAD_I16",
     "S_LOAD_U16",
+    "S_BUFFER_LOAD_I8",
+    "S_BUFFER_LOAD_U8",
+    "S_BUFFER_LOAD_I16",
+    "S_BUFFER_LOAD_U16",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1049,6 +1059,70 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
             SignExtend5(ExtractBits(word, 6, 5))))
             .WithDescriptor(MakeImmediateDescriptor(OperandRole::kUnknown,
                                                    OperandSlotKind::kUnknown)));
+    *words_consumed = 2;
+  } else if (instruction_name == "S_BUFFER_LOAD_B32" ||
+             instruction_name == "S_BUFFER_LOAD_B64" ||
+             instruction_name == "S_BUFFER_LOAD_B96" ||
+             instruction_name == "S_BUFFER_LOAD_B128" ||
+             instruction_name == "S_BUFFER_LOAD_B256" ||
+             instruction_name == "S_BUFFER_LOAD_B512" ||
+             instruction_name == "S_BUFFER_LOAD_I8" ||
+             instruction_name == "S_BUFFER_LOAD_U8" ||
+             instruction_name == "S_BUFFER_LOAD_I16" ||
+             instruction_name == "S_BUFFER_LOAD_U16") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+
+    InstructionOperand sdst;
+    if (!DecodeScalarDestination(ExtractBits(word, 6, 7), &sdst,
+                                 error_message)) {
+      return false;
+    }
+
+    InstructionOperand sbase;
+    if (!DecodeSmemBaseOperand(ExtractBits(word, 0, 6), &sbase, error_message)) {
+      return false;
+    }
+
+    InstructionOperand soffset;
+    if (!DecodeSmemOffsetNokOperand(ExtractBits(words[1], 25, 7), &soffset,
+                                    error_message)) {
+      return false;
+    }
+
+    std::uint8_t element_bit_width = 32u;
+    std::uint8_t component_count = 1u;
+    if (instruction_name == "S_BUFFER_LOAD_B64") {
+      element_bit_width = 64u;
+      component_count = 2u;
+    } else if (instruction_name == "S_BUFFER_LOAD_B96") {
+      component_count = 3u;
+    } else if (instruction_name == "S_BUFFER_LOAD_B128") {
+      element_bit_width = 128u;
+      component_count = 4u;
+    } else if (instruction_name == "S_BUFFER_LOAD_B256") {
+      component_count = 8u;
+    } else if (instruction_name == "S_BUFFER_LOAD_B512") {
+      component_count = 16u;
+    }
+
+    *instruction = DecodedInstruction::FourOperand(
+        instruction_name,
+        DescribeScalarDestinationOperand(sdst, false, element_bit_width,
+                                         component_count),
+        DescribeWideScalarSourceOperand(sbase, OperandRole::kSource0,
+                                        OperandSlotKind::kSource0, 128u, 4u),
+        InstructionOperand::Imm32(static_cast<std::uint32_t>(
+            SignExtend24(ExtractBits(words[1], 0, 24))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource1,
+                                                   OperandSlotKind::kSource1,
+                                                   24u)),
+        DescribeSourceOperand(soffset, OperandRole::kSource2,
+                              OperandSlotKind::kSource2));
     *words_consumed = 2;
   } else if (instruction_name == "S_ATC_PROBE" ||
              instruction_name == "S_ATC_PROBE_BUFFER") {

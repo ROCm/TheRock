@@ -2,7 +2,7 @@
   "target": "gfx1201",
   "slice": "phase0_wave32_boundary",
   "wave_size": 32,
-  "phase0_executable_count": 343,
+  "phase0_executable_count": 353,
   "tracked_encodings": [
     {
       "encoding_name": "ENC_VOP1",
@@ -21,12 +21,19 @@
       "seeded_instruction_count": 162,
       "executable_instruction_count": 162,
       "fully_executable": true
+    },
+    {
+      "encoding_name": "ENC_SMEM",
+      "seeded_instruction_count": 28,
+      "executable_instruction_count": 28,
+      "fully_executable": true
     }
   ],
   "saturated_encodings": [
     "ENC_VOP1",
     "ENC_VOP2",
-    "ENC_VOPC"
+    "ENC_VOPC",
+    "ENC_SMEM"
   ],
   "next_risk_encodings": [
     "ENC_SMEM",
@@ -40,14 +47,14 @@
     "ENC_VDS",
     "ENC_VOP3"
   ],
-  "recommended_next_frontier": "ENC_SMEM",
+  "recommended_next_frontier": "ENC_VGLOBAL",
   "remaining_narrow_instruction_encoding_pairs": 0,
   "next_risk_encoding_statuses": [
     {
       "encoding_name": "ENC_SMEM",
       "example_instruction": "S_LOAD_B32",
       "seeded_instruction_count": 28,
-      "executable_instruction_count": 18,
+      "executable_instruction_count": 28,
       "first_executable_instruction": "S_ATC_PROBE",
       "transferable_as_is_count": 0,
       "transferable_with_decoder_work_count": 0,
@@ -101,10 +108,10 @@
     }
   ],
   "notes": [
-    "All currently seeded ENC_VOP1, ENC_VOP2, and ENC_VOPC instruction/encoding pairs are executable on the local wave32 path.",
-    "There are no remaining imported ENC_VOP1, ENC_VOP2, or ENC_VOPC instruction/encoding pairs outside the current seed surface.",
-    "ENC_SMEM now has eighteen local executable footholds via S_DCACHE_INV, S_PREFETCH_INST, S_PREFETCH_INST_PC_REL, S_PREFETCH_DATA, S_BUFFER_PREFETCH_DATA, S_PREFETCH_DATA_PC_REL, S_ATC_PROBE, S_ATC_PROBE_BUFFER, S_LOAD_B32, S_LOAD_B64, S_LOAD_B96, S_LOAD_B128, S_LOAD_B256, S_LOAD_B512, S_LOAD_I8, S_LOAD_U8, S_LOAD_I16, and S_LOAD_U16, but the remaining 10 seeded SMEM instructions stay scaffolded.",
-    "ENC_SMEM remains the recommended next frontier because it is the smallest remaining seeded blocker and the current local foothold keeps the next phase architecture-local.",
-    "The next coherent phase-0 extensions now deepen ENC_SMEM beyond the current cache-hint/probe plus wide non-buffer load footholds, or move into ENC_VOP3, ENC_VDS, and ENC_VGLOBAL, or require broader shared-layer churn."
+    "All currently seeded ENC_VOP1, ENC_VOP2, ENC_VOPC, and ENC_SMEM instruction/encoding pairs are executable on the local wave32 path.",
+    "There are no remaining imported ENC_VOP1, ENC_VOP2, ENC_VOPC, or ENC_SMEM instruction/encoding pairs outside the current seed surface.",
+    "ENC_SMEM is now saturated through S_DCACHE_INV, the prefetch and ATC-probe footholds, the full non-buffer S_LOAD_* slice, and the matching S_BUFFER_LOAD_* slice, leaving no seeded scalar-memory instructions scaffolded.",
+    "ENC_VGLOBAL is now the recommended next frontier because ENC_SMEM is saturated and VGLOBAL is the next smallest remaining seeded blocker that still keeps the next phase architecture-local.",
+    "The next coherent phase-0 extensions now move past saturated ENC_SMEM into ENC_VGLOBAL, ENC_VDS, and ENC_VOP3, or require broader shared-layer churn."
   ]
 }

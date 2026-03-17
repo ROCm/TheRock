@@ -107,6 +107,24 @@ std::array<std::uint32_t, 2> MakeSmemBasePrefetch(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeSmemBufferLoad(std::uint32_t op,
+                                                std::uint32_t sdst,
+                                                std::uint32_t sbase_start,
+                                                std::int32_t ioffset,
+                                                std::uint32_t soffset) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x30u) << 26;
+  word |= static_cast<std::uint64_t>(sbase_start >> 1);
+  word |= static_cast<std::uint64_t>(sdst) << 6;
+  word |= static_cast<std::uint64_t>(op & 0xffu) << 18;
+  word |= static_cast<std::uint64_t>(static_cast<std::uint32_t>(ioffset) &
+                                     0x00ffffffu)
+          << 32;
+  word |= static_cast<std::uint64_t>(soffset & 0x7fu) << 57;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 }  // namespace
 
 int main() {
@@ -145,7 +163,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 343u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 353u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -161,6 +179,18 @@ int main() {
               "expected S_LOAD_B256 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B512"),
               "expected S_LOAD_B512 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_BUFFER_LOAD_B32"),
+              "expected S_BUFFER_LOAD_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_BUFFER_LOAD_B64"),
+              "expected S_BUFFER_LOAD_B64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_BUFFER_LOAD_B96"),
+              "expected S_BUFFER_LOAD_B96 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_BUFFER_LOAD_B128"),
+              "expected S_BUFFER_LOAD_B128 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_BUFFER_LOAD_B256"),
+              "expected S_BUFFER_LOAD_B256 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_BUFFER_LOAD_B512"),
+              "expected S_BUFFER_LOAD_B512 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_I8"),
               "expected S_LOAD_I8 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_U8"),
@@ -169,6 +199,14 @@ int main() {
               "expected S_LOAD_I16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_U16"),
               "expected S_LOAD_U16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_BUFFER_LOAD_I8"),
+              "expected S_BUFFER_LOAD_I8 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_BUFFER_LOAD_U8"),
+              "expected S_BUFFER_LOAD_U8 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_BUFFER_LOAD_I16"),
+              "expected S_BUFFER_LOAD_I16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_BUFFER_LOAD_U16"),
+              "expected S_BUFFER_LOAD_U16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_PREFETCH_INST"),
               "expected S_PREFETCH_INST executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_PREFETCH_INST_PC_REL"),
@@ -567,6 +605,60 @@ int main() {
     return 1;
   }
 
+  const auto buffer_load_b32_words = MakeSmemBufferLoad(16u, 30u, 14u, 24, 19u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(buffer_load_b32_words.data(),
+                                                 buffer_load_b32_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_BUFFER_LOAD_B32 decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "S_BUFFER_LOAD_B32",
+              "expected S_BUFFER_LOAD_B32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 4u,
+              "expected S_BUFFER_LOAD_B32 quaternary decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[0].index == 30u,
+              "expected S_BUFFER_LOAD_B32 scalar destination") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[1].index == 14u,
+              "expected S_BUFFER_LOAD_B32 resource base") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[2].imm32 == 24u,
+              "expected S_BUFFER_LOAD_B32 inline ioffset") ||
+      !Expect(decoded_instruction.operands[3].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[3].index == 19u,
+              "expected S_BUFFER_LOAD_B32 scalar soffset")) {
+    return 1;
+  }
+
+  const auto buffer_load_b128_words =
+      MakeSmemBufferLoad(18u, 34u, 16u, -12, 23u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(buffer_load_b128_words.data(),
+                                                 buffer_load_b128_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_BUFFER_LOAD_B128 decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "S_BUFFER_LOAD_B128",
+              "expected S_BUFFER_LOAD_B128 opcode") ||
+      !Expect(decoded_instruction.operand_count == 4u,
+              "expected S_BUFFER_LOAD_B128 quaternary decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[0].index == 34u,
+              "expected S_BUFFER_LOAD_B128 scalar destination") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[1].index == 16u,
+              "expected S_BUFFER_LOAD_B128 resource base") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
+                  static_cast<std::int32_t>(decoded_instruction.operands[2].imm32) ==
+                      -12,
+              "expected S_BUFFER_LOAD_B128 inline ioffset") ||
+      !Expect(decoded_instruction.operands[3].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[3].index == 23u,
+              "expected S_BUFFER_LOAD_B128 scalar soffset")) {
+    return 1;
+  }
+
   const auto prefetch_inst_pc_rel_words =
       MakeSmemPrefetchPcRel(37u, -32, 9u, -3);
   if (!Expect(decoder.DecodeInstruction(
@@ -722,7 +814,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 343u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 353u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -740,6 +832,18 @@ int main() {
               "expected interpreter support for S_LOAD_B256") ||
       !Expect(interpreter.Supports("S_LOAD_B512"),
               "expected interpreter support for S_LOAD_B512") ||
+      !Expect(interpreter.Supports("S_BUFFER_LOAD_B32"),
+              "expected interpreter support for S_BUFFER_LOAD_B32") ||
+      !Expect(interpreter.Supports("S_BUFFER_LOAD_B64"),
+              "expected interpreter support for S_BUFFER_LOAD_B64") ||
+      !Expect(interpreter.Supports("S_BUFFER_LOAD_B96"),
+              "expected interpreter support for S_BUFFER_LOAD_B96") ||
+      !Expect(interpreter.Supports("S_BUFFER_LOAD_B128"),
+              "expected interpreter support for S_BUFFER_LOAD_B128") ||
+      !Expect(interpreter.Supports("S_BUFFER_LOAD_B256"),
+              "expected interpreter support for S_BUFFER_LOAD_B256") ||
+      !Expect(interpreter.Supports("S_BUFFER_LOAD_B512"),
+              "expected interpreter support for S_BUFFER_LOAD_B512") ||
       !Expect(interpreter.Supports("S_LOAD_I8"),
               "expected interpreter support for S_LOAD_I8") ||
       !Expect(interpreter.Supports("S_LOAD_U8"),
@@ -748,6 +852,14 @@ int main() {
               "expected interpreter support for S_LOAD_I16") ||
       !Expect(interpreter.Supports("S_LOAD_U16"),
               "expected interpreter support for S_LOAD_U16") ||
+      !Expect(interpreter.Supports("S_BUFFER_LOAD_I8"),
+              "expected interpreter support for S_BUFFER_LOAD_I8") ||
+      !Expect(interpreter.Supports("S_BUFFER_LOAD_U8"),
+              "expected interpreter support for S_BUFFER_LOAD_U8") ||
+      !Expect(interpreter.Supports("S_BUFFER_LOAD_I16"),
+              "expected interpreter support for S_BUFFER_LOAD_I16") ||
+      !Expect(interpreter.Supports("S_BUFFER_LOAD_U16"),
+              "expected interpreter support for S_BUFFER_LOAD_U16") ||
       !Expect(interpreter.Supports("S_PREFETCH_INST"),
               "expected interpreter support for S_PREFETCH_INST") ||
       !Expect(interpreter.Supports("S_PREFETCH_INST_PC_REL"),

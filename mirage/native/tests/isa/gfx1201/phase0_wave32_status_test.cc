@@ -27,6 +27,8 @@ int main() {
       FindGfx1201Wave32Phase0EncodingStatus("ENC_VOP2");
   const Gfx1201Wave32Phase0EncodingStatus* vopc =
       FindGfx1201Wave32Phase0EncodingStatus("ENC_VOPC");
+  const Gfx1201Wave32Phase0EncodingStatus* smem_status =
+      FindGfx1201Wave32Phase0EncodingStatus("ENC_SMEM");
   const Gfx1201Wave32Phase0EncodingStatus* missing =
       FindGfx1201Wave32Phase0EncodingStatus("ENC_VIMAGE");
   const auto next_risk_statuses = GetGfx1201Wave32Phase0NextRiskEncodingStatuses();
@@ -39,11 +41,12 @@ int main() {
   const Gfx1201Wave32Phase0NextRiskEncodingStatus* vglobal =
       FindGfx1201Wave32Phase0NextRiskEncodingStatus("ENC_VGLOBAL");
 
-  if (!Expect(statuses.size() == 3u,
-              "expected three tracked wave32-local encodings") ||
+  if (!Expect(statuses.size() == 4u,
+              "expected four tracked wave32-local encodings") ||
       !Expect(vop1 != nullptr, "expected ENC_VOP1 status") ||
       !Expect(vop2 != nullptr, "expected ENC_VOP2 status") ||
       !Expect(vopc != nullptr, "expected ENC_VOPC status") ||
+      !Expect(smem_status != nullptr, "expected ENC_SMEM status") ||
       !Expect(missing == nullptr, "expected no status for ENC_VIMAGE") ||
       !Expect(next_risk_statuses.size() == 4u,
               "expected four next-risk encoding statuses") ||
@@ -68,13 +71,19 @@ int main() {
               "expected ENC_VOPC seeded instruction count") ||
       !Expect(vopc->executable_instruction_count == 162u,
               "expected ENC_VOPC executable instruction count") ||
-      !Expect(vopc->fully_executable, "expected ENC_VOPC saturation")) {
+      !Expect(vopc->fully_executable, "expected ENC_VOPC saturation") ||
+      !Expect(smem_status->seeded_instruction_count == 28u,
+              "expected ENC_SMEM seeded instruction count") ||
+      !Expect(smem_status->executable_instruction_count == 28u,
+              "expected ENC_SMEM executable instruction count") ||
+      !Expect(smem_status->fully_executable,
+              "expected ENC_SMEM saturation")) {
     return 1;
   }
 
   if (!Expect(smem->seeded_instruction_count == 28u,
               "expected ENC_SMEM seeded instruction count") ||
-      !Expect(smem->executable_instruction_count == 18u,
+      !Expect(smem->executable_instruction_count == 28u,
               "expected ENC_SMEM executable foothold count") ||
       !Expect(smem->HasExecutableFoothold(),
               "expected ENC_SMEM executable foothold helper") ||
@@ -105,7 +114,7 @@ int main() {
     return 1;
   }
 
-  if (!Expect(decoder.Phase0ExecutableOpcodes().size() == 343u,
+  if (!Expect(decoder.Phase0ExecutableOpcodes().size() == 353u,
               "expected phase-0 executable opcode count") ||
       !Expect(IsGfx1201Wave32Phase0EncodingSaturated("ENC_VOP1"),
               "expected ENC_VOP1 saturation helper") ||
@@ -113,6 +122,8 @@ int main() {
               "expected ENC_VOP2 saturation helper") ||
       !Expect(IsGfx1201Wave32Phase0EncodingSaturated("ENC_VOPC"),
               "expected ENC_VOPC saturation helper") ||
+      !Expect(IsGfx1201Wave32Phase0EncodingSaturated("ENC_SMEM"),
+              "expected ENC_SMEM saturation helper") ||
       !Expect(!IsGfx1201Wave32Phase0EncodingSaturated("ENC_VOP3"),
               "expected ENC_VOP3 to be out of scope")) {
     return 1;
@@ -137,8 +148,8 @@ int main() {
               "expected next-risk encoding count") ||
       !Expect(frontier_order.size() == kExpectedFrontierOrder.size(),
               "expected frontier order count") ||
-      !Expect(GetGfx1201Wave32Phase0RecommendedNextEncoding() == "ENC_SMEM",
-              "expected ENC_SMEM as the recommended next frontier")) {
+      !Expect(GetGfx1201Wave32Phase0RecommendedNextEncoding() == "ENC_VGLOBAL",
+              "expected ENC_VGLOBAL as the recommended next frontier")) {
     return 1;
   }
 

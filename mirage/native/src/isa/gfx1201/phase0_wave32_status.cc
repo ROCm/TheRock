@@ -10,10 +10,11 @@
 namespace mirage::sim::isa {
 namespace {
 
-constexpr std::array<std::string_view, 3> kTrackedEncodings{{
+constexpr std::array<std::string_view, 4> kTrackedEncodings{{
     "ENC_VOP1",
     "ENC_VOP2",
     "ENC_VOPC",
+    "ENC_SMEM",
 }};
 
 constexpr std::array<std::string_view, 4> kNextRiskEncodings{{
@@ -164,7 +165,12 @@ std::span<const std::string_view> GetGfx1201Wave32Phase0FrontierOrder() {
 }
 
 std::string_view GetGfx1201Wave32Phase0RecommendedNextEncoding() {
-  return kFrontierOrder.front();
+  for (std::string_view encoding_name : kFrontierOrder) {
+    if (!IsGfx1201Wave32Phase0EncodingSaturated(encoding_name)) {
+      return encoding_name;
+    }
+  }
+  return {};
 }
 
 bool IsGfx1201Wave32Phase0EncodingSaturated(std::string_view encoding_name) {
