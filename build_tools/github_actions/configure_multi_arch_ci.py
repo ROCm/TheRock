@@ -823,67 +823,11 @@ def expand_build_configs(
 # ---------------------------------------------------------------------------
 
 
-def _format_build_config_rows(label: str, config: BuildConfig | None) -> str:
-    """Format one platform's build config as a markdown table row."""
-    if config is None:
-        return f"| {label} | — | — | — |"
-    families = config.dist_amdgpu_families.replace(";", ", ")
-    variant = config.build_variant_label
-    if config.expect_failure:
-        variant += " (expect failure)"
-    return f"| {label} | {families} | {variant} | {config.artifact_group} |"
-
-
-def format_summary(outputs: CIOutputs) -> str:
-    """Generate human-readable markdown summary for GITHUB_STEP_SUMMARY."""
-    lines = ["## Multi-Arch CI Configuration", ""]
-
-    if not outputs.is_ci_enabled:
-        lines.append("**CI skipped.**")
-        return "\n".join(lines)
-
-    if not outputs.jobs:
-        return "\n".join(lines)
-
-    jobs = outputs.jobs
-
-    # Test type
-    lines.append(
-        f"**Test type:** `{jobs.test_rocm.test_type}` "
-        f"({jobs.test_rocm.test_type_reason})"
-    )
-    lines.append("")
-
-    # Platform build configs
-    lines.append("| Platform | Families | Variant | Artifact Group |")
-    lines.append("|----------|----------|---------|----------------|")
-    lines.append(_format_build_config_rows("Linux", outputs.builds.linux))
-    lines.append(_format_build_config_rows("Windows", outputs.builds.windows))
-    lines.append("")
-
-    # Job group decisions
-    lines.append("| Job Group | Decision |")
-    lines.append("|-----------|----------|")
-    lines.append(f"| build-rocm | {jobs.build_rocm.action} |")
-    lines.append(f"| test-rocm | {jobs.test_rocm.action} |")
-    lines.append(f"| build-rocm-python | {jobs.build_rocm_python.action} |")
-    lines.append(f"| build-pytorch | {jobs.build_pytorch.action} |")
-    lines.append(f"| test-pytorch | {jobs.test_pytorch.action} |")
-    lines.append("")
-
-    # Prebuilt stages
-    prebuilt = jobs.build_rocm.prebuilt_stages
-    if prebuilt:
-        lines.append(
-            f"**Prebuilt stages:** {', '.join(prebuilt)} "
-            f"(baseline run: `{jobs.build_rocm.baseline_run_id or 'none'}`)"
-        )
-        lines.append("")
-
-    return "\n".join(lines)
-
-
-def write_outputs(outputs: CIOutputs) -> None:
+def write_outputs(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+    outputs: CIOutputs,
+) -> None:
     """Write results to GITHUB_OUTPUT and GITHUB_STEP_SUMMARY.
 
     This is the only function with side effects (besides from_environ).
@@ -909,7 +853,18 @@ def write_outputs(outputs: CIOutputs) -> None:
         ),
     }
     gha_set_output(output_vars)
-    gha_append_step_summary(format_summary(outputs))
+
+    # Lazy import: configure_multi_arch_ci_summary imports types from this
+    # module, so importing it at the top level would create a circular import.
+    from configure_multi_arch_ci_summary import format_summary
+
+    gha_append_step_summary(
+        format_summary(
+            ci_inputs=ci_inputs,
+            git_context=git_context,
+            outputs=outputs,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -973,7 +928,7 @@ def main():
         git_context = GitContext.empty()
 
     outputs = configure(ci_inputs, git_context)
-    write_outputs(outputs)
+    write_outputs(ci_inputs=ci_inputs, git_context=git_context, outputs=outputs)
 
 
 if __name__ == "__main__":

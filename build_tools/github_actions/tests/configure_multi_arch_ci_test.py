@@ -728,11 +728,26 @@ class TestExpandBuildConfigs(unittest.TestCase):
 class TestFormatSummary(unittest.TestCase):
     """Test summary formatting (pure function)."""
 
+    def _inputs(self, **kwargs):
+        defaults = dict(
+            event_name="push",
+            branch_name="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        defaults.update(kwargs)
+        return cm.CIInputs(**defaults)
+
     def test_skipped_summary_does_not_raise(self):
+        from configure_multi_arch_ci_summary import format_summary
+
         outputs = cm.CIOutputs.skipped("only .md files changed")
-        cm.format_summary(outputs)
+        git = cm.GitContext(changed_files=["docs/README.md"])
+        format_summary(self._inputs(), git, outputs)
 
     def test_normal_summary_does_not_raise(self):
+        from configure_multi_arch_ci_summary import format_summary
+
         jobs = cm.JobDecisions(
             build_rocm=cm.BuildRocmDecision(action="run", reason="default"),
             test_rocm=cm.TestRocmDecision(
@@ -743,7 +758,7 @@ class TestFormatSummary(unittest.TestCase):
             test_pytorch=cm.JobGroupDecision(action="run", reason="default"),
         )
         outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
-        cm.format_summary(outputs)
+        format_summary(self._inputs(), cm.GitContext(), outputs)
 
 
 # ---------------------------------------------------------------------------
