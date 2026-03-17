@@ -43,16 +43,6 @@ _spec = importlib.util.spec_from_file_location(
 native_linux_package_install_test = importlib.util.module_from_spec(_spec)
 sys.modules["native_linux_package_install_test"] = native_linux_package_install_test
 _spec.loader.exec_module(native_linux_package_install_test)
-# Support old script that still defines NativeLinuxPackageInstallTest
-if not hasattr(native_linux_package_install_test, "NativeLinuxPackageInstallTest"):
-    if hasattr(native_linux_package_install_test, "NativeLinuxPackageInstallTest"):
-        native_linux_package_install_test.NativeLinuxPackageInstallTest = (
-            native_linux_package_install_test.NativeLinuxPackageInstallTest
-        )
-    elif hasattr(native_linux_package_install_test, "NativeLinuxPackagesTester"):
-        native_linux_package_install_test.NativeLinuxPackageInstallTest = (
-            native_linux_package_install_test.NativeLinuxPackagesTester
-        )
 
 
 def _noop_print(*args, **kwargs):
