@@ -8327,12 +8327,15 @@ int main() {
       typed_buffer_low_component_dst_sel_word3;
   typed_buffer_low_component_state.vgprs[0][0] = 0x0u;
   typed_buffer_low_component_state.vgprs[0][1] = 0x4u;
+  typed_buffer_low_component_state.vgprs[0][2] = 0x0cu;
   typed_buffer_low_component_state.vgprs[0][3] = 0x8u;
   typed_buffer_low_component_state.vgprs[1][0] = 0x0u;
   typed_buffer_low_component_state.vgprs[1][1] = 0x4u;
+  typed_buffer_low_component_state.vgprs[1][2] = 0x0cu;
   typed_buffer_low_component_state.vgprs[1][3] = 0x8u;
   typed_buffer_low_component_state.vgprs[2][0] = 0x0u;
   typed_buffer_low_component_state.vgprs[2][1] = 0x4u;
+  typed_buffer_low_component_state.vgprs[2][2] = 0x0cu;
   typed_buffer_low_component_state.vgprs[2][3] = 0x8u;
   typed_buffer_low_component_state.vgprs[10][2] = 0xdeadbeefu;
   typed_buffer_low_component_state.vgprs[11][2] = 0xdeadbeefu;
@@ -8534,6 +8537,24 @@ int main() {
                       .c_str()) &&
            Expect(typed_buffer_low_component_short == 0xef01u,
                   (std::string(mode) + " typed buffer d16 x store lane 3 result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3acu, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " inactive typed buffer x store read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0u,
+                  (std::string(mode) + " inactive typed buffer x store result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x3ecu, &typed_buffer_low_component_short),
+                  (std::string(mode) + " inactive typed buffer xy store read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_short == 0u,
+                  (std::string(mode) + " inactive typed buffer xy store result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x42cu, &typed_buffer_low_component_short),
+                  (std::string(mode) + " inactive typed buffer d16 x store read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_short == 0u,
+                  (std::string(mode) + " inactive typed buffer d16 x store result")
                       .c_str());
   };
   if (!Expect(interpreter.ExecuteProgram(typed_buffer_low_component_program,
@@ -11990,6 +12011,7 @@ int main() {
   buffer_memory_state.sgprs[71] = 0xf0u;
   buffer_memory_state.vgprs[2][0] = 0x10u;
   buffer_memory_state.vgprs[2][1] = 0x20u;
+  buffer_memory_state.vgprs[2][2] = 0x80u;
   buffer_memory_state.vgprs[2][3] = 0x30u;
   buffer_memory_state.vgprs[50][0] = 0x50000001u;
   buffer_memory_state.vgprs[50][1] = 0x50000002u;
@@ -12181,7 +12203,43 @@ int main() {
            Expect(memory.ReadU32(0x22cu, &value),
                   (std::string(mode) + " buffer storex4 read").c_str()) &&
            Expect(value == 0x63000004u,
-                  (std::string(mode) + " buffer storex4 lane 3 result").c_str());
+                  (std::string(mode) + " buffer storex4 lane 3 result").c_str()) &&
+           Expect(memory.ReadU32(0x240u, &value),
+                  (std::string(mode) + " inactive buffer storex2 low read").c_str()) &&
+           Expect(value == 0u,
+                  (std::string(mode) + " inactive buffer storex2 low result").c_str()) &&
+           Expect(memory.ReadU32(0x244u, &value),
+                  (std::string(mode) + " inactive buffer storex2 high read").c_str()) &&
+           Expect(value == 0u,
+                  (std::string(mode) + " inactive buffer storex2 high result").c_str()) &&
+           Expect(memory.ReadU32(0x260u, &value),
+                  (std::string(mode) + " inactive buffer storex3 dword 0 read").c_str()) &&
+           Expect(value == 0u,
+                  (std::string(mode) + " inactive buffer storex3 dword 0 result").c_str()) &&
+           Expect(memory.ReadU32(0x264u, &value),
+                  (std::string(mode) + " inactive buffer storex3 dword 1 read").c_str()) &&
+           Expect(value == 0u,
+                  (std::string(mode) + " inactive buffer storex3 dword 1 result").c_str()) &&
+           Expect(memory.ReadU32(0x268u, &value),
+                  (std::string(mode) + " inactive buffer storex3 dword 2 read").c_str()) &&
+           Expect(value == 0u,
+                  (std::string(mode) + " inactive buffer storex3 dword 2 result").c_str()) &&
+           Expect(memory.ReadU32(0x270u, &value),
+                  (std::string(mode) + " inactive buffer storex4 dword 0 read").c_str()) &&
+           Expect(value == 0u,
+                  (std::string(mode) + " inactive buffer storex4 dword 0 result").c_str()) &&
+           Expect(memory.ReadU32(0x274u, &value),
+                  (std::string(mode) + " inactive buffer storex4 dword 1 read").c_str()) &&
+           Expect(value == 0u,
+                  (std::string(mode) + " inactive buffer storex4 dword 1 result").c_str()) &&
+           Expect(memory.ReadU32(0x278u, &value),
+                  (std::string(mode) + " inactive buffer storex4 dword 2 read").c_str()) &&
+           Expect(value == 0u,
+                  (std::string(mode) + " inactive buffer storex4 dword 2 result").c_str()) &&
+           Expect(memory.ReadU32(0x27cu, &value),
+                  (std::string(mode) + " inactive buffer storex4 dword 3 read").c_str()) &&
+           Expect(value == 0u,
+                  (std::string(mode) + " inactive buffer storex4 dword 3 result").c_str());
   };
   if (!Expect(interpreter.ExecuteProgram(buffer_memory_program,
                                          &buffer_memory_state, &buffer_memory,
@@ -12205,7 +12263,7 @@ int main() {
   }
 
   {
-  LinearExecutionMemory buffer_subword_memory(0x500, 0);
+  LinearExecutionMemory buffer_subword_memory(0x600, 0);
   if (!Expect(WriteU8(&buffer_subword_memory, 0x100u, 0x7au),
               "expected buffer ubyte seed write") ||
       !Expect(WriteU8(&buffer_subword_memory, 0x110u, 0x80u),
@@ -12273,6 +12331,7 @@ int main() {
   buffer_subword_state.sgprs[11] = 0u;
   buffer_subword_state.vgprs[2][0] = 0x10u;
   buffer_subword_state.vgprs[2][1] = 0x20u;
+  buffer_subword_state.vgprs[2][2] = 0x100u;
   buffer_subword_state.vgprs[2][3] = 0x30u;
   buffer_subword_state.vgprs[40][0] = 0x111111abu;
   buffer_subword_state.vgprs[40][1] = 0x222222bcu;
@@ -12520,6 +12579,25 @@ int main() {
            Expect(stored_short == 0xabcdu,
                   (std::string(mode) +
                    " buffer short d16 hi store lane 3 result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x470u, &stored_byte),
+                  (std::string(mode) + " inactive buffer byte store read").c_str()) &&
+           Expect(stored_byte == 0u,
+                  (std::string(mode) + " inactive buffer byte store result").c_str()) &&
+           Expect(ReadU8(memory, 0x4a0u, &stored_byte),
+                  (std::string(mode) + " inactive buffer byte d16 hi store read").c_str()) &&
+           Expect(stored_byte == 0u,
+                  (std::string(mode) + " inactive buffer byte d16 hi store result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x4e0u, &stored_short),
+                  (std::string(mode) + " inactive buffer short store read").c_str()) &&
+           Expect(stored_short == 0u,
+                  (std::string(mode) + " inactive buffer short store result").c_str()) &&
+           Expect(ReadU16(memory, 0x520u, &stored_short),
+                  (std::string(mode) + " inactive buffer short d16 hi store read").c_str()) &&
+           Expect(stored_short == 0u,
+                  (std::string(mode) +
+                   " inactive buffer short d16 hi store result")
                       .c_str());
   };
   if (!Expect(interpreter.ExecuteProgram(buffer_subword_program,
@@ -13977,15 +14055,19 @@ int main() {
       make_buffer_format_low_component_word3(2u, 4u);
   buffer_format_low_component_state.vgprs[0][0] = 0u;
   buffer_format_low_component_state.vgprs[0][1] = 4u;
+  buffer_format_low_component_state.vgprs[0][2] = 0x0cu;
   buffer_format_low_component_state.vgprs[0][3] = 8u;
   buffer_format_low_component_state.vgprs[1][0] = 0u;
   buffer_format_low_component_state.vgprs[1][1] = 4u;
+  buffer_format_low_component_state.vgprs[1][2] = 0x0cu;
   buffer_format_low_component_state.vgprs[1][3] = 8u;
   buffer_format_low_component_state.vgprs[2][0] = 0u;
   buffer_format_low_component_state.vgprs[2][1] = 4u;
+  buffer_format_low_component_state.vgprs[2][2] = 0x0cu;
   buffer_format_low_component_state.vgprs[2][3] = 8u;
   buffer_format_low_component_state.vgprs[3][0] = 0u;
   buffer_format_low_component_state.vgprs[3][1] = 4u;
+  buffer_format_low_component_state.vgprs[3][2] = 0x0cu;
   buffer_format_low_component_state.vgprs[3][3] = 8u;
   buffer_format_low_component_state.vgprs[30][0] = 0x55u;
   buffer_format_low_component_state.vgprs[30][1] = 0x66u;
@@ -14223,6 +14305,30 @@ int main() {
            Expect(short_value == 0x7788u,
                   (std::string(mode) +
                    " buffer format d16 hi store lane 3 result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x12cu, &byte_value),
+                  (std::string(mode) + " inactive buffer format x store read")
+                      .c_str()) &&
+           Expect(byte_value == 0u,
+                  (std::string(mode) + " inactive buffer format x store result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x174u, &short_value),
+                  (std::string(mode) + " inactive buffer format xy store read")
+                      .c_str()) &&
+           Expect(short_value == 0u,
+                  (std::string(mode) + " inactive buffer format xy store result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x1fcu, &short_value),
+                  (std::string(mode) + " inactive buffer format d16 x store read")
+                      .c_str()) &&
+           Expect(short_value == 0u,
+                  (std::string(mode) + " inactive buffer format d16 x store result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x26cu, &short_value),
+                  (std::string(mode) + " inactive buffer format d16 hi store read")
+                      .c_str()) &&
+           Expect(short_value == 0u,
+                  (std::string(mode) + " inactive buffer format d16 hi store result")
                       .c_str());
   };
   if (!Expect(interpreter.ExecuteProgram(buffer_format_low_component_program,
