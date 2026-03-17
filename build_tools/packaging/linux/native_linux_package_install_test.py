@@ -37,36 +37,36 @@ Prerequisites:
 Example invocations:
 
  # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
- python3 native_linux_packages_test.py \\
+ python3 native_linux_package_install_test.py \\
  --os-profile ubuntu2404 \\
  --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x \\
  --release-type nightly
 
  # Prerelease DEB with GPG verification
- python3 native_linux_packages_test.py \\
+ python3 native_linux_package_install_test.py \\
  --os-profile ubuntu2404 \\
  --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
  --release-type prerelease \\
  --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
  # Nightly RPM (RHEL 8) - run inside rhel8/almalinux container or VM
- python3 native_linux_packages_test.py \\
+ python3 native_linux_package_install_test.py \\
  --os-profile rhel8 \\
  --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
  --gfx-arch gfx94x \\
  --release-type nightly
 
  # Prerelease RPM (SLES 16)
- python3 native_linux_packages_test.py \\
+ python3 native_linux_package_install_test.py \\
  --os-profile sles16 \\
  --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
  --release-type prerelease \\
  --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
  # Simulate install (dry-run) from local .deb or .rpm directory
- python3 native_linux_packages_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
- python3 native_linux_packages_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
+ python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
+ python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
 """
 
 import argparse
@@ -194,8 +194,8 @@ def _run_streaming(cmd: list[str], timeout_sec: int) -> int:
         raise
 
 
-class NativeLinuxPackagesTester:
-    """Full installation tester for ROCm native Linux packages."""
+class NativeLinuxPackageInstallTest:
+    """Runner for the native Linux package install test (repo setup, install, verification)."""
 
     @staticmethod
     def _derive_package_type(os_profile: str) -> str:
@@ -237,7 +237,7 @@ class NativeLinuxPackagesTester:
         gfx_arch: Optional[Union[str, list[str]]] = None,
         gpg_key_url: Optional[str] = None,
     ):
-        """Initialize the package Install tester.
+        """Initialize the native Linux package install test runner.
 
         Args:
         repo_url: Full repository URL (constructed in YAML)
@@ -865,30 +865,30 @@ def main():
     epilog = """
 Examples:
  # Nightly DEB (Ubuntu 24.04) - run inside matching container/VM
- python native_linux_packages_test.py --os-profile ubuntu2404 \\
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
  --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Prerelease DEB with GPG verification
- python native_linux_packages_test.py --os-profile ubuntu2404 \\
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
  --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
  --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
  # Nightly RPM (RHEL 8)
- python native_linux_packages_test.py --os-profile rhel8 \\
+ python native_linux_package_install_test.py --os-profile rhel8 \\
  --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Prerelease RPM (RHEL 8)
- python native_linux_packages_test.py --os-profile rhel8 \\
+ python native_linux_package_install_test.py --os-profile rhel8 \\
  --repo-url https://rocm.prereleases.amd.com/packages/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
  --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
  # Simulate install (dry-run) from local packages
- python native_linux_packages_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
- python native_linux_packages_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
+ python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
+ python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
 """
 
     parser = argparse.ArgumentParser(
@@ -970,7 +970,7 @@ Examples:
             )
         if args.os_profile and not args.pkg_type:
             try:
-                NativeLinuxPackagesTester._derive_package_type(args.os_profile)
+                NativeLinuxPackageInstallTest._derive_package_type(args.os_profile)
             except ValueError as e:
                 parser.error(str(e))
     else:
@@ -990,7 +990,7 @@ Examples:
 
     # Simulate path: dry-run only; exit after run_simulate_install_test (no repo setup or install)
     if args.test_type == "simulate":
-        pkg_type = args.pkg_type or NativeLinuxPackagesTester._derive_package_type(
+        pkg_type = args.pkg_type or NativeLinuxPackageInstallTest._derive_package_type(
             args.os_profile
         )
         print("\n" + "=" * 80)
@@ -1001,7 +1001,7 @@ Examples:
 
     # Derive package type from OS profile
     try:
-        derived_package_type = NativeLinuxPackagesTester._derive_package_type(
+        derived_package_type = NativeLinuxPackageInstallTest._derive_package_type(
             args.os_profile
         )
     except ValueError as e:
@@ -1022,8 +1022,8 @@ Examples:
         print(f"GPG Key URL: {args.gpg_key_url}")
     print("=" * 80)
 
-    # Create tester and run repo-based steps (1–3); simulate path exits earlier in main
-    tester = NativeLinuxPackagesTester(
+    # Create test runner and run repo-based steps (1–3); simulate path exits earlier in main
+    test_runner = NativeLinuxPackageInstallTest(
         os_profile=args.os_profile,
         repo_url=args.repo_url,
         release_type=args.release_type,
@@ -1035,25 +1035,25 @@ Examples:
     print("\n" + "=" * 80)
     print("INSTALLATION TEST - NATIVE LINUX PACKAGES")
     print("=" * 80)
-    print(f"Release Type: {tester.release_type.upper()}")
-    print(f"Install Prefix: {tester.install_prefix}")
+    print(f"Release Type: {test_runner.release_type.upper()}")
+    print(f"Install Prefix: {test_runner.install_prefix}")
     print(f"Test Type: {args.test_type}")
     print("=" * 80)
 
     try:
         # Step 1: Repo setup and install (both sanity and full)
-        if not tester.run_repo_setup_and_install():
+        if not test_runner.run_repo_setup_and_install():
             print("\n[FAIL] Step 1 (repo setup and install) failed.")
             sys.exit(1)
 
         # Step 2: Basic test — prefix, components, packages, rocminfo (both sanity and full)
-        if not tester.run_basic_verification():
+        if not test_runner.run_basic_verification():
             print("\n[FAIL] Step 2 (basic verification) failed.")
             sys.exit(1)
 
         # Step 3: Full test — rdhc.py (full only)
         if args.test_type == "full":
-            if not tester.run_full_verification():
+            if not test_runner.run_full_verification():
                 print("\n[FAIL] Step 3 (full verification) failed.")
                 sys.exit(1)
 
