@@ -437,3 +437,49 @@ class TestROCmSanity:
                 assert (
                     not missing_fields
                 ), f"Human-readable GPU block {index} missing fields: {missing_fields}\nBlock:\n{human_readable_gpu_block}"
+
+    @pytest.mark.skipif(is_windows(), reason="amd-smi CLI not supported on Windows")
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
+    )
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES is None,
+        reason="AMDGPU_FAMILIES is not set (required for VDDBOARD expectations)",
+    )
+    def test_amd_smi_voltage_vddboard(self) -> None:
+        """Validate `amd-smi metric --voltage` reports VDDBOARD.
+
+        `amd_smi_voltage_vddboard`.
+        """
+
+        return_code, stdout_text, stderr_text = _run_amd_smi(["metric", "--voltage"])
+        assert (
+            return_code == 0
+        ), f"amd-smi metric --voltage failed rc={return_code} stderr={stderr_text} stdout={stdout_text}"
+
+        # Expected behavior:
+        # - Supported families: VDDBOARD: <number> mV
+        # - Unsupported families: VDDBOARD: N/A
+        supported_families = {"gfx94X-dcgpu", "gfx950-dcgpu"}
+
+        # Capture the full value after 'VDDBOARD:' for each occurrence.
+        values = [v.strip() for v in re.findall(r"VDDBOARD:\s*([^\r\n]+)", stdout_text)]
+        assert values, (
+            "Expected VDDBOARD field in `amd-smi metric --voltage` output "
+            f"for family={AMDGPU_FAMILIES}. stdout=\n{stdout_text}\n\n"
+            f"stderr=\n{stderr_text}"
+        )
+
+        if AMDGPU_FAMILIES in supported_families:
+            # Example expected: '55079 mV'
+            for v in values:
+                assert re.search(r"^\d+(?:\.\d+)?\s*mV\b", v, flags=re.IGNORECASE), (
+                    "Expected VDDBOARD to be reported as '<number> mV' "
+                    f"for family={AMDGPU_FAMILIES}, got: {v!r}. stdout=\n{stdout_text}"
+                )
+        else:
+            for v in values:
+                assert re.search(r"^N/A\b", v, flags=re.IGNORECASE), (
+                    "Expected VDDBOARD to be reported as 'N/A' for unsupported families "
+                    f"(family={AMDGPU_FAMILIES}), got: {v!r}. stdout=\n{stdout_text}"
+                )
