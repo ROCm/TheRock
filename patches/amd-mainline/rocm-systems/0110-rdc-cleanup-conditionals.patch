@@ -1,0 +1,68 @@
+From 92f728bc990d5ebd7460183678af9b2fc64bfa3f Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Mon, 16 Mar 2026 20:22:12 -0400
+Subject: [PATCH] rdc - clean up if-statements in cmakelists
+
+---
+ projects/rdc/CMakeLists.txt               | 7 +++----
+ projects/rdc/example/CMakeLists.txt       | 7 +++----
+ projects/rdc/tests/example/CMakeLists.txt | 7 +++----
+ 3 files changed, 9 insertions(+), 12 deletions(-)
+
+diff --git a/projects/rdc/CMakeLists.txt b/projects/rdc/CMakeLists.txt
+index c3710234c8..983b9af366 100755
+--- a/projects/rdc/CMakeLists.txt
++++ b/projects/rdc/CMakeLists.txt
+@@ -156,10 +156,9 @@ project(${RDC} VERSION "${VERSION_STRING}" HOMEPAGE_URL "https://github.com/Rade
+ 
+ 
+ # Set compile flags
+-if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64")
+-else()
+-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64 -msse -msse2")
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64")
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse2")
+ endif()
+ 
+ # Include CMAKE_INSTALL_* variables
+diff --git a/projects/rdc/example/CMakeLists.txt b/projects/rdc/example/CMakeLists.txt
+index a2766ce158..49b0a23e02 100755
+--- a/projects/rdc/example/CMakeLists.txt
++++ b/projects/rdc/example/CMakeLists.txt
+@@ -32,10 +32,9 @@ option(CMAKE_VERBOSE_MAKEFILE "Enable verbose output" ON)
+ option(CMAKE_EXPORT_COMPILE_COMMANDS "Export compile commands for linters and autocompleters" ON)
+ 
+ # Set compile flags
+-if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64")
+-else()
+-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64 -msse -msse2")
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64")
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse2")
+ endif()
+ set(CMAKE_CXX_FLAGS_DEBUG
+     "${CMAKE_CXX_FLAGS_DEBUG} -O0 -ggdb -DDEBUG"
+diff --git a/projects/rdc/tests/example/CMakeLists.txt b/projects/rdc/tests/example/CMakeLists.txt
+index c799c1aa35..c3b30df79a 100755
+--- a/projects/rdc/tests/example/CMakeLists.txt
++++ b/projects/rdc/tests/example/CMakeLists.txt
+@@ -23,10 +23,9 @@ message("                       Cmake Example Lib                           ")
+ message("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+ 
+ # Set compile flags
+-if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64")
+-else()
+-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64 -msse -msse2")
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64")
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse2")
+ endif()
+ set(CMAKE_CXX_FLAGS_DEBUG
+     "${CMAKE_CXX_FLAGS_DEBUG} -O0 -ggdb -DDEBUG"
+-- 
+2.50.1 (Apple Git-155)
+
