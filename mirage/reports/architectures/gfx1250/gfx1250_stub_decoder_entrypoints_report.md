@@ -37,6 +37,7 @@
   - route-wide exact operand-role binding-count total and explicitness validation across the current routed matrix and non-matrix seed sets
   - route-wide exact operand-role, slot-binding, and descriptor ordering validation across the current routed matrix and non-matrix seed sets
   - route-wide exact route metadata and operand-layout validation across the current routed matrix and non-matrix seed sets
+  - route-wide exact route-info and RDNA4 provenance parity validation across the current routed matrix and non-matrix seed sets
 
 ## Routed Seed Metadata Coverage
 
@@ -46,6 +47,7 @@
   - `V_PK_MUL_BF16`
   - `V_PK_MIN_NUM_BF16`
   - `V_PK_MAX_NUM_BF16`
+  - route-wide exact route metadata, operand-layout, and route-info / RDNA4 provenance checks across the current packed BF16 seeds
 - `VOP3P` WMMA / SWMMAC slice:
   - `V_WMMA_F32_16X16X4_F32_w32`
   - `V_WMMA_F32_16X16X128_FP8_FP8_w32`
@@ -181,6 +183,7 @@
     - route-wide exact operand-role binding-count total and explicitness checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact route metadata and operand-layout checks across current routed non-scale `V_WMMA_*` seeds
+    - route-wide exact route-info and RDNA4 provenance parity checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide role-specific wave32 checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide wave32 validation across current routed `V_WMMA_*` seeds except paired-load helpers
 - WMMA scale:
@@ -220,6 +223,7 @@
     - route-wide exact operand-role binding-count total and explicitness checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact route metadata and operand-layout checks across current routed `V_WMMA_SCALE*` seeds
+    - route-wide exact route-info and RDNA4 provenance parity checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide scalar scale-slot and scale-descriptor checks across current routed `V_WMMA_SCALE*` seeds
 - WMMA scale paired loads:
   - `V_WMMA_LD_SCALE_PAIRED_B32` -> `kWmmaLdScalePairedB32`
@@ -254,6 +258,7 @@
     - route-wide exact operand-role binding-count total and explicitness checks across current paired scale-load helpers
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across current paired scale-load helpers
     - route-wide exact route metadata and operand-layout checks across current paired scale-load helpers
+    - route-wide exact route-info and RDNA4 provenance parity checks across current paired scale-load helpers
     - route-wide exact vector source/destination and scalar scale / paired-scale slot-shape checks across current paired scale-load helpers
     - route-wide exact scalar scale / paired-scale and width-specific destination descriptor-shape checks across current paired scale-load helpers
     - route-wide explicit slot/descriptor validation across current paired scale-load helpers
@@ -302,6 +307,7 @@
     - route-wide exact operand-role binding-count total and explicitness checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact route metadata and operand-layout checks across current routed `V_SWMMAC_*` seeds
+    - route-wide exact route-info and RDNA4 provenance parity checks across current routed `V_SWMMAC_*` seeds
     - route-wide role-specific wave32 checks across current routed `V_SWMMAC_*` seeds
     - route-wide wave32 validation across current routed `V_SWMMAC_*` seeds
 - Tensor routes:
@@ -338,6 +344,7 @@
     - route-wide exact operand-role binding-count total and explicitness checks across the current tensor route set
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across the current tensor route set
     - route-wide exact route metadata and operand-layout checks across the current tensor route set
+    - route-wide exact route-info and RDNA4 provenance parity checks across the current tensor route set
     - route-wide exact tensor-descriptor, tensor-coordinate, and LDS address slot-shape checks across the current tensor route set
     - route-wide exact tensor-descriptor, tensor-coordinate, and LDS address descriptor-shape checks across the current tensor route set
     - route-wide explicit slot/descriptor validation across the current tensor route set
@@ -373,6 +380,7 @@
     - route-wide exact operand-role binding-count total and explicitness checks across the current VOP1 route set
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across the current VOP1 route set
     - route-wide exact route metadata and operand-layout checks across the current VOP1 route set
+    - route-wide exact route-info and RDNA4 provenance parity checks across the current VOP1 route set
     - route-wide exact scalar and packed source/destination slot-shape checks across the current VOP1 route set
     - route-wide exact scalar and packed source/destination descriptor-shape checks across the current VOP1 route set
     - route-wide explicit slot/descriptor validation across the current VOP1 route set
@@ -406,6 +414,7 @@
     - route-wide exact operand-role binding-count total and explicitness checks across the current VOP3 SDST route set
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across the current VOP3 SDST route set
     - route-wide exact route metadata and operand-layout checks across the current VOP3 SDST route set
+    - route-wide exact route-info and RDNA4 provenance parity checks across the current VOP3 SDST route set
     - route-wide exact source, scale, and vector/scalar destination slot-shape checks across the current VOP3 SDST route set
     - route-wide exact scale-source and vector/scalar destination descriptor-shape checks across the current VOP3 SDST route set
     - route-wide explicit slot/descriptor validation across the current VOP3 SDST route set

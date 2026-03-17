@@ -26,6 +26,7 @@ using mirage::sim::isa::gfx1250::StubDecodedInstruction;
 using mirage::sim::isa::gfx1250::StubDecodeStatus;
 using mirage::sim::isa::gfx1250::StubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::StubDecoderRoute;
+using mirage::sim::isa::gfx1250::StubDecoderRouteInfo;
 using mirage::sim::isa::gfx1250::StubExecutionDomain;
 using mirage::sim::isa::gfx1250::StubOperandAccess;
 using mirage::sim::isa::gfx1250::StubFragmentKind;
@@ -240,6 +241,19 @@ bool MatchesLayout(const StubDecodedInstruction& instruction,
              expected.has_tensor_descriptor &&
          instruction.operand_layout.touches_lds == expected.touches_lds &&
          instruction.operand_layout.is_store == expected.is_store;
+}
+
+bool MatchesRouteInfoPayload(const StubDecodedInstruction& instruction,
+                             const StubDecoderRouteInfo& route_info) {
+  return instruction.instruction_name == route_info.instruction_name &&
+         instruction.route == route_info.route &&
+         instruction.route_name == route_info.route_name &&
+         instruction.route_priority == route_info.route_priority &&
+         instruction.rdna4_encoding_name == route_info.rdna4_encoding_name &&
+         instruction.rdna4_opcode == route_info.rdna4_opcode &&
+         instruction.rdna4_operand_count == route_info.rdna4_operand_count &&
+         instruction.appears_in_rdna4_xml == route_info.appears_in_rdna4_xml &&
+         instruction.is_target_specific == route_info.is_target_specific;
 }
 
 bool ContainsSlot(const StubDecodedInstruction& instruction,
@@ -1066,6 +1080,63 @@ int main() {
     return 1;
   }
 
+  for (std::string_view instruction_name :
+       GetStubDecoderRouteInstructions(StubDecoderRoute::kVop3p)) {
+    if (instruction_name.rfind("V_PK_", 0) != 0 ||
+        instruction_name.find("BF16") == std::string_view::npos) {
+      continue;
+    }
+    const StubDecodedInstruction decoded = DecodeVop3pStub(instruction_name);
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
+    if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
+                "expected routed packed VOP3P seed to decode")) {
+      return 1;
+    }
+    if (!Expect(route_info != nullptr &&
+                    MatchesRouteInfoPayload(decoded, *route_info),
+                "expected routed packed VOP3P seed to preserve route-info and RDNA4 provenance")) {
+      return 1;
+    }
+    if (!Expect(
+            MatchesRouteMetadata(
+                decoded,
+                {StubDecoderRoute::kVop3p, "kVop3p", "DecodeVop3pStub", 1}),
+            "expected routed packed VOP3P seed to keep exact route metadata")) {
+      return 1;
+    }
+    if (!Expect(
+            decoded.execution_domain == StubExecutionDomain::kVectorAlu &&
+                decoded.opcode_shape ==
+                    (instruction_name == "V_PK_FMA_BF16"
+                         ? StubOpcodeShape::kVop3pPackedFma
+                         : StubOpcodeShape::kVop3pPackedBinary) &&
+                !decoded.uses_accumulator && !decoded.uses_tensor_memory &&
+                !decoded.uses_scale_path && decoded.uses_paired_operands &&
+                MatchesLayout(
+                    decoded,
+                    {instruction_name == "V_PK_ADD_BF16"
+                         ? StubOperandLayoutKind::kPkAddBf16
+                         : instruction_name == "V_PK_FMA_BF16"
+                               ? StubOperandLayoutKind::kPkFmaBf16
+                               : instruction_name == "V_PK_MUL_BF16"
+                                     ? StubOperandLayoutKind::kPkMulBf16
+                                     : instruction_name == "V_PK_MIN_NUM_BF16"
+                                           ? StubOperandLayoutKind::kPkMinNumBf16
+                                           : StubOperandLayoutKind::kPkMaxNumBf16,
+                     instruction_name == "V_PK_FMA_BF16" ? 3u : 2u,
+                     1,
+                     0,
+                     false,
+                     false,
+                     false,
+                     false,
+                     false}),
+            "expected routed packed VOP3P seed to keep exact top-level route/layout metadata")) {
+      return 1;
+    }
+  }
+
   const StubDecodedInstruction wmma =
       DecodeVop3pStub("V_WMMA_F32_16X16X4_F32_w32");
   if (!Expect(wmma.opcode_shape == StubOpcodeShape::kWmmaCore,
@@ -1836,8 +1907,15 @@ int main() {
     }
 
     const StubDecodedInstruction decoded = DecodeVop3pStub(instruction_name);
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
     if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
                 "expected routed WMMA/SWMMAC seed to decode")) {
+      return 1;
+    }
+    if (!Expect(route_info != nullptr &&
+                    MatchesRouteInfoPayload(decoded, *route_info),
+                "expected routed WMMA/SWMMAC seed to preserve route-info and RDNA4 provenance")) {
       return 1;
     }
     if (!Expect(
@@ -4065,8 +4143,15 @@ int main() {
   for (std::string_view instruction_name :
        GetStubDecoderRouteInstructions(StubDecoderRoute::kMimgTensor)) {
     const StubDecodedInstruction decoded = DecodeMimgTensorStub(instruction_name);
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
     if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
                 "expected routed tensor seed to decode")) {
+      return 1;
+    }
+    if (!Expect(route_info != nullptr &&
+                    MatchesRouteInfoPayload(decoded, *route_info),
+                "expected routed tensor seed to preserve route-info and RDNA4 provenance")) {
       return 1;
     }
     if (!Expect(
@@ -4674,8 +4759,15 @@ int main() {
   for (std::string_view instruction_name :
        GetStubDecoderRouteInstructions(StubDecoderRoute::kVop1)) {
     const StubDecodedInstruction decoded = DecodeVop1Stub(instruction_name);
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
     if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
                 "expected routed VOP1 seed to decode")) {
+      return 1;
+    }
+    if (!Expect(route_info != nullptr &&
+                    MatchesRouteInfoPayload(decoded, *route_info),
+                "expected routed VOP1 seed to preserve route-info and RDNA4 provenance")) {
       return 1;
     }
     if (!Expect(
@@ -5099,8 +5191,15 @@ int main() {
   for (std::string_view instruction_name :
        GetStubDecoderRouteInstructions(StubDecoderRoute::kVop3Sdst)) {
     const StubDecodedInstruction decoded = DecodeVop3SdstStub(instruction_name);
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
     if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
                 "expected routed VOP3 SDST seed to decode")) {
+      return 1;
+    }
+    if (!Expect(route_info != nullptr &&
+                    MatchesRouteInfoPayload(decoded, *route_info),
+                "expected routed VOP3 SDST seed to preserve route-info and RDNA4 provenance")) {
       return 1;
     }
     if (!Expect(
@@ -5582,8 +5681,15 @@ int main() {
       continue;
     }
     const StubDecodedInstruction decoded = DecodeVop3pStub(instruction_name);
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
     if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
                 "expected routed paired-scale seed to decode")) {
+      return 1;
+    }
+    if (!Expect(route_info != nullptr &&
+                    MatchesRouteInfoPayload(decoded, *route_info),
+                "expected routed paired-scale seed to preserve route-info and RDNA4 provenance")) {
       return 1;
     }
     if (!Expect(
