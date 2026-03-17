@@ -10,7 +10,7 @@ import re
 import subprocess
 import sys
 
-from github_actions.manifest_utils import capture, capture_optional
+from github_actions.manifest_utils import capture, capture_optional, log
 
 
 def source_root() -> Path:
@@ -315,7 +315,7 @@ def main():
     # Write JSON
     write_manifest_json(out_path, manifest)
 
-    print(str(out_path))
+    log(str(out_path))
     return 0
 
 

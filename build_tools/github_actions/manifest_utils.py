@@ -7,6 +7,13 @@ from dataclasses import dataclass
 from pathlib import Path
 import shlex
 import subprocess
+import sys
+
+
+def log(*args, **kwargs) -> None:
+    """Consistent logging helper for manifest generation scripts."""
+    print(*args, **kwargs)
+    sys.stdout.flush()
 
 
 @dataclass(frozen=True)
@@ -26,7 +33,7 @@ class GitSourceInfo:
 
 def capture(args: list[str | Path], cwd: Path) -> str:
     args = [str(arg) for arg in args]
-    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+    log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     return (
         subprocess.check_output(
             args,
@@ -41,7 +48,7 @@ def capture(args: list[str | Path], cwd: Path) -> str:
 def capture_optional(args: list[str | Path], cwd: Path) -> str | None:
     """Like capture(), but returns None on failure."""
     args = [str(arg) for arg in args]
-    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+    log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     try:
         out = (
             subprocess.check_output(

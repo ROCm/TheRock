@@ -23,6 +23,7 @@ from github_actions.manifest_utils import (
     GitSourceInfo,
     git_branch_best_effort,
     git_head,
+    log,
     normalize_python_version_for_filename,
     normalize_ref_for_filename,
     resolve_branch,
@@ -251,7 +252,7 @@ def main(argv: list[str]) -> None:
         json.dumps(manifest, indent=2, sort_keys=False) + "\n",
         encoding="utf-8",
     )
-    print(f"[pytorch-sources-manifest] wrote {out_path}")
+    log(f"[pytorch-sources-manifest] wrote {out_path}")
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ from github_actions.manifest_utils import (
     GitSourceInfo,
     git_branch_best_effort,
     git_head,
+    log,
     normalize_python_version_for_filename,
     normalize_ref_for_filename,
     resolve_branch,
@@ -152,7 +153,7 @@ def main(argv: list[str]) -> None:
     if out_path.stat().st_size == 0:
         raise RuntimeError(f"Manifest is empty: {out_path}")
 
-    print(f"[jax-sources-manifest] wrote {out_path}")
+    log(f"[jax-sources-manifest] wrote {out_path}")
 
 
 if __name__ == "__main__":
