@@ -4,6 +4,9 @@
 """
 This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
 
+Runner labels can be dynamically overridden via S3 without requiring PRs.
+See runner_overrides.py for details.
+
 * Each entry determines which families and test runners are available to use
 * Each group determines which entries run by default on workflow triggers
 
@@ -328,7 +331,14 @@ def get_all_families_for_trigger_types(trigger_types):
     """
     Returns a combined family matrix for the specified trigger types.
     trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
+
+    The returned matrix has S3-based runner overrides applied, allowing
+    dynamic runner configuration without requiring PRs.
     """
+    import copy
+
+    from runner_overrides import apply_overrides
+
     result = {}
     matrix_map = {
         "presubmit": amdgpu_family_info_matrix_presubmit,
@@ -339,6 +349,8 @@ def get_all_families_for_trigger_types(trigger_types):
     for trigger_type in trigger_types:
         if trigger_type in matrix_map:
             for family_name, family_config in matrix_map[trigger_type].items():
-                result[family_name] = family_config
+                # Deep copy to avoid mutating original static matrices
+                result[family_name] = copy.deepcopy(family_config)
 
-    return result
+    # Apply S3 overrides for dynamic runner configuration
+    return apply_overrides(result)
