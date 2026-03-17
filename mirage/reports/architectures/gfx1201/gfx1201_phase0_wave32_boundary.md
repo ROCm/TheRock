@@ -11,11 +11,11 @@ execution path.
 
 ## Summary
 
-- Phase-0 executable opcodes: `333`
+- Phase-0 executable opcodes: `339`
 - Wave size: `32`
 - All currently seeded `ENC_VOP1`, `ENC_VOP2`, and `ENC_VOPC` instruction/encoding pairs are executable on the local path.
 - There are no remaining imported `ENC_VOP1`, `ENC_VOP2`, or `ENC_VOPC` instruction/encoding pairs outside the current seed surface.
-- `ENC_SMEM` now has eight local executable footholds via `S_DCACHE_INV`, `S_PREFETCH_INST`, `S_PREFETCH_INST_PC_REL`, `S_PREFETCH_DATA`, `S_BUFFER_PREFETCH_DATA`, `S_PREFETCH_DATA_PC_REL`, `S_ATC_PROBE`, and `S_ATC_PROBE_BUFFER`, but the remaining `20` seeded scalar-memory instructions stay scaffolded.
+- `ENC_SMEM` now has fourteen local executable footholds via `S_DCACHE_INV`, `S_PREFETCH_INST`, `S_PREFETCH_INST_PC_REL`, `S_PREFETCH_DATA`, `S_BUFFER_PREFETCH_DATA`, `S_PREFETCH_DATA_PC_REL`, `S_ATC_PROBE`, `S_ATC_PROBE_BUFFER`, `S_LOAD_B32`, `S_LOAD_B64`, `S_LOAD_I8`, `S_LOAD_U8`, `S_LOAD_I16`, and `S_LOAD_U16`, but the remaining `14` seeded scalar-memory instructions stay scaffolded.
 - Remaining narrow `ENC_VOP1`/`ENC_VOP2`/`ENC_VOPC` instruction/encoding pairs outside the current seed: `0`
 - Recommended next frontier: `ENC_SMEM`
 
@@ -35,13 +35,13 @@ execution path.
 
 ## Next-Risk Encoding Status
 
-- `ENC_SMEM`: example `S_LOAD_B32`, seeded `28`, executable `8` via `S_ATC_PROBE`, as-is `0`, decoder-rollup `3`, semantic-only `0`, gfx1201-specific `25`
+- `ENC_SMEM`: example `S_LOAD_B32`, seeded `28`, executable `14` via `S_ATC_PROBE`, as-is `0`, decoder-rollup `3`, semantic-only `0`, gfx1201-specific `25`
 - `ENC_VOP3`: example `V_ADD3_U32`, seeded `434`, executable `0`, as-is `232`, decoder-rollup `91`, semantic-only `24`, gfx1201-specific `87`
 - `ENC_VDS`: example `DS_ADD_U32`, seeded `123`, executable `0`, as-is `27`, decoder-rollup `38`, semantic-only `0`, gfx1201-specific `58`
 - `ENC_VGLOBAL`: example `GLOBAL_LOAD_B32`, seeded `65`, executable `0`, as-is `3`, decoder-rollup `0`, semantic-only `0`, gfx1201-specific `62`
 
 `ENC_SMEM` remains the recommended next frontier because it is still the
-smallest remaining seeded blocker and the current local cache-hint/probe footholds keep the
+smallest remaining seeded blocker and the current local cache-hint/probe plus first-load footholds keep the
 next phase architecture-local. The later frontier steps move into broader
 decoder/execution churn, with `ENC_VOP3` remaining the largest and riskiest
 step.

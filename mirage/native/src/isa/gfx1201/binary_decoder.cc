@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 333> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 339> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -28,6 +28,12 @@ constexpr std::array<std::string_view, 333> kPhase0ExecutableOpcodes{{
     "S_PREFETCH_DATA_PC_REL",
     "S_ATC_PROBE",
     "S_ATC_PROBE_BUFFER",
+    "S_LOAD_B32",
+    "S_LOAD_B64",
+    "S_LOAD_I8",
+    "S_LOAD_U8",
+    "S_LOAD_I16",
+    "S_LOAD_U16",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1076,6 +1082,44 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         described_sbase,
         DescribeSourceOperand(offset, OperandRole::kSource2,
                               OperandSlotKind::kSource2));
+    *words_consumed = 2;
+  } else if (instruction_name == "S_LOAD_B32" ||
+             instruction_name == "S_LOAD_B64" ||
+             instruction_name == "S_LOAD_I8" ||
+             instruction_name == "S_LOAD_U8" ||
+             instruction_name == "S_LOAD_I16" ||
+             instruction_name == "S_LOAD_U16") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+
+    InstructionOperand sdst;
+    if (!DecodeScalarDestination(ExtractBits(word, 6, 7), &sdst, error_message)) {
+      return false;
+    }
+
+    InstructionOperand sbase;
+    if (!DecodeSmemBaseOperand(ExtractBits(word, 0, 6), &sbase, error_message)) {
+      return false;
+    }
+
+    InstructionOperand offset;
+    if (!DecodeSmemOffsetOperand(word, words[1], &offset, error_message)) {
+      return false;
+    }
+
+    const bool is_wide_load = instruction_name == "S_LOAD_B64";
+    *instruction = DecodedInstruction::ThreeOperand(
+        instruction_name,
+        is_wide_load ? DescribeScalarDestinationOperand(sdst, false, 64u, 2u)
+                     : DescribeScalarDestinationOperand(sdst),
+        DescribeWideSourceOperand(sbase, OperandRole::kSource0,
+                                  OperandSlotKind::kSource0),
+        DescribeSourceOperand(offset, OperandRole::kSource1,
+                              OperandSlotKind::kSource1));
     *words_consumed = 2;
   } else if (instruction_name == "S_BRANCH" ||
              instruction_name == "S_CBRANCH_SCC0" ||

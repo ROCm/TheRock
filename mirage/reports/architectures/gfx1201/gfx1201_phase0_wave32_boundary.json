@@ -2,7 +2,7 @@
   "target": "gfx1201",
   "slice": "phase0_wave32_boundary",
   "wave_size": 32,
-  "phase0_executable_count": 333,
+  "phase0_executable_count": 339,
   "tracked_encodings": [
     {
       "encoding_name": "ENC_VOP1",
@@ -47,7 +47,7 @@
       "encoding_name": "ENC_SMEM",
       "example_instruction": "S_LOAD_B32",
       "seeded_instruction_count": 28,
-      "executable_instruction_count": 8,
+      "executable_instruction_count": 14,
       "first_executable_instruction": "S_ATC_PROBE",
       "transferable_as_is_count": 0,
       "transferable_with_decoder_work_count": 0,
@@ -103,8 +103,8 @@
   "notes": [
     "All currently seeded ENC_VOP1, ENC_VOP2, and ENC_VOPC instruction/encoding pairs are executable on the local wave32 path.",
     "There are no remaining imported ENC_VOP1, ENC_VOP2, or ENC_VOPC instruction/encoding pairs outside the current seed surface.",
-    "ENC_SMEM now has eight local executable footholds via S_DCACHE_INV, S_PREFETCH_INST, S_PREFETCH_INST_PC_REL, S_PREFETCH_DATA, S_BUFFER_PREFETCH_DATA, S_PREFETCH_DATA_PC_REL, S_ATC_PROBE, and S_ATC_PROBE_BUFFER, but the remaining 20 seeded SMEM instructions stay scaffolded.",
+    "ENC_SMEM now has fourteen local executable footholds via S_DCACHE_INV, S_PREFETCH_INST, S_PREFETCH_INST_PC_REL, S_PREFETCH_DATA, S_BUFFER_PREFETCH_DATA, S_PREFETCH_DATA_PC_REL, S_ATC_PROBE, S_ATC_PROBE_BUFFER, S_LOAD_B32, S_LOAD_B64, S_LOAD_I8, S_LOAD_U8, S_LOAD_I16, and S_LOAD_U16, but the remaining 14 seeded SMEM instructions stay scaffolded.",
     "ENC_SMEM remains the recommended next frontier because it is the smallest remaining seeded blocker and the current local foothold keeps the next phase architecture-local.",
-    "The next coherent phase-0 extensions now deepen ENC_SMEM beyond the current cache-hint/probe footholds, or move into ENC_VOP3, ENC_VDS, and ENC_VGLOBAL, or require broader shared-layer churn."
+    "The next coherent phase-0 extensions now deepen ENC_SMEM beyond the current cache-hint/probe plus first-load footholds, or move into ENC_VOP3, ENC_VDS, and ENC_VGLOBAL, or require broader shared-layer churn."
   ]
 }

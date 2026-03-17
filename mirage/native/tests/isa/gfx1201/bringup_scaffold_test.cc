@@ -145,10 +145,22 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 333u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 339u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B32"),
+              "expected S_LOAD_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B64"),
+              "expected S_LOAD_B64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_I8"),
+              "expected S_LOAD_I8 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_U8"),
+              "expected S_LOAD_U8 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_I16"),
+              "expected S_LOAD_I16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_U16"),
+              "expected S_LOAD_U16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_PREFETCH_INST"),
               "expected S_PREFETCH_INST executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_PREFETCH_INST_PC_REL"),
@@ -455,6 +467,52 @@ int main() {
     return 1;
   }
 
+  const auto load_b32_words = MakeSmem(0u, 18u, 4u, true, 12u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(load_b32_words.data(),
+                                                 load_b32_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_LOAD_B32 decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "S_LOAD_B32",
+              "expected S_LOAD_B32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected S_LOAD_B32 ternary decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[0].index == 18u,
+              "expected S_LOAD_B32 scalar destination") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[1].index == 4u,
+              "expected S_LOAD_B32 64-bit scalar base") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[2].imm32 == 12u,
+              "expected S_LOAD_B32 inline offset")) {
+    return 1;
+  }
+
+  const auto load_b64_words = MakeSmem(1u, 20u, 8u, false, 31u, true);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(load_b64_words.data(),
+                                                 load_b64_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_LOAD_B64 decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "S_LOAD_B64",
+              "expected S_LOAD_B64 opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected S_LOAD_B64 ternary decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[0].index == 20u,
+              "expected S_LOAD_B64 scalar destination") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[1].index == 8u,
+              "expected S_LOAD_B64 64-bit scalar base") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[2].index == 31u,
+              "expected S_LOAD_B64 scalar offset register")) {
+    return 1;
+  }
+
   const auto prefetch_inst_pc_rel_words =
       MakeSmemPrefetchPcRel(37u, -32, 9u, -3);
   if (!Expect(decoder.DecodeInstruction(
@@ -610,12 +668,24 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 333u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 339u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
       !Expect(interpreter.Supports("S_DCACHE_INV"),
               "expected interpreter support for S_DCACHE_INV") ||
+      !Expect(interpreter.Supports("S_LOAD_B32"),
+              "expected interpreter support for S_LOAD_B32") ||
+      !Expect(interpreter.Supports("S_LOAD_B64"),
+              "expected interpreter support for S_LOAD_B64") ||
+      !Expect(interpreter.Supports("S_LOAD_I8"),
+              "expected interpreter support for S_LOAD_I8") ||
+      !Expect(interpreter.Supports("S_LOAD_U8"),
+              "expected interpreter support for S_LOAD_U8") ||
+      !Expect(interpreter.Supports("S_LOAD_I16"),
+              "expected interpreter support for S_LOAD_I16") ||
+      !Expect(interpreter.Supports("S_LOAD_U16"),
+              "expected interpreter support for S_LOAD_U16") ||
       !Expect(interpreter.Supports("S_PREFETCH_INST"),
               "expected interpreter support for S_PREFETCH_INST") ||
       !Expect(interpreter.Supports("S_PREFETCH_INST_PC_REL"),

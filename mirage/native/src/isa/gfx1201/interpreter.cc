@@ -45,7 +45,7 @@ float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 std::uint16_t CompressFloatToFp16BitsRtz(float value);
 
-constexpr std::array<std::string_view, 333> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 339> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -56,6 +56,12 @@ constexpr std::array<std::string_view, 333> kExecutableSeedOpcodes{{
     "S_PREFETCH_DATA_PC_REL",
     "S_ATC_PROBE",
     "S_ATC_PROBE_BUFFER",
+    "S_LOAD_B32",
+    "S_LOAD_B64",
+    "S_LOAD_I8",
+    "S_LOAD_U8",
+    "S_LOAD_I16",
+    "S_LOAD_U16",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -877,6 +883,30 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "S_DCACHE_INV") {
     *compiled_opcode = Gfx1201CompiledOpcode::kSNop;
+    return true;
+  }
+  if (opcode == "S_LOAD_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSLoadB32;
+    return true;
+  }
+  if (opcode == "S_LOAD_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSLoadB64;
+    return true;
+  }
+  if (opcode == "S_LOAD_I8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSLoadI8;
+    return true;
+  }
+  if (opcode == "S_LOAD_U8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSLoadU8;
+    return true;
+  }
+  if (opcode == "S_LOAD_I16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSLoadI16;
+    return true;
+  }
+  if (opcode == "S_LOAD_U16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSLoadU16;
     return true;
   }
   if (opcode == "S_PREFETCH_INST_PC_REL" ||
@@ -2418,6 +2448,26 @@ bool WriteScalarOperand(const InstructionOperand& operand,
   return true;
 }
 
+bool WriteWideScalarOperand(const InstructionOperand& operand,
+                            std::uint64_t value,
+                            WaveExecutionState* state,
+                            std::string* error_message) {
+  if (operand.kind != OperandKind::kSgpr) {
+    if (error_message != nullptr) {
+      *error_message = "expected wide scalar destination operand";
+    }
+    return false;
+  }
+
+  if (!WriteScalarOperand(operand, static_cast<std::uint32_t>(value), state,
+                          error_message)) {
+    return false;
+  }
+  return WriteScalarOperand(
+      InstructionOperand::Sgpr(static_cast<std::uint16_t>(operand.index + 1)),
+      static_cast<std::uint32_t>(value >> 32), state, error_message);
+}
+
 bool WriteVectorOperand(const InstructionOperand& operand,
                         std::size_t lane_index,
                         std::uint32_t value,
@@ -2437,6 +2487,37 @@ bool WriteVectorOperand(const InstructionOperand& operand,
   }
 
   state->vgprs[operand.index][lane_index] = value;
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool ComputeSmemAddress(const DecodedInstruction& instruction,
+                        const WaveExecutionState& state,
+                        std::uint64_t* address,
+                        std::string* error_message) {
+  if (address == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "SMEM address output must not be null";
+    }
+    return false;
+  }
+
+  const std::uint64_t base =
+      ReadWideSourceOperand(instruction.operands[1], state, 0, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+  const std::uint32_t raw_offset =
+      ReadScalarOperand(instruction.operands[2], state, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+
+  const std::int64_t signed_offset =
+      static_cast<std::int64_t>(static_cast<std::int32_t>(raw_offset));
+  *address = base + static_cast<std::uint64_t>(signed_offset);
   if (error_message != nullptr) {
     error_message->clear();
   }
@@ -3956,6 +4037,7 @@ bool EvaluateWideVectorCompareSeedInstruction(std::string_view opcode,
 
 bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
                                    WaveExecutionState* state,
+                                   ExecutionMemory* memory,
                                    bool* pc_was_updated,
                                    std::string* error_message) {
   if (pc_was_updated != nullptr) {
@@ -3994,6 +4076,89 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
   if (instruction.opcode == "S_ATC_PROBE" ||
       instruction.opcode == "S_ATC_PROBE_BUFFER") {
     return ValidateOperandCount(instruction, 3, error_message);
+  }
+  if (instruction.opcode == "S_LOAD_B32" ||
+      instruction.opcode == "S_LOAD_B64" ||
+      instruction.opcode == "S_LOAD_I8" ||
+      instruction.opcode == "S_LOAD_U8" ||
+      instruction.opcode == "S_LOAD_I16" ||
+      instruction.opcode == "S_LOAD_U16") {
+    if (!ValidateOperandCount(instruction, 3, error_message)) {
+      return false;
+    }
+    if (memory == nullptr) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " requires execution memory";
+      }
+      return false;
+    }
+
+    std::uint64_t address = 0;
+    if (!ComputeSmemAddress(instruction, *state, &address, error_message)) {
+      return false;
+    }
+
+    if (instruction.opcode == "S_LOAD_B32") {
+      std::uint32_t value = 0;
+      if (!memory->LoadU32(address, &value)) {
+        if (error_message != nullptr) {
+          *error_message = "S_LOAD_B32 memory read failed";
+        }
+        return false;
+      }
+      return WriteScalarOperand(instruction.operands[0], value, state,
+                                error_message);
+    }
+    if (instruction.opcode == "S_LOAD_B64") {
+      std::uint32_t low = 0;
+      std::uint32_t high = 0;
+      if (!memory->LoadU32(address, &low) || !memory->LoadU32(address + 4u, &high)) {
+        if (error_message != nullptr) {
+          *error_message = "S_LOAD_B64 memory read failed";
+        }
+        return false;
+      }
+      return WriteWideScalarOperand(
+          instruction.operands[0],
+          static_cast<std::uint64_t>(low) |
+              (static_cast<std::uint64_t>(high) << 32),
+          state, error_message);
+    }
+    if (instruction.opcode == "S_LOAD_I8" ||
+        instruction.opcode == "S_LOAD_U8") {
+      std::uint8_t value = 0;
+      if (!memory->LoadU8(address, &value)) {
+        if (error_message != nullptr) {
+          *error_message = std::string(instruction.opcode) +
+                           " memory read failed";
+        }
+        return false;
+      }
+      const std::uint32_t extended =
+          instruction.opcode == "S_LOAD_I8"
+              ? static_cast<std::uint32_t>(
+                    static_cast<std::int32_t>(static_cast<std::int8_t>(value)))
+              : static_cast<std::uint32_t>(value);
+      return WriteScalarOperand(instruction.operands[0], extended, state,
+                                error_message);
+    }
+
+    std::uint16_t value = 0;
+    if (!memory->LoadU16(address, &value)) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " memory read failed";
+      }
+      return false;
+    }
+    const std::uint32_t extended =
+        instruction.opcode == "S_LOAD_I16"
+            ? static_cast<std::uint32_t>(
+                  static_cast<std::int32_t>(static_cast<std::int16_t>(value)))
+            : static_cast<std::uint32_t>(value);
+    return WriteScalarOperand(instruction.operands[0], extended, state,
+                              error_message);
   }
 
   if (instruction.opcode == "V_NOP" ||
@@ -4903,11 +5068,18 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
 
 bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instruction,
                                     WaveExecutionState* state,
+                                    ExecutionMemory* memory,
                                     bool* pc_was_updated,
                                     std::string* error_message) {
   switch (instruction.opcode) {
     case Gfx1201CompiledOpcode::kSEndpgm:
     case Gfx1201CompiledOpcode::kSNop:
+    case Gfx1201CompiledOpcode::kSLoadB32:
+    case Gfx1201CompiledOpcode::kSLoadB64:
+    case Gfx1201CompiledOpcode::kSLoadI8:
+    case Gfx1201CompiledOpcode::kSLoadU8:
+    case Gfx1201CompiledOpcode::kSLoadI16:
+    case Gfx1201CompiledOpcode::kSLoadU16:
     case Gfx1201CompiledOpcode::kSAddU32:
     case Gfx1201CompiledOpcode::kSAddI32:
     case Gfx1201CompiledOpcode::kSSubU32:
@@ -5230,7 +5402,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVOrB32:
     case Gfx1201CompiledOpcode::kVXorB32:
       return ExecuteDecodedSeedInstruction(instruction.decoded_instruction, state,
-                                           pc_was_updated, error_message);
+                                           memory, pc_was_updated,
+                                           error_message);
     case Gfx1201CompiledOpcode::kUnknown:
       break;
   }
@@ -5321,7 +5494,6 @@ bool Gfx1201Interpreter::ExecuteProgram(std::span<const DecodedInstruction> prog
                                         WaveExecutionState* state,
                                         ExecutionMemory* memory,
                                         std::string* error_message) const {
-  (void)memory;
   std::vector<Gfx1201CompiledInstruction> compiled_program;
   if (!CompileProgram(program, &compiled_program, error_message)) {
     return false;
@@ -5341,7 +5513,6 @@ bool Gfx1201Interpreter::ExecuteProgram(
     WaveExecutionState* state,
     ExecutionMemory* memory,
     std::string* error_message) const {
-  (void)memory;
   if (!ValidateStateAndResetForExecution<std::span<const Gfx1201CompiledInstruction>>(
           state, error_message)) {
     return false;
@@ -5352,7 +5523,8 @@ bool Gfx1201Interpreter::ExecuteProgram(
     const Gfx1201CompiledInstruction& instruction =
         program[static_cast<std::size_t>(state->pc)];
     bool pc_was_updated = false;
-    if (!ExecuteCompiledSeedInstruction(instruction, state, &pc_was_updated,
+    if (!ExecuteCompiledSeedInstruction(instruction, state, memory,
+                                        &pc_was_updated,
                                         error_message)) {
       return false;
     }

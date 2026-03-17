@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "lib/sim/isa/common/decoded_instruction.h"
+#include "lib/sim/isa/common/execution_memory.h"
 #include "lib/sim/isa/common/wave_execution_state.h"
 #include "lib/sim/isa/gfx1201/binary_decoder.h"
 #include "lib/sim/isa/gfx1201/interpreter.h"
@@ -6884,6 +6885,205 @@ int main() {
               "expected compiled S_DCACHE_INV execution success") ||
       !Expect(expect_dcache_inv_state(compiled_dcache_inv_state),
               "expected compiled S_DCACHE_INV state")) {
+    return 1;
+  }
+
+  const auto load_b32_words = MakeSmem(0u, 40u, 2u, true, 4u);
+  const auto load_b64_words = MakeSmem(1u, 42u, 4u, false, 13u, true);
+  const auto load_i8_words = MakeSmem(8u, 44u, 6u, true, 0u);
+  const auto load_u8_words = MakeSmem(9u, 45u, 6u, true, 1u);
+  const auto load_i16_words = MakeSmem(10u, 46u, 6u, true, 2u);
+  const auto load_u16_words = MakeSmem(11u, 47u, 6u, true, 4u);
+
+  DecodedInstruction load_b32_instruction;
+  std::size_t load_words_consumed = 0;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(load_b32_words.data(),
+                                                 load_b32_words.size()),
+                  &load_b32_instruction, &load_words_consumed, &error_message),
+              "expected S_LOAD_B32 direct decode success") ||
+      !Expect(ExpectThreeOperandInstruction(load_b32_instruction, "S_LOAD_B32",
+                                            OperandKind::kSgpr, 40u,
+                                            OperandKind::kSgpr, 2u,
+                                            OperandKind::kImm32, 4u),
+              "expected decoded S_LOAD_B32 operands") ||
+      !Expect(load_words_consumed == 2u,
+              "expected S_LOAD_B32 to consume two dwords") ||
+      !Expect(ExpectOperandDescriptor(
+                  load_b32_instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected S_LOAD_B32 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  load_b32_instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 64u, 2u, false),
+              "expected S_LOAD_B32 base descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  load_b32_instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1, OperandValueClass::kUnknown,
+                  OperandAccess::kRead, FragmentKind::kScalar, 32u, 1u, false),
+              "expected S_LOAD_B32 offset descriptor")) {
+    return 1;
+  }
+
+  DecodedInstruction load_b64_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(load_b64_words.data(),
+                                                 load_b64_words.size()),
+                  &load_b64_instruction, &load_words_consumed, &error_message),
+              "expected S_LOAD_B64 direct decode success") ||
+      !Expect(ExpectThreeOperandInstruction(load_b64_instruction, "S_LOAD_B64",
+                                            OperandKind::kSgpr, 42u,
+                                            OperandKind::kSgpr, 4u,
+                                            OperandKind::kSgpr, 13u),
+              "expected decoded S_LOAD_B64 operands") ||
+      !Expect(load_words_consumed == 2u,
+              "expected S_LOAD_B64 to consume two dwords") ||
+      !Expect(ExpectOperandDescriptor(
+                  load_b64_instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 64u, 2u, false),
+              "expected S_LOAD_B64 destination descriptor")) {
+    return 1;
+  }
+
+  DecodedInstruction load_i8_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(load_i8_words.data(),
+                                                 load_i8_words.size()),
+                  &load_i8_instruction, &load_words_consumed, &error_message),
+              "expected S_LOAD_I8 direct decode success") ||
+      !Expect(ExpectThreeOperandInstruction(load_i8_instruction, "S_LOAD_I8",
+                                            OperandKind::kSgpr, 44u,
+                                            OperandKind::kSgpr, 6u,
+                                            OperandKind::kImm32, 0u),
+              "expected decoded S_LOAD_I8 operands") ||
+      !Expect(load_words_consumed == 2u,
+              "expected S_LOAD_I8 to consume two dwords")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 13> smem_load_program_words{{
+      load_b32_words[0], load_b32_words[1], load_b64_words[0], load_b64_words[1],
+      load_i8_words[0],  load_i8_words[1],  load_u8_words[0],  load_u8_words[1],
+      load_i16_words[0], load_i16_words[1], load_u16_words[0], load_u16_words[1],
+      MakeSopp(48u),
+  }};
+  std::vector<DecodedInstruction> smem_load_program;
+  if (!Expect(decoder.DecodeProgram(smem_load_program_words, &smem_load_program,
+                                    &error_message),
+              "expected SMEM load program decode success") ||
+      !Expect(smem_load_program.size() == 7u,
+              "expected seven decoded SMEM load instructions") ||
+      !Expect(smem_load_program[0].opcode == "S_LOAD_B32",
+              "expected decoded S_LOAD_B32 program opcode") ||
+      !Expect(smem_load_program[1].opcode == "S_LOAD_B64",
+              "expected decoded S_LOAD_B64 program opcode") ||
+      !Expect(smem_load_program[2].opcode == "S_LOAD_I8",
+              "expected decoded S_LOAD_I8 program opcode") ||
+      !Expect(smem_load_program[3].opcode == "S_LOAD_U8",
+              "expected decoded S_LOAD_U8 program opcode") ||
+      !Expect(smem_load_program[4].opcode == "S_LOAD_I16",
+              "expected decoded S_LOAD_I16 program opcode") ||
+      !Expect(smem_load_program[5].opcode == "S_LOAD_U16",
+              "expected decoded S_LOAD_U16 program opcode") ||
+      !Expect(smem_load_program[6].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after SMEM loads")) {
+    return 1;
+  }
+
+  auto initialize_smem_load_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x5u;
+    state->sgprs[2] = 0x1000u;
+    state->sgprs[3] = 0u;
+    state->sgprs[4] = 0x1010u;
+    state->sgprs[5] = 0u;
+    state->sgprs[6] = 0x1020u;
+    state->sgprs[7] = 0u;
+    state->sgprs[13] = 8u;
+  };
+  auto expect_smem_load_state = [](const WaveExecutionState& state) {
+    return state.lane_count == 32u && state.exec_mask == 0x5u &&
+           state.sgprs[40] == 0x11223344u &&
+           state.sgprs[42] == 0x55667788u &&
+           state.sgprs[43] == 0x99aabbccu &&
+           state.sgprs[44] == 0xffffff80u &&
+           state.sgprs[45] == 0x7fu &&
+           state.sgprs[46] == 0xffff8001u &&
+           state.sgprs[47] == 0x8123u && state.halted &&
+           !state.waiting_on_barrier && state.pc == 6u;
+  };
+  LinearExecutionMemory smem_load_memory(0x80u, 0x1000u);
+  if (!Expect(smem_load_memory.WriteU32(0x1004u, 0x11223344u),
+              "expected SMEM test write for S_LOAD_B32") ||
+      !Expect(smem_load_memory.WriteU32(0x1018u, 0x55667788u),
+              "expected SMEM test write for S_LOAD_B64 low") ||
+      !Expect(smem_load_memory.WriteU32(0x101cu, 0x99aabbccu),
+              "expected SMEM test write for S_LOAD_B64 high") ||
+      !Expect(smem_load_memory.StoreU8(0x1020u, 0x80u),
+              "expected SMEM test write for S_LOAD_I8") ||
+      !Expect(smem_load_memory.StoreU8(0x1021u, 0x7fu),
+              "expected SMEM test write for S_LOAD_U8") ||
+      !Expect(smem_load_memory.StoreU16(0x1022u, 0x8001u),
+              "expected SMEM test write for S_LOAD_I16") ||
+      !Expect(smem_load_memory.StoreU16(0x1024u, 0x8123u),
+              "expected SMEM test write for S_LOAD_U16")) {
+    return 1;
+  }
+
+  WaveExecutionState decoded_smem_load_state;
+  initialize_smem_load_state(&decoded_smem_load_state);
+  if (!Expect(interpreter.ExecuteProgram(smem_load_program, &decoded_smem_load_state,
+                                         &smem_load_memory, &error_message),
+              "expected decoded SMEM load execution success") ||
+      !Expect(expect_smem_load_state(decoded_smem_load_state),
+              "expected decoded SMEM load state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_smem_load_program;
+  if (!Expect(interpreter.CompileProgram(smem_load_program,
+                                         &compiled_smem_load_program,
+                                         &error_message),
+              "expected compiled SMEM load program success") ||
+      !Expect(compiled_smem_load_program.size() == 7u,
+              "expected seven compiled SMEM load instructions") ||
+      !Expect(compiled_smem_load_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kSLoadB32,
+              "expected compiled S_LOAD_B32 opcode") ||
+      !Expect(compiled_smem_load_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSLoadB64,
+              "expected compiled S_LOAD_B64 opcode") ||
+      !Expect(compiled_smem_load_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kSLoadI8,
+              "expected compiled S_LOAD_I8 opcode") ||
+      !Expect(compiled_smem_load_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kSLoadU8,
+              "expected compiled S_LOAD_U8 opcode") ||
+      !Expect(compiled_smem_load_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kSLoadI16,
+              "expected compiled S_LOAD_I16 opcode") ||
+      !Expect(compiled_smem_load_program[5].opcode ==
+                  Gfx1201CompiledOpcode::kSLoadU16,
+              "expected compiled S_LOAD_U16 opcode") ||
+      !Expect(compiled_smem_load_program[6].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after SMEM loads")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_smem_load_state;
+  initialize_smem_load_state(&compiled_smem_load_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_smem_load_program,
+                                         &compiled_smem_load_state,
+                                         &smem_load_memory, &error_message),
+              "expected compiled SMEM load execution success") ||
+      !Expect(expect_smem_load_state(compiled_smem_load_state),
+              "expected compiled SMEM load state")) {
     return 1;
   }
 

@@ -329,6 +329,7 @@ int main() {
   }
 
   const auto dcache_inv_words = MakeSmem(33u, 0u, 0u, true, 0u);
+  const auto load_b64_words = MakeSmem(1u, 12u, 8u, false, 31u, true);
   const auto prefetch_inst_words = MakeSmemBasePrefetch(36u, 8u, -16, 11u, -4);
   const auto atc_probe_words = MakeSmem(34u, 42u, 6u, false, 17u, true);
   const auto atc_probe_buffer_words = MakeSmem(35u, 55u, 10u, true, 0x1abcdu);
@@ -623,6 +624,34 @@ int main() {
       !Expect(decoded_instruction.opcode == "S_DCACHE_INV",
               "expected decoded S_DCACHE_INV opcode") ||
       !Expect(words_consumed == 2u, "expected two consumed dwords")) {
+    return 1;
+  }
+
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(smem_words.data(),
+                                                 smem_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_LOAD_B32 decode success after route") ||
+      !Expect(decoded_instruction.opcode == "S_LOAD_B32",
+              "expected decoded S_LOAD_B32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected decoded S_LOAD_B32 operand count") ||
+      !Expect(words_consumed == 2u,
+              "expected two consumed dwords for S_LOAD_B32")) {
+    return 1;
+  }
+
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(load_b64_words.data(),
+                                                 load_b64_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected S_LOAD_B64 decode success after route") ||
+      !Expect(decoded_instruction.opcode == "S_LOAD_B64",
+              "expected decoded S_LOAD_B64 opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected decoded S_LOAD_B64 operand count") ||
+      !Expect(words_consumed == 2u,
+              "expected two consumed dwords for S_LOAD_B64")) {
     return 1;
   }
 
