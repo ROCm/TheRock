@@ -2,9 +2,9 @@
 {% if disable_rpm_strip %}
 %global __strip   /bin/true
 {% else %}
-%global __strip   /usr/bin/llvm-strip
+%global __strip   /usr/bin/llvm-strip-20
 {% endif %}
-%global __objcopy /usr/bin/llvm-objcopy
+%global __objcopy /usr/bin/llvm-objcopy-20
 
 %global _buildshell /bin/bash
 %global _debugsource_template %{nil}

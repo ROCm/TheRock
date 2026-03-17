@@ -194,7 +194,7 @@ class TestROCmSanity:
         ]
 
         TESTS_TO_IGNORE = {
-            "gfx90X-dcgpu": {
+            "gfx90a": {
                 # TODO(#2963): Re-enable once amdsmi tests are fixed for gfx90X-dcgpu
                 "linux": [
                     "amdsmitstReadOnly.TestSysInfoRead",

@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: MIT
 
 if(THEROCK_ENABLE_ROCPROFV3)
-  set(_rocprofiler_sdk_common_deps)
-
   set(_openmpi_optional_dep)
   if(THEROCK_ENABLE_MPI)
     set(_openmpi_optional_dep therock-openmpi)
@@ -16,16 +14,14 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # See: https://github.com/ROCm/rocprof-trace-decoder/
   ##############################################################################
   therock_cmake_subproject_declare(rocprof-trace-decoder
+    # The build infrastructure requires generic stages to pass through
+    # DIST_AMDGPU_TARGETS even if the list isn't used by the underlying project.
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprof-trace-decoder"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder"
     BACKGROUND_BUILD
-    INTERFACE_INCLUDE_DIRS
-      include
-    INTERFACE_LINK_DIRS
-      lib
   )
   therock_cmake_subproject_activate(rocprof-trace-decoder)
-  list(APPEND _rocprofiler_sdk_common_deps rocprof-trace-decoder)
 
   ##############################################################################
   # aqlprofile
@@ -102,8 +98,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
     RUNTIME_DEPS
       aqlprofile
       hip-clr
+      rocprof-trace-decoder
       rocprofiler-register
-      ${_rocprofiler_sdk_common_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
@@ -150,7 +146,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       aqlprofile
       hip-clr
       rocprofiler-register
-      ${_rocprofiler_sdk_common_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
@@ -214,7 +209,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     SUBPROJECT_DEPS
       rocprofiler-sdk
       roctracer
-      ${_rocprofiler_sdk_common_deps}
+      rocprof-trace-decoder
   )
 
   therock_provide_artifact(rocprofiler-compute

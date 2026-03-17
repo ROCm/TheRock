@@ -302,6 +302,48 @@ class ConfigureCITest(unittest.TestCase):
             configure_ci.main(base_args, {}, {})
         self.assertIn('"test_type": "quick"', captured_out.getvalue())
 
+    @patch("subprocess.run")
+    def test_valid_main_push_ci_run(self, mock_run):
+        base_args = {
+            "build_variant": "release",
+            "github_event_name": "push",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml"
+        mock_run.return_value = mock_process
+        configure_ci.main(base_args, {}, {})
+
+    @patch("subprocess.run")
+    def test_valid_schedule_ci_run(self, mock_run):
+        base_args = {
+            "build_variant": "release",
+            "github_event_name": "schedule",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml"
+        mock_run.return_value = mock_process
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            configure_ci.main(base_args, {}, {})
+        self.assertIn('"test_type": "comprehensive"', captured_out.getvalue())
+
+    @patch("subprocess.run")
+    def test_valid_workflow_dispatch_ci_run(self, mock_run):
+        base_args = {
+            "build_variant": "release",
+            "github_event_name": "workflow_dispatch",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml"
+        mock_run.return_value = mock_process
+        configure_ci.main(
+            base_args, {"amdgpu_families": "gfx94X"}, {"amdgpu_families": "gfx110X"}
+        )
+
     def test_skip_ci_label(self):
         base_args = {
             "pr_labels": '{"labels":[{"name":"skip-ci"},{"name":"test:hipblaslt"},{"name":"test:rocblas"},{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"},{"name":"test_runner:oem"}]}',
@@ -858,7 +900,7 @@ class ConfigureCITest(unittest.TestCase):
             platform="linux",
         )
         entry = linux_target_output[0]
-        self.assertEqual(entry["test-runs-on"], "linux-mi325-8gpu-ossci-rocm-sandbox")
+        self.assertEqual(entry["test-runs-on"], "rocm-asan-mi325-sandbox")
 
 
 if __name__ == "__main__":
