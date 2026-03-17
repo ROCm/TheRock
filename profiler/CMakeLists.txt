@@ -128,6 +128,15 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-rocattach lib/cmake/rocprofiler-sdk-rocattach)
   therock_cmake_subproject_activate(rocprofiler-sdk)
 
+  therock_test_validate_shared_lib(PATH profiler/dist/lib/rocprofiler-sdk
+    LIB_NAMES
+      libgotcha.so
+      librocprofiler-sdk-tool.so
+      librocprofiler-sdk-tool-kokkosp.so
+      librocprofv3-list-avail.so
+      librocprofv3-attach.so
+  )
+
   ##############################################################################
   # rocprofiler-compute
   ##############################################################################
