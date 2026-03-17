@@ -13044,6 +13044,709 @@ int main() {
   }
 
   {
+  auto make_buffer_format_high_component_word3 = [](std::uint32_t data_format,
+                                                    std::uint32_t num_format) {
+    return (4u << 0) | (5u << 3) | (6u << 6) | (7u << 9) |
+           (data_format << 12) | (num_format << 19);
+  };
+
+  LinearExecutionMemory buffer_format_high_component_memory(0x400, 0);
+  if (!Expect(WriteU8(&buffer_format_high_component_memory, 0x140u, 0x01u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x141u, 0x02u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x142u, 0x03u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x143u, 0x04u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x144u, 0x11u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x145u, 0x12u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x146u, 0x13u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x147u, 0x14u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x148u, 0x21u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x149u, 0x22u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x14au, 0x23u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x14bu, 0x24u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x180u, 0x3fc00000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x184u, 0xc0000000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x188u, 0x3e800000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x18cu, 0x40200000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x190u, 0xbf800000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x194u, 0x40400000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x1b0u, 0x40a00000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x1b4u, 0xbf000000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x1b8u, 0x41000000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x1c0u, 0x0011u),
+              "expected buffer format high-component d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x1c2u, 0x0022u),
+              "expected buffer format high-component d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x1c4u, 0x0055u),
+              "expected buffer format high-component d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x1c6u, 0x0066u),
+              "expected buffer format high-component d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x1c8u, 0x00aau),
+              "expected buffer format high-component d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x1cau, 0x00bbu),
+              "expected buffer format high-component d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x200u, 0x3c00u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x202u, 0x4000u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x204u, 0xc000u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x208u, 0x3400u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x20au, 0x3800u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x20cu, 0x3c00u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x210u, 0x4200u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x212u, 0x4400u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x214u, 0x4600u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x280u, 0x3800u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x282u, 0x3c00u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x284u, 0x4000u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x286u, 0xc000u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x288u, 0x3400u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x28au, 0x3800u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x28cu, 0x3c00u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x28eu, 0x4000u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x290u, 0x4200u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x292u, 0x4400u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x294u, 0x4600u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x296u, 0x4800u),
+              "expected buffer format high-component d16 xyzw seed write")) {
+    return 1;
+  }
+
+  WaveExecutionState buffer_format_high_component_state{};
+  buffer_format_high_component_state.exec_mask = 0b1011ULL;
+  buffer_format_high_component_state.sgprs[24] = 0x140u;
+  buffer_format_high_component_state.sgprs[25] = 0u;
+  buffer_format_high_component_state.sgprs[26] = 0x80u;
+  buffer_format_high_component_state.sgprs[27] =
+      make_buffer_format_high_component_word3(10u, 4u);
+  buffer_format_high_component_state.sgprs[28] = 0x180u;
+  buffer_format_high_component_state.sgprs[29] = 0u;
+  buffer_format_high_component_state.sgprs[30] = 0x80u;
+  buffer_format_high_component_state.sgprs[31] =
+      make_buffer_format_high_component_word3(13u, 7u);
+  buffer_format_high_component_state.sgprs[32] = 0x1c0u;
+  buffer_format_high_component_state.sgprs[33] = 0u;
+  buffer_format_high_component_state.sgprs[34] = 0x80u;
+  buffer_format_high_component_state.sgprs[35] =
+      make_buffer_format_high_component_word3(5u, 4u);
+  buffer_format_high_component_state.sgprs[36] = 0x200u;
+  buffer_format_high_component_state.sgprs[37] = 0u;
+  buffer_format_high_component_state.sgprs[38] = 0x80u;
+  buffer_format_high_component_state.sgprs[39] =
+      make_buffer_format_high_component_word3(12u, 7u);
+  buffer_format_high_component_state.sgprs[44] = 0x280u;
+  buffer_format_high_component_state.sgprs[45] = 0u;
+  buffer_format_high_component_state.sgprs[46] = 0x80u;
+  buffer_format_high_component_state.sgprs[47] =
+      make_buffer_format_high_component_word3(12u, 7u);
+  buffer_format_high_component_state.vgprs[0][0] = 0u;
+  buffer_format_high_component_state.vgprs[0][1] = 4u;
+  buffer_format_high_component_state.vgprs[0][2] = 0x0cu;
+  buffer_format_high_component_state.vgprs[0][3] = 8u;
+  buffer_format_high_component_state.vgprs[1][0] = 0u;
+  buffer_format_high_component_state.vgprs[1][1] = 0x0cu;
+  buffer_format_high_component_state.vgprs[1][2] = 0x24u;
+  buffer_format_high_component_state.vgprs[1][3] = 0x30u;
+  buffer_format_high_component_state.vgprs[2][0] = 0u;
+  buffer_format_high_component_state.vgprs[2][1] = 4u;
+  buffer_format_high_component_state.vgprs[2][2] = 0x0cu;
+  buffer_format_high_component_state.vgprs[2][3] = 8u;
+  buffer_format_high_component_state.vgprs[3][0] = 0u;
+  buffer_format_high_component_state.vgprs[3][1] = 8u;
+  buffer_format_high_component_state.vgprs[3][2] = 0x18u;
+  buffer_format_high_component_state.vgprs[3][3] = 0x10u;
+  buffer_format_high_component_state.vgprs[4][0] = 0u;
+  buffer_format_high_component_state.vgprs[4][1] = 8u;
+  buffer_format_high_component_state.vgprs[4][2] = 0x18u;
+  buffer_format_high_component_state.vgprs[4][3] = 0x10u;
+  buffer_format_high_component_state.vgprs[40][0] = 0x05u;
+  buffer_format_high_component_state.vgprs[40][1] = 0x15u;
+  buffer_format_high_component_state.vgprs[40][3] = 0x25u;
+  buffer_format_high_component_state.vgprs[41][0] = 0x06u;
+  buffer_format_high_component_state.vgprs[41][1] = 0x16u;
+  buffer_format_high_component_state.vgprs[41][3] = 0x26u;
+  buffer_format_high_component_state.vgprs[42][0] = 0x07u;
+  buffer_format_high_component_state.vgprs[42][1] = 0x17u;
+  buffer_format_high_component_state.vgprs[42][3] = 0x27u;
+  buffer_format_high_component_state.vgprs[43][0] = 0x08u;
+  buffer_format_high_component_state.vgprs[43][1] = 0x18u;
+  buffer_format_high_component_state.vgprs[43][3] = 0x28u;
+  buffer_format_high_component_state.vgprs[50][0] = 0x40200000u;
+  buffer_format_high_component_state.vgprs[50][1] = 0x3f800000u;
+  buffer_format_high_component_state.vgprs[50][3] = 0x40c00000u;
+  buffer_format_high_component_state.vgprs[51][0] = 0xbf800000u;
+  buffer_format_high_component_state.vgprs[51][1] = 0xc0000000u;
+  buffer_format_high_component_state.vgprs[51][3] = 0xbf000000u;
+  buffer_format_high_component_state.vgprs[52][0] = 0x40800000u;
+  buffer_format_high_component_state.vgprs[52][1] = 0x40400000u;
+  buffer_format_high_component_state.vgprs[52][3] = 0x41000000u;
+  buffer_format_high_component_state.vgprs[60][0] = 0x00220011u;
+  buffer_format_high_component_state.vgprs[60][1] = 0x00660055u;
+  buffer_format_high_component_state.vgprs[60][3] = 0x00bb00aau;
+  buffer_format_high_component_state.vgprs[61][0] = 0x40003c00u;
+  buffer_format_high_component_state.vgprs[61][1] = 0x38003400u;
+  buffer_format_high_component_state.vgprs[61][3] = 0x44004200u;
+  buffer_format_high_component_state.vgprs[62][0] = 0x0000c000u;
+  buffer_format_high_component_state.vgprs[62][1] = 0x00003c00u;
+  buffer_format_high_component_state.vgprs[62][3] = 0x00004600u;
+  buffer_format_high_component_state.vgprs[64][0] = 0x38003400u;
+  buffer_format_high_component_state.vgprs[64][1] = 0x3c003800u;
+  buffer_format_high_component_state.vgprs[64][3] = 0x44004200u;
+  buffer_format_high_component_state.vgprs[65][0] = 0x40003c00u;
+  buffer_format_high_component_state.vgprs[65][1] = 0x44004000u;
+  buffer_format_high_component_state.vgprs[65][3] = 0x48004600u;
+  buffer_format_high_component_state.vgprs[71][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[72][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[73][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[74][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[75][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[76][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[77][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[80][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[81][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[82][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[84][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[85][2] = 0xdeadbeefu;
+
+  const std::vector<DecodedInstruction> buffer_format_high_component_program = {
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_XYZW",
+                                      InstructionOperand::Vgpr(71),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Sgpr(24),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_XYZW",
+                                      InstructionOperand::Vgpr(40),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Sgpr(24),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_XYZ",
+                                      InstructionOperand::Vgpr(75),
+                                      InstructionOperand::Vgpr(1),
+                                      InstructionOperand::Sgpr(28),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_XYZ",
+                                      InstructionOperand::Vgpr(50),
+                                      InstructionOperand::Vgpr(1),
+                                      InstructionOperand::Sgpr(28),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_XY",
+                                      InstructionOperand::Vgpr(80),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(32),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_XY",
+                                      InstructionOperand::Vgpr(60),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(32),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_XYZ",
+                                      InstructionOperand::Vgpr(81),
+                                      InstructionOperand::Vgpr(3),
+                                      InstructionOperand::Sgpr(36),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_XYZ",
+                                      InstructionOperand::Vgpr(61),
+                                      InstructionOperand::Vgpr(3),
+                                      InstructionOperand::Sgpr(36),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_XYZW",
+                                      InstructionOperand::Vgpr(84),
+                                      InstructionOperand::Vgpr(4),
+                                      InstructionOperand::Sgpr(44),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_XYZW",
+                                      InstructionOperand::Vgpr(64),
+                                      InstructionOperand::Vgpr(4),
+                                      InstructionOperand::Sgpr(44),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  std::vector<CompiledInstruction> compiled_buffer_format_high_component_program;
+  if (!Expect(interpreter.CompileProgram(
+                  buffer_format_high_component_program,
+                  &compiled_buffer_format_high_component_program, &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+
+  const LinearExecutionMemory initial_buffer_format_high_component_memory =
+      buffer_format_high_component_memory;
+  const WaveExecutionState initial_buffer_format_high_component_state =
+      buffer_format_high_component_state;
+  const auto validate_buffer_format_high_component =
+      [](const WaveExecutionState& state,
+         const LinearExecutionMemory& memory,
+         const char* mode) -> bool {
+    static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+    const auto expect_lane_values =
+        [&](std::uint16_t reg,
+            const std::array<std::uint32_t, kObservedLanes.size()>& expected,
+            const char* label) {
+          for (std::size_t index = 0; index < kObservedLanes.size(); ++index) {
+            if (!Expect(state.vgprs[reg][kObservedLanes[index]] == expected[index],
+                        label)) {
+              return false;
+            }
+          }
+          return true;
+        };
+    std::uint8_t byte_value = 0;
+    std::uint16_t short_value = 0;
+    std::uint32_t dword_value = 0;
+    return Expect(state.halted,
+                  (std::string(mode) +
+                   " buffer format high-component program to halt")
+                      .c_str()) &&
+           expect_lane_values(
+               71, {0x01u, 0x11u, 0x21u},
+               (std::string(mode) + " buffer format xyzw load x result").c_str()) &&
+           expect_lane_values(
+               72, {0x02u, 0x12u, 0x22u},
+               (std::string(mode) + " buffer format xyzw load y result").c_str()) &&
+           expect_lane_values(
+               73, {0x03u, 0x13u, 0x23u},
+               (std::string(mode) + " buffer format xyzw load z result").c_str()) &&
+           expect_lane_values(
+               74, {0x04u, 0x14u, 0x24u},
+               (std::string(mode) + " buffer format xyzw load w result").c_str()) &&
+           expect_lane_values(
+               75, {0x3fc00000u, 0x40200000u, 0x40a00000u},
+               (std::string(mode) + " buffer format xyz load x result").c_str()) &&
+           expect_lane_values(
+               76, {0xc0000000u, 0xbf800000u, 0xbf000000u},
+               (std::string(mode) + " buffer format xyz load y result").c_str()) &&
+           expect_lane_values(
+               77, {0x3e800000u, 0x40400000u, 0x41000000u},
+               (std::string(mode) + " buffer format xyz load z result").c_str()) &&
+           expect_lane_values(
+               80, {0x00220011u, 0x00660055u, 0x00bb00aau},
+               (std::string(mode) + " buffer format d16 xy load result").c_str()) &&
+           expect_lane_values(
+               81, {0x40003c00u, 0x38003400u, 0x44004200u},
+               (std::string(mode) + " buffer format d16 xyz packed xy result")
+                   .c_str()) &&
+           expect_lane_values(
+               82, {0x0000c000u, 0x00003c00u, 0x00004600u},
+               (std::string(mode) + " buffer format d16 xyz z result").c_str()) &&
+           expect_lane_values(
+               84, {0x3c003800u, 0x38003400u, 0x44004200u},
+               (std::string(mode) + " buffer format d16 xyzw packed xy result")
+                   .c_str()) &&
+           expect_lane_values(
+               85, {0xc0004000u, 0x40003c00u, 0x48004600u},
+               (std::string(mode) + " buffer format d16 xyzw packed zw result")
+                   .c_str()) &&
+           Expect(state.vgprs[71][2] == 0xdeadbeefu,
+                  (std::string(mode) +
+                   " inactive buffer format xyzw lane remains untouched")
+                      .c_str()) &&
+           Expect(state.vgprs[84][2] == 0xdeadbeefu,
+                  (std::string(mode) +
+                   " inactive buffer format d16 xyzw lane remains untouched")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x160u, &byte_value),
+                  (std::string(mode) + " buffer format xyzw store lane 0 x read")
+                      .c_str()) &&
+           Expect(byte_value == 0x05u,
+                  (std::string(mode) + " buffer format xyzw store lane 0 x result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x161u, &byte_value),
+                  (std::string(mode) + " buffer format xyzw store lane 0 y read")
+                      .c_str()) &&
+           Expect(byte_value == 0x06u,
+                  (std::string(mode) + " buffer format xyzw store lane 0 y result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x162u, &byte_value),
+                  (std::string(mode) + " buffer format xyzw store lane 0 z read")
+                      .c_str()) &&
+           Expect(byte_value == 0x07u,
+                  (std::string(mode) + " buffer format xyzw store lane 0 z result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x163u, &byte_value),
+                  (std::string(mode) + " buffer format xyzw store lane 0 w read")
+                      .c_str()) &&
+           Expect(byte_value == 0x08u,
+                  (std::string(mode) + " buffer format xyzw store lane 0 w result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x164u, &byte_value),
+                  (std::string(mode) + " buffer format xyzw store lane 1 x read")
+                      .c_str()) &&
+           Expect(byte_value == 0x15u,
+                  (std::string(mode) + " buffer format xyzw store lane 1 x result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x165u, &byte_value),
+                  (std::string(mode) + " buffer format xyzw store lane 1 y read")
+                      .c_str()) &&
+           Expect(byte_value == 0x16u,
+                  (std::string(mode) + " buffer format xyzw store lane 1 y result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x166u, &byte_value),
+                  (std::string(mode) + " buffer format xyzw store lane 1 z read")
+                      .c_str()) &&
+           Expect(byte_value == 0x17u,
+                  (std::string(mode) + " buffer format xyzw store lane 1 z result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x167u, &byte_value),
+                  (std::string(mode) + " buffer format xyzw store lane 1 w read")
+                      .c_str()) &&
+           Expect(byte_value == 0x18u,
+                  (std::string(mode) + " buffer format xyzw store lane 1 w result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x168u, &byte_value),
+                  (std::string(mode) + " buffer format xyzw store lane 3 x read")
+                      .c_str()) &&
+           Expect(byte_value == 0x25u,
+                  (std::string(mode) + " buffer format xyzw store lane 3 x result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x169u, &byte_value),
+                  (std::string(mode) + " buffer format xyzw store lane 3 y read")
+                      .c_str()) &&
+           Expect(byte_value == 0x26u,
+                  (std::string(mode) + " buffer format xyzw store lane 3 y result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x16au, &byte_value),
+                  (std::string(mode) + " buffer format xyzw store lane 3 z read")
+                      .c_str()) &&
+           Expect(byte_value == 0x27u,
+                  (std::string(mode) + " buffer format xyzw store lane 3 z result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x16bu, &byte_value),
+                  (std::string(mode) + " buffer format xyzw store lane 3 w read")
+                      .c_str()) &&
+           Expect(byte_value == 0x28u,
+                  (std::string(mode) + " buffer format xyzw store lane 3 w result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x1a0u, &dword_value),
+                  (std::string(mode) + " buffer format xyz store lane 0 x read")
+                      .c_str()) &&
+           Expect(dword_value == 0x40200000u,
+                  (std::string(mode) + " buffer format xyz store lane 0 x result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x1a4u, &dword_value),
+                  (std::string(mode) + " buffer format xyz store lane 0 y read")
+                      .c_str()) &&
+           Expect(dword_value == 0xbf800000u,
+                  (std::string(mode) + " buffer format xyz store lane 0 y result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x1a8u, &dword_value),
+                  (std::string(mode) + " buffer format xyz store lane 0 z read")
+                      .c_str()) &&
+           Expect(dword_value == 0x40800000u,
+                  (std::string(mode) + " buffer format xyz store lane 0 z result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x1acu, &dword_value),
+                  (std::string(mode) + " buffer format xyz store lane 1 x read")
+                      .c_str()) &&
+           Expect(dword_value == 0x3f800000u,
+                  (std::string(mode) + " buffer format xyz store lane 1 x result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x1b0u, &dword_value),
+                  (std::string(mode) + " buffer format xyz store lane 1 y read")
+                      .c_str()) &&
+           Expect(dword_value == 0xc0000000u,
+                  (std::string(mode) + " buffer format xyz store lane 1 y result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x1b4u, &dword_value),
+                  (std::string(mode) + " buffer format xyz store lane 1 z read")
+                      .c_str()) &&
+           Expect(dword_value == 0x40400000u,
+                  (std::string(mode) + " buffer format xyz store lane 1 z result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x1d0u, &dword_value),
+                  (std::string(mode) + " buffer format xyz store lane 3 x read")
+                      .c_str()) &&
+           Expect(dword_value == 0x40c00000u,
+                  (std::string(mode) + " buffer format xyz store lane 3 x result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x1d4u, &dword_value),
+                  (std::string(mode) + " buffer format xyz store lane 3 y read")
+                      .c_str()) &&
+           Expect(dword_value == 0xbf000000u,
+                  (std::string(mode) + " buffer format xyz store lane 3 y result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x1d8u, &dword_value),
+                  (std::string(mode) + " buffer format xyz store lane 3 z read")
+                      .c_str()) &&
+           Expect(dword_value == 0x41000000u,
+                  (std::string(mode) + " buffer format xyz store lane 3 z result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x1e0u, &short_value),
+                  (std::string(mode) + " buffer format d16 xy store lane 0 x read")
+                      .c_str()) &&
+           Expect(short_value == 0x0011u,
+                  (std::string(mode) + " buffer format d16 xy store lane 0 x result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x1e2u, &short_value),
+                  (std::string(mode) + " buffer format d16 xy store lane 0 y read")
+                      .c_str()) &&
+           Expect(short_value == 0x0022u,
+                  (std::string(mode) + " buffer format d16 xy store lane 0 y result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x1e4u, &short_value),
+                  (std::string(mode) + " buffer format d16 xy store lane 1 x read")
+                      .c_str()) &&
+           Expect(short_value == 0x0055u,
+                  (std::string(mode) + " buffer format d16 xy store lane 1 x result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x1e6u, &short_value),
+                  (std::string(mode) + " buffer format d16 xy store lane 1 y read")
+                      .c_str()) &&
+           Expect(short_value == 0x0066u,
+                  (std::string(mode) + " buffer format d16 xy store lane 1 y result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x1e8u, &short_value),
+                  (std::string(mode) + " buffer format d16 xy store lane 3 x read")
+                      .c_str()) &&
+           Expect(short_value == 0x00aau,
+                  (std::string(mode) + " buffer format d16 xy store lane 3 x result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x1eau, &short_value),
+                  (std::string(mode) + " buffer format d16 xy store lane 3 y read")
+                      .c_str()) &&
+           Expect(short_value == 0x00bbu,
+                  (std::string(mode) + " buffer format d16 xy store lane 3 y result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x220u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyz store lane 0 x read")
+                      .c_str()) &&
+           Expect(short_value == 0x3c00u,
+                  (std::string(mode) + " buffer format d16 xyz store lane 0 x result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x222u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyz store lane 0 y read")
+                      .c_str()) &&
+           Expect(short_value == 0x4000u,
+                  (std::string(mode) + " buffer format d16 xyz store lane 0 y result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x224u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyz store lane 0 z read")
+                      .c_str()) &&
+           Expect(short_value == 0xc000u,
+                  (std::string(mode) + " buffer format d16 xyz store lane 0 z result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x228u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyz store lane 1 x read")
+                      .c_str()) &&
+           Expect(short_value == 0x3400u,
+                  (std::string(mode) + " buffer format d16 xyz store lane 1 x result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x22au, &short_value),
+                  (std::string(mode) + " buffer format d16 xyz store lane 1 y read")
+                      .c_str()) &&
+           Expect(short_value == 0x3800u,
+                  (std::string(mode) + " buffer format d16 xyz store lane 1 y result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x22cu, &short_value),
+                  (std::string(mode) + " buffer format d16 xyz store lane 1 z read")
+                      .c_str()) &&
+           Expect(short_value == 0x3c00u,
+                  (std::string(mode) + " buffer format d16 xyz store lane 1 z result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x230u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyz store lane 3 x read")
+                      .c_str()) &&
+           Expect(short_value == 0x4200u,
+                  (std::string(mode) + " buffer format d16 xyz store lane 3 x result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x232u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyz store lane 3 y read")
+                      .c_str()) &&
+           Expect(short_value == 0x4400u,
+                  (std::string(mode) + " buffer format d16 xyz store lane 3 y result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x234u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyz store lane 3 z read")
+                      .c_str()) &&
+           Expect(short_value == 0x4600u,
+                  (std::string(mode) + " buffer format d16 xyz store lane 3 z result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2a0u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyzw store lane 0 x read")
+                      .c_str()) &&
+           Expect(short_value == 0x3400u,
+                  (std::string(mode) +
+                   " buffer format d16 xyzw store lane 0 x result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2a2u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyzw store lane 0 y read")
+                      .c_str()) &&
+           Expect(short_value == 0x3800u,
+                  (std::string(mode) +
+                   " buffer format d16 xyzw store lane 0 y result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2a4u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyzw store lane 0 z read")
+                      .c_str()) &&
+           Expect(short_value == 0x3c00u,
+                  (std::string(mode) +
+                   " buffer format d16 xyzw store lane 0 z result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2a6u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyzw store lane 0 w read")
+                      .c_str()) &&
+           Expect(short_value == 0x4000u,
+                  (std::string(mode) +
+                   " buffer format d16 xyzw store lane 0 w result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2a8u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyzw store lane 1 x read")
+                      .c_str()) &&
+           Expect(short_value == 0x3800u,
+                  (std::string(mode) +
+                   " buffer format d16 xyzw store lane 1 x result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2aau, &short_value),
+                  (std::string(mode) + " buffer format d16 xyzw store lane 1 y read")
+                      .c_str()) &&
+           Expect(short_value == 0x3c00u,
+                  (std::string(mode) +
+                   " buffer format d16 xyzw store lane 1 y result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2acu, &short_value),
+                  (std::string(mode) + " buffer format d16 xyzw store lane 1 z read")
+                      .c_str()) &&
+           Expect(short_value == 0x4000u,
+                  (std::string(mode) +
+                   " buffer format d16 xyzw store lane 1 z result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2aeu, &short_value),
+                  (std::string(mode) + " buffer format d16 xyzw store lane 1 w read")
+                      .c_str()) &&
+           Expect(short_value == 0x4400u,
+                  (std::string(mode) +
+                   " buffer format d16 xyzw store lane 1 w result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2b0u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyzw store lane 3 x read")
+                      .c_str()) &&
+           Expect(short_value == 0x4200u,
+                  (std::string(mode) +
+                   " buffer format d16 xyzw store lane 3 x result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2b2u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyzw store lane 3 y read")
+                      .c_str()) &&
+           Expect(short_value == 0x4400u,
+                  (std::string(mode) +
+                   " buffer format d16 xyzw store lane 3 y result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2b4u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyzw store lane 3 z read")
+                      .c_str()) &&
+           Expect(short_value == 0x4600u,
+                  (std::string(mode) +
+                   " buffer format d16 xyzw store lane 3 z result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2b6u, &short_value),
+                  (std::string(mode) + " buffer format d16 xyzw store lane 3 w read")
+                      .c_str()) &&
+           Expect(short_value == 0x4800u,
+                  (std::string(mode) +
+                   " buffer format d16 xyzw store lane 3 w result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x16cu, &byte_value),
+                  (std::string(mode) + " inactive buffer format xyzw store read")
+                      .c_str()) &&
+           Expect(byte_value == 0u,
+                  (std::string(mode) + " inactive buffer format xyzw store result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x1ecu, &short_value),
+                  (std::string(mode) + " inactive buffer format d16 xy store read")
+                      .c_str()) &&
+           Expect(short_value == 0u,
+                  (std::string(mode) + " inactive buffer format d16 xy store result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x238u, &short_value),
+                  (std::string(mode) + " inactive buffer format d16 xyz store read")
+                      .c_str()) &&
+           Expect(short_value == 0u,
+                  (std::string(mode) + " inactive buffer format d16 xyz store result")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x2b8u, &short_value),
+                  (std::string(mode) + " inactive buffer format d16 xyzw store read")
+                      .c_str()) &&
+           Expect(short_value == 0u,
+                  (std::string(mode) +
+                   " inactive buffer format d16 xyzw store result")
+                      .c_str());
+  };
+  if (!Expect(interpreter.ExecuteProgram(buffer_format_high_component_program,
+                                         &buffer_format_high_component_state,
+                                         &buffer_format_high_component_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_buffer_format_high_component(
+          buffer_format_high_component_state,
+          buffer_format_high_component_memory, "decoded")) {
+    return 1;
+  }
+
+  LinearExecutionMemory compiled_buffer_format_high_component_memory =
+      initial_buffer_format_high_component_memory;
+  WaveExecutionState compiled_buffer_format_high_component_state =
+      initial_buffer_format_high_component_state;
+  if (!Expect(interpreter.ExecuteProgram(
+                  compiled_buffer_format_high_component_program,
+                  &compiled_buffer_format_high_component_state,
+                  &compiled_buffer_format_high_component_memory,
+                  &error_message),
+              error_message.c_str()) ||
+      !validate_buffer_format_high_component(
+          compiled_buffer_format_high_component_state,
+          compiled_buffer_format_high_component_memory, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
   auto make_buffer_format_low_component_word3 = [](std::uint32_t data_format,
                                                    std::uint32_t num_format) {
     return (4u << 0) | (5u << 3) | (6u << 6) | (7u << 9) |
