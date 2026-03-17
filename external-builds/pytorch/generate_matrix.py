@@ -10,7 +10,7 @@ Usage (in a workflow step)::
 
     python external-builds/pytorch/generate_matrix.py \
         --test-configs 'default distributed inductor' \
-        --default-runner 'linux-mi325-1gpu-ossci-rocm'
+        --default-runner 'linux-rocm-docker-mi300-1gpu-ossci'
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ def main() -> None:
     parser.add_argument(
         "--default-runner",
         required=True,
-        help="Default runner label (e.g. 'linux-mi325-1gpu-ossci-rocm')",
+        help="Default runner label (e.g. 'linux-rocm-docker-mi300-1gpu-ossci')",
     )
     args = parser.parse_args()
 
