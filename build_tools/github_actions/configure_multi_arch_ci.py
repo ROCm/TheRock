@@ -41,12 +41,11 @@ Outputs (written to GITHUB_OUTPUT):
     linux_build_enabled   : "true" or "false"
     windows_build_enabled : "true" or "false"
     enable_build_jobs     : "true" or "false"
-    test_type             : "smoke" or "full"
+    test_type             : "quick", "standard", "comprehensive", or "full"
 """
 
 import json
 import os
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -150,11 +149,7 @@ class CIInputs:
         event_name = os.environ.get("GITHUB_EVENT_NAME", "")
         branch_name = os.environ.get("GITHUB_REF_NAME", "")
         if not branch_name:
-            print(
-                "[ERROR] GITHUB_REF_NAME is not set. Exiting.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+            raise RuntimeError("GITHUB_REF_NAME is not set.")
 
         # Read the full event payload
         event_path = os.environ.get("GITHUB_EVENT_PATH", "")
@@ -608,13 +603,13 @@ def _validate_family_names(
 def _filter_families_by_platform(
     family_names: list[str],
     platform: str,
-    lookup_matrix: dict[str, dict],
+    all_families: dict[str, dict],
 ) -> list[str]:
     """Return only the family names that have an entry for the given platform."""
     return [
         name
         for name in family_names
-        if name in lookup_matrix and platform in lookup_matrix[name]
+        if name in all_families and platform in all_families[name]
     ]
 
 
