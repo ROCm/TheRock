@@ -246,6 +246,111 @@ bool MatchesLayout(const StubDecodedInstruction& instruction,
          instruction.operand_layout.is_store == expected.is_store;
 }
 
+std::uint32_t CountDescriptorsForRole(const StubDecodedInstruction& instruction,
+                                      StubOperandRole role);
+std::uint32_t CountSlotsOfKind(const StubDecodedInstruction& instruction,
+                               StubOperandSlotKind slot_kind);
+std::uint32_t CountDescriptorsWithAccess(
+    const StubDecodedInstruction& instruction,
+    StubOperandAccess access);
+std::uint32_t CountOutputSlots(const StubDecodedInstruction& instruction);
+
+bool MatchesLayoutToRecordInvariants(const StubDecodedInstruction& instruction) {
+  const std::uint32_t paired_scale_count =
+      instruction.operand_layout.has_paired_scale_operand ? 1u : 0u;
+  const std::uint32_t lds_count =
+      instruction.operand_layout.touches_lds ? 1u : 0u;
+  const std::uint32_t expected_record_count =
+      instruction.operand_layout.source_count +
+      instruction.operand_layout.destination_count +
+      instruction.operand_layout.accumulator_source_count +
+      paired_scale_count + lds_count;
+  const std::uint32_t expected_output_count =
+      instruction.operand_layout.destination_count +
+      (instruction.operand_layout.touches_lds &&
+               !instruction.operand_layout.is_store
+           ? 1u
+           : 0u);
+  const std::uint32_t expected_read_descriptor_count =
+      instruction.operand_layout.source_count +
+      instruction.operand_layout.accumulator_source_count +
+      paired_scale_count +
+      (instruction.operand_layout.touches_lds && instruction.operand_layout.is_store
+           ? 1u
+           : 0u);
+  const std::uint32_t expected_write_descriptor_count = expected_output_count;
+
+  return instruction.operand_slots.binding_count == expected_record_count &&
+         instruction.operand_descriptors.descriptor_count == expected_record_count &&
+         CountOutputSlots(instruction) == expected_output_count &&
+         CountDescriptorsWithAccess(instruction, StubOperandAccess::kRead) ==
+             expected_read_descriptor_count &&
+         CountDescriptorsWithAccess(instruction, StubOperandAccess::kWrite) ==
+             expected_write_descriptor_count &&
+         CountRoleBindings(instruction, StubOperandRole::kAccumulator) ==
+             instruction.operand_layout.accumulator_source_count &&
+         CountSlotsOfKind(instruction, StubOperandSlotKind::kAccumulatorSource) ==
+             instruction.operand_layout.accumulator_source_count &&
+         CountDescriptorsForRole(instruction, StubOperandRole::kAccumulator) ==
+             instruction.operand_layout.accumulator_source_count &&
+         CountRoleBindings(instruction, StubOperandRole::kScale) ==
+             (instruction.operand_layout.has_scale_operand ? 1u : 0u) &&
+         CountSlotsOfKind(instruction, StubOperandSlotKind::kScaleSource) ==
+             (instruction.operand_layout.has_scale_operand ? 1u : 0u) &&
+         CountDescriptorsForRole(instruction, StubOperandRole::kScale) ==
+             (instruction.operand_layout.has_scale_operand ? 1u : 0u) &&
+         CountRoleBindings(instruction, StubOperandRole::kPairedScale) ==
+             paired_scale_count &&
+         CountSlotsOfKind(instruction, StubOperandSlotKind::kPairedScaleSource) ==
+             paired_scale_count &&
+         CountDescriptorsForRole(instruction, StubOperandRole::kPairedScale) ==
+             paired_scale_count &&
+         CountRoleBindings(instruction, StubOperandRole::kTensorDescriptor) ==
+             (instruction.operand_layout.has_tensor_descriptor ? 1u : 0u) &&
+         CountSlotsOfKind(instruction,
+                          StubOperandSlotKind::kTensorDescriptorSource) ==
+             (instruction.operand_layout.has_tensor_descriptor ? 1u : 0u) &&
+         CountDescriptorsForRole(instruction, StubOperandRole::kTensorDescriptor) ==
+             (instruction.operand_layout.has_tensor_descriptor ? 1u : 0u) &&
+         CountRoleBindings(instruction, StubOperandRole::kTensorCoordinate) ==
+             (instruction.operand_layout.has_tensor_descriptor ? 1u : 0u) &&
+         CountSlotsOfKind(instruction,
+                          StubOperandSlotKind::kTensorCoordinateSource) ==
+             (instruction.operand_layout.has_tensor_descriptor ? 1u : 0u) &&
+         CountDescriptorsForRole(instruction, StubOperandRole::kTensorCoordinate) ==
+             (instruction.operand_layout.has_tensor_descriptor ? 1u : 0u) &&
+         CountRoleBindings(instruction, StubOperandRole::kLdsDestination) ==
+             (instruction.operand_layout.touches_lds &&
+                      !instruction.operand_layout.is_store
+                  ? 1u
+                  : 0u) &&
+         CountSlotsOfKind(instruction, StubOperandSlotKind::kLdsDestination) ==
+             (instruction.operand_layout.touches_lds &&
+                      !instruction.operand_layout.is_store
+                  ? 1u
+                  : 0u) &&
+         CountDescriptorsForRole(instruction, StubOperandRole::kLdsDestination) ==
+             (instruction.operand_layout.touches_lds &&
+                      !instruction.operand_layout.is_store
+                  ? 1u
+                  : 0u) &&
+         CountRoleBindings(instruction, StubOperandRole::kLdsSource) ==
+             (instruction.operand_layout.touches_lds &&
+                      instruction.operand_layout.is_store
+                  ? 1u
+                  : 0u) &&
+         CountSlotsOfKind(instruction, StubOperandSlotKind::kLdsSource) ==
+             (instruction.operand_layout.touches_lds &&
+                      instruction.operand_layout.is_store
+                  ? 1u
+                  : 0u) &&
+         CountDescriptorsForRole(instruction, StubOperandRole::kLdsSource) ==
+             (instruction.operand_layout.touches_lds &&
+                      instruction.operand_layout.is_store
+                  ? 1u
+                  : 0u);
+}
+
 bool MatchesRouteInfoPayload(const StubDecodedInstruction& instruction,
                              const StubDecoderRouteInfo& route_info) {
   return instruction.instruction_name == route_info.instruction_name &&
@@ -1301,6 +1406,10 @@ int main() {
                 "expected routed packed VOP3P seed to keep exact top-level flag composition")) {
       return 1;
     }
+    if (!Expect(MatchesLayoutToRecordInvariants(decoded),
+                "expected routed packed VOP3P seed to keep exact layout-to-record consistency")) {
+      return 1;
+    }
   }
 
   const StubDecodedInstruction wmma =
@@ -2093,6 +2202,10 @@ int main() {
     }
     if (!Expect(HasMatrixSlot(decoded) && HasMatrixDescriptor(decoded),
                 "expected routed WMMA/SWMMAC seed to materialize matrix metadata")) {
+      return 1;
+    }
+    if (!Expect(MatchesLayoutToRecordInvariants(decoded),
+                "expected routed WMMA/SWMMAC seed to keep exact layout-to-record consistency")) {
       return 1;
     }
     if (decoded.uses_scale_path) {
@@ -4363,6 +4476,10 @@ int main() {
                 "expected routed tensor seed to keep exact top-level flag composition")) {
       return 1;
     }
+    if (!Expect(MatchesLayoutToRecordInvariants(decoded),
+                "expected routed tensor seed to keep exact layout-to-record consistency")) {
+      return 1;
+    }
     if (!Expect(decoded.uses_tensor_memory &&
                     decoded.operand_layout.has_tensor_descriptor &&
                     decoded.operand_layout.touches_lds &&
@@ -4993,6 +5110,10 @@ int main() {
             "expected routed VOP1 seed to keep exact top-level flag composition")) {
       return 1;
     }
+    if (!Expect(MatchesLayoutToRecordInvariants(decoded),
+                "expected routed VOP1 seed to keep exact layout-to-record consistency")) {
+      return 1;
+    }
     if (!Expect(decoded.execution_domain == StubExecutionDomain::kConversion &&
                     !HasMatrixSlot(decoded) && !HasMatrixDescriptor(decoded) &&
                     decoded.operand_slots.binding_count == 2 &&
@@ -5414,6 +5535,10 @@ int main() {
     }
     if (!Expect(MatchesTopLevelFlags(decoded, false, false, true, false),
                 "expected routed VOP3 SDST seed to keep exact top-level flag composition")) {
+      return 1;
+    }
+    if (!Expect(MatchesLayoutToRecordInvariants(decoded),
+                "expected routed VOP3 SDST seed to keep exact layout-to-record consistency")) {
       return 1;
     }
     if (!Expect(decoded.uses_scale_path && !HasMatrixSlot(decoded) &&
@@ -5909,6 +6034,10 @@ int main() {
     }
     if (!Expect(MatchesTopLevelFlags(decoded, false, false, true, true),
                 "expected routed paired-scale seed to keep exact top-level flag composition")) {
+      return 1;
+    }
+    if (!Expect(MatchesLayoutToRecordInvariants(decoded),
+                "expected routed paired-scale seed to keep exact layout-to-record consistency")) {
       return 1;
     }
     if (!Expect(decoded.uses_scale_path && decoded.uses_paired_operands &&
