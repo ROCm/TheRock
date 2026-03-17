@@ -6889,7 +6889,11 @@ int main() {
   }
 
   const auto load_b32_words = MakeSmem(0u, 40u, 2u, true, 4u);
-  const auto load_b64_words = MakeSmem(1u, 42u, 4u, false, 13u, true);
+  const auto load_b64_words = MakeSmem(1u, 42u, 4u, false, 21u, true);
+  const auto load_b96_words = MakeSmem(5u, 48u, 8u, true, 12u);
+  const auto load_b128_words = MakeSmem(2u, 52u, 10u, false, 22u, true);
+  const auto load_b256_words = MakeSmem(3u, 56u, 12u, true, 20u);
+  const auto load_b512_words = MakeSmem(4u, 64u, 14u, false, 23u, true);
   const auto load_i8_words = MakeSmem(8u, 44u, 6u, true, 0u);
   const auto load_u8_words = MakeSmem(9u, 45u, 6u, true, 1u);
   const auto load_i16_words = MakeSmem(10u, 46u, 6u, true, 2u);
@@ -6938,7 +6942,7 @@ int main() {
       !Expect(ExpectThreeOperandInstruction(load_b64_instruction, "S_LOAD_B64",
                                             OperandKind::kSgpr, 42u,
                                             OperandKind::kSgpr, 4u,
-                                            OperandKind::kSgpr, 13u),
+                                            OperandKind::kSgpr, 21u),
               "expected decoded S_LOAD_B64 operands") ||
       !Expect(load_words_consumed == 2u,
               "expected S_LOAD_B64 to consume two dwords") ||
@@ -6948,6 +6952,52 @@ int main() {
                   OperandValueClass::kScalarRegister, OperandAccess::kWrite,
                   FragmentKind::kScalar, 64u, 2u, false),
               "expected S_LOAD_B64 destination descriptor")) {
+    return 1;
+  }
+
+  DecodedInstruction load_b96_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(load_b96_words.data(),
+                                                 load_b96_words.size()),
+                  &load_b96_instruction, &load_words_consumed, &error_message),
+              "expected S_LOAD_B96 direct decode success") ||
+      !Expect(ExpectThreeOperandInstruction(load_b96_instruction, "S_LOAD_B96",
+                                            OperandKind::kSgpr, 48u,
+                                            OperandKind::kSgpr, 8u,
+                                            OperandKind::kImm32, 12u),
+              "expected decoded S_LOAD_B96 operands") ||
+      !Expect(load_words_consumed == 2u,
+              "expected S_LOAD_B96 to consume two dwords") ||
+      !Expect(ExpectOperandDescriptor(
+                  load_b96_instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 32u, 3u, false),
+              "expected S_LOAD_B96 destination descriptor")) {
+    return 1;
+  }
+
+  DecodedInstruction load_b128_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(load_b128_words.data(),
+                                                 load_b128_words.size()),
+                  &load_b128_instruction, &load_words_consumed,
+                  &error_message),
+              "expected S_LOAD_B128 direct decode success") ||
+      !Expect(ExpectThreeOperandInstruction(load_b128_instruction,
+                                            "S_LOAD_B128", OperandKind::kSgpr,
+                                            52u, OperandKind::kSgpr, 10u,
+                                            OperandKind::kSgpr, 22u),
+              "expected decoded S_LOAD_B128 operands") ||
+      !Expect(load_words_consumed == 2u,
+              "expected S_LOAD_B128 to consume two dwords") ||
+      !Expect(ExpectOperandDescriptor(
+                  load_b128_instruction.operands[0],
+                  OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 128u, 4u, false),
+              "expected S_LOAD_B128 destination descriptor")) {
     return 1;
   }
 
@@ -6967,34 +7017,85 @@ int main() {
     return 1;
   }
 
-  const std::array<std::uint32_t, 13> smem_load_program_words{{
-      load_b32_words[0], load_b32_words[1], load_b64_words[0], load_b64_words[1],
-      load_i8_words[0],  load_i8_words[1],  load_u8_words[0],  load_u8_words[1],
-      load_i16_words[0], load_i16_words[1], load_u16_words[0], load_u16_words[1],
-      MakeSopp(48u),
+  const std::array<std::uint32_t, 21> smem_load_program_words{{
+      load_b32_words[0],  load_b32_words[1],  load_b64_words[0],
+      load_b64_words[1],  load_b96_words[0],  load_b96_words[1],
+      load_b128_words[0], load_b128_words[1], load_b256_words[0],
+      load_b256_words[1], load_b512_words[0], load_b512_words[1],
+      load_i8_words[0],   load_i8_words[1],   load_u8_words[0],
+      load_u8_words[1],   load_i16_words[0],  load_i16_words[1],
+      load_u16_words[0],  load_u16_words[1],  MakeSopp(48u),
   }};
   std::vector<DecodedInstruction> smem_load_program;
   if (!Expect(decoder.DecodeProgram(smem_load_program_words, &smem_load_program,
                                     &error_message),
               "expected SMEM load program decode success") ||
-      !Expect(smem_load_program.size() == 7u,
-              "expected seven decoded SMEM load instructions") ||
+      !Expect(smem_load_program.size() == 11u,
+              "expected eleven decoded SMEM load instructions") ||
       !Expect(smem_load_program[0].opcode == "S_LOAD_B32",
               "expected decoded S_LOAD_B32 program opcode") ||
       !Expect(smem_load_program[1].opcode == "S_LOAD_B64",
               "expected decoded S_LOAD_B64 program opcode") ||
-      !Expect(smem_load_program[2].opcode == "S_LOAD_I8",
+      !Expect(smem_load_program[2].opcode == "S_LOAD_B96",
+              "expected decoded S_LOAD_B96 program opcode") ||
+      !Expect(smem_load_program[3].opcode == "S_LOAD_B128",
+              "expected decoded S_LOAD_B128 program opcode") ||
+      !Expect(smem_load_program[4].opcode == "S_LOAD_B256",
+              "expected decoded S_LOAD_B256 program opcode") ||
+      !Expect(smem_load_program[5].opcode == "S_LOAD_B512",
+              "expected decoded S_LOAD_B512 program opcode") ||
+      !Expect(smem_load_program[6].opcode == "S_LOAD_I8",
               "expected decoded S_LOAD_I8 program opcode") ||
-      !Expect(smem_load_program[3].opcode == "S_LOAD_U8",
+      !Expect(smem_load_program[7].opcode == "S_LOAD_U8",
               "expected decoded S_LOAD_U8 program opcode") ||
-      !Expect(smem_load_program[4].opcode == "S_LOAD_I16",
+      !Expect(smem_load_program[8].opcode == "S_LOAD_I16",
               "expected decoded S_LOAD_I16 program opcode") ||
-      !Expect(smem_load_program[5].opcode == "S_LOAD_U16",
+      !Expect(smem_load_program[9].opcode == "S_LOAD_U16",
               "expected decoded S_LOAD_U16 program opcode") ||
-      !Expect(smem_load_program[6].opcode == "S_ENDPGM",
+      !Expect(smem_load_program[10].opcode == "S_ENDPGM",
               "expected decoded S_ENDPGM after SMEM loads")) {
     return 1;
   }
+
+  const std::array<std::uint32_t, 3> expected_load_b96{{
+      0x11111111u,
+      0x22222222u,
+      0x33333333u,
+  }};
+  const std::array<std::uint32_t, 4> expected_load_b128{{
+      0x44444444u,
+      0x55555555u,
+      0x66666666u,
+      0x77777777u,
+  }};
+  const std::array<std::uint32_t, 8> expected_load_b256{{
+      0x88000001u,
+      0x88000002u,
+      0x88000003u,
+      0x88000004u,
+      0x88000005u,
+      0x88000006u,
+      0x88000007u,
+      0x88000008u,
+  }};
+  const std::array<std::uint32_t, 16> expected_load_b512{{
+      0x99000001u,
+      0x99000002u,
+      0x99000003u,
+      0x99000004u,
+      0x99000005u,
+      0x99000006u,
+      0x99000007u,
+      0x99000008u,
+      0x99000009u,
+      0x9900000au,
+      0x9900000bu,
+      0x9900000cu,
+      0x9900000du,
+      0x9900000eu,
+      0x9900000fu,
+      0x99000010u,
+  }};
 
   auto initialize_smem_load_state = [](WaveExecutionState* state) {
     state->exec_mask = 0x5u;
@@ -7004,20 +7105,53 @@ int main() {
     state->sgprs[5] = 0u;
     state->sgprs[6] = 0x1020u;
     state->sgprs[7] = 0u;
-    state->sgprs[13] = 8u;
+    state->sgprs[8] = 0x1040u;
+    state->sgprs[9] = 0u;
+    state->sgprs[10] = 0x1060u;
+    state->sgprs[11] = 0u;
+    state->sgprs[12] = 0x1080u;
+    state->sgprs[13] = 0u;
+    state->sgprs[14] = 0x1100u;
+    state->sgprs[15] = 0u;
+    state->sgprs[21] = 8u;
+    state->sgprs[22] = 16u;
+    state->sgprs[23] = 12u;
   };
-  auto expect_smem_load_state = [](const WaveExecutionState& state) {
-    return state.lane_count == 32u && state.exec_mask == 0x5u &&
-           state.sgprs[40] == 0x11223344u &&
-           state.sgprs[42] == 0x55667788u &&
-           state.sgprs[43] == 0x99aabbccu &&
-           state.sgprs[44] == 0xffffff80u &&
-           state.sgprs[45] == 0x7fu &&
-           state.sgprs[46] == 0xffff8001u &&
-           state.sgprs[47] == 0x8123u && state.halted &&
-           !state.waiting_on_barrier && state.pc == 6u;
+  auto expect_smem_load_state = [&](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == 0x5u &&
+          state.sgprs[40] == 0x11223344u &&
+          state.sgprs[42] == 0x55667788u &&
+          state.sgprs[43] == 0x99aabbccu &&
+          state.sgprs[44] == 0xffffff80u &&
+          state.sgprs[45] == 0x7fu &&
+          state.sgprs[46] == 0xffff8001u &&
+          state.sgprs[47] == 0x8123u && state.halted &&
+          !state.waiting_on_barrier && state.pc == 10u)) {
+      return false;
+    }
+    for (std::size_t i = 0; i < expected_load_b96.size(); ++i) {
+      if (state.sgprs[48u + i] != expected_load_b96[i]) {
+        return false;
+      }
+    }
+    for (std::size_t i = 0; i < expected_load_b128.size(); ++i) {
+      if (state.sgprs[52u + i] != expected_load_b128[i]) {
+        return false;
+      }
+    }
+    for (std::size_t i = 0; i < expected_load_b256.size(); ++i) {
+      if (state.sgprs[56u + i] != expected_load_b256[i]) {
+        return false;
+      }
+    }
+    for (std::size_t i = 0; i < expected_load_b512.size(); ++i) {
+      if (state.sgprs[64u + i] != expected_load_b512[i]) {
+        return false;
+      }
+    }
+    return true;
   };
-  LinearExecutionMemory smem_load_memory(0x80u, 0x1000u);
+  LinearExecutionMemory smem_load_memory(0x200u, 0x1000u);
   if (!Expect(smem_load_memory.WriteU32(0x1004u, 0x11223344u),
               "expected SMEM test write for S_LOAD_B32") ||
       !Expect(smem_load_memory.WriteU32(0x1018u, 0x55667788u),
@@ -7034,10 +7168,43 @@ int main() {
               "expected SMEM test write for S_LOAD_U16")) {
     return 1;
   }
+  for (std::size_t i = 0; i < expected_load_b96.size(); ++i) {
+    if (!Expect(smem_load_memory.WriteU32(
+                    0x104cu + static_cast<std::uint32_t>(i * 4u),
+                    expected_load_b96[i]),
+                "expected SMEM test write for S_LOAD_B96")) {
+      return 1;
+    }
+  }
+  for (std::size_t i = 0; i < expected_load_b128.size(); ++i) {
+    if (!Expect(smem_load_memory.WriteU32(
+                    0x1070u + static_cast<std::uint32_t>(i * 4u),
+                    expected_load_b128[i]),
+                "expected SMEM test write for S_LOAD_B128")) {
+      return 1;
+    }
+  }
+  for (std::size_t i = 0; i < expected_load_b256.size(); ++i) {
+    if (!Expect(smem_load_memory.WriteU32(
+                    0x1094u + static_cast<std::uint32_t>(i * 4u),
+                    expected_load_b256[i]),
+                "expected SMEM test write for S_LOAD_B256")) {
+      return 1;
+    }
+  }
+  for (std::size_t i = 0; i < expected_load_b512.size(); ++i) {
+    if (!Expect(smem_load_memory.WriteU32(
+                    0x110cu + static_cast<std::uint32_t>(i * 4u),
+                    expected_load_b512[i]),
+                "expected SMEM test write for S_LOAD_B512")) {
+      return 1;
+    }
+  }
 
   WaveExecutionState decoded_smem_load_state;
   initialize_smem_load_state(&decoded_smem_load_state);
-  if (!Expect(interpreter.ExecuteProgram(smem_load_program, &decoded_smem_load_state,
+  if (!Expect(interpreter.ExecuteProgram(smem_load_program,
+                                         &decoded_smem_load_state,
                                          &smem_load_memory, &error_message),
               "expected decoded SMEM load execution success") ||
       !Expect(expect_smem_load_state(decoded_smem_load_state),
@@ -7050,8 +7217,8 @@ int main() {
                                          &compiled_smem_load_program,
                                          &error_message),
               "expected compiled SMEM load program success") ||
-      !Expect(compiled_smem_load_program.size() == 7u,
-              "expected seven compiled SMEM load instructions") ||
+      !Expect(compiled_smem_load_program.size() == 11u,
+              "expected eleven compiled SMEM load instructions") ||
       !Expect(compiled_smem_load_program[0].opcode ==
                   Gfx1201CompiledOpcode::kSLoadB32,
               "expected compiled S_LOAD_B32 opcode") ||
@@ -7059,18 +7226,30 @@ int main() {
                   Gfx1201CompiledOpcode::kSLoadB64,
               "expected compiled S_LOAD_B64 opcode") ||
       !Expect(compiled_smem_load_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kSLoadB96,
+              "expected compiled S_LOAD_B96 opcode") ||
+      !Expect(compiled_smem_load_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kSLoadB128,
+              "expected compiled S_LOAD_B128 opcode") ||
+      !Expect(compiled_smem_load_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kSLoadB256,
+              "expected compiled S_LOAD_B256 opcode") ||
+      !Expect(compiled_smem_load_program[5].opcode ==
+                  Gfx1201CompiledOpcode::kSLoadB512,
+              "expected compiled S_LOAD_B512 opcode") ||
+      !Expect(compiled_smem_load_program[6].opcode ==
                   Gfx1201CompiledOpcode::kSLoadI8,
               "expected compiled S_LOAD_I8 opcode") ||
-      !Expect(compiled_smem_load_program[3].opcode ==
+      !Expect(compiled_smem_load_program[7].opcode ==
                   Gfx1201CompiledOpcode::kSLoadU8,
               "expected compiled S_LOAD_U8 opcode") ||
-      !Expect(compiled_smem_load_program[4].opcode ==
+      !Expect(compiled_smem_load_program[8].opcode ==
                   Gfx1201CompiledOpcode::kSLoadI16,
               "expected compiled S_LOAD_I16 opcode") ||
-      !Expect(compiled_smem_load_program[5].opcode ==
+      !Expect(compiled_smem_load_program[9].opcode ==
                   Gfx1201CompiledOpcode::kSLoadU16,
               "expected compiled S_LOAD_U16 opcode") ||
-      !Expect(compiled_smem_load_program[6].opcode ==
+      !Expect(compiled_smem_load_program[10].opcode ==
                   Gfx1201CompiledOpcode::kSEndpgm,
               "expected compiled S_ENDPGM after SMEM loads")) {
     return 1;

@@ -45,7 +45,7 @@ float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 std::uint16_t CompressFloatToFp16BitsRtz(float value);
 
-constexpr std::array<std::string_view, 339> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 343> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -58,6 +58,10 @@ constexpr std::array<std::string_view, 339> kExecutableSeedOpcodes{{
     "S_ATC_PROBE_BUFFER",
     "S_LOAD_B32",
     "S_LOAD_B64",
+    "S_LOAD_B96",
+    "S_LOAD_B128",
+    "S_LOAD_B256",
+    "S_LOAD_B512",
     "S_LOAD_I8",
     "S_LOAD_U8",
     "S_LOAD_I16",
@@ -891,6 +895,22 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "S_LOAD_B64") {
     *compiled_opcode = Gfx1201CompiledOpcode::kSLoadB64;
+    return true;
+  }
+  if (opcode == "S_LOAD_B96") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSLoadB96;
+    return true;
+  }
+  if (opcode == "S_LOAD_B128") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSLoadB128;
+    return true;
+  }
+  if (opcode == "S_LOAD_B256") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSLoadB256;
+    return true;
+  }
+  if (opcode == "S_LOAD_B512") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSLoadB512;
     return true;
   }
   if (opcode == "S_LOAD_I8") {
@@ -2466,6 +2486,32 @@ bool WriteWideScalarOperand(const InstructionOperand& operand,
   return WriteScalarOperand(
       InstructionOperand::Sgpr(static_cast<std::uint16_t>(operand.index + 1)),
       static_cast<std::uint32_t>(value >> 32), state, error_message);
+}
+
+bool WriteScalarOperandSequence(const InstructionOperand& operand,
+                                std::span<const std::uint32_t> values,
+                                WaveExecutionState* state,
+                                std::string* error_message) {
+  if (operand.kind != OperandKind::kSgpr) {
+    if (error_message != nullptr) {
+      *error_message = "expected scalar destination operand";
+    }
+    return false;
+  }
+
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    if (!WriteScalarOperand(
+            InstructionOperand::Sgpr(
+                static_cast<std::uint16_t>(operand.index + i)),
+            values[i], state, error_message)) {
+      return false;
+    }
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
 }
 
 bool WriteVectorOperand(const InstructionOperand& operand,
@@ -4079,6 +4125,10 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
   }
   if (instruction.opcode == "S_LOAD_B32" ||
       instruction.opcode == "S_LOAD_B64" ||
+      instruction.opcode == "S_LOAD_B96" ||
+      instruction.opcode == "S_LOAD_B128" ||
+      instruction.opcode == "S_LOAD_B256" ||
+      instruction.opcode == "S_LOAD_B512" ||
       instruction.opcode == "S_LOAD_I8" ||
       instruction.opcode == "S_LOAD_U8" ||
       instruction.opcode == "S_LOAD_I16" ||
@@ -4124,6 +4174,38 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
           static_cast<std::uint64_t>(low) |
               (static_cast<std::uint64_t>(high) << 32),
           state, error_message);
+    }
+    if (instruction.opcode == "S_LOAD_B96" ||
+        instruction.opcode == "S_LOAD_B128" ||
+        instruction.opcode == "S_LOAD_B256" ||
+        instruction.opcode == "S_LOAD_B512") {
+      std::size_t word_count = 0;
+      if (instruction.opcode == "S_LOAD_B96") {
+        word_count = 3u;
+      } else if (instruction.opcode == "S_LOAD_B128") {
+        word_count = 4u;
+      } else if (instruction.opcode == "S_LOAD_B256") {
+        word_count = 8u;
+      } else {
+        word_count = 16u;
+      }
+
+      std::array<std::uint32_t, 16> values{};
+      for (std::size_t i = 0; i < word_count; ++i) {
+        if (!memory->LoadU32(address + static_cast<std::uint64_t>(i * 4u),
+                             &values[i])) {
+          if (error_message != nullptr) {
+            *error_message = std::string(instruction.opcode) +
+                             " memory read failed";
+          }
+          return false;
+        }
+      }
+
+      return WriteScalarOperandSequence(
+          instruction.operands[0],
+          std::span<const std::uint32_t>(values.data(), word_count), state,
+          error_message);
     }
     if (instruction.opcode == "S_LOAD_I8" ||
         instruction.opcode == "S_LOAD_U8") {
@@ -5076,6 +5158,10 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kSNop:
     case Gfx1201CompiledOpcode::kSLoadB32:
     case Gfx1201CompiledOpcode::kSLoadB64:
+    case Gfx1201CompiledOpcode::kSLoadB96:
+    case Gfx1201CompiledOpcode::kSLoadB128:
+    case Gfx1201CompiledOpcode::kSLoadB256:
+    case Gfx1201CompiledOpcode::kSLoadB512:
     case Gfx1201CompiledOpcode::kSLoadI8:
     case Gfx1201CompiledOpcode::kSLoadU8:
     case Gfx1201CompiledOpcode::kSLoadI16:

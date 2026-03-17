@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 339> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 343> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -30,6 +30,10 @@ constexpr std::array<std::string_view, 339> kPhase0ExecutableOpcodes{{
     "S_ATC_PROBE_BUFFER",
     "S_LOAD_B32",
     "S_LOAD_B64",
+    "S_LOAD_B96",
+    "S_LOAD_B128",
+    "S_LOAD_B256",
+    "S_LOAD_B512",
     "S_LOAD_I8",
     "S_LOAD_U8",
     "S_LOAD_I16",
@@ -1085,6 +1089,10 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
     *words_consumed = 2;
   } else if (instruction_name == "S_LOAD_B32" ||
              instruction_name == "S_LOAD_B64" ||
+             instruction_name == "S_LOAD_B96" ||
+             instruction_name == "S_LOAD_B128" ||
+             instruction_name == "S_LOAD_B256" ||
+             instruction_name == "S_LOAD_B512" ||
              instruction_name == "S_LOAD_I8" ||
              instruction_name == "S_LOAD_U8" ||
              instruction_name == "S_LOAD_I16" ||
@@ -1111,11 +1119,26 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       return false;
     }
 
-    const bool is_wide_load = instruction_name == "S_LOAD_B64";
+    std::uint8_t element_bit_width = 32u;
+    std::uint8_t component_count = 1u;
+    if (instruction_name == "S_LOAD_B64") {
+      element_bit_width = 64u;
+      component_count = 2u;
+    } else if (instruction_name == "S_LOAD_B96") {
+      component_count = 3u;
+    } else if (instruction_name == "S_LOAD_B128") {
+      element_bit_width = 128u;
+      component_count = 4u;
+    } else if (instruction_name == "S_LOAD_B256") {
+      element_bit_width = 32u;
+      component_count = 8u;
+    } else if (instruction_name == "S_LOAD_B512") {
+      element_bit_width = 32u;
+      component_count = 16u;
+    }
     *instruction = DecodedInstruction::ThreeOperand(
-        instruction_name,
-        is_wide_load ? DescribeScalarDestinationOperand(sdst, false, 64u, 2u)
-                     : DescribeScalarDestinationOperand(sdst),
+        instruction_name, DescribeScalarDestinationOperand(
+                              sdst, false, element_bit_width, component_count),
         DescribeWideSourceOperand(sbase, OperandRole::kSource0,
                                   OperandSlotKind::kSource0),
         DescribeSourceOperand(offset, OperandRole::kSource1,
