@@ -20,7 +20,10 @@ _this_file = Path(__file__).resolve()
 _search_dirs = [_this_file.parent, _this_file.parent.parent]
 _module_path = None
 for _d in _search_dirs:
-    for _name in ("native_linux_package_install_test.py", "native_linux_package_install_ut_test.py"):
+    for _name in (
+        "native_linux_package_install_test.py",
+        "native_linux_package_install_ut_test.py",
+    ):
         _candidate = _d / _name
         if _candidate.is_file():
             _module_path = _candidate
@@ -65,6 +68,7 @@ def _suppress_script_output():
     suppressed during the with block.
     """
     import builtins
+
     orig = builtins.print
     try:
         builtins.print = _noop_print
@@ -80,7 +84,8 @@ class EnvHelperTest(unittest.TestCase):
         # Test that _env returns the environment variable value when it is set.
         with patch.dict(os.environ, {"ROCM_TEST_KEY": "custom"}, clear=False):
             self.assertEqual(
-                native_linux_package_install_test._env("ROCM_TEST_KEY", "default"), "custom"
+                native_linux_package_install_test._env("ROCM_TEST_KEY", "default"),
+                "custom",
             )
 
     def test_env_returns_default_when_unset(self):
@@ -97,14 +102,16 @@ class EnvHelperTest(unittest.TestCase):
         # Test that _env returns the default when the variable is set to empty string.
         with patch.dict(os.environ, {"ROCM_TEST_KEY": ""}, clear=False):
             self.assertEqual(
-                native_linux_package_install_test._env("ROCM_TEST_KEY", "default"), "default"
+                native_linux_package_install_test._env("ROCM_TEST_KEY", "default"),
+                "default",
             )
 
     def test_env_strips_whitespace(self):
         # Test that _env strips leading and trailing whitespace from the value.
         with patch.dict(os.environ, {"ROCM_TEST_KEY": "  value  "}, clear=False):
             self.assertEqual(
-                native_linux_package_install_test._env("ROCM_TEST_KEY", "default"), "value"
+                native_linux_package_install_test._env("ROCM_TEST_KEY", "default"),
+                "value",
             )
 
 
@@ -314,7 +321,9 @@ class RunSimulateInstallTestTest(unittest.TestCase):
             path = f.name
         try:
             self.assertFalse(
-                native_linux_package_install_ut_test.run_simulate_install_test("deb", path)
+                native_linux_package_install_ut_test.run_simulate_install_test(
+                    "deb", path
+                )
             )
         finally:
             os.unlink(path)
@@ -354,7 +363,9 @@ class RunSimulateInstallTestTest(unittest.TestCase):
         mock_run.return_value = MagicMock(returncode=0)
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "fake.deb").write_text("")
-            result = native_linux_package_install_ut_test.run_simulate_install_test("deb", d)
+            result = native_linux_package_install_ut_test.run_simulate_install_test(
+                "deb", d
+            )
             self.assertTrue(result)
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
@@ -368,7 +379,9 @@ class RunSimulateInstallTestTest(unittest.TestCase):
         mock_run.return_value = MagicMock(returncode=0)
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "fake.rpm").write_text("")
-            result = native_linux_package_install_ut_test.run_simulate_install_test("rpm", d)
+            result = native_linux_package_install_ut_test.run_simulate_install_test(
+                "rpm", d
+            )
             self.assertTrue(result)
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
@@ -415,7 +428,15 @@ class MainValidationTest(unittest.TestCase):
         # Test that main() exits with error when --test-type sanity but --os-profile is missing.
         with patch(
             "sys.argv",
-            ["prog", "--test-type", "sanity", "--repo-url", "https://x.com", "--gfx-arch", "gfx94x"],
+            [
+                "prog",
+                "--test-type",
+                "sanity",
+                "--repo-url",
+                "https://x.com",
+                "--gfx-arch",
+                "gfx94x",
+            ],
         ):
             with self.assertRaises(SystemExit) as cm:
                 native_linux_package_install_ut_test.main()
@@ -425,7 +446,15 @@ class MainValidationTest(unittest.TestCase):
         # Test that main() exits with error when --test-type sanity but --repo-url is missing.
         with patch(
             "sys.argv",
-            ["prog", "--test-type", "sanity", "--os-profile", "ubuntu2404", "--gfx-arch", "gfx94x"],
+            [
+                "prog",
+                "--test-type",
+                "sanity",
+                "--os-profile",
+                "ubuntu2404",
+                "--gfx-arch",
+                "gfx94x",
+            ],
         ):
             with self.assertRaises(SystemExit) as cm:
                 native_linux_package_install_ut_test.main()
@@ -497,6 +526,7 @@ class RunBasicVerificationTest(unittest.TestCase):
     def test_handles_called_process_error_when_querying_packages(self, mock_run):
         # Test that run_basic_verification handles CalledProcessError when querying packages (continues, then passes if enough components).
         import subprocess
+
         mock_run.side_effect = subprocess.CalledProcessError(1, "dpkg")
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "bin").mkdir()
@@ -514,6 +544,7 @@ class RunBasicVerificationTest(unittest.TestCase):
     def test_handles_rocminfo_timeout(self, mock_run):
         # Test that run_basic_verification handles rocminfo TimeoutExpired (warns but still passes if enough components).
         import subprocess
+
         mock_run.side_effect = [
             MagicMock(returncode=0, stdout="ii rocm 1.0\n"),
             subprocess.TimeoutExpired("rocminfo", 30),
@@ -569,7 +600,10 @@ class SetupGpgKeyTest(unittest.TestCase):
     def test_returns_false_for_deb_when_subprocess_fails(self, mock_run):
         # Test that setup_gpg_key returns False when subprocess raises CalledProcessError.
         import subprocess
-        mock_run.side_effect = subprocess.CalledProcessError(1, "mkdir", stderr=b"permission denied")
+
+        mock_run.side_effect = subprocess.CalledProcessError(
+            1, "mkdir", stderr=b"permission denied"
+        )
         t = native_linux_package_install_ut_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="ubuntu2404",
@@ -583,7 +617,9 @@ class SetupDebRepositoryTest(unittest.TestCase):
 
     @patch("native_linux_package_install_ut_test._run_streaming")
     @patch("builtins.open", new_callable=mock_open)
-    def test_returns_true_when_apt_update_succeeds_no_gpg(self, mock_file, mock_streaming):
+    def test_returns_true_when_apt_update_succeeds_no_gpg(
+        self, mock_file, mock_streaming
+    ):
         # Test that setup_deb_repository writes repo entry (trusted=yes) and returns True when apt update returns 0.
         mock_streaming.return_value = 0
         t = native_linux_package_install_ut_test.NativeLinuxPackageInstallTest(
@@ -604,7 +640,9 @@ class SetupDebRepositoryTest(unittest.TestCase):
         return_value=True,
     )
     @patch("builtins.open", new_callable=mock_open)
-    def test_returns_true_with_gpg_when_apt_update_succeeds(self, mock_file, mock_gpg, mock_streaming):
+    def test_returns_true_with_gpg_when_apt_update_succeeds(
+        self, mock_file, mock_gpg, mock_streaming
+    ):
         # Test that with gpg_key_url, setup_gpg_key is called and repo entry uses signed-by.
         mock_streaming.return_value = 0
         t = native_linux_package_install_ut_test.NativeLinuxPackageInstallTest(
@@ -659,6 +697,7 @@ class SetupDebRepositoryTest(unittest.TestCase):
     def test_returns_false_when_apt_update_times_out(self, mock_file, mock_streaming):
         # Test that setup_deb_repository returns False when _run_streaming raises TimeoutExpired.
         import subprocess
+
         mock_streaming.side_effect = subprocess.TimeoutExpired("apt", 120)
         t = native_linux_package_install_ut_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -674,7 +713,9 @@ class SetupSlesRepositoryTest(unittest.TestCase):
     @patch("native_linux_package_install_ut_test._run_streaming")
     @patch("native_linux_package_install_ut_test.subprocess.run")
     @patch("builtins.open", new_callable=mock_open)
-    def test_returns_true_when_refresh_succeeds(self, mock_file, mock_run, mock_streaming):
+    def test_returns_true_when_refresh_succeeds(
+        self, mock_file, mock_run, mock_streaming
+    ):
         # Test that _setup_sles_repository writes repo file and returns True when zypper refresh returns 0.
         mock_streaming.return_value = 0
         t = native_linux_package_install_ut_test.NativeLinuxPackageInstallTest(
@@ -769,6 +810,7 @@ class InstallDebPackagesTest(unittest.TestCase):
     def test_returns_false_when_apt_install_times_out(self, mock_streaming):
         # Test that install_deb_packages returns False when _run_streaming raises TimeoutExpired.
         import subprocess
+
         mock_streaming.side_effect = subprocess.TimeoutExpired("apt", 1800)
         t = native_linux_package_install_ut_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
@@ -821,7 +863,9 @@ class RunRepoSetupAndInstallTest(unittest.TestCase):
         "setup_deb_repository",
         return_value=True,
     )
-    def test_returns_true_for_deb_when_setup_and_install_succeed(self, mock_setup, mock_install):
+    def test_returns_true_for_deb_when_setup_and_install_succeed(
+        self, mock_setup, mock_install
+    ):
         # Test that run_repo_setup_and_install returns True when setup and install both succeed (deb).
         t = native_linux_package_install_ut_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
@@ -855,7 +899,9 @@ class RunRepoSetupAndInstallTest(unittest.TestCase):
         "setup_rpm_repository",
         return_value=True,
     )
-    def test_returns_true_for_rpm_when_setup_and_install_succeed(self, mock_setup, mock_install):
+    def test_returns_true_for_rpm_when_setup_and_install_succeed(
+        self, mock_setup, mock_install
+    ):
         # Test that run_repo_setup_and_install returns True when setup and install both succeed (rpm).
         t = native_linux_package_install_ut_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
@@ -920,6 +966,7 @@ class TestRdhcTest(unittest.TestCase):
     def test_returns_false_when_rdhc_times_out(self, mock_run):
         # Test that test_rdhc returns False when subprocess raises TimeoutExpired.
         import subprocess
+
         mock_run.side_effect = subprocess.TimeoutExpired("rdhc", 30)
         with tempfile.TemporaryDirectory() as d:
             libexec = Path(d) / "libexec" / "rocm-core"
@@ -936,6 +983,7 @@ class TestRdhcTest(unittest.TestCase):
     def test_returns_false_when_rdhc_fails(self, mock_run):
         # Test that test_rdhc returns False when subprocess raises CalledProcessError.
         import subprocess
+
         mock_run.side_effect = subprocess.CalledProcessError(1, "rdhc")
         with tempfile.TemporaryDirectory() as d:
             libexec = Path(d) / "libexec" / "rocm-core"
@@ -968,6 +1016,7 @@ class RunStreamingTest(unittest.TestCase):
     def test_kills_process_on_timeout(self, mock_popen):
         # Test that _run_streaming kills the process when wait() raises TimeoutExpired.
         import subprocess as sp
+
         mock_proc = MagicMock()
         mock_proc.stdout = iter(["line1\n"])
         mock_proc.wait.side_effect = sp.TimeoutExpired("cmd", 30)

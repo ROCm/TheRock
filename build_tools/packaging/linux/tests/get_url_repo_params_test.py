@@ -189,11 +189,16 @@ class MainSubcommandsTest(unittest.TestCase):
             code = get_url_repo_params.main(
                 [
                     "get-repo-url",
-                    "--release-type", "prerelease",
-                    "--native-package-type", "deb",
-                    "--repo-base-url", "https://x.com",
-                    "--os-profile", "ubuntu2404",
-                    "--repo-sub-folder", "",
+                    "--release-type",
+                    "prerelease",
+                    "--native-package-type",
+                    "deb",
+                    "--repo-base-url",
+                    "https://x.com",
+                    "--os-profile",
+                    "ubuntu2404",
+                    "--repo-sub-folder",
+                    "",
                 ]
             )
         self.assertEqual(code, 0)
@@ -202,16 +207,23 @@ class MainSubcommandsTest(unittest.TestCase):
 
     def test_get_repo_url_error_returns_one(self):
         # Test that get-repo-url returns 1 and prints error when get_repo_url raises.
-        with patch("get_url_repo_params.get_repo_url", side_effect=ValueError("bad params")):
+        with patch(
+            "get_url_repo_params.get_repo_url", side_effect=ValueError("bad params")
+        ):
             with patch("sys.stderr"):
                 code = get_url_repo_params.main(
                     [
                         "get-repo-url",
-                        "--release-type", "prerelease",
-                        "--native-package-type", "deb",
-                        "--repo-base-url", "https://x.com",
-                        "--os-profile", "ubuntu2404",
-                        "--repo-sub-folder", "",
+                        "--release-type",
+                        "prerelease",
+                        "--native-package-type",
+                        "deb",
+                        "--repo-base-url",
+                        "https://x.com",
+                        "--os-profile",
+                        "ubuntu2404",
+                        "--repo-sub-folder",
+                        "",
                     ]
                 )
         self.assertEqual(code, 1)
