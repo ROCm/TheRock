@@ -251,6 +251,9 @@ class BootstrappingPopulator(ArtifactPopulator):
         self.current_artifact_path: Optional[Path] = None
         # Dictionary of subproject_name -> fingerprint loaded from fprint file
         self.fingerprints: dict = {}
+        # Dictionary of relative_stage_path -> fingerprint for new format
+        # e.g., {"compiler/amd-llvm/stage": "abc123..."}
+        self.path_to_fingerprint: dict = {}
 
     def on_first_relpath(self, relpath: str):
         if not relpath:
@@ -270,10 +273,11 @@ class BootstrappingPopulator(ArtifactPopulator):
             prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
             prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Look up fingerprint for this subproject from the loaded fprint data.
-            # The relpath is like "compiler/amd-llvm/stage" - we need to find
-            # the corresponding subproject name (e.g., "amd-llvm") in our fingerprints dict.
-            fingerprint = self._lookup_fingerprint_for_relpath(relpath)
+            # Look up fingerprint using exact path match from fprint file
+            # The relpath is like "compiler/amd-llvm/stage" and should directly
+            # match an entry in path_to_fingerprint
+            normalized_relpath = relpath.strip("/")
+            fingerprint = self.path_to_fingerprint.get(normalized_relpath)
             if fingerprint:
                 prebuilt_path.write_text(fingerprint)
             else:
@@ -281,40 +285,6 @@ class BootstrappingPopulator(ArtifactPopulator):
                 prebuilt_path.write_text("UNKNOWN")
 
             self.created_markers.append(prebuilt_path)
-
-    def _lookup_fingerprint_for_relpath(self, relpath: str) -> Optional[str]:
-        """Look up fingerprint for a relpath by matching against subproject names.
-
-        The relpath is like "compiler/amd-llvm/stage" and subproject names in the
-        fprint file are CMake target names like "amd-llvm". We try to match
-        the directory name component against the subproject names.
-        """
-        if not self.fingerprints:
-            return None
-
-        # Extract path components - the subproject is usually the second-to-last
-        # component (before "stage" or "dist")
-        parts = relpath.strip("/").split("/")
-        if len(parts) < 2:
-            return None
-
-        # Try different matching strategies
-        # 1. Match the second-to-last component (e.g., "amd-llvm" from "compiler/amd-llvm/stage")
-        subproject_candidate = parts[-2] if len(parts) >= 2 else parts[-1]
-        if subproject_candidate in self.fingerprints:
-            return self.fingerprints[subproject_candidate]
-
-        # 2. Try case-insensitive match (subproject names may vary in case)
-        for name, fprint in self.fingerprints.items():
-            if name.lower() == subproject_candidate.lower():
-                return fprint
-
-        # 3. Check if any subproject name is contained in the relpath
-        for name, fprint in self.fingerprints.items():
-            if name.lower() in relpath.lower():
-                return fprint
-
-        return None
 
     def on_artifact_dir(self, artifact_dir: Path):
         """Called when processing an artifact directory."""
@@ -338,8 +308,11 @@ class BootstrappingPopulator(ArtifactPopulator):
         File format:
             ARTIFACT={slice_name}
             DESCRIPTOR={descriptor_hash}
-            {subproject_name}={subproject_fprint}
+            {subproject_name}={relative_stage_path}/{subproject_fprint}
             ...
+
+        The relative_stage_path indicates where stage.prebuilt should be extracted
+        relative to THEROCK_BINARY_DIR (e.g., "compiler/amd-llvm/stage").
 
         For example, for artifact "amd-llvm_dev_generic", the fingerprint
         file is at "artifacts/amd-llvm.fprint".
@@ -372,7 +345,10 @@ class BootstrappingPopulator(ArtifactPopulator):
     def _parse_fprint_file(self, fprint_path: Path):
         """Parse a .fprint file containing key=value pairs.
 
-        Populates self.fingerprints with subproject_name -> fingerprint mappings.
+        Populates self.path_to_fingerprint with relative_stage_path -> fingerprint mappings.
+
+        Format: subproject_name=relative_stage_path/fingerprint
+        Example: amd-llvm=compiler/amd-llvm/stage/abc123...
         """
         content = fprint_path.read_text().strip()
         if content == "INVALID":
@@ -390,7 +366,16 @@ class BootstrappingPopulator(ArtifactPopulator):
             if key in ("ARTIFACT", "DESCRIPTOR"):
                 continue
 
-            self.fingerprints[key] = value
+            # New format: relative_stage_path/fingerprint
+            # Split on the last "/" to separate path from fingerprint
+            if "/" in value:
+                path_part, _, fingerprint = value.rpartition("/")
+                # Store mappings
+                self.fingerprints[key] = fingerprint  # subproject_name -> fingerprint (for legacy lookups)
+                self.path_to_fingerprint[path_part] = fingerprint  # path -> fingerprint (primary lookup)
+            else:
+                # Malformed entry - log a warning but continue
+                print(f"Warning: Malformed fprint entry '{key}={value}' - expected path/fingerprint format")
 
 
 def extract_artifact(request: ExtractRequest) -> Optional[Path]:
@@ -489,14 +474,38 @@ def do_fetch(args: argparse.Namespace):
         for filename in matched_filenames
     ]
 
+    for artifact_name in sorted(inbound):
+        # Download .fprint file for this artifact (once per artifact, not per component)
+        # Similar to how .sha256sum files are handled, .fprint files are metadata that
+        # should be downloaded if they exist. We don't check if they're in the available
+        # list since list_artifacts() only returns archive files.
+        fprint_filename = f"{artifact_name}.fprint"
+        download_requests.append(
+            DownloadRequest(
+                artifact_key=fprint_filename,
+                dest_path=download_dir / fprint_filename,
+                backend=backend,
+            )
+        )
+
     if not download_requests:
         log("No matching artifacts found to download")
         return
 
     log(f"\nDownloading {len(download_requests)} artifacts...")
 
-    # Parallel download and extract pipeline
-    downloaded_count = 0
+    # Download all .fprint files FIRST before concurrent download/extract pipeline
+    # This ensures fingerprints are available when extraction starts
+    fprint_requests = [req for req in download_requests if req.artifact_key.endswith('.fprint')]
+    archive_requests = [req for req in download_requests if not req.artifact_key.endswith('.fprint')]
+
+    if fprint_requests:
+        log(f"Downloading {len(fprint_requests)} fingerprint files first...")
+        for req in fprint_requests:
+            download_artifact(req)
+
+    # Parallel download and extract pipeline for archives
+    downloaded_count = len(fprint_requests)  # Count the fprints we already downloaded
     extracted_count = 0
 
     with concurrent.futures.ThreadPoolExecutor(
@@ -504,7 +513,7 @@ def do_fetch(args: argparse.Namespace):
     ) as download_executor:
         download_futures = [
             download_executor.submit(download_artifact, req)
-            for req in download_requests
+            for req in archive_requests
         ]
 
         if args.no_extract:
@@ -532,6 +541,11 @@ def do_fetch(args: argparse.Namespace):
                     if not downloaded_path or not downloaded_path.exists():
                         continue
                     downloaded_count += 1
+
+                    # Skip extraction for .fprint files - they're metadata, not archives
+                    if downloaded_path.suffix == ".fprint":
+                        continue
+
                     extract_futures.append(
                         extract_executor.submit(
                             extract_artifact,
@@ -578,10 +592,12 @@ def do_fetch(args: argparse.Namespace):
         sys.exit(1)
 
     # Fail if any extractions failed (when extraction was requested)
-    if not args.no_extract and extracted_count < downloaded_count:
+    # Compare against archive count, not total downloads (which includes .fprint files)
+    expected_extractions = len(archive_requests)
+    if not args.no_extract and extracted_count < expected_extractions:
         log(
-            f"ERROR: Only extracted {extracted_count}/{downloaded_count} artifacts - "
-            f"{downloaded_count - extracted_count} failed"
+            f"ERROR: Only extracted {extracted_count}/{expected_extractions} archives - "
+            f"{expected_extractions - extracted_count} failed"
         )
         sys.exit(1)
 

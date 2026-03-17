@@ -150,10 +150,20 @@ function(therock_provide_artifact slice_name)
   set(_fprint_is_valid TRUE)
   foreach(_subproject_dep ${ARG_SUBPROJECT_DEPS})
     get_target_property(_subproject_fprint "${_subproject_dep}" THEROCK_FPRINT)
-    if(_subproject_fprint)
-      list(APPEND _fprint_content "${_subproject_dep}=${_subproject_fprint}")
+    get_target_property(_subproject_stage_dir "${_subproject_dep}" THEROCK_STAGE_DIR)
+
+    if(_subproject_fprint AND _subproject_stage_dir)
+      # Compute relative path from THEROCK_BINARY_DIR to stage directory
+      # This allows the fprint file to indicate where stage.prebuilt should be extracted
+      cmake_path(RELATIVE_PATH _subproject_stage_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _relative_stage_path)
+      list(APPEND _fprint_content "${_subproject_dep}=${_relative_stage_path}/${_subproject_fprint}")
     else()
-      message(STATUS "Cannot compute fprint for artifact ${slice_name} (no fprint for ${_subproject_dep})")
+      if(NOT _subproject_fprint)
+        message(STATUS "Cannot compute fprint for artifact ${slice_name} (no fprint for ${_subproject_dep})")
+      endif()
+      if(NOT _subproject_stage_dir)
+        message(STATUS "Cannot compute stage path for artifact ${slice_name} (no stage dir for ${_subproject_dep})")
+      endif()
       set(_fprint_is_valid FALSE)
     endif()
   endforeach()
@@ -350,8 +360,11 @@ function(therock_provide_artifact slice_name)
   # Format:
   #   ARTIFACT={slice_name}
   #   DESCRIPTOR={descriptor_hash}
-  #   {subproject_name}={subproject_fprint}
+  #   {subproject_name}={relative_stage_path}/{subproject_fprint}
   #   ...
+  #
+  # The relative_stage_path indicates where stage.prebuilt should be extracted
+  # relative to THEROCK_BINARY_DIR (e.g., "compiler/amd-llvm/stage")
   set(_slice_fprint_file "${_artifacts_dir}/${slice_name}.fprint")
   if(_fprint_is_valid)
     # Convert CMake list to newline-separated content

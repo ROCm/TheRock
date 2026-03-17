@@ -257,6 +257,9 @@ class BootstrappingPopulator(ArtifactPopulator):
         self.current_artifact_path: Optional[Path] = None
         # Dictionary of subproject_name -> fingerprint loaded from fprint file
         self.fingerprints: dict[str, str] = {}
+        # Dictionary of relative_stage_path -> fingerprint for new format
+        # e.g., {"compiler/amd-llvm/stage": "abc123..."}
+        self.path_to_fingerprint: dict[str, str] = {}
 
     def on_first_relpath(self, relpath: str):
         if not relpath:
@@ -270,10 +273,11 @@ class BootstrappingPopulator(ArtifactPopulator):
         prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
         prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Look up fingerprint for this subproject from the loaded fprint data.
-        # The relpath is like "compiler/amd-llvm/stage" - we need to find
-        # the corresponding subproject name (e.g., "amd-llvm") in our fingerprints dict.
-        fingerprint = self._lookup_fingerprint_for_relpath(relpath)
+        # Look up fingerprint using exact path match from fprint file
+        # The relpath is like "compiler/amd-llvm/stage" and should directly
+        # match an entry in path_to_fingerprint
+        normalized_relpath = relpath.strip("/")
+        fingerprint = self.path_to_fingerprint.get(normalized_relpath)
         if fingerprint:
             prebuilt_path.write_text(fingerprint)
             if self.verbose:
@@ -285,40 +289,6 @@ class BootstrappingPopulator(ArtifactPopulator):
                 print(f"  Writing UNKNOWN fingerprint to {prebuilt_path}")
 
         self.created_markers.append(prebuilt_path)
-
-    def _lookup_fingerprint_for_relpath(self, relpath: str) -> Optional[str]:
-        """Look up fingerprint for a relpath by matching against subproject names.
-
-        The relpath is like "compiler/amd-llvm/stage" and subproject names in the
-        fprint file are CMake target names like "amd-llvm". We try to match
-        the directory name component against the subproject names.
-        """
-        if not self.fingerprints:
-            return None
-
-        # Extract path components - the subproject is usually the second-to-last
-        # component (before "stage" or "dist")
-        parts = relpath.strip("/").split("/")
-        if len(parts) < 2:
-            return None
-
-        # Try different matching strategies
-        # 1. Match the second-to-last component (e.g., "amd-llvm" from "compiler/amd-llvm/stage")
-        subproject_candidate = parts[-2] if len(parts) >= 2 else parts[-1]
-        if subproject_candidate in self.fingerprints:
-            return self.fingerprints[subproject_candidate]
-
-        # 2. Try case-insensitive match (subproject names may vary in case)
-        for name, fprint in self.fingerprints.items():
-            if name.lower() == subproject_candidate.lower():
-                return fprint
-
-        # 3. Check if any subproject name is contained in the relpath
-        for name, fprint in self.fingerprints.items():
-            if name.lower() in relpath.lower():
-                return fprint
-
-        return None
 
     def on_relpath(self, relpath: str):
         """Process a relpath from artifact extraction."""
@@ -348,8 +318,11 @@ class BootstrappingPopulator(ArtifactPopulator):
         File format:
             ARTIFACT={slice_name}
             DESCRIPTOR={descriptor_hash}
-            {subproject_name}={subproject_fprint}
+            {subproject_name}={relative_stage_path}/{subproject_fprint}
             ...
+
+        The relative_stage_path indicates where stage.prebuilt should be extracted
+        relative to THEROCK_BINARY_DIR (e.g., "compiler/amd-llvm/stage").
 
         For example, for artifact "amd-llvm_dev_generic", the fingerprint
         file is at "artifacts/amd-llvm.fprint".
@@ -389,7 +362,10 @@ class BootstrappingPopulator(ArtifactPopulator):
     def _parse_fprint_file(self, fprint_path: Path):
         """Parse a .fprint file containing key=value pairs.
 
-        Populates self.fingerprints with subproject_name -> fingerprint mappings.
+        Populates self.path_to_fingerprint with relative_stage_path -> fingerprint mappings.
+
+        Format: subproject_name=relative_stage_path/fingerprint
+        Example: amd-llvm=compiler/amd-llvm/stage/abc123...
         """
         content = fprint_path.read_text().strip()
         if content == "INVALID":
@@ -409,7 +385,17 @@ class BootstrappingPopulator(ArtifactPopulator):
             if key in ("ARTIFACT", "DESCRIPTOR"):
                 continue
 
-            self.fingerprints[key] = value
+            # New format: relative_stage_path/fingerprint
+            # Split on the last "/" to separate path from fingerprint
+            if "/" in value:
+                path_part, _, fingerprint = value.rpartition("/")
+                # Store mappings
+                self.fingerprints[key] = fingerprint  # subproject_name -> fingerprint (for legacy lookups)
+                self.path_to_fingerprint[path_part] = fingerprint  # path -> fingerprint (primary lookup)
+            else:
+                # Malformed entry - log a warning but continue
+                if self.verbose:
+                    print(f"Warning: Malformed fprint entry '{key}={value}' - expected path/fingerprint format")
 
         if self.verbose and self.fingerprints:
             print(
