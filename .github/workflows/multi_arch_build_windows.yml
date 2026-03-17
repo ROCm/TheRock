@@ -6,7 +6,8 @@
 # This workflow builds TheRock in stages:
 # 1. foundation (generic) - sysdeps, base
 # 2. compiler-runtime (generic) - compiler, runtimes
-# 3. math-libs (per-arch) - BLAS, FFT, etc.
+# 3. ml-libs-generic (generic) - hipdnn (parallel to math-libs)
+# 4. math-libs (per-arch) - BLAS, FFT, etc. (needs ml-libs-generic for ml-libs group)
 #
 # Stages disabled on Windows: comm-libs, dctools-core, profiler-apps, media
 # (see BUILD_TOPOLOGY.toml disable_platforms)
@@ -81,10 +82,29 @@ jobs:
       id-token: write
 
   # ==========================================================================
+  # STAGE: ml-libs-generic (generic, parallel to math-libs)
+  # ==========================================================================
+  ml-libs-generic:
+    needs: compiler-runtime
+    uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: ml-libs-generic
+      stage_display_name: "Stage - ML Libs Generic"
+      timeout_minutes: 60
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
   # STAGE: math-libs (per-arch)
   # ==========================================================================
   math-libs:
-    needs: compiler-runtime
+    # ml-libs (built in this stage) depends on hipdnn from ml-libs-generic
+    needs: [compiler-runtime, ml-libs-generic]
     strategy:
       fail-fast: false
       matrix:

@@ -6,14 +6,15 @@
 # This workflow builds TheRock in stages:
 # 1. foundation (generic) - sysdeps, base
 # 2. compiler-runtime (generic) - compiler, runtimes, profiler-core
-# 3. math-libs (per-arch) - BLAS, FFT, etc.
-# 4. comm-libs (per-arch) - RCCL (parallel to math-libs)
-# 5. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
-# 6. dctools-core (generic) - RDC (parallel to math-libs)
-# 7. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
-# 8. iree-compiler (generic) - IREE compiler (parallel to math-libs)
-# 9. fusilli-libs (generic) - Fusilli hipdnn provider (after math-libs + iree-compiler)
-# 10. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
+# 3. ml-libs-generic (generic) - hipdnn (parallel to math-libs)
+# 4. math-libs (per-arch) - BLAS, FFT, etc. (needs ml-libs-generic for ml-libs group)
+# 5. comm-libs (per-arch) - RCCL (parallel to math-libs)
+# 6. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
+# 7. dctools-core (generic) - RDC (parallel to math-libs)
+# 8. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
+# 9. iree-compiler (generic) - IREE compiler (parallel to math-libs)
+# 10. fusilli-libs (generic) - Fusilli hipdnn provider (after ml-libs-generic + iree-compiler)
+# 11. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 
 name: Multi-Arch Build (Linux)
 
@@ -86,10 +87,28 @@ jobs:
       id-token: write
 
   # ==========================================================================
+  # STAGE: ml-libs-generic (generic, parallel to math-libs)
+  # ==========================================================================
+  ml-libs-generic:
+    needs: compiler-runtime
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: ml-libs-generic
+      stage_display_name: "Stage - ML Libs Generic"
+      timeout_minutes: 60
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
   # STAGE: math-libs (per-arch)
   # ==========================================================================
   math-libs:
-    needs: compiler-runtime
+    # ml-libs (built in this stage) depends on hipdnn from ml-libs-generic
+    needs: [compiler-runtime, ml-libs-generic]
     strategy:
       fail-fast: false
       matrix:
@@ -201,7 +220,7 @@ jobs:
   # STAGE: fusilli-libs (generic, after math-libs + iree-compiler)
   # ==========================================================================
   fusilli-libs:
-    needs: [compiler-runtime, math-libs, iree-compiler]
+    needs: [compiler-runtime, ml-libs-generic, iree-compiler]
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
