@@ -16,6 +16,7 @@ from configure_multi_arch_ci import (
 
 _DAG = """\
 ```
+# Build graph
 build-rocm ──┬── test-rocm
              └── build-rocm-python ── build-pytorch
 ```"""
@@ -42,14 +43,15 @@ def format_summary(
 
     # One-liner: trigger, branch, variant
     lines.append(
-        f"{ci_inputs.event_name.replace('_', ' ').title()} "
-        f"to `{ci_inputs.branch_name}`, `{ci_inputs.build_variant}` variant."
+        f"Trigger: `{ci_inputs.event_name}` on `{ci_inputs.branch_name}`, "
+        f"`{ci_inputs.build_variant}` variant."
     )
     lines.append("")
 
     # Non-default callout
     callouts = _non_default_callouts(ci_inputs, outputs)
     if callouts:
+        lines.append("> [!NOTE]")
         lines.append("> **Non-default configuration:**")
         for callout in callouts:
             lines.append(f"> - {callout}")
@@ -68,11 +70,6 @@ def format_summary(
     lines.append("### test-rocm")
     lines.append("")
     _append_test_rocm(lines, outputs)
-
-    # build-pytorch
-    lines.append("### build-pytorch")
-    lines.append("")
-    _append_build_pytorch(lines, outputs)
 
     return "\n".join(lines)
 
@@ -194,8 +191,8 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
     lines.append("")
 
     # Per-family test runner table
-    lines.append("| Platform | Family | Runner | Scope |")
-    lines.append("|----------|--------|--------|-------|")
+    lines.append("| Platform | Family | Runner Label | Scope |")
+    lines.append("|----------|--------|--------------|-------|")
     for platform, config in [
         ("Linux", outputs.builds.linux),
         ("Windows", outputs.builds.windows),
@@ -211,34 +208,6 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
             else:
                 scope = test_rocm.test_type
             lines.append(f"| {platform} | {family} | {runner} | {scope} |")
-    lines.append("")
-
-
-def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
-    linux = outputs.builds.linux
-    windows = outputs.builds.windows
-
-    if linux and not linux.build_pytorch and windows and not windows.build_pytorch:
-        lines.append(f"Not building pytorch (`{linux.build_variant_label}` variant).")
-        lines.append("")
-        return
-
-    has_any = False
-    lines.append("| Platform | Families |")
-    lines.append("|----------|----------|")
-    for platform, config in [("Linux", linux), ("Windows", windows)]:
-        if config is None or not config.build_pytorch:
-            continue
-        families = ", ".join(f"`{f}`" for f in config.dist_amdgpu_families.split(";"))
-        lines.append(f"| {platform} | {families} |")
-        has_any = True
-
-    if not has_any:
-        # Remove the empty table header
-        lines.pop()
-        lines.pop()
-        lines.append("Not building pytorch.")
-
     lines.append("")
 
 
