@@ -188,7 +188,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "-DROCCLR_ENABLE_PAL=1"
       "-DROCCLR_ENABLE_HSA=1"
       "-D__HIP_ENABLE_RTC=1"
-      "-DROCR_DLL_LOAD=1"
+      "-DROCR_DLL_LOAD=0"
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
     )
   else()
