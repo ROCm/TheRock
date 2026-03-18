@@ -23,7 +23,7 @@ from pathlib import Path
 
 # Add tests directory to path for extended_tests imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
-from github_actions_utils import *
+from github_actions_api import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from extended_tests.functional.functional_test_matrix import functional_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
@@ -580,9 +580,9 @@ def run():
             job_config_data["shard_arr"] = [i + 1 for i in range(total_shards)]
             job_config_data["total_shards"] = total_shards
 
-            # If the test type is smoke tests, we only need one shard for the test job
+            # If the test type is quick tests, we only need one shard for the test job
             # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
-            if test_type == "smoke":
+            if test_type == "quick":
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 

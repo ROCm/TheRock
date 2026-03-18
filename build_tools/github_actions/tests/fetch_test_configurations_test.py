@@ -108,8 +108,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(hipblaslt["total_shards"], 6)
         self.assertEqual(hipblaslt["shard_arr"], [1, 2, 3, 4, 5, 6])
 
-    def test_smoke_test_forces_single_shard(self):
-        os.environ["TEST_TYPE"] = "smoke"
+    def test_quick_test_forces_single_shard(self):
+        os.environ["TEST_TYPE"] = "quick"
 
         fetch_test_configurations.run()
         components = self._get_components()

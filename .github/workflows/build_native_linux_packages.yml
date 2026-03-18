@@ -110,7 +110,7 @@ jobs:
           # Install the needed tools for creating rpm / deb packages
           # Also install tools for creating repo files
           sudo apt update
-          sudo apt install -y llvm
+          sudo apt install -y llvm-20
           sudo apt install -y rpm debhelper-compat build-essential
           sudo apt install -y dpkg-dev createrepo-c
 

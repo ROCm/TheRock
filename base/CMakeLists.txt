@@ -15,6 +15,7 @@ therock_cmake_subproject_declare(therock-aux-overlay
   BACKGROUND_BUILD
   CMAKE_ARGS
     "-DTHEROCK_FLAG_SETTINGS_FILE=${THEROCK_FLAG_SETTINGS_FILE}"
+    "-DTHEROCK_PACKAGE_VERSION=${THEROCK_PACKAGE_VERSION}"
 )
 therock_cmake_subproject_activate(therock-aux-overlay)
 
@@ -148,38 +149,6 @@ therock_cmake_subproject_glob_c_sources(rocm-half
     include
 )
 therock_cmake_subproject_activate(rocm-half)
-
-
-################################################################################
-# rocm-kpack
-################################################################################
-
-if(THEROCK_FLAG_KPACK_SPLIT_ARTIFACTS)
-
-therock_cmake_subproject_declare(rocm-kpack
-  EXTERNAL_SOURCE_DIR "rocm-kpack"
-  USE_DIST_AMDGPU_TARGETS
-  BACKGROUND_BUILD
-  OPTIONAL
-  CMAKE_ARGS
-    -DBUILD_TESTING=OFF
-    -DBUILD_SHARED_LIBS=ON
-  BUILD_DEPS
-    therock-msgpack-cxx
-  RUNTIME_DEPS
-    ${THEROCK_BUNDLED_ZSTD}
-  INTERFACE_LINK_DIRS
-    lib
-  INTERFACE_INSTALL_RPATH_DIRS
-    lib
-)
-therock_cmake_subproject_provide_package(rocm-kpack
-  rocm-kpack lib/cmake/rocm-kpack)
-therock_cmake_subproject_activate(rocm-kpack)
-list(APPEND _optional_artifact_deps rocm-kpack)
-
-endif()
-
 
 ################################################################################
 # Artifacts

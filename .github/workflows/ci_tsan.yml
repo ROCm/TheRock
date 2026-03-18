@@ -4,8 +4,8 @@
 name: CI TSAN
 
 on:
-#  schedule:
-#    - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
+  schedule:
+    - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:
