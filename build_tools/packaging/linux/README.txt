@@ -13,7 +13,7 @@ apt update
 apt install -y python3
 apt install -y python3-pip
 apt install -y debhelper
-apt install -y llvm
+apt install -y llvm-20
 pip install -r requirements.txt
 
 #Usage:

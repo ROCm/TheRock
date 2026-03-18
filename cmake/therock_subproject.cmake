@@ -847,6 +847,11 @@ function(therock_cmake_subproject_activate target_name)
     endif()
     string(APPEND _init_contents "include(\"${_addl_cmake_include}\")\n")
   endforeach()
+
+  # Flag system: inject flag-controlled variables and defines.
+  _therock_get_flag_init_contents(_flag_init_contents "${target_name}")
+  string(APPEND _init_contents "${_flag_init_contents}")
+
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
   list(APPEND _fprint_files "${_cmake_project_init_file}")
 
@@ -863,6 +868,8 @@ function(therock_cmake_subproject_activate target_name)
 
   # Detect whether the stage dir has been pre-built.
   set(_prebuilt_file "${_stage_dir}.prebuilt")
+
+  list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
 
   # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.

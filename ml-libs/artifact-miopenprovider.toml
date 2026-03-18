@@ -1,10 +1,10 @@
 # miopenprovider
 # Note: The subproject builds as miopen_plugin in rocm-libraries but TheRock wraps it as miopenprovider
-[components.dbg."ml-libs/miopenprovider/stage"]
 [components.lib."ml-libs/miopenprovider/stage"]
 exclude = [
   "lib/*.a",
 ]
+[components.dbg."ml-libs/miopenprovider/stage"]
 [components.test."ml-libs/miopenprovider/stage"]
 include = [
   "bin/miopen_plugin*_test*",
