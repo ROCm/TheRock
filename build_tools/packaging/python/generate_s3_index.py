@@ -4,10 +4,12 @@
 
 """Creates an HTML page for releases for `pip install --find-links` from a subdirectory in an S3 bucket.
 
+For generating an index from local files (e.g. during a CI build), see generate_local_index.py.
+
 Sample usage:
 
     ```bash
-    ./build_tools/packaging/python/generate_release_index.py \
+    ./build_tools/packaging/python/generate_s3_index.py \
         --bucket=therock-dev-python \
         --endpoint=s3.us-east-2.amazonaws.com \
         --subdir=gfx110X-all \
@@ -81,7 +83,7 @@ def add_releases(objects: list, base_url: str, subdir: str, file: io.TextIOWrapp
 
     file.write(
         "    <br><hr>\n"
-        f'    This file was auto-generated with <a href="https://github.com/ROCm/TheRock/blob/main/build_tools/packaging/python/generate_release_index.py">generate_release_index.py</a>.\n'
+        f'    This file was auto-generated with <a href="https://github.com/ROCm/TheRock/blob/main/build_tools/packaging/python/generate_s3_index.py">generate_s3_index.py</a>.\n'
     )
 
 
