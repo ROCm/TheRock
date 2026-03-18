@@ -1244,8 +1244,9 @@
       }
     ],
 
+    "Gfxarch": "False",
     "Disable_DWZ": "True",
-    "Gfxarch": "False"
+    "Disable_DEB_STRIP": "True"
   },
   {
     "Package": "amdrocm-hipify",
