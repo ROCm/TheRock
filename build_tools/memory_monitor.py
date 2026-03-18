@@ -150,7 +150,9 @@ class ResourceMonitor:
             warn = " [CRITICAL]"
         elif stats["mem_percent"] >= WARN_PERCENT:
             warn = " [WARNING]"
-        parts.append(f"Mem: {stats['mem_used_gb']:.1f}/{stats['mem_total_gb']:.1f}GB ({stats['mem_percent']:.0f}%){warn}")
+        parts.append(
+            f"Mem: {stats['mem_used_gb']:.1f}/{stats['mem_total_gb']:.1f}GB ({stats['mem_percent']:.0f}%){warn}"
+        )
 
         # Swap (only if used)
         if stats["swap_used_gb"] > 0.1:
@@ -165,7 +167,9 @@ class ResourceMonitor:
 
         # GPU
         for gpu in stats.get("gpus", []):
-            parts.append(f"GPU{gpu['id'][-1]}: {gpu['used_gb']:.1f}/{gpu['total_gb']:.1f}GB")
+            parts.append(
+                f"GPU{gpu['id'][-1]}: {gpu['used_gb']:.1f}/{gpu['total_gb']:.1f}GB"
+            )
 
         # Storage
         storage = stats.get("storage", {})
@@ -230,7 +234,9 @@ class ResourceMonitor:
         print(f"Resource Summary - {self.phase}")
         print("=" * 70)
         print(f"Duration:     {duration / 60:.1f} min ({len(samples)} samples)")
-        print(f"Memory:       {max_mem:.0f}% peak ({max_mem_gb:.1f} GB), {avg_mem:.0f}% avg")
+        print(
+            f"Memory:       {max_mem:.0f}% peak ({max_mem_gb:.1f} GB), {avg_mem:.0f}% avg"
+        )
         if max_swap > 1:
             print(f"Swap:         {max_swap:.0f}% peak")
         print(f"CPU:          {avg_cpu:.0f}% avg")
@@ -243,7 +249,9 @@ class ResourceMonitor:
                 if gid not in gpu_maxes or gpu["used_gb"] > gpu_maxes[gid]["used_gb"]:
                     gpu_maxes[gid] = gpu
         for gid, gpu in gpu_maxes.items():
-            print(f"GPU {gid}:       {gpu['used_gb']:.1f}/{gpu['total_gb']:.1f} GB peak ({gpu['percent']:.0f}%)")
+            print(
+                f"GPU {gid}:       {gpu['used_gb']:.1f}/{gpu['total_gb']:.1f} GB peak ({gpu['percent']:.0f}%)"
+            )
 
         # Storage summary
         storage_samples = [s.get("storage", {}) for s in samples if s.get("storage")]
@@ -256,7 +264,9 @@ class ResourceMonitor:
         print("=" * 70 + "\n")
 
 
-def run_with_monitor(command: list[str], interval: float, phase: str, storage_path: str) -> int:
+def run_with_monitor(
+    command: list[str], interval: float, phase: str, storage_path: str
+) -> int:
     """Run a command with resource monitoring."""
     monitor = ResourceMonitor(interval=interval, phase=phase, storage_path=storage_path)
 
@@ -276,10 +286,18 @@ def run_with_monitor(command: list[str], interval: float, phase: str, storage_pa
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Monitor resources during command execution")
-    parser.add_argument("--interval", type=float, default=float(os.environ.get("MONITOR_INTERVAL", DEFAULT_INTERVAL)))
+    parser = argparse.ArgumentParser(
+        description="Monitor resources during command execution"
+    )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=float(os.environ.get("MONITOR_INTERVAL", DEFAULT_INTERVAL)),
+    )
     parser.add_argument("--phase", default=os.environ.get("MONITOR_PHASE", "Build"))
-    parser.add_argument("--storage-path", default=os.environ.get("MONITOR_STORAGE_PATH", "."))
+    parser.add_argument(
+        "--storage-path", default=os.environ.get("MONITOR_STORAGE_PATH", ".")
+    )
     parser.add_argument("command", nargs="*")
 
     args = parser.parse_args()
