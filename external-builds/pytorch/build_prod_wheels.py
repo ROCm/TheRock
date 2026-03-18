@@ -314,7 +314,7 @@ def download_llvm_for_triton_windows(triton_dir: Path) -> Path:
 
         print("  Extracting...")
         with tarfile.open(download_path, "r:gz") as tar:
-            tar.extractall(triton_dir.parent)
+            tar.extractall(triton_dir.parent, filter="data")
 
         if not llvm_dir.exists():
             raise RuntimeError(f"Extracted LLVM directory not found: {llvm_dir}")
