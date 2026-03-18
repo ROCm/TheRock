@@ -488,6 +488,207 @@ bool MatchesDecodedInstruction(const StubDecodedInstruction& lhs,
                                         rhs.operand_descriptors);
 }
 
+std::string_view ExpectedOpcodeShapeName(std::string_view instruction_name) {
+  if (instruction_name == "V_PK_FMA_BF16") {
+    return "kVop3pPackedFma";
+  }
+  if (instruction_name.rfind("V_PK_", 0) == 0) {
+    return "kVop3pPackedBinary";
+  }
+  if (instruction_name.rfind("V_WMMA_LD_SCALE", 0) == 0) {
+    return "kWmmaScalePairedLoad";
+  }
+  if (instruction_name.rfind("V_WMMA_SCALE", 0) == 0) {
+    return "kWmmaScale";
+  }
+  if (instruction_name.rfind("V_SWMMAC_", 0) == 0) {
+    return "kSwmmacCore";
+  }
+  if (instruction_name.rfind("V_WMMA_", 0) == 0) {
+    return "kWmmaCore";
+  }
+  if (instruction_name == "TENSOR_LOAD_TO_LDS") {
+    return "kTensorLoadToLds";
+  }
+  if (instruction_name == "TENSOR_STORE_FROM_LDS") {
+    return "kTensorStoreFromLds";
+  }
+  if (instruction_name == "V_CVT_F16_FP8" ||
+      instruction_name == "V_CVT_F16_BF8") {
+    return "kFp8ConvertToF16";
+  }
+  if (instruction_name == "V_CVT_F32_FP8") {
+    return "kFp8ConvertToF32";
+  }
+  if (instruction_name.rfind("V_CVT_PK_", 0) == 0) {
+    return "kFp8PackedConvert";
+  }
+  if (instruction_name == "V_DIV_SCALE_F64") {
+    return "kVop3SdstScale";
+  }
+  return "kUnknown";
+}
+
+std::string_view ExpectedExecutionDomainName(std::string_view instruction_name) {
+  if (instruction_name.rfind("V_PK_", 0) == 0) {
+    return "kVectorAlu";
+  }
+  if (instruction_name.rfind("V_WMMA_", 0) == 0 ||
+      instruction_name.rfind("V_SWMMAC_", 0) == 0) {
+    return "kMatrix";
+  }
+  if (instruction_name.rfind("TENSOR_", 0) == 0) {
+    return "kTensorMemory";
+  }
+  if (instruction_name.rfind("V_CVT_", 0) == 0) {
+    return "kConversion";
+  }
+  if (instruction_name == "V_DIV_SCALE_F64") {
+    return "kScaleAssist";
+  }
+  return "kUnknown";
+}
+
+std::string_view ExpectedOperandLayoutName(std::string_view instruction_name) {
+  if (instruction_name == "V_PK_ADD_BF16") {
+    return "kPkAddBf16";
+  }
+  if (instruction_name == "V_PK_FMA_BF16") {
+    return "kPkFmaBf16";
+  }
+  if (instruction_name == "V_PK_MUL_BF16") {
+    return "kPkMulBf16";
+  }
+  if (instruction_name == "V_PK_MIN_NUM_BF16") {
+    return "kPkMinNumBf16";
+  }
+  if (instruction_name == "V_PK_MAX_NUM_BF16") {
+    return "kPkMaxNumBf16";
+  }
+  if (instruction_name == "V_WMMA_F32_16X16X4_F32_w32") {
+    return "kWmmaF32_16x16x4_F32W32";
+  }
+  if (instruction_name == "V_WMMA_F32_16X16X128_FP8_FP8_w32") {
+    return "kWmmaF32_16x16x128_Fp8Fp8W32";
+  }
+  if (instruction_name == "V_WMMA_F16_16X16X128_FP8_FP8_w32") {
+    return "kWmmaF16_16x16x128_Fp8Fp8W32";
+  }
+  if (instruction_name == "V_WMMA_F32_16X16X64_FP8_FP8_w32") {
+    return "kWmmaF32_16x16x64_Fp8Fp8W32";
+  }
+  if (instruction_name == "V_WMMA_SCALE_F32_16X16X128_F8F6F4") {
+    return "kWmmaScaleF32_16x16x128_F8F6F4";
+  }
+  if (instruction_name == "V_WMMA_SCALE16_F32_16X16X128_F8F6F4") {
+    return "kWmmaScale16F32_16x16x128_F8F6F4";
+  }
+  if (instruction_name.rfind("V_WMMA_SCALE", 0) == 0) {
+    return "kWmmaScaleGeneric";
+  }
+  if (instruction_name == "V_WMMA_LD_SCALE_PAIRED_B32") {
+    return "kWmmaLdScalePairedB32";
+  }
+  if (instruction_name == "V_WMMA_LD_SCALE16_PAIRED_B64") {
+    return "kWmmaLdScale16PairedB64";
+  }
+  if (instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32") {
+    return "kSwmmacF32_16x16x128_Fp8Fp8W32";
+  }
+  if (instruction_name == "V_SWMMAC_F16_16X16X128_FP8_FP8_w32") {
+    return "kSwmmacF16_16x16x128_Fp8Fp8W32";
+  }
+  if (instruction_name.rfind("V_SWMMAC_", 0) == 0) {
+    return "kSwmmacCoreGeneric";
+  }
+  if (instruction_name.rfind("V_WMMA_", 0) == 0) {
+    return "kWmmaCoreGeneric";
+  }
+  if (instruction_name == "TENSOR_LOAD_TO_LDS") {
+    return "kTensorLoadToLds";
+  }
+  if (instruction_name == "TENSOR_STORE_FROM_LDS") {
+    return "kTensorStoreFromLds";
+  }
+  if (instruction_name == "V_CVT_F16_BF8") {
+    return "kCvtF16Bf8";
+  }
+  if (instruction_name == "V_CVT_F16_FP8") {
+    return "kCvtF16Fp8";
+  }
+  if (instruction_name == "V_CVT_F32_FP8") {
+    return "kCvtF32Fp8";
+  }
+  if (instruction_name == "V_CVT_PK_F16_FP8") {
+    return "kCvtPkF16Fp8";
+  }
+  if (instruction_name == "V_CVT_PK_F16_BF8") {
+    return "kCvtPkF16Bf8";
+  }
+  if (instruction_name == "V_DIV_SCALE_F64") {
+    return "kVDivScaleF64";
+  }
+  return "kUnknown";
+}
+
+bool AllRoleHelperNamesKnown(const StubDecodedInstruction& instruction) {
+  for (std::uint32_t index = 0; index < instruction.operand_roles.binding_count;
+       ++index) {
+    if (GetStubOperandRoleName(instruction.operand_roles.bindings[index].role) ==
+        "kUnknown") {
+      return false;
+    }
+  }
+  for (std::uint32_t index = 0;
+       index < instruction.operand_descriptors.descriptor_count; ++index) {
+    if (GetStubOperandRoleName(
+            instruction.operand_descriptors.descriptors[index].role) ==
+        "kUnknown") {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool AllSlotKindHelperNamesKnown(const StubDecodedInstruction& instruction) {
+  for (std::uint32_t index = 0; index < instruction.operand_slots.binding_count;
+       ++index) {
+    if (GetStubOperandSlotKindName(
+            instruction.operand_slots.bindings[index].slot_kind) == "kUnknown") {
+      return false;
+    }
+  }
+  for (std::uint32_t index = 0;
+       index < instruction.operand_descriptors.descriptor_count; ++index) {
+    if (GetStubOperandSlotKindName(
+            instruction.operand_descriptors.descriptors[index].slot_kind) ==
+        "kUnknown") {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool AllValueClassHelperNamesKnown(const StubDecodedInstruction& instruction) {
+  for (std::uint32_t index = 0; index < instruction.operand_slots.binding_count;
+       ++index) {
+    if (GetStubOperandValueClassName(
+            instruction.operand_slots.bindings[index].value_class) ==
+        "kUnknown") {
+      return false;
+    }
+  }
+  for (std::uint32_t index = 0;
+       index < instruction.operand_descriptors.descriptor_count; ++index) {
+    if (GetStubOperandValueClassName(
+            instruction.operand_descriptors.descriptors[index].value_class) ==
+        "kUnknown") {
+      return false;
+    }
+  }
+  return true;
+}
+
 StubDecodedInstruction DecodeViaRouteEntrypoint(
     const StubDecoderRouteInfo& route_info) {
   switch (route_info.route) {
@@ -6778,6 +6979,18 @@ int main() {
                     IsInstructionListedForRoute(via_name.route,
                                                 via_name.instruction_name),
                 "expected decoded routed seed to match route and entrypoint manifest surfaces")) {
+      return 1;
+    }
+    if (!Expect(GetStubOpcodeShapeName(via_name.opcode_shape) ==
+                        ExpectedOpcodeShapeName(via_name.instruction_name) &&
+                    GetStubExecutionDomainName(via_name.execution_domain) ==
+                        ExpectedExecutionDomainName(via_name.instruction_name) &&
+                    GetStubOperandLayoutName(via_name.operand_layout.layout_kind) ==
+                        ExpectedOperandLayoutName(via_name.instruction_name) &&
+                    AllRoleHelperNamesKnown(via_name) &&
+                    AllSlotKindHelperNamesKnown(via_name) &&
+                    AllValueClassHelperNamesKnown(via_name),
+                "expected routed seed to keep exact helper-name parity and coverage")) {
       return 1;
     }
   }

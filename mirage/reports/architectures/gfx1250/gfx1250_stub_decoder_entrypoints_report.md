@@ -45,6 +45,7 @@
   - route-wide exact route-info-based vs name-based decode parity validation across the current routed seed set
   - route-wide exact route-keyed entrypoint vs generic decode parity validation across the current routed seed set
   - route-wide exact decoded-route-to-manifest parity validation across the current routed seed set
+  - route-wide exact helper-name parity and helper-coverage validation across the current routed seed set
 
 ## Routed Seed Metadata Coverage
 
@@ -53,6 +54,7 @@
   - route-wide exact `DecodeStubInstruction(route_info)` vs `DecodeStubInstruction(instruction_name)` parity checks across the current routed seed set
   - route-wide exact route-keyed entrypoint decode vs `DecodeStubInstruction(instruction_name)` parity checks across the current routed seed set
   - route-wide exact decoded route / entrypoint metadata and routed-instruction-list parity checks across the current routed seed set
+  - route-wide exact opcode-shape / execution-domain / operand-layout helper-name parity plus routed role/slot/value-class helper coverage checks across the current routed seed set
 
 - `VOP3P` packed BF16 slice:
   - `V_PK_ADD_BF16`
