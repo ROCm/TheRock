@@ -71,7 +71,7 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
-            "test-runs-on-multi-gpu": "",
+            "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "",
             "family": "gfx94X-dcgpu",
