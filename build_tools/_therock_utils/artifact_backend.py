@@ -217,30 +217,22 @@ class S3Backend(ArtifactBackend):
 
     @property
     def s3_client(self):
-        """Lazy initialization of S3 client."""
+        """Lazy-initialized boto3 S3 client.
+
+        Credentials are resolved through boto3's default credential chain
+        (environment variables, shared credentials file, instance profile,
+        etc.). This matches how the ``aws`` CLI and storage_backend.py
+        resolve credentials.
+        """
         if self._s3_client is None:
             import boto3
-            from botocore import UNSIGNED
             from botocore.config import Config
 
-            _access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
-            _secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
-            _session_token = os.environ.get("AWS_SESSION_TOKEN")
-
-            if None not in (_access_key_id, _secret_access_key, _session_token):
-                self._s3_client = boto3.client(
-                    "s3",
-                    verify=True,
-                    aws_access_key_id=_access_key_id,
-                    aws_secret_access_key=_secret_access_key,
-                    aws_session_token=_session_token,
-                )
-            else:
-                self._s3_client = boto3.client(
-                    "s3",
-                    verify=True,
-                    config=Config(max_pool_connections=100, signature_version=UNSIGNED),
-                )
+            self._s3_client = boto3.client(
+                "s3",
+                verify=True,
+                config=Config(max_pool_connections=100),
+            )
         return self._s3_client
 
     @property
