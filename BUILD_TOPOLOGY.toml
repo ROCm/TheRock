@@ -503,6 +503,7 @@ disable_platforms = ["windows"]
 artifact_group = "hip-runtime"
 type = "target-neutral"
 artifact_deps = ["sysdeps"]
+group_deps = ["third-party-libs"]
 feature_name = "KPACK"
 feature_group = "CORE"
 
