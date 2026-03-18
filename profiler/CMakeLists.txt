@@ -9,8 +9,11 @@ if(THEROCK_ENABLE_ROCPROFV3)
 
   
   set(_rocprof_use_sys_yaml_cpp OFF)
-  if(NOT THEROCK_BUNDLE_SYSDEPS)
+  if(THEROCK_BUNDLED_YAMLCPP)
     set(_rocprof_use_sys_yaml_cpp ON)
+  endif()
+  if(DEFINED ROCPROF_USE_SYS_YAML_CPP)
+    set(_rocprof_use_sys_yaml_cpp ${ROCPROF_USE_SYS_YAML_CPP})
   endif()
 
   ##############################################################################
