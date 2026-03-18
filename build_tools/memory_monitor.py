@@ -81,16 +81,18 @@ def get_storage_info(path: str = ".") -> dict:
 
 def get_thread_info() -> dict:
     """Get thread/CPU information."""
+    info = {
+        "cpu_count": psutil.cpu_count(),
+        "cpu_percent": psutil.cpu_percent(interval=None),
+    }
     try:
-        load1, load5, load15 = os.getloadavg()
-        return {
-            "cpu_count": psutil.cpu_count(),
-            "load_1m": load1,
-            "load_5m": load5,
-            "cpu_percent": psutil.cpu_percent(interval=None),
-        }
+        # psutil.getloadavg() works on all platforms (emulated on Windows)
+        load1, load5, load15 = psutil.getloadavg()
+        info["load_1m"] = load1
+        info["load_5m"] = load5
     except (OSError, AttributeError):
-        return {"cpu_count": psutil.cpu_count(), "cpu_percent": psutil.cpu_percent(interval=None)}
+        pass
+    return info
 
 
 class ResourceMonitor:
