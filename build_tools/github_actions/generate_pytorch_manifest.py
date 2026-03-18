@@ -19,6 +19,9 @@ import os
 from pathlib import Path
 import sys
 
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+
 from github_actions.manifest_utils import (
     GitSourceInfo,
     git_branch_best_effort,
