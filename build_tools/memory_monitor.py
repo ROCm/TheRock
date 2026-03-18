@@ -151,9 +151,9 @@ class ResourceMonitor:
         # Memory
         warn = ""
         if stats["mem_percent"] >= CRIT_PERCENT:
-            warn = "!"
+            warn = " [CRITICAL]"
         elif stats["mem_percent"] >= WARN_PERCENT:
-            warn = "~"
+            warn = " [WARNING]"
         parts.append(f"Mem: {stats['mem_used_gb']:.1f}/{stats['mem_total_gb']:.1f}GB ({stats['mem_percent']:.0f}%){warn}")
 
         # Swap (only if used)
@@ -255,56 +255,9 @@ class ResourceMonitor:
             min_free = min(s["free_gb"] for s in storage_samples)
             print(f"Storage:      {min_free:.0f} GB min free")
 
-        # Warnings
-        if max_mem >= CRIT_PERCENT:
-            print(f"\n[CRITICAL] Memory exceeded {CRIT_PERCENT}%!")
-        elif max_mem >= WARN_PERCENT:
-            print(f"\n[WARNING] Memory exceeded {WARN_PERCENT}%")
-
+        print("=" * 70)
+        print(f"Max memory usage was {max_mem:.0f}%")
         print("=" * 70 + "\n")
-
-        self._write_github_summary(duration, samples, max_mem, max_mem_gb, max_swap, gpu_maxes)
-
-    def _write_github_summary(
-        self, duration: float, samples: list, max_mem: float, max_mem_gb: float, max_swap: float, gpu_maxes: dict
-    ) -> None:
-        """Write summary to GitHub Actions step summary."""
-        summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
-        if not summary_file:
-            return
-
-        status = "OK"
-        if max_mem >= CRIT_PERCENT:
-            status = "CRITICAL"
-        elif max_mem >= WARN_PERCENT:
-            status = "WARNING"
-
-        rows = [
-            f"| Memory | {max_mem:.0f}% peak ({max_mem_gb:.1f} GB) |",
-            f"| Duration | {duration / 60:.1f} min |",
-        ]
-        if max_swap > 1:
-            rows.append(f"| Swap | {max_swap:.0f}% peak |")
-        for gid, gpu in gpu_maxes.items():
-            rows.append(f"| GPU {gid} | {gpu['used_gb']:.1f}/{gpu['total_gb']:.1f} GB |")
-
-        summary = f"""
-## Resources: {self.phase} [{status}]
-
-| Metric | Value |
-|--------|-------|
-{chr(10).join(rows)}
-"""
-        if max_mem >= CRIT_PERCENT:
-            summary += f"\n> [!CAUTION]\n> Memory exceeded {CRIT_PERCENT}%\n"
-        elif max_mem >= WARN_PERCENT:
-            summary += f"\n> [!WARNING]\n> Memory exceeded {WARN_PERCENT}%\n"
-
-        try:
-            with open(summary_file, "a") as f:
-                f.write(summary)
-        except OSError:
-            pass
 
 
 def run_with_monitor(command: list[str], interval: float, phase: str, storage_path: str) -> int:
