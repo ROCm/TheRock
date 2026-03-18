@@ -47,7 +47,7 @@ ______________________________________________________________________
 1. **Resolve GPU arch**
    Parse `AMDGPU_FAMILIES` for the first `gfx...` token (e.g. `gfx1151`). If missing or generic, the script will exclude all GPU-specific tests (`-LE ex_gpu`).
 1. **Match GPU to suite**
-   Using `find_matching_gpu_arch()` (from `github_actions_utils`):
+   Using `find_matching_gpu_arch()` (defined in `test_runner.py`):
 
 - Prefer **exact** match in the discovered set (e.g. `gfx1151`).
 - Else try **wildcard** patterns from most to least specific (e.g. for `gfx1151`: `gfx115X`, then `gfx11X`).
