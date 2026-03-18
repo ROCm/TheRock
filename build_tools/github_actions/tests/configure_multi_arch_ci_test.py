@@ -173,12 +173,12 @@ class TestCheckSkipCI(unittest.TestCase):
         return cm.CIInputs(**defaults)
 
     def test_skip_ci_label(self):
-        """PR with skip-ci label skips CI regardless of changed files."""
-        inputs = self._inputs(pr_labels=["skip-ci", "gfx950"])
+        """PR with ci:skip label skips CI regardless of changed files."""
+        inputs = self._inputs(pr_labels=["ci:skip", "gfx950"])
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         result = cm.check_skip_ci(inputs, git)
         self.assertTrue(result.skip)
-        self.assertIn("skip-ci", result.reason)
+        self.assertIn("ci:skip", result.reason)
 
     @patch("configure_multi_arch_ci.is_ci_run_required", return_value=False)
     def test_path_filter_says_skip(self, mock_filter):
@@ -429,13 +429,13 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx906", result_with.linux_families)
 
     def test_pull_request_run_all_archs_label(self):
-        """PR with run-all-archs-ci label selects all families."""
+        """PR with ci:run-all-archs label selects all families."""
         inputs = cm.CIInputs(
             event_name="pull_request",
             branch_name="feature",
             base_ref="HEAD^",
             build_variant="release",
-            pr_labels=["run-all-archs-ci"],
+            pr_labels=["ci:run-all-archs"],
         )
         result = cm.select_targets(inputs)
         # Should include nightly-only families
@@ -779,7 +779,7 @@ class TestConfigurePipeline(unittest.TestCase):
     @patch("configure_multi_arch_ci.check_skip_ci")
     def test_pipeline_skips_when_gate_says_skip(self, mock_skip):
         """If check_skip_ci returns skip=True, pipeline short-circuits."""
-        mock_skip.return_value = cm.SkipDecision(skip=True, reason="skip-ci label")
+        mock_skip.return_value = cm.SkipDecision(skip=True, reason="ci:skip label")
         inputs = cm.CIInputs(
             event_name="workflow_dispatch",
             branch_name="main",

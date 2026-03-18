@@ -233,7 +233,7 @@ class SkipDecision:
     """Whether to skip CI entirely."""
 
     skip: bool
-    reason: str  # e.g. "skip-ci label", "only .md files changed", ""
+    reason: str  # e.g. "ci:skip label", "only .md files changed", ""
 
 
 @dataclass(frozen=True)
@@ -427,16 +427,16 @@ def check_skip_ci(
     """Determine whether CI should be skipped entirely.
 
     Returns SkipDecision(skip=True) for:
-    - 'skip-ci' PR label
+    - 'ci:skip' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
 
     schedule and workflow_dispatch always proceed (changed_files is None
     for those triggers, and they have no PR labels).
     """
-    if "skip-ci" in ci_inputs.pr_labels:
-        print("  Found 'skip-ci' PR label")
-        return SkipDecision(skip=True, reason="skip-ci label")
+    if "ci:skip" in ci_inputs.pr_labels:
+        print("  Found 'ci:skip' PR label")
+        return SkipDecision(skip=True, reason="ci:skip label")
 
     # changed_files is None for schedule/workflow_dispatch — always proceed.
     if git_context.changed_files is not None:
@@ -619,7 +619,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 
     - pull_request: Smallest default set (presubmit families). Designed for
       fast feedback on proposed changes. PR labels can opt in to additional
-      families (gfx* labels) or the full set (run-all-archs-ci).
+      families (gfx* labels) or the full set (ci:run-all-archs).
     - push: Broader coverage (presubmit + postsubmit families). Runs on
       code that has landed, so we want more thorough validation than PRs
       without paying the full nightly cost.
@@ -647,7 +647,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         windows_names = list(ci_inputs.windows_amdgpu_families)
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
-        # the set below (gfx* for individual families, run-all-archs-ci
+        # the set below (gfx* for individual families, ci:run-all-archs
         # for everything).
         defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
         linux_names = list(defaults)
@@ -672,11 +672,11 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     # PR labels can extend the family set (both platforms)
     if ci_inputs.is_pull_request:
         for label in ci_inputs.pr_labels:
-            if label == "run-all-archs-ci":
+            if label == "ci:run-all-archs":
                 # Override to all families.
                 linux_names = list(all_families.keys())
                 windows_names = list(all_families.keys())
-                print("  Label 'run-all-archs-ci' -> all families")
+                print("  Label 'ci:run-all-archs' -> all families")
                 break
             if label.startswith("gfx"):
                 target = label.split("-")[0]
@@ -922,7 +922,7 @@ def main():
     ci_inputs = CIInputs.from_environ()
 
     # Build git context for push/PR triggers (need changed files for
-    # skip-ci and test_type decisions). Schedule/workflow_dispatch don't
+    # ci:skip and test_type decisions). Schedule/workflow_dispatch don't
     # need git data.
     if ci_inputs.is_pull_request or ci_inputs.is_push:
         git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)
