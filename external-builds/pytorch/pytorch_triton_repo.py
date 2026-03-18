@@ -71,7 +71,6 @@ def do_checkout(args: argparse.Namespace):
                 print("No triton-windows pin found, using main-windows branch")
 
         args.hipify = False
-        args.patch = False
     else:
         print("Using ROCm/triton repository (Linux build)")
 
@@ -110,11 +109,9 @@ def main(cl_args: list[str]):
     if IS_WINDOWS:
         default_origin = TRITON_WINDOWS_ORIGIN
         default_hipify = False
-        default_patch = False
     else:
         default_origin = ROCM_TRITON_ORIGIN
         default_hipify = True
-        default_patch = True
 
     def add_common(command_parser: argparse.ArgumentParser):
         command_parser.add_argument(
@@ -162,12 +159,6 @@ def main(cl_args: list[str]):
         action=argparse.BooleanOptionalAction,
         default=default_hipify,
         help="Run hipify",
-    )
-    checkout_p.add_argument(
-        "--patch",
-        action=argparse.BooleanOptionalAction,
-        default=default_patch,
-        help="Apply patches for the repo-hashtag",
     )
     checkout_p.set_defaults(func=do_checkout)
 
