@@ -715,63 +715,57 @@ def do_build(args: argparse.Namespace):
             print(f"ccache --show-stats output:\n{ccache_stats_output}")
 
 
-def do_build_triton(
+def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
+    """Build triton wheel for Windows using triton-windows repository."""
+    print("Building Triton for Windows (using triton-windows repository)")
+
+    llvm_build_dir = download_llvm_for_triton_windows(triton_dir)
+
+    # Prepare environment for triton-windows build.
+    # Note: MSVC environment (vcvars64.bat) must already be set up.
+    windows_env = dict(os.environ)
+    windows_env.update(
+        {
+            "PYTHONUTF8": "1",
+            "LLVM_BUILD_DIR": str(llvm_build_dir),
+            "LLVM_INCLUDE_DIRS": str(llvm_build_dir / "include"),
+            "LLVM_LIBRARY_DIR": str(llvm_build_dir / "lib"),
+            "LLVM_SYSPATH": str(llvm_build_dir),
+            "TRITON_BUILD_PROTON": "OFF",
+            "TRITON_APPEND_CMAKE_ARGS": "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE",
+        }
+    )
+
+    print("+++ Installing build dependencies:")
+    run_command(
+        [sys.executable, "-m", "pip", "install", "build", "wheel"],
+        cwd=triton_dir,
+    )
+
+    remove_dir_if_exists(triton_dir / "dist")
+    if args.clean:
+        remove_dir_if_exists(triton_dir / "build")
+
+    print("+++ Building triton:")
+    run_command(
+        [sys.executable, "-m", "build", "--wheel"],
+        cwd=triton_dir,
+        env=windows_env,
+    )
+
+    # triton-windows produces wheels named "triton_windows"
+    built_wheel = find_built_wheel(triton_dir / "dist", "triton_windows")
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
+
+    wheel_version = built_wheel.stem.split("-")[1]
+    return f"triton_windows=={wheel_version}"
+
+
+def build_triton_linux(
     args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
 ) -> str:
-    """Build triton wheel. Uses triton-windows on Windows, ROCm/triton on Linux."""
-    triton_wheel_name = env.get("TRITON_WHEEL_NAME", "triton")
-
-    if is_windows:
-        print("Building Triton for Windows (using triton-windows repository)")
-
-        llvm_build_dir = download_llvm_for_triton_windows(triton_dir)
-
-        # Prepare environment for triton-windows build.
-        # Note: MSVC environment (vcvars64.bat) must already be set up.
-        windows_env = dict(os.environ)
-        windows_env.update(
-            {
-                "PYTHONUTF8": "1",
-                "LLVM_BUILD_DIR": str(llvm_build_dir),
-                "LLVM_INCLUDE_DIRS": str(llvm_build_dir / "include"),
-                "LLVM_LIBRARY_DIR": str(llvm_build_dir / "lib"),
-                "LLVM_SYSPATH": str(llvm_build_dir),
-                "TRITON_BUILD_PROTON": "OFF",
-                "TRITON_APPEND_CMAKE_ARGS": "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE",
-            }
-        )
-
-        print("+++ Installing build dependencies:")
-        run_command(
-            [sys.executable, "-m", "pip", "install", "build", "wheel"],
-            cwd=triton_dir,
-        )
-
-        remove_dir_if_exists(triton_dir / "dist")
-        if args.clean:
-            remove_dir_if_exists(triton_dir / "build")
-
-        print("+++ Building triton:")
-        run_command(
-            [sys.executable, "-m", "build", "--wheel"],
-            cwd=triton_dir,
-            env=windows_env,
-        )
-
-        # triton-windows produces wheels named "triton_windows" not "triton".
-        windows_wheel_name = "triton_windows"
-        try:
-            built_wheel = find_built_wheel(triton_dir / "dist", windows_wheel_name)
-        except RuntimeError:
-            built_wheel = find_built_wheel(triton_dir / "dist", triton_wheel_name)
-            windows_wheel_name = triton_wheel_name
-
-        print(f"Found built wheel: {built_wheel}")
-        copy_to_output(args, built_wheel)
-
-        wheel_version = built_wheel.stem.split("-")[1]
-        return f"{windows_wheel_name}=={wheel_version}"
-
+    """Build triton wheel for Linux using ROCm/triton repository."""
     print("Building Triton for Linux (using ROCm/triton repository)")
 
     version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
@@ -849,6 +843,16 @@ def do_build_triton(
 
     installed_triton_version = get_installed_package_version(triton_wheel_name)
     return f"{triton_wheel_name}=={installed_triton_version}"
+
+
+def do_build_triton(
+    args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
+) -> str:
+    """Build triton wheel. Dispatches to platform-specific build functions."""
+    if is_windows:
+        return build_triton_windows(args, triton_dir)
+    else:
+        return build_triton_linux(args, triton_dir, env)
 
 
 def copy_msvc_libomp_to_torch_lib(pytorch_dir: Path):
