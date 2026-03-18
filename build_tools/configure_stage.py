@@ -90,6 +90,18 @@ def get_stage_features(
             feature_name = topology.get_artifact_feature_name(artifact)
             features.add(feature_name)
 
+    # Include group features for groups that have active artifacts in this stage.
+    active_groups: set[str] = set()
+    for artifact_name in all_artifacts:
+        if artifact_name in topology.artifacts:
+            active_groups.add(topology.artifacts[artifact_name].artifact_group)
+    for group_name in active_groups:
+        group = topology.artifact_groups.get(group_name)
+        if group:
+            group_fn = topology.get_group_feature_name(group)
+            if group_fn:
+                features.add(group_fn)
+
     return features
 
 
