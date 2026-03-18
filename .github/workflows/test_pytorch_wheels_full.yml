@@ -15,11 +15,11 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-mi325-1gpu-ossci-rocm"
+        default: "linux-gfx942-1gpu-ossci-rocm"
       test_runs_on_multi_gpu:
         description: Runner label for multi-GPU test configs (e.g. distributed). Corresponds to test-runs-on-multi-gpu in amdgpu_family_matrix.py
         type: string
-        default: "linux-mi325-4gpu-ossci-rocm"
+        default: "linux-gfx942-8gpu-ossci-rocm"
       package_index_url:
         description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
         required: true
@@ -56,7 +56,7 @@ on:
         type: string
       test_runs_on_multi_gpu:
         type: string
-        default: "linux-mi325-4gpu-ossci-rocm"
+        default: "linux-gfx942-8gpu-ossci-rocm"
       package_index_url:
         required: true
         type: string

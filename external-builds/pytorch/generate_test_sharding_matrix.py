@@ -10,19 +10,19 @@ Usage (in a workflow step)::
 
     python external-builds/pytorch/generate_test_sharding_matrix.py \\
         --test-configs 'default distributed inductor' \\
-        --default-runner 'linux-mi325-1gpu-ossci-rocm' \\
-        --multi-gpu-runner 'linux-mi325-4gpu-ossci-rocm'
+        --default-runner 'linux-gfx942-1gpu-ossci-rocm' \\
+        --multi-gpu-runner 'linux-gfx942-8gpu-ossci-rocm'
 
 Example output (written to $GITHUB_OUTPUT as ``matrix=<json>``)::
 
     {"include":[
-      {"test_config":"default","shard":1,"num_shards":6,"runs_on":"linux-mi325-1gpu-ossci-rocm"},
-      {"test_config":"default","shard":2,"num_shards":6,"runs_on":"linux-mi325-1gpu-ossci-rocm"},
+      {"test_config":"default","shard":1,"num_shards":6,"runs_on":"linux-gfx942-1gpu-ossci-rocm"},
+      {"test_config":"default","shard":2,"num_shards":6,"runs_on":"linux-gfx942-1gpu-ossci-rocm"},
       ...
-      {"test_config":"distributed","shard":1,"num_shards":3,"runs_on":"linux-mi325-4gpu-ossci-rocm"},
+      {"test_config":"distributed","shard":1,"num_shards":3,"runs_on":"linux-gfx942-8gpu-ossci-rocm"},
       ...
-      {"test_config":"inductor","shard":1,"num_shards":2,"runs_on":"linux-mi325-1gpu-ossci-rocm"},
-      {"test_config":"inductor","shard":2,"num_shards":2,"runs_on":"linux-mi325-1gpu-ossci-rocm"}
+      {"test_config":"inductor","shard":1,"num_shards":2,"runs_on":"linux-gfx942-1gpu-ossci-rocm"},
+      {"test_config":"inductor","shard":2,"num_shards":2,"runs_on":"linux-gfx942-1gpu-ossci-rocm"}
     ]}
 """
 
@@ -35,7 +35,7 @@ import sys
 
 # Shard counts mirror the parallelism used by upstream PyTorch CI for the
 # corresponding ROCm test configurations.  Chosen to keep each shard under
-# ~3 h on MI300 1-GPU runners (default/inductor) and MI300 4-GPU runners
+# ~3 h on gfx942 1-GPU runners (default/inductor) and gfx942 8-GPU runners
 # (distributed).
 #
 # Upstream references (as of March 2026):
@@ -88,7 +88,7 @@ def main() -> None:
         help=(
             "Runner label for single-GPU configs. Corresponds to "
             "'test-runs-on' in amdgpu_family_matrix.py "
-            "(e.g. 'linux-mi325-1gpu-ossci-rocm')"
+            "(e.g. 'linux-gfx942-1gpu-ossci-rocm')"
         ),
     )
     parser.add_argument(
@@ -97,7 +97,7 @@ def main() -> None:
         help=(
             "Runner label for multi-GPU configs (e.g. distributed). Corresponds to "
             "'test-runs-on-multi-gpu' in amdgpu_family_matrix.py "
-            "(e.g. 'linux-mi325-4gpu-ossci-rocm')"
+            "(e.g. 'linux-gfx942-8gpu-ossci-rocm')"
         ),
     )
     args = parser.parse_args()
