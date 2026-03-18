@@ -38,7 +38,8 @@
   * windows_amdgpu_families : List of valid Windows AMD GPU families to execute build and test jobs
   * windows_test_labels : List of test names to run on Windows, optionally filtered by PR labels.
   * enable_build_jobs: If true, builds will be enabled
-  * test_type: The type of test that component tests will run (i.e. smoke, full)
+  * test_type: The type of test that component tests will run (i.e. quick, full)
+  * run_functional_tests: If true, functional tests will be enabled (nightly/scheduled builds)
 
   Written to GITHUB_STEP_SUMMARY:
   * Human-readable summary for most contributors
@@ -58,7 +59,7 @@ from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
 )
-from fetch_test_configurations import test_matrix
+from fetch_test_configurations import test_matrix, functional_matrix
 
 from configure_ci_path_filters import (
     get_git_modified_paths,
@@ -114,7 +115,10 @@ def filter_known_names(
         ), "target_matrix must be provided for 'target' name_type"
         known_references = {"target": target_matrix}
     else:
-        known_references = {"test": test_matrix}
+        # Merge test_matrix and functional_matrix so that functional test
+        # names/labels will be recognised.
+        combined_test_matrix = {**test_matrix, **functional_matrix}
+        known_references = {"test": combined_test_matrix}
 
     filtered_names = []
     if name_type not in known_references:
@@ -206,6 +210,14 @@ def generate_multi_arch_matrix(
                         "test-runs-on": test_runs_on,
                         "sanity_check_only_for_family": platform_info.get(
                             "sanity_check_only_for_family", False
+                        ),
+                        # Per-family pytorch flag. False for families with known
+                        # build failures. Used to gate per-family pytorch wheel
+                        # builds in multi_arch_ci_linux.yml.
+                        # NOTE: This is distinct from a future combined (multi-arch)
+                        # pytorch build that would build once against the full index.
+                        "build_pytorch": not platform_info.get(
+                            "expect_pytorch_failure", False
                         ),
                     }
                 )
@@ -592,6 +604,7 @@ def main(base_args, linux_families, windows_families):
     print(f"  is_schedule: {is_schedule}")
     print(f"  linux_use_prebuilt_artifacts: {linux_use_prebuilt_artifacts}")
     print(f"  windows_use_prebuilt_artifacts: {windows_use_prebuilt_artifacts}")
+    pr_labels = None
     if is_pull_request:
         pr_labels = get_pr_labels(base_args)
         print(f"  pr_labels: {pr_labels}")
@@ -634,15 +647,29 @@ def main(base_args, linux_families, windows_families):
     )
     print("")
 
-    test_type = "smoke"
-    test_type_reason = "default (smoke tests)"
+    test_type = "quick"
+    test_type_reason = "default (quick tests)"
+    run_functional_tests = False
 
-    # In the case of a scheduled run, we always want to build and we want to run full tests
     if is_schedule:
+        # Always build and run full tests on scheduled runs.
         enable_build_jobs = True
-        test_type = "full"
-        test_type_reason = "scheduled run triggers full tests"
+        test_type = "comprehensive"
+        test_type_reason = "scheduled run triggers comprehensive tests"
+        # Functional tests run on nightly/scheduled builds
+        run_functional_tests = True
+    elif is_workflow_dispatch:
+        # Always build and conditionally run full tests for workflow dispatch.
+        enable_build_jobs = True
+        if linux_test_output or windows_test_output:
+            combined_test_labels = list(set(linux_test_output + windows_test_output))
+            test_type = "full"
+            test_type_reason = f"test label(s) specified: {combined_test_labels}"
+            # Functional tests run on nightly/scheduled builds
+            run_functional_tests = True
     else:
+        # Conditionally build and conditionally run full tests for other
+        # triggers (pull_request), based on modified paths and other inputs.
         modified_paths = get_git_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
         print(f"Checking modified files since this had a {github_event_name} trigger")
@@ -651,7 +678,7 @@ def main(base_args, linux_families, windows_families):
         enable_build_jobs = is_ci_run_required(modified_paths)
 
         # If the modified path contains any git submodules, we want to run a full test suite.
-        # Otherwise, we just run smoke tests
+        # Otherwise, we just run quick tests
         submodule_paths = get_git_submodule_paths(repo_root=THEROCK_DIR)
         matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
         if matching_submodule_paths:
@@ -665,8 +692,8 @@ def main(base_args, linux_families, windows_families):
             test_type_reason = f"test label(s) specified: {combined_test_labels}"
 
         for matrix_row in linux_variants_output + windows_variants_output:
-            # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a smoke test type
-            if matrix_row.get("run-full-tests-only", False) and test_type == "smoke":
+            # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a quick test type
+            if matrix_row.get("run-full-tests-only", False) and test_type == "quick":
                 matrix_row["test-runs-on"] = ""
             # For nightly_check_only_for_family architectures, we want to run only full tests during nightly (scheduled) run
             # Otherwise, we run sanity checks in all other scenarios (presubmit/postsubmit)
@@ -674,6 +701,23 @@ def main(base_args, linux_families, windows_families):
                 is_pull_request or is_push
             ):
                 matrix_row["sanity_check_only_for_family"] = True
+
+        # If a test filter label is included, we set the "test_type" to the designated filter
+        if pr_labels and any("test_filter:" in label for label in pr_labels):
+            for label in pr_labels:
+                if "test_filter:" in label:
+                    filter_type = label.split(":")[1]
+                    # If the filter type is not recognized, we ignore the label and keep the default test type
+                    if filter_type not in [
+                        "quick",
+                        "standard",
+                        "comprehensive",
+                        "full",
+                    ]:
+                        continue
+                    test_type = filter_type
+                    test_type_reason = f"test filter label specified: {label}"
+                    break
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
@@ -709,6 +753,7 @@ def main(base_args, linux_families, windows_families):
 * `windows_use_prebuilt_artifacts`: {json.dumps(windows_use_prebuilt_artifacts)}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
 * `test_type`: {test_type}
+* `run_functional_tests`: {json.dumps(run_functional_tests)}
     """
     )
 
@@ -719,6 +764,7 @@ def main(base_args, linux_families, windows_families):
         "windows_test_labels": json.dumps(windows_test_output),
         "enable_build_jobs": json.dumps(enable_build_jobs),
         "test_type": test_type,
+        "run_functional_tests": json.dumps(run_functional_tests),
     }
     gha_set_output(output)
 

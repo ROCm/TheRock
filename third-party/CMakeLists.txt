@@ -46,3 +46,8 @@ if(THEROCK_ENABLE_THIRD_PARTY_LIBS)
   # See: docs/rfcs/RFC0007-rdc-therock-integration.md
   add_subdirectory(grpc)
 endif()
+
+# OpenMPI implementation of MPI
+if(THEROCK_ENABLE_MPI)
+  add_subdirectory(openmpi)
+endif()

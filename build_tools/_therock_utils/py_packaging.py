@@ -80,7 +80,10 @@ class Parameters:
         self.version_suffix = version_suffix
         self.artifacts = artifacts
         self.all_target_families = artifacts.all_target_families
-        self.default_target_family = sorted(self.all_target_families)[0]
+        _sorted_families = sorted(self.all_target_families)
+        self.default_target_family: str | None = (
+            _sorted_families[0] if _sorted_families else None
+        )
         self.populated_packages: list["PopulatedDistPackage"] = []
         self.runtime_artifact_names: set[str] = set()
 
@@ -96,9 +99,10 @@ class Parameters:
         # Full: base extended with all families. Used by most packages and by
         # the dynamically loaded self.dist_info module below.
         dist_info_contents = dist_info_base
-        dist_info_contents += (
-            f"DEFAULT_TARGET_FAMILY = '{self.default_target_family}'\n"
-        )
+        if self.default_target_family is not None:
+            dist_info_contents += (
+                f"DEFAULT_TARGET_FAMILY = '{self.default_target_family}'\n"
+            )
         for target_family in self.all_target_families:
             dist_info_contents += (
                 f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"

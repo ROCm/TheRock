@@ -1,18 +1,19 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+from contextlib import redirect_stdout, redirect_stderr
+import io
 import json
 from pathlib import Path
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 # Add tests directory to path for extended_tests imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests"))
 import configure_ci
-from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 
 
 class ConfigureCITest(unittest.TestCase):
@@ -46,6 +47,7 @@ class ConfigureCITest(unittest.TestCase):
             self.assertTrue(
                 all("sanity_check_only_for_family" in f for f in family_info_list)
             )
+            self.assertTrue(all("build_pytorch" in f for f in family_info_list))
 
         if not allow_xfail:
             self.assertFalse(
@@ -265,6 +267,82 @@ class ConfigureCITest(unittest.TestCase):
             target_output=linux_target_output, allow_xfail=False
         )
         self.assertEqual(linux_test_labels, [])
+
+    @patch("subprocess.run")
+    def test_filter_tests_from_pull_request(self, mock_run):
+        base_args = {
+            "pr_labels": '{"labels":[{"name":"test_filter:comprehensive"}]}',
+            "build_variant": "release",
+            "github_event_name": "pull_request",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml\nsrc/some_code.cpp"
+        mock_run.return_value = mock_process
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            configure_ci.main(base_args, {}, {})
+        self.assertIn('"test_type": "comprehensive"', captured_out.getvalue())
+
+    @patch("subprocess.run")
+    def test_invalid_filter_tests_from_pull_request(self, mock_run):
+        base_args = {
+            "pr_labels": '{"labels":[{"name":"test_filter:extended"}]}',
+            "build_variant": "release",
+            "github_event_name": "pull_request",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml\nsrc/some_code.cpp"
+        mock_run.return_value = mock_process
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            configure_ci.main(base_args, {}, {})
+        self.assertIn('"test_type": "quick"', captured_out.getvalue())
+
+    @patch("subprocess.run")
+    def test_valid_main_push_ci_run(self, mock_run):
+        base_args = {
+            "build_variant": "release",
+            "github_event_name": "push",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml"
+        mock_run.return_value = mock_process
+        configure_ci.main(base_args, {}, {})
+
+    @patch("subprocess.run")
+    def test_valid_schedule_ci_run(self, mock_run):
+        base_args = {
+            "build_variant": "release",
+            "github_event_name": "schedule",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml"
+        mock_run.return_value = mock_process
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            configure_ci.main(base_args, {}, {})
+        self.assertIn('"test_type": "comprehensive"', captured_out.getvalue())
+
+    @patch("subprocess.run")
+    def test_valid_workflow_dispatch_ci_run(self, mock_run):
+        base_args = {
+            "build_variant": "release",
+            "github_event_name": "workflow_dispatch",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml"
+        mock_run.return_value = mock_process
+        configure_ci.main(
+            base_args, {"amdgpu_families": "gfx94X"}, {"amdgpu_families": "gfx110X"}
+        )
 
     def test_skip_ci_label(self):
         base_args = {
@@ -581,7 +659,8 @@ class ConfigureCITest(unittest.TestCase):
             self.assertIn("test-runs-on", family_info)
 
     def test_multi_arch_sanity_check_field_propagation_logic(self):
-        """Unit test: Verify sanity_check_only_for_family field is correctly propagated.
+        """Unit test: Verify sanity_check_only_for_family and build_pytorch fields
+        are correctly propagated into matrix_per_family_json entries.
 
         Uses synthetic data to test the code logic in isolation.
         This test should never need updates unless the code behavior changes.
@@ -594,7 +673,7 @@ class ConfigureCITest(unittest.TestCase):
                     "family": "testfamily1-stable",
                     "test-runs-on": "linux-stable-runner",
                     "build_variants": ["release"],
-                    # Field not present - should default to False
+                    # Neither field present - sanity_check defaults False, build_pytorch defaults True
                 }
             },
             "testfamily2": {
@@ -603,6 +682,7 @@ class ConfigureCITest(unittest.TestCase):
                     "test-runs-on": "linux-experimental-runner",
                     "build_variants": ["release"],
                     "sanity_check_only_for_family": True,
+                    "expect_pytorch_failure": True,
                 }
             },
             "testfamily3": {
@@ -650,7 +730,7 @@ class ConfigureCITest(unittest.TestCase):
 
             family_dict = {f["amdgpu_family"]: f for f in family_info_list}
 
-            # Verify field is correctly propagated with proper defaults
+            # Verify sanity_check_only_for_family is correctly propagated
             self.assertIn("testfamily1-stable", family_dict)
             self.assertFalse(
                 family_dict["testfamily1-stable"]["sanity_check_only_for_family"],
@@ -671,10 +751,26 @@ class ConfigureCITest(unittest.TestCase):
                 "Explicit False should be preserved",
             )
 
-            # Verify all entries have the field (even if False)
+            # Verify build_pytorch is correctly propagated per family
+            self.assertTrue(
+                family_dict["testfamily1-stable"]["build_pytorch"],
+                "Missing expect_pytorch_failure should default build_pytorch to True",
+            )
+            self.assertFalse(
+                family_dict["testfamily2-experimental"]["build_pytorch"],
+                "expect_pytorch_failure=True should set build_pytorch=False",
+            )
+            self.assertTrue(
+                family_dict["testfamily3-explicit-false"]["build_pytorch"],
+                "Missing expect_pytorch_failure should default build_pytorch to True",
+            )
+
+            # Verify all entries have both fields as booleans
             for family_info in family_info_list:
                 self.assertIn("sanity_check_only_for_family", family_info)
                 self.assertIsInstance(family_info["sanity_check_only_for_family"], bool)
+                self.assertIn("build_pytorch", family_info)
+                self.assertIsInstance(family_info["build_pytorch"], bool)
 
     def test_multi_arch_production_sanity_check_configuration(self):
         """Integration test: Verify production matrix sanity_check configuration.
@@ -775,11 +871,19 @@ class ConfigureCITest(unittest.TestCase):
             family_dict[stable_arch_name]["sanity_check_only_for_family"],
             f"Stable family {stable_arch_name} should have sanity_check=False",
         )
+        self.assertTrue(
+            family_dict[stable_arch_name]["build_pytorch"],
+            f"Stable family {stable_arch_name} should have build_pytorch=True",
+        )
 
         self.assertIn(experimental_arch_name, family_dict)
         self.assertTrue(
             family_dict[experimental_arch_name]["sanity_check_only_for_family"],
             f"Experimental family {experimental_arch_name} should have sanity_check=True",
+        )
+        self.assertTrue(
+            family_dict[experimental_arch_name]["build_pytorch"],
+            f"Experimental family {experimental_arch_name} should have build_pytorch=True",
         )
 
     # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
@@ -796,7 +900,7 @@ class ConfigureCITest(unittest.TestCase):
             platform="linux",
         )
         entry = linux_target_output[0]
-        self.assertEqual(entry["test-runs-on"], "linux-mi325-8gpu-ossci-rocm-sandbox")
+        self.assertEqual(entry["test-runs-on"], "rocm-asan-mi325-sandbox")
 
 
 if __name__ == "__main__":

@@ -97,6 +97,19 @@ mainline, in open source, using MSVC, etc.).
 These instructions mostly mirror the instructions in the root
 [README.md](../../README.md), with some extra Windows-specific callouts.
 
+### Validating your environment
+
+Before diving into the full setup, you can run the environment validation script
+to check that all prerequisites are met:
+
+```powershell
+.\build_tools\validate_windows_install.ps1
+```
+
+The script checks RAM, disk space, long path support, symlink capability, MSVC,
+CMake, Ninja, Git, Python, DVC, Strawberry Perl/gfortran, ccache, and git
+configuration. It is safe to re-run at any time.
+
 ### Prerequisites
 
 #### Set up your system
@@ -114,9 +127,24 @@ These instructions mostly mirror the instructions in the root
     to save space, but storage sizes do not often account for this savings.
     Reported size used and actual size used may differ substantially.
 
-- Long path support is required. As needed, enable long paths for your system:
+- Long path support is required. There are a few ways to enable it:
 
-  - https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry#registry-setting-to-enable-long-paths
+  - **Registry (most reliable):** set
+    `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled` to `1`
+    (requires admin):
+
+    ```
+    reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f
+    ```
+
+  - **GUI toggle (Windows 11, after enabling Developer Mode):** go to
+    Settings > System > For developers and enable the **"Enable Long Paths"**
+    toggle, then reboot. Note: this toggle may not appear until Developer Mode
+    is on, and has been reported as unreliable on some systems — verify with the
+    validation script after rebooting.
+
+  - See also:
+    https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry#registry-setting-to-enable-long-paths
 
 - There are some [known issues](https://github.com/ROCm/TheRock/issues/651)
   with preexisting HIP SDK / ROCm installs causing errors during the build

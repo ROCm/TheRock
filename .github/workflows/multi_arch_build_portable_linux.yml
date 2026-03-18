@@ -11,7 +11,9 @@
 # 5. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
 # 6. dctools-core (generic) - RDC (parallel to math-libs)
 # 7. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
-# 8. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
+# 8. iree-compiler (generic) - IREE compiler (parallel to math-libs)
+# 9. fusilli-libs (generic) - Fusilli hipdnn provider (after math-libs + iree-compiler)
+# 10. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 
 name: Multi-Arch Build (Linux)
 
@@ -172,6 +174,40 @@ jobs:
       stage_name: profiler-apps
       stage_display_name: "Stage - Profiler Apps"
       timeout_minutes: 180  # 3 hours
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
+  # STAGE: iree-compiler (generic, parallel to math-libs)
+  # ==========================================================================
+  iree-compiler:
+    needs: compiler-runtime
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: iree-compiler
+      stage_display_name: "Stage - IREE Compiler"
+      timeout_minutes: 90  # 1.5 hours - iree is not _yet_ building with a common llvm, it includes its own.
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
+  # STAGE: fusilli-libs (generic, after math-libs + iree-compiler)
+  # ==========================================================================
+  fusilli-libs:
+    needs: [compiler-runtime, math-libs, iree-compiler]
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: fusilli-libs
+      stage_display_name: "Stage - Fusilli Libs"
+      timeout_minutes: 60  # 1 hour
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
     permissions:

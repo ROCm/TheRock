@@ -29,13 +29,13 @@ if is_asan():
 
 logging.basicConfig(level=logging.INFO)
 
-# If smoke tests are enabled, we run smoke tests only.
+# If quick tests are enabled, we run quick tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
+if test_type == "quick":
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 else:
-    # only running smoke tests due to openBLAS issue: https://github.com/ROCm/TheRock/issues/1605
+    # only running quick tests due to openBLAS issue: https://github.com/ROCm/TheRock/issues/1605
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 
 cmd = [f"{THEROCK_BIN_DIR}/rocblas-test"] + test_filter
