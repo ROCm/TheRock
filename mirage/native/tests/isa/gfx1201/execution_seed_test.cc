@@ -7013,6 +7013,78 @@ int main() {
     return 1;
   }
 
+  const auto global_load_d16_u8_words =
+      MakeGlobal(30u, 34u, 42u, 0u, 20u, 0x120);
+  DecodedInstruction global_load_d16_u8_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      global_load_d16_u8_words.data(),
+                      global_load_d16_u8_words.size()),
+                  &global_load_d16_u8_instruction, &global_words_consumed,
+                  &error_message),
+              "expected GLOBAL_LOAD_D16_U8 direct decode success") ||
+      !Expect(global_load_d16_u8_instruction.opcode == "GLOBAL_LOAD_D16_U8",
+              "expected decoded GLOBAL_LOAD_D16_U8 opcode") ||
+      !Expect(global_load_d16_u8_instruction.operand_count == 4u,
+              "expected GLOBAL_LOAD_D16_U8 operand count") ||
+      !Expect(global_load_d16_u8_instruction.operands[0].kind ==
+                  OperandKind::kVgpr &&
+                  global_load_d16_u8_instruction.operands[0].index == 34u,
+              "expected GLOBAL_LOAD_D16_U8 vector destination") ||
+      !Expect(global_load_d16_u8_instruction.operands[1].kind ==
+                  OperandKind::kVgpr &&
+                  global_load_d16_u8_instruction.operands[1].index == 42u,
+              "expected GLOBAL_LOAD_D16_U8 vector address") ||
+      !Expect(global_load_d16_u8_instruction.operands[2].kind ==
+                  OperandKind::kSgpr &&
+                  global_load_d16_u8_instruction.operands[2].index == 20u,
+              "expected GLOBAL_LOAD_D16_U8 scalar address") ||
+      !Expect(global_load_d16_u8_instruction.operands[3].kind ==
+                  OperandKind::kImm32 &&
+                  global_load_d16_u8_instruction.operands[3].imm32 == 0x120u,
+              "expected GLOBAL_LOAD_D16_U8 inline offset") ||
+      !Expect(global_words_consumed == 2u,
+              "expected GLOBAL_LOAD_D16_U8 to consume two dwords")) {
+    return 1;
+  }
+
+  const auto global_load_d16_hi_b16_words =
+      MakeGlobal(35u, 35u, 43u, 0u, 21u, 0x340);
+  DecodedInstruction global_load_d16_hi_b16_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      global_load_d16_hi_b16_words.data(),
+                      global_load_d16_hi_b16_words.size()),
+                  &global_load_d16_hi_b16_instruction, &global_words_consumed,
+                  &error_message),
+              "expected GLOBAL_LOAD_D16_HI_B16 direct decode success") ||
+      !Expect(global_load_d16_hi_b16_instruction.opcode ==
+                  "GLOBAL_LOAD_D16_HI_B16",
+              "expected decoded GLOBAL_LOAD_D16_HI_B16 opcode") ||
+      !Expect(global_load_d16_hi_b16_instruction.operand_count == 4u,
+              "expected GLOBAL_LOAD_D16_HI_B16 operand count") ||
+      !Expect(global_load_d16_hi_b16_instruction.operands[0].kind ==
+                  OperandKind::kVgpr &&
+                  global_load_d16_hi_b16_instruction.operands[0].index == 35u,
+              "expected GLOBAL_LOAD_D16_HI_B16 vector destination") ||
+      !Expect(global_load_d16_hi_b16_instruction.operands[1].kind ==
+                  OperandKind::kVgpr &&
+                  global_load_d16_hi_b16_instruction.operands[1].index == 43u,
+              "expected GLOBAL_LOAD_D16_HI_B16 vector address") ||
+      !Expect(global_load_d16_hi_b16_instruction.operands[2].kind ==
+                  OperandKind::kSgpr &&
+                  global_load_d16_hi_b16_instruction.operands[2].index == 21u,
+              "expected GLOBAL_LOAD_D16_HI_B16 scalar address") ||
+      !Expect(global_load_d16_hi_b16_instruction.operands[3].kind ==
+                  OperandKind::kImm32 &&
+                  global_load_d16_hi_b16_instruction.operands[3].imm32 ==
+                      0x340u,
+              "expected GLOBAL_LOAD_D16_HI_B16 inline offset") ||
+      !Expect(global_words_consumed == 2u,
+              "expected GLOBAL_LOAD_D16_HI_B16 to consume two dwords")) {
+    return 1;
+  }
+
   const auto global_store_b32_words = MakeGlobal(26u, 0u, 44u, 18u, 30u, 16);
   DecodedInstruction global_store_b32_instruction;
   if (!Expect(decoder.DecodeInstruction(
@@ -7068,6 +7140,43 @@ int main() {
               "expected GLOBAL_STORE_B128 inline offset") ||
       !Expect(global_words_consumed == 2u,
               "expected GLOBAL_STORE_B128 to consume two dwords")) {
+    return 1;
+  }
+
+  const auto global_store_d16_hi_b8_words =
+      MakeGlobal(36u, 0u, 49u, 24u, 33u, 0x44);
+  DecodedInstruction global_store_d16_hi_b8_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      global_store_d16_hi_b8_words.data(),
+                      global_store_d16_hi_b8_words.size()),
+                  &global_store_d16_hi_b8_instruction, &global_words_consumed,
+                  &error_message),
+              "expected GLOBAL_STORE_D16_HI_B8 direct decode success") ||
+      !Expect(global_store_d16_hi_b8_instruction.opcode ==
+                  "GLOBAL_STORE_D16_HI_B8",
+              "expected decoded GLOBAL_STORE_D16_HI_B8 opcode") ||
+      !Expect(global_store_d16_hi_b8_instruction.operand_count == 4u,
+              "expected GLOBAL_STORE_D16_HI_B8 operand count") ||
+      !Expect(global_store_d16_hi_b8_instruction.operands[0].kind ==
+                  OperandKind::kVgpr &&
+                  global_store_d16_hi_b8_instruction.operands[0].index == 24u,
+              "expected GLOBAL_STORE_D16_HI_B8 vector data") ||
+      !Expect(global_store_d16_hi_b8_instruction.operands[1].kind ==
+                  OperandKind::kVgpr &&
+                  global_store_d16_hi_b8_instruction.operands[1].index == 49u,
+              "expected GLOBAL_STORE_D16_HI_B8 vector address") ||
+      !Expect(global_store_d16_hi_b8_instruction.operands[2].kind ==
+                  OperandKind::kSgpr &&
+                  global_store_d16_hi_b8_instruction.operands[2].index == 33u,
+              "expected GLOBAL_STORE_D16_HI_B8 scalar address") ||
+      !Expect(global_store_d16_hi_b8_instruction.operands[3].kind ==
+                  OperandKind::kImm32 &&
+                  global_store_d16_hi_b8_instruction.operands[3].imm32 ==
+                      0x44u,
+              "expected GLOBAL_STORE_D16_HI_B8 inline offset") ||
+      !Expect(global_words_consumed == 2u,
+              "expected GLOBAL_STORE_D16_HI_B8 to consume two dwords")) {
     return 1;
   }
 
@@ -7367,6 +7476,222 @@ int main() {
     return 1;
   }
 
+  const auto global_load_d16_u8_program_words =
+      MakeGlobal(30u, 20u, 40u, 0u, 20u, 0x000);
+  const auto global_load_d16_i8_program_words =
+      MakeGlobal(31u, 21u, 40u, 0u, 20u, 0x200);
+  const auto global_load_d16_b16_program_words =
+      MakeGlobal(32u, 22u, 40u, 0u, 20u, 0x400);
+  const auto global_load_d16_hi_u8_program_words =
+      MakeGlobal(33u, 23u, 40u, 0u, 20u, 0x600);
+  const auto global_load_d16_hi_i8_program_words =
+      MakeGlobal(34u, 24u, 40u, 0u, 20u, 0x800);
+  const auto global_load_d16_hi_b16_program_words =
+      MakeGlobal(35u, 25u, 40u, 0u, 20u, 0xa00);
+  const std::array<std::uint32_t, 13> global_load_d16_program_words{
+      global_load_d16_u8_program_words[0],
+      global_load_d16_u8_program_words[1],
+      global_load_d16_i8_program_words[0],
+      global_load_d16_i8_program_words[1],
+      global_load_d16_b16_program_words[0],
+      global_load_d16_b16_program_words[1],
+      global_load_d16_hi_u8_program_words[0],
+      global_load_d16_hi_u8_program_words[1],
+      global_load_d16_hi_i8_program_words[0],
+      global_load_d16_hi_i8_program_words[1],
+      global_load_d16_hi_b16_program_words[0],
+      global_load_d16_hi_b16_program_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> global_load_d16_program;
+  if (!Expect(decoder.DecodeProgram(global_load_d16_program_words,
+                                    &global_load_d16_program, &error_message),
+              "expected GLOBAL D16 load program decode success") ||
+      !Expect(global_load_d16_program.size() == 7u,
+              "expected seven decoded GLOBAL D16 load instructions") ||
+      !Expect(global_load_d16_program[0].opcode == "GLOBAL_LOAD_D16_U8",
+              "expected decoded GLOBAL_LOAD_D16_U8 opcode") ||
+      !Expect(global_load_d16_program[1].opcode == "GLOBAL_LOAD_D16_I8",
+              "expected decoded GLOBAL_LOAD_D16_I8 opcode") ||
+      !Expect(global_load_d16_program[2].opcode == "GLOBAL_LOAD_D16_B16",
+              "expected decoded GLOBAL_LOAD_D16_B16 opcode") ||
+      !Expect(global_load_d16_program[3].opcode == "GLOBAL_LOAD_D16_HI_U8",
+              "expected decoded GLOBAL_LOAD_D16_HI_U8 opcode") ||
+      !Expect(global_load_d16_program[4].opcode == "GLOBAL_LOAD_D16_HI_I8",
+              "expected decoded GLOBAL_LOAD_D16_HI_I8 opcode") ||
+      !Expect(global_load_d16_program[5].opcode == "GLOBAL_LOAD_D16_HI_B16",
+              "expected decoded GLOBAL_LOAD_D16_HI_B16 opcode") ||
+      !Expect(global_load_d16_program[6].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after GLOBAL D16 loads")) {
+    return 1;
+  }
+
+  auto initialize_global_load_d16_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x80000005ull;
+    state->sgprs[20] = 0x5000u;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      state->vgprs[40][lane] = static_cast<std::uint32_t>(lane * 16u);
+      state->vgprs[20][lane] = 0xa10000a0u + static_cast<std::uint32_t>(lane);
+      state->vgprs[21][lane] = 0xa20000b0u + static_cast<std::uint32_t>(lane);
+      state->vgprs[22][lane] = 0xa30000c0u + static_cast<std::uint32_t>(lane);
+      state->vgprs[23][lane] = 0xd4000100u + static_cast<std::uint32_t>(lane);
+      state->vgprs[24][lane] = 0xd5000200u + static_cast<std::uint32_t>(lane);
+      state->vgprs[25][lane] = 0xd6000300u + static_cast<std::uint32_t>(lane);
+    }
+  };
+  auto expect_global_load_d16_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == 0x80000005ull &&
+          state.sgprs[20] == 0x5000u && state.halted &&
+          !state.waiting_on_barrier && state.pc == 6u)) {
+      return false;
+    }
+
+    constexpr std::uint64_t kActiveMask = 0x80000005ull;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      const bool active = (kActiveMask & (1ull << lane)) != 0u;
+      const std::uint32_t initial_u8 = 0xa10000a0u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t initial_i8 = 0xa20000b0u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t initial_b16 =
+          0xa30000c0u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t initial_hi_u8 =
+          0xd4000100u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t initial_hi_i8 =
+          0xd5000200u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t initial_hi_b16 =
+          0xd6000300u + static_cast<std::uint32_t>(lane);
+
+      const std::uint32_t expected_u8 =
+          active ? ((initial_u8 & 0xffff0000u) |
+                    static_cast<std::uint16_t>(0x40u + lane))
+                 : initial_u8;
+      const std::uint32_t expected_i8 =
+          active ? ((initial_i8 & 0xffff0000u) |
+                    static_cast<std::uint16_t>(
+                        static_cast<std::int16_t>(static_cast<std::int8_t>(
+                            static_cast<std::uint8_t>(0x80u + lane)))))
+                 : initial_i8;
+      const std::uint32_t expected_b16 =
+          active ? ((initial_b16 & 0xffff0000u) |
+                    static_cast<std::uint16_t>(0x9100u + lane))
+                 : initial_b16;
+      const std::uint16_t hi_u8_payload =
+          static_cast<std::uint16_t>(0x50u + lane);
+      const std::uint16_t hi_i8_payload = static_cast<std::uint16_t>(
+          static_cast<std::int16_t>(static_cast<std::int8_t>(
+              static_cast<std::uint8_t>(0x90u + lane))));
+      const std::uint16_t hi_b16_payload =
+          static_cast<std::uint16_t>(0xa100u + lane);
+      const std::uint32_t expected_hi_u8 =
+          active ? ((initial_hi_u8 & 0x0000ffffu) |
+                    (static_cast<std::uint32_t>(hi_u8_payload) << 16))
+                 : initial_hi_u8;
+      const std::uint32_t expected_hi_i8 =
+          active ? ((initial_hi_i8 & 0x0000ffffu) |
+                    (static_cast<std::uint32_t>(hi_i8_payload) << 16))
+                 : initial_hi_i8;
+      const std::uint32_t expected_hi_b16 =
+          active ? ((initial_hi_b16 & 0x0000ffffu) |
+                    (static_cast<std::uint32_t>(hi_b16_payload) << 16))
+                 : initial_hi_b16;
+
+      if (state.vgprs[40][lane] != static_cast<std::uint32_t>(lane * 16u) ||
+          state.vgprs[20][lane] != expected_u8 ||
+          state.vgprs[21][lane] != expected_i8 ||
+          state.vgprs[22][lane] != expected_b16 ||
+          state.vgprs[23][lane] != expected_hi_u8 ||
+          state.vgprs[24][lane] != expected_hi_i8 ||
+          state.vgprs[25][lane] != expected_hi_b16) {
+        return false;
+      }
+    }
+    return true;
+  };
+  LinearExecutionMemory global_load_d16_memory(0x1000u, 0x5000u);
+  for (std::uint32_t lane = 0; lane < 32u; ++lane) {
+    const std::uint32_t lane_address = 0x5000u + lane * 16u;
+    if (!Expect(global_load_d16_memory.StoreU8(
+                    lane_address + 0x000u,
+                    static_cast<std::uint8_t>(0x40u + lane)),
+                "expected GLOBAL D16 load test write for GLOBAL_LOAD_D16_U8") ||
+        !Expect(global_load_d16_memory.StoreU8(
+                    lane_address + 0x200u,
+                    static_cast<std::uint8_t>(0x80u + lane)),
+                "expected GLOBAL D16 load test write for GLOBAL_LOAD_D16_I8") ||
+        !Expect(global_load_d16_memory.StoreU16(
+                    lane_address + 0x400u,
+                    static_cast<std::uint16_t>(0x9100u + lane)),
+                "expected GLOBAL D16 load test write for GLOBAL_LOAD_D16_B16") ||
+        !Expect(global_load_d16_memory.StoreU8(
+                    lane_address + 0x600u,
+                    static_cast<std::uint8_t>(0x50u + lane)),
+                "expected GLOBAL D16 load test write for GLOBAL_LOAD_D16_HI_U8") ||
+        !Expect(global_load_d16_memory.StoreU8(
+                    lane_address + 0x800u,
+                    static_cast<std::uint8_t>(0x90u + lane)),
+                "expected GLOBAL D16 load test write for GLOBAL_LOAD_D16_HI_I8") ||
+        !Expect(global_load_d16_memory.StoreU16(
+                    lane_address + 0xa00u,
+                    static_cast<std::uint16_t>(0xa100u + lane)),
+                "expected GLOBAL D16 load test write for GLOBAL_LOAD_D16_HI_B16")) {
+      return 1;
+    }
+  }
+
+  WaveExecutionState decoded_global_load_d16_state;
+  initialize_global_load_d16_state(&decoded_global_load_d16_state);
+  if (!Expect(interpreter.ExecuteProgram(global_load_d16_program,
+                                         &decoded_global_load_d16_state,
+                                         &global_load_d16_memory,
+                                         &error_message),
+              "expected decoded GLOBAL D16 load execution success") ||
+      !Expect(expect_global_load_d16_state(decoded_global_load_d16_state),
+              "expected decoded GLOBAL D16 load state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_global_load_d16_program;
+  if (!Expect(interpreter.CompileProgram(global_load_d16_program,
+                                         &compiled_global_load_d16_program,
+                                         &error_message),
+              "expected compiled GLOBAL D16 load program success") ||
+      !Expect(compiled_global_load_d16_program.size() == 7u,
+              "expected seven compiled GLOBAL D16 load instructions") ||
+      !Expect(compiled_global_load_d16_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalLoadD16U8,
+              "expected compiled GLOBAL_LOAD_D16_U8 opcode") ||
+      !Expect(compiled_global_load_d16_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalLoadD16I8,
+              "expected compiled GLOBAL_LOAD_D16_I8 opcode") ||
+      !Expect(compiled_global_load_d16_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalLoadD16B16,
+              "expected compiled GLOBAL_LOAD_D16_B16 opcode") ||
+      !Expect(compiled_global_load_d16_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalLoadD16HiU8,
+              "expected compiled GLOBAL_LOAD_D16_HI_U8 opcode") ||
+      !Expect(compiled_global_load_d16_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalLoadD16HiI8,
+              "expected compiled GLOBAL_LOAD_D16_HI_I8 opcode") ||
+      !Expect(compiled_global_load_d16_program[5].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalLoadD16HiB16,
+              "expected compiled GLOBAL_LOAD_D16_HI_B16 opcode") ||
+      !Expect(compiled_global_load_d16_program[6].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after GLOBAL D16 loads")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_global_load_d16_state;
+  initialize_global_load_d16_state(&compiled_global_load_d16_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_global_load_d16_program,
+                                         &compiled_global_load_d16_state,
+                                         &global_load_d16_memory,
+                                         &error_message),
+              "expected compiled GLOBAL D16 load execution success") ||
+      !Expect(expect_global_load_d16_state(compiled_global_load_d16_state),
+              "expected compiled GLOBAL D16 load state")) {
+    return 1;
+  }
+
   const auto global_store_b8_words = MakeGlobal(24u, 0u, 40u, 20u, 20u, 0x000);
   const auto global_store_b16_words =
       MakeGlobal(25u, 0u, 40u, 21u, 20u, 0x200);
@@ -7573,6 +7898,138 @@ int main() {
               "expected compiled GLOBAL store register state") ||
       !Expect(expect_global_store_memory(&compiled_global_store_memory),
               "expected compiled GLOBAL store memory state")) {
+    return 1;
+  }
+
+  const auto global_store_d16_hi_b8_program_words =
+      MakeGlobal(36u, 0u, 40u, 20u, 20u, 0x000);
+  const auto global_store_d16_hi_b16_program_words =
+      MakeGlobal(37u, 0u, 40u, 21u, 20u, 0x200);
+  const std::array<std::uint32_t, 5> global_store_d16_program_words{
+      global_store_d16_hi_b8_program_words[0],
+      global_store_d16_hi_b8_program_words[1],
+      global_store_d16_hi_b16_program_words[0],
+      global_store_d16_hi_b16_program_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> global_store_d16_program;
+  if (!Expect(decoder.DecodeProgram(global_store_d16_program_words,
+                                    &global_store_d16_program, &error_message),
+              "expected GLOBAL D16 store program decode success") ||
+      !Expect(global_store_d16_program.size() == 3u,
+              "expected three decoded GLOBAL D16 store instructions") ||
+      !Expect(global_store_d16_program[0].opcode == "GLOBAL_STORE_D16_HI_B8",
+              "expected decoded GLOBAL_STORE_D16_HI_B8 opcode") ||
+      !Expect(global_store_d16_program[1].opcode == "GLOBAL_STORE_D16_HI_B16",
+              "expected decoded GLOBAL_STORE_D16_HI_B16 opcode") ||
+      !Expect(global_store_d16_program[2].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after GLOBAL D16 stores")) {
+    return 1;
+  }
+
+  auto initialize_global_store_d16_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x80000005ull;
+    state->sgprs[20] = 0x6000u;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      state->vgprs[40][lane] = static_cast<std::uint32_t>(lane * 16u);
+      state->vgprs[20][lane] =
+          0xab000000u |
+          (static_cast<std::uint32_t>(0x40u + lane) << 16) | 0x1234u;
+      state->vgprs[21][lane] =
+          (static_cast<std::uint32_t>(0x5000u + lane) << 16) | 0x5678u;
+    }
+  };
+  auto expect_global_store_d16_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == 0x80000005ull &&
+          state.sgprs[20] == 0x6000u && state.halted &&
+          !state.waiting_on_barrier && state.pc == 2u)) {
+      return false;
+    }
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      const std::uint32_t expected_b8 =
+          0xab000000u |
+          (static_cast<std::uint32_t>(0x40u + lane) << 16) | 0x1234u;
+      const std::uint32_t expected_b16 =
+          (static_cast<std::uint32_t>(0x5000u + lane) << 16) | 0x5678u;
+      if (state.vgprs[40][lane] != static_cast<std::uint32_t>(lane * 16u) ||
+          state.vgprs[20][lane] != expected_b8 ||
+          state.vgprs[21][lane] != expected_b16) {
+        return false;
+      }
+    }
+    return true;
+  };
+  auto expect_global_store_d16_memory = [](LinearExecutionMemory* memory) {
+    constexpr std::uint64_t kActiveMask = 0x80000005ull;
+    for (std::uint32_t lane = 0; lane < 32u; ++lane) {
+      const bool active = (kActiveMask & (1ull << lane)) != 0u;
+      const std::uint64_t lane_address = 0x6000u + lane * 16u;
+      std::uint8_t b8 = 0;
+      std::uint16_t b16 = 0;
+      if (!memory->LoadU8(lane_address + 0x000u, &b8) ||
+          !memory->LoadU16(lane_address + 0x200u, &b16)) {
+        return false;
+      }
+      if (!active) {
+        if (b8 != 0u || b16 != 0u) {
+          return false;
+        }
+        continue;
+      }
+      if (b8 != static_cast<std::uint8_t>(0x40u + lane) ||
+          b16 != static_cast<std::uint16_t>(0x5000u + lane)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  LinearExecutionMemory decoded_global_store_d16_memory(0x1000u, 0x6000u);
+  WaveExecutionState decoded_global_store_d16_state;
+  initialize_global_store_d16_state(&decoded_global_store_d16_state);
+  if (!Expect(interpreter.ExecuteProgram(global_store_d16_program,
+                                         &decoded_global_store_d16_state,
+                                         &decoded_global_store_d16_memory,
+                                         &error_message),
+              "expected decoded GLOBAL D16 store execution success") ||
+      !Expect(expect_global_store_d16_state(decoded_global_store_d16_state),
+              "expected decoded GLOBAL D16 store state") ||
+      !Expect(expect_global_store_d16_memory(&decoded_global_store_d16_memory),
+              "expected decoded GLOBAL D16 store memory state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_global_store_d16_program;
+  if (!Expect(interpreter.CompileProgram(global_store_d16_program,
+                                         &compiled_global_store_d16_program,
+                                         &error_message),
+              "expected compiled GLOBAL D16 store program success") ||
+      !Expect(compiled_global_store_d16_program.size() == 3u,
+              "expected three compiled GLOBAL D16 store instructions") ||
+      !Expect(compiled_global_store_d16_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalStoreD16HiB8,
+              "expected compiled GLOBAL_STORE_D16_HI_B8 opcode") ||
+      !Expect(compiled_global_store_d16_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalStoreD16HiB16,
+              "expected compiled GLOBAL_STORE_D16_HI_B16 opcode") ||
+      !Expect(compiled_global_store_d16_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after GLOBAL D16 stores")) {
+    return 1;
+  }
+
+  LinearExecutionMemory compiled_global_store_d16_memory(0x1000u, 0x6000u);
+  WaveExecutionState compiled_global_store_d16_state;
+  initialize_global_store_d16_state(&compiled_global_store_d16_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_global_store_d16_program,
+                                         &compiled_global_store_d16_state,
+                                         &compiled_global_store_d16_memory,
+                                         &error_message),
+              "expected compiled GLOBAL D16 store execution success") ||
+      !Expect(expect_global_store_d16_state(compiled_global_store_d16_state),
+              "expected compiled GLOBAL D16 store state") ||
+      !Expect(expect_global_store_d16_memory(&compiled_global_store_d16_memory),
+              "expected compiled GLOBAL D16 store memory state")) {
     return 1;
   }
 

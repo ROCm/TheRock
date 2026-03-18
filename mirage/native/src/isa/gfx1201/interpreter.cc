@@ -54,7 +54,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 370> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 378> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -96,12 +96,20 @@ constexpr std::array<std::string_view, 370> kExecutableSeedOpcodes{{
     "GLOBAL_LOAD_B64",
     "GLOBAL_LOAD_B96",
     "GLOBAL_LOAD_B128",
+    "GLOBAL_LOAD_D16_U8",
+    "GLOBAL_LOAD_D16_I8",
+    "GLOBAL_LOAD_D16_B16",
+    "GLOBAL_LOAD_D16_HI_U8",
+    "GLOBAL_LOAD_D16_HI_I8",
+    "GLOBAL_LOAD_D16_HI_B16",
     "GLOBAL_STORE_B8",
     "GLOBAL_STORE_B16",
     "GLOBAL_STORE_B32",
     "GLOBAL_STORE_B64",
     "GLOBAL_STORE_B96",
     "GLOBAL_STORE_B128",
+    "GLOBAL_STORE_D16_HI_B8",
+    "GLOBAL_STORE_D16_HI_B16",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -962,6 +970,30 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadB128;
     return true;
   }
+  if (opcode == "GLOBAL_LOAD_D16_U8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadD16U8;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_D16_I8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadD16I8;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_D16_B16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadD16B16;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_D16_HI_U8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadD16HiU8;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_D16_HI_I8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadD16HiI8;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_D16_HI_B16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadD16HiB16;
+    return true;
+  }
   if (opcode == "GLOBAL_STORE_B8") {
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreB8;
     return true;
@@ -984,6 +1016,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "GLOBAL_STORE_B128") {
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreB128;
+    return true;
+  }
+  if (opcode == "GLOBAL_STORE_D16_HI_B8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreD16HiB8;
+    return true;
+  }
+  if (opcode == "GLOBAL_STORE_D16_HI_B16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreD16HiB16;
     return true;
   }
   if (opcode == "S_LOAD_B32") {
@@ -2929,6 +2969,21 @@ bool ExecuteVectorGlobalLoadAtAddress(const DecodedInstruction& instruction,
                                       std::string* error_message) {
   const std::string_view opcode = instruction.opcode;
 
+  auto write_d16_half = [&](std::uint16_t payload, bool high_half) {
+    const std::uint32_t current_value = ReadVectorOperand(
+        instruction.operands[0], *state, lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    const std::uint32_t result =
+        high_half ? ((current_value & 0x0000ffffu) |
+                     (static_cast<std::uint32_t>(payload) << 16))
+                  : ((current_value & 0xffff0000u) |
+                     static_cast<std::uint32_t>(payload));
+    return WriteVectorOperand(instruction.operands[0], lane_index, result, state,
+                              error_message);
+  };
+
   if (opcode == "GLOBAL_LOAD_B32") {
     std::uint32_t value = 0;
     if (!memory->LoadU32(address, &value)) {
@@ -2976,6 +3031,39 @@ bool ExecuteVectorGlobalLoadAtAddress(const DecodedInstruction& instruction,
         error_message);
   }
 
+  if (opcode == "GLOBAL_LOAD_D16_U8" || opcode == "GLOBAL_LOAD_D16_I8" ||
+      opcode == "GLOBAL_LOAD_D16_HI_U8" ||
+      opcode == "GLOBAL_LOAD_D16_HI_I8") {
+    std::uint8_t value = 0;
+    if (!memory->LoadU8(address, &value)) {
+      if (error_message != nullptr) {
+        *error_message = std::string(opcode) + " memory read failed";
+      }
+      return false;
+    }
+    const bool sign_extend = opcode == "GLOBAL_LOAD_D16_I8" ||
+                             opcode == "GLOBAL_LOAD_D16_HI_I8";
+    const bool high_half = opcode == "GLOBAL_LOAD_D16_HI_U8" ||
+                           opcode == "GLOBAL_LOAD_D16_HI_I8";
+    const std::uint16_t payload = sign_extend
+                                      ? static_cast<std::uint16_t>(
+                                            static_cast<std::int16_t>(
+                                                static_cast<std::int8_t>(value)))
+                                      : static_cast<std::uint16_t>(value);
+    return write_d16_half(payload, high_half);
+  }
+
+  if (opcode == "GLOBAL_LOAD_D16_B16" || opcode == "GLOBAL_LOAD_D16_HI_B16") {
+    std::uint16_t value = 0;
+    if (!memory->LoadU16(address, &value)) {
+      if (error_message != nullptr) {
+        *error_message = std::string(opcode) + " memory read failed";
+      }
+      return false;
+    }
+    return write_d16_half(value, opcode == "GLOBAL_LOAD_D16_HI_B16");
+  }
+
   if (opcode == "GLOBAL_LOAD_I8" || opcode == "GLOBAL_LOAD_U8") {
     std::uint8_t value = 0;
     if (!memory->LoadU8(address, &value)) {
@@ -3016,6 +3104,42 @@ bool ExecuteVectorGlobalStoreAtAddress(const DecodedInstruction& instruction,
                                        ExecutionMemory* memory,
                                        std::string* error_message) {
   const std::string_view opcode = instruction.opcode;
+
+  if (opcode == "GLOBAL_STORE_D16_HI_B8") {
+    const std::uint32_t value = ReadVectorOperand(instruction.operands[0], state,
+                                                  lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU8(address, static_cast<std::uint8_t>((value >> 16) & 0xffu))) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL_STORE_D16_HI_B8 memory write failed";
+      }
+      return false;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (opcode == "GLOBAL_STORE_D16_HI_B16") {
+    const std::uint32_t value = ReadVectorOperand(instruction.operands[0], state,
+                                                  lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU16(address, static_cast<std::uint16_t>(value >> 16))) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL_STORE_D16_HI_B16 memory write failed";
+      }
+      return false;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
 
   if (opcode == "GLOBAL_STORE_B8") {
     const std::uint32_t value = ReadVectorOperand(instruction.operands[0], state,
@@ -4672,7 +4796,13 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "GLOBAL_LOAD_B32" ||
       instruction.opcode == "GLOBAL_LOAD_B64" ||
       instruction.opcode == "GLOBAL_LOAD_B96" ||
-      instruction.opcode == "GLOBAL_LOAD_B128") {
+      instruction.opcode == "GLOBAL_LOAD_B128" ||
+      instruction.opcode == "GLOBAL_LOAD_D16_U8" ||
+      instruction.opcode == "GLOBAL_LOAD_D16_I8" ||
+      instruction.opcode == "GLOBAL_LOAD_D16_B16" ||
+      instruction.opcode == "GLOBAL_LOAD_D16_HI_U8" ||
+      instruction.opcode == "GLOBAL_LOAD_D16_HI_I8" ||
+      instruction.opcode == "GLOBAL_LOAD_D16_HI_B16") {
     if (!ValidateOperandCount(instruction, 4, error_message)) {
       return false;
     }
@@ -4708,7 +4838,9 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "GLOBAL_STORE_B32" ||
       instruction.opcode == "GLOBAL_STORE_B64" ||
       instruction.opcode == "GLOBAL_STORE_B96" ||
-      instruction.opcode == "GLOBAL_STORE_B128") {
+      instruction.opcode == "GLOBAL_STORE_B128" ||
+      instruction.opcode == "GLOBAL_STORE_D16_HI_B8" ||
+      instruction.opcode == "GLOBAL_STORE_D16_HI_B16") {
     if (!ValidateOperandCount(instruction, 4, error_message)) {
       return false;
     }
@@ -5733,12 +5865,20 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kGlobalLoadB64:
     case Gfx1201CompiledOpcode::kGlobalLoadB96:
     case Gfx1201CompiledOpcode::kGlobalLoadB128:
+    case Gfx1201CompiledOpcode::kGlobalLoadD16U8:
+    case Gfx1201CompiledOpcode::kGlobalLoadD16I8:
+    case Gfx1201CompiledOpcode::kGlobalLoadD16B16:
+    case Gfx1201CompiledOpcode::kGlobalLoadD16HiU8:
+    case Gfx1201CompiledOpcode::kGlobalLoadD16HiI8:
+    case Gfx1201CompiledOpcode::kGlobalLoadD16HiB16:
     case Gfx1201CompiledOpcode::kGlobalStoreB8:
     case Gfx1201CompiledOpcode::kGlobalStoreB16:
     case Gfx1201CompiledOpcode::kGlobalStoreB32:
     case Gfx1201CompiledOpcode::kGlobalStoreB64:
     case Gfx1201CompiledOpcode::kGlobalStoreB96:
     case Gfx1201CompiledOpcode::kGlobalStoreB128:
+    case Gfx1201CompiledOpcode::kGlobalStoreD16HiB8:
+    case Gfx1201CompiledOpcode::kGlobalStoreD16HiB16:
     case Gfx1201CompiledOpcode::kSLoadB32:
     case Gfx1201CompiledOpcode::kSLoadB64:
     case Gfx1201CompiledOpcode::kSLoadB96:
