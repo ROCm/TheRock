@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 378> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 380> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -59,6 +59,8 @@ constexpr std::array<std::string_view, 378> kPhase0ExecutableOpcodes{{
     "GLOBAL_LOAD_B64",
     "GLOBAL_LOAD_B96",
     "GLOBAL_LOAD_B128",
+    "GLOBAL_LOAD_TR_B64",
+    "GLOBAL_LOAD_TR_B128",
     "GLOBAL_LOAD_D16_U8",
     "GLOBAL_LOAD_D16_I8",
     "GLOBAL_LOAD_D16_B16",
@@ -1054,6 +1056,8 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "GLOBAL_LOAD_B64" ||
              instruction_name == "GLOBAL_LOAD_B96" ||
              instruction_name == "GLOBAL_LOAD_B128" ||
+             instruction_name == "GLOBAL_LOAD_TR_B64" ||
+             instruction_name == "GLOBAL_LOAD_TR_B128" ||
              instruction_name == "GLOBAL_LOAD_D16_U8" ||
              instruction_name == "GLOBAL_LOAD_D16_I8" ||
              instruction_name == "GLOBAL_LOAD_D16_B16" ||
@@ -1090,11 +1094,13 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_saddr));
 
     InstructionOperand described_dst = DescribeVectorDestinationOperand(dst);
-    if (instruction_name == "GLOBAL_LOAD_B64") {
+    if (instruction_name == "GLOBAL_LOAD_B64" ||
+        instruction_name == "GLOBAL_LOAD_TR_B64") {
       described_dst = DescribeVectorPairDestinationOperand(dst);
     } else if (instruction_name == "GLOBAL_LOAD_B96") {
       described_dst = DescribeWideVectorDestinationOperand(dst, 3u);
-    } else if (instruction_name == "GLOBAL_LOAD_B128") {
+    } else if (instruction_name == "GLOBAL_LOAD_B128" ||
+               instruction_name == "GLOBAL_LOAD_TR_B128") {
       described_dst = DescribeWideVectorDestinationOperand(dst, 4u);
     } else if (instruction_name == "GLOBAL_LOAD_D16_U8" ||
                instruction_name == "GLOBAL_LOAD_D16_I8" ||

@@ -43,6 +43,8 @@
     "GLOBAL_LOAD_B64",
     "GLOBAL_LOAD_B96",
     "GLOBAL_LOAD_B128",
+    "GLOBAL_LOAD_TR_B64",
+    "GLOBAL_LOAD_TR_B128",
     "GLOBAL_LOAD_D16_U8",
     "GLOBAL_LOAD_D16_I8",
     "GLOBAL_LOAD_D16_B16",
@@ -460,6 +462,8 @@
       "GLOBAL_LOAD_B64",
       "GLOBAL_LOAD_B96",
       "GLOBAL_LOAD_B128",
+      "GLOBAL_LOAD_TR_B64",
+      "GLOBAL_LOAD_TR_B128",
       "GLOBAL_LOAD_D16_U8",
       "GLOBAL_LOAD_D16_I8",
       "GLOBAL_LOAD_D16_B16",
@@ -843,7 +847,7 @@
     "Decodes the full local F32 VOPC float/class subset currently present in the phase-0 seed from ENC_VOPC: V_CMP_CLASS_F32, V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F32, V_CMPX_CLASS_F32, and V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F32.",
     "Decodes the local F64 VOPC float/class subset on the same phase-0 path, using architecture-local wide source descriptors for SGPR/VGPR register pairs while keeping the shared implicit VCC destination model: V_CMP_CLASS_F64, V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64, V_CMPX_CLASS_F64, and V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64.",
     "Sign-extends SIMM16 for S_MOVK_I32.",
-    "Decodes GLOBAL_LOAD_U8, GLOBAL_LOAD_I8, GLOBAL_LOAD_U16, GLOBAL_LOAD_I16, GLOBAL_LOAD_B32, GLOBAL_LOAD_B64, GLOBAL_LOAD_B96, GLOBAL_LOAD_B128, GLOBAL_LOAD_D16_U8, GLOBAL_LOAD_D16_I8, GLOBAL_LOAD_D16_B16, GLOBAL_LOAD_D16_HI_U8, GLOBAL_LOAD_D16_HI_I8, GLOBAL_LOAD_D16_HI_B16, GLOBAL_STORE_B8, GLOBAL_STORE_B16, GLOBAL_STORE_B32, GLOBAL_STORE_B64, GLOBAL_STORE_B96, GLOBAL_STORE_B128, GLOBAL_STORE_D16_HI_B8, and GLOBAL_STORE_D16_HI_B16 from ENC_VGLOBAL with wave32-local VADDR, scalar SADDR, and inline offset operands on the current real path."
+    "Decodes GLOBAL_LOAD_U8, GLOBAL_LOAD_I8, GLOBAL_LOAD_U16, GLOBAL_LOAD_I16, GLOBAL_LOAD_B32, GLOBAL_LOAD_B64, GLOBAL_LOAD_B96, GLOBAL_LOAD_B128, GLOBAL_LOAD_TR_B64, GLOBAL_LOAD_TR_B128, GLOBAL_LOAD_D16_U8, GLOBAL_LOAD_D16_I8, GLOBAL_LOAD_D16_B16, GLOBAL_LOAD_D16_HI_U8, GLOBAL_LOAD_D16_HI_I8, GLOBAL_LOAD_D16_HI_B16, GLOBAL_STORE_B8, GLOBAL_STORE_B16, GLOBAL_STORE_B32, GLOBAL_STORE_B64, GLOBAL_STORE_B96, GLOBAL_STORE_B128, GLOBAL_STORE_D16_HI_B8, and GLOBAL_STORE_D16_HI_B16 from ENC_VGLOBAL with wave32-local VADDR, scalar SADDR, and inline offset operands on the current real path."
   ],
   "execution_capabilities": [
     "Halts waves with S_ENDPGM.",
@@ -913,12 +917,12 @@
     "Executes exec-masked V_LSHLREV_B64 by taking a 32-bit shift count from SRC0, shifting the wide 64-bit VSRC1 value, and materializing the result into a VGPR pair.",
     "Executes exec-masked V_ADD_CO_CI_U32, V_SUB_CO_CI_U32, and V_SUBREV_CO_CI_U32 lane-wise by reading carry-in bits from the wave32-local VCC mask, updating the vector destination, and writing carry-out / no-borrow bits back into VCC while preserving inactive lanes.",
     "Executes exec-masked V_ADD_U32, V_SUB_U32, V_SUBREV_U32, V_MIN/MAX_I32, V_MIN/MAX_U32, V_CNDMASK_B32, V_LSHRREV_B32, V_ASHRREV_I32, V_LSHLREV_B32, V_AND_B32, V_OR_B32, and V_XOR_B32 lane-wise.",
-    "Executes GLOBAL_LOAD_U8, GLOBAL_LOAD_I8, GLOBAL_LOAD_U16, GLOBAL_LOAD_I16, GLOBAL_LOAD_B32, GLOBAL_LOAD_B64, GLOBAL_LOAD_B96, GLOBAL_LOAD_B128, GLOBAL_LOAD_D16_U8, GLOBAL_LOAD_D16_I8, GLOBAL_LOAD_D16_B16, GLOBAL_LOAD_D16_HI_U8, GLOBAL_LOAD_D16_HI_I8, GLOBAL_LOAD_D16_HI_B16, GLOBAL_STORE_B8, GLOBAL_STORE_B16, GLOBAL_STORE_B32, GLOBAL_STORE_B64, GLOBAL_STORE_B96, GLOBAL_STORE_B128, GLOBAL_STORE_D16_HI_B8, and GLOBAL_STORE_D16_HI_B16 lane-wise under exec_mask by combining per-lane VADDR, scalar SADDR, and inline offsets through ExecutionMemory, including sign/zero extension, packed low/high-16-bit payload updates, and sequential VGPR reads or writes for the wider forms."
+    "Executes GLOBAL_LOAD_U8, GLOBAL_LOAD_I8, GLOBAL_LOAD_U16, GLOBAL_LOAD_I16, GLOBAL_LOAD_B32, GLOBAL_LOAD_B64, GLOBAL_LOAD_B96, GLOBAL_LOAD_B128, GLOBAL_LOAD_TR_B64, GLOBAL_LOAD_TR_B128, GLOBAL_LOAD_D16_U8, GLOBAL_LOAD_D16_I8, GLOBAL_LOAD_D16_B16, GLOBAL_LOAD_D16_HI_U8, GLOBAL_LOAD_D16_HI_I8, GLOBAL_LOAD_D16_HI_B16, GLOBAL_STORE_B8, GLOBAL_STORE_B16, GLOBAL_STORE_B32, GLOBAL_STORE_B64, GLOBAL_STORE_B96, GLOBAL_STORE_B128, GLOBAL_STORE_D16_HI_B8, and GLOBAL_STORE_D16_HI_B16 lane-wise under exec_mask by combining per-lane VADDR, scalar SADDR, and inline offsets through ExecutionMemory, including sign/zero extension, packed low/high-16-bit payload updates, and sequential VGPR reads or writes for the wider forms."
   ],
   "still_scaffolded": [
     "Route-matched but non-executable phase-0 compute instructions still return selector-aware stub errors.",
     "ENC_SMEM is now fully bootstrapped through S_DCACHE_INV, S_PREFETCH_INST, S_PREFETCH_INST_PC_REL, S_PREFETCH_DATA, S_BUFFER_PREFETCH_DATA, S_PREFETCH_DATA_PC_REL, S_ATC_PROBE, S_ATC_PROBE_BUFFER, the full non-buffer S_LOAD_* slice, and the matching S_BUFFER_LOAD_* slice, leaving no remaining scalar-memory seed instructions scaffolded.",
-    "ENC_VGLOBAL now has executable footholds through GLOBAL_INV, GLOBAL_WB, GLOBAL_WBINV, the plain GLOBAL_LOAD_U8/I8/U16/I16/B32/B64/B96/B128 slice, the packed GLOBAL_LOAD_D16_U8/I8/B16 and GLOBAL_LOAD_D16_HI_U8/I8/B16 slice, the plain GLOBAL_STORE_B8/B16/B32/B64/B96/B128 slice, and GLOBAL_STORE_D16_HI_B8/B16, but the broader TR, block, ADDTID, and atomic seed surface is still scaffolded.",
+    "ENC_VGLOBAL now has executable footholds through GLOBAL_INV, GLOBAL_WB, GLOBAL_WBINV, the plain GLOBAL_LOAD_U8/I8/U16/I16/B32/B64/B96/B128 slice, GLOBAL_LOAD_TR_B64/B128, the packed GLOBAL_LOAD_D16_U8/I8/B16 and GLOBAL_LOAD_D16_HI_U8/I8/B16 slice, the plain GLOBAL_STORE_B8/B16/B32/B64/B96/B128 slice, and GLOBAL_STORE_D16_HI_B8/B16, but the broader BLOCK, ADDTID, and atomic seed surface is still scaffolded.",
     "ENC_VOP3",
     "ENC_VDS",
     "The remaining ENC_VOPC surface outside this seed is now primarily packed and other wider forms not yet on the current local path.",

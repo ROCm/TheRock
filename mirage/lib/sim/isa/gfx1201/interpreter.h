@@ -25,6 +25,8 @@ enum class Gfx1201CompiledOpcode : std::uint16_t {
   kGlobalLoadB64,
   kGlobalLoadB96,
   kGlobalLoadB128,
+  kGlobalLoadTrB64,
+  kGlobalLoadTrB128,
   kGlobalLoadD16U8,
   kGlobalLoadD16I8,
   kGlobalLoadD16B16,

@@ -7085,6 +7085,76 @@ int main() {
     return 1;
   }
 
+  const auto global_load_tr_b64_words =
+      MakeGlobal(88u, 36u, 44u, 0u, 22u, 0x460);
+  DecodedInstruction global_load_tr_b64_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      global_load_tr_b64_words.data(),
+                      global_load_tr_b64_words.size()),
+                  &global_load_tr_b64_instruction, &global_words_consumed,
+                  &error_message),
+              "expected GLOBAL_LOAD_TR_B64 direct decode success") ||
+      !Expect(global_load_tr_b64_instruction.opcode == "GLOBAL_LOAD_TR_B64",
+              "expected decoded GLOBAL_LOAD_TR_B64 opcode") ||
+      !Expect(global_load_tr_b64_instruction.operand_count == 4u,
+              "expected GLOBAL_LOAD_TR_B64 operand count") ||
+      !Expect(global_load_tr_b64_instruction.operands[0].kind ==
+                  OperandKind::kVgpr &&
+                  global_load_tr_b64_instruction.operands[0].index == 36u,
+              "expected GLOBAL_LOAD_TR_B64 vector destination") ||
+      !Expect(global_load_tr_b64_instruction.operands[1].kind ==
+                  OperandKind::kVgpr &&
+                  global_load_tr_b64_instruction.operands[1].index == 44u,
+              "expected GLOBAL_LOAD_TR_B64 vector address") ||
+      !Expect(global_load_tr_b64_instruction.operands[2].kind ==
+                  OperandKind::kSgpr &&
+                  global_load_tr_b64_instruction.operands[2].index == 22u,
+              "expected GLOBAL_LOAD_TR_B64 scalar address") ||
+      !Expect(global_load_tr_b64_instruction.operands[3].kind ==
+                  OperandKind::kImm32 &&
+                  global_load_tr_b64_instruction.operands[3].imm32 == 0x460u,
+              "expected GLOBAL_LOAD_TR_B64 inline offset") ||
+      !Expect(global_words_consumed == 2u,
+              "expected GLOBAL_LOAD_TR_B64 to consume two dwords")) {
+    return 1;
+  }
+
+  const auto global_load_tr_b128_words =
+      MakeGlobal(87u, 38u, 45u, 0u, 23u, 0x680);
+  DecodedInstruction global_load_tr_b128_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      global_load_tr_b128_words.data(),
+                      global_load_tr_b128_words.size()),
+                  &global_load_tr_b128_instruction, &global_words_consumed,
+                  &error_message),
+              "expected GLOBAL_LOAD_TR_B128 direct decode success") ||
+      !Expect(global_load_tr_b128_instruction.opcode == "GLOBAL_LOAD_TR_B128",
+              "expected decoded GLOBAL_LOAD_TR_B128 opcode") ||
+      !Expect(global_load_tr_b128_instruction.operand_count == 4u,
+              "expected GLOBAL_LOAD_TR_B128 operand count") ||
+      !Expect(global_load_tr_b128_instruction.operands[0].kind ==
+                  OperandKind::kVgpr &&
+                  global_load_tr_b128_instruction.operands[0].index == 38u,
+              "expected GLOBAL_LOAD_TR_B128 vector destination") ||
+      !Expect(global_load_tr_b128_instruction.operands[1].kind ==
+                  OperandKind::kVgpr &&
+                  global_load_tr_b128_instruction.operands[1].index == 45u,
+              "expected GLOBAL_LOAD_TR_B128 vector address") ||
+      !Expect(global_load_tr_b128_instruction.operands[2].kind ==
+                  OperandKind::kSgpr &&
+                  global_load_tr_b128_instruction.operands[2].index == 23u,
+              "expected GLOBAL_LOAD_TR_B128 scalar address") ||
+      !Expect(global_load_tr_b128_instruction.operands[3].kind ==
+                  OperandKind::kImm32 &&
+                  global_load_tr_b128_instruction.operands[3].imm32 == 0x680u,
+              "expected GLOBAL_LOAD_TR_B128 inline offset") ||
+      !Expect(global_words_consumed == 2u,
+              "expected GLOBAL_LOAD_TR_B128 to consume two dwords")) {
+    return 1;
+  }
+
   const auto global_store_b32_words = MakeGlobal(26u, 0u, 44u, 18u, 30u, 16);
   DecodedInstruction global_store_b32_instruction;
   if (!Expect(decoder.DecodeInstruction(
@@ -7689,6 +7759,159 @@ int main() {
               "expected compiled GLOBAL D16 load execution success") ||
       !Expect(expect_global_load_d16_state(compiled_global_load_d16_state),
               "expected compiled GLOBAL D16 load state")) {
+    return 1;
+  }
+
+  const auto global_load_tr_b64_program_words =
+      MakeGlobal(88u, 20u, 40u, 0u, 20u, 0x100);
+  const auto global_load_tr_b128_program_words =
+      MakeGlobal(87u, 22u, 40u, 0u, 20u, 0x300);
+  const std::array<std::uint32_t, 5> global_load_tr_program_words{
+      global_load_tr_b64_program_words[0],
+      global_load_tr_b64_program_words[1],
+      global_load_tr_b128_program_words[0],
+      global_load_tr_b128_program_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> global_load_tr_program;
+  if (!Expect(decoder.DecodeProgram(global_load_tr_program_words,
+                                    &global_load_tr_program, &error_message),
+              "expected GLOBAL TR load program decode success") ||
+      !Expect(global_load_tr_program.size() == 3u,
+              "expected three decoded GLOBAL TR load instructions") ||
+      !Expect(global_load_tr_program[0].opcode == "GLOBAL_LOAD_TR_B64",
+              "expected decoded GLOBAL_LOAD_TR_B64 opcode") ||
+      !Expect(global_load_tr_program[1].opcode == "GLOBAL_LOAD_TR_B128",
+              "expected decoded GLOBAL_LOAD_TR_B128 opcode") ||
+      !Expect(global_load_tr_program[2].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after GLOBAL TR loads")) {
+    return 1;
+  }
+
+  auto initialize_global_load_tr_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x80000005ull;
+    state->sgprs[20] = 0x7000u;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      state->vgprs[40][lane] = static_cast<std::uint32_t>(lane * 16u);
+      state->vgprs[20][lane] = 0xc10000a0u + static_cast<std::uint32_t>(lane);
+      state->vgprs[21][lane] = 0xc20000b0u + static_cast<std::uint32_t>(lane);
+      state->vgprs[22][lane] = 0xd30000c0u + static_cast<std::uint32_t>(lane);
+      state->vgprs[23][lane] = 0xd40000d0u + static_cast<std::uint32_t>(lane);
+      state->vgprs[24][lane] = 0xd50000e0u + static_cast<std::uint32_t>(lane);
+      state->vgprs[25][lane] = 0xd60000f0u + static_cast<std::uint32_t>(lane);
+    }
+  };
+  auto expect_global_load_tr_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == 0x80000005ull &&
+          state.sgprs[20] == 0x7000u && state.halted &&
+          !state.waiting_on_barrier && state.pc == 2u)) {
+      return false;
+    }
+
+    constexpr std::uint64_t kActiveMask = 0x80000005ull;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      const bool active = (kActiveMask & (1ull << lane)) != 0u;
+      const std::uint32_t initial_b64_lo =
+          0xc10000a0u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t initial_b64_hi =
+          0xc20000b0u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t initial_b128_0 =
+          0xd30000c0u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t initial_b128_1 =
+          0xd40000d0u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t initial_b128_2 =
+          0xd50000e0u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t initial_b128_3 =
+          0xd60000f0u + static_cast<std::uint32_t>(lane);
+      if (state.vgprs[40][lane] != static_cast<std::uint32_t>(lane * 16u) ||
+          state.vgprs[20][lane] !=
+              (active ? (0x81000000u + static_cast<std::uint32_t>(lane))
+                      : initial_b64_lo) ||
+          state.vgprs[21][lane] !=
+              (active ? (0x82000000u + static_cast<std::uint32_t>(lane))
+                      : initial_b64_hi) ||
+          state.vgprs[22][lane] !=
+              (active ? (0x91000000u + static_cast<std::uint32_t>(lane))
+                      : initial_b128_0) ||
+          state.vgprs[23][lane] !=
+              (active ? (0x92000000u + static_cast<std::uint32_t>(lane))
+                      : initial_b128_1) ||
+          state.vgprs[24][lane] !=
+              (active ? (0x93000000u + static_cast<std::uint32_t>(lane))
+                      : initial_b128_2) ||
+          state.vgprs[25][lane] !=
+              (active ? (0x94000000u + static_cast<std::uint32_t>(lane))
+                      : initial_b128_3)) {
+        return false;
+      }
+    }
+    return true;
+  };
+  LinearExecutionMemory global_load_tr_memory(0x1000u, 0x7000u);
+  for (std::uint32_t lane = 0; lane < 32u; ++lane) {
+    const std::uint32_t lane_address = 0x7000u + lane * 16u;
+    if (!Expect(global_load_tr_memory.StoreU32(
+                    lane_address + 0x100u, 0x81000000u + lane),
+                "expected GLOBAL TR load test write for GLOBAL_LOAD_TR_B64 low") ||
+        !Expect(global_load_tr_memory.StoreU32(
+                    lane_address + 0x104u, 0x82000000u + lane),
+                "expected GLOBAL TR load test write for GLOBAL_LOAD_TR_B64 high") ||
+        !Expect(global_load_tr_memory.StoreU32(
+                    lane_address + 0x300u, 0x91000000u + lane),
+                "expected GLOBAL TR load test write for GLOBAL_LOAD_TR_B128 word0") ||
+        !Expect(global_load_tr_memory.StoreU32(
+                    lane_address + 0x304u, 0x92000000u + lane),
+                "expected GLOBAL TR load test write for GLOBAL_LOAD_TR_B128 word1") ||
+        !Expect(global_load_tr_memory.StoreU32(
+                    lane_address + 0x308u, 0x93000000u + lane),
+                "expected GLOBAL TR load test write for GLOBAL_LOAD_TR_B128 word2") ||
+        !Expect(global_load_tr_memory.StoreU32(
+                    lane_address + 0x30cu, 0x94000000u + lane),
+                "expected GLOBAL TR load test write for GLOBAL_LOAD_TR_B128 word3")) {
+      return 1;
+    }
+  }
+
+  WaveExecutionState decoded_global_load_tr_state;
+  initialize_global_load_tr_state(&decoded_global_load_tr_state);
+  if (!Expect(interpreter.ExecuteProgram(global_load_tr_program,
+                                         &decoded_global_load_tr_state,
+                                         &global_load_tr_memory,
+                                         &error_message),
+              "expected decoded GLOBAL TR load execution success") ||
+      !Expect(expect_global_load_tr_state(decoded_global_load_tr_state),
+              "expected decoded GLOBAL TR load state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_global_load_tr_program;
+  if (!Expect(interpreter.CompileProgram(global_load_tr_program,
+                                         &compiled_global_load_tr_program,
+                                         &error_message),
+              "expected compiled GLOBAL TR load program success") ||
+      !Expect(compiled_global_load_tr_program.size() == 3u,
+              "expected three compiled GLOBAL TR load instructions") ||
+      !Expect(compiled_global_load_tr_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalLoadTrB64,
+              "expected compiled GLOBAL_LOAD_TR_B64 opcode") ||
+      !Expect(compiled_global_load_tr_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalLoadTrB128,
+              "expected compiled GLOBAL_LOAD_TR_B128 opcode") ||
+      !Expect(compiled_global_load_tr_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after GLOBAL TR loads")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_global_load_tr_state;
+  initialize_global_load_tr_state(&compiled_global_load_tr_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_global_load_tr_program,
+                                         &compiled_global_load_tr_state,
+                                         &global_load_tr_memory,
+                                         &error_message),
+              "expected compiled GLOBAL TR load execution success") ||
+      !Expect(expect_global_load_tr_state(compiled_global_load_tr_state),
+              "expected compiled GLOBAL TR load state")) {
     return 1;
   }
 

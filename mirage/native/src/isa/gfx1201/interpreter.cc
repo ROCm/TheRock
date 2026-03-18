@@ -54,7 +54,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 378> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 380> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -96,6 +96,8 @@ constexpr std::array<std::string_view, 378> kExecutableSeedOpcodes{{
     "GLOBAL_LOAD_B64",
     "GLOBAL_LOAD_B96",
     "GLOBAL_LOAD_B128",
+    "GLOBAL_LOAD_TR_B64",
+    "GLOBAL_LOAD_TR_B128",
     "GLOBAL_LOAD_D16_U8",
     "GLOBAL_LOAD_D16_I8",
     "GLOBAL_LOAD_D16_B16",
@@ -968,6 +970,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "GLOBAL_LOAD_B128") {
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadB128;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_TR_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadTrB64;
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_TR_B128") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadTrB128;
     return true;
   }
   if (opcode == "GLOBAL_LOAD_D16_U8") {
@@ -2996,14 +3006,14 @@ bool ExecuteVectorGlobalLoadAtAddress(const DecodedInstruction& instruction,
                               error_message);
   }
 
-  if (opcode == "GLOBAL_LOAD_B64") {
+  if (opcode == "GLOBAL_LOAD_B64" || opcode == "GLOBAL_LOAD_TR_B64") {
     std::uint64_t value = 0;
     std::uint32_t low = 0;
     std::uint32_t high = 0;
     if (!memory->LoadU32(address, &low) ||
         !memory->LoadU32(address + 4u, &high)) {
       if (error_message != nullptr) {
-        *error_message = "GLOBAL_LOAD_B64 memory read failed";
+        *error_message = std::string(opcode) + " memory read failed";
       }
       return false;
     }
@@ -3013,7 +3023,8 @@ bool ExecuteVectorGlobalLoadAtAddress(const DecodedInstruction& instruction,
                                   state, error_message);
   }
 
-  if (opcode == "GLOBAL_LOAD_B96" || opcode == "GLOBAL_LOAD_B128") {
+  if (opcode == "GLOBAL_LOAD_B96" || opcode == "GLOBAL_LOAD_B128" ||
+      opcode == "GLOBAL_LOAD_TR_B128") {
     const std::size_t word_count = opcode == "GLOBAL_LOAD_B96" ? 3u : 4u;
     std::array<std::uint32_t, 4> values{};
     for (std::size_t i = 0; i < word_count; ++i) {
@@ -4797,6 +4808,8 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "GLOBAL_LOAD_B64" ||
       instruction.opcode == "GLOBAL_LOAD_B96" ||
       instruction.opcode == "GLOBAL_LOAD_B128" ||
+      instruction.opcode == "GLOBAL_LOAD_TR_B64" ||
+      instruction.opcode == "GLOBAL_LOAD_TR_B128" ||
       instruction.opcode == "GLOBAL_LOAD_D16_U8" ||
       instruction.opcode == "GLOBAL_LOAD_D16_I8" ||
       instruction.opcode == "GLOBAL_LOAD_D16_B16" ||
@@ -5865,6 +5878,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kGlobalLoadB64:
     case Gfx1201CompiledOpcode::kGlobalLoadB96:
     case Gfx1201CompiledOpcode::kGlobalLoadB128:
+    case Gfx1201CompiledOpcode::kGlobalLoadTrB64:
+    case Gfx1201CompiledOpcode::kGlobalLoadTrB128:
     case Gfx1201CompiledOpcode::kGlobalLoadD16U8:
     case Gfx1201CompiledOpcode::kGlobalLoadD16I8:
     case Gfx1201CompiledOpcode::kGlobalLoadD16B16:
