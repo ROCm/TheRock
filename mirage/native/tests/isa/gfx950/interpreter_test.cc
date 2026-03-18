@@ -12815,7 +12815,7 @@ int main() {
   }
 
   WaveExecutionState buffer_format_state{};
-  buffer_format_state.exec_mask = 0x1ULL;
+  buffer_format_state.exec_mask = 0b1011ULL;
   buffer_format_state.sgprs[20] = 0x100u;
   buffer_format_state.sgprs[21] = 0u;
   buffer_format_state.sgprs[22] = 0x80u;
@@ -12868,6 +12868,15 @@ int main() {
   buffer_format_state.vgprs[64][0] = 0x38003400u;
   buffer_format_state.vgprs[65][0] = 0x40003c00u;
   buffer_format_state.vgprs[66][0] = 0x00001234u;
+  for (std::uint16_t vgpr : {30u, 40u, 41u, 42u, 43u, 44u, 45u, 50u, 51u,
+                             52u, 60u, 61u, 62u, 63u, 64u, 65u, 66u}) {
+    buffer_format_state.vgprs[vgpr][1] = buffer_format_state.vgprs[vgpr][0];
+    buffer_format_state.vgprs[vgpr][3] = buffer_format_state.vgprs[vgpr][0];
+  }
+  for (std::uint16_t vgpr : {70u, 71u, 72u, 73u, 74u, 75u, 76u, 77u, 78u,
+                             79u, 80u, 81u, 82u, 83u, 84u, 85u, 86u}) {
+    buffer_format_state.vgprs[vgpr][2] = 0xdeadbeefu;
+  }
 
   const std::vector<DecodedInstruction> buffer_format_program = {
       DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_X",
@@ -12989,39 +12998,85 @@ int main() {
   }
   const LinearExecutionMemory initial_buffer_format_memory = buffer_format_memory;
   const WaveExecutionState initial_buffer_format_state = buffer_format_state;
+  const auto validate_buffer_format_registers =
+      [](const WaveExecutionState& state, const char* mode) -> bool {
+    const auto expect_lane_values =
+        [&](std::uint16_t reg, std::uint32_t expected, const char* label) {
+          return Expect(state.vgprs[reg][0] == expected &&
+                            state.vgprs[reg][1] == expected &&
+                            state.vgprs[reg][3] == expected,
+                        (std::string(mode) + label).c_str());
+        };
+    const auto expect_inactive_lane_preserved = [&](std::uint16_t reg,
+                                                    const char* label) {
+      return Expect(state.vgprs[reg][2] == 0xdeadbeefu,
+                    (std::string(mode) + label).c_str());
+    };
+    return Expect(state.halted,
+                  (std::string(mode) + " buffer format program to halt").c_str()) &&
+           expect_lane_values(70, 0x7au, " buffer format x load result") &&
+           expect_lane_values(78, 0x01u, " buffer format xy low load result") &&
+           expect_lane_values(79, 0x02u, " buffer format xy high load result") &&
+           expect_lane_values(71, 0x01u, " buffer format xyzw x load result") &&
+           expect_lane_values(72, 0x02u, " buffer format xyzw y load result") &&
+           expect_lane_values(73, 0x03u, " buffer format xyzw z load result") &&
+           expect_lane_values(74, 0x04u, " buffer format xyzw w load result") &&
+           expect_lane_values(75, 0x3fc00000u, " buffer format xyz x load result") &&
+           expect_lane_values(76, 0xc0000000u, " buffer format xyz y load result") &&
+           expect_lane_values(77, 0x3e800000u, " buffer format xyz z load result") &&
+           expect_lane_values(80, 0x00220011u, " buffer format d16 xy load result") &&
+           expect_lane_values(86, 0x00000011u, " buffer format d16 x load result") &&
+           expect_lane_values(81, 0x40003c00u,
+                              " buffer format d16 xyz packed xy load result") &&
+           expect_lane_values(82, 0x0000c000u,
+                              " buffer format d16 xyz z load result") &&
+           expect_lane_values(84, 0x3c003800u,
+                              " buffer format d16 xyzw packed xy load result") &&
+           expect_lane_values(85, 0xc0004000u,
+                              " buffer format d16 xyzw packed zw load result") &&
+           expect_lane_values(83, 0x33440000u,
+                              " buffer format d16 hi load result") &&
+           expect_inactive_lane_preserved(
+               70, " inactive buffer format x lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               78, " inactive buffer format xy low lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               79, " inactive buffer format xy high lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               71, " inactive buffer format xyzw x lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               72, " inactive buffer format xyzw y lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               73, " inactive buffer format xyzw z lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               74, " inactive buffer format xyzw w lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               75, " inactive buffer format xyz x lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               76, " inactive buffer format xyz y lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               77, " inactive buffer format xyz z lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               80, " inactive buffer format d16 xy lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               86, " inactive buffer format d16 x lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               81, " inactive buffer format d16 xyz packed xy lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               82, " inactive buffer format d16 xyz z lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               84, " inactive buffer format d16 xyzw packed xy lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               85, " inactive buffer format d16 xyzw packed zw lane remains untouched") &&
+           expect_inactive_lane_preserved(
+               83, " inactive buffer format d16 hi lane remains untouched");
+      };
   if (!Expect(interpreter.ExecuteProgram(buffer_format_program,
                                          &buffer_format_state,
                                          &buffer_format_memory,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(buffer_format_state.halted,
-              "expected buffer format program to halt") ||
-      !Expect(buffer_format_state.vgprs[70][0] == 0x7au,
-              "expected buffer format x load result") ||
-      !Expect(buffer_format_state.vgprs[78][0] == 0x01u &&
-                  buffer_format_state.vgprs[79][0] == 0x02u,
-              "expected buffer format xy load result") ||
-      !Expect(buffer_format_state.vgprs[71][0] == 0x01u &&
-                  buffer_format_state.vgprs[72][0] == 0x02u &&
-                  buffer_format_state.vgprs[73][0] == 0x03u &&
-                  buffer_format_state.vgprs[74][0] == 0x04u,
-              "expected buffer format xyzw load result") ||
-      !Expect(buffer_format_state.vgprs[75][0] == 0x3fc00000u &&
-                  buffer_format_state.vgprs[76][0] == 0xc0000000u &&
-                  buffer_format_state.vgprs[77][0] == 0x3e800000u,
-              "expected buffer format xyz load result") ||
-      !Expect(buffer_format_state.vgprs[80][0] == 0x00220011u,
-              "expected buffer format d16 xy load result") ||
-      !Expect(buffer_format_state.vgprs[86][0] == 0x00000011u,
-              "expected buffer format d16 x load result") ||
-      !Expect(buffer_format_state.vgprs[81][0] == 0x40003c00u &&
-                  buffer_format_state.vgprs[82][0] == 0x0000c000u,
-              "expected buffer format d16 xyz load result") ||
-      !Expect(buffer_format_state.vgprs[84][0] == 0x3c003800u &&
-                  buffer_format_state.vgprs[85][0] == 0xc0004000u,
-              "expected buffer format d16 xyzw load result") ||
-      !Expect(buffer_format_state.vgprs[83][0] == 0x33440000u,
-              "expected buffer format d16 hi load result")) {
+      !validate_buffer_format_registers(buffer_format_state, "decoded")) {
     return 1;
   }
 
@@ -13123,34 +13178,8 @@ int main() {
                                          &compiled_buffer_format_memory,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(compiled_buffer_format_state.halted,
-              "expected compiled buffer format program to halt") ||
-      !Expect(compiled_buffer_format_state.vgprs[70][0] == 0x7au,
-              "expected compiled buffer format x load result") ||
-      !Expect(compiled_buffer_format_state.vgprs[78][0] == 0x01u &&
-                  compiled_buffer_format_state.vgprs[79][0] == 0x02u,
-              "expected compiled buffer format xy load result") ||
-      !Expect(compiled_buffer_format_state.vgprs[71][0] == 0x01u &&
-                  compiled_buffer_format_state.vgprs[72][0] == 0x02u &&
-                  compiled_buffer_format_state.vgprs[73][0] == 0x03u &&
-                  compiled_buffer_format_state.vgprs[74][0] == 0x04u,
-              "expected compiled buffer format xyzw load result") ||
-      !Expect(compiled_buffer_format_state.vgprs[75][0] == 0x3fc00000u &&
-                  compiled_buffer_format_state.vgprs[76][0] == 0xc0000000u &&
-                  compiled_buffer_format_state.vgprs[77][0] == 0x3e800000u,
-              "expected compiled buffer format xyz load result") ||
-      !Expect(compiled_buffer_format_state.vgprs[80][0] == 0x00220011u,
-              "expected compiled buffer format d16 xy load result") ||
-      !Expect(compiled_buffer_format_state.vgprs[86][0] == 0x00000011u,
-              "expected compiled buffer format d16 x load result") ||
-      !Expect(compiled_buffer_format_state.vgprs[81][0] == 0x40003c00u &&
-                  compiled_buffer_format_state.vgprs[82][0] == 0x0000c000u,
-              "expected compiled buffer format d16 xyz load result") ||
-      !Expect(compiled_buffer_format_state.vgprs[84][0] == 0x3c003800u &&
-                  compiled_buffer_format_state.vgprs[85][0] == 0xc0004000u,
-              "expected compiled buffer format d16 xyzw load result") ||
-      !Expect(compiled_buffer_format_state.vgprs[83][0] == 0x33440000u,
-              "expected compiled buffer format d16 hi load result")) {
+      !validate_buffer_format_registers(compiled_buffer_format_state,
+                                        "compiled")) {
     return 1;
   }
 
