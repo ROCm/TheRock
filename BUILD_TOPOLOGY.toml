@@ -8,11 +8,6 @@
 #   1. CMake Feature Generation: At configure time, topology_to_cmake.py reads
 #      this file and generates therock_add_feature() calls for each artifact,
 #      creating the THEROCK_ENABLE_* cache variables that control the build.
-#      Artifact groups can also declare a feature_name to get their own
-#      THEROCK_ENABLE_* variable. This is useful for groups whose members are
-#      internal build dependencies (not distributable artifacts): outside
-#      artifacts use group_deps to REQUIRE the group feature without needing
-#      to list each internal member as an artifact_dep.
 #
 #   2. CI/CD Pipeline Sharding: The build_topology.py module parses this file
 #      to compute artifact dependencies for sharded builds, determining which
@@ -52,9 +47,6 @@
 #   type = "generic" | "per-arch"           # "per-arch" = built per GPU architecture
 #   artifact_group_deps = ["dep1", "dep2"]  # Optional, other groups this depends on
 #   source_sets = ["set1", "set2"]          # Optional, source sets needed for this group
-#   feature_name = "FEATURE_NAME"           # Optional: standalone feature for the group
-#   feature_group = "GROUP_NAME"            # Optional: group option for the feature
-#   artifact_deps = ["dep1"]                # Optional: artifacts the group feature REQUIRES
 #
 #   [artifacts.<name>]
 #   artifact_group = "group-name"           # Required: which group this belongs to
@@ -65,8 +57,7 @@
 #       target-specific: Built separately per architecture family and kept separate
 #           for distribution. Use for kernel libraries where sharded builds
 #           improve CI parallelism and enable per-arch downloads.
-#   artifact_deps = ["dep1", "dep2"]        # Optional: artifacts this depends on (can be fetched/prebuilt)
-#   group_deps = ["group-name"]             # Optional: group features this depends on (must be built from source)
+#   artifact_deps = ["dep1", "dep2"]        # Optional: other artifacts this depends on
 #   feature_name = "FEATURE_NAME"           # Optional: override auto-generated name
 #   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
 #   platform = "windows"                    # Optional: platform-specific artifact
@@ -147,9 +138,9 @@ artifact_groups = ["third-party-sysdeps", "base"]
 description = "Compiler, runtimes, and core profiling"
 artifact_groups = [
     "compiler",
-    "third-party-libs",
     "core-amdsmi",
     "core-runtime",
+    "third-party-libs",
     "hip-runtime",
     "opencl-runtime",
     "profiler-core",
@@ -199,14 +190,7 @@ artifact_groups = ["media-libs"]
 # ==============================================================================
 # ARTIFACT GROUPS - Logical groupings of related artifacts
 # ==============================================================================
-# These define build dependencies and source requirements.
-#
-# Not every artifact group has a corresponding entry in the ARTIFACTS section.
-# Some groups (like third-party-libs) contain only internal build dependencies
-# that are built from source within a stage but never transmitted as artifacts
-# between CI stages. These groups use feature_name to generate a
-# THEROCK_ENABLE_* variable that gates their CMake subdirectories, and outside
-# artifacts reference them via group_deps rather than artifact_deps.
+# These define build dependencies and source requirements
 
 [artifact_groups.third-party-sysdeps]
 description = "Third-party system libraries bundled for portable distribution"
@@ -217,9 +201,6 @@ description = "Third-party libraries (typically internal dependencies, not distr
 type = "generic"
 artifact_group_deps = ["compiler"]
 source_sets = []  # No submodules - uses vendored/in-tree deps
-feature_name = "THIRD_PARTY_LIBS"
-feature_group = "CORE"
-artifact_deps = ["amd-llvm"]
 
 [artifact_groups.base]
 description = "Base ROCm infrastructure and CMake tools"
@@ -415,7 +396,7 @@ feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by de
 [artifacts.host-suite-sparse]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "host-blas"]  # SuiteSparse depends on BLAS
+artifact_deps = ["host-blas"]  # SuiteSparse depends on BLAS
 feature_name = "HOST_SUITE_SPARSE"
 feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by default)
 disable_platforms = ["windows"]
@@ -423,25 +404,25 @@ disable_platforms = ["windows"]
 [artifacts.fftw3]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = ["amd-llvm"]
+artifact_deps = []
 feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by default)
 
 [artifacts.flatbuffers]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = ["amd-llvm"]
+artifact_deps = []
 feature_group = "CORE"
 
 [artifacts.fmt]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = ["amd-llvm"]
+artifact_deps = []
 feature_group = "CORE"
 
 [artifacts.nlohmann-json]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = ["amd-llvm"]
+artifact_deps = []
 feature_group = "CORE"
 
 [artifacts.spdlog]
@@ -485,7 +466,6 @@ feature_group = "ALL"
 artifact_group = "core-runtime"
 type = "target-neutral"
 artifact_deps = ["base", "sysdeps", "amd-llvm"]
-group_deps = ["third-party-libs"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms = ["windows"]
@@ -494,7 +474,6 @@ disable_platforms = ["windows"]
 artifact_group = "core-amdsmi"
 type = "target-neutral"
 artifact_deps = ["base", "sysdeps"]
-group_deps = ["third-party-libs"]
 feature_name = "CORE_AMDSMI"
 feature_group = "CORE"
 disable_platforms = ["windows"]
@@ -549,14 +528,12 @@ feature_group = "CORE"  # Part of core, enabled by default
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
-group_deps = ["third-party-libs"]
 split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.fft]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "fftw3", "rocprofiler-sdk"]
-group_deps = ["third-party-libs"]
 
 [artifacts.rand]
 artifact_group = "math-libs"
@@ -577,7 +554,6 @@ artifact_deps = ["blas", "prim"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
-group_deps = ["third-party-libs"]
 
 [artifacts.rocwmma]
 artifact_group = "math-libs"
@@ -594,7 +570,6 @@ disable_platforms = ["windows"]
 artifact_group = "math-libs"
 type = "target-neutral"
 artifact_deps = []
-group_deps = ["third-party-libs"]
 
 # --- ML Libraries (per-arch) ---
 
@@ -613,25 +588,21 @@ split_databases = ["miopen"]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "spdlog"]
-group_deps = ["third-party-libs"]
 
 [artifacts.miopenprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
-group_deps = ["third-party-libs"]
 
 [artifacts.hipblasltprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
-group_deps = ["third-party-libs"]
 
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
-group_deps = ["third-party-libs"]
 
 # --- IREE Integration ---
 
@@ -646,7 +617,6 @@ feature_group = "IREE_LIBS"
 artifact_group = "fusilli-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "iree-compiler"]
-group_deps = ["third-party-libs"]
 disable_platforms = ["windows"]
 feature_group = "IREE_LIBS"
 
@@ -708,7 +678,6 @@ disable_platforms = ["windows"]
 artifact_group = "profiler-apps"
 type = "target-neutral"
 artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdlog", "openmpi"]
-group_deps = ["third-party-libs"]
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
