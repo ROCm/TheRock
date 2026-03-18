@@ -7,7 +7,7 @@ Usage:
     python build_tools/memory_monitor.py -- cmake --build build
 
 Output:
-    [09:00:03] Mem: 24.5/32.0GB (77%) [WARNING] | CPU: 85% | Jobs: ~14/16 | Disk: 150GB free
+    [09:00:03Z] Mem: 24.5/32.0GB (77%) [WARNING] | CPU: 85% | Jobs: ~14/16 | Disk: 150GB free
 """
 
 import argparse
@@ -19,7 +19,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import psutil
@@ -118,7 +118,7 @@ class ResourceMonitor:
         swap = psutil.swap_memory()
 
         stats = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "mem_used_gb": vm.used / GB,
             "mem_total_gb": vm.total / GB,
             "mem_percent": vm.percent,
@@ -177,7 +177,7 @@ class ResourceMonitor:
     def _log_stats(self, stats: dict) -> None:
         """Print resource stats to stdout."""
         line = self._format_stats(stats)
-        print(f"[{stats['timestamp'][11:19]}] {line}", flush=True)
+        print(f"[{stats['timestamp'][11:19]}Z] {line}", flush=True)
 
     def _monitor_loop(self) -> None:
         """Background monitoring loop."""
