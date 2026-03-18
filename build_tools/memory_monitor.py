@@ -179,14 +179,7 @@ class ResourceMonitor:
     def _log_stats(self, stats: dict) -> None:
         """Print resource stats to stdout."""
         line = self._format_stats(stats)
-        # Show elapsed time since start for easier correlation with build logs
-        if self.start_time:
-            elapsed = time.time() - self.start_time
-            mins, secs = divmod(int(elapsed), 60)
-            timestamp = f"+{mins:02d}:{secs:02d}"
-        else:
-            timestamp = stats["timestamp"][11:19]
-        print(f"[{timestamp}] {line}", flush=True)
+        print(f"[{stats['timestamp'][11:19]}] {line}", flush=True)
 
     def _monitor_loop(self) -> None:
         """Background monitoring loop."""
