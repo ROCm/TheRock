@@ -132,9 +132,6 @@ if is_windows:
 
 cmd.extend(["-GNinja", ".."])
 
-if is_windows:
-    cmd.append("-DCMAKE_RC_COMPILER=rc.exe")
-
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
 
