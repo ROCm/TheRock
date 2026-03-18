@@ -159,10 +159,11 @@ class ResourceMonitor:
             parts.append(f"Swap: {stats['swap_used_gb']:.1f}GB")
 
         # CPU
-        if "load_1m" in stats:
-            parts.append(f"Load: {stats['load_1m']:.1f}")
         if "cpu_percent" in stats and stats["cpu_percent"] > 0:
             parts.append(f"CPU: {stats['cpu_percent']:.0f}%")
+        if "load_1m" in stats:
+            cpu_count = stats.get("cpu_count", 1)
+            parts.append(f"Jobs: ~{stats['load_1m']:.0f}/{cpu_count}")
 
         # GPU
         for gpu in stats.get("gpus", []):
@@ -178,7 +179,14 @@ class ResourceMonitor:
     def _log_stats(self, stats: dict) -> None:
         """Print resource stats to stdout."""
         line = self._format_stats(stats)
-        print(f"[{stats['timestamp'][11:19]}] {line}", flush=True)
+        # Show elapsed time since start for easier correlation with build logs
+        if self.start_time:
+            elapsed = time.time() - self.start_time
+            mins, secs = divmod(int(elapsed), 60)
+            timestamp = f"+{mins:02d}:{secs:02d}"
+        else:
+            timestamp = stats["timestamp"][11:19]
+        print(f"[{timestamp}] {line}", flush=True)
 
     def _monitor_loop(self) -> None:
         """Background monitoring loop."""
@@ -234,7 +242,7 @@ class ResourceMonitor:
         print(f"Memory:       {max_mem:.0f}% peak ({max_mem_gb:.1f} GB), {avg_mem:.0f}% avg")
         if max_swap > 1:
             print(f"Swap:         {max_swap:.0f}% peak")
-        print(f"CPU:          {avg_cpu:.0f}% avg, {max_load:.1f} max load")
+        print(f"CPU:          {avg_cpu:.0f}% avg")
 
         # GPU summary
         gpu_maxes = {}
