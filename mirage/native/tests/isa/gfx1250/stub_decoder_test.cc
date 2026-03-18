@@ -650,6 +650,17 @@ std::uint32_t CountRouteInfosForRouteWithTargetSpecificFlag(
   return count;
 }
 
+bool IsInstructionListedForRoute(StubDecoderRoute route,
+                                 std::string_view instruction_name) {
+  for (std::string_view listed_instruction :
+       GetStubDecoderRouteInstructions(route)) {
+    if (listed_instruction == instruction_name) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool ContainsSlot(const StubDecodedInstruction& instruction,
                   StubOperandSlotKind slot_kind,
                   StubOperandValueClass value_class,
@@ -6747,6 +6758,26 @@ int main() {
         DecodeViaRouteEntrypoint(route_info);
     if (!Expect(MatchesDecodedInstruction(via_name, via_entrypoint),
                 "expected route-keyed entrypoint decode to match name-based decode across routed seeds")) {
+      return 1;
+    }
+    const StubDecoderEntrypointManifest* entrypoint_manifest =
+        FindStubDecoderEntrypointManifest(via_name.route);
+    const StubDecoderRouteManifest* route_manifest =
+        FindStubDecoderRouteManifest(via_name.route);
+    if (!Expect(entrypoint_manifest != nullptr && route_manifest != nullptr &&
+                    via_name.route == entrypoint_manifest->route &&
+                    via_name.route == route_manifest->route &&
+                    via_name.route_name == route_manifest->route_name &&
+                    via_name.route_priority == route_manifest->route_priority &&
+                    via_name.entrypoint_name ==
+                        entrypoint_manifest->entrypoint_name &&
+                    via_name.route_priority ==
+                        entrypoint_manifest->route_priority &&
+                    route_manifest->instruction_count ==
+                        entrypoint_manifest->instruction_count &&
+                    IsInstructionListedForRoute(via_name.route,
+                                                via_name.instruction_name),
+                "expected decoded routed seed to match route and entrypoint manifest surfaces")) {
       return 1;
     }
   }
