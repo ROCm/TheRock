@@ -16,7 +16,6 @@ endif()
 # This enables RCCL's LTO optimization bypass for faster ASAN link times
 if(THEROCK_SANITIZER STREQUAL "ASAN")
   set(BUILD_ADDRESS_SANITIZER ON)
-  set(VERBOSE 1)
   message(STATUS "Enabling BUILD_ADDRESS_SANITIZER for RCCL
 (THEROCK_SANITIZER=${THEROCK_SANITIZER})")
 endif()
