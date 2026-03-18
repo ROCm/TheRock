@@ -80,7 +80,7 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx942"],
             "build_variants": ["release", "asan", "tsan"],
             # Due to the limited count of mi325 machines, we only run this on non-quick tests
-            "run-full-tests-only": True
+            "run-full-tests-only": True,
         }
     },
     "gfx110x": {
