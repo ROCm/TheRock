@@ -34,12 +34,6 @@ on:
       windows_test_labels:
         description: ROCm projects to run Windows tests on. Optional filter.
         value: ${{ jobs.setup.outputs.windows_test_labels }}
-      prebuilt_stages:
-        description: "Comma-separated build stages to use prebuilt artifacts for."
-        value: ${{ jobs.setup.outputs.prebuilt_stages }}
-      baseline_run_id:
-        description: "Workflow run ID to copy prebuilt stage artifacts from."
-        value: ${{ jobs.setup.outputs.baseline_run_id }}
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
@@ -59,8 +53,6 @@ jobs:
       test_type: ${{ steps.configure.outputs.test_type }}
       linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
-      prebuilt_stages: ${{ steps.configure.outputs.prebuilt_stages }}
-      baseline_run_id: ${{ steps.configure.outputs.baseline_run_id }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
       - name: Checking out repository

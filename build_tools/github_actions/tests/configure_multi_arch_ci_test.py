@@ -565,16 +565,8 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_pytorch=True,
         )
         d = config.to_dict()
-        expected_keys = {
-            "per_family_info",
-            "dist_amdgpu_families",
-            "artifact_group",
-            "build_variant_label",
-            "build_variant_suffix",
-            "build_variant_cmake_preset",
-            "expect_failure",
-            "build_pytorch",
-        }
+        # to_dict keys should match dataclass fields.
+        expected_keys = {f.name for f in fields(cm.BuildConfig)}
         self.assertEqual(set(d.keys()), expected_keys)
 
     def test_empty_targets_both_none(self):

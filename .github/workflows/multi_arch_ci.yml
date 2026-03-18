@@ -77,8 +77,6 @@ jobs:
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
       test_labels: ${{ needs.setup.outputs.linux_test_labels }}
-      prebuilt_stages: ${{ needs.setup.outputs.prebuilt_stages }}
-      baseline_run_id: ${{ needs.setup.outputs.baseline_run_id }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
     permissions:
@@ -98,8 +96,6 @@ jobs:
     with:
       build_config: ${{ needs.setup.outputs.windows_build_config }}
       test_labels: ${{ needs.setup.outputs.windows_test_labels }}
-      prebuilt_stages: ${{ needs.setup.outputs.prebuilt_stages }}
-      baseline_run_id: ${{ needs.setup.outputs.baseline_run_id }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       build_pytorch: ${{ matrix.variant.build_pytorch == true }}

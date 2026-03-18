@@ -360,6 +360,9 @@ class BuildConfig:
     build_variant_cmake_preset: str
     expect_failure: bool
     build_pytorch: bool
+    # Prebuilt stage configuration — set by configure() from JobDecisions.
+    prebuilt_stages: str = ""
+    baseline_run_id: str = ""
 
     def to_dict(self) -> dict:
         """Convert to dict for JSON serialization."""
@@ -372,6 +375,8 @@ class BuildConfig:
             "build_variant_cmake_preset": self.build_variant_cmake_preset,
             "expect_failure": self.expect_failure,
             "build_pytorch": self.build_pytorch,
+            "prebuilt_stages": self.prebuilt_stages,
+            "baseline_run_id": self.baseline_run_id,
         }
 
 
@@ -713,6 +718,8 @@ def _expand_build_config_for_platform(
     build_variant: str,
     all_families: dict[str, dict],
     variant_config: dict,
+    prebuilt_stages: str = "",
+    baseline_run_id: str = "",
 ) -> BuildConfig | None:
     """Build a BuildConfig for one platform, or None if no families match.
 
@@ -769,12 +776,16 @@ def _expand_build_config_for_platform(
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         expect_failure=expect_failure,
         build_pytorch=not expect_failure and not expect_pytorch_failure,
+        prebuilt_stages=prebuilt_stages,
+        baseline_run_id=baseline_run_id,
     )
 
 
 def expand_build_configs(
     targets: TargetSelection,
     build_variant: str,
+    prebuilt_stages: str = "",
+    baseline_run_id: str = "",
 ) -> BuildConfigs:
     """Build a BuildConfig for each platform that supports the variant.
 
@@ -805,6 +816,8 @@ def expand_build_configs(
             build_variant=build_variant,
             all_families=all_families,
             variant_config=variant_config,
+            prebuilt_stages=prebuilt_stages,
+            baseline_run_id=baseline_run_id,
         )
         if platform == "linux":
             linux_config = config
@@ -844,12 +857,6 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
-        "prebuilt_stages": ",".join(
-            outputs.jobs.build_rocm.prebuilt_stages if outputs.jobs else []
-        ),
-        "baseline_run_id": (
-            outputs.jobs.build_rocm.baseline_run_id if outputs.jobs else ""
-        ),
     }
     gha_set_output(output_vars)
 
@@ -901,6 +908,8 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     builds = expand_build_configs(
         targets=targets,
         build_variant=ci_inputs.build_variant,
+        prebuilt_stages=",".join(jobs.build_rocm.prebuilt_stages),
+        baseline_run_id=jobs.build_rocm.baseline_run_id,
     )
     builds.log()
 
