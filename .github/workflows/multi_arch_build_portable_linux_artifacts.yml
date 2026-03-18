@@ -90,7 +90,6 @@ jobs:
       # Note: no AWS credentials should be needed here since our CI buckets
       # all currently have public read access.
       - name: Fetch inbound artifacts
-        if: ${{ github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/artifact_manager.py fetch \
             --run-id=${{ github.run_id }} \
@@ -146,7 +145,6 @@ jobs:
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
       - name: Push stage artifacts
-        if: ${{ github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
