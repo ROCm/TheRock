@@ -488,6 +488,23 @@ bool MatchesDecodedInstruction(const StubDecodedInstruction& lhs,
                                         rhs.operand_descriptors);
 }
 
+StubDecodedInstruction DecodeViaRouteEntrypoint(
+    const StubDecoderRouteInfo& route_info) {
+  switch (route_info.route) {
+    case StubDecoderRoute::kVop3p:
+      return DecodeVop3pStub(route_info.instruction_name);
+    case StubDecoderRoute::kMimgTensor:
+      return DecodeMimgTensorStub(route_info.instruction_name);
+    case StubDecoderRoute::kVop1:
+      return DecodeVop1Stub(route_info.instruction_name);
+    case StubDecoderRoute::kVop3Sdst:
+      return DecodeVop3SdstStub(route_info.instruction_name);
+    case StubDecoderRoute::kUnsupported:
+      break;
+  }
+  return {};
+}
+
 StubOperandRole ExpectedRoleForSlotKind(StubOperandSlotKind slot_kind) {
   switch (slot_kind) {
     case StubOperandSlotKind::kDestination:
@@ -6724,6 +6741,12 @@ int main() {
     const StubDecodedInstruction via_info = DecodeStubInstruction(route_info);
     if (!Expect(MatchesDecodedInstruction(via_name, via_info),
                 "expected route-info-based decode to match name-based decode across routed seeds")) {
+      return 1;
+    }
+    const StubDecodedInstruction via_entrypoint =
+        DecodeViaRouteEntrypoint(route_info);
+    if (!Expect(MatchesDecodedInstruction(via_name, via_entrypoint),
+                "expected route-keyed entrypoint decode to match name-based decode across routed seeds")) {
       return 1;
     }
   }

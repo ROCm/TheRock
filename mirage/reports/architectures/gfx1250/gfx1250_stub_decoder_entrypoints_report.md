@@ -43,12 +43,14 @@
   - exact route-manifest parity validation across the current routed family set
   - route-wide exact top-level flag composition validation across the current routed matrix and non-matrix seed sets
   - route-wide exact route-info-based vs name-based decode parity validation across the current routed seed set
+  - route-wide exact route-keyed entrypoint vs generic decode parity validation across the current routed seed set
 
 ## Routed Seed Metadata Coverage
 
 - Route manifests:
   - route-wide exact instruction-count, XML-backed vs LLVM-only count, target-specific count, route-name, and route-priority parity checks across `kVop3p`, `kMimgTensor`, `kVop1`, and `kVop3Sdst`
   - route-wide exact `DecodeStubInstruction(route_info)` vs `DecodeStubInstruction(instruction_name)` parity checks across the current routed seed set
+  - route-wide exact route-keyed entrypoint decode vs `DecodeStubInstruction(instruction_name)` parity checks across the current routed seed set
 
 - `VOP3P` packed BF16 slice:
   - `V_PK_ADD_BF16`
