@@ -95,7 +95,7 @@ For each script, refine the seeded copy in the owning repo:
 - Remove `TheRock`-specific path assumptions (e.g., `SCRIPT_DIR.parent.parent.parent`)
   and replace with environment-variable-driven paths already used by many scripts
   (e.g., `THEROCK_BIN_DIR`).
-- Resolve the `github_actions_utils` import dependency — either vendor the
+- Resolve the `github_actions_api` import dependency — either vendor the
   needed helpers, expose them as a small installable package, or accept an
   import from a checked-out `TheRock` path.
 - Add or update `CODEOWNERS` entries for the new path.
@@ -126,7 +126,7 @@ Once CI is green with all workflows pointing to canonical locations:
 
 ## Open Questions
 
-- **`github_actions_utils` dependency**: Several scripts import shared helpers
+- **`github_actions_api` dependency**: Several scripts import shared helpers
   from a relative path into `TheRock`. The resolution strategy (vendor, package,
   or reference) should be decided before Step 3 begins.
 - **`hipdnn_install_tests/` subdirectory**: This directory lives alongside the

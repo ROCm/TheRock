@@ -35,7 +35,7 @@ from find_artifacts_for_commit import (
     ArtifactRunInfo,
     find_artifacts_for_commit,
 )
-from github_actions.github_actions_utils import (
+from github_actions.github_actions_api import (
     GitHubAPIError,
     gha_query_recent_branch_commits,
 )
