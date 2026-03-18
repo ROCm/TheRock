@@ -16600,6 +16600,7 @@ int main() {
         state.sgprs[124] = m0_base;
         set_lane_u64(&state, 0u, 0u, lane_addresses[0]);
         set_lane_u64(&state, 0u, 1u, lane_addresses[1]);
+        set_lane_u64(&state, 0u, 2u, lane_addresses[0]);
         set_lane_u64(&state, 0u, 3u, lane_addresses[2]);
         return state;
       };
@@ -16624,6 +16625,25 @@ int main() {
         }
         return true;
       };
+  auto expect_lds_zero_region =
+      [&](const WaveExecutionState& state,
+          std::uint32_t base_address,
+          std::size_t dword_count,
+          const char* mode) {
+        for (std::size_t index = 0; index < dword_count; ++index) {
+          std::uint32_t observed_value = 0;
+          std::memcpy(&observed_value,
+                      state.lds_bytes.data() + base_address +
+                          index * sizeof(std::uint32_t),
+                      sizeof(observed_value));
+          if (!Expect(observed_value == 0u,
+                      "expected inactive global_load_lds region to remain zero")) {
+            std::cerr << mode << " index=" << index << '\n';
+            return false;
+          }
+        }
+        return true;
+      };
   auto run_global_load_lds_case =
       [&](std::string_view opcode,
           std::int32_t offset,
@@ -16631,6 +16651,9 @@ int main() {
           std::array<std::uint64_t, 3> lane_addresses,
           auto seed_memory,
           std::initializer_list<std::uint32_t> expected_values) {
+        const std::uint32_t base_address =
+            static_cast<std::uint32_t>(m0_base + offset);
+        const std::size_t dwords_per_lane = expected_values.size() / 3u;
         const std::vector<DecodedInstruction> program = {
             DecodedInstruction::ThreeOperand(
                 opcode, InstructionOperand::Vgpr(0),
@@ -16650,9 +16673,14 @@ int main() {
                     error_message.c_str()) ||
             !Expect(decoded_state.halted,
                     "expected decoded global_load_lds program to halt") ||
-            !expect_lds_dwords(decoded_state,
-                               static_cast<std::uint32_t>(m0_base + offset),
-                               expected_values, "decoded")) {
+            !expect_lds_dwords(decoded_state, base_address, expected_values,
+                               "decoded") ||
+            !expect_lds_zero_region(
+                decoded_state,
+                base_address +
+                    static_cast<std::uint32_t>(expected_values.size() *
+                                               sizeof(std::uint32_t)),
+                dwords_per_lane, "decoded inactive")) {
           std::cerr << opcode << '\n';
           return false;
         }
@@ -16676,9 +16704,14 @@ int main() {
                     error_message.c_str()) ||
             !Expect(compiled_state.halted,
                     "expected compiled global_load_lds program to halt") ||
-            !expect_lds_dwords(compiled_state,
-                               static_cast<std::uint32_t>(m0_base + offset),
-                               expected_values, "compiled")) {
+            !expect_lds_dwords(compiled_state, base_address, expected_values,
+                               "compiled") ||
+            !expect_lds_zero_region(
+                compiled_state,
+                base_address +
+                    static_cast<std::uint32_t>(expected_values.size() *
+                                               sizeof(std::uint32_t)),
+                dwords_per_lane, "compiled inactive")) {
           std::cerr << opcode << '\n';
           return false;
         }
