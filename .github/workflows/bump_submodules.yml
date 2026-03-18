@@ -55,7 +55,7 @@ jobs:
         if: github.event_name == 'schedule'
         run: |
           python3 build_tools/github_actions/bump_automation.py \
-            --event_type schedule \
+            --event_type "schedule" \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
             --libraries_token "${{ steps.librarian-token.outputs.token }}" \
             --therock_token "${{ steps.therock-token.outputs.token }}"
