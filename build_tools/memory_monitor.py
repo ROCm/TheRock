@@ -4,14 +4,10 @@
 Monitors memory, GPU, storage, and CPU during command execution.
 
 Usage:
-    # Wrap a command (explicit)
     python build_tools/memory_monitor.py -- cmake --build build
 
-    # Via environment variable (minimal workflow change)
-    MONITOR=1 python build_tools/memory_monitor.py -- cmake --build build
-
-    # One-shot check
-    python build_tools/memory_monitor.py
+Output:
+    [09:00:03] Mem: 24.5/32.0GB (77%) [WARNING] | CPU: 85% | Jobs: ~14/16 | Disk: 150GB free
 """
 
 import argparse
