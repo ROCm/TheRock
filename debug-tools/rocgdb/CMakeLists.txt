@@ -1,22 +1,5 @@
-## Copyright (c) 2026 Advanced Micro Devices, Inc.
-##
-## Permission is hereby granted, free of charge, to any person obtaining a copy
-## of this software and associated documentation files (the "Software"), to
-## deal in the Software without restriction, including without limitation the
-## rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-## sell copies of the Software, and to permit persons to whom the Software is
-## furnished to do so, subject to the following conditions:
-##
-## The above copyright notice and this permission notice shall be included in
-## all copies or substantial portions of the Software.
-##
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-## AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-## FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-## IN THE SOFTWARE.
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 # This is a CMake wrapper to build rocgdb from within TheRock. Since GDB's
 # build system is autotools-based, we need the wrapper to call the right
@@ -90,8 +73,8 @@ function(fetch_library_prefix input_path_list pattern output_var)
     set(${output_var} "${_result_path}" PARENT_SCOPE)
     message(STATUS "Extracted path for pattern '${pattern}': ${_result_path}")
   else()
-    # No match found, issue a fatal error.
-    message(SEND_ERROR "Did not find a path containing '${pattern}' in ${input_list_var_name}.")
+    message(STATUS "No path containing '${pattern}' found in CMAKE_PREFIX_PATH; will use system detection.")
+    set(${output_var} "" PARENT_SCOPE)
   endif()
 endfunction()
 
@@ -131,30 +114,50 @@ endif()
 message(STATUS "Build type set to: ${CMAKE_BUILD_TYPE}")
 
 # Fetch the install prefixes for the library and executables rocgdb
-# depends on.
-fetch_library_prefix(CMAKE_PREFIX_PATH "/gmp/build/stage" GMP_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "/mpfr/build/stage" MPFR_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "/expat/build/stage" EXPAT_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "/ncurses/build/stage" NCURSES_PREFIX)
+# depends on. When THEROCK_BUNDLE_SYSDEPS is OFF, these are left empty and
+# GDB's configure script discovers the libraries via pkg-config instead.
+set(NCURSES_RPATH "")
+if(THEROCK_BUNDLE_SYSDEPS)
+  fetch_library_prefix(CMAKE_PREFIX_PATH "/gmp/build/stage" GMP_PREFIX)
+  fetch_library_prefix(CMAKE_PREFIX_PATH "/mpfr/build/stage" MPFR_PREFIX)
+  fetch_library_prefix(CMAKE_PREFIX_PATH "/expat/build/stage" EXPAT_PREFIX)
+  fetch_library_prefix(CMAKE_PREFIX_PATH "/ncurses/build/stage" NCURSES_PREFIX)
 
-# We need to explicitly pass ncurses' include path and set the rpath for
-# the library. The reason we need to explicitly pass rpath is because gdb's
-# configure assumes ncurses is always picked up from the default system
-# location, or that the library is always within reach.
-#
-# Since we're building our own ncurses and it is in a non-standard location,
-# the rpath assures the configure tests properly locate the library.
-set(NCURSES_RPATH "-Wl,-rpath,${NCURSES_PREFIX}/lib")
-set(NCURSES_INCLUDE "-I${NCURSES_PREFIX}/include")
+  # We need to explicitly pass ncurses' include path and set the rpath for
+  # the library. The reason we need to explicitly pass rpath is because gdb's
+  # configure assumes ncurses is always picked up from the default system
+  # location, or that the library is always within reach.
+  #
+  # Since we're building our own ncurses and it is in a non-standard location,
+  # the rpath assures the configure tests properly locate the library.
+  set(NCURSES_RPATH "-Wl,-rpath,${NCURSES_PREFIX}/lib")
+  set(NCURSES_INCLUDE "-I${NCURSES_PREFIX}/include")
 
-# Adjust the compilation flags and LDFLAGS.
-set(CUSTOM_C_FLAGS "${CUSTOM_C_FLAGS} ${NCURSES_INCLUDE}")
-set(CUSTOM_CXX_FLAGS "${CUSTOM_CXX_FLAGS} ${NCURSES_INCLUDE}")
+  # Adjust the compilation flags with the bundled ncurses include path.
+  set(CUSTOM_C_FLAGS "${CUSTOM_C_FLAGS} ${NCURSES_INCLUDE}")
+  set(CUSTOM_CXX_FLAGS "${CUSTOM_CXX_FLAGS} ${NCURSES_INCLUDE}")
+endif()
+
+# Adjust LDFLAGS. NCURSES_RPATH is empty when not using bundled sysdeps.
 set(LDFLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NCURSES_RPATH} -Wl,--enable-new-dtags")
 
 # Replace all semicolons (the CMake separator) with colons (the ENV separator).
 # We need this to pass it on to rocgdb's configure.
 string(REPLACE ";" ":" PKG_CONFIG_PATH_ENV_VAR "${THEROCK_PKG_CONFIG_DIRS}")
+
+# Set conditional configure flags for bundled sysdep prefixes. When using system
+# libraries, these are left empty so autotools discovers them via pkg-config.
+# Furthermore, set an RPATH segment for the bundled sysdeps lib directory.
+set(ROCGDB_EXPAT_FLAG "")
+set(ROCGDB_GMP_FLAG "")
+set(ROCGDB_MPFR_FLAG "")
+set(ROCGDB_SYSDEPS_RPATH_SEGMENT "")
+if(THEROCK_BUNDLE_SYSDEPS)
+  set(ROCGDB_EXPAT_FLAG "--with-expat-prefix=${EXPAT_PREFIX}")
+  set(ROCGDB_GMP_FLAG "--with-gmp=${GMP_PREFIX}")
+  set(ROCGDB_MPFR_FLAG "--with-mpfr=${MPFR_PREFIX}")
+  set(ROCGDB_SYSDEPS_RPATH_SEGMENT ":\\\$ORIGIN/../lib/rocm_sysdeps/lib")
+endif()
 
 # Set some global variables for the configure/build.
 set(ROCGDB_BUG_URL "https://github.com/ROCm-Developer-Tools/ROCgdb/issues")
@@ -241,11 +244,11 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
 
         --with-amd-dbgapi
         "--with-bugurl=${ROCGDB_BUG_URL}"
-        "--with-expat-prefix=${EXPAT_PREFIX}"
+        ${ROCGDB_EXPAT_FLAG}
         "--with-gdb-datadir=${ROCGDB_DATA_DIR}"
-        "--with-gmp=${GMP_PREFIX}"
+        ${ROCGDB_GMP_FLAG}
         --with-lzma
-        "--with-mpfr=${MPFR_PREFIX}"
+        ${ROCGDB_MPFR_FLAG}
         "--with-pkgversion=${ROCM_BUILD_ID}"
         "--with-separate-debug-dir=${ROCGDB_SEPARATE_DEBUG_INFO_DIR}"
         --with-system-zlib
@@ -355,7 +358,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
   # Register RPATH patching for this rocgdb variant.
   message(STATUS "Registering fixup of ${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}")
   install(CODE "execute_process(
-      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../lib/rocm_sysdeps/lib${LIBPYTHON_RPATH}\"
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib${ROCGDB_SYSDEPS_RPATH_SEGMENT}${LIBPYTHON_RPATH}\"
       \"${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}\"
       COMMAND_ERROR_IS_FATAL ANY
     )"
@@ -423,160 +426,11 @@ add_custom_target(build_all_rocgdb ALL DEPENDS ${ALL_ROCGDB_TARGETS})
 ################################
 
 # Since we potentially have multiple versions of python, and each rocgdb
-# executable links against a specific version of libpython, we have to
-# generate a convenience script that automatically detects the version and
-# fires up the most appropriate rocgdb executable. This makes the python
-# selection process transparent to the end user.
-set(ROCGDB_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/rocgdb")
-
-# We use [=[ to capture the exact script content.
-set(ROCGDB_SCRIPT_CONTENT [=[#!/usr/bin/env bash
-
-## Copyright (c) 2026 Advanced Micro Devices, Inc.
-##
-## Permission is hereby granted, free of charge, to any person obtaining a copy
-## of this software and associated documentation files (the "Software"), to
-## deal in the Software without restriction, including without limitation the
-## rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-## sell copies of the Software, and to permit persons to whom the Software is
-## furnished to do so, subject to the following conditions:
-##
-## The above copyright notice and this permission notice shall be included in
-## all copies or substantial portions of the Software.
-##
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-## AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-## FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-## IN THE SOFTWARE.
-
-# ROCgdb wrapper script
-#
-# This script selects and launches an appropriate ROCgdb executable based on
-# the active Python version. It tries the Python-matching rocgdb binary first,
-# falls back to other Python-enabled binaries, and finally to the Python-less
-# version. It also configures TERMINFO for ncurses TUI mode.
-#
-# Debugging output can be enabled by setting ROCGDB_WRAPPER_DEBUG=1. The wrapper
-# will run through the logic but not actually execute rocgdb, like a dry run.
-#
-# This mode is for debugging purposes only. The launcher outputs its searching
-# logic so it is clear what particular rocgdb executable is being picked and
-# why.
-
-# Handle debugging output. Always disabled unless ROCGDB_WRAPPER_DEBUG is set to 1.
-: "${ROCGDB_WRAPPER_DEBUG:=0}"
-
-# Prints debug messages if ROCGDB_WRAPPER_DEBUG is 1.
-#
-log_message() {
-    if [ "${ROCGDB_WRAPPER_DEBUG}" == "1" ]; then
-        if [ "x$1" == "x" ]; then
-            echo ""
-        else
-            echo "[DEBUG] -> $1" >&2
-        fi
-    fi
-}
-
-# Determines whether the given executable exists and can run with
-# the `--version` option without errors.
-#
-# Arguments:
-#   $1 - Path or name of the rocgdb executable to test.
-#
-# Returns:
-#   0 - Executable exists and responds successfully to `--version`.
-#   1 - Executable not found, not executable, or fails the `--version` check.
-#
-validate_executable() {
-    local executable="$1"
-    log_message ""
-    log_message "Validating $executable"
-    if ! command -v "$executable" >/dev/null 2>&1; then
-        log_message "Executable $executable not found."
-        return 1
-    fi
-    if "$executable" --version >/dev/null 2>&1; then
-        log_message "Running $executable --version works."
-        return 0
-    else
-        log_message "Running $executable --version does not work."
-        return 1
-    fi
-}
-
-# Find the active python version
-python_version=$(python3 --version 2>&1 | sed -n 's/^Python \([0-9]\+\.[0-9]\+\).*$/\1/p' )
-log_message "Python version found: ${python_version}"
-
-# Find the BIN directory where rocgdb executables live.
-GDB_BIN_DIR="$(dirname "$(realpath -e "${BASH_SOURCE[0]}")")"
-log_message "GDB_BIN_DIR set to ${GDB_BIN_DIR}"
-
-# Set the ncurses TERMINFO lookup directory if it isn't set already.
-# This is used to locate our own terminfo database in a relative path, since
-# ncurses doesn't support relative path lookups as a configure option.
-#
-# ROCgdb TUI mode requires this information.
-log_message "Checking if TERMINFO is defined."
-if [ -z "$TERMINFO" ]; then
-    export TERMINFO="$GDB_BIN_DIR/../lib/rocm_sysdeps/share/terminfo"
-    log_message "TERMINFO not defined. Setting it to ${TERMINFO}"
-fi
-
-# Create a rocgdb command with the active python version.
-gdb_executable="$GDB_BIN_DIR/rocgdb-py$python_version"
-log_message ""
-log_message "rocgdb command for active python version: ${gdb_executable}"
-
-# Validate that our rocgdb executable for the active python version works.
-if validate_executable $gdb_executable; then
-    log_message "Executing: $gdb_executable $@"
-    if [ "${ROCGDB_WRAPPER_DEBUG}" == "0" ]; then
-        exec "$gdb_executable" "$@"
-    fi
-fi
-
-# The active python version rocgdb did not work. Look for alternatives by
-# checking all the other rocgdb executables except rocgdb-pynone.
-while read -r gdb_executable
-do
-    if validate_executable "$gdb_executable"; then
-        log_message "Executing: $gdb_executable $@"
-        if [ "${ROCGDB_WRAPPER_DEBUG}" == "0" ]; then
-            exec "$gdb_executable" "$@"
-        fi
-    fi
-done < <(find "$GDB_BIN_DIR" -name "rocgdb-py*" ! -name "rocgdb-pynone" | sort -r)
-
-# None of the python-enabled rocgdb executables worked. As a fallback run the
-# pythonless version of rocgdb.
-
-log_message ""
-log_message "No working python-enabled rocgdb executables found."
-log_message "Attempting to execute rocgdb without python support."
-
-gdb_executable="$GDB_BIN_DIR/rocgdb-pynone"
-if validate_executable "$gdb_executable"; then
-    log_message "Executing: $gdb_executable $@"
-    if [ "${ROCGDB_WRAPPER_DEBUG}" == "0" ]; then
-        exec "$gdb_executable" "$@"
-    fi
-fi
-
-log_message "None of the rocgdb executables worked."
-
-if [ "${ROCGDB_WRAPPER_DEBUG}" == "0" ]; then
-  echo "Could not find any working rocgdb executables."
-  echo "Please check your installation and system for missing files and required dependencies."
-fi
-]=])
-
-# Generate the script file.
-file(GENERATE OUTPUT "${ROCGDB_SCRIPT}" CONTENT "${ROCGDB_SCRIPT_CONTENT}")
+# executable links against a specific version of libpython, we have a
+# convenience script that automatically detects the version and fires up
+# the most appropriate rocgdb executable. This makes the python selection
+# process transparent to the end user.
+set(ROCGDB_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/rocgdb")
 
 # Install the generated script.
 install(PROGRAMS ${ROCGDB_SCRIPT}
@@ -609,7 +463,7 @@ foreach(rocgdb_exec_filename ${ROCGDB_EXECS_TO_PATCH})
 
   # Patch in the RUNPATH.
   install(CODE "execute_process(
-      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../lib/rocm_sysdeps/lib\"
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib${ROCGDB_SYSDEPS_RPATH_SEGMENT}\"
       \"${rocgdb_exec_file}\"
       COMMAND_ERROR_IS_FATAL ANY
   )"

@@ -21,22 +21,23 @@ BUCKET = S3.Bucket(getenv("S3_BUCKET_PY", "therock-dev-python"))
 VERSIONS = ["v2-staging", "v2"]
 
 PACKAGES_PER_PROJECT = {
-    "dbus_python": {"version": "latest", "project": "jax"},
-    "flatbuffers": {"version": "latest", "project": "jax"},
-    "ml_dtypes": {"version": "latest", "project": "jax"},
-    "opt_einsum": {"version": "latest", "project": "jax"},
-    "tomli": {"version": "latest", "project": "jax"},
-    "sympy": {"version": "latest", "project": "torch"},
-    "mpmath": {"version": "latest", "project": "torch"},
-    "pillow": {"version": "latest", "project": "torch"},
-    "networkx": {"version": "latest", "project": "torch"},
-    "numpy": {"version": "latest", "project": "torch"},
-    "jinja2": {"version": "latest", "project": "torch"},
-    "markupsafe": {"version": "latest", "project": "torch"},
-    "filelock": {"version": "latest", "project": "torch"},
-    "fsspec": {"version": "latest", "project": "torch"},
-    "typing-extensions": {"version": "latest", "project": "torch"},
-    "setuptools": {"version": "latest", "project": "rocm"},
+    "dbus_python": {"versions": ["latest"], "project": "jax"},
+    "flatbuffers": {"versions": ["latest"], "project": "jax"},
+    "ml_dtypes": {"versions": ["latest"], "project": "jax"},
+    "opt_einsum": {"versions": ["latest"], "project": "jax"},
+    "tomli": {"versions": ["latest"], "project": "jax"},
+    "sympy": {"versions": ["latest"], "project": "torch"},
+    "mpmath": {"versions": ["latest"], "project": "torch"},
+    "pillow": {"versions": ["latest"], "project": "torch"},
+    # 3.4.2 for Python 3.10, latest for Python 3.11+
+    "networkx": {"versions": ["3.4.2", "latest"], "project": "torch"},
+    "numpy": {"versions": ["latest"], "project": "torch"},
+    "jinja2": {"versions": ["latest"], "project": "torch"},
+    "markupsafe": {"versions": ["latest"], "project": "torch"},
+    "filelock": {"versions": ["latest"], "project": "torch"},
+    "fsspec": {"versions": ["latest"], "project": "torch"},
+    "typing-extensions": {"versions": ["latest"], "project": "torch"},
+    "setuptools": {"versions": ["latest"], "project": "rocm"},
 }
 
 
@@ -143,10 +144,8 @@ def upload_missing_whls(
         # Skip riscv64 packages
         if "riscv64" in pkg:
             continue
-        # Skip unsupported Python version
+        # Skip unsupported Python versions
         if "cp39" in pkg:
-            continue
-        if "cp310" in pkg:
             continue
         if "cp313t" in pkg:
             continue
@@ -210,13 +209,14 @@ def main() -> None:
                 else:
                     full_path = f"{VERSION}/{prefix}"
 
-                upload_missing_whls(
-                    pkg_name,
-                    full_path,
-                    dry_run=args.dry_run,
-                    only_pypi=args.only_pypi,
-                    target_version=pkg_info["version"],
-                )
+                for target_version in pkg_info["versions"]:
+                    upload_missing_whls(
+                        pkg_name,
+                        full_path,
+                        dry_run=args.dry_run,
+                        only_pypi=args.only_pypi,
+                        target_version=target_version,
+                    )
 
 
 if __name__ == "__main__":

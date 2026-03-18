@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: CI - Windows
 
 on:
@@ -22,6 +25,9 @@ on:
       benchmark_runs_on:
         type: string
         default: ""
+      run_functional_tests:
+        type: boolean
+        default: false
       expect_failure:
         type: boolean
       use_prebuilt_artifacts:
@@ -32,6 +38,9 @@ on:
         type: string
       sanity_check_only_for_family:
         type: boolean
+      build_pytorch:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -61,6 +70,25 @@ jobs:
   #   (implicit) run id, or it could be an explicit run id.
   #   How about having the "build artifacts" job run as a passthrough?
 
+  validate_windows_artifact_structure:
+    needs: [build_windows_artifacts]
+    name: Validate Artifact Structure
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false
+      }}
+    uses: ./.github/workflows/test_artifacts_structure.yml
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      platform: windows
+
   test_windows_artifacts:
     needs: [build_windows_artifacts]
     name: Test Artifacts
@@ -87,6 +115,7 @@ jobs:
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
+      run_functional_tests: ${{ inputs.run_functional_tests }}
 
   test_windows_benchmarks:
     needs: [build_windows_artifacts]
@@ -135,3 +164,58 @@ jobs:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       artifact_group: ${{ inputs.artifact_group }}
       package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
+
+  test_rocm_wheels:
+    needs: [build_windows_python_packages]
+    name: Test Python
+    # Run tests if:
+    # - Build succeeded (or using prebuilt artifacts)
+    # - Not expecting failure
+    # - Test runner is available (test_runs_on is set)
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false &&
+        inputs.test_runs_on != ''
+      }}
+    uses: ./.github/workflows/test_rocm_wheels.yml
+    with:
+      amdgpu_family: ${{ inputs.artifact_group }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      package_find_links_url: ${{ needs.build_windows_python_packages.outputs.package_find_links_url }}
+      python_version: "3.12"
+      rocm_version: ${{ inputs.rocm_package_version }}
+
+  build_windows_pytorch_wheels_ci:
+    needs: [build_windows_python_packages]
+    name: Build PyTorch
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.build_pytorch == true
+      }}
+    uses: ./.github/workflows/build_windows_pytorch_wheels_ci.yml
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      python_version: "3.12"
+      pytorch_git_ref: "release/2.10"
+      rocm_package_find_links_url: ${{ needs.build_windows_python_packages.outputs.package_find_links_url }}
+      rocm_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # TODO(#3291): Add test_pytorch_wheels job

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Template find_package version file used to trampoline to a fixed location.
 # Processed via configure_file with the following variables in scope:
 #   @_package_name@ : Name of the package being searched

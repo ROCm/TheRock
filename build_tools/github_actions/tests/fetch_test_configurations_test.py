@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 from pathlib import Path
 import os
 import sys
@@ -105,8 +108,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(hipblaslt["total_shards"], 6)
         self.assertEqual(hipblaslt["shard_arr"], [1, 2, 3, 4, 5, 6])
 
-    def test_smoke_test_forces_single_shard(self):
-        os.environ["TEST_TYPE"] = "smoke"
+    def test_quick_test_forces_single_shard(self):
+        os.environ["TEST_TYPE"] = "quick"
 
         fetch_test_configurations.run()
         components = self._get_components()
@@ -114,6 +117,21 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertEqual(job["total_shards"], 1)
             self.assertEqual(job["shard_arr"], [1])
+
+    def test_platform_specific_shards(self):
+        os.environ["PROJECTS_TO_TEST"] = "hipblaslt"
+        fetch_test_configurations.run()
+        components = self._get_components()
+        hipblaslt_linux = components[0]
+
+        os.environ["RUNNER_OS"] = "Windows"
+        fetch_test_configurations.run()
+        components = self._get_components()
+        hipblaslt_windows = components[0]
+
+        self.assertNotEqual(
+            hipblaslt_linux["total_shards"], hipblaslt_windows["total_shards"]
+        )
 
     # -----------------------
     # Exclude-family logic
@@ -140,7 +158,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             "bench1": {
                 "job_name": "bench1",
                 "platform": ["linux"],
-                "total_shards": 1,
+                "total_shards_dict": {"linux": 1},
             }
         }
 

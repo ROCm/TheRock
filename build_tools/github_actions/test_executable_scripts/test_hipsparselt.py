@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
@@ -19,19 +22,14 @@ environ_vars = os.environ.copy()
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
-# If smoke tests are enabled, we run smoke tests only.
+# If quick tests are enabled, we run quick tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 
 test_filter = []
-if test_type == "smoke":
-    # Filter is absurdly long because hipsparselt's smoke tests are extensive
-    # This filter only runs specific sizes from the available operations
-    test_filter.append(
-        "--gtest_filter=*smoke*_8_8_16*:*smoke*16_16_32*:*smoke*128_128_128:*smoke*clippedrelu_0_n1*128*128*256*:*smoke*clippedrelu_0_1*128*128*256*:*smoke*clippedrelu_0p5_n1*128*128*256*:*smoke*clippedrelu_0p5_1*128*128*256*"
-    )
+if test_type == "quick":
+    test_filter.append("--gtest_filter=*smoke*")
 elif test_type == "full":
-    # TODO(#2616): Enable correct filter once known test set is reduced to appropriate amount
     test_filter.append("--gtest_filter=*quick*")
 
 cmd = [f"{THEROCK_BIN_DIR}/hipsparselt-test"] + test_filter

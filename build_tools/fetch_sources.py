@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Fetches sources from a specified branch/set of projects.
 # This script is available for users, but it is primarily the mechanism
 # the CI uses to get to a clean state.
@@ -26,9 +29,7 @@ THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 PATCHES_DIR = THEROCK_DIR / "patches"
 TOPOLOGY_PATH = THEROCK_DIR / "BUILD_TOPOLOGY.toml"
-ALWAYS_SUBMODULE_PATHS = [
-    "base/rocm-kpack",
-]
+ALWAYS_SUBMODULE_PATHS: list[str] = []
 
 
 def is_windows() -> bool:
@@ -106,8 +107,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(["rocm-systems"])
     if args.include_ml_frameworks:
         projects.extend(args.ml_framework_projects)
-    if args.include_rocm_media:
-        projects.extend(args.rocm_media_projects)
+    if args.include_media_libs:
+        projects.extend(args.media_libs_projects)
     if args.include_iree_libs:
         projects.extend(args.iree_libs_projects)
     if args.include_math_libraries:
@@ -423,7 +424,17 @@ def main(argv):
         "--nested-submodules",
         nargs="+",
         type=parse_nested_submodules,
-        default=[("iree", ["third_party/flatcc", "third_party/benchmark"])],
+        default=[
+            (
+                "iree",
+                [
+                    "third_party/flatcc",
+                    "third_party/benchmark",
+                    "third_party/llvm-project",
+                    "third_party/torch-mlir",
+                ],
+            )
+        ],
         help="Specify which nested submodules to fetch (e.g., project1:nested_in_project1_1,nested_in_project1_2 project2:nested_in_project2)",
     )
     parser.add_argument(
@@ -463,14 +474,14 @@ def main(argv):
         help="Include machine learning frameworks that are part of ROCM",
     )
     parser.add_argument(
-        "--include-rocm-media",
+        "--include-media-libs",
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Include media projects that are part of ROCM",
     )
     parser.add_argument(
         "--include-iree-libs",
-        default=True,
+        default=False,
         action=argparse.BooleanOptionalAction,
         help="Include IREE and related libraries",
     )
@@ -486,10 +497,7 @@ def main(argv):
         type=str,
         default=[
             "half",
-            "rccl",
-            "rccl-tests",
             "rocm-cmake",
-            "rocprof-trace-decoder",
         ],
     )
     parser.add_argument(
@@ -509,7 +517,7 @@ def main(argv):
         default=[],
     )
     parser.add_argument(
-        "--rocm-media-projects",
+        "--media-libs-projects",
         nargs="+",
         type=str,
         default=(
@@ -555,8 +563,6 @@ def main(argv):
             if is_windows()
             else [
                 # Linux only projects.
-                "amd-dbgapi",
-                "rocr-debug-agent",
                 "rocgdb",
             ]
         ),

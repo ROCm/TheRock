@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # On Linux, we compile core libraries with our own LLVM. This gets us the
 # best optimizations and, most importantly, gives us uniform access to
 # sanitizers. Currently, some of these projects, though, are hard-coded
@@ -8,6 +11,88 @@ set(_system_toolchain "amd-llvm")
 if(WIN32)
   set(_system_toolchain "")
 endif()
+
+################################################################################
+# rocm-kpack
+################################################################################
+
+therock_cmake_subproject_declare(rocm-kpack
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm-kpack"
+  USE_DIST_AMDGPU_TARGETS
+  BACKGROUND_BUILD
+  CMAKE_ARGS
+    -DBUILD_TESTING=OFF  # TODO: Enable testing in TheRock builds
+    -DBUILD_SHARED_LIBS=ON
+  BUILD_DEPS
+    therock-msgpack-cxx
+  RUNTIME_DEPS
+    ${THEROCK_BUNDLED_ZSTD}
+  INTERFACE_LINK_DIRS
+    lib
+  INTERFACE_INSTALL_RPATH_DIRS
+    lib
+)
+therock_cmake_subproject_provide_package(rocm-kpack
+  rocm-kpack lib/cmake/rocm-kpack)
+therock_cmake_subproject_activate(rocm-kpack)
+
+therock_provide_artifact(core-kpack
+  TARGET_NEUTRAL
+  DESCRIPTOR artifact-core-kpack.toml
+  COMPONENTS
+    dbg
+    dev
+    lib
+  SUBPROJECT_DEPS
+    rocm-kpack
+)
+
+if(THEROCK_ENABLE_CORE_AMDSMI)
+
+  ################################################################################
+  # amdsmi
+  ################################################################################
+
+  if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
+
+    therock_cmake_subproject_declare(amdsmi
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/amdsmi"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amdsmi"
+      USE_DIST_AMDGPU_TARGETS
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        "-DCMAKE_VERBOSE_MAKEFILE=OFF"
+        "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+      BUILD_DEPS
+        therock-googletest
+      RUNTIME_DEPS
+        rocm-core
+        ${THEROCK_BUNDLED_LIBDRM}
+      INSTALL_RPATH_DIRS
+        lib
+      INTERFACE_INSTALL_RPATH_DIRS
+        lib
+    )
+    therock_cmake_subproject_provide_package(amdsmi amd_smi lib/cmake)
+    therock_cmake_subproject_activate(amdsmi)
+
+    therock_provide_artifact(core-amdsmi
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-amdsmi.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+      SUBPROJECT_DEPS
+        amdsmi
+    )
+
+  endif() # NOT WIN32
+endif(THEROCK_ENABLE_CORE_AMDSMI)
+
 
 if(THEROCK_ENABLE_CORE_RUNTIME)
   ##############################################################################
@@ -113,6 +198,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
+
+
   therock_cmake_subproject_declare(hip-clr
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr"
@@ -126,6 +213,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "-DHIP_PLATFORM=amd"
       "-DHIP_COMMON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip"
       "-DCLR_BUILD_HIP=ON"
+      "-DROCM_KPACK_ENABLED=ON"
       # Legacy: Disable various auto-detection logic that breaks out of jail
       # and can use local machine tools.
       "-DHIPCC_BIN_DIR="
@@ -138,6 +226,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       amd-comgr
       hipcc     # For hipconfig
       rocm-core
+      rocm-kpack
       ${HIP_CLR_RUNTIME_DEPS}
     INTERFACE_LINK_DIRS
       "lib"
@@ -208,7 +297,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     set(HIP_TESTS_CMAKE_ARGS)
     set(_hip_tests_subproject_names)
     therock_cmake_subproject_declare(hip-tests
-      USE_DIST_AMDGPU_TARGETS
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/catch"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-tests"
       BACKGROUND_BUILD
@@ -235,6 +324,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     therock_cmake_subproject_activate(hip-tests)
     # Provide it as an artifact:
     therock_provide_artifact(core-hiptests
+      TARGET_NEUTRAL
       DESCRIPTOR artifact-core-hiptests.toml
       COMPONENTS
         test
@@ -290,6 +380,9 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       rocprofiler-register
       ROCR-Runtime
     )
+    list(APPEND OCL_CLR_CMAKE_ARGS
+      "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+    )
   endif()
 
   therock_cmake_subproject_declare(ocl-clr
@@ -299,6 +392,8 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
     INTERFACE_PROGRAM_DIRS
       bin
     BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      "${_system_toolchain}"
     CMAKE_ARGS
       "-DCLR_BUILD_OCL=ON"
       ${OCL_CLR_CMAKE_ARGS}
@@ -333,6 +428,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS
       ocl-clr
   )
@@ -364,8 +460,17 @@ endif(THEROCK_ENABLE_OCL_RUNTIME)
 if(THEROCK_BUILD_TESTING)
   if(THEROCK_ENABLE_CORE_RUNTIME_TESTS)
 
+    # rocrtst may optionally build against amdsmi when available (Linux).
+    set(_rocrtst_build_deps
+      amd-llvm
+      ocl-clr
+    )
+    if(TARGET amdsmi)
+      list(APPEND _rocrtst_build_deps amdsmi)
+    endif()
+
     therock_cmake_subproject_declare(rocrtst
-      USE_DIST_AMDGPU_TARGETS
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
       BACKGROUND_BUILD
@@ -376,15 +481,18 @@ if(THEROCK_BUILD_TESTING)
       COMPILER_TOOLCHAIN
         "${_system_toolchain}"
       BUILD_DEPS
-        amd-llvm
-        amdsmi
-        ocl-clr
+        ${_rocrtst_build_deps}
       RUNTIME_DEPS
         ROCR-Runtime
         rocprofiler-register
         ${THEROCK_BUNDLED_ELFUTILS}
+        ${THEROCK_BUNDLED_HWLOC}
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_NUMACTL}
+      INTERFACE_LINK_DIRS
+        "lib/rocm_sysdeps/lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib/rocm_sysdeps/lib"
     )
     therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
     therock_cmake_subproject_activate(rocrtst)

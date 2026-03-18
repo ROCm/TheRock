@@ -1,0 +1,45 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Hip tagging automation
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  tag-rocm-systems:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout ROCm/TheRock
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.11'
+
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        id: generate-token
+        with:
+          app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
+          private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
+          owner: "ROCm"
+          repositories: "rocm-systems"
+
+      - name: Install dependencies
+        run: |
+          pip install PyGithub
+
+      - name: Run tagging script
+        run: |
+          python build_tools/github_actions/hip_tagging_helper.py \
+            --repo "${{ github.repository }}" \
+            --before "${{ github.event.before }}" \
+            --after "${{ github.sha }}" \
+            --pat "${{ steps.generate-token.outputs.token }}"

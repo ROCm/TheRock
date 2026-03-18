@@ -1,1 +1,6 @@
+{%- if has_regular_files %}
 .{{path}}/*  {{path}}
+{%- endif %}
+{%- if has_hidden_files %}
+.{{path}}/.[!.]*  {{path}}
+{%- endif %}

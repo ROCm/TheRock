@@ -84,6 +84,9 @@ Sub-project directories:
   projects like [hipBLASLt](https://github.com/ROCm/hipBLASLt).
 - [`ml-libs/`](/ml-libs/) : Machine learning library sub-projects like
   [MIOpen](https://github.com/ROCm/MIOpen).
+- [`media-libs/`](/media-libs/) : Media decoding library sub-projects like
+  [rocDecode](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdecode)
+  and [rocJPEG](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocjpeg).
 - [`profiler/`](/profiler/) : Profiler sub-projects
 
 Note that there is nothing in the build system which ensures naming consistency,

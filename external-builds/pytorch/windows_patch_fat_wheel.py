@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Given a windows torch .whl, patches it so that it contains ROCm.
 
 This lets us have a standalone PyTorch wheel (albeit a big one) that does not need

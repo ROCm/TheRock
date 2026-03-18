@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Patches installed binaries from the external build system.
 # Args: install_dir patchelf_binary
 set -e

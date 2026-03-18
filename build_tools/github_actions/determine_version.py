@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Determines the SDK version and version suffix to pass as additional
 arguments to scripts like `external-builds/pytorch/build_prod_wheels.py`.
 
@@ -26,7 +29,7 @@ from packaging.version import parse
 import argparse
 import sys
 
-from github_actions_utils import *
+from github_actions_api import *
 
 
 def derive_version_suffix(rocm_version: str) -> str:

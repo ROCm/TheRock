@@ -14,6 +14,7 @@ repos:
         exclude_types: ["image", "jupyter"]
     -   id: check-yaml
         exclude: patches/
+    -   id: check-json
     -   id: check-merge-conflict
         exclude: patches/
 
@@ -48,3 +49,11 @@ repos:
   hooks:
     - id: actionlint
       args: [-shellcheck=, -ignore, 'label ".+" is unknown']
+
+- repo: local
+  hooks:
+  - id: test-file-naming
+    name: Enforce *_test.py naming for build_tools tests
+    entry: "Test files must use the *_test.py naming convention, not test_*.py"
+    language: fail
+    files: '^build_tools/(.*/)?tests/test_[^/]*\.py$'

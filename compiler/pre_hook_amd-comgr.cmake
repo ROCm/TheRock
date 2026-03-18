@@ -1,8 +1,5 @@
-if(WIN32)
-  set(LLVM_LINK_LLVM_DYLIB OFF)
-else()
-  set(LLVM_LINK_LLVM_DYLIB ON)
-endif()
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 set(COMGR_DISABLE_SPIRV OFF)
 

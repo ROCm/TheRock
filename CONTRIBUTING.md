@@ -114,7 +114,6 @@ List of long-lived branches:
 - [`main`](https://github.com/ROCm/TheRock/tree/main)
 - [`release/*`](https://github.com/ROCm/TheRock/branches/all?query=release%2F)
 - [`compiler/amd-staging`](https://github.com/ROCm/TheRock/tree/compiler/amd-staging)
-- [`compiler/amd-mainline`](https://github.com/ROCm/TheRock/tree/compiler/amd-mainline)
 
 > [!TIP]
 > Most developer workflows are compatible with pull requests coming from forks.
