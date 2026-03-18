@@ -1,0 +1,72 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Bump Submodule automation
+
+on:
+  schedule:
+    - cron: "0 */12 * * *" # Runs every 12 hrs at 12AM and 12PM
+  push:
+    branches:
+      - main
+jobs:
+  bump-submodules:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout ROCm/TheRock
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.11'
+
+      - name: Generate GitHub App token rocm-systems
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        id: systems-token
+        with:
+          app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
+          private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
+          owner: "ROCm"
+          repositories: "rocm-systems"
+
+      - name: Generate GitHub App token rocm-libraries
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        id: librarian-token
+        with:
+          app-id: ${{ secrets.ROCM_LIBRARIES_APP_ID }}
+          private-key: ${{ secrets.ROCM_LIBRARIES_APP_PRIVATE_KEY }}
+          owner: "ROCm"
+          repositories: "rocm-libraries"
+
+      - name: Generate GitHub App token TheRock
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        id: therock-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+          owner: "ROCm"
+          repositories: "TheRock"
+
+      - name: Run scheduled bump automation
+        if: github.event_name == 'schedule'
+        run: |
+          python3 build_tools/github_actions/bump_automation.py \
+            --event_type "schedule" \
+            --systems_token "${{ steps.systems-token.outputs.token }}" \
+            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
+            --therock_token "${{ steps.therock-token.outputs.token }}"
+
+      - name: Run push automation
+        if: github.event_name == 'push'
+        run: |
+          python3 build_tools/github_actions/bump_automation.py \
+            --event_type "push" \
+            --before "${{ github.event.before }}" \
+            --after "${{ github.sha }}" \
+            --systems_token "${{ steps.systems-token.outputs.token }}" \
+            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
+            --therock_token "${{ steps.therock-token.outputs.token }}"

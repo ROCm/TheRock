@@ -220,9 +220,14 @@ class S3Backend(ArtifactBackend):
         """Lazy-initialized boto3 S3 client.
 
         Credentials are resolved through boto3's default credential chain
-        (environment variables, shared credentials file, instance profile,
-        etc.). This matches how the ``aws`` CLI and storage_backend.py
-        resolve credentials.
+        (see https://docs.aws.amazon.com/boto3/latest/guide/credentials.html).
+        Relevant locations are checked in order:
+        1. Environment variables:
+           `AWS_ACCESS_KEY_ID`
+           `AWS_SECRET_ACCESS_KEY`
+           `AWS_SESSION_TOKEN`
+        2. Assume role providers
+        3. Shared credentials file: `AWS_SHARED_CREDENTIALS_FILE`
         """
         if self._s3_client is None:
             import boto3
