@@ -2,7 +2,7 @@
 
 - **Author:** Laura Promberger (HereThereBeDragons)
 - **Created:** 2026-03-03
-- **Modified:** 2026-03-16
+- **Modified:** 2026-03-18
 - **Status:** Draft
 - **Discussion:** https://github.com/ROCm/TheRock/discussions/3782
 
@@ -100,10 +100,13 @@ ROCm/quartz/
 │       └── vllm.yml                     # Tier 2: repo → Quartz Kibble-vllm App ID
 │
 ├── scripts/
-│   ├── validate_allowlist.py
 │   ├── validate_schema.py
+│   ├── validate_allowlist.py
 │   ├── insert_therock_data.py
-│   └── generate_status_json.py
+│   ├── insert_downstream_data.py
+│   ├── notify_subscribers.py
+│   ├── generate_status_json.py
+│   └── ...                              # additional scripts added per phase
 │
 ├── release-nightly/
 │   ├── 20260215/
@@ -244,7 +247,7 @@ When a downstream project PR triggers a TheRock CI run, notify that project auto
 
 ## Phase 1 Implementation Plan
 
-*Detailed implementation plans are provided for Phase 1 and Phase 2 only. Phases 3–5 will be detailed in a follow-up.*
+*Detailed implementation plans are provided for Phase 1 and Phase 2 only. Phases 3–5 will be detailed in a follow-up. The granular implementation tasks will be tracked as GitHub Issues in the respective repositories and organised in a GitHub Project.*
 
 ### A. Infrastructure
 
@@ -364,3 +367,4 @@ Quartz provides the ROCm ecosystem with a unified CI/CD data hub: TheRock result
 - 2026-03-03: Initial draft (Laura Promberger)
 - 2026-03-05: Address feedback, add URL to discussion, adjust GitHub App names, add using secrets for subscriptions (Laura Promberger)
 - 2026-03-16: Add Phase 1 and Phase 2 implementation plans; update deduplication strategy to version integer with GitHub API timestamps; resolve dispatch mechanism to `workflow_dispatch`; various consistency fixes (Laura Promberger)
+- 2026-03-18: Add missing scripts to repository structure; add GitHub Issues and GitHub Project tracking note; minor fixes (Laura Promberger)
