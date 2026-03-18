@@ -68,16 +68,10 @@ amdgpu_family_info_matrix dictionary fields:
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            # Due to migrating MI325s, we have lost capacity as of 3/13/2026 11:41am PST
-            # Labels are:
-            # "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
-            # "test-runs-on-sandbox": "linux-mi325-8gpu-ossci-rocm-sandbox",
-            # "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
-            # "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
-            "test-runs-on-multi-gpu": "",
+            "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "",
             "family": "gfx94X-dcgpu",
@@ -85,8 +79,8 @@ amdgpu_family_info_matrix_presubmit = {
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
             "build_variants": ["release", "asan", "tsan"],
-            # Due to no MI325s, we will continue to release artifacts
-            "bypass_tests_for_releases": True,
+            # Due to the limited count of mi325 machines, we only run this on non-quick tests
+            "run-full-tests-only": True,
         }
     },
     "gfx110x": {
