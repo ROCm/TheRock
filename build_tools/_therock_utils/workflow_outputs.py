@@ -46,7 +46,7 @@ import platform as platform_module
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.storage_location import StorageLocation
-from github_actions.github_actions_utils import gha_query_workflow_run_by_id
+from github_actions.github_actions_api import gha_query_workflow_run_by_id
 
 
 def _log(*args, **kwargs):

@@ -46,7 +46,7 @@ import os
 import sys
 from dataclasses import dataclass
 
-from github_actions_utils import GitHubAPIError, gha_send_request, str2bool
+from github_actions_api import GitHubAPIError, gha_send_request, str2bool
 
 
 # ---------------------------------------------------------------------------

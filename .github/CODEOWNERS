@@ -8,8 +8,8 @@
 # New patches are strongly discouraged. See patches/README.md.
 /patches/               @ScottTodd @marbre
 
-# This is for _github actions APIs_, not a general dumping ground for random utils.
-/build_tools/github_actions/github_actions_utils.py     @ScottTodd
+# This file accumulated unrelated code, tighten reviews until cleaned up.
+/build_tools/github_actions/github_actions_api.py       @ScottTodd
 
 # Debug tools configs and ROCgdb cmake wrapper.
 /debug-tools            @ROCm/TheRock-infra-write @ROCm/ROCm-DevTools-Debugger
