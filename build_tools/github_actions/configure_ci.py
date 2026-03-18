@@ -394,18 +394,18 @@ def matrix_generator(
                 print(
                     f"    Label '{label}' matched 'test:*' pattern -> test: {test_name}"
                 )
-            # If the "skip-ci" label was added, we skip all builds and tests
+            # If the "ci:skip" label was added, we skip all builds and tests
             # We don't want to check for anymore labels
-            if "skip-ci" == label:
-                print(f"    Label 'skip-ci' detected -> skipping all builds and tests")
+            if "ci:skip" == label:
+                print(f"    Label 'ci:skip' detected -> skipping all builds and tests")
                 selected_target_names = []
                 selected_test_names = []
                 requested_target_names = []
                 requested_test_names = []
                 break
-            if "run-all-archs-ci" == label:
+            if "ci:run-all-archs" == label:
                 print(
-                    f"    Label 'run-all-archs-ci' detected -> enabling all architectures"
+                    f"    Label 'ci:run-all-archs' detected -> enabling all architectures"
                 )
                 selected_target_names = [
                     target

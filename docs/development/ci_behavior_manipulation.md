@@ -23,12 +23,12 @@ For `pull_request`, TheRock CI collects the `amdgpu_family_info_matrix_presubmit
 
 However, if additional options are wanted, you can add a label to manipulate the behavior. The labels we provide are:
 
-- `skip-ci`: The CI will skip all builds and tests
-- `run-all-archs-ci`: The CI will build all possible architectures
-- `gfx...`: A build and test (if a test machine is available) is added to the CI matrix for the specified gfx family. (ex: `gfx120X`, `gfx950`)
-- `test:...`: The full test will run only for the specified label and other labeled projects (ex: `test:rocthrust`, `test:hipblaslt`)
-- `test_runner:...`: The CI will run tests on only custom test machines (ex: `test_runner:oem`)
-- `test_filter:...`: The CI will run tests based on the specified filter (ex: `test_filter:comprehensive`). [test_filtering.md](./test_filtering.md) has additional information on allowed test filters.
+- `ci:skip`: Skip all builds and tests
+- `ci:run-all-archs`: Build and test all possible architectures
+- `gfx...`: Add a build and test (if a test machine is available) for the specified gfx family (e.g. `gfx120X`, `gfx950`)
+- `test:...`: Run full tests only for the specified label and other labeled projects (e.g. `test:rocthrust`, `test:hipblaslt`)
+- `test_runner:...`: Run tests on only custom test machines (e.g. `test_runner:oem`)
+- `test_filter:...`: Run tests based on the specified filter (e.g. `test_filter:comprehensive`). See [test_filtering.md](./test_filtering.md) for allowed test filters.
 
 ### Workflow dispatch behavior
 
