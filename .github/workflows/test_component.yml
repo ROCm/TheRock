@@ -146,14 +146,30 @@ jobs:
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
       - name: Test
+        id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
+          TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
         run: |
           ${{ fromJSON(inputs.component).test_script }}
+
+      - name: Print test reproduction steps
+        # TODO: Add windows reproduction steps
+        if: ${{ failure() && steps.test.outcome == 'failure' && inputs.platform == 'linux' }}
+        run: |
+          python ./build_tools/github_actions/print_test_reproduction_steps.py \
+            --run-id "${{ env.ARTIFACT_RUN_ID }}" \
+            --repository "${{ github.repository }}" \
+            --amdgpu-family "${{ inputs.amdgpu_families }}" \
+            --test-script "${{ fromJSON(inputs.component).test_script }}" \
+            --shard-index "${{ matrix.shard }}" \
+            --total-shards "${{ fromJSON(inputs.component).total_shards }}" \
+            --test-type "${{ fromJSON(inputs.component).test_type }}" \
+            --fetch-artifact-args "${{ fromJSON(inputs.component).fetch_artifact_args }}"
 
       # GitHub's 'Complete job' step is unaware of launched executables
       # and will fail to clean up orphan processes.

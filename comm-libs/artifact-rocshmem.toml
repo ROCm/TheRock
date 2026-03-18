@@ -1,4 +1,13 @@
 # rocshmem
+[components.lib."comm-libs/rocshmem/stage"]
+include = [
+  "lib/*.bc",
+]
+
+[components.run."comm-libs/rocshmem/stage"]
+include = [
+  "bin/rocshmem_info",
+]
 [components.dbg."comm-libs/rocshmem/stage"]
 [components.dev."comm-libs/rocshmem/stage"]
 include = [
@@ -9,16 +18,6 @@ include = [
 [components.doc."comm-libs/rocshmem/stage"]
 include = [
   "share/doc/**",
-]
-
-[components.lib."comm-libs/rocshmem/stage"]
-include = [
-  "lib/*.bc",
-]
-
-[components.run."comm-libs/rocshmem/stage"]
-include = [
-  "bin/rocshmem_info",
 ]
 
 # Tests
