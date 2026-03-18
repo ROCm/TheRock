@@ -10,14 +10,18 @@ No environment variables or filesystem access needed (except from_environ tests)
 
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
+from dataclasses import fields
 from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_multi_arch_ci as cm
+from configure_multi_arch_ci_summary import format_summary
+from workflow_utils import WORKFLOWS_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -693,15 +697,11 @@ class TestFormatSummary(unittest.TestCase):
         return cm.CIInputs(**defaults)
 
     def test_skipped_summary_does_not_raise(self):
-        from configure_multi_arch_ci_summary import format_summary
-
         outputs = cm.CIOutputs.skipped("only .md files changed")
         git = cm.GitContext(changed_files=["docs/README.md"])
         format_summary(self._inputs(), git, outputs)
 
     def test_normal_summary_does_not_raise(self):
-        from configure_multi_arch_ci_summary import format_summary
-
         jobs = cm.JobDecisions(
             build_rocm=cm.BuildRocmDecision(action="run", reason="default"),
             test_rocm=cm.TestRocmDecision(
@@ -779,6 +779,78 @@ class TestConfigurePipeline(unittest.TestCase):
         mock_targets.assert_called_once()
         mock_jobs.assert_called_once()
         mock_expand.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Contract: BuildConfig fields match workflow YAML references
+# ---------------------------------------------------------------------------
+
+
+class TestBuildConfigWorkflowContract(unittest.TestCase):
+    """Verify that workflow YAML references to fromJSON(inputs.build_config).FIELD
+    only use fields that exist in BuildConfig.to_dict().
+
+    If a workflow references a field that was renamed or removed in Python,
+    this test fails — catching the mismatch before CI does a runtime fromJSON
+    and gets null. Fields in Python but not referenced in YAML are fine
+    (not every workflow uses every field).
+    """
+
+    @staticmethod
+    def _extract_build_config_fields(workflow_path):
+        """Extract field names referenced as fromJSON(inputs.build_config).X."""
+        # We need the raw text, not parsed YAML, to find expression references.
+        text = workflow_path.read_text()
+        # Match fromJSON(inputs.build_config).FIELD_NAME
+        pattern = r"fromJSON\(inputs\.build_config\)\.(\w+)"
+        return set(re.findall(pattern, text))
+
+    def _assert_yaml_fields_subset_of_python(self, workflow_path):
+        yaml_fields = self._extract_build_config_fields(workflow_path)
+        python_fields = {f.name for f in fields(cm.BuildConfig)}
+        unknown = yaml_fields - python_fields
+        self.assertEqual(
+            unknown,
+            set(),
+            f"{workflow_path.name} references BuildConfig fields that don't "
+            f"exist in Python: {unknown}. "
+            f"Available fields: {sorted(python_fields)}",
+        )
+
+    def test_linux_workflow_uses_all_fields(self):
+        """Linux workflow should reference every BuildConfig field."""
+        workflow_path = WORKFLOWS_DIR / "multi_arch_ci_linux.yml"
+        yaml_fields = self._extract_build_config_fields(workflow_path)
+        python_fields = {f.name for f in fields(cm.BuildConfig)}
+        self.assertEqual(
+            yaml_fields,
+            python_fields,
+            f"BuildConfig fields mismatch with {workflow_path.name}.\n"
+            f"  In YAML but not Python: {yaml_fields - python_fields}\n"
+            f"  In Python but not YAML: {python_fields - yaml_fields}",
+        )
+
+    @unittest.skip(
+        "Windows doesn't build pytorch on multi-arch CI yet — build_pytorch field unused"
+    )
+    def test_windows_workflow_uses_all_fields(self):
+        """Windows workflow should reference every BuildConfig field."""
+        workflow_path = WORKFLOWS_DIR / "multi_arch_ci_windows.yml"
+        yaml_fields = self._extract_build_config_fields(workflow_path)
+        python_fields = {f.name for f in fields(cm.BuildConfig)}
+        self.assertEqual(
+            yaml_fields,
+            python_fields,
+            f"BuildConfig fields mismatch with {workflow_path.name}.\n"
+            f"  In YAML but not Python: {yaml_fields - python_fields}\n"
+            f"  In Python but not YAML: {python_fields - yaml_fields}",
+        )
+
+    def test_windows_workflow_no_unknown_fields(self):
+        """Windows workflow should not reference fields that don't exist."""
+        self._assert_yaml_fields_subset_of_python(
+            WORKFLOWS_DIR / "multi_arch_ci_windows.yml"
+        )
 
 
 if __name__ == "__main__":
