@@ -551,7 +551,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
     def test_build_config_to_dict_round_trips(self):
         """BuildConfig.to_dict() produces all expected keys."""
         config = cm.BuildConfig(
-            matrix_per_family_json="[]",
+            per_family_info=[],
             dist_amdgpu_families="",
             artifact_group="multi-arch-release",
             build_variant_label="release",
@@ -562,7 +562,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
         d = config.to_dict()
         expected_keys = {
-            "matrix_per_family_json",
+            "per_family_info",
             "dist_amdgpu_families",
             "artifact_group",
             "build_variant_label",
@@ -599,7 +599,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         }
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)
-            per_family = json.loads(config.matrix_per_family_json)
+            per_family = config.per_family_info
             self.assertGreater(len(per_family), 0)
             for entry in per_family:
                 self.assertEqual(
@@ -614,7 +614,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         BuildConfig carries two representations of the family list for
         different workflow consumers:
 
-        matrix_per_family_json — JSON array with per-family metadata for
+        per_family_info — JSON array with per-family metadata for
         test and per-arch artifact jobs (fromJSON matrix expansion):
 
             [
@@ -641,9 +641,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
         result = cm.expand_build_configs(targets=targets, build_variant="release")
 
         # All target families that support the variant appear in output.
-        linux_per_family = json.loads(result.linux.matrix_per_family_json)
+        linux_per_family = result.linux.per_family_info
         self.assertEqual(len(linux_per_family), 2)
-        windows_per_family = json.loads(result.windows.matrix_per_family_json)
+        windows_per_family = result.windows.per_family_info
         self.assertEqual(len(windows_per_family), 1)
 
         # The two family representations carry the same set of families.
@@ -668,56 +668,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         result = cm.expand_build_configs(targets=targets, build_variant="asan")
         # Only gfx94x on linux survives.
         self.assertIsNotNone(result.linux)
-        linux_per_family = json.loads(result.linux.matrix_per_family_json)
+        linux_per_family = result.linux.per_family_info
         self.assertEqual(len(linux_per_family), 1)
         # Windows has no asan variant config at all.
         self.assertIsNone(result.windows)
-
-    # -- Parity test (useful during transition, may be removed later) --
-
-    def test_output_matches_generate_multi_arch_matrix(self):
-        """expand_build_configs output matches configure_ci.generate_multi_arch_matrix."""
-        from amdgpu_family_matrix import (
-            all_build_variants,
-            get_all_families_for_trigger_types,
-        )
-        from configure_ci import generate_multi_arch_matrix
-
-        all_families_list = ["gfx94x", "gfx110x", "gfx1151", "gfx120x"]
-        variant = "release"
-        lookup_matrix = get_all_families_for_trigger_types(
-            ["presubmit", "postsubmit", "nightly"]
-        )
-
-        # Filter families per platform (as select_targets would).
-        linux_families = [
-            f for f in all_families_list if "linux" in lookup_matrix.get(f, {})
-        ]
-        windows_families = [
-            f for f in all_families_list if "windows" in lookup_matrix.get(f, {})
-        ]
-        targets = cm.TargetSelection(
-            linux_families=linux_families,
-            windows_families=windows_families,
-        )
-        result = cm.expand_build_configs(targets=targets, build_variant=variant)
-
-        for platform, families, new_config in [
-            ("linux", linux_families, result.linux),
-            ("windows", windows_families, result.windows),
-        ]:
-            old_result = generate_multi_arch_matrix(
-                target_names=families,
-                lookup_matrix=lookup_matrix,
-                platform=platform,
-                platform_build_variants=all_build_variants[platform],
-                base_args={"build_variant": variant},
-            )
-            self.assertIsNotNone(new_config, f"expected config for {platform}")
-            self.assertEqual(len(old_result), 1, f"expected 1 entry for {platform}")
-            self.assertEqual(
-                old_result[0], new_config.to_dict(), f"mismatch on {platform}"
-            )
 
 
 # ---------------------------------------------------------------------------

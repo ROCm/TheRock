@@ -56,7 +56,7 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
-from github_actions_utils import gha_append_step_summary, gha_set_output
+from github_actions_api import gha_append_step_summary, gha_set_output
 
 # ---------------------------------------------------------------------------
 # Input parsing helpers
@@ -352,7 +352,7 @@ class BuildConfig:
     for downstream per-architecture job expansion and variant metadata.
     """
 
-    matrix_per_family_json: str  # JSON array of per-family info
+    per_family_info: list[dict]  # Per-family metadata for test/artifact jobs
     dist_amdgpu_families: str  # Semicolon-separated
     artifact_group: str
     build_variant_label: str
@@ -364,7 +364,7 @@ class BuildConfig:
     def to_dict(self) -> dict:
         """Convert to dict for JSON serialization."""
         return {
-            "matrix_per_family_json": self.matrix_per_family_json,
+            "per_family_info": self.per_family_info,
             "dist_amdgpu_families": self.dist_amdgpu_families,
             "artifact_group": self.artifact_group,
             "build_variant_label": self.build_variant_label,
@@ -761,7 +761,7 @@ def _expand_build_config_for_platform(
     suffix = variant_config.get("build_variant_suffix", "")
 
     return BuildConfig(
-        matrix_per_family_json=json.dumps(per_family_info),
+        per_family_info=per_family_info,
         dist_amdgpu_families=";".join(family_names),
         artifact_group=f"multi-arch-{suffix or 'release'}",
         build_variant_label=variant_config["build_variant_label"],

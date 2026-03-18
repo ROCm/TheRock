@@ -203,7 +203,7 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
     ]:
         if config is None:
             continue
-        per_family = json.loads(config.matrix_per_family_json)
+        per_family = config.per_family_info
         for entry in per_family:
             family = f"`{entry['amdgpu_family']}`"
             runner = f"`{entry['test-runs-on']}`" if entry["test-runs-on"] else "—"
