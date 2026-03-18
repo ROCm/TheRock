@@ -129,6 +129,9 @@ def generate_cmake_args(
     # Quote the value since it contains semicolons (CMake list separator)
     if dist_amdgpu_families:
         args.append(f'-DTHEROCK_DIST_AMDGPU_FAMILIES="{dist_amdgpu_families}"')
+        # Multi-arch dist builds require kpack split artifacts so generic host
+        # artifacts and target-specific payloads can be staged independently.
+        args.append("-DTHEROCK_KPACK_SPLIT_ARTIFACTS=ON")
 
     # Disable all features by default, then enable only what we need
     if include_comments:
