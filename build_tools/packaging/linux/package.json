@@ -631,7 +631,6 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "amdrocm-runtime",
-      "amdrocm-amdsmi",
       "amdrocm-blas-devel"
     ],
     "RPMRequires": [
@@ -1721,7 +1720,6 @@
       "libc6",
       "amdrocm-base",
       "amdrocm-profiler-base",
-      "amdrocm-amdsmi",
       "amdrocm-rccl-devel"
     ],
     "RPMRequires": [
@@ -1899,7 +1897,6 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-amdsmi",
       "amdrocm-dnn-devel"
     ],
     "RPMRequires": [
