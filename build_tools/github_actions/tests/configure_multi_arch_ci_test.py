@@ -178,16 +178,31 @@ class TestCheckSkipCI(unittest.TestCase):
 
     def test_skip_ci_label(self):
         """PR with ci:skip label skips CI regardless of changed files."""
-        inputs = self._inputs(pr_labels=["ci:skip", "gfx950"])
+        inputs = self._inputs(pr_labels=["ci:skip", "ci:run-multi-arch"])
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         result = cm.check_skip_ci(inputs, git)
         self.assertTrue(result.skip)
         self.assertIn("ci:skip", result.reason)
 
+    def test_pr_without_multi_arch_label_skips(self):
+        """PR without ci:run-multi-arch label skips multi-arch CI."""
+        inputs = self._inputs(pr_labels=[])
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.check_skip_ci(inputs, git)
+        self.assertTrue(result.skip)
+        self.assertIn("ci:run-multi-arch", result.reason)
+
+    def test_pr_with_multi_arch_label_proceeds(self):
+        """PR with ci:run-multi-arch label proceeds to path filtering."""
+        inputs = self._inputs(pr_labels=["ci:run-multi-arch"])
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.check_skip_ci(inputs, git)
+        self.assertFalse(result.skip)
+
     @patch("configure_multi_arch_ci.is_ci_run_required", return_value=False)
     def test_path_filter_says_skip(self, mock_filter):
         """When is_ci_run_required returns False, skip CI."""
-        inputs = self._inputs()
+        inputs = self._inputs(pr_labels=["ci:run-multi-arch"])
         git = cm.GitContext(changed_files=["docs/README.md"])
         result = cm.check_skip_ci(inputs, git)
         self.assertTrue(result.skip)
@@ -196,7 +211,7 @@ class TestCheckSkipCI(unittest.TestCase):
     @patch("configure_multi_arch_ci.is_ci_run_required", return_value=True)
     def test_path_filter_says_required(self, mock_filter):
         """When is_ci_run_required returns True, don't skip."""
-        inputs = self._inputs()
+        inputs = self._inputs(pr_labels=["ci:run-multi-arch"])
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         result = cm.check_skip_ci(inputs, git)
         self.assertFalse(result.skip)

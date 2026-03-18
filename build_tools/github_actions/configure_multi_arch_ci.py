@@ -433,6 +433,7 @@ def check_skip_ci(
 
     Returns SkipDecision(skip=True) for:
     - 'ci:skip' PR label
+    - pull_request without 'ci:run-multi-arch' label (opt-in during transition)
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
 
@@ -442,6 +443,15 @@ def check_skip_ci(
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Found 'ci:skip' PR label")
         return SkipDecision(skip=True, reason="ci:skip label")
+
+    # Multi-arch CI on PRs requires explicit opt-in via label to avoid
+    # doubling CI load during the transition. See #3337.
+    if ci_inputs.is_pull_request and "ci:run-multi-arch" not in ci_inputs.pr_labels:
+        print("  PR without 'ci:run-multi-arch' label — skipping multi-arch CI")
+        return SkipDecision(
+            skip=True,
+            reason="ci:run-multi-arch label not found (add to opt in)",
+        )
 
     # changed_files is None for schedule/workflow_dispatch — always proceed.
     if git_context.changed_files is not None:
