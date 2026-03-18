@@ -10,19 +10,19 @@ Usage (in a workflow step)::
 
     python external-builds/pytorch/generate_test_sharding_matrix.py \\
         --test-configs 'default distributed inductor' \\
-        --default-runner 'linux-rocm-docker-mi300-1gpu-ossci' \\
-        --multi-gpu-runner 'linux-rocm-docker-mi300-8gpu-ossci'
+        --default-runner 'linux-mi325-1gpu-ossci-rocm' \\
+        --multi-gpu-runner 'linux-mi325-4gpu-ossci-rocm'
 
 Example output (written to $GITHUB_OUTPUT as ``matrix=<json>``)::
 
     {"include":[
-      {"test_config":"default","shard":1,"num_shards":6,"runs_on":"linux-rocm-docker-mi300-1gpu-ossci"},
-      {"test_config":"default","shard":2,"num_shards":6,"runs_on":"linux-rocm-docker-mi300-1gpu-ossci"},
+      {"test_config":"default","shard":1,"num_shards":6,"runs_on":"linux-mi325-1gpu-ossci-rocm"},
+      {"test_config":"default","shard":2,"num_shards":6,"runs_on":"linux-mi325-1gpu-ossci-rocm"},
       ...
-      {"test_config":"distributed","shard":1,"num_shards":3,"runs_on":"linux-rocm-docker-mi300-8gpu-ossci"},
+      {"test_config":"distributed","shard":1,"num_shards":3,"runs_on":"linux-mi325-4gpu-ossci-rocm"},
       ...
-      {"test_config":"inductor","shard":1,"num_shards":2,"runs_on":"linux-rocm-docker-mi300-1gpu-ossci"},
-      {"test_config":"inductor","shard":2,"num_shards":2,"runs_on":"linux-rocm-docker-mi300-1gpu-ossci"}
+      {"test_config":"inductor","shard":1,"num_shards":2,"runs_on":"linux-mi325-1gpu-ossci-rocm"},
+      {"test_config":"inductor","shard":2,"num_shards":2,"runs_on":"linux-mi325-1gpu-ossci-rocm"}
     ]}
 """
 
@@ -34,10 +34,15 @@ import os
 import sys
 
 # Shard counts mirror the parallelism used by upstream PyTorch CI for the
-# corresponding ROCm test configurations (rocm-mi300.yml and
-# inductor-rocm-mi300.yml as of March 2026).  Chosen to keep each shard
-# under ~3 h on MI300 1-GPU runners (default/inductor) and MI300 8-GPU
-# runners (distributed).
+# corresponding ROCm test configurations.  Chosen to keep each shard under
+# ~3 h on MI300 1-GPU runners (default/inductor) and MI300 4-GPU runners
+# (distributed).
+#
+# Upstream references (as of March 2026):
+#   default (6) & distributed (3):
+#     https://github.com/pytorch/pytorch/blob/1ace6e9e198f0221122a81efe39c11eef90b5d80/.github/workflows/trunk.yml#L283-L291
+#   inductor (2):
+#     https://github.com/pytorch/pytorch/blob/1ace6e9e198f0221122a81efe39c11eef90b5d80/.github/workflows/inductor-rocm-mi300.yml#L51-L52
 SHARDS_PER_CONFIG: dict[str, int] = {
     "default": 6,
     "distributed": 3,
@@ -83,7 +88,7 @@ def main() -> None:
         help=(
             "Runner label for single-GPU configs. Corresponds to "
             "'test-runs-on' in amdgpu_family_matrix.py "
-            "(e.g. 'linux-rocm-docker-mi300-1gpu-ossci')"
+            "(e.g. 'linux-mi325-1gpu-ossci-rocm')"
         ),
     )
     parser.add_argument(
@@ -92,7 +97,7 @@ def main() -> None:
         help=(
             "Runner label for multi-GPU configs (e.g. distributed). Corresponds to "
             "'test-runs-on-multi-gpu' in amdgpu_family_matrix.py "
-            "(e.g. 'linux-rocm-docker-mi300-8gpu-ossci')"
+            "(e.g. 'linux-mi325-4gpu-ossci-rocm')"
         ),
     )
     args = parser.parse_args()
