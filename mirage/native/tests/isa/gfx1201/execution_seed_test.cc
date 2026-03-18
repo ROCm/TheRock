@@ -7155,6 +7155,34 @@ int main() {
     return 1;
   }
 
+  const auto global_load_addtid_b32_words =
+      MakeGlobal(40u, 39u, 0u, 0u, 24u, 0);
+  DecodedInstruction global_load_addtid_b32_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      global_load_addtid_b32_words.data(),
+                      global_load_addtid_b32_words.size()),
+                  &global_load_addtid_b32_instruction, &global_words_consumed,
+                  &error_message),
+              "expected GLOBAL_LOAD_ADDTID_B32 direct decode success") ||
+      !Expect(global_load_addtid_b32_instruction.opcode ==
+                  "GLOBAL_LOAD_ADDTID_B32",
+              "expected decoded GLOBAL_LOAD_ADDTID_B32 opcode") ||
+      !Expect(global_load_addtid_b32_instruction.operand_count == 3u,
+              "expected GLOBAL_LOAD_ADDTID_B32 operand count") ||
+      !Expect(global_load_addtid_b32_instruction.operands[0].kind ==
+                  OperandKind::kVgpr &&
+                  global_load_addtid_b32_instruction.operands[0].index == 39u,
+              "expected GLOBAL_LOAD_ADDTID_B32 vector destination") ||
+      !Expect(global_load_addtid_b32_instruction.operands[1].kind ==
+                  OperandKind::kSgpr &&
+                  global_load_addtid_b32_instruction.operands[1].index == 24u,
+              "expected GLOBAL_LOAD_ADDTID_B32 scalar address") ||
+      !Expect(global_words_consumed == 2u,
+              "expected GLOBAL_LOAD_ADDTID_B32 to consume two dwords")) {
+    return 1;
+  }
+
   const auto global_store_b32_words = MakeGlobal(26u, 0u, 44u, 18u, 30u, 16);
   DecodedInstruction global_store_b32_instruction;
   if (!Expect(decoder.DecodeInstruction(
@@ -7247,6 +7275,34 @@ int main() {
               "expected GLOBAL_STORE_D16_HI_B8 inline offset") ||
       !Expect(global_words_consumed == 2u,
               "expected GLOBAL_STORE_D16_HI_B8 to consume two dwords")) {
+    return 1;
+  }
+
+  const auto global_store_addtid_b32_words =
+      MakeGlobal(41u, 0u, 0u, 26u, 34u, 0);
+  DecodedInstruction global_store_addtid_b32_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      global_store_addtid_b32_words.data(),
+                      global_store_addtid_b32_words.size()),
+                  &global_store_addtid_b32_instruction, &global_words_consumed,
+                  &error_message),
+              "expected GLOBAL_STORE_ADDTID_B32 direct decode success") ||
+      !Expect(global_store_addtid_b32_instruction.opcode ==
+                  "GLOBAL_STORE_ADDTID_B32",
+              "expected decoded GLOBAL_STORE_ADDTID_B32 opcode") ||
+      !Expect(global_store_addtid_b32_instruction.operand_count == 3u,
+              "expected GLOBAL_STORE_ADDTID_B32 operand count") ||
+      !Expect(global_store_addtid_b32_instruction.operands[0].kind ==
+                  OperandKind::kVgpr &&
+                  global_store_addtid_b32_instruction.operands[0].index == 26u,
+              "expected GLOBAL_STORE_ADDTID_B32 vector data") ||
+      !Expect(global_store_addtid_b32_instruction.operands[1].kind ==
+                  OperandKind::kSgpr &&
+                  global_store_addtid_b32_instruction.operands[1].index == 34u,
+              "expected GLOBAL_STORE_ADDTID_B32 scalar address") ||
+      !Expect(global_words_consumed == 2u,
+              "expected GLOBAL_STORE_ADDTID_B32 to consume two dwords")) {
     return 1;
   }
 
@@ -7912,6 +7968,212 @@ int main() {
               "expected compiled GLOBAL TR load execution success") ||
       !Expect(expect_global_load_tr_state(compiled_global_load_tr_state),
               "expected compiled GLOBAL TR load state")) {
+    return 1;
+  }
+
+  const auto global_load_addtid_b32_program_words =
+      MakeGlobal(40u, 20u, 0u, 0u, 20u, 0);
+  const std::array<std::uint32_t, 3> global_load_addtid_program_words{
+      global_load_addtid_b32_program_words[0],
+      global_load_addtid_b32_program_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> global_load_addtid_program;
+  if (!Expect(decoder.DecodeProgram(global_load_addtid_program_words,
+                                    &global_load_addtid_program,
+                                    &error_message),
+              "expected GLOBAL ADDTID load program decode success") ||
+      !Expect(global_load_addtid_program.size() == 2u,
+              "expected two decoded GLOBAL ADDTID load instructions") ||
+      !Expect(global_load_addtid_program[0].opcode == "GLOBAL_LOAD_ADDTID_B32",
+              "expected decoded GLOBAL_LOAD_ADDTID_B32 opcode") ||
+      !Expect(global_load_addtid_program[1].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after GLOBAL ADDTID load")) {
+    return 1;
+  }
+
+  auto initialize_global_load_addtid_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x80000005ull;
+    state->sgprs[20] = 0x8000u;
+    state->sgprs[21] = 0u;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      state->vgprs[20][lane] = 0xe10000a0u + static_cast<std::uint32_t>(lane);
+    }
+  };
+  auto expect_global_load_addtid_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == 0x80000005ull &&
+          state.sgprs[20] == 0x8000u && state.sgprs[21] == 0u &&
+          state.halted && !state.waiting_on_barrier && state.pc == 1u)) {
+      return false;
+    }
+    constexpr std::uint64_t kActiveMask = 0x80000005ull;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      const bool active = (kActiveMask & (1ull << lane)) != 0u;
+      const std::uint32_t initial_value =
+          0xe10000a0u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t expected_value =
+          active ? (0x61000000u + static_cast<std::uint32_t>(lane))
+                 : initial_value;
+      if (state.vgprs[20][lane] != expected_value) {
+        return false;
+      }
+    }
+    return true;
+  };
+  LinearExecutionMemory global_load_addtid_memory(0x1000u, 0x8000u);
+  for (std::uint32_t lane = 0; lane < 32u; ++lane) {
+    if (!Expect(global_load_addtid_memory.StoreU32(
+                    0x8000u + lane * 4u, 0x61000000u + lane),
+                "expected GLOBAL ADDTID load test write")) {
+      return 1;
+    }
+  }
+
+  WaveExecutionState decoded_global_load_addtid_state;
+  initialize_global_load_addtid_state(&decoded_global_load_addtid_state);
+  if (!Expect(interpreter.ExecuteProgram(global_load_addtid_program,
+                                         &decoded_global_load_addtid_state,
+                                         &global_load_addtid_memory,
+                                         &error_message),
+              "expected decoded GLOBAL ADDTID load execution success") ||
+      !Expect(expect_global_load_addtid_state(decoded_global_load_addtid_state),
+              "expected decoded GLOBAL ADDTID load state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_global_load_addtid_program;
+  if (!Expect(interpreter.CompileProgram(global_load_addtid_program,
+                                         &compiled_global_load_addtid_program,
+                                         &error_message),
+              "expected compiled GLOBAL ADDTID load program success") ||
+      !Expect(compiled_global_load_addtid_program.size() == 2u,
+              "expected two compiled GLOBAL ADDTID load instructions") ||
+      !Expect(compiled_global_load_addtid_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalLoadAddtidB32,
+              "expected compiled GLOBAL_LOAD_ADDTID_B32 opcode") ||
+      !Expect(compiled_global_load_addtid_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after GLOBAL ADDTID load")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_global_load_addtid_state;
+  initialize_global_load_addtid_state(&compiled_global_load_addtid_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_global_load_addtid_program,
+                                         &compiled_global_load_addtid_state,
+                                         &global_load_addtid_memory,
+                                         &error_message),
+              "expected compiled GLOBAL ADDTID load execution success") ||
+      !Expect(expect_global_load_addtid_state(compiled_global_load_addtid_state),
+              "expected compiled GLOBAL ADDTID load state")) {
+    return 1;
+  }
+
+  const auto global_store_addtid_b32_program_words =
+      MakeGlobal(41u, 0u, 0u, 20u, 22u, 0);
+  const std::array<std::uint32_t, 3> global_store_addtid_program_words{
+      global_store_addtid_b32_program_words[0],
+      global_store_addtid_b32_program_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> global_store_addtid_program;
+  if (!Expect(decoder.DecodeProgram(global_store_addtid_program_words,
+                                    &global_store_addtid_program,
+                                    &error_message),
+              "expected GLOBAL ADDTID store program decode success") ||
+      !Expect(global_store_addtid_program.size() == 2u,
+              "expected two decoded GLOBAL ADDTID store instructions") ||
+      !Expect(global_store_addtid_program[0].opcode == "GLOBAL_STORE_ADDTID_B32",
+              "expected decoded GLOBAL_STORE_ADDTID_B32 opcode") ||
+      !Expect(global_store_addtid_program[1].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after GLOBAL ADDTID store")) {
+    return 1;
+  }
+
+  auto initialize_global_store_addtid_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x80000005ull;
+    state->sgprs[22] = 0x9000u;
+    state->sgprs[23] = 0u;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      state->vgprs[20][lane] = 0x71000000u + static_cast<std::uint32_t>(lane);
+    }
+  };
+  auto expect_global_store_addtid_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == 0x80000005ull &&
+          state.sgprs[22] == 0x9000u && state.sgprs[23] == 0u &&
+          state.halted && !state.waiting_on_barrier && state.pc == 1u)) {
+      return false;
+    }
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      if (state.vgprs[20][lane] !=
+          0x71000000u + static_cast<std::uint32_t>(lane)) {
+        return false;
+      }
+    }
+    return true;
+  };
+  auto expect_global_store_addtid_memory = [](LinearExecutionMemory* memory) {
+    constexpr std::uint64_t kActiveMask = 0x80000005ull;
+    for (std::uint32_t lane = 0; lane < 32u; ++lane) {
+      std::uint32_t value = 0;
+      if (!memory->LoadU32(0x9000u + lane * 4u, &value)) {
+        return false;
+      }
+      const bool active = (kActiveMask & (1ull << lane)) != 0u;
+      const std::uint32_t expected =
+          active ? (0x71000000u + lane) : 0u;
+      if (value != expected) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  LinearExecutionMemory decoded_global_store_addtid_memory(0x1000u, 0x9000u);
+  WaveExecutionState decoded_global_store_addtid_state;
+  initialize_global_store_addtid_state(&decoded_global_store_addtid_state);
+  if (!Expect(interpreter.ExecuteProgram(global_store_addtid_program,
+                                         &decoded_global_store_addtid_state,
+                                         &decoded_global_store_addtid_memory,
+                                         &error_message),
+              "expected decoded GLOBAL ADDTID store execution success") ||
+      !Expect(expect_global_store_addtid_state(decoded_global_store_addtid_state),
+              "expected decoded GLOBAL ADDTID store state") ||
+      !Expect(expect_global_store_addtid_memory(
+                  &decoded_global_store_addtid_memory),
+              "expected decoded GLOBAL ADDTID store memory state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_global_store_addtid_program;
+  if (!Expect(interpreter.CompileProgram(global_store_addtid_program,
+                                         &compiled_global_store_addtid_program,
+                                         &error_message),
+              "expected compiled GLOBAL ADDTID store program success") ||
+      !Expect(compiled_global_store_addtid_program.size() == 2u,
+              "expected two compiled GLOBAL ADDTID store instructions") ||
+      !Expect(compiled_global_store_addtid_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalStoreAddtidB32,
+              "expected compiled GLOBAL_STORE_ADDTID_B32 opcode") ||
+      !Expect(compiled_global_store_addtid_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after GLOBAL ADDTID store")) {
+    return 1;
+  }
+
+  LinearExecutionMemory compiled_global_store_addtid_memory(0x1000u, 0x9000u);
+  WaveExecutionState compiled_global_store_addtid_state;
+  initialize_global_store_addtid_state(&compiled_global_store_addtid_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_global_store_addtid_program,
+                                         &compiled_global_store_addtid_state,
+                                         &compiled_global_store_addtid_memory,
+                                         &error_message),
+              "expected compiled GLOBAL ADDTID store execution success") ||
+      !Expect(expect_global_store_addtid_state(compiled_global_store_addtid_state),
+              "expected compiled GLOBAL ADDTID store state") ||
+      !Expect(expect_global_store_addtid_memory(
+                  &compiled_global_store_addtid_memory),
+              "expected compiled GLOBAL ADDTID store memory state")) {
     return 1;
   }
 

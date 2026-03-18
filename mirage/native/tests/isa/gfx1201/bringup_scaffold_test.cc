@@ -183,7 +183,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 380u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 382u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -209,6 +209,8 @@ int main() {
               "expected GLOBAL_LOAD_B96 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_LOAD_B128"),
               "expected GLOBAL_LOAD_B128 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_LOAD_ADDTID_B32"),
+              "expected GLOBAL_LOAD_ADDTID_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_LOAD_TR_B64"),
               "expected GLOBAL_LOAD_TR_B64 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_LOAD_TR_B128"),
@@ -237,6 +239,8 @@ int main() {
               "expected GLOBAL_STORE_B96 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_STORE_B128"),
               "expected GLOBAL_STORE_B128 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_STORE_ADDTID_B32"),
+              "expected GLOBAL_STORE_ADDTID_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_STORE_D16_HI_B8"),
               "expected GLOBAL_STORE_D16_HI_B8 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_STORE_D16_HI_B16"),
@@ -760,6 +764,28 @@ int main() {
     return 1;
   }
 
+  const auto global_load_addtid_b32_words =
+      MakeGlobal(40u, 39u, 0u, 0u, 26u, 0);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      global_load_addtid_b32_words.data(),
+                      global_load_addtid_b32_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected GLOBAL_LOAD_ADDTID_B32 decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "GLOBAL_LOAD_ADDTID_B32",
+              "expected GLOBAL_LOAD_ADDTID_B32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected GLOBAL_LOAD_ADDTID_B32 ternary decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 39u,
+              "expected GLOBAL_LOAD_ADDTID_B32 vector destination") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[1].index == 26u,
+              "expected GLOBAL_LOAD_ADDTID_B32 scalar address")) {
+    return 1;
+  }
+
   const auto global_store_b32_words = MakeGlobal(26u, 0u, 44u, 18u, 30u, 16);
   if (!Expect(decoder.DecodeInstruction(
                   std::span<const std::uint32_t>(global_store_b32_words.data(),
@@ -837,6 +863,28 @@ int main() {
       !Expect(decoded_instruction.operands[3].kind == OperandKind::kImm32 &&
                   decoded_instruction.operands[3].imm32 == 20u,
               "expected GLOBAL_STORE_D16_HI_B16 inline offset")) {
+    return 1;
+  }
+
+  const auto global_store_addtid_b32_words =
+      MakeGlobal(41u, 0u, 0u, 27u, 36u, 0);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      global_store_addtid_b32_words.data(),
+                      global_store_addtid_b32_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected GLOBAL_STORE_ADDTID_B32 decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "GLOBAL_STORE_ADDTID_B32",
+              "expected GLOBAL_STORE_ADDTID_B32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected GLOBAL_STORE_ADDTID_B32 ternary decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 27u,
+              "expected GLOBAL_STORE_ADDTID_B32 vector data") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[1].index == 36u,
+              "expected GLOBAL_STORE_ADDTID_B32 scalar address")) {
     return 1;
   }
 
@@ -1141,7 +1189,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 380u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 382u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -1169,6 +1217,8 @@ int main() {
               "expected interpreter support for GLOBAL_LOAD_B96") ||
       !Expect(interpreter.Supports("GLOBAL_LOAD_B128"),
               "expected interpreter support for GLOBAL_LOAD_B128") ||
+      !Expect(interpreter.Supports("GLOBAL_LOAD_ADDTID_B32"),
+              "expected interpreter support for GLOBAL_LOAD_ADDTID_B32") ||
       !Expect(interpreter.Supports("GLOBAL_LOAD_TR_B64"),
               "expected interpreter support for GLOBAL_LOAD_TR_B64") ||
       !Expect(interpreter.Supports("GLOBAL_LOAD_TR_B128"),
@@ -1197,6 +1247,8 @@ int main() {
               "expected interpreter support for GLOBAL_STORE_B96") ||
       !Expect(interpreter.Supports("GLOBAL_STORE_B128"),
               "expected interpreter support for GLOBAL_STORE_B128") ||
+      !Expect(interpreter.Supports("GLOBAL_STORE_ADDTID_B32"),
+              "expected interpreter support for GLOBAL_STORE_ADDTID_B32") ||
       !Expect(interpreter.Supports("GLOBAL_STORE_D16_HI_B8"),
               "expected interpreter support for GLOBAL_STORE_D16_HI_B8") ||
       !Expect(interpreter.Supports("GLOBAL_STORE_D16_HI_B16"),
