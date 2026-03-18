@@ -334,6 +334,9 @@ def main(argv: list[str]) -> int:
     ((first_arch, _),) = set_gpu_execution_policy(args.amdgpu_family, policy="single")
     print(f"Using AMDGPU family: {first_arch}")
 
+    # get_tests amdgpu_family requires list[str]
+    first_arch = [first_arch]
+
     pytorch_version = args.pytorch_version
     if not pytorch_version:
         pytorch_version = detect_pytorch_version()
