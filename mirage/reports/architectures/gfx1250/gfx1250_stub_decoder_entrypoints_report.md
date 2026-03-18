@@ -38,6 +38,7 @@
   - route-wide exact operand-role, slot-binding, and descriptor ordering validation across the current routed matrix and non-matrix seed sets
   - route-wide exact route metadata and operand-layout validation across the current routed matrix and non-matrix seed sets
   - route-wide exact operand-layout-to-record consistency validation across the current routed matrix and non-matrix seed sets
+  - route-wide exact descriptor-to-slot parity validation across the current routed matrix and non-matrix seed sets
   - route-wide exact route-info and RDNA4 provenance parity validation across the current routed matrix and non-matrix seed sets
   - exact route-manifest parity validation across the current routed family set
   - route-wide exact top-level flag composition validation across the current routed matrix and non-matrix seed sets
@@ -57,6 +58,7 @@
   - `V_PK_MAX_NUM_BF16`
   - route-wide exact route metadata, operand-layout, and route-info / RDNA4 provenance checks across the current packed BF16 seeds
   - route-wide exact operand-layout-to-record consistency checks across the current packed BF16 seeds
+  - route-wide exact descriptor-to-slot parity checks across the current packed BF16 seeds
   - route-wide exact top-level flag composition checks across the current packed BF16 seeds
 - `VOP3P` WMMA / SWMMAC slice:
   - `V_WMMA_F32_16X16X4_F32_w32`
@@ -194,6 +196,7 @@
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact route metadata and operand-layout checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact operand-layout-to-record consistency checks across current routed non-scale `V_WMMA_*` seeds
+    - route-wide exact descriptor-to-slot parity checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact route-info and RDNA4 provenance parity checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact top-level flag composition checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide role-specific wave32 checks across current routed non-scale `V_WMMA_*` seeds
@@ -236,6 +239,7 @@
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact route metadata and operand-layout checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact operand-layout-to-record consistency checks across current routed `V_WMMA_SCALE*` seeds
+    - route-wide exact descriptor-to-slot parity checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact route-info and RDNA4 provenance parity checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact top-level flag composition checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide scalar scale-slot and scale-descriptor checks across current routed `V_WMMA_SCALE*` seeds
@@ -273,6 +277,7 @@
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across current paired scale-load helpers
     - route-wide exact route metadata and operand-layout checks across current paired scale-load helpers
     - route-wide exact operand-layout-to-record consistency checks across current paired scale-load helpers
+    - route-wide exact descriptor-to-slot parity checks across current paired scale-load helpers
     - route-wide exact route-info and RDNA4 provenance parity checks across current paired scale-load helpers
     - route-wide exact top-level flag composition checks across current paired scale-load helpers
     - route-wide exact vector source/destination and scalar scale / paired-scale slot-shape checks across current paired scale-load helpers
@@ -324,6 +329,7 @@
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact route metadata and operand-layout checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact operand-layout-to-record consistency checks across current routed `V_SWMMAC_*` seeds
+    - route-wide exact descriptor-to-slot parity checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact route-info and RDNA4 provenance parity checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact top-level flag composition checks across current routed `V_SWMMAC_*` seeds
     - route-wide role-specific wave32 checks across current routed `V_SWMMAC_*` seeds
@@ -363,6 +369,7 @@
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across the current tensor route set
     - route-wide exact route metadata and operand-layout checks across the current tensor route set
     - route-wide exact operand-layout-to-record consistency checks across the current tensor route set
+    - route-wide exact descriptor-to-slot parity checks across the current tensor route set
     - route-wide exact route-info and RDNA4 provenance parity checks across the current tensor route set
     - route-wide exact top-level flag composition checks across the current tensor route set
     - route-wide exact tensor-descriptor, tensor-coordinate, and LDS address slot-shape checks across the current tensor route set
@@ -401,6 +408,7 @@
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across the current VOP1 route set
     - route-wide exact route metadata and operand-layout checks across the current VOP1 route set
     - route-wide exact operand-layout-to-record consistency checks across the current VOP1 route set
+    - route-wide exact descriptor-to-slot parity checks across the current VOP1 route set
     - route-wide exact route-info and RDNA4 provenance parity checks across the current VOP1 route set
     - route-wide exact top-level flag composition checks across the current VOP1 route set
     - route-wide exact scalar and packed source/destination slot-shape checks across the current VOP1 route set
@@ -437,6 +445,7 @@
     - route-wide exact operand-role, slot-binding, and descriptor ordering checks across the current VOP3 SDST route set
     - route-wide exact route metadata and operand-layout checks across the current VOP3 SDST route set
     - route-wide exact operand-layout-to-record consistency checks across the current VOP3 SDST route set
+    - route-wide exact descriptor-to-slot parity checks across the current VOP3 SDST route set
     - route-wide exact route-info and RDNA4 provenance parity checks across the current VOP3 SDST route set
     - route-wide exact top-level flag composition checks across the current VOP3 SDST route set
     - route-wide exact source, scale, and vector/scalar destination slot-shape checks across the current VOP3 SDST route set
