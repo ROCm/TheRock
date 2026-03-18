@@ -87,15 +87,16 @@ If you prefer to set up manually:
 Set-ExecutionPolicy Bypass -Scope Process -Force
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
 iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+Import-Module $env:ChocolateyInstall\\helpers\\chocolateyProfile.psm1; refreshenv
 
 # Install dependencies
 choco install -y git python cmake ninja ccache
 
-# Refresh PATH
-$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')
-
 # Install uv
 irm https://astral.sh/uv/install.ps1 | iex
+
+# Refresh PATH
+$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')
 
 # Clone and setup
 git clone https://github.com/ROCm/TheRock.git
