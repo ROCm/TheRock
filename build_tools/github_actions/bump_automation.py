@@ -318,7 +318,7 @@ def main():
     args = parser.parse_args()
 
     if args.event_type == "schedule":
-        handle_schedule(args.systems_token,args.libraries_token)
+        handle_schedule(args.systems_token, args.libraries_token)
     elif args.event_type == "push":
         handle_push(
             args.before,
