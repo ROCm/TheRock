@@ -11,3 +11,12 @@ if(NOT WIN32)
   find_library(_therock_legacy_roctx64 roctx64 REQUIRED)
   cmake_language(DEFER CALL therock_patch_linked_lib OLD_LIBRARY "roctx64" NEW_TARGET "${_therock_legacy_roctx64}")
 endif()
+
+# Enable BUILD_ADDRESS_SANITIZER when THEROCK_SANITIZER is ASAN
+# This enables RCCL's LTO optimization bypass for faster ASAN link times
+if(THEROCK_SANITIZER STREQUAL "ASAN")
+  set(BUILD_ADDRESS_SANITIZER ON)
+  set(VERBOSE 1)
+  message(STATUS "Enabling BUILD_ADDRESS_SANITIZER for RCCL
+(THEROCK_SANITIZER=${THEROCK_SANITIZER})")
+endif()
