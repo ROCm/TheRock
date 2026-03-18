@@ -622,10 +622,12 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "amdrocm-runtime",
+      "amdrocm-amdsmi",
       "amdrocm-blas-devel"
     ],
     "RPMRequires": [
       "amdrocm-runtime",
+      "amdrocm-amdsmi",
       "amdrocm-blas-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -1197,11 +1199,13 @@
       "libc6",
       "amdrocm-runtime",
       "amdrocm-sysdeps",
+      "amdrocm-amdsmi",
       "amdrocm-profiler-base"
     ],
     "RPMRequires": [
       "amdrocm-runtime",
       "amdrocm-sysdeps",
+      "amdrocm-amdsmi",
       "amdrocm-profiler-base"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -1752,10 +1756,12 @@
     "DEBDepends": [
       "libc6",
       "amdrocm-base",
+      "amdrocm-amdsmi",
       "amdrocm-profiler-base"
     ],
     "RPMRequires": [
       "amdrocm-base",
+      "amdrocm-amdsmi",
       "amdrocm-profiler-base"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
