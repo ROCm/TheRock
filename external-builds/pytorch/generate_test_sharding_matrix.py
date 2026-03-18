@@ -31,7 +31,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 
 # Shard counts mirror the parallelism used by upstream PyTorch CI for the
 # corresponding ROCm test configurations.  Chosen to keep each shard under
@@ -104,8 +103,7 @@ def main() -> None:
 
     configs = args.test_configs.split()
     if not configs:
-        print("Error: --test-configs must not be empty", file=sys.stderr)
-        sys.exit(1)
+        parser.error("--test-configs must not be empty")
 
     matrix = build_matrix(configs, args.default_runner, args.multi_gpu_runner)
     matrix_json = json.dumps(matrix, separators=(",", ":"))

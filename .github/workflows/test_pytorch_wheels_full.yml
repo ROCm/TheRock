@@ -90,7 +90,7 @@ run-name: Test PyTorch Full (${{ inputs.amdgpu_family }}, ${{ inputs.torch_versi
 
 jobs:
   prepare_matrix:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
     steps:
@@ -99,7 +99,6 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
-          sparse-checkout: external-builds/pytorch/generate_test_sharding_matrix.py
 
       - id: generate
         run: |
