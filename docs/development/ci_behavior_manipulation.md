@@ -29,6 +29,7 @@ However, if additional options are wanted, you can add a label to manipulate the
 - `test:...`: The full test will run only for the specified label and other labeled projects (ex: `test:rocthrust`, `test:hipblaslt`)
 - `test_runner:...`: The CI will run tests on only custom test machines (ex: `test_runner:oem`)
 - `test_filter:...`: The CI will run tests based on the specified filter (ex: `test_filter:comprehensive`). [test_filtering.md](./test_filtering.md) has additional information on allowed test filters.
+- `ci:run-multi-arch`: Opt in to running [Multi-Arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml) on this PR. Without this label, multi-arch CI is skipped on PRs to avoid doubling CI load during the transition. See [issue #3337](https://github.com/ROCm/TheRock/issues/3337).
 
 ### Workflow dispatch behavior
 
