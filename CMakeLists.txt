@@ -114,7 +114,7 @@ option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds in
 cmake_dependent_option(THEROCK_ENABLE_MPI
   "Enables building components with Message Passing Interface (MPI) support"
   OFF "NOT WIN32" OFF)
-  
+
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 option(THEROCK_BUILD_COMGR_TESTS "Enables building Comgr tests" OFF)
