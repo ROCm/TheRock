@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 364> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 370> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -59,6 +59,12 @@ constexpr std::array<std::string_view, 364> kPhase0ExecutableOpcodes{{
     "GLOBAL_LOAD_B64",
     "GLOBAL_LOAD_B96",
     "GLOBAL_LOAD_B128",
+    "GLOBAL_STORE_B8",
+    "GLOBAL_STORE_B16",
+    "GLOBAL_STORE_B32",
+    "GLOBAL_STORE_B64",
+    "GLOBAL_STORE_B96",
+    "GLOBAL_STORE_B128",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -572,6 +578,14 @@ InstructionOperand DescribeWideSourceOperand(InstructionOperand operand,
   return operand.WithDescriptor(MakeImmediateDescriptor(role, slot_kind, 64));
 }
 
+InstructionOperand DescribeWideVectorSourceOperand(InstructionOperand operand,
+                                                   OperandRole role,
+                                                   OperandSlotKind slot_kind,
+                                                   std::uint8_t component_count) {
+  return operand.WithDescriptor(MakeVectorRegisterDescriptor(
+      role, slot_kind, OperandAccess::kRead, 32, component_count));
+}
+
 InstructionOperand DescribeWideScalarSourceOperand(InstructionOperand operand,
                                                    OperandRole role,
                                                    OperandSlotKind slot_kind,
@@ -1080,6 +1094,67 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
             SignExtend13(ExtractBits(word, 0, 13))))
             .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource2,
                                                    OperandSlotKind::kSource2,
+                                                   13u)));
+    *words_consumed = 2;
+  } else if (instruction_name == "GLOBAL_STORE_B8" ||
+             instruction_name == "GLOBAL_STORE_B16" ||
+             instruction_name == "GLOBAL_STORE_B32" ||
+             instruction_name == "GLOBAL_STORE_B64" ||
+             instruction_name == "GLOBAL_STORE_B96" ||
+             instruction_name == "GLOBAL_STORE_B128") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+
+    InstructionOperand vdata;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 8, 8), &vdata,
+                                    error_message)) {
+      return false;
+    }
+
+    InstructionOperand vaddr;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 0, 8), &vaddr,
+                                    error_message)) {
+      return false;
+    }
+
+    const std::uint32_t raw_saddr = ExtractBits(words[1], 16, 7);
+    if (raw_saddr >= WaveExecutionState::kScalarRegisterCount) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL store scalar address out of range";
+      }
+      return false;
+    }
+    const InstructionOperand saddr =
+        InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_saddr));
+
+    InstructionOperand described_vdata =
+        DescribeSourceOperand(vdata, OperandRole::kSource0,
+                              OperandSlotKind::kSource0);
+    if (instruction_name == "GLOBAL_STORE_B64") {
+      described_vdata = DescribeWideVectorSourceOperand(
+          vdata, OperandRole::kSource0, OperandSlotKind::kSource0, 2u);
+    } else if (instruction_name == "GLOBAL_STORE_B96") {
+      described_vdata = DescribeWideVectorSourceOperand(
+          vdata, OperandRole::kSource0, OperandSlotKind::kSource0, 3u);
+    } else if (instruction_name == "GLOBAL_STORE_B128") {
+      described_vdata = DescribeWideVectorSourceOperand(
+          vdata, OperandRole::kSource0, OperandSlotKind::kSource0, 4u);
+    }
+
+    *instruction = DecodedInstruction::FourOperand(
+        instruction_name, described_vdata,
+        DescribeSourceOperand(vaddr, OperandRole::kSource1,
+                              OperandSlotKind::kSource1),
+        DescribeSourceOperand(saddr, OperandRole::kSource2,
+                              OperandSlotKind::kSource2),
+        InstructionOperand::Imm32(static_cast<std::uint32_t>(
+            SignExtend13(ExtractBits(word, 0, 13))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kUnknown,
+                                                   OperandSlotKind::kUnknown,
                                                    13u)));
     *words_consumed = 2;
   } else if (instruction_name == "S_PREFETCH_INST_PC_REL" ||

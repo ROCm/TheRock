@@ -54,7 +54,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 364> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 370> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -96,6 +96,12 @@ constexpr std::array<std::string_view, 364> kExecutableSeedOpcodes{{
     "GLOBAL_LOAD_B64",
     "GLOBAL_LOAD_B96",
     "GLOBAL_LOAD_B128",
+    "GLOBAL_STORE_B8",
+    "GLOBAL_STORE_B16",
+    "GLOBAL_STORE_B32",
+    "GLOBAL_STORE_B64",
+    "GLOBAL_STORE_B96",
+    "GLOBAL_STORE_B128",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -954,6 +960,30 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "GLOBAL_LOAD_B128") {
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadB128;
+    return true;
+  }
+  if (opcode == "GLOBAL_STORE_B8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreB8;
+    return true;
+  }
+  if (opcode == "GLOBAL_STORE_B16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreB16;
+    return true;
+  }
+  if (opcode == "GLOBAL_STORE_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreB32;
+    return true;
+  }
+  if (opcode == "GLOBAL_STORE_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreB64;
+    return true;
+  }
+  if (opcode == "GLOBAL_STORE_B96") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreB96;
+    return true;
+  }
+  if (opcode == "GLOBAL_STORE_B128") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreB128;
     return true;
   }
   if (opcode == "S_LOAD_B32") {
@@ -2979,6 +3009,119 @@ bool ExecuteVectorGlobalLoadAtAddress(const DecodedInstruction& instruction,
                             state, error_message);
 }
 
+bool ExecuteVectorGlobalStoreAtAddress(const DecodedInstruction& instruction,
+                                       std::uint64_t address,
+                                       std::size_t lane_index,
+                                       const WaveExecutionState& state,
+                                       ExecutionMemory* memory,
+                                       std::string* error_message) {
+  const std::string_view opcode = instruction.opcode;
+
+  if (opcode == "GLOBAL_STORE_B8") {
+    const std::uint32_t value = ReadVectorOperand(instruction.operands[0], state,
+                                                  lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU8(address, static_cast<std::uint8_t>(value))) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL_STORE_B8 memory write failed";
+      }
+      return false;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (opcode == "GLOBAL_STORE_B16") {
+    const std::uint32_t value = ReadVectorOperand(instruction.operands[0], state,
+                                                  lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU16(address, static_cast<std::uint16_t>(value))) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL_STORE_B16 memory write failed";
+      }
+      return false;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (opcode == "GLOBAL_STORE_B32") {
+    const std::uint32_t value = ReadVectorOperand(instruction.operands[0], state,
+                                                  lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU32(address, value)) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL_STORE_B32 memory write failed";
+      }
+      return false;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (opcode == "GLOBAL_STORE_B64") {
+    const std::uint64_t value = ReadWideSourceOperand(
+        instruction.operands[0], state, lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU32(address, static_cast<std::uint32_t>(value)) ||
+        !memory->StoreU32(address + 4u,
+                          static_cast<std::uint32_t>(value >> 32))) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL_STORE_B64 memory write failed";
+      }
+      return false;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (instruction.operands[0].kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "expected vector source operand";
+    }
+    return false;
+  }
+
+  const std::size_t word_count = opcode == "GLOBAL_STORE_B96" ? 3u : 4u;
+  for (std::size_t i = 0; i < word_count; ++i) {
+    InstructionOperand element_operand =
+        InstructionOperand::Vgpr(static_cast<std::uint16_t>(
+            instruction.operands[0].index + static_cast<std::uint16_t>(i)));
+    const std::uint32_t value = ReadVectorOperand(element_operand, state,
+                                                  lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU32(address + static_cast<std::uint64_t>(i * 4u), value)) {
+      if (error_message != nullptr) {
+        *error_message = std::string(opcode) + " memory write failed";
+      }
+      return false;
+    }
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
 bool WriteWideVectorOperand(const InstructionOperand& operand,
                             std::size_t lane_index,
                             std::uint64_t value,
@@ -4560,6 +4703,42 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     }
     return true;
   }
+  if (instruction.opcode == "GLOBAL_STORE_B8" ||
+      instruction.opcode == "GLOBAL_STORE_B16" ||
+      instruction.opcode == "GLOBAL_STORE_B32" ||
+      instruction.opcode == "GLOBAL_STORE_B64" ||
+      instruction.opcode == "GLOBAL_STORE_B96" ||
+      instruction.opcode == "GLOBAL_STORE_B128") {
+    if (!ValidateOperandCount(instruction, 4, error_message)) {
+      return false;
+    }
+    if (memory == nullptr) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " requires execution memory";
+      }
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < kGfx1201LaneCount;
+         ++lane_index) {
+      if ((MaskToGfx1201Wave32(state->exec_mask) & (1ull << lane_index)) == 0u) {
+        continue;
+      }
+      std::uint64_t address = 0;
+      if (!ComputeVglobalAddress(instruction, *state, lane_index, &address,
+                                 error_message)) {
+        return false;
+      }
+      if (!ExecuteVectorGlobalStoreAtAddress(instruction, address, lane_index,
+                                             *state, memory, error_message)) {
+        return false;
+      }
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
 
   if (instruction.opcode == "S_PREFETCH_INST_PC_REL" ||
       instruction.opcode == "S_PREFETCH_DATA_PC_REL") {
@@ -5554,6 +5733,12 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kGlobalLoadB64:
     case Gfx1201CompiledOpcode::kGlobalLoadB96:
     case Gfx1201CompiledOpcode::kGlobalLoadB128:
+    case Gfx1201CompiledOpcode::kGlobalStoreB8:
+    case Gfx1201CompiledOpcode::kGlobalStoreB16:
+    case Gfx1201CompiledOpcode::kGlobalStoreB32:
+    case Gfx1201CompiledOpcode::kGlobalStoreB64:
+    case Gfx1201CompiledOpcode::kGlobalStoreB96:
+    case Gfx1201CompiledOpcode::kGlobalStoreB128:
     case Gfx1201CompiledOpcode::kSLoadB32:
     case Gfx1201CompiledOpcode::kSLoadB64:
     case Gfx1201CompiledOpcode::kSLoadB96:
