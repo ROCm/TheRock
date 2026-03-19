@@ -605,53 +605,6 @@ def get_first_gpu_architecture(env=None, therock_bin_dir: str | None = None) -> 
     raise RuntimeError("No GPU architecture found in rocminfo output")
 
 
-def get_gpu_architecture_offload_arch(THEROCK_DIR):
-    """
-    Installs and executes the offload-arch command and returns the last line of the output.
-
-    Returns:
-        str: The last line of the offload-arch output, or None if not available.
-    """
-    import platform
-
-    try:
-        subprocess.run(
-            f"python {THEROCK_DIR}/build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-all --packages rocm .tmpvenv",
-            shell=True,
-        )
-        if platform.system() == "Windows":
-            offload_arch_location = ".tmpvenv/Scripts/offload-arch.exe"
-        else:
-            offload_arch_location = ".tmpvenv/bin/offload-arch"
-        result = subprocess.run(
-            [offload_arch_location], capture_output=True, text=True, check=True
-        )
-
-        lines = result.stdout.strip().split("\n")
-        logging.info(f"DEBUG:{lines}")
-
-        return lines[-1]
-
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing offload-arch: {e}", file=sys.stderr)
-        print(f"stderr: {e.stderr}", file=sys.stderr)
-        return None
-    except FileNotFoundError:
-        print("Error: offload-arch command not found", file=sys.stderr)
-        return None
-
-
-def prepend_env_path(env: dict, var_name: str, new_path: str):
-    """
-    Prepend a new path to an environment variable that contains a list of paths (e.g., PATH, LD_LIBRARY_PATH).
-    """
-    existing = env.get(var_name)
-    if existing:
-        env[var_name] = f"{new_path}{os.pathsep}{existing}"
-    else:
-        env[var_name] = new_path
-
-
 def is_asan():
     """Using artifact_group, determines if this is an asan build"""
     ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP", "")

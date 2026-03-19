@@ -10,22 +10,19 @@ import subprocess
 from pathlib import Path
 import platform
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-if str(THEROCK_DIR) not in sys.path:
-    sys.path.insert(0, str(THEROCK_DIR))
-
-from build_tools.github_actions.github_actions_utils import (
-    get_gpu_architecture_offload_arch,
+from libhipcxx_utils import (
+    get_gpu_architecture_portable,
     prepend_env_path,
 )
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
+SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-gpu_arch = get_gpu_architecture_offload_arch(THEROCK_DIR)
+gpu_arch = get_gpu_architecture_portable(OUTPUT_ARTIFACTS_DIR)
 logging.info(f"++ Detected GPU architecture: {gpu_arch}")
 
 
@@ -86,12 +83,9 @@ except FileNotFoundError as e:
 is_windows = platform.system() == "Windows"
 is_linux = platform.system() == "Linux"
 
-if is_windows:
-    HIPCC_BINARY_NAME = "hipcc.exe"
-elif is_linux:
-    HIPCC_BINARY_NAME = "hipcc"
-else:
-    print("Incompatible platform!")
+compiler_ext = ".exe" if is_windows else ""
+
+HIPCC_BINARY_NAME = f"hipcc{compiler_ext}"
 
 HIP_COMPILER_ROCM_ROOT = OUTPUT_ARTIFACTS_PATH
 if is_windows:
@@ -109,21 +103,6 @@ cmd = [
     f"-DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT.as_posix()}",
     f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
 ]
-
-# Find lit executable (from venv or system)
-if is_windows:
-    lit_executable = None
-    # Check in current venv
-    venv_lit = Path(os.sys.prefix) / "Scripts" / "lit.exe"
-    if venv_lit.exists():
-        lit_executable = str(venv_lit)
-    # Check in .tmpvenv
-    elif (Path(".tmpvenv") / "Scripts" / "lit.exe").exists():
-        lit_executable = str((Path(".tmpvenv") / "Scripts" / "lit.exe").resolve())
-    if lit_executable:
-        logging.info(f"Found lit executable at: {lit_executable}")
-        cmd.append(f"-Dlibcudacxx_LIT={lit_executable}")
-        cmd.append(f"-DLLVM_EXTERNAL_LIT={lit_executable}")
 
 # Add rc compiler for windows
 if is_windows:
