@@ -18,7 +18,6 @@ post_build_upload.py [-h]
   [--skip-manifest]
 
 Path/URL arguments (--path-prefix, --summary-base-url, --summary-path):
-  Must not end with a forward slash. The script joins segments with "/".
   --path-prefix is the S3 key prefix for all outputs; --summary-path is the
   corresponding prefix in the CDN URL used for job summary links. These let
   private workflows place artifacts under a versioned subdirectory while
@@ -409,19 +408,19 @@ if __name__ == "__main__":
         "--path-prefix",
         type=str,
         default="",
-        help="S3 key prefix for all outputs (e.g. 'v3/artifacts'). Must not end with /.",
+        help="S3 key prefix for all outputs (e.g. 'v3/artifacts').",
     )
     parser.add_argument(
         "--summary-base-url",
         type=str,
         default="",
-        help="CDN base URL for job summary links (e.g. 'https://artifacts.example.com'). Must not end with /. When set, summary links use this instead of the raw S3 URL.",
+        help="CDN base URL for job summary links (e.g. 'https://artifacts.example.com'). When set, summary links use this instead of the raw S3 URL.",
     )
     parser.add_argument(
         "--summary-path",
         type=str,
         default="",
-        help="CDN path prefix for summary links, corresponding to --path-prefix on S3 (e.g. 'artifacts'). Must not end with /.",
+        help="CDN path prefix for summary links, corresponding to --path-prefix on S3 (e.g. 'artifacts').",
     )
     parser.add_argument(
         "--skip-manifest",
@@ -433,10 +432,9 @@ if __name__ == "__main__":
 
     # Check preconditions for provided arguments before proceeding.
 
-    for arg_name in ("path_prefix", "summary_base_url", "summary_path"):
-        val = getattr(args, arg_name)
-        if val and val.endswith("/"):
-            parser.error(f"--{arg_name.replace('_', '-')} must not end with '/'")
+    args.path_prefix = args.path_prefix.rstrip("/")
+    args.summary_base_url = args.summary_base_url.rstrip("/")
+    args.summary_path = args.summary_path.rstrip("/")
 
     if args.upload:
         if not args.run_id:
