@@ -1,0 +1,38 @@
+From 8cf997ea521470c42ca444d7dd4d70fae6641924 Mon Sep 17 00:00:00 2001
+From: Ron Lieberman <ron.lieberman@amd.com>
+Date: Sun, 22 Mar 2026 09:49:10 -0500
+Subject: [PATCH] [CK lifetime override]
+ -Wno-lifetime-safety-intra-tu-suggestions
+ +-Wno-lifetime-safety-cross-tu-suggestions
+
+---
+ clang/tools/driver/driver.cpp | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/clang/tools/driver/driver.cpp b/clang/tools/driver/driver.cpp
+index f22c4b7050b8..a6c409dc2d7d 100644
+--- a/clang/tools/driver/driver.cpp
++++ b/clang/tools/driver/driver.cpp
+@@ -321,6 +321,19 @@ int clang_main(int Argc, char **Argv, const llvm::ToolContext &ToolContext) {
+     driver::applyOverrideOptions(Args, OverrideStr, SavedStrings,
+                                  "CCC_OVERRIDE_OPTIONS", &llvm::errs());
+   }
++  { bool Noisy = false;
++    if (const char *OverrideStr = ::getenv("CCC_OVERRIDE_OPTIONS"))
++      Noisy |= OverrideStr[0] != '#';
++    if (const char *NoisyStr = ::getenv("NOISY_CK_OVERRIDE"))
++      Noisy |= NoisyStr[0] != '#';
++    const char *AppendedOverrideStr;
++    if (Noisy)
++      AppendedOverrideStr = "+-Wno-lifetime-safety-intra-tu-suggestions +-Wno-lifetime-safety-cross-tu-suggestions";
++    else
++      AppendedOverrideStr = "#+-Wno-lifetime-safety-intra-tu-suggestions +-Wno-lifetime-safety-cross-tu-suggestions";
++    driver::applyOverrideOptions(Args, AppendedOverrideStr, SavedStrings,
++                                 "EXTRA_CCC_OVERRIDE_OPTIONS", &llvm::errs());
++  }
+ 
+   std::string Path = GetExecutablePath(ToolContext.Path, CanonicalPrefixes);
+ 
+-- 
+2.34.1
+
