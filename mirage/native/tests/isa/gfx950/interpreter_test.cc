@@ -17110,6 +17110,27 @@ int main() {
         }
         return true;
       };
+  auto expect_memory_unchanged =
+      [&](const LinearExecutionMemory& memory,
+          const LinearExecutionMemory& expected,
+          std::uint64_t byte_count,
+          const char* mode) {
+        for (std::uint64_t address = 0; address < byte_count; ++address) {
+          std::uint8_t observed = 0;
+          std::uint8_t expected_value = 0;
+          if (!Expect(ReadU8(memory, address, &observed),
+                      "expected global_load_lds memory read") ||
+              !Expect(ReadU8(expected, address, &expected_value),
+                      "expected global_load_lds baseline memory read") ||
+              !Expect(observed == expected_value,
+                      "expected global_load_lds to preserve source memory")) {
+            std::cerr << mode << " address=0x" << std::hex << address
+                      << std::dec << '\n';
+            return false;
+          }
+        }
+        return true;
+      };
   auto run_global_load_lds_case =
       [&](std::string_view opcode,
           std::int32_t offset,
@@ -17132,6 +17153,7 @@ int main() {
                     "expected decoded global_load_lds seed writes")) {
           return false;
         }
+        const LinearExecutionMemory initial_decoded_memory = decoded_memory;
         WaveExecutionState decoded_state =
             make_global_load_lds_state(m0_base, lane_addresses);
         if (!Expect(interpreter.ExecuteProgram(program, &decoded_state,
@@ -17146,7 +17168,9 @@ int main() {
                 base_address +
                     static_cast<std::uint32_t>(expected_values.size() *
                                                sizeof(std::uint32_t)),
-                dwords_per_lane, "decoded inactive")) {
+                dwords_per_lane, "decoded inactive") ||
+            !expect_memory_unchanged(decoded_memory, initial_decoded_memory,
+                                     0x4000u, "decoded")) {
           std::cerr << opcode << '\n';
           return false;
         }
@@ -17163,6 +17187,7 @@ int main() {
                     "expected compiled global_load_lds seed writes")) {
           return false;
         }
+        const LinearExecutionMemory initial_compiled_memory = compiled_memory;
         WaveExecutionState compiled_state =
             make_global_load_lds_state(m0_base, lane_addresses);
         if (!Expect(interpreter.ExecuteProgram(compiled_program, &compiled_state,
@@ -17177,7 +17202,9 @@ int main() {
                 base_address +
                     static_cast<std::uint32_t>(expected_values.size() *
                                                sizeof(std::uint32_t)),
-                dwords_per_lane, "compiled inactive")) {
+                dwords_per_lane, "compiled inactive") ||
+            !expect_memory_unchanged(compiled_memory, initial_compiled_memory,
+                                     0x4000u, "compiled")) {
           std::cerr << opcode << '\n';
           return false;
         }
