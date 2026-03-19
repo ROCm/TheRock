@@ -15578,12 +15578,61 @@ int main() {
       DecodedInstruction::Nullary("S_ICACHE_INV"),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
-  WaveExecutionState decoded_icache_state{};
+  const auto make_icache_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x13572468u;
+    state.sgprs[1] = 0x89abcdefu;
+    state.vgprs[12][0] = 0x01020304u;
+    state.vgprs[12][1] = 0x11121314u;
+    state.vgprs[12][2] = 0x21222324u;
+    state.vgprs[12][3] = 0x31323334u;
+    return state;
+  };
+  const auto make_icache_memory = []() {
+    LinearExecutionMemory memory(0x80, 0);
+    memory.WriteU32(0x00u, 0xdeadbeefu);
+    memory.WriteU32(0x20u, 0x11223344u);
+    return memory;
+  };
+  const auto validate_icache_state =
+      [&](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+          const char* mode) {
+        std::uint32_t value = 0;
+        if (!Expect(state.halted,
+                    (std::string(mode) + " s_icache_inv program to halt").c_str()) ||
+            !Expect(state.exec_mask == 0b1011ULL,
+                    (std::string(mode) + " s_icache_inv to preserve exec").c_str()) ||
+            !Expect(state.sgprs[0] == 0x13572468u &&
+                        state.sgprs[1] == 0x89abcdefu,
+                    (std::string(mode) + " s_icache_inv to preserve sgprs").c_str()) ||
+            !Expect(state.vgprs[12][0] == 0x01020304u &&
+                        state.vgprs[12][1] == 0x11121314u &&
+                        state.vgprs[12][2] == 0x21222324u &&
+                        state.vgprs[12][3] == 0x31323334u,
+                    (std::string(mode) + " s_icache_inv to preserve vgprs").c_str()) ||
+            !Expect(memory.ReadU32(0x00u, &value),
+                    (std::string(mode) + " s_icache_inv memory read").c_str()) ||
+            !Expect(value == 0xdeadbeefu,
+                    (std::string(mode) + " s_icache_inv memory result").c_str()) ||
+            !Expect(memory.ReadU32(0x20u, &value),
+                    (std::string(mode) + " s_icache_inv memory read").c_str()) ||
+            !Expect(value == 0x11223344u,
+                    (std::string(mode) + " s_icache_inv memory result").c_str())) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        return true;
+      };
+
+  LinearExecutionMemory decoded_icache_memory = make_icache_memory();
+  WaveExecutionState decoded_icache_state = make_icache_state();
   if (!Expect(interpreter.ExecuteProgram(icache_program, &decoded_icache_state,
+                                         &decoded_icache_memory,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(decoded_icache_state.halted,
-              "expected s_icache_inv program to halt")) {
+      !validate_icache_state(decoded_icache_state, decoded_icache_memory,
+                             "decoded")) {
     return 1;
   }
 
@@ -15593,13 +15642,15 @@ int main() {
               error_message.c_str())) {
     return 1;
   }
-  WaveExecutionState compiled_icache_state{};
+  LinearExecutionMemory compiled_icache_memory = make_icache_memory();
+  WaveExecutionState compiled_icache_state = make_icache_state();
   if (!Expect(interpreter.ExecuteProgram(compiled_icache_program,
                                          &compiled_icache_state,
+                                         &compiled_icache_memory,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(compiled_icache_state.halted,
-              "expected compiled s_icache_inv program to halt")) {
+      !validate_icache_state(compiled_icache_state, compiled_icache_memory,
+                             "compiled")) {
     return 1;
   }
   }
