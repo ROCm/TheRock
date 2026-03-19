@@ -4,14 +4,12 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-    set(_download_stamp "${_source_dir}/download.stamp")
 
     therock_subproject_fetch(therock-bzip2-sources
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz"
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/bzip2-1.0.8.tar.gz"
       URL_HASH "SHA512=083f5e675d73f3233c7930ebe20425a533feedeaaa9d8cc86831312a6581cefbe6ed0d08d2fa89be81082f2a5abdabca8b3c080bf97218a1bd59dc118a30b9f3"
-      TOUCH "${_download_stamp}"
     )
 
     therock_cmake_subproject_declare(therock-bzip2
@@ -36,7 +34,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       INTERFACE_PKG_CONFIG_DIRS
         lib/rocm_sysdeps/lib/pkgconfig
       EXTRA_DEPENDS
-        "${_download_stamp}"
+        therock-bzip2-sources-download
     )
     therock_cmake_subproject_provide_package(therock-bzip2 BZip2 lib/rocm_sysdeps/lib/cmake/BZip2)
     therock_cmake_subproject_activate(therock-bzip2)

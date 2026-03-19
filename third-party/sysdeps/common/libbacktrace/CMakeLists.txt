@@ -4,7 +4,6 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-    set(_download_stamp "${_source_dir}/download.stamp")
 
     therock_subproject_fetch(therock-libbacktrace-sources
       SOURCE_DIR "${_source_dir}"
@@ -13,7 +12,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       # branch.
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/libbacktrace-b9e40069c0b47a722286b94eb5231f7f05c08713.zip"
       URL_HASH "SHA512=8acc3324d367413f41a7a65d86b96ad536907ef8c54905041670f5b9adac229a45d454a954385f230c4236d0d69d486551194b1298694af9df2229a05e998997"
-      TOUCH "${_download_stamp}"
     )
 
     therock_cmake_subproject_declare(therock-libbacktrace
@@ -37,7 +35,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       INTERFACE_PKG_CONFIG_DIRS
         lib/rocm_sysdeps/lib/pkgconfig
       EXTRA_DEPENDS
-        "${_download_stamp}"
+        therock-libbacktrace-sources-download
     )
     therock_cmake_subproject_provide_package(therock-libbacktrace libbacktrace lib/rocm_sysdeps/lib/cmake/libbacktrace)
     therock_cmake_subproject_activate(therock-libbacktrace)

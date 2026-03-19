@@ -4,14 +4,12 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-    set(_download_stamp "${_source_dir}/download.stamp")
 
     therock_subproject_fetch(therock-ncurses-sources
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: https://invisible-island.net/archives/ncurses/ncurses-6.6.tar.gz
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/ncurses-6.6.tar.gz"
       URL_HASH "SHA512=02647baae53abc844fbadee5b0a2187ad073125c4e8950df6d1c4feb781cb74ba64fb838cedfee2c246c39932187f6775b1df124f18b99a4233f0d98c72191de"
-      TOUCH "${_download_stamp}"
       # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
       # of the extracted sources, otherwise the build system will notice
       # changes and will try to re-run autotools, causing issues.
@@ -40,7 +38,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       INTERFACE_PKG_CONFIG_DIRS
         lib/rocm_sysdeps/lib/pkgconfig
       EXTRA_DEPENDS
-        "${_download_stamp}"
+        therock-ncurses-sources-download
     )
     therock_cmake_subproject_provide_package(therock-ncurses ncurses lib/rocm_sysdeps/lib/cmake/ncurses)
     therock_cmake_subproject_activate(therock-ncurses)

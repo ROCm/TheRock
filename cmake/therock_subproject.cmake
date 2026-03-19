@@ -144,7 +144,7 @@ function(therock_subproject_fetch target_name)
     PARSE_ARGV 1 ARG
     "CMAKE_PROJECT"
     "SOURCE_DIR;PREFIX;EXCLUDE_FROM_ALL"
-    "TOUCH"
+    ""
   )
 
   if(NOT DEFINED ARG_EXCLUDE_FROM_ALL)
@@ -156,21 +156,23 @@ function(therock_subproject_fetch target_name)
   if(NOT DEFINED ARG_SOURCE_DIR)
     set(ARG_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source")
   endif()
-
   set(_extra)
-  # In order to interop with therock_cmake_subproject_declare, the CMakeLists.txt
-  # file must exist so we mark this as a by-product. This serves as the dependency
-  # anchor and causes proper ordering of fetch->configure.
+  # In order to interop with therock_cmake_subproject_declare, there are two ways:
+  # 1. TheExternalProject_Add generates a step target for download
+  #    therock_cmake_subproject_declare can use that target
+  #    in its EXTRA_DEPENDS. The target name is ${target_name}-download
+  #
+  # 2. If, ARG_CMAKE_PROJECT is given, a CMakeLists.txt will be generated in the source dir
+  #    and the subproject can depend on that as a file dependency.
+
   if(ARG_CMAKE_PROJECT)
-    list(APPEND ARG_TOUCH "${ARG_SOURCE_DIR}/CMakeLists.txt")
-  endif()
-  if(ARG_TOUCH)
     list(APPEND _extra
-      BUILD_COMMAND "${CMAKE_COMMAND}" -E touch ${ARG_TOUCH}
-      BUILD_BYPRODUCTS ${ARG_TOUCH}
+      BUILD_COMMAND "${CMAKE_COMMAND}" -E touch "${ARG_SOURCE_DIR}/CMakeLists.txt"
+      BUILD_BYPRODUCTS "${ARG_SOURCE_DIR}/CMakeLists.txt"
     )
   else()
-    list(APPEND _extra "BUILD_COMMAND" "")
+    list(APPEND _extra
+      BUILD_COMMAND "")
   endif()
 
   ExternalProject_Add(
@@ -185,6 +187,7 @@ function(therock_subproject_fetch target_name)
     CONFIGURE_COMMAND ""
     INSTALL_COMMAND ""
     TEST_COMMAND ""
+    STEP_TARGETS download
     ${_extra}
     ${ARG_UNPARSED_ARGUMENTS}
   )
@@ -192,10 +195,12 @@ function(therock_subproject_fetch target_name)
   # Write a .smrev file that is used to compute fingerprints. This matches the
   # logic for the source code control system when it is providing a stable hash
   # for patched source checkouts.
+  # ARG_UNPARSED_ARGUMENTS will include the URL and URL_HASH which
+  # seem sufficient for fingerprinting the dependency
   cmake_path(GET ARG_SOURCE_DIR PARENT_PATH _source_parent)
   cmake_path(GET ARG_SOURCE_DIR FILENAME _source_basename)
   set(_smrev_file "${_source_parent}/.${_source_basename}.smrev")
-  file(WRITE "${_smrev_file}" "${_extra};${ARG_UNPARSED_ARGUMENTS}")
+  file(WRITE "${_smrev_file}" "${ARG_UNPARSED_ARGUMENTS}")
 endfunction()
 
 # therock_cmake_subproject_declare

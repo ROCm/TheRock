@@ -4,14 +4,12 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-    set(_download_stamp "${_source_dir}/download.stamp")
 
     therock_subproject_fetch(therock-hwloc-sources
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: "https://download.open-mpi.org/release/hwloc/v1.11/hwloc-1.11.13.tar.bz2"
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/hwloc-1.11.13.tar.bz2"
       URL_HASH "SHA256=a4494b7765f517c0990d1c7f09d98cb87755bb6b841e4e2cbfebca1b14bac9c8"
-      TOUCH "${_download_stamp}"
       # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
       # of the extracted sources, otherwise the build system will notice
       # changes and will try to re-run autotools, causing issues.
@@ -43,7 +41,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       INTERFACE_PKG_CONFIG_DIRS
         lib/rocm_sysdeps/lib/pkgconfig
       EXTRA_DEPENDS
-        "${_download_stamp}"
+        therock-hwloc-sources-download
     )
     therock_cmake_subproject_provide_package(therock-hwloc hwloc lib/rocm_sysdeps/lib/cmake/hwloc)
     therock_cmake_subproject_activate(therock-hwloc)

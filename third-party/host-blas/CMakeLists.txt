@@ -20,7 +20,6 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-    set(_download_stamp "${_source_dir}/download.stamp")
 
     therock_subproject_fetch(therock-OpenBLAS-sources
       CMAKE_PROJECT
@@ -30,7 +29,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       URL_HASH SHA256=5d81882fdf45a92a190bda2be2922d3372fef19af8f4442f720c0ebc4d10eba8
       # Originally posted MD5 was recomputed as SHA256 manually:
       # URL_HASH MD5=853a0c5c0747c5943e7ef4bbb793162d
-      TOUCH "${_download_stamp}"
     )
 
     # MSVC does not support VLA and AT&T assembly which are required by DYNAMIC_ARCH
@@ -71,7 +69,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DDYNAMIC_ARCH=${_enable_dynamicArch}
         -DBUILD_TESTING=OFF
       EXTRA_DEPENDS
-        "${_download_stamp}"
+        therock-OpenBLAS-sources-download
     )
     therock_cmake_subproject_provide_package(therock-host-blas OpenBLAS lib/host-math/lib/cmake/OpenBLAS)
     therock_cmake_subproject_provide_package(therock-host-blas cblas lib/host-math/lib/cmake/OpenBLAS)
@@ -112,7 +110,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DBUILD_TESTING=OFF
         -DINTERFACE64=1
       EXTRA_DEPENDS
-        "${_download_stamp}"
+        therock-OpenBLAS-sources-download
     )
     therock_cmake_subproject_provide_package(therock-host-blas64 OpenBLAS64 lib/host-math/lib/cmake/OpenBLAS64)
     therock_cmake_subproject_provide_package(therock-host-blas64 cblas64 lib/host-math/lib/cmake/OpenBLAS64)
