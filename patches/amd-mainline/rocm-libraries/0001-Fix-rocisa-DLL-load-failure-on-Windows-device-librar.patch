@@ -1,0 +1,95 @@
+From 86292bc3f2528c2cb3d67f5d8ba112b58268a137 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Thu, 19 Mar 2026 23:03:18 +0100
+Subject: [PATCH] Fix rocisa DLL load failure on Windows device library build
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+On Windows, a .pyd extension's DLL dependencies must be on PATH at
+load time — there is no RPATH equivalent. The device library build
+spawns Python subprocesses (LayerNormGenerator.py, etc.) that import
+rocisa, whose rocisa.pyd links against origami.dll and amdhip64.dll.
+Those DLL directories were missing from the subprocess PATH, causing:
+
+  ImportError: DLL load failed while importing rocisa:
+    The specified module could not be found.
+
+Changes:
+- hipblaslt_python.cmake: on WIN32, prepend $<TARGET_FILE_DIR:origami>,
+  python_binary_dir, and (if defined) $<TARGET_FILE_DIR:amdhip64> to
+  PATH in HIPBLASLT_PYTHON_COMMAND so DLL dependencies resolve.
+- device-library/CMakeLists.txt,
+  device-library/extops/CMakeLists.txt: add "$<TARGET_FILE:rocisa>" as
+  an explicit file-level DEPENDS alongside HIPBLASLT_PYTHON_DEPS to
+  guarantee rocisa.pyd is fully written before any Python import step
+  runs under high build parallelism.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ projects/hipblaslt/cmake/hipblaslt_python.cmake     | 13 +++++++++++++
+ projects/hipblaslt/device-library/CMakeLists.txt    |  2 +-
+ .../hipblaslt/device-library/extops/CMakeLists.txt  |  3 ++-
+ 3 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/projects/hipblaslt/cmake/hipblaslt_python.cmake b/projects/hipblaslt/cmake/hipblaslt_python.cmake
+index 1315137c43..128308e2d0 100644
+--- a/projects/hipblaslt/cmake/hipblaslt_python.cmake
++++ b/projects/hipblaslt/cmake/hipblaslt_python.cmake
+@@ -40,6 +40,19 @@ function(hipblaslt_configure_bundled_python_command python_binary_dir asan_optio
+     set(_path "$ENV{PATH}")
+     if(WIN32)
+         string(REPLACE ";" "${_ds}" _path "${_path}")
++        # Prepend build-output DLL directories so rocisa.pyd can load its runtime
++        # dependencies (origami.dll, amdhip64.dll) when spawned by the device
++        # library build step. On Linux these are resolved via RPATH; Windows has no
++        # equivalent, so we must extend PATH explicitly.
++        set(_dll_dirs
++            "$<TARGET_FILE_DIR:origami>"
++            "${python_binary_dir}"
++        )
++        if(TARGET amdhip64)
++            list(APPEND _dll_dirs "$<TARGET_FILE_DIR:amdhip64>")
++        endif()
++        list(JOIN _dll_dirs "${_ds}" _dll_dirs)
++        set(_path "${_dll_dirs}${_ds}${_path}")
+     endif()
+     set(_python_command
+         "${CMAKE_COMMAND}" -E env
+diff --git a/projects/hipblaslt/device-library/CMakeLists.txt b/projects/hipblaslt/device-library/CMakeLists.txt
+index a9a698334e..44397a7179 100644
+--- a/projects/hipblaslt/device-library/CMakeLists.txt
++++ b/projects/hipblaslt/device-library/CMakeLists.txt
+@@ -66,7 +66,7 @@ add_custom_command(
+     COMMENT "Building device libraries to ${HIPBLASLT_TENSILE_LIBPATH} ..."
+     COMMAND ${TENSILE_CREATE_LIBRARY_COMMAND}
+     COMMAND ${CMAKE_COMMAND} -E touch "${output_stamp}"
+-    DEPENDS  ${HIPBLASLT_PYTHON_DEPS}
++    DEPENDS  ${HIPBLASLT_PYTHON_DEPS} "$<TARGET_FILE:rocisa>"
+     # Because the command can contain special characters
+     VERBATIM
+     # Because this can be very long running and difficult to debug deadlocks
+diff --git a/projects/hipblaslt/device-library/extops/CMakeLists.txt b/projects/hipblaslt/device-library/extops/CMakeLists.txt
+index 2bc7f29881..0875b44c04 100644
+--- a/projects/hipblaslt/device-library/extops/CMakeLists.txt
++++ b/projects/hipblaslt/device-library/extops/CMakeLists.txt
+@@ -69,7 +69,7 @@ foreach(arch IN LISTS archs)
+         COMMAND ${HIPBLASLT_PYTHON_COMMAND} "${ops_dir}/AMaxGenerator.py" -o "${CMAKE_CURRENT_BINARY_DIR}/A_H_S_256_4_${arch}.s" -t H -d S -w 256 -c 4 --arch ${arch}
+         COMMAND ${HIPBLASLT_PYTHON_COMMAND} "${ops_dir}/AMaxGenerator.py" -o "${CMAKE_CURRENT_BINARY_DIR}/A_S_H_256_4_${arch}.s" -t S -d H -w 256 -c 4 --arch ${arch}
+         COMMENT "Creating Layer Norm, Softmax and Amax Assembly for ${arch}"
+-        DEPENDS ${HIPBLASLT_PYTHON_DEPS}
++        DEPENDS ${HIPBLASLT_PYTHON_DEPS} "$<TARGET_FILE:rocisa>"
+     )
+ 
+     set(output_code_object_file "${CMAKE_CURRENT_BINARY_DIR}/extop_${arch}.co")
+@@ -86,6 +86,7 @@ foreach(arch IN LISTS archs)
+         DEPENDS
+             "${output_code_object_file}"
+             ${HIPBLASLT_PYTHON_DEPS}
++            "$<TARGET_FILE:rocisa>"
+             ${previous_target}
+         COMMAND ${HIPBLASLT_PYTHON_COMMAND} "${ops_dir}/ExtOpCreateLibrary.py" --src=${CMAKE_CURRENT_BINARY_DIR} --co=${output_code_object_file} --output=${output_dir} --arch=${arch}
+         COMMAND ${CMAKE_COMMAND} -E copy "${output_dir}/hipblasltExtOpLibrary.dat" "${HIPBLASLT_TENSILE_LIBPATH}/library"
+-- 
+2.51.0
+
