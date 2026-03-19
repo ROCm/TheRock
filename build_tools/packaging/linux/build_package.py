@@ -275,7 +275,10 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     pkg_name = update_package_name(pkg_info.get("Package"), config)
 
     # Disable debian dh_strip for multi-arch builds
-    # TODO: Fix required for dh_strip error in multi-arch builds
+    # WORKAROUND: dh_strip's debugedit incorrectly truncates ELF files with
+    # unconventional layouts (e.g., program headers at end of file).
+    # This causes "program header goes past the end of the file" errors.
+    # See: https://github.com/ROCm/TheRock/issues/4047
     if config.enable_multi_arch:
         disable_dh_strip = True
 

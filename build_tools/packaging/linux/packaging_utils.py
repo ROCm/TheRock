@@ -773,14 +773,17 @@ def resolve_versioned_dependencies(dep_list, config: PackageConfig, is_meta):
         # Gfx-specific non-meta package:
         # dep_list[0] is the versioned-dependency (resolved as generic)
         # dep_list[1:] are gfxarch dependencies (resolved with arch suffix)
-        version_deps = convert_to_versiondependency([dep_list[0]], config)
-        if len(dep_list) > 1:
-            gfx_deps = convert_to_versiondependency(
-                dep_list[1:], config, preserve_arch=True
-            )
-            deps = f"{version_deps}, {gfx_deps}"
+        if not dep_list:
+            deps = ""
         else:
-            deps = version_deps
+            version_deps = convert_to_versiondependency([dep_list[0]], config)
+            if len(dep_list) > 1:
+                gfx_deps = convert_to_versiondependency(
+                    dep_list[1:], config, preserve_arch=True
+                )
+                deps = f"{version_deps}, {gfx_deps}"
+            else:
+                deps = version_deps
     else:
         # Normal path: convert dependencies and add version suffix
         deps = convert_to_versiondependency(dep_list, config)
