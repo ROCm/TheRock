@@ -72,9 +72,7 @@ def gh_api(token, endpoint, method="GET", data=None):
     response = requests.request(method, url, headers=headers, json=data)
 
     if not response.ok:
-        raise RuntimeError(
-            f"GitHub API failed: {response.status_code} {response.text}"
-        )
+        raise RuntimeError(f"GitHub API failed: {response.status_code} {response.text}")
 
     return response.json()
 
