@@ -137,7 +137,7 @@ if platform.system() == "Linux":
     # Update library linking for each libnl library
     libraries = [
         ("librocm_sysdeps_nl_3.so", "libnl-3.so"),
-        ("librocm_sysdeps_nl_genl_3.so", "libnl-genl-3.so"), 
+        ("librocm_sysdeps_nl_genl_3.so", "libnl-genl-3.so"),
         ("librocm_sysdeps_nl_route_3.so", "libnl-route-3.so"),
         ("librocm_sysdeps_nl_idiag_3.so", "libnl-idiag-3.so"),
         ("librocm_sysdeps_nl_nf_3.so", "libnl-nf-3.so"),
@@ -170,13 +170,13 @@ if platform.system() == "Linux":
     # Headers are installed in libnl3/netlink/, but tests expect netlink/
     include_dir = Path(install_prefix) / "include"
     libnl3_dir = include_dir / "libnl3"
-    
+
     if libnl3_dir.exists():
         # Create symlink from include/netlink to include/libnl3/netlink
-        netlink_symlink = include_dir / "netlink" 
+        netlink_symlink = include_dir / "netlink"
         if netlink_symlink.exists() or netlink_symlink.is_symlink():
             netlink_symlink.unlink()
-        
+
         libnl3_netlink = libnl3_dir / "netlink"
         if libnl3_netlink.exists():
             netlink_symlink.symlink_to("libnl3/netlink", target_is_directory=True)
