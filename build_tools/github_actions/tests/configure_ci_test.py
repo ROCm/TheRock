@@ -346,7 +346,7 @@ class ConfigureCITest(unittest.TestCase):
 
     def test_skip_ci_label(self):
         base_args = {
-            "pr_labels": '{"labels":[{"name":"skip-ci"},{"name":"test:hipblaslt"},{"name":"test:rocblas"},{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"},{"name":"test_runner:oem"}]}',
+            "pr_labels": '{"labels":[{"name":"ci:skip"},{"name":"test:hipblaslt"},{"name":"test:rocblas"},{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"},{"name":"test_runner:oem"}]}',
             "build_variant": "release",
         }
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(

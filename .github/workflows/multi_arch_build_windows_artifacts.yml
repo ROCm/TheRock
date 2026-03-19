@@ -62,6 +62,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
       BUILD_DIR: B:\build
       TEATIME_FORCE_INTERACTIVE: 0
+      IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
     steps:
       - name: Checkout Repository
