@@ -51,6 +51,11 @@ def execute_tests(env):
     ROCJPEG_TEST_DIR = Path(THEROCK_TEST_DIR) / "rocjpeg-test"
     ROCJPEG_TEST_DIR.mkdir(parents=True, exist_ok=True)
 
+    # rocjpeg tests are shipped as CMake source and must be built on the target
+    # machine. This serves two purposes:
+    # 1. Verifies that the installed rocjpeg headers and libraries are functional.
+    # 2. Some test dependencies are not bundled in the TheRock artifacts and must
+    #    be linked from the system at build time.
     cmd = [
         "cmake",
         "-GNinja",
@@ -83,7 +88,7 @@ def execute_tests(env):
 
     cmd = [
         "ctest",
-        "-VV",
+        "--extra-verbose",
         "--output-on-failure",
     ]
     logging.info(f"++ Exec [{ROCJPEG_TEST_DIR}]$ {shlex.join(cmd)}")

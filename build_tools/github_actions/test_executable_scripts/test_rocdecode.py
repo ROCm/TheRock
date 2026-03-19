@@ -49,36 +49,14 @@ def setup_env(env):
 
 def execute_tests(env):
     ROCDECODE_TEST_DIR = Path(THEROCK_TEST_DIR) / "rocdecode-test"
-    ROCM_LIB_PATH = Path(THEROCK_BIN_DIR).resolve().parent / "lib"
-    ROCDECODE_LIB = ROCM_LIB_PATH / "librocdecode.so"
-    ROCM_SYSDEPS_PATH = ROCM_LIB_PATH / "rocm_sysdeps" / "lib"
-    RADEON_SI_LIB = ROCM_SYSDEPS_PATH / "radeonsi_drv_video.so"
 
     ROCDECODE_TEST_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Diagnostic: verify shared library dependencies are resolvable
-    cmd = [
-        "ldd",
-        str(ROCDECODE_LIB),
-    ]
-    logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, cwd=ROCDECODE_TEST_DIR, check=True, env=env)
-
-    cmd = [
-        "ldd",
-        str(RADEON_SI_LIB),
-    ]
-    logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, cwd=ROCDECODE_TEST_DIR, check=True, env=env)
-
-    cmd = [
-        "ls",
-        "-xl",
-        str(ROCM_SYSDEPS_PATH),
-    ]
-    logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, cwd=ROCDECODE_TEST_DIR, check=True, env=env)
-
+    # rocdecode tests are shipped as CMake source and must be built on the target
+    # machine. This serves two purposes:
+    # 1. Verifies that the installed rocdecode headers and libraries are functional.
+    # 2. Some test dependencies (e.g. video codec libraries) are not bundled in the
+    #    TheRock artifacts and must be linked from the system at build time.
     cmd = [
         "cmake",
         "-GNinja",
@@ -111,7 +89,7 @@ def execute_tests(env):
 
     cmd = [
         "ctest",
-        "-VV",
+        "--extra-verbose",
         "--output-on-failure",
     ]
     logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")

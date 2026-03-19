@@ -447,7 +447,6 @@ test_matrix = {
             "windows": 1,
         },
     },
-    # rocdecode
     "rocdecode": {
         "job_name": "rocdecode",
         "fetch_artifact_args": "--rocdecode --tests",
@@ -458,7 +457,6 @@ test_matrix = {
             "linux": 1,
         },
     },
-    # rocjpeg
     "rocjpeg": {
         "job_name": "rocjpeg",
         "fetch_artifact_args": "--rocjpeg --tests",
