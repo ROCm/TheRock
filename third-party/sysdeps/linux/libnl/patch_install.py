@@ -165,3 +165,18 @@ if platform.system() == "Linux":
         pc_file = pkgconfig_dir / pc_name
         if pc_file.exists():
             relativize_pc_file(pc_file)
+
+    # Create header symlinks for test compatibility
+    # Headers are installed in libnl3/netlink/, but tests expect netlink/
+    include_dir = Path(install_prefix) / "include"
+    libnl3_dir = include_dir / "libnl3"
+    
+    if libnl3_dir.exists():
+        # Create symlink from include/netlink to include/libnl3/netlink
+        netlink_symlink = include_dir / "netlink" 
+        if netlink_symlink.exists() or netlink_symlink.is_symlink():
+            netlink_symlink.unlink()
+        
+        libnl3_netlink = libnl3_dir / "netlink"
+        if libnl3_netlink.exists():
+            netlink_symlink.symlink_to("libnl3/netlink", target_is_directory=True)
