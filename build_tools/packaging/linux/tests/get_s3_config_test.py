@@ -153,20 +153,6 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
 class DetermineS3ConfigRepositoryTest(unittest.TestCase):
     """Tests for S3 config with different repositories."""
 
-    def test_internal_releases_repository(self):
-        """Test internal releases repository uses artifacts-internal bucket."""
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
-            release_type="",
-            repository="ROCm/therock-releases-internal",
-            is_fork=False,
-            pkg_type="deb",
-            artifact_id="12345678",
-            rocm_version="8.1.0~dev20251203",
-        )
-        self.assertEqual(bucket, "therock-artifacts-internal")
-        self.assertEqual(prefix, "v3/packages/deb/20251203-12345678")
-        self.assertEqual(job_type, "ci")
-
     def test_fork_pr(self):
         """Test fork PR uses external bucket."""
         bucket, prefix, job_type = get_s3_config.determine_s3_config(

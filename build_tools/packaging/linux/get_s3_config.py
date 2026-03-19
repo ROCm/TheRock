@@ -16,10 +16,6 @@ Decision Tree:
   │     ├─ prerelease/release → prefix: v3/packages/<pkg_type>
   │     └─ dev/nightly → prefix: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
   │
-  ├─ ELSE IF repository is "ROCm/therock-releases-internal"
-  │  └─ Use: therock-artifacts-internal bucket (internal releases)
-  │     └─ prefix: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
-  │
   ├─ ELSE IF fork PR OR non-ROCm/TheRock repository
   │  └─ Use: therock-ci-artifacts-external bucket (external CI)
   │     └─ prefix: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
@@ -59,9 +55,41 @@ Usage:
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime
-from typing import Tuple
+from typing import Optional, Tuple
+
+
+def extract_date_from_version(version: Optional[str]) -> str:
+    """
+    Extract date from ROCm package version string.
+
+    Supports various version formats:
+    - Debian dev:     8.1.0~dev20251203      → 20251203
+    - Debian nightly: 8.1.0~20251203         → 20251203
+    - RPM:            8.1.0~20251203gf689a8e → 20251203
+    - Wheel/alpha:    7.10.0a20251021        → 20251021
+
+    Falls back to current date if no date is found in the version string.
+
+    Args:
+        version: ROCm package version string (may be None)
+
+    Returns:
+        Date string in YYYYMMDD format
+    """
+    if not version:
+        return datetime.now().strftime("%Y%m%d")
+
+    # Look for 8-digit date pattern (YYYYMMDD)
+    # Common patterns: ~dev20251203, ~20251203, a20251021, ~20251203gf689a8e
+    match = re.search(r"(\d{8})", version)
+    if match:
+        return match.group(1)
+
+    # No date found, fall back to current date
+    return datetime.now().strftime("%Y%m%d")
 
 
 def determine_s3_config(
@@ -70,6 +98,7 @@ def determine_s3_config(
     is_fork: bool,
     pkg_type: str,
     artifact_id: str,
+    rocm_version: Optional[str] = None,
 ) -> Tuple[str, str, str]:
     """
     Determine S3 bucket, prefix, and job type based on inputs.
@@ -80,11 +109,13 @@ def determine_s3_config(
         is_fork: Whether this is a fork PR
         pkg_type: Package type ('deb' or 'rpm')
         artifact_id: Artifact/run ID for versioning
+        rocm_version: ROCm package version string (for date extraction)
 
     Returns:
         Tuple of (s3_bucket, s3_prefix, job_type)
     """
-    yyyymmdd = datetime.now().strftime("%Y%m%d")
+    # Extract date from version for consistency between version and S3 path
+    yyyymmdd = extract_date_from_version(rocm_version)
 
     # Branch 1: Release-type-specific package buckets (dev/nightly/prerelease/release)
     # Note: 'ci' or empty string should fall through to CI bucket logic below
@@ -102,21 +133,14 @@ def determine_s3_config(
             job_type = release_type
             print(f"✓ Using release-type bucket: {s3_bucket}", file=sys.stderr)
 
-    # Branch 2: Internal releases repository
-    elif repository == "ROCm/therock-releases-internal":
-        s3_bucket = "therock-artifacts-internal"
-        s3_prefix = f"v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
-        job_type = "ci"
-        print(f"✓ Using internal releases bucket: {s3_bucket}", file=sys.stderr)
-
-    # Branch 3: Fork PRs or external repositories
+    # Branch 2: Fork PRs or external repositories
     elif is_fork or repository != "ROCm/TheRock":
         s3_bucket = "therock-ci-artifacts-external"
         s3_prefix = f"v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
         job_type = "ci"
         print(f"✓ Using external bucket: {s3_bucket}", file=sys.stderr)
 
-    # Branch 4: Default - ROCm/TheRock non-fork (normal CI builds)
+    # Branch 3: Default - ROCm/TheRock non-fork (normal CI builds)
     else:
         s3_bucket = "therock-ci-artifacts"
         s3_prefix = f"v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
@@ -164,6 +188,12 @@ def main():
         help="Artifact/run ID for versioning",
     )
     parser.add_argument(
+        "--rocm-version",
+        required=False,
+        default=None,
+        help="ROCm package version string (for date extraction, e.g., '8.1.0~dev20251203')",
+    )
+    parser.add_argument(
         "--output-format",
         choices=["env", "json", "github"],
         default="env",
@@ -182,6 +212,7 @@ def main():
         is_fork=is_fork,
         pkg_type=args.pkg_type,
         artifact_id=args.artifact_id,
+        rocm_version=args.rocm_version,
     )
 
     # Output in requested format
