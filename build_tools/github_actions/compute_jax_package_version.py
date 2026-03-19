@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Computes JAX package version from rocm_version and JAX requirements.
 
 Used as a fallback when the test workflow is triggered via manual
@@ -28,7 +31,7 @@ import argparse
 import re
 import sys
 
-from github_actions_utils import *
+from github_actions_api import *
 
 
 def extract_jax_version_from_requirements(requirements_path: str) -> str:

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Unit tests for build_tools/github_actions/generate_pytorch_manifest.py
 """

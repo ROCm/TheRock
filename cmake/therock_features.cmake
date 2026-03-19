@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # therock_features.cmake
 # Registry of features that can be enabled/disabled when building TheRock.
 # In this context, "feature" can refer to either a top-level component/project

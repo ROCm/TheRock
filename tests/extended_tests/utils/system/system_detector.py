@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """System detector combining platform, hardware, and ROCm detection into unified context."""
 
 from typing import Dict, List, Optional, Any

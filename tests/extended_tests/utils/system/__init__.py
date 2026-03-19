@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """System detection module for platform, hardware, and ROCm information."""
 
 from .system_detector import (

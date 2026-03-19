@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # install_rocm_tarball.sh
 #
 # Downloads and installs ROCm from a tarball.

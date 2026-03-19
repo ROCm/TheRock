@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 include(ProcessorCount)
 
 function(therock_setup_job_pools)

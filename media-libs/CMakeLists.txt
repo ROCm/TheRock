@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(THEROCK_ENABLE_ROCDECODE AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
   ##############################################################################
   # rocdecode library
@@ -47,6 +50,7 @@ if(THEROCK_ENABLE_ROCDECODE AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
     COMPONENTS
       dbg
       dev
+      doc
       lib
       test
     SUBPROJECT_DEPS
@@ -103,6 +107,7 @@ if(THEROCK_ENABLE_ROCJPEG AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
     COMPONENTS
       dbg
       dev
+      doc
       lib
       test
     SUBPROJECT_DEPS

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """This file looks up the test-runs-on runner label for a given GPU family.
 
 Environment variable inputs:
@@ -9,7 +12,7 @@ Environment variable inputs:
 import os
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 
-from github_actions_utils import *
+from github_actions_api import *
 
 
 def get_runner_label(target: str, platform: str) -> str:

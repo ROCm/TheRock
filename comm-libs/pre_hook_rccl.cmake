@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(NOT WIN32)
   # Configure roctracer if on a supported operating system (Linux).
   # rocBLAS has deprecated dependencies on roctracer. We apply a patch to redirect
@@ -7,4 +10,12 @@ if(NOT WIN32)
   include(therock_subproject_utils)
   find_library(_therock_legacy_roctx64 roctx64 REQUIRED)
   cmake_language(DEFER CALL therock_patch_linked_lib OLD_LIBRARY "roctx64" NEW_TARGET "${_therock_legacy_roctx64}")
+endif()
+
+# Enable BUILD_ADDRESS_SANITIZER when THEROCK_SANITIZER is ASAN
+# This enables RCCL's LTO optimization bypass for faster ASAN link times
+if(THEROCK_SANITIZER STREQUAL "ASAN")
+  set(BUILD_ADDRESS_SANITIZER ON)
+  message(STATUS "Enabling BUILD_ADDRESS_SANITIZER for RCCL
+(THEROCK_SANITIZER=${THEROCK_SANITIZER})")
 endif()

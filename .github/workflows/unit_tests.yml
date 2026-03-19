@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Unit Tests
 
 on:
@@ -50,15 +53,11 @@ jobs:
     #       We could also use https://about.codecov.io/ instead of custom infra.
     - name: Upload coverage report
       if: always()
-      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: coverage-report-${{ matrix.runs-on }}
         path: build/coverage-html/
 
-  # TODO(scotttodd): share code with ci_summary in ci.yml
-  #   Could reuse this from prior projects:
-  #   https://github.com/iree-org/iree/blob/main/.github/workflows/workflow_summary.yml
-  #   (including support for sending alerts on failures)
   unit_tests_summary:
     name: Unit Tests Summary
     if: always()
@@ -66,16 +65,10 @@ jobs:
       - unit_tests
     runs-on: ubuntu-24.04
     steps:
-      - name: Output failed jobs
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Evaluate workflow results
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          echo '${{ toJson(needs) }}'
-          FAILED_JOBS="$(echo '${{ toJson(needs) }}' \
-            | jq --raw-output \
-            'map_values(select(.result!="success" and .result!="skipped")) | keys | join(",")' \
-          )"
-          if [[ "${FAILED_JOBS}" != "" ]]; then
-            echo "The following jobs failed: ${FAILED_JOBS}"
-            exit 1
-          else
-            echo "All required jobs succeeded."
-          fi
+          python build_tools/github_actions/workflow_summary.py \
+            --needs-json '${{ toJSON(needs) }}'

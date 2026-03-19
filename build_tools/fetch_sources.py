@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Fetches sources from a specified branch/set of projects.
 # This script is available for users, but it is primarily the mechanism
 # the CI uses to get to a clean state.
@@ -26,9 +29,7 @@ THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 PATCHES_DIR = THEROCK_DIR / "patches"
 TOPOLOGY_PATH = THEROCK_DIR / "BUILD_TOPOLOGY.toml"
-ALWAYS_SUBMODULE_PATHS = [
-    "base/rocm-kpack",
-]
+ALWAYS_SUBMODULE_PATHS: list[str] = []
 
 
 def is_windows() -> bool:
@@ -480,7 +481,7 @@ def main(argv):
     )
     parser.add_argument(
         "--include-iree-libs",
-        default=True,
+        default=False,
         action=argparse.BooleanOptionalAction,
         help="Include IREE and related libraries",
     )
@@ -497,7 +498,6 @@ def main(argv):
         default=[
             "half",
             "rocm-cmake",
-            "rocprof-trace-decoder",
         ],
     )
     parser.add_argument(

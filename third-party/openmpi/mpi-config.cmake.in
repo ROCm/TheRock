@@ -1,0 +1,37 @@
+@PACKAGE_INIT@
+
+set_and_check(MPI_ROOT "${PACKAGE_PREFIX_DIR}")
+
+set_and_check(MPI_C_HEADER_DIR "${MPI_ROOT}/include")
+set_and_check(MPI_CXX_HEADER_DIR "${MPI_ROOT}/include")
+
+set_and_check(MPI_C_INCLUDE_DIRS "${MPI_C_HEADER_DIR}")
+set_and_check(MPI_CXX_INCLUDE_DIRS "${MPI_CXX_HEADER_DIR}")
+
+set_and_check(MPI_C_LIBRARIES "${MPI_ROOT}/lib/libmpi.so")
+set_and_check(MPI_CXX_LIBRARIES "${MPI_ROOT}/lib/libmpi.so")
+
+set_and_check(MPIEXEC_EXECUTABLE "${MPI_ROOT}/bin/mpiexec")
+set_and_check(MPI_C_COMPILER "${MPI_ROOT}/bin/mpicc")
+set_and_check(MPI_CXX_COMPILER "${MPI_ROOT}/bin/mpicxx")
+
+if(NOT TARGET MPI::MPI_C)
+    add_library(MPI::MPI_C INTERFACE IMPORTED)
+    set_target_properties(MPI::MPI_C PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${MPI_C_INCLUDE_DIRS}"
+        INTERFACE_LINK_LIBRARIES "${MPI_C_LIBRARIES}"
+    )
+endif()
+
+if(NOT TARGET MPI::MPI_CXX)
+    add_library(MPI::MPI_CXX INTERFACE IMPORTED)
+    set_target_properties(MPI::MPI_CXX PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${MPI_CXX_INCLUDE_DIRS}"
+        INTERFACE_LINK_LIBRARIES "${MPI_CXX_LIBRARIES}"
+    )
+endif()
+
+set(MPI_FOUND TRUE)
+set(MPI_C_FOUND TRUE)
+set(MPI_CXX_FOUND TRUE)
+set(MPI_Fortran_FOUND FALSE)

@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Test suite for the promote_from_rc_to_final package promotion script.
 
 This test suite validates the functionality of promote_from_rc_to_final.py, which

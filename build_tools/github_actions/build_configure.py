@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 This script runs the Linux and Windows build configurations
 
@@ -99,7 +102,7 @@ def build_configure(build_dir, manylinux=False):
     cmd.extend(
         [
             f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}",
-            f"-DTHEROCK_PACKAGE_VERSION='{package_version}'",
+            f"-DTHEROCK_PACKAGE_VERSION={package_version}",
             f"-DCMAKE_C_COMPILER_LAUNCHER={c_launcher}",
             f"-DCMAKE_CXX_COMPILER_LAUNCHER={cxx_launcher}",
             "-DBUILD_TESTING=ON",

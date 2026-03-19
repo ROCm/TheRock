@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Platform-specific build configuration for gRPC
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
