@@ -12,9 +12,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
   if(THEROCK_BUNDLED_YAMLCPP)
     set(_rocprof_use_sys_yaml_cpp ON)
   endif()
-  if(DEFINED ROCPROF_USE_SYS_YAML_CPP)
-    set(_rocprof_use_sys_yaml_cpp ${ROCPROF_USE_SYS_YAML_CPP})
-  endif()
 
   ##############################################################################
   # rocprof-trace-decoder
@@ -176,7 +173,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DINSTALL_TESTS=${THEROCK_BUILD_TESTING}
       -DTEST_FROM_INSTALL=${THEROCK_BUILD_TESTING}
       -DCHECK_PYTHON_DEPS=OFF
-      -DROCPROF_USE_SYS_YAML_CPP=${_rocprof_use_sys_yaml_cpp}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -188,7 +184,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprofiler-register
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
-      ${THEROCK_BUNDLED_YAMLCPP}
       ${THEROCK_BUNDLED_SQLITE3}
       ${_openmpi_optional_dep}
     )
@@ -324,7 +319,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_USE_PYTHON="${_ROCPROFSYS_USE_PYTHON}"
         -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_ROCPROFSYS_PYTHON_VERSIONS_STR}"
         -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}"
-        -DROCPROF_USE_SYS_YAML_CPP=${_rocprof_use_sys_yaml_cpp}
         "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
       INSTALL_RPATH_DIRS
         "lib"
@@ -342,7 +336,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
         rocprofiler-register
         rocprofiler-sdk
         ${THEROCK_BUNDLED_LIBDRM}
-        ${THEROCK_BUNDLED_YAMLCPP}
         ${THEROCK_BUNDLED_SQLITE3}
         ${_openmpi_optional_dep}
     )
