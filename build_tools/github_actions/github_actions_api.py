@@ -518,8 +518,6 @@ def gha_query_recent_branch_commits(
 
 # TODO: Consider moving str2bool to a general-purpose utils module. It's useful
 # for GitHub Actions (YAML has fuzzy boolean handling) but is also used broadly.
-
-
 def str2bool(value: str | None) -> bool:
     """Convert environment variables to boolean values."""
     if not value:
