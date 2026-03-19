@@ -733,6 +733,8 @@ def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
             "LLVM_SYSPATH": str(llvm_build_dir),
             "TRITON_BUILD_PROTON": "OFF",
             "TRITON_APPEND_CMAKE_ARGS": "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE",
+            # Override package name to "triton" for consistency with Linux
+            "TRITON_WHEEL_NAME": "triton",
         }
     )
 
@@ -753,13 +755,13 @@ def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
         env=windows_env,
     )
 
-    # triton-windows produces wheels named "triton_windows"
-    built_wheel = find_built_wheel(triton_dir / "dist", "triton_windows")
+    # Build produces wheel named "triton" (overridden via TRITON_WHEEL_NAME)
+    built_wheel = find_built_wheel(triton_dir / "dist", "triton")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
 
     wheel_version = built_wheel.stem.split("-")[1]
-    return f"triton_windows=={wheel_version}"
+    return f"triton=={wheel_version}"
 
 
 def build_triton_linux(
