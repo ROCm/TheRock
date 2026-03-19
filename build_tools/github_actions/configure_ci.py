@@ -677,6 +677,17 @@ def main(base_args, linux_families, windows_families):
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = is_ci_run_required(modified_paths)
 
+        # TODO(#3399): move multi-arch CI configuration to its own script
+        # Multi-arch CI on PRs requires explicit opt-in via label.
+        # This avoids doubling CI load during the transition from ci.yml
+        # to multi_arch_ci.yml. See https://github.com/ROCm/TheRock/issues/3337
+        if multi_arch and "ci:run-multi-arch" not in (pr_labels or []):
+            print(
+                "Skipping multi-arch CI: 'ci:run-multi-arch' label not found. "
+                "Add the label to opt in."
+            )
+            enable_build_jobs = False
+
         # If the modified path contains any git submodules, we want to run a full test suite.
         # Otherwise, we just run quick tests
         submodule_paths = get_git_submodule_paths(repo_root=THEROCK_DIR)

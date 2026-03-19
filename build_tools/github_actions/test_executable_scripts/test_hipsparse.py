@@ -44,7 +44,7 @@ test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "quick":
     gtest_filter += "*spmv*:*spsv*:*spsm*:*spmm*:*csric0*:*csrilu0*:-known_bug*"
 else:
-    gtest_filter += "--gtest_filter=*quick*:-known_bug*"
+    gtest_filter += "*quick*:-known_bug*"
 
 if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
     ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]

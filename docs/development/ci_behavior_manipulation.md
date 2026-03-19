@@ -25,6 +25,7 @@ However, if additional options are wanted, you can add a label to manipulate the
 
 - `ci:skip`: Skip all builds and tests
 - `ci:run-all-archs`: Build and test all possible architectures
+- `ci:run-multi-arch`: Opt in to running [Multi-Arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml) on this PR. Without this label, multi-arch CI is skipped on PRs to avoid doubling CI load during the transition. See [issue #3337](https://github.com/ROCm/TheRock/issues/3337).
 - `gfx...`: Add a build and test (if a test machine is available) for the specified gfx family (e.g. `gfx120X`, `gfx950`)
 - `test:...`: Run full tests only for the specified label and other labeled projects (e.g. `test:rocthrust`, `test:hipblaslt`)
 - `test_runner:...`: Run tests on only custom test machines (e.g. `test_runner:oem`)

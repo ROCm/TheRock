@@ -329,10 +329,18 @@ def main(argv: list[str]) -> int:
 
     # Determine AMDGPU family and set HIP_VISIBLE_DEVICES BEFORE importing
     # torch or running pytest.  Once torch.cuda is initialized, changing
-    # HIP_VISIBLE_DEVICES has no effect.  For unit tests we run on a single
-    # device (policy="single") to avoid multi-GPU contention.
-    ((first_arch, _),) = set_gpu_execution_policy(args.amdgpu_family, policy="single")
-    print(f"Using AMDGPU family: {first_arch}")
+    # HIP_VISIBLE_DEVICES has no effect.  Distributed tests need all GPUs;
+    # other configs use a single device to avoid multi-GPU contention.
+    gpu_policy = "all" if args.test_config == "distributed" else "single"
+    selected = set_gpu_execution_policy(args.amdgpu_family, policy=gpu_policy)
+    first_arch = selected[0][0]
+    unique_archs = sorted(set(arch for arch, _ in selected))
+    device_ids = [str(dev_id) for _, dev_id in selected]
+    print(
+        f"Selected {len(selected)} GPU(s): "
+        f"arch(es)={', '.join(unique_archs)}, "
+        f"device(s)={', '.join(device_ids)}"
+    )
 
     # get_tests amdgpu_family requires list[str]
     first_arch = [first_arch]
