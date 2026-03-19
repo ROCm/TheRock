@@ -159,6 +159,9 @@ function(therock_subproject_fetch target_name)
 
   set(_extra)
   set(_smrev_contents "${ARG_UNPARSED_ARGUMENTS}")
+  if(THEROCK_VERBOSE_FPRINT)
+    message(STATUS "  FETCH ${target_name}: ARG_UNPARSED_ARGUMENTS = ${ARG_UNPARSED_ARGUMENTS}")
+  endif()
   # In order to interop with therock_cmake_subproject_declare, there are two ways:
   # 1. TheExternalProject_Add generates a step target for download
   #    therock_cmake_subproject_declare can use that target

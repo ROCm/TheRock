@@ -171,6 +171,10 @@ function(therock_provide_artifact slice_name)
   if(_fprint_is_valid)
     string(SHA256 _fprint "${_fprint_content}")
   endif()
+  if(THEROCK_VERBOSE_FPRINT)
+    message(STATUS "  ARTIFACT FPRINT (${slice_name}) = ${_fprint}")
+    message(STATUS "  ARTIFACT FPRINT CONTENT = ${_fprint_content}")
+  endif()
 
   # Populate commands.
   set(_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")
