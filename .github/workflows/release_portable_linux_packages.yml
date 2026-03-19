@@ -212,18 +212,19 @@ jobs:
           git config fetch.parallel 10
 
       # Set up ccache with a custom configuration.
-      - name: Setup ccache
-        env:
-          CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
-        run: |
-          ./build_tools/setup_ccache.py \
-            --config-preset "github-oss-${{ env.CI_TYPE }}" \
-            --dir "$(dirname $CCACHE_CONFIGPATH)" \
-            --local-path "$CCACHE_DIR"
+      # - name: Setup ccache
+      #   env:
+      #     CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
+      #   run: |
+      #     ./build_tools/setup_ccache.py \
+      #       --config-preset "github-oss-${{ env.CI_TYPE }}" \
+      #       --dir "$(dirname $CCACHE_CONFIGPATH)" \
+      #       --local-path "$CCACHE_DIR"
 
       - name: Runner health status
         run: |
           ./build_tools/health_status.py
+          sccache --show-stats
 
       - name: Install the AWS tool
         run: ./dockerfiles/install_awscli.sh
