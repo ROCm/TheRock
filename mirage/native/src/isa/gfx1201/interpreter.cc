@@ -54,7 +54,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 382> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 384> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -97,6 +97,7 @@ constexpr std::array<std::string_view, 382> kExecutableSeedOpcodes{{
     "GLOBAL_LOAD_B96",
     "GLOBAL_LOAD_B128",
     "GLOBAL_LOAD_ADDTID_B32",
+    "GLOBAL_LOAD_BLOCK",
     "GLOBAL_LOAD_TR_B64",
     "GLOBAL_LOAD_TR_B128",
     "GLOBAL_LOAD_D16_U8",
@@ -112,6 +113,7 @@ constexpr std::array<std::string_view, 382> kExecutableSeedOpcodes{{
     "GLOBAL_STORE_B96",
     "GLOBAL_STORE_B128",
     "GLOBAL_STORE_ADDTID_B32",
+    "GLOBAL_STORE_BLOCK",
     "GLOBAL_STORE_D16_HI_B8",
     "GLOBAL_STORE_D16_HI_B16",
     "S_ADD_U32",
@@ -978,6 +980,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadAddtidB32;
     return true;
   }
+  if (opcode == "GLOBAL_LOAD_BLOCK") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadBlock;
+    return true;
+  }
   if (opcode == "GLOBAL_LOAD_TR_B64") {
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalLoadTrB64;
     return true;
@@ -1036,6 +1042,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "GLOBAL_STORE_ADDTID_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreAddtidB32;
+    return true;
+  }
+  if (opcode == "GLOBAL_STORE_BLOCK") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreBlock;
     return true;
   }
   if (opcode == "GLOBAL_STORE_D16_HI_B8") {
@@ -2830,6 +2840,118 @@ bool ComputeVglobalAddTidAddress(const DecodedInstruction& instruction,
   }
 
   *address = base + static_cast<std::uint64_t>(lane_index * sizeof(std::uint32_t));
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool ExecuteVectorGlobalLoadBlockAtAddress(const DecodedInstruction& instruction,
+                                           std::uint64_t base_address,
+                                           std::size_t lane_index,
+                                           WaveExecutionState* state,
+                                           ExecutionMemory* memory,
+                                           std::string* error_message) {
+  if (!IsImplicitM0SourceOperand(instruction.operands[4])) {
+    if (error_message != nullptr) {
+      *error_message = "expected implicit M0 source operand";
+    }
+    return false;
+  }
+  if (instruction.operands[0].kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "expected vector destination operand";
+    }
+    return false;
+  }
+  if (instruction.operands[0].index + 31u >= state->vgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "GLOBAL_LOAD_BLOCK vector destination range out of range";
+    }
+    return false;
+  }
+
+  const std::uint32_t vgpr_mask =
+      ReadScalarOperand(instruction.operands[4], *state, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+
+  for (std::size_t slot = 0; slot < 32u; ++slot) {
+    if ((vgpr_mask & (1u << slot)) == 0u) {
+      continue;
+    }
+    std::uint32_t value = 0;
+    if (!memory->LoadU32(base_address + static_cast<std::uint64_t>(slot * 4u),
+                         &value)) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL_LOAD_BLOCK memory read failed";
+      }
+      return false;
+    }
+    if (!WriteVectorOperand(
+            InstructionOperand::Vgpr(static_cast<std::uint16_t>(
+                instruction.operands[0].index + slot)),
+            lane_index, value, state, error_message)) {
+      return false;
+    }
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool ExecuteVectorGlobalStoreBlockAtAddress(
+    const DecodedInstruction& instruction, std::uint64_t base_address,
+    std::size_t lane_index, const WaveExecutionState& state,
+    ExecutionMemory* memory, std::string* error_message) {
+  if (!IsImplicitM0SourceOperand(instruction.operands[4])) {
+    if (error_message != nullptr) {
+      *error_message = "expected implicit M0 source operand";
+    }
+    return false;
+  }
+  if (instruction.operands[0].kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "expected vector source operand";
+    }
+    return false;
+  }
+  if (instruction.operands[0].index + 31u >= state.vgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "GLOBAL_STORE_BLOCK vector source range out of range";
+    }
+    return false;
+  }
+
+  const std::uint32_t vgpr_mask =
+      ReadScalarOperand(instruction.operands[4], state, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+
+  for (std::size_t slot = 0; slot < 32u; ++slot) {
+    if ((vgpr_mask & (1u << slot)) == 0u) {
+      continue;
+    }
+    const std::uint32_t value = ReadVectorOperand(
+        InstructionOperand::Vgpr(
+            static_cast<std::uint16_t>(instruction.operands[0].index + slot)),
+        state, lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU32(base_address + static_cast<std::uint64_t>(slot * 4u),
+                          value)) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL_STORE_BLOCK memory write failed";
+      }
+      return false;
+    }
+  }
+
   if (error_message != nullptr) {
     error_message->clear();
   }
@@ -4912,6 +5034,38 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     }
     return true;
   }
+  if (instruction.opcode == "GLOBAL_LOAD_BLOCK") {
+    if (!ValidateOperandCount(instruction, 5, error_message)) {
+      return false;
+    }
+    if (memory == nullptr) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " requires execution memory";
+      }
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < kGfx1201LaneCount;
+         ++lane_index) {
+      if ((MaskToGfx1201Wave32(state->exec_mask) & (1ull << lane_index)) == 0u) {
+        continue;
+      }
+      std::uint64_t address = 0;
+      if (!ComputeVglobalAddress(instruction, *state, lane_index, &address,
+                                 error_message)) {
+        return false;
+      }
+      if (!ExecuteVectorGlobalLoadBlockAtAddress(instruction, address,
+                                                 lane_index, state, memory,
+                                                 error_message)) {
+        return false;
+      }
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
   if (instruction.opcode == "GLOBAL_STORE_B8" ||
       instruction.opcode == "GLOBAL_STORE_B16" ||
       instruction.opcode == "GLOBAL_STORE_B32" ||
@@ -4973,6 +5127,38 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       }
       if (!ExecuteVectorGlobalStoreAtAddress(instruction, address, lane_index,
                                              *state, memory, error_message)) {
+        return false;
+      }
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+  if (instruction.opcode == "GLOBAL_STORE_BLOCK") {
+    if (!ValidateOperandCount(instruction, 5, error_message)) {
+      return false;
+    }
+    if (memory == nullptr) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " requires execution memory";
+      }
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < kGfx1201LaneCount;
+         ++lane_index) {
+      if ((MaskToGfx1201Wave32(state->exec_mask) & (1ull << lane_index)) == 0u) {
+        continue;
+      }
+      std::uint64_t address = 0;
+      if (!ComputeVglobalAddress(instruction, *state, lane_index, &address,
+                                 error_message)) {
+        return false;
+      }
+      if (!ExecuteVectorGlobalStoreBlockAtAddress(instruction, address,
+                                                  lane_index, *state, memory,
+                                                  error_message)) {
         return false;
       }
     }
@@ -5976,6 +6162,7 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kGlobalLoadB96:
     case Gfx1201CompiledOpcode::kGlobalLoadB128:
     case Gfx1201CompiledOpcode::kGlobalLoadAddtidB32:
+    case Gfx1201CompiledOpcode::kGlobalLoadBlock:
     case Gfx1201CompiledOpcode::kGlobalLoadTrB64:
     case Gfx1201CompiledOpcode::kGlobalLoadTrB128:
     case Gfx1201CompiledOpcode::kGlobalLoadD16U8:
@@ -5991,6 +6178,7 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kGlobalStoreB96:
     case Gfx1201CompiledOpcode::kGlobalStoreB128:
     case Gfx1201CompiledOpcode::kGlobalStoreAddtidB32:
+    case Gfx1201CompiledOpcode::kGlobalStoreBlock:
     case Gfx1201CompiledOpcode::kGlobalStoreD16HiB8:
     case Gfx1201CompiledOpcode::kGlobalStoreD16HiB16:
     case Gfx1201CompiledOpcode::kSLoadB32:

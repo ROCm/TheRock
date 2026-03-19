@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 382> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 384> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -60,6 +60,7 @@ constexpr std::array<std::string_view, 382> kPhase0ExecutableOpcodes{{
     "GLOBAL_LOAD_B96",
     "GLOBAL_LOAD_B128",
     "GLOBAL_LOAD_ADDTID_B32",
+    "GLOBAL_LOAD_BLOCK",
     "GLOBAL_LOAD_TR_B64",
     "GLOBAL_LOAD_TR_B128",
     "GLOBAL_LOAD_D16_U8",
@@ -75,6 +76,7 @@ constexpr std::array<std::string_view, 382> kPhase0ExecutableOpcodes{{
     "GLOBAL_STORE_B96",
     "GLOBAL_STORE_B128",
     "GLOBAL_STORE_ADDTID_B32",
+    "GLOBAL_STORE_BLOCK",
     "GLOBAL_STORE_D16_HI_B8",
     "GLOBAL_STORE_D16_HI_B16",
     "S_ADD_U32",
@@ -1082,6 +1084,53 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
             MakeImmediateDescriptor(OperandRole::kUnknown,
                                     OperandSlotKind::kUnknown)));
     *words_consumed = 2;
+  } else if (instruction_name == "GLOBAL_LOAD_BLOCK") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(ExtractBits(words[1], 24, 8), &dst,
+                                 error_message)) {
+      return false;
+    }
+
+    InstructionOperand vaddr;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 0, 8), &vaddr,
+                                    error_message)) {
+      return false;
+    }
+
+    const std::uint32_t raw_saddr = ExtractBits(words[1], 16, 7);
+    if (raw_saddr >= WaveExecutionState::kScalarRegisterCount) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL block load scalar address out of range";
+      }
+      return false;
+    }
+    const InstructionOperand saddr =
+        InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_saddr));
+
+    *instruction = DecodedInstruction::FiveOperand(
+        instruction_name, DescribeWideVectorDestinationOperand(dst, 32u),
+        DescribeSourceOperand(vaddr, OperandRole::kSource0,
+                              OperandSlotKind::kSource0),
+        DescribeSourceOperand(saddr, OperandRole::kSource1,
+                              OperandSlotKind::kSource1),
+        InstructionOperand::Imm32(static_cast<std::uint32_t>(
+            SignExtend13(ExtractBits(word, 0, 13))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource2,
+                                                   OperandSlotKind::kSource2,
+                                                   13u)),
+        InstructionOperand::Sgpr(
+            kM0RegisterIndex,
+            MakeScalarRegisterDescriptor(OperandRole::kUnknown,
+                                         OperandSlotKind::kUnknown,
+                                         OperandAccess::kRead, 32, 1, true)));
+    *words_consumed = 2;
   } else if (instruction_name == "GLOBAL_LOAD_U8" ||
              instruction_name == "GLOBAL_LOAD_I8" ||
              instruction_name == "GLOBAL_LOAD_U16" ||
@@ -1191,6 +1240,55 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         InstructionOperand::Imm32(0u).WithDescriptor(
             MakeImmediateDescriptor(OperandRole::kUnknown,
                                     OperandSlotKind::kUnknown)));
+    *words_consumed = 2;
+  } else if (instruction_name == "GLOBAL_STORE_BLOCK") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+
+    InstructionOperand vdata;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 8, 8), &vdata,
+                                    error_message)) {
+      return false;
+    }
+
+    InstructionOperand vaddr;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 0, 8), &vaddr,
+                                    error_message)) {
+      return false;
+    }
+
+    const std::uint32_t raw_saddr = ExtractBits(words[1], 16, 7);
+    if (raw_saddr >= WaveExecutionState::kScalarRegisterCount) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL block store scalar address out of range";
+      }
+      return false;
+    }
+    const InstructionOperand saddr =
+        InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_saddr));
+
+    *instruction = DecodedInstruction::FiveOperand(
+        instruction_name,
+        DescribeWideVectorSourceOperand(vdata, OperandRole::kSource0,
+                                        OperandSlotKind::kSource0, 32u),
+        DescribeSourceOperand(vaddr, OperandRole::kSource1,
+                              OperandSlotKind::kSource1),
+        DescribeSourceOperand(saddr, OperandRole::kSource2,
+                              OperandSlotKind::kSource2),
+        InstructionOperand::Imm32(static_cast<std::uint32_t>(
+            SignExtend13(ExtractBits(word, 0, 13))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kUnknown,
+                                                   OperandSlotKind::kUnknown,
+                                                   13u)),
+        InstructionOperand::Sgpr(
+            kM0RegisterIndex,
+            MakeScalarRegisterDescriptor(OperandRole::kUnknown,
+                                         OperandSlotKind::kUnknown,
+                                         OperandAccess::kRead, 32, 1, true)));
     *words_consumed = 2;
   } else if (instruction_name == "GLOBAL_STORE_B8" ||
              instruction_name == "GLOBAL_STORE_B16" ||

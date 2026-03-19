@@ -7183,6 +7183,45 @@ int main() {
     return 1;
   }
 
+  const auto global_load_block_words =
+      MakeGlobal(83u, 40u, 46u, 0u, 25u, 0x120);
+  DecodedInstruction global_load_block_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(global_load_block_words.data(),
+                                                 global_load_block_words.size()),
+                  &global_load_block_instruction, &global_words_consumed,
+                  &error_message),
+              "expected GLOBAL_LOAD_BLOCK direct decode success") ||
+      !Expect(global_load_block_instruction.opcode == "GLOBAL_LOAD_BLOCK",
+              "expected decoded GLOBAL_LOAD_BLOCK opcode") ||
+      !Expect(global_load_block_instruction.operand_count == 5u,
+              "expected GLOBAL_LOAD_BLOCK operand count") ||
+      !Expect(global_load_block_instruction.operands[0].kind ==
+                  OperandKind::kVgpr &&
+                  global_load_block_instruction.operands[0].index == 40u,
+              "expected GLOBAL_LOAD_BLOCK vector destination base") ||
+      !Expect(global_load_block_instruction.operands[1].kind ==
+                  OperandKind::kVgpr &&
+                  global_load_block_instruction.operands[1].index == 46u,
+              "expected GLOBAL_LOAD_BLOCK vector address") ||
+      !Expect(global_load_block_instruction.operands[2].kind ==
+                  OperandKind::kSgpr &&
+                  global_load_block_instruction.operands[2].index == 25u,
+              "expected GLOBAL_LOAD_BLOCK scalar address") ||
+      !Expect(global_load_block_instruction.operands[3].kind ==
+                  OperandKind::kImm32 &&
+                  global_load_block_instruction.operands[3].imm32 == 0x120u,
+              "expected GLOBAL_LOAD_BLOCK inline offset") ||
+      !Expect(global_load_block_instruction.operands[4].kind ==
+                  OperandKind::kSgpr &&
+                  global_load_block_instruction.operands[4].index ==
+                      kM0RegisterIndex,
+              "expected GLOBAL_LOAD_BLOCK implicit M0 source") ||
+      !Expect(global_words_consumed == 2u,
+              "expected GLOBAL_LOAD_BLOCK to consume two dwords")) {
+    return 1;
+  }
+
   const auto global_store_b32_words = MakeGlobal(26u, 0u, 44u, 18u, 30u, 16);
   DecodedInstruction global_store_b32_instruction;
   if (!Expect(decoder.DecodeInstruction(
@@ -7303,6 +7342,45 @@ int main() {
               "expected GLOBAL_STORE_ADDTID_B32 scalar address") ||
       !Expect(global_words_consumed == 2u,
               "expected GLOBAL_STORE_ADDTID_B32 to consume two dwords")) {
+    return 1;
+  }
+
+  const auto global_store_block_words =
+      MakeGlobal(84u, 0u, 47u, 28u, 35u, 0x44);
+  DecodedInstruction global_store_block_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(global_store_block_words.data(),
+                                                 global_store_block_words.size()),
+                  &global_store_block_instruction, &global_words_consumed,
+                  &error_message),
+              "expected GLOBAL_STORE_BLOCK direct decode success") ||
+      !Expect(global_store_block_instruction.opcode == "GLOBAL_STORE_BLOCK",
+              "expected decoded GLOBAL_STORE_BLOCK opcode") ||
+      !Expect(global_store_block_instruction.operand_count == 5u,
+              "expected GLOBAL_STORE_BLOCK operand count") ||
+      !Expect(global_store_block_instruction.operands[0].kind ==
+                  OperandKind::kVgpr &&
+                  global_store_block_instruction.operands[0].index == 28u,
+              "expected GLOBAL_STORE_BLOCK vector data base") ||
+      !Expect(global_store_block_instruction.operands[1].kind ==
+                  OperandKind::kVgpr &&
+                  global_store_block_instruction.operands[1].index == 47u,
+              "expected GLOBAL_STORE_BLOCK vector address") ||
+      !Expect(global_store_block_instruction.operands[2].kind ==
+                  OperandKind::kSgpr &&
+                  global_store_block_instruction.operands[2].index == 35u,
+              "expected GLOBAL_STORE_BLOCK scalar address") ||
+      !Expect(global_store_block_instruction.operands[3].kind ==
+                  OperandKind::kImm32 &&
+                  global_store_block_instruction.operands[3].imm32 == 0x44u,
+              "expected GLOBAL_STORE_BLOCK inline offset") ||
+      !Expect(global_store_block_instruction.operands[4].kind ==
+                  OperandKind::kSgpr &&
+                  global_store_block_instruction.operands[4].index ==
+                      kM0RegisterIndex,
+              "expected GLOBAL_STORE_BLOCK implicit M0 source") ||
+      !Expect(global_words_consumed == 2u,
+              "expected GLOBAL_STORE_BLOCK to consume two dwords")) {
     return 1;
   }
 
@@ -8069,6 +8147,123 @@ int main() {
     return 1;
   }
 
+  const auto global_load_block_b32_program_words =
+      MakeGlobal(83u, 80u, 40u, 0u, 20u, 16);
+  const std::array<std::uint32_t, 3> global_load_block_program_words{
+      global_load_block_b32_program_words[0],
+      global_load_block_b32_program_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> global_load_block_program;
+  if (!Expect(decoder.DecodeProgram(global_load_block_program_words,
+                                    &global_load_block_program,
+                                    &error_message),
+              "expected GLOBAL BLOCK load program decode success") ||
+      !Expect(global_load_block_program.size() == 2u,
+              "expected two decoded GLOBAL BLOCK load instructions") ||
+      !Expect(global_load_block_program[0].opcode == "GLOBAL_LOAD_BLOCK",
+              "expected decoded GLOBAL_LOAD_BLOCK opcode") ||
+      !Expect(global_load_block_program[1].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after GLOBAL BLOCK load")) {
+    return 1;
+  }
+
+  auto initialize_global_load_block_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x80000005ull;
+    state->sgprs[20] = 0xa000u;
+    state->sgprs[21] = 0u;
+    state->sgprs[kM0RegisterIndex] = (1u << 0) | (1u << 2) | (1u << 31);
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      state->vgprs[40][lane] = static_cast<std::uint32_t>(lane) * 0x100u;
+      for (std::size_t slot = 0; slot < 32u; ++slot) {
+        state->vgprs[80u + slot][lane] =
+            0xd0000000u + static_cast<std::uint32_t>(slot << 8) +
+            static_cast<std::uint32_t>(lane);
+      }
+    }
+  };
+  auto expect_global_load_block_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == 0x80000005ull &&
+          state.sgprs[20] == 0xa000u && state.sgprs[21] == 0u &&
+          state.sgprs[kM0RegisterIndex] == ((1u << 0) | (1u << 2) | (1u << 31)) &&
+          state.halted && !state.waiting_on_barrier && state.pc == 1u)) {
+      return false;
+    }
+    constexpr std::uint64_t kActiveMask = 0x80000005ull;
+    constexpr std::uint32_t kBlockMask = (1u << 0) | (1u << 2) | (1u << 31);
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      for (std::size_t slot = 0; slot < 32u; ++slot) {
+        const bool active = (kActiveMask & (1ull << lane)) != 0u;
+        const bool selected =
+            (kBlockMask & (1u << static_cast<std::uint32_t>(slot))) != 0u;
+        const std::uint32_t initial_value =
+            0xd0000000u + static_cast<std::uint32_t>(slot << 8) +
+            static_cast<std::uint32_t>(lane);
+        const std::uint32_t expected_value =
+            (active && selected)
+                ? (0x63000000u + static_cast<std::uint32_t>(lane << 8) +
+                   static_cast<std::uint32_t>(slot))
+                : initial_value;
+        if (state.vgprs[80u + slot][lane] != expected_value) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+  LinearExecutionMemory global_load_block_memory(0x3000u, 0xa000u);
+  for (std::uint32_t lane : {0u, 2u, 31u}) {
+    const std::uint32_t lane_base = 0xa000u + lane * 0x100u + 16u;
+    for (std::uint32_t slot : {0u, 2u, 31u}) {
+      if (!Expect(global_load_block_memory.StoreU32(
+                      lane_base + slot * 4u,
+                      0x63000000u + (lane << 8) + slot),
+                  "expected GLOBAL BLOCK load test write")) {
+        return 1;
+      }
+    }
+  }
+
+  WaveExecutionState decoded_global_load_block_state;
+  initialize_global_load_block_state(&decoded_global_load_block_state);
+  if (!Expect(interpreter.ExecuteProgram(global_load_block_program,
+                                         &decoded_global_load_block_state,
+                                         &global_load_block_memory,
+                                         &error_message),
+              "expected decoded GLOBAL BLOCK load execution success") ||
+      !Expect(expect_global_load_block_state(decoded_global_load_block_state),
+              "expected decoded GLOBAL BLOCK load state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_global_load_block_program;
+  if (!Expect(interpreter.CompileProgram(global_load_block_program,
+                                         &compiled_global_load_block_program,
+                                         &error_message),
+              "expected compiled GLOBAL BLOCK load program success") ||
+      !Expect(compiled_global_load_block_program.size() == 2u,
+              "expected two compiled GLOBAL BLOCK load instructions") ||
+      !Expect(compiled_global_load_block_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalLoadBlock,
+              "expected compiled GLOBAL_LOAD_BLOCK opcode") ||
+      !Expect(compiled_global_load_block_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after GLOBAL BLOCK load")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_global_load_block_state;
+  initialize_global_load_block_state(&compiled_global_load_block_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_global_load_block_program,
+                                         &compiled_global_load_block_state,
+                                         &global_load_block_memory,
+                                         &error_message),
+              "expected compiled GLOBAL BLOCK load execution success") ||
+      !Expect(expect_global_load_block_state(compiled_global_load_block_state),
+              "expected compiled GLOBAL BLOCK load state")) {
+    return 1;
+  }
+
   const auto global_store_addtid_b32_program_words =
       MakeGlobal(41u, 0u, 0u, 20u, 22u, 0);
   const std::array<std::uint32_t, 3> global_store_addtid_program_words{
@@ -8174,6 +8369,136 @@ int main() {
       !Expect(expect_global_store_addtid_memory(
                   &compiled_global_store_addtid_memory),
               "expected compiled GLOBAL ADDTID store memory state")) {
+    return 1;
+  }
+
+  const auto global_store_block_program_words_raw =
+      MakeGlobal(84u, 0u, 41u, 90u, 22u, 12);
+  const std::array<std::uint32_t, 3> global_store_block_program_words{
+      global_store_block_program_words_raw[0],
+      global_store_block_program_words_raw[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> global_store_block_program;
+  if (!Expect(decoder.DecodeProgram(global_store_block_program_words,
+                                    &global_store_block_program,
+                                    &error_message),
+              "expected GLOBAL BLOCK store program decode success") ||
+      !Expect(global_store_block_program.size() == 2u,
+              "expected two decoded GLOBAL BLOCK store instructions") ||
+      !Expect(global_store_block_program[0].opcode == "GLOBAL_STORE_BLOCK",
+              "expected decoded GLOBAL_STORE_BLOCK opcode") ||
+      !Expect(global_store_block_program[1].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after GLOBAL BLOCK store")) {
+    return 1;
+  }
+
+  auto initialize_global_store_block_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x80000005ull;
+    state->sgprs[22] = 0xb000u;
+    state->sgprs[23] = 0u;
+    state->sgprs[kM0RegisterIndex] = (1u << 1) | (1u << 3) | (1u << 31);
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      state->vgprs[41][lane] = static_cast<std::uint32_t>(lane) * 0x100u;
+      for (std::size_t slot = 0; slot < 32u; ++slot) {
+        state->vgprs[90u + slot][lane] =
+            0x74000000u + static_cast<std::uint32_t>(slot << 8) +
+            static_cast<std::uint32_t>(lane);
+      }
+    }
+  };
+  auto expect_global_store_block_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == 0x80000005ull &&
+          state.sgprs[22] == 0xb000u && state.sgprs[23] == 0u &&
+          state.sgprs[kM0RegisterIndex] == ((1u << 1) | (1u << 3) | (1u << 31)) &&
+          state.halted && !state.waiting_on_barrier && state.pc == 1u)) {
+      return false;
+    }
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      if (state.vgprs[41][lane] != static_cast<std::uint32_t>(lane) * 0x100u) {
+        return false;
+      }
+      for (std::size_t slot = 0; slot < 32u; ++slot) {
+        const std::uint32_t expected_value =
+            0x74000000u + static_cast<std::uint32_t>(slot << 8) +
+            static_cast<std::uint32_t>(lane);
+        if (state.vgprs[90u + slot][lane] != expected_value) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+  auto expect_global_store_block_memory = [](LinearExecutionMemory* memory) {
+    constexpr std::uint64_t kActiveMask = 0x80000005ull;
+    constexpr std::uint32_t kBlockMask = (1u << 1) | (1u << 3) | (1u << 31);
+    for (std::uint32_t lane = 0; lane < 32u; ++lane) {
+      const std::uint32_t lane_base = 0xb000u + lane * 0x100u + 12u;
+      for (std::uint32_t slot = 0; slot < 32u; ++slot) {
+        std::uint32_t value = 0;
+        if (!memory->LoadU32(lane_base + slot * 4u, &value)) {
+          return false;
+        }
+        const bool active = (kActiveMask & (1ull << lane)) != 0u;
+        const bool selected =
+            (kBlockMask & (1u << static_cast<std::uint32_t>(slot))) != 0u;
+        const std::uint32_t expected_value =
+            (active && selected)
+                ? (0x74000000u + (slot << 8) + lane)
+                : 0u;
+        if (value != expected_value) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  LinearExecutionMemory decoded_global_store_block_memory(0x3000u, 0xb000u);
+  WaveExecutionState decoded_global_store_block_state;
+  initialize_global_store_block_state(&decoded_global_store_block_state);
+  if (!Expect(interpreter.ExecuteProgram(global_store_block_program,
+                                         &decoded_global_store_block_state,
+                                         &decoded_global_store_block_memory,
+                                         &error_message),
+              "expected decoded GLOBAL BLOCK store execution success") ||
+      !Expect(expect_global_store_block_state(decoded_global_store_block_state),
+              "expected decoded GLOBAL BLOCK store state") ||
+      !Expect(expect_global_store_block_memory(
+                  &decoded_global_store_block_memory),
+              "expected decoded GLOBAL BLOCK store memory state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_global_store_block_program;
+  if (!Expect(interpreter.CompileProgram(global_store_block_program,
+                                         &compiled_global_store_block_program,
+                                         &error_message),
+              "expected compiled GLOBAL BLOCK store program success") ||
+      !Expect(compiled_global_store_block_program.size() == 2u,
+              "expected two compiled GLOBAL BLOCK store instructions") ||
+      !Expect(compiled_global_store_block_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kGlobalStoreBlock,
+              "expected compiled GLOBAL_STORE_BLOCK opcode") ||
+      !Expect(compiled_global_store_block_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after GLOBAL BLOCK store")) {
+    return 1;
+  }
+
+  LinearExecutionMemory compiled_global_store_block_memory(0x3000u, 0xb000u);
+  WaveExecutionState compiled_global_store_block_state;
+  initialize_global_store_block_state(&compiled_global_store_block_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_global_store_block_program,
+                                         &compiled_global_store_block_state,
+                                         &compiled_global_store_block_memory,
+                                         &error_message),
+              "expected compiled GLOBAL BLOCK store execution success") ||
+      !Expect(expect_global_store_block_state(compiled_global_store_block_state),
+              "expected compiled GLOBAL BLOCK store state") ||
+      !Expect(expect_global_store_block_memory(
+                  &compiled_global_store_block_memory),
+              "expected compiled GLOBAL BLOCK store memory state")) {
     return 1;
   }
 
