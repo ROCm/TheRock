@@ -209,9 +209,10 @@ Blast radius is limited to `ROCm/quartz` only — apps are installed on Quartz a
 - Every incoming `workflow_dispatch` workflow must verify
   - the App ID against the allowlist as its first step.
     = if possible: verify that the request comes from a actively running workflow (see newest [meta data available for workflows](https://github.blog/changelog/2026-02-19-workflow-dispatch-api-now-returns-run-ids/) )
-- Quartz workflows must have strict, minimal scope over what they can change in the repository and database. Every workflow must declare explicit `permissions:` to enforce this:
-  - TheRock → Quartz (`receive-therock-data.yml`): `contents: write` (status.json commit), `actions: none`
-  - Quartz → Downstream (`notify-downstream.yml`) and Downstream → Quartz (`receive-downstream-data.yml`): `contents: read`, `actions: none`
+- Quartz workflows must have strict, minimal scope. The repository default workflow permission is set to `read-all` (`contents: read`) at the repo level. Individual jobs that require more elevate only what they need:
+  - `receive-therock-data.yml`: `contents: write` (to commit `status.json`) and `issues: write` (to open a GitHub Issue on failure) at the job level, all others inherit `read-all`
+  - `notify-downstream.yml`: no elevation needed, `read-all` default is sufficient
+  - `receive-downstream-data.yml`: `issues: write` at the job level (to open a GitHub Issue on failure), all others inherit `read-all`
 - All business logic must be in Python scripts, not in workflow YAML.
 
 ### Mitigations
@@ -223,6 +224,12 @@ Blast radius is limited to `ROCm/quartz` only — apps are installed on Quartz a
 - Repo rules to safe guard
   - Branch protection rules
   - Protection rules who can edit what `CODEOWNERS`. `.github/workflows/**`, and `scripts/*`
+
+## Scope and Deferred Work
+
+This RFC covers the core architecture, authentication model, and the first two phases of the data flow: TheRock CI results flowing into Quartz (Phase 1) and Quartz notifying downstream projects (Phase 2).
+
+Phases 3–5 are out of scope and will be addressed in a follow-up. Phase 3 requires detailed downstream project requirements to be gathered first. Phase 4 (expanding data collection beyond nightly and prerelease) will be scoped once Phase 1 and 2 are operational — which additional workflows to instrument depends on operational experience and on decisions around PR and manual builds that are entangled with Phase 5.
 
 ## Implementation Phases
 
@@ -236,14 +243,14 @@ Create the `ROCm/quartz` repository and database, stand up the Quartz Hauly GitH
 **Phase 2 — Subscription: Quartz → Downstream + Dashboards**
 Implement the Quartz Conveyor app and outbound notification workflow. Onboard the first downstream subscriber. Connect Grafana to ClickHouse Cloud for analytics dashboards.
 
-**Phase 3 — All TheRock workflows → Quartz**
-Expand data collection beyond release workflows to all other TheRock CI workflows (PR builds, branch builds, manual runs). The ingest pipeline from Phase 1 is reused; this phase covers all additions need to the python scripts and workflows.
+**Phase 3 — Reporting Back: Downstream → Quartz**
+Define the downstream callback schema and implement the Quartz Hunt (Tier 1) and Quartz Kibble (Tier 2) ingest workflows. Provide onboarding templates for downstream projects. Covered in a follow-up — see Scope and Deferred Work.
 
-**Phase 4 — Reporting Back: Downstream → Quartz**
-Define the downstream callback schema and implement the Quartz Hunt (Tier 1) and Quartz Kibble (Tier 2) ingest workflows. Provide onboarding templates for downstream projects. Covered by a follow-up RFC — see Scope and Deferred Work.
+**Phase 4 — All TheRock workflows → Quartz**
+Expand data collection beyond nightly and prerelease to additional TheRock CI workflows. Which workflows to include (dev nightly, PR builds, manual runs) will be decided once Phase 1 and 2 are operational. Covered in a follow-up — see Scope and Deferred Work.
 
 **Phase 5 — Expand Notification system to PR-Subscriptions**
-When a downstream project PR triggers a TheRock CI run, notify that project automatically on completion. Covered by a follow-up RFC — see Scope and Deferred Work.
+When a downstream project PR triggers a TheRock CI run, notify that project automatically on completion. Covered in a follow-up — see Scope and Deferred Work.
 
 ## Phase 1 Implementation Plan
 
@@ -349,18 +356,9 @@ ClickHouse selected because ReplacingMergeTree is a natural fit for the high-fre
 | `workflow_call` (reusable workflow) | Rejected | Cannot verify App ID, cross-repo call limitations                                                                                                                                           |
 | `workflow_dispatch`                 | Selected | Targets a specific workflow; requires only `actions:write`; inputs are declared in the workflow YAML and validated by GitHub; App ID verifiable via `github.event.installation.id`          |
 
-## Scope and Deferred Work
-
-This RFC covers the core architecture, authentication model, and the first two phases of the data flow: TheRock CI results flowing into Quartz (Phase 1) and Quartz notifying downstream projects (Phase 2).
-
-The following are out of scope and will be addressed in a follow-up RFC once downstream project requirements are gathered:
-
-- **Downstream reporting back (Phase 3):** The schema for downstream callback data, mandatory vs. optional fields, and the Quartz Hunt Tier 1 shared credential model (acceptable blast radius vs. per-project apps) will be defined once downstream projects have confirmed their reporting requirements.
-- **PR-subscription flow (Phase 4):** How Quartz identifies and notifies the originating downstream project when a PR-triggered TheRock CI run completes.
-
 ## Summary
 
-Quartz provides the ROCm ecosystem with a unified CI/CD data hub: TheRock results flow in, downstream projects are notified, downstream results flow back, and dashboards query the database directly. The design stays within the GitHub ecosystem, uses ClickHouse Cloud for its high-frequency upsert and insert-triggered materialized view support, and secures all data transport with a pseudo-"2FA" GitHub App + allowlist model.
+This RFC proposes Quartz, a central CI/CD data hub that gives the ROCm ecosystem a unified view of TheRock build and test results, automatic notification of downstream projects, and a path for downstream projects to report their own results back. It covers the full architecture and security model, and provides detailed implementation plans for Phase 1 (TheRock data ingest and `status.json`) and Phase 2 (downstream notifications and dashboards). Phases 3–5 are defined at a high level and will be detailed in a follow-up once early operational experience with Quartz and downstream project requirements are in hand.
 
 ## Revision History
 
@@ -368,3 +366,4 @@ Quartz provides the ROCm ecosystem with a unified CI/CD data hub: TheRock result
 - 2026-03-05: Address feedback, add URL to discussion, adjust GitHub App names, add using secrets for subscriptions (Laura Promberger)
 - 2026-03-16: Add Phase 1 and Phase 2 implementation plans; update deduplication strategy to version integer with GitHub API timestamps; resolve dispatch mechanism to `workflow_dispatch`; various consistency fixes (Laura Promberger)
 - 2026-03-18: Add missing scripts to repository structure; add GitHub Issues and GitHub Project tracking note; minor fixes (Laura Promberger)
+- 2026-03-19: Refactor workflow permissions to read-all default with job-level elevation; move Scope and Deferred Work before Implementation Phases; rewrite Summary; swap Phase 3 (downstream reporting) and Phase 4 (all TheRock workflows) (Laura Promberger)
