@@ -76,13 +76,14 @@ Data flows:
 
 ## Repository Structure
 
-The `ROCm/quartz` repository has five distinct areas of concern:
+The `ROCm/quartz` repository has six distinct areas of concern:
 
 - **`.github/workflows/`** — the three workflow entry points, one per data direction. Workflow YAML is kept minimal: trigger definition, input parameters, and a call to the relevant Python script.
 - **`config/`** — human-editable configuration. `subscriber.yml` lists which downstream projects receive push notifications. `allow-list/` maps each project's repository to its expected GitHub App ID; each project's own maintainers own their file via CODEOWNERS.
 - **`scripts/`** — all business logic in Python. Validation, schema checking, allowlist enforcement, and database insertion happen here, not in YAML.
 - **`release-nightly/` and `prerelease/`** — static JSON status artifacts committed to the repo after each build. Downstream projects that prefer polling over push notifications consume these directly via raw GitHub URLs.
-- **`templates/`** — onboarding materials for downstream projects: example workflows for both push and pull subscription models, and an example workflow for reporting results back to Quartz.
+- **`templates/`** — example workflow files for downstream projects: pull and push subscription models, and reporting results back to Quartz.
+- **`docs/`** — guides for pull subscription, push subscription, and reporting back, populated incrementally across phases.
 
 ```
 ROCm/quartz/
@@ -124,7 +125,12 @@ ROCm/quartz/
 │   ├── subscriber-push.yml            # Workflow triggered by Quartz Conveyor
 │   └── downstream-send.yml            # Downstream: dispatch results to Quartz
 │
-└── README.md                          # Onboarding guide pointing to templates/
+├── docs/
+│   ├── pull-subscription.md           # Guide: polling status.json (Phase 1)
+│   ├── push-subscription.md           # Guide: Quartz Conveyor push model (Phase 2)
+│   └── reporting-back.md              # Guide: reporting results to Quartz (Phase 3)
+│
+└── README.md                          # What Quartz is; links to docs/ and RFC-0011
 ```
 
 ## GitHub Apps and Authentication
@@ -366,4 +372,4 @@ This RFC proposes Quartz, a central CI/CD data hub that gives the ROCm ecosystem
 - 2026-03-05: Address feedback, add URL to discussion, adjust GitHub App names, add using secrets for subscriptions (Laura Promberger)
 - 2026-03-16: Add Phase 1 and Phase 2 implementation plans; update deduplication strategy to version integer with GitHub API timestamps; resolve dispatch mechanism to `workflow_dispatch`; various consistency fixes (Laura Promberger)
 - 2026-03-18: Add missing scripts to repository structure; add GitHub Issues and GitHub Project tracking note; minor fixes (Laura Promberger)
-- 2026-03-19: Refactor workflow permissions to read-all default with job-level elevation; move Scope and Deferred Work before Implementation Phases; rewrite Summary; swap Phase 3 (downstream reporting) and Phase 4 (all TheRock workflows) (Laura Promberger)
+- 2026-03-19: Refactor workflow permissions to read-all default with job-level elevation; move Scope and Deferred Work before Implementation Phases; rewrite Summary; swap Phase 3 (downstream reporting) and Phase 4 (all TheRock workflows); add `docs/` directory to repository structure (Laura Promberger)
