@@ -862,6 +862,101 @@ bool IsInstructionListedForRoute(StubDecoderRoute route,
   return false;
 }
 
+bool RouteInstructionListMatchesRouteInfoSequence(StubDecoderRoute route) {
+  const auto routed_instructions = GetStubDecoderRouteInstructions(route);
+  std::size_t routed_index = 0;
+  for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
+    if (route_info.route != route) {
+      continue;
+    }
+    if (routed_index >= routed_instructions.size() ||
+        routed_instructions[routed_index] != route_info.instruction_name) {
+      return false;
+    }
+    ++routed_index;
+  }
+  return routed_index == routed_instructions.size();
+}
+
+bool GlobalRouteInfoSequenceMatchesRouteInstructionLists() {
+  const auto route_infos = GetStubDecoderRouteInfos();
+  std::size_t route_info_index = 0;
+  for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
+    for (std::string_view instruction_name :
+         GetStubDecoderRouteInstructions(manifest.route)) {
+      if (route_info_index >= route_infos.size()) {
+        return false;
+      }
+      const StubDecoderRouteInfo& route_info = route_infos[route_info_index];
+      if (route_info.route != manifest.route ||
+          route_info.instruction_name != instruction_name) {
+        return false;
+      }
+      ++route_info_index;
+    }
+  }
+  return route_info_index == route_infos.size();
+}
+
+bool RouteInfoLookupMatchesSequenceEntries() {
+  for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
+    if (FindStubDecoderRouteInfo(route_info.instruction_name) != &route_info) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool EntrypointManifestLookupMatchesSequenceEntries() {
+  const auto manifests = GetStubDecoderEntrypointManifests();
+  for (std::size_t i = 0; i < manifests.size(); ++i) {
+    if (FindStubDecoderEntrypointManifest(manifests[i].route) != &manifests[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool RouteManifestLookupMatchesSequenceEntries() {
+  const auto manifests = GetStubDecoderRouteManifests();
+  for (std::size_t i = 0; i < manifests.size(); ++i) {
+    if (FindStubDecoderRouteManifest(manifests[i].route) != &manifests[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool RoutedInstructionNamesFormUniqueBijection() {
+  const auto route_infos = GetStubDecoderRouteInfos();
+  for (std::size_t i = 0; i < route_infos.size(); ++i) {
+    if (!IsInstructionListedForRoute(route_infos[i].route,
+                                     route_infos[i].instruction_name)) {
+      return false;
+    }
+    for (std::size_t j = i + 1; j < route_infos.size(); ++j) {
+      if (route_infos[i].instruction_name == route_infos[j].instruction_name) {
+        return false;
+      }
+    }
+  }
+
+  std::size_t listed_instruction_count = 0;
+  for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
+    for (std::string_view instruction_name :
+         GetStubDecoderRouteInstructions(manifest.route)) {
+      const StubDecoderRouteInfo* route_info =
+          FindStubDecoderRouteInfo(instruction_name);
+      if (route_info == nullptr || route_info->route != manifest.route) {
+        return false;
+      }
+      ++listed_instruction_count;
+    }
+  }
+
+  return listed_instruction_count == route_infos.size();
+}
+
 bool ContainsSlot(const StubDecodedInstruction& instruction,
                   StubOperandSlotKind slot_kind,
                   StubOperandValueClass value_class,
@@ -6867,9 +6962,30 @@ int main() {
     return 1;
   }
 
+  const auto entrypoint_manifests = GetStubDecoderEntrypointManifests();
+  if (!Expect(entrypoint_manifests.size() == 4 &&
+                  entrypoint_manifests[0].route == StubDecoderRoute::kVop3p &&
+                  entrypoint_manifests[0].route_priority == 1 &&
+                  entrypoint_manifests[0].entrypoint_name == "DecodeVop3pStub" &&
+                  entrypoint_manifests[1].route ==
+                      StubDecoderRoute::kMimgTensor &&
+                  entrypoint_manifests[1].route_priority == 2 &&
+                  entrypoint_manifests[1].entrypoint_name ==
+                      "DecodeMimgTensorStub" &&
+                  entrypoint_manifests[2].route == StubDecoderRoute::kVop1 &&
+                  entrypoint_manifests[2].route_priority == 3 &&
+                  entrypoint_manifests[2].entrypoint_name == "DecodeVop1Stub" &&
+                  entrypoint_manifests[3].route ==
+                      StubDecoderRoute::kVop3Sdst &&
+                  entrypoint_manifests[3].route_priority == 4 &&
+                  entrypoint_manifests[3].entrypoint_name ==
+                      "DecodeVop3SdstStub",
+              "expected entrypoint manifests to stay in exact route-priority order")) {
+    return 1;
+  }
+
   std::size_t total_manifest_instructions = 0;
-  for (const StubDecoderEntrypointManifest& manifest :
-       GetStubDecoderEntrypointManifests()) {
+  for (const StubDecoderEntrypointManifest& manifest : entrypoint_manifests) {
     total_manifest_instructions += manifest.instruction_count;
   }
   if (!Expect(total_manifest_instructions ==
@@ -6877,12 +6993,45 @@ int main() {
               "expected entrypoint manifests to cover all routed seeds")) {
     return 1;
   }
+  if (!Expect(EntrypointManifestLookupMatchesSequenceEntries(),
+              "expected entrypoint manifest lookup to return sequence-stable entries")) {
+    return 1;
+  }
 
   if (!Expect(GetStubDecoderRouteManifests().size() == 4,
               "expected four route manifests")) {
     return 1;
   }
-  for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
+  const auto route_manifests = GetStubDecoderRouteManifests();
+  if (!Expect(route_manifests.size() == 4 &&
+                  route_manifests[0].route == StubDecoderRoute::kVop3p &&
+                  route_manifests[0].route_name == "kVop3p" &&
+                  route_manifests[0].route_priority == 1 &&
+                  route_manifests[1].route == StubDecoderRoute::kMimgTensor &&
+                  route_manifests[1].route_name == "kMimgTensor" &&
+                  route_manifests[1].route_priority == 2 &&
+                  route_manifests[2].route == StubDecoderRoute::kVop1 &&
+                  route_manifests[2].route_name == "kVop1" &&
+                  route_manifests[2].route_priority == 3 &&
+                  route_manifests[3].route == StubDecoderRoute::kVop3Sdst &&
+                  route_manifests[3].route_name == "kVop3Sdst" &&
+                  route_manifests[3].route_priority == 4,
+              "expected route manifests to stay in exact route-priority order")) {
+    return 1;
+  }
+  if (!Expect(RouteManifestLookupMatchesSequenceEntries(),
+              "expected route manifest lookup to return sequence-stable entries")) {
+    return 1;
+  }
+  if (!Expect(GlobalRouteInfoSequenceMatchesRouteInstructionLists(),
+              "expected global route-info sequence to match manifest-ordered routed instruction lists")) {
+    return 1;
+  }
+  if (!Expect(RoutedInstructionNamesFormUniqueBijection(),
+              "expected routed instruction names to form a unique bijection between route infos and routed instruction lists")) {
+    return 1;
+  }
+  for (const StubDecoderRouteManifest& manifest : route_manifests) {
     if (!Expect(
             manifest.instruction_count ==
                     GetStubDecoderRouteInstructions(manifest.route).size() &&
@@ -6900,6 +7049,14 @@ int main() {
             "expected route manifest counts to match routed instruction and provenance totals")) {
       return 1;
     }
+    if (!Expect(RouteInstructionListMatchesRouteInfoSequence(manifest.route),
+                "expected routed instruction list order to match route-info sequence")) {
+      return 1;
+    }
+  }
+  if (!Expect(RouteInfoLookupMatchesSequenceEntries(),
+              "expected route-info lookup to return sequence-stable entries")) {
+    return 1;
   }
 
   const StubDecoderRouteManifest* vop3p_route_manifest =

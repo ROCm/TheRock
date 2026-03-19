@@ -46,6 +46,9 @@
   - route-wide exact route-keyed entrypoint vs generic decode parity validation across the current routed seed set
   - route-wide exact decoded-route-to-manifest parity validation across the current routed seed set
   - route-wide exact helper-name parity and helper-coverage validation across the current routed seed set
+  - exact route-priority ordering and routed-instruction-list sequence validation across the current routed family set
+  - exact collection lookup parity and global route-info ordering validation across the current routed family set
+  - exact routed-instruction-name uniqueness and route-info/list bijection validation across the current routed family set
 
 ## Routed Seed Metadata Coverage
 
@@ -55,6 +58,9 @@
   - route-wide exact route-keyed entrypoint decode vs `DecodeStubInstruction(instruction_name)` parity checks across the current routed seed set
   - route-wide exact decoded route / entrypoint metadata and routed-instruction-list parity checks across the current routed seed set
   - route-wide exact opcode-shape / execution-domain / operand-layout helper-name parity plus routed role/slot/value-class helper coverage checks across the current routed seed set
+  - exact `GetStubDecoderEntrypointManifests()` / `GetStubDecoderRouteManifests()` route-priority ordering plus routed-instruction-list sequence parity checks across `kVop3p`, `kMimgTensor`, `kVop1`, and `kVop3Sdst`
+  - exact `FindStubDecoderRouteInfo()` / `FindStubDecoderEntrypointManifest()` / `FindStubDecoderRouteManifest()` sequence-stable lookup parity plus global `GetStubDecoderRouteInfos()` ordering checks against manifest-ordered routed instruction lists
+  - exact routed-instruction-name uniqueness plus one-to-one coverage checks between `GetStubDecoderRouteInfos()` and `GetStubDecoderRouteInstructions()` across `kVop3p`, `kMimgTensor`, `kVop1`, and `kVop3Sdst`
 
 - `VOP3P` packed BF16 slice:
   - `V_PK_ADD_BF16`
