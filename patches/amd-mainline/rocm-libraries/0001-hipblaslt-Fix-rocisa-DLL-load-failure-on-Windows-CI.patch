@@ -1,0 +1,65 @@
+From 3aff13345c34edb8d98550dcbf1ecd085a558de9 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Thu, 19 Mar 2026 18:39:12 +0100
+Subject: [PATCH] [hipblaslt] Fix rocisa DLL load failure on Windows CI
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+On Windows, the Tensile device library build spawns a Python subprocess
+that does `import rocisa`. The rocisa.pyd extension depends on two DLLs
+that are not on PATH at build time:
+- amdhip64_<major>.dll — HIP runtime, output to ${clr_build}/lib/
+- origami.dll — in-tree shared library
+
+The configure-time PATH captured by $ENV{PATH} does not include these
+build-output directories, so the Windows DLL loader fails intermittently.
+
+Fix: on Windows, prepend build-time DLL output dirs to PATH using
+generator expressions before passing it to `cmake -E env`:
+- python_binary_dir: rocisa.pyd location (peer DLL loading)
+- $<TARGET_FILE_DIR:roc::origami>: origami.dll output dir
+- $<TARGET_FILE_DIR:amdhip64> or $<TARGET_FILE_DIR:hip::amdhip64>:
+  HIP runtime DLL output dir (superbuild vs standalone target name)
+
+The TARGET guards at configure time degrade gracefully if neither HIP
+target is in scope.
+
+Note: $<TARGET_RUNTIME_DLL_DIRS:rocisa> would be ideal but requires
+CMake 3.27; the project floor is 3.25.2.
+
+Changes:
+- cmake/hipblaslt_python.cmake: extend Windows PATH with DLL dirs
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ projects/hipblaslt/cmake/hipblaslt_python.cmake | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/projects/hipblaslt/cmake/hipblaslt_python.cmake b/projects/hipblaslt/cmake/hipblaslt_python.cmake
+index 1315137c43..8b48923bcc 100644
+--- a/projects/hipblaslt/cmake/hipblaslt_python.cmake
++++ b/projects/hipblaslt/cmake/hipblaslt_python.cmake
+@@ -40,6 +40,17 @@ function(hipblaslt_configure_bundled_python_command python_binary_dir asan_optio
+     set(_path "$ENV{PATH}")
+     if(WIN32)
+         string(REPLACE ";" "${_ds}" _path "${_path}")
++        # Prepend build-time DLL output dirs so rocisa.pyd can load its runtime
++        # dependencies (origami.dll, amdhip64_N.dll) when imported by the
++        # Tensile device library build step.
++        set(_dll_dirs "${python_binary_dir}" "$<TARGET_FILE_DIR:roc::origami>")
++        if(TARGET amdhip64)
++            list(APPEND _dll_dirs "$<TARGET_FILE_DIR:amdhip64>")
++        elseif(TARGET hip::amdhip64)
++            list(APPEND _dll_dirs "$<TARGET_FILE_DIR:hip::amdhip64>")
++        endif()
++        list(JOIN _dll_dirs "${_ds}" _dll_dirs)
++        set(_path "${_dll_dirs}${_ds}${_path}")
+     endif()
+     set(_python_command
+         "${CMAKE_COMMAND}" -E env
+-- 
+2.43.0
+
