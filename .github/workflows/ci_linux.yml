@@ -241,7 +241,6 @@ jobs:
       matrix:
         package_type: [deb, rpm]
     uses: ./.github/workflows/build_native_linux_packages.yml
-    secrets: inherit
     with:
       artifact_group: ${{ inputs.artifact_group }}
       artifact_run_id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
