@@ -293,6 +293,47 @@ class TestS3Backend(unittest.TestCase):
         """Test that s3_prefix is constructed correctly."""
         self.assertEqual(self.backend.s3_prefix, "external/test-run-456-linux")
 
+    @mock.patch("boto3.client")
+    def test_s3_client_with_credentials(self, mock_boto_client):
+        """Test S3 client initialization with AWS credentials."""
+        mock_client = mock.MagicMock()
+        mock_boto_client.return_value = mock_client
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "AWS_ACCESS_KEY_ID": "test-key",
+                "AWS_SECRET_ACCESS_KEY": "test-secret",
+                "AWS_SESSION_TOKEN": "test-token",
+            },
+        ):
+            backend = S3Backend(output_root=_make_s3_root())
+            # Access client to trigger initialization
+            _ = backend.s3_client
+
+        mock_boto_client.assert_called_once()
+        call_kwargs = mock_boto_client.call_args[1]
+        self.assertEqual(call_kwargs["aws_access_key_id"], "test-key")
+        self.assertEqual(call_kwargs["aws_secret_access_key"], "test-secret")
+        self.assertEqual(call_kwargs["aws_session_token"], "test-token")
+
+    @mock.patch("boto3.client")
+    def test_s3_client_without_credentials(self, mock_boto_client):
+        """Test S3 client initialization without AWS credentials (unsigned)."""
+        mock_client = mock.MagicMock()
+        mock_boto_client.return_value = mock_client
+
+        # Clear any existing credentials
+        with mock.patch.dict(os.environ, {}, clear=True):
+            backend = S3Backend(output_root=_make_s3_root())
+            # Access client to trigger initialization
+            _ = backend.s3_client
+
+        mock_boto_client.assert_called_once()
+        call_kwargs = mock_boto_client.call_args[1]
+        # Should use unsigned config
+        self.assertIn("config", call_kwargs)
+
     @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
     def test_list_artifacts(self, mock_client_prop):
         """Test listing S3 artifacts (both zstd and xz)."""
