@@ -35,11 +35,6 @@ on:
         required: false
         type: boolean
         default: false
-      install_prefix:
-        description: Installation prefix for install test (default /opt/rocm/core). Used by test_native_linux_packages_install.
-        required: false
-        type: string
-        default: "/opt/rocm/core"
       cloudfront_base_url:
         description: "CloudFront base URL (no trailing slash). For nightly use e.g. https://rocm.nightlies.amd.com; for prerelease use e.g. https://rocm.prereleases.amd.com/packages. Used to build repo_url for install test; for prerelease, GPG key URL is derived as <this_url>/gpg/rocm.gpg."
         required: false
@@ -83,10 +78,6 @@ on:
         description: Skip uploading packages to S3. Set to true when called from test workflows.
         type: boolean
         default: false
-      install_prefix:
-        description: Installation prefix for install test.
-        type: string
-        default: "/opt/rocm/core"
       cloudfront_base_url:
         description: "CloudFront base URL (nightly e.g. https://rocm.nightlies.amd.com; prerelease e.g. https://rocm.prereleases.amd.com/packages)."
         type: string
@@ -253,4 +244,4 @@ jobs:
       os_profile: ${{ matrix.os_profile }}
       gpg_key_url: ${{ inputs.release_type == 'prerelease' && format('{0}/gpg/rocm.gpg', needs.get_install_test_profiles.outputs.repo_base_url) || '' }}
       gfx_arch: ${{ needs.get_install_test_profiles.outputs.gfx_arch }}
-      install_prefix: ${{ inputs.install_prefix || '/opt/rocm/core' }}
+      install_prefix: ${{ '/opt/rocm/core' }}

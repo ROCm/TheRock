@@ -34,6 +34,11 @@ on:
         required: false
         type: string
         default: "/opt/rocm/core"
+      test_type:
+        description: "Test type: sanity (install + basic verification), full (install + basic + rdhc). If not set, script default is used."
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       repo_base_url:
@@ -74,6 +79,10 @@ on:
         type: string
         default: "/opt/rocm/core"
         required: false
+      test_type:
+        description: "Test type: sanity or full (optional; leave empty for script default)"
+        type: string
+        default: ""
 
 permissions:
   id-token: write
@@ -134,6 +143,7 @@ jobs:
       RELEASE_TYPE: ${{ needs.compute_repo_url.outputs.release_type }}
       GFX_ARCH: ${{ inputs.gfx_arch || 'gfx94x' }}
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
+      TEST_TYPE: ${{ inputs.test_type }}
     steps:
       - name: Install System Prerequisites
         run: |
@@ -210,10 +220,14 @@ jobs:
           echo "Install Prefix: ${{ env.INSTALL_PREFIX }}"
           echo "GPU Architecture: ${{ env.GFX_ARCH }}"
           echo "Release Type: ${{ env.RELEASE_TYPE }}"
+          if [ -n "${{ env.TEST_TYPE }}" ]; then echo "Test Type: ${{ env.TEST_TYPE }}"; fi
           echo "=========================================================================="
           echo ""
 
           CMD="python build_tools/packaging/linux/native_linux_package_install_test.py"
+          if [ -n "${{ env.TEST_TYPE }}" ]; then
+            CMD="$CMD --test-type ${{ env.TEST_TYPE }}"
+          fi
           CMD="$CMD --os-profile ${{ inputs.os_profile }}"
           CMD="$CMD --repo-url \"${{ env.REPO_URL }}\""
           CMD="$CMD --gfx-arch ${{ env.GFX_ARCH }}"
@@ -263,9 +277,9 @@ jobs:
           for comp in "${components[@]}"; do
             full_path="${{ env.INSTALL_PREFIX }}/${comp}"
             if [ -e "$full_path" ]; then
-              echo "  $comp"
+              echo " $comp"
             else
-              echo "  $comp (not found)"
+              echo " $comp (not found)"
               all_found=false
             fi
           done
@@ -290,9 +304,9 @@ jobs:
             echo "INSTALLATION TEST PASSED"
             echo ""
             echo "Summary:"
-            echo "  - Repository setup: SUCCESS"
-            echo "  - Package installation: SUCCESS"
-            echo "  - ROCm verification: SUCCESS"
+            echo " - Repository setup: SUCCESS"
+            echo " - Package installation: SUCCESS"
+            echo " - ROCm verification: SUCCESS"
             echo ""
             echo "Installed at: ${{ env.INSTALL_PREFIX }}"
             echo "From: ${{ env.REPO_URL }}"
