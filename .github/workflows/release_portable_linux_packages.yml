@@ -191,10 +191,12 @@ jobs:
       THEROCK_BUILD_PROF_LOG_DIR: ${{ github.workspace }}/output/build/logs/therock-build-prof
       SCCACHE_BUCKET: "therock-${{ inputs.release_type }}-sccache"
       SCCACHE_REGION: us-east-2
-      SCCACHE_S3_KEY_PREFIX: "linux/${{ inputs.amdgpu_family }}/"
+      SCCACHE_S3_KEY_PREFIX: "linux/${{ matrix.target_bundle.amdgpu_family }}/"
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_ERROR_LOG: ${{ github.workspace }}/output/build/logs/sccache_error.log
       SCCACHE_LOG: debug
+      SCCACHE_CONF: ${{ github.workspace }}/.ccache/sccache.conf
+      SCCACHE_DIR: ${{ github.workspace }}/output/caches/sccache_cache
 
     steps:
       - name: "Checking out repository"
@@ -220,14 +222,19 @@ jobs:
       #       --config-preset "github-oss-${{ env.CI_TYPE }}" \
       #       --dir "$(dirname $CCACHE_CONFIGPATH)" \
       #       --local-path "$CCACHE_DIR"
+      - name: Install the AWS tool
+        run: ./dockerfiles/install_awscli.sh
 
+      - name: Configure AWS Credentials
+        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
       - name: Runner health status
         run: |
           ./build_tools/health_status.py
           sccache --show-stats
-
-      - name: Install the AWS tool
-        run: ./dockerfiles/install_awscli.sh
 
       - name: Fetch sources
         timeout-minutes: 30
@@ -275,13 +282,6 @@ jobs:
         run: |
           python3 build_tools/resource_info.py --finalize
           python3 build_tools/analyze_build_times.py --build-dir ${{ env.OUTPUT_DIR }}/build
-
-      - name: Configure AWS Credentials
-        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
 
       - name: Post Build Upload
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
