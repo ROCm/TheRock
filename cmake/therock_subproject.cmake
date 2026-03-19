@@ -900,6 +900,24 @@ function(therock_cmake_subproject_activate target_name)
   # Compute fingerprint early so we can validate prebuilt artifacts
   # (fingerprint calculation moved from end of function)
   _therock_subproject_fprint_files(_fprint_content "${_fprint_files}")
+
+  set(_stage_destination_dir "${_stage_dir}")
+  if(_install_destination)
+    cmake_path(APPEND _stage_destination_dir "${_install_destination}")
+  endif()
+
+  # Finger-print vital configure content.
+  cmake_path(RELATIVE_PATH _stage_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_dir)
+  cmake_path(RELATIVE_PATH _stage_destination_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_destination_dir)
+  cmake_path(RELATIVE_PATH _cmake_source_dir BASE_DIRECTORY "${THEROCK_SOURCE_DIR}" OUTPUT_VARIABLE _rel_cmake_source_dir)
+  list(APPEND _fprint_content
+    "CONFIGURE"
+    "CMAKE_BUILD_TYPE=${_cmake_build_type}"
+    "CMAKE_SOURCE_DIR=${_rel_cmake_source_dir}"
+    "STAGE_DIR=${_rel_stage_dir}"
+    "STAGE_DESTINATION_DIR=${_rel_stage_destination_dir}"
+  )
+
   set(_fprint)
   if(_fprint_is_valid)
     string(SHA256 _fprint "${_fprint_content}")
@@ -975,27 +993,11 @@ function(therock_cmake_subproject_activate target_name)
       set(_build_terminal_option JOB_POOL "${_build_pool}")
       set(_build_comment_suffix " (in background)")
     endif()
-    set(_stage_destination_dir "${_stage_dir}")
-    if(_install_destination)
-      cmake_path(APPEND _stage_destination_dir "${_install_destination}")
-    endif()
     set(_compile_commands_file "${PROJECT_BINARY_DIR}/compile_commands_fragment_${target_name}.json")
     therock_subproject_log_command(_configure_log_prefix
       LOG_FILE "${target_name}_configure.log"
       LABEL "${target_name} configure"
       OUTPUT_ON_FAILURE "${_output_on_failure}"
-    )
-
-    # Finger-print vital configure content.
-    cmake_path(RELATIVE_PATH _stage_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_dir)
-    cmake_path(RELATIVE_PATH _stage_destination_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_destination_dir)
-    cmake_path(RELATIVE_PATH _cmake_source_dir BASE_DIRECTORY "${THEROCK_SOURCE_DIR}" OUTPUT_VARIABLE _rel_cmake_source_dir)
-    list(APPEND _fprint_content
-      "CONFIGURE"
-      "CMAKE_BUILD_TYPE=${_cmake_build_type}"
-      "CMAKE_SOURCE_DIR=${_rel_cmake_source_dir}"
-      "STAGE_DIR=${_rel_stage_dir}"
-      "STAGE_DESTINATION_DIR=${_rel_stage_destination_dir}"
     )
 
     # Configure command.
