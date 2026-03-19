@@ -189,8 +189,12 @@ jobs:
       EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
       EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
       THEROCK_BUILD_PROF_LOG_DIR: ${{ github.workspace }}/output/build/logs/therock-build-prof
-      CCACHE_DIR: ${{ github.workspace }}/output/caches/ccache
-      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      SCCACHE_BUCKET: "therock-${{ inputs.release_type }}-sccache"
+      SCCACHE_REGION: us-east-2
+      SCCACHE_S3_KEY_PREFIX: "linux/${{ inputs.amdgpu_family }}/"
+      SCCACHE_S3_USE_SSL: "true"
+      SCCACHE_ERROR_LOG: ${{ github.workspace }}/output/build/logs/sccache_error.log
+      SCCACHE_LOG: debug
 
     steps:
       - name: "Checking out repository"

@@ -51,7 +51,7 @@ if extra_cxx_compiler_launcher:
 
 
 def build_compiler_launcher(
-    extra_launcher: str, default_launcher: str = "ccache"
+    extra_launcher: str, default_launcher: str = "sccache"
 ) -> str:
     """Build compiler launcher string.
 
@@ -100,6 +100,9 @@ def build_configure(build_dir, manylinux=False):
     # Build compiler launcher strings (prepend extra launcher if provided)
     c_launcher = build_compiler_launcher(extra_c_compiler_launcher)
     cxx_launcher = build_compiler_launcher(extra_cxx_compiler_launcher)
+
+    print(f"Using C compiler launcher: {c_launcher}")
+    print(f"Using CXX compiler launcher: {cxx_launcher}")
 
     cmd.extend(
         [
