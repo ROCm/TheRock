@@ -13,6 +13,10 @@ on:
         type: boolean
         default: false
         description: "If true, group all families into one entry per build_variant instead of expanding cross-product"
+      prebuilt_stages:
+        type: string
+        default: ""
+        description: "Comma-separated build stages to skip; passed through for future automatic stage selection"
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
