@@ -1,0 +1,63 @@
+From 904d7e5459d93d50701a27f87ddc9532a191b76a Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 19 Mar 2026 09:55:40 -0400
+Subject: [PATCH] aqlprofile ppc64le: use __ppc_get_timebase_freq()
+
+---
+ projects/aqlprofile/test/util/perf_timer.cpp | 32 ++++++++------------
+ 1 file changed, 13 insertions(+), 19 deletions(-)
+
+diff --git a/projects/aqlprofile/test/util/perf_timer.cpp b/projects/aqlprofile/test/util/perf_timer.cpp
+index 5d5ee77439..6113578da6 100644
+--- a/projects/aqlprofile/test/util/perf_timer.cpp
++++ b/projects/aqlprofile/test/util/perf_timer.cpp
+@@ -157,33 +157,27 @@ uint64_t PerfTimer::CoarseTimestampUs() {
+ #endif
+ }
+ 
+-
+ uint64_t PerfTimer::MeasureTSCFreqHz() {
++#if defined(__x86_64__) || defined(_M_X64)
++  // Make a coarse interval measurement of TSC ticks for 1 gigacycles.
+   unsigned int unused;
+-  uint64_t tscTicksBegin, tscTicksEnd;
+-  uint64_t coarseBeginUs = CoarseTimestampUs();
++  uint64_t tscTicksEnd;
+ 
+-//  --- Architecture Specific Read ---
+-#if defined(__x86_64__) || defined(_M_X64)
+-  tscTicksBegin = __rdtscp(&unused);
+-#elif defined(__powerpc64__) || defined(__PPC64__)
+-// __ppc_get_timebase() is the standard way to read TB on POWER
+-  tscTicksBegin = __ppc_get_timebase();
+-#else
+-  #error "Unsupported architecture"
+-#endif
++  uint64_t coarseBeginUs = CoarseTimestampUs();
++  uint64_t tscTicksBegin = __rdtscp(&unused);
+   do {
+-#if defined(__x86_64__) || defined(_M_X64)
+     tscTicksEnd = __rdtscp(&unused);
+-#elif defined(__powerpc64__) || defined(__PPC64__)
+-    tscTicksEnd = __ppc_get_timebase();
+-#endif
+   } while (tscTicksEnd - tscTicksBegin < 1000000000);
++
+   uint64_t coarseEndUs = CoarseTimestampUs();
+ 
+-  // Compute the frequency
++  // Compute the TSC frequency and round to nearest 100MHz.
+   uint64_t coarseIntervalNs = (coarseEndUs - coarseBeginUs) * 1000;
+   uint64_t tscIntervalTicks = tscTicksEnd - tscTicksBegin;
+-  // Frequency in Hz, rounded
+-  return (tscIntervalTicks * 1000000000 + (coarseIntervalNs / 2)) / coarseIntervalNs;
++  return (tscIntervalTicks * 10 + (coarseIntervalNs / 2)) / coarseIntervalNs;
++#elif defined(__ppc64le__) || defined(__PPC64__)
++  return __ppc_get_timebase_freq() / 100000000;
++#else
++#error "Unsupported architecture"
++#endif
+ }
+-- 
+2.50.1 (Apple Git-155)
+
