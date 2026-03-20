@@ -1,0 +1,27 @@
+From 7a4658f67cbf42b4e8b5b9fc185da4fdcb68d98a Mon Sep 17 00:00:00 2001
+From: Mark Searles <mark.searles@amd.com>
+Date: Thu, 19 Mar 2026 17:21:41 -0700
+Subject: [PATCH] Set gfx1250 default to A0
+
+lit tests have NOT been updated and will fail due to A0/B0 codegen
+differences
+---
+ llvm/lib/Target/AMDGPU/GCNSubtarget.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/llvm/lib/Target/AMDGPU/GCNSubtarget.cpp b/llvm/lib/Target/AMDGPU/GCNSubtarget.cpp
+index e7c397f9c679..ef1418fc2963 100644
+--- a/llvm/lib/Target/AMDGPU/GCNSubtarget.cpp
++++ b/llvm/lib/Target/AMDGPU/GCNSubtarget.cpp
+@@ -55,7 +55,7 @@ static cl::opt<unsigned>
+ static cl::opt<bool>
+     EnableGFX1250B0Specific("amdgpu-gfx1250-b0-specific", cl::Hidden,
+                             cl::desc("Generate code for B0 flavor of gfx1250"),
+-                            cl::init(true));
++                            cl::init(false));
+ 
+ GCNSubtarget::~GCNSubtarget() = default;
+ 
+-- 
+2.43.0
+
