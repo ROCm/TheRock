@@ -75,9 +75,10 @@ AMDGPU_FAMILY_TO_BUILD_ENV = {
 }
 ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
 
-# Upstream PyTorch uses a separate BUILD_ENVIRONMENT for the inductor config
+# WORKAROUND: Upstream PyTorch uses a separate BUILD_ENVIRONMENT for the inductor config
 # (e.g. inductor-rocm-mi300.yml vs rocm-mi300.yml), so test-times.json stores
 # inductor timings under different keys.
+# This workaround should not be required once https://github.com/pytorch/pytorch/pull/176445 merges.
 AMDGPU_FAMILY_TO_INDUCTOR_BUILD_ENV = {
     "gfx94X-dcgpu": "rocm-py3.12-inductor-mi300",
 }
