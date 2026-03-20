@@ -1,0 +1,83 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: CI Nightly PyTorch Full Test
+
+on:
+  schedule:
+    - cron: "0 12 * * *" # 12:00 UTC, after nightly builds (~04:00 UTC) have completed
+  workflow_dispatch:
+    inputs:
+      amdgpu_family:
+        description: GPU family to test
+        type: string
+        default: "gfx94X-dcgpu"
+      torch_version:
+        description: "Torch version to test (leave empty to auto-detect latest nightly)"
+        type: string
+        default: ""
+      pytorch_git_ref:
+        description: "PyTorch git ref for test sources"
+        type: string
+        default: "nightly"
+      test_configs:
+        description: "Space-separated test configs to run"
+        type: string
+        default: "default distributed inductor"
+      python_version:
+        description: "Python version"
+        type: string
+        default: "3.12"
+
+permissions:
+  contents: read
+
+run-name: CI Nightly PyTorch Full Test (${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }})
+
+jobs:
+  resolve_torch_version:
+    runs-on: ubuntu-24.04
+    outputs:
+      torch_version: ${{ steps.resolve.outputs.torch_version }}
+    steps:
+      - name: Resolve latest nightly torch version
+        id: resolve
+        run: |
+          AMDGPU_FAMILY="${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}"
+          PYTHON_VERSION="${{ inputs.python_version || '3.12' }}"
+          INDEX_URL="https://rocm.nightlies.amd.com/v2-staging/${AMDGPU_FAMILY}"
+
+          if [ -n "${{ inputs.torch_version }}" ]; then
+            echo "torch_version=${{ inputs.torch_version }}" >> "$GITHUB_OUTPUT"
+            echo "Using provided torch_version: ${{ inputs.torch_version }}"
+            exit 0
+          fi
+
+          pip install packaging
+          TORCH_VERSION=$(pip index versions torch \
+            --index-url "${INDEX_URL}" \
+            --python-version "${PYTHON_VERSION}" 2>/dev/null \
+            | head -1 \
+            | sed 's/torch (\(.*\))/\1/')
+
+          if [ -z "${TORCH_VERSION}" ]; then
+            echo "::error::Failed to resolve torch version from ${INDEX_URL}"
+            exit 1
+          fi
+
+          echo "torch_version=${TORCH_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved torch_version: ${TORCH_VERSION}"
+
+  run_full_tests:
+    needs: resolve_torch_version
+    uses: ./.github/workflows/test_pytorch_wheels_full.yml
+    with:
+      amdgpu_family: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
+      test_runs_on: "linux-gfx942-1gpu-ossci-rocm"
+      test_runs_on_multi_gpu: "linux-gfx942-8gpu-ossci-rocm"
+      package_index_url: "https://rocm.nightlies.amd.com/v2-staging"
+      python_version: ${{ inputs.python_version || '3.12' }}
+      torch_version: ${{ needs.resolve_torch_version.outputs.torch_version }}
+      pytorch_git_ref: ${{ inputs.pytorch_git_ref || 'nightly' }}
+      test_configs: ${{ inputs.test_configs || 'default distributed inductor' }}
+      tests_to_include: ""

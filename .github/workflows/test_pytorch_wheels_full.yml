@@ -24,7 +24,7 @@ on:
         description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/v2"
+        default: "https://rocm.nightlies.amd.com/v2-staging"
       python_version:
         required: true
         type: string
