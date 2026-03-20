@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 384> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 412> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -79,6 +79,34 @@ constexpr std::array<std::string_view, 384> kPhase0ExecutableOpcodes{{
     "GLOBAL_STORE_BLOCK",
     "GLOBAL_STORE_D16_HI_B8",
     "GLOBAL_STORE_D16_HI_B16",
+    "GLOBAL_ATOMIC_SWAP_B32",
+    "GLOBAL_ATOMIC_CMPSWAP_B32",
+    "GLOBAL_ATOMIC_ADD_U32",
+    "GLOBAL_ATOMIC_SUB_U32",
+    "GLOBAL_ATOMIC_SUB_CLAMP_U32",
+    "GLOBAL_ATOMIC_MIN_I32",
+    "GLOBAL_ATOMIC_MIN_U32",
+    "GLOBAL_ATOMIC_MAX_I32",
+    "GLOBAL_ATOMIC_MAX_U32",
+    "GLOBAL_ATOMIC_AND_B32",
+    "GLOBAL_ATOMIC_OR_B32",
+    "GLOBAL_ATOMIC_XOR_B32",
+    "GLOBAL_ATOMIC_INC_U32",
+    "GLOBAL_ATOMIC_DEC_U32",
+    "GLOBAL_ATOMIC_COND_SUB_U32",
+    "GLOBAL_ATOMIC_SWAP_B64",
+    "GLOBAL_ATOMIC_CMPSWAP_B64",
+    "GLOBAL_ATOMIC_ADD_U64",
+    "GLOBAL_ATOMIC_SUB_U64",
+    "GLOBAL_ATOMIC_MIN_I64",
+    "GLOBAL_ATOMIC_MIN_U64",
+    "GLOBAL_ATOMIC_MAX_I64",
+    "GLOBAL_ATOMIC_MAX_U64",
+    "GLOBAL_ATOMIC_AND_B64",
+    "GLOBAL_ATOMIC_OR_B64",
+    "GLOBAL_ATOMIC_XOR_B64",
+    "GLOBAL_ATOMIC_INC_U64",
+    "GLOBAL_ATOMIC_DEC_U64",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1349,6 +1377,145 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
 
     *instruction = DecodedInstruction::FourOperand(
         instruction_name, described_vdata,
+        DescribeSourceOperand(vaddr, OperandRole::kSource1,
+                              OperandSlotKind::kSource1),
+        DescribeSourceOperand(saddr, OperandRole::kSource2,
+                              OperandSlotKind::kSource2),
+        InstructionOperand::Imm32(static_cast<std::uint32_t>(
+            SignExtend13(ExtractBits(word, 0, 13))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kUnknown,
+                                                   OperandSlotKind::kUnknown,
+                                                   13u)));
+    *words_consumed = 2;
+  } else if (instruction_name == "GLOBAL_ATOMIC_SWAP_B32" ||
+             instruction_name == "GLOBAL_ATOMIC_CMPSWAP_B32" ||
+             instruction_name == "GLOBAL_ATOMIC_ADD_U32" ||
+             instruction_name == "GLOBAL_ATOMIC_SUB_U32" ||
+             instruction_name == "GLOBAL_ATOMIC_SUB_CLAMP_U32" ||
+             instruction_name == "GLOBAL_ATOMIC_MIN_I32" ||
+             instruction_name == "GLOBAL_ATOMIC_MIN_U32" ||
+             instruction_name == "GLOBAL_ATOMIC_MAX_I32" ||
+             instruction_name == "GLOBAL_ATOMIC_MAX_U32" ||
+             instruction_name == "GLOBAL_ATOMIC_AND_B32" ||
+             instruction_name == "GLOBAL_ATOMIC_OR_B32" ||
+             instruction_name == "GLOBAL_ATOMIC_XOR_B32" ||
+             instruction_name == "GLOBAL_ATOMIC_INC_U32" ||
+             instruction_name == "GLOBAL_ATOMIC_DEC_U32" ||
+             instruction_name == "GLOBAL_ATOMIC_COND_SUB_U32") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(ExtractBits(words[1], 24, 8), &dst,
+                                 error_message)) {
+      return false;
+    }
+
+    InstructionOperand vdata;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 8, 8), &vdata,
+                                    error_message)) {
+      return false;
+    }
+
+    InstructionOperand vaddr;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 0, 8), &vaddr,
+                                    error_message)) {
+      return false;
+    }
+
+    const std::uint32_t raw_saddr = ExtractBits(words[1], 16, 7);
+    if (raw_saddr >= WaveExecutionState::kScalarRegisterCount) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL atomic scalar address out of range";
+      }
+      return false;
+    }
+    const InstructionOperand saddr =
+        InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_saddr));
+
+    InstructionOperand described_vdata =
+        DescribeSourceOperand(vdata, OperandRole::kSource0,
+                              OperandSlotKind::kSource0);
+    if (instruction_name == "GLOBAL_ATOMIC_CMPSWAP_B32") {
+      described_vdata = DescribeWideVectorSourceOperand(
+          vdata, OperandRole::kSource0, OperandSlotKind::kSource0, 2u);
+    }
+
+    *instruction = DecodedInstruction::FiveOperand(
+        instruction_name, DescribeVectorDestinationOperand(dst),
+        described_vdata,
+        DescribeSourceOperand(vaddr, OperandRole::kSource1,
+                              OperandSlotKind::kSource1),
+        DescribeSourceOperand(saddr, OperandRole::kSource2,
+                              OperandSlotKind::kSource2),
+        InstructionOperand::Imm32(static_cast<std::uint32_t>(
+            SignExtend13(ExtractBits(word, 0, 13))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kUnknown,
+                                                   OperandSlotKind::kUnknown,
+                                                   13u)));
+    *words_consumed = 2;
+  } else if (instruction_name == "GLOBAL_ATOMIC_SWAP_B64" ||
+             instruction_name == "GLOBAL_ATOMIC_CMPSWAP_B64" ||
+             instruction_name == "GLOBAL_ATOMIC_ADD_U64" ||
+             instruction_name == "GLOBAL_ATOMIC_SUB_U64" ||
+             instruction_name == "GLOBAL_ATOMIC_MIN_I64" ||
+             instruction_name == "GLOBAL_ATOMIC_MIN_U64" ||
+             instruction_name == "GLOBAL_ATOMIC_MAX_I64" ||
+             instruction_name == "GLOBAL_ATOMIC_MAX_U64" ||
+             instruction_name == "GLOBAL_ATOMIC_AND_B64" ||
+             instruction_name == "GLOBAL_ATOMIC_OR_B64" ||
+             instruction_name == "GLOBAL_ATOMIC_XOR_B64" ||
+             instruction_name == "GLOBAL_ATOMIC_INC_U64" ||
+             instruction_name == "GLOBAL_ATOMIC_DEC_U64") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(ExtractBits(words[1], 24, 8), &dst,
+                                 error_message)) {
+      return false;
+    }
+
+    InstructionOperand vdata;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 8, 8), &vdata,
+                                    error_message)) {
+      return false;
+    }
+
+    InstructionOperand vaddr;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 0, 8), &vaddr,
+                                    error_message)) {
+      return false;
+    }
+
+    const std::uint32_t raw_saddr = ExtractBits(words[1], 16, 7);
+    if (raw_saddr >= WaveExecutionState::kScalarRegisterCount) {
+      if (error_message != nullptr) {
+        *error_message = "GLOBAL atomic scalar address out of range";
+      }
+      return false;
+    }
+    const InstructionOperand saddr =
+        InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_saddr));
+
+    InstructionOperand described_vdata = DescribeWideVectorSourceOperand(
+        vdata, OperandRole::kSource0, OperandSlotKind::kSource0, 2u);
+    if (instruction_name == "GLOBAL_ATOMIC_CMPSWAP_B64") {
+      described_vdata = DescribeWideVectorSourceOperand(
+          vdata, OperandRole::kSource0, OperandSlotKind::kSource0, 4u);
+    }
+
+    *instruction = DecodedInstruction::FiveOperand(
+        instruction_name, DescribeWideVectorDestinationOperand(dst),
+        described_vdata,
         DescribeSourceOperand(vaddr, OperandRole::kSource1,
                               OperandSlotKind::kSource1),
         DescribeSourceOperand(saddr, OperandRole::kSource2,

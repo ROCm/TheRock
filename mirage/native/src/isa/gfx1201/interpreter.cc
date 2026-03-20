@@ -54,7 +54,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 384> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 412> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -116,6 +116,34 @@ constexpr std::array<std::string_view, 384> kExecutableSeedOpcodes{{
     "GLOBAL_STORE_BLOCK",
     "GLOBAL_STORE_D16_HI_B8",
     "GLOBAL_STORE_D16_HI_B16",
+    "GLOBAL_ATOMIC_SWAP_B32",
+    "GLOBAL_ATOMIC_CMPSWAP_B32",
+    "GLOBAL_ATOMIC_ADD_U32",
+    "GLOBAL_ATOMIC_SUB_U32",
+    "GLOBAL_ATOMIC_SUB_CLAMP_U32",
+    "GLOBAL_ATOMIC_MIN_I32",
+    "GLOBAL_ATOMIC_MIN_U32",
+    "GLOBAL_ATOMIC_MAX_I32",
+    "GLOBAL_ATOMIC_MAX_U32",
+    "GLOBAL_ATOMIC_AND_B32",
+    "GLOBAL_ATOMIC_OR_B32",
+    "GLOBAL_ATOMIC_XOR_B32",
+    "GLOBAL_ATOMIC_INC_U32",
+    "GLOBAL_ATOMIC_DEC_U32",
+    "GLOBAL_ATOMIC_COND_SUB_U32",
+    "GLOBAL_ATOMIC_SWAP_B64",
+    "GLOBAL_ATOMIC_CMPSWAP_B64",
+    "GLOBAL_ATOMIC_ADD_U64",
+    "GLOBAL_ATOMIC_SUB_U64",
+    "GLOBAL_ATOMIC_MIN_I64",
+    "GLOBAL_ATOMIC_MIN_U64",
+    "GLOBAL_ATOMIC_MAX_I64",
+    "GLOBAL_ATOMIC_MAX_U64",
+    "GLOBAL_ATOMIC_AND_B64",
+    "GLOBAL_ATOMIC_OR_B64",
+    "GLOBAL_ATOMIC_XOR_B64",
+    "GLOBAL_ATOMIC_INC_U64",
+    "GLOBAL_ATOMIC_DEC_U64",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1054,6 +1082,118 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "GLOBAL_STORE_D16_HI_B16") {
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalStoreD16HiB16;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_SWAP_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicSwapB32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_CMPSWAP_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicCmpswapB32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_ADD_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicAddU32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_SUB_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicSubU32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_SUB_CLAMP_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicSubClampU32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_MIN_I32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicMinI32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_MIN_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicMinU32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_MAX_I32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicMaxI32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_MAX_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicMaxU32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_AND_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicAndB32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_OR_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicOrB32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_XOR_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicXorB32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_INC_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicIncU32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_DEC_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicDecU32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_COND_SUB_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicCondSubU32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_SWAP_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicSwapB64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_CMPSWAP_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicCmpswapB64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_ADD_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicAddU64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_SUB_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicSubU64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_MIN_I64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicMinI64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_MIN_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicMinU64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_MAX_I64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicMaxI64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_MAX_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicMaxU64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_AND_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicAndB64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_OR_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicOrB64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_XOR_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicXorB64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_INC_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicIncU64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_DEC_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicDecU64;
     return true;
   }
   if (opcode == "S_LOAD_B32") {
@@ -2844,6 +2984,317 @@ bool ComputeVglobalAddTidAddress(const DecodedInstruction& instruction,
     error_message->clear();
   }
   return true;
+}
+
+std::uint32_t AtomicIncU32(std::uint32_t old_value, std::uint32_t limit) {
+  return old_value >= limit ? 0u : old_value + 1u;
+}
+
+std::uint32_t AtomicDecU32(std::uint32_t old_value, std::uint32_t limit) {
+  return (old_value == 0u || old_value > limit) ? limit : old_value - 1u;
+}
+
+std::uint64_t AtomicIncU64(std::uint64_t old_value, std::uint64_t limit) {
+  return old_value >= limit ? 0u : old_value + 1u;
+}
+
+std::uint64_t AtomicDecU64(std::uint64_t old_value, std::uint64_t limit) {
+  return (old_value == 0u || old_value > limit) ? limit : old_value - 1u;
+}
+
+bool LoadU64(ExecutionMemory* memory,
+             std::uint64_t address,
+             std::uint64_t* value,
+             std::string* error_message,
+             std::string_view opcode) {
+  if (value == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = std::string(opcode) + " value output must not be null";
+    }
+    return false;
+  }
+
+  std::uint32_t low = 0;
+  std::uint32_t high = 0;
+  if (!memory->LoadU32(address, &low) || !memory->LoadU32(address + 4u, &high)) {
+    if (error_message != nullptr) {
+      *error_message = std::string(opcode) + " memory read failed";
+    }
+    return false;
+  }
+
+  *value = static_cast<std::uint64_t>(low) |
+           (static_cast<std::uint64_t>(high) << 32);
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool StoreU64(ExecutionMemory* memory,
+              std::uint64_t address,
+              std::uint64_t value,
+              std::string* error_message,
+              std::string_view opcode) {
+  if (!memory->StoreU32(address, static_cast<std::uint32_t>(value)) ||
+      !memory->StoreU32(address + 4u, static_cast<std::uint32_t>(value >> 32))) {
+    if (error_message != nullptr) {
+      *error_message = std::string(opcode) + " memory write failed";
+    }
+    return false;
+  }
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool ReadAtomicCmpswapB64CompareReplace(const InstructionOperand& operand,
+                                        const WaveExecutionState& state,
+                                        std::size_t lane_index,
+                                        std::uint64_t* compare_value,
+                                        std::uint64_t* replacement_value,
+                                        std::string* error_message) {
+  if (compare_value == nullptr || replacement_value == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "GLOBAL_ATOMIC_CMPSWAP_B64 outputs must not be null";
+    }
+    return false;
+  }
+  if (operand.kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "GLOBAL_ATOMIC_CMPSWAP_B64 expected VGPR source";
+    }
+    return false;
+  }
+  if (operand.index + 3 >= state.vgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "GLOBAL_ATOMIC_CMPSWAP_B64 source out of range";
+    }
+    return false;
+  }
+
+  *compare_value = static_cast<std::uint64_t>(state.vgprs[operand.index][lane_index]) |
+                   (static_cast<std::uint64_t>(
+                        state.vgprs[operand.index + 1][lane_index])
+                    << 32);
+  *replacement_value =
+      static_cast<std::uint64_t>(state.vgprs[operand.index + 2][lane_index]) |
+      (static_cast<std::uint64_t>(state.vgprs[operand.index + 3][lane_index])
+       << 32);
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool ComputeVglobalAtomicAddress(const DecodedInstruction& instruction,
+                                 const WaveExecutionState& state,
+                                 std::size_t lane_index,
+                                 std::uint64_t* address,
+                                 std::string* error_message) {
+  if (address == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "VGLOBAL atomic address output must not be null";
+    }
+    return false;
+  }
+
+  const std::uint32_t vaddr =
+      ReadVectorOperand(instruction.operands[2], state, lane_index,
+                        error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+  const std::uint32_t saddr =
+      ReadScalarOperand(instruction.operands[3], state, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+  const std::int64_t signed_offset =
+      static_cast<std::int64_t>(static_cast<std::int32_t>(
+          ReadScalarOperand(instruction.operands[4], state, error_message)));
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+
+  const std::int64_t signed_address =
+      static_cast<std::int64_t>(static_cast<std::uint64_t>(saddr)) +
+      static_cast<std::int64_t>(static_cast<std::uint64_t>(vaddr)) +
+      signed_offset;
+  if (signed_address < 0) {
+    if (error_message != nullptr) {
+      *error_message =
+          std::string(instruction.opcode) + " computed negative address";
+    }
+    return false;
+  }
+
+  *address = static_cast<std::uint64_t>(signed_address);
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool ExecuteVectorGlobalAtomicAtAddress(const DecodedInstruction& instruction,
+                                        std::uint64_t address,
+                                        std::size_t lane_index,
+                                        WaveExecutionState* state,
+                                        ExecutionMemory* memory,
+                                        std::string* error_message) {
+  const std::string_view opcode = instruction.opcode;
+  std::uint32_t old_value = 0;
+  if (!memory->LoadU32(address, &old_value)) {
+    if (error_message != nullptr) {
+      *error_message = std::string(opcode) + " memory read failed";
+    }
+    return false;
+  }
+
+  std::uint32_t new_value = old_value;
+  if (opcode == "GLOBAL_ATOMIC_CMPSWAP_B32") {
+    const std::uint64_t compare_and_replace = ReadWideSourceOperand(
+        instruction.operands[1], *state, lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    const std::uint32_t compare_value =
+        static_cast<std::uint32_t>(compare_and_replace);
+    const std::uint32_t replacement_value =
+        static_cast<std::uint32_t>(compare_and_replace >> 32);
+    if (old_value == compare_value) {
+      new_value = replacement_value;
+    }
+  } else {
+    const std::uint32_t data_value = ReadVectorOperand(
+        instruction.operands[1], *state, lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+
+    if (opcode == "GLOBAL_ATOMIC_SWAP_B32") {
+      new_value = data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_ADD_U32") {
+      new_value = old_value + data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_SUB_U32") {
+      new_value = old_value - data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_SUB_CLAMP_U32") {
+      new_value = data_value > old_value ? data_value - old_value : 0u;
+    } else if (opcode == "GLOBAL_ATOMIC_MIN_I32") {
+      new_value = BitCast<std::uint32_t>(
+          std::min(BitCast<std::int32_t>(old_value),
+                   BitCast<std::int32_t>(data_value)));
+    } else if (opcode == "GLOBAL_ATOMIC_MIN_U32") {
+      new_value = std::min(old_value, data_value);
+    } else if (opcode == "GLOBAL_ATOMIC_MAX_I32") {
+      new_value = BitCast<std::uint32_t>(
+          std::max(BitCast<std::int32_t>(old_value),
+                   BitCast<std::int32_t>(data_value)));
+    } else if (opcode == "GLOBAL_ATOMIC_MAX_U32") {
+      new_value = std::max(old_value, data_value);
+    } else if (opcode == "GLOBAL_ATOMIC_AND_B32") {
+      new_value = old_value & data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_OR_B32") {
+      new_value = old_value | data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_XOR_B32") {
+      new_value = old_value ^ data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_INC_U32") {
+      new_value = AtomicIncU32(old_value, data_value);
+    } else if (opcode == "GLOBAL_ATOMIC_DEC_U32") {
+      new_value = AtomicDecU32(old_value, data_value);
+    } else if (opcode == "GLOBAL_ATOMIC_COND_SUB_U32") {
+      new_value = old_value >= data_value ? old_value - data_value : old_value;
+    } else {
+      if (error_message != nullptr) {
+        *error_message = "unsupported GLOBAL atomic opcode";
+      }
+      return false;
+    }
+  }
+
+  if (!memory->StoreU32(address, new_value)) {
+    if (error_message != nullptr) {
+      *error_message = std::string(opcode) + " memory write failed";
+    }
+    return false;
+  }
+  return WriteVectorOperand(instruction.operands[0], lane_index, old_value,
+                            state, error_message);
+}
+
+bool ExecuteVectorGlobalAtomic64AtAddress(const DecodedInstruction& instruction,
+                                          std::uint64_t address,
+                                          std::size_t lane_index,
+                                          WaveExecutionState* state,
+                                          ExecutionMemory* memory,
+                                          std::string* error_message) {
+  const std::string_view opcode = instruction.opcode;
+  std::uint64_t old_value = 0;
+  if (!LoadU64(memory, address, &old_value, error_message, opcode)) {
+    return false;
+  }
+
+  std::uint64_t new_value = old_value;
+  if (opcode == "GLOBAL_ATOMIC_CMPSWAP_B64") {
+    std::uint64_t compare_value = 0;
+    std::uint64_t replacement_value = 0;
+    if (!ReadAtomicCmpswapB64CompareReplace(instruction.operands[1], *state,
+                                            lane_index, &compare_value,
+                                            &replacement_value, error_message)) {
+      return false;
+    }
+    if (old_value == compare_value) {
+      new_value = replacement_value;
+    }
+  } else {
+    const std::uint64_t data_value = ReadWideSourceOperand(
+        instruction.operands[1], *state, lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+
+    if (opcode == "GLOBAL_ATOMIC_SWAP_B64") {
+      new_value = data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_ADD_U64") {
+      new_value = old_value + data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_SUB_U64") {
+      new_value = old_value - data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_MIN_I64") {
+      new_value = BitCast<std::uint64_t>(
+          std::min(BitCast<std::int64_t>(old_value),
+                   BitCast<std::int64_t>(data_value)));
+    } else if (opcode == "GLOBAL_ATOMIC_MIN_U64") {
+      new_value = std::min(old_value, data_value);
+    } else if (opcode == "GLOBAL_ATOMIC_MAX_I64") {
+      new_value = BitCast<std::uint64_t>(
+          std::max(BitCast<std::int64_t>(old_value),
+                   BitCast<std::int64_t>(data_value)));
+    } else if (opcode == "GLOBAL_ATOMIC_MAX_U64") {
+      new_value = std::max(old_value, data_value);
+    } else if (opcode == "GLOBAL_ATOMIC_AND_B64") {
+      new_value = old_value & data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_OR_B64") {
+      new_value = old_value | data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_XOR_B64") {
+      new_value = old_value ^ data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_INC_U64") {
+      new_value = AtomicIncU64(old_value, data_value);
+    } else if (opcode == "GLOBAL_ATOMIC_DEC_U64") {
+      new_value = AtomicDecU64(old_value, data_value);
+    } else {
+      if (error_message != nullptr) {
+        *error_message = "unsupported GLOBAL 64-bit atomic opcode";
+      }
+      return false;
+    }
+  }
+
+  if (!StoreU64(memory, address, new_value, error_message, opcode)) {
+    return false;
+  }
+  return WriteWideVectorOperand(instruction.operands[0], lane_index, old_value,
+                                state, error_message);
 }
 
 bool ExecuteVectorGlobalLoadBlockAtAddress(const DecodedInstruction& instruction,
@@ -5167,6 +5618,94 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     }
     return true;
   }
+  if (instruction.opcode == "GLOBAL_ATOMIC_SWAP_B32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_CMPSWAP_B32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_ADD_U32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_SUB_U32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_SUB_CLAMP_U32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_MIN_I32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_MIN_U32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_MAX_I32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_MAX_U32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_AND_B32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_OR_B32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_XOR_B32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_INC_U32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_DEC_U32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_COND_SUB_U32") {
+    if (!ValidateOperandCount(instruction, 5, error_message)) {
+      return false;
+    }
+    if (memory == nullptr) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " requires execution memory";
+      }
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < kGfx1201LaneCount;
+         ++lane_index) {
+      if ((MaskToGfx1201Wave32(state->exec_mask) & (1ull << lane_index)) == 0u) {
+        continue;
+      }
+      std::uint64_t address = 0;
+      if (!ComputeVglobalAtomicAddress(instruction, *state, lane_index,
+                                       &address, error_message)) {
+        return false;
+      }
+      if (!ExecuteVectorGlobalAtomicAtAddress(instruction, address, lane_index,
+                                              state, memory, error_message)) {
+        return false;
+      }
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+  if (instruction.opcode == "GLOBAL_ATOMIC_SWAP_B64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_CMPSWAP_B64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_ADD_U64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_SUB_U64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_MIN_I64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_MIN_U64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_MAX_I64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_MAX_U64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_AND_B64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_OR_B64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_XOR_B64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_INC_U64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_DEC_U64") {
+    if (!ValidateOperandCount(instruction, 5, error_message)) {
+      return false;
+    }
+    if (memory == nullptr) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " requires execution memory";
+      }
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < kGfx1201LaneCount;
+         ++lane_index) {
+      if ((MaskToGfx1201Wave32(state->exec_mask) & (1ull << lane_index)) == 0u) {
+        continue;
+      }
+      std::uint64_t address = 0;
+      if (!ComputeVglobalAtomicAddress(instruction, *state, lane_index,
+                                       &address, error_message)) {
+        return false;
+      }
+      if (!ExecuteVectorGlobalAtomic64AtAddress(instruction, address, lane_index,
+                                                state, memory, error_message)) {
+        return false;
+      }
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
 
   if (instruction.opcode == "S_PREFETCH_INST_PC_REL" ||
       instruction.opcode == "S_PREFETCH_DATA_PC_REL") {
@@ -6181,6 +6720,34 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kGlobalStoreBlock:
     case Gfx1201CompiledOpcode::kGlobalStoreD16HiB8:
     case Gfx1201CompiledOpcode::kGlobalStoreD16HiB16:
+    case Gfx1201CompiledOpcode::kGlobalAtomicSwapB32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicCmpswapB32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicAddU32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicSubU32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicSubClampU32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicMinI32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicMinU32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicMaxI32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicMaxU32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicAndB32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicOrB32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicXorB32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicIncU32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicDecU32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicCondSubU32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicSwapB64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicCmpswapB64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicAddU64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicSubU64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicMinI64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicMinU64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicMaxI64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicMaxU64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicAndB64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicOrB64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicXorB64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicIncU64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicDecU64:
     case Gfx1201CompiledOpcode::kSLoadB32:
     case Gfx1201CompiledOpcode::kSLoadB64:
     case Gfx1201CompiledOpcode::kSLoadB96:
