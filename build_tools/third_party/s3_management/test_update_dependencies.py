@@ -25,7 +25,6 @@ from update_dependencies import is_wheel_allowed
         # pure-Python / platform-independent
         "sympy-1.13.0-py3-none-any.whl",
         "filelock-3.15.0-py3-none-any.whl",
-        "typing_extensions-4.12.0-py310-none-any.whl",
         # Windows x64 — was not excluded by the old blacklist
         "torch-2.3.0-cp312-cp312-win_amd64.whl",
         "numpy-2.0.0-cp310-cp310-win_amd64.whl",
@@ -85,6 +84,9 @@ def test_rejected_platform(pkg: str) -> None:
         "numpy-2.0.0-cp313t-cp313t-linux_x86_64.whl",
         "numpy-2.0.0-cp314-cp314-linux_x86_64.whl",
         "numpy-2.0.0-cp314t-cp314t-linux_x86_64.whl",
+        # Python 2 and py2.py3 universal tags
+        "six-1.16.0-py2-none-any.whl",
+        "six-1.16.0-py2.py3-none-any.whl",
     ],
 )
 def test_rejected_python(pkg: str) -> None:

@@ -107,9 +107,9 @@ def is_wheel_allowed(pkg: str) -> bool:
     1. Platform tag is "linux_x86_64", "win_amd64", "any", or starts with
        "manylinux" and ends with "_x86_64" (e.g., "manylinux_2_17_x86_64").
        This rejects win32, win_arm64, macOS, musllinux, ARM, RISC-V, iOS, etc.
-    2. Python tag is in _ALLOWED_CPYTHON_TAGS, or starts with "py"
-       (pure-Python wheels such as "py3" or "py310").
-       This rejects PyPy (pp*), cp39, cp313t, cp314, cp314t, etc.
+    2. Python tag is in _ALLOWED_CPYTHON_TAGS, or is exactly "py3"
+       (pure-Python wheels). This rejects PyPy (pp*), cp39, cp313t,
+       cp314, cp314t, py2, py2.py3, etc.
 
     Per PEP 427, the wheel stem is:
         {name}-{version}[-{build}]-{python}-{abi}-{platform}
@@ -128,7 +128,7 @@ def is_wheel_allowed(pkg: str) -> bool:
     platform_ok = platform_tag in _ALLOWED_PLATFORM_TAGS or (
         platform_tag.startswith("manylinux") and platform_tag.endswith("_x86_64")
     )
-    python_ok = python_tag in _ALLOWED_CPYTHON_TAGS or python_tag.startswith("py")
+    python_ok = python_tag in _ALLOWED_CPYTHON_TAGS or python_tag == "py3"
 
     return platform_ok and python_ok
 
