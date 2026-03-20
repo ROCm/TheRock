@@ -447,6 +447,26 @@ test_matrix = {
             "windows": 1,
         },
     },
+    "rocdecode": {
+        "job_name": "rocdecode",
+        "fetch_artifact_args": "--rocdecode --tests",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocdecode.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "rocjpeg": {
+        "job_name": "rocjpeg",
+        "fetch_artifact_args": "--rocjpeg --tests",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocjpeg.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # aqlprofile tests
     "aqlprofile": {
         "job_name": "aqlprofile",
