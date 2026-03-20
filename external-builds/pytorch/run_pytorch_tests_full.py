@@ -81,6 +81,7 @@ ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
 # This workaround should not be required once https://github.com/pytorch/pytorch/pull/176445 merges.
 AMDGPU_FAMILY_TO_INDUCTOR_BUILD_ENV = {
     "gfx94X-dcgpu": "rocm-py3.12-inductor-mi300",
+    "gfx950-dcgpu": "rocm-py3.12-inductor-mi355",
 }
 
 THEROCK_ENV_VARS = [
