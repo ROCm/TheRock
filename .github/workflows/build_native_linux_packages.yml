@@ -85,7 +85,7 @@ run-name: Build native Linux packages (${{ inputs.artifact_group }}, ${{ inputs.
 
 jobs:
   build_native_packages:
-    name: Build Linux native Packages :: ${{ inputs.native_package_type }}
+    name: Build Linux native Packages::${{ inputs.native_package_type }}
     strategy:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
