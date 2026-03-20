@@ -57,7 +57,6 @@ block(SCOPE_FOR VARIABLES)
       "--topology" "${CMAKE_CURRENT_SOURCE_DIR}/BUILD_TOPOLOGY.toml"
       "--output" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake"
     OUTPUT_VARIABLE _topology_output
-    ERROR_VARIABLE _topology_error
     COMMAND_ERROR_IS_FATAL ANY  # Fail on any error
   )
   message(STATUS "Generated build topology targets from BUILD_TOPOLOGY.toml")
