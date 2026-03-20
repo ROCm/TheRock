@@ -1646,19 +1646,42 @@ bool RunDsWaveCounterTests(
   auto make_ds_wave_counter_state = []() {
     WaveExecutionState state;
     state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x13572468u;
     state.vgprs[10][2] = 0xdeadbeefu;
     state.vgprs[11][2] = 0xcafebabeu;
+    state.vgprs[12][0] = 0x01020304u;
+    state.vgprs[12][1] = 0x11121314u;
+    state.vgprs[12][2] = 0x21222324u;
+    state.vgprs[12][3] = 0x31323334u;
     const std::uint32_t consume_initial = 20u;
     const std::uint32_t append_initial = 50u;
+    const std::uint32_t untouched_lds = 0x11223344u;
+    const std::uint32_t untouched_consume_neighbor = 0x55667788u;
+    const std::uint32_t untouched_append_neighbor = 0x99aabbccu;
+    std::memcpy(state.lds_bytes.data() + 0x040u, &untouched_lds,
+                sizeof(untouched_lds));
     std::memcpy(state.lds_bytes.data() + 0x120u, &consume_initial,
                 sizeof(consume_initial));
+    std::memcpy(state.lds_bytes.data() + 0x124u, &untouched_consume_neighbor,
+                sizeof(untouched_consume_neighbor));
     std::memcpy(state.lds_bytes.data() + 0x450u, &append_initial,
                 sizeof(append_initial));
+    std::memcpy(state.lds_bytes.data() + 0x454u, &untouched_append_neighbor,
+                sizeof(untouched_append_neighbor));
     return state;
   };
   auto validate_ds_wave_counter_state = [&](const WaveExecutionState& state,
                                             const char* mode) {
-    if (!Expect(state.halted, "expected ds wave-counter program to halt")) {
+    if (!Expect(state.halted, "expected ds wave-counter program to halt") ||
+        !Expect(state.exec_mask == 0b1011ULL,
+                "expected ds wave-counter to preserve exec") ||
+        !Expect(state.sgprs[0] == 0x13572468u,
+                "expected ds wave-counter to preserve sgprs") ||
+        !Expect(state.vgprs[12][0] == 0x01020304u &&
+                    state.vgprs[12][1] == 0x11121314u &&
+                    state.vgprs[12][2] == 0x21222324u &&
+                    state.vgprs[12][3] == 0x31323334u,
+                "expected ds wave-counter to preserve unrelated vgprs")) {
       std::cerr << mode << '\n';
       return false;
     }
@@ -1684,12 +1707,27 @@ bool RunDsWaveCounterTests(
 
     std::uint32_t consume_value = 0;
     std::uint32_t append_value = 0;
+    std::uint32_t untouched_lds = 0;
+    std::uint32_t untouched_consume_neighbor = 0;
+    std::uint32_t untouched_append_neighbor = 0;
+    std::memcpy(&untouched_lds, state.lds_bytes.data() + 0x040u,
+                sizeof(untouched_lds));
     std::memcpy(&consume_value, state.lds_bytes.data() + 0x120u,
                 sizeof(consume_value));
+    std::memcpy(&untouched_consume_neighbor, state.lds_bytes.data() + 0x124u,
+                sizeof(untouched_consume_neighbor));
     std::memcpy(&append_value, state.lds_bytes.data() + 0x450u,
                 sizeof(append_value));
+    std::memcpy(&untouched_append_neighbor, state.lds_bytes.data() + 0x454u,
+                sizeof(untouched_append_neighbor));
     if (!Expect(consume_value == 17u, "expected ds consume final lds value") ||
-        !Expect(append_value == 53u, "expected ds append final lds value")) {
+        !Expect(append_value == 53u, "expected ds append final lds value") ||
+        !Expect(untouched_lds == 0x11223344u,
+                "expected ds wave-counter to preserve unrelated lds") ||
+        !Expect(untouched_consume_neighbor == 0x55667788u,
+                "expected ds consume to preserve neighboring lds") ||
+        !Expect(untouched_append_neighbor == 0x99aabbccu,
+                "expected ds append to preserve neighboring lds")) {
       std::cerr << mode << '\n';
       return false;
     }
