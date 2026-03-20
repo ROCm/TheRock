@@ -230,7 +230,8 @@ struct ScalarPairCompareCase {
 bool RunAtomicSemanticCase(
     const mirage::sim::isa::Gfx950Interpreter& interpreter,
     const AtomicSemanticCase& test_case,
-    bool use_compiled_program = false) {
+    bool use_compiled_program = false,
+    bool has_return_operand = true) {
   using namespace mirage::sim::isa;
 
   constexpr std::uint64_t kAtomicAddress = 0x100;
@@ -264,15 +265,25 @@ bool RunAtomicSemanticCase(
     state.vgprs[kReturnReg + dword_index][0] = 0xdeadbeefu;
   }
 
-  const std::vector<DecodedInstruction> program = {
-      DecodedInstruction::FiveOperand(test_case.opcode,
-                                      InstructionOperand::Vgpr(kReturnReg),
-                                      InstructionOperand::Vgpr(kAddressReg),
-                                      InstructionOperand::Vgpr(kDataReg),
-                                      InstructionOperand::Sgpr(kScalarBaseReg),
-                                      InstructionOperand::Imm32(0)),
-      DecodedInstruction::Nullary("S_ENDPGM"),
-  };
+  const std::vector<DecodedInstruction> program =
+      has_return_operand
+          ? std::vector<DecodedInstruction>{
+                DecodedInstruction::FiveOperand(
+                    test_case.opcode, InstructionOperand::Vgpr(kReturnReg),
+                    InstructionOperand::Vgpr(kAddressReg),
+                    InstructionOperand::Vgpr(kDataReg),
+                    InstructionOperand::Sgpr(kScalarBaseReg),
+                    InstructionOperand::Imm32(0)),
+                DecodedInstruction::Nullary("S_ENDPGM"),
+            }
+          : std::vector<DecodedInstruction>{
+                DecodedInstruction::FourOperand(
+                    test_case.opcode, InstructionOperand::Vgpr(kAddressReg),
+                    InstructionOperand::Vgpr(kDataReg),
+                    InstructionOperand::Sgpr(kScalarBaseReg),
+                    InstructionOperand::Imm32(0)),
+                DecodedInstruction::Nullary("S_ENDPGM"),
+            };
 
   std::string error_message;
   if (use_compiled_program) {
@@ -308,8 +319,20 @@ bool RunAtomicSemanticCase(
                 << " mismatch\n";
       return false;
     }
-    if (state.vgprs[kReturnReg + dword_index][0] !=
-        test_case.expected_return[dword_index]) {
+  }
+  for (std::uint8_t dword_index = 0; dword_index < test_case.data_dword_count;
+       ++dword_index) {
+    if (state.vgprs[kDataReg + dword_index][0] != test_case.data[dword_index]) {
+      std::cerr << test_case.opcode << ": data dword " << +dword_index
+                << " mismatch\n";
+      return false;
+    }
+  }
+  for (std::uint8_t dword_index = 0; dword_index < test_case.memory_dword_count;
+       ++dword_index) {
+    const std::uint32_t expected_return =
+        has_return_operand ? test_case.expected_return[dword_index] : 0xdeadbeefu;
+    if (state.vgprs[kReturnReg + dword_index][0] != expected_return) {
       std::cerr << test_case.opcode << ": return dword " << +dword_index
                 << " mismatch\n";
       return false;
@@ -419,7 +442,8 @@ bool RunBufferAtomicSemanticCase(
 bool RunFlatAtomicSemanticCase(
     const mirage::sim::isa::Gfx950Interpreter& interpreter,
     const AtomicSemanticCase& test_case,
-    bool use_compiled_program = false) {
+    bool use_compiled_program = false,
+    bool has_return_operand = true) {
   using namespace mirage::sim::isa;
 
   constexpr std::uint64_t kAtomicAddress = 0x100;
@@ -450,14 +474,23 @@ bool RunFlatAtomicSemanticCase(
     state.vgprs[kReturnReg + dword_index][0] = 0xdeadbeefu;
   }
 
-  const std::vector<DecodedInstruction> program = {
-      DecodedInstruction::FourOperand(test_case.opcode,
-                                      InstructionOperand::Vgpr(kReturnReg),
-                                      InstructionOperand::Vgpr(kAddressReg),
-                                      InstructionOperand::Vgpr(kDataReg),
-                                      InstructionOperand::Imm32(0)),
-      DecodedInstruction::Nullary("S_ENDPGM"),
-  };
+  const std::vector<DecodedInstruction> program =
+      has_return_operand
+          ? std::vector<DecodedInstruction>{
+                DecodedInstruction::FourOperand(
+                    test_case.opcode, InstructionOperand::Vgpr(kReturnReg),
+                    InstructionOperand::Vgpr(kAddressReg),
+                    InstructionOperand::Vgpr(kDataReg),
+                    InstructionOperand::Imm32(0)),
+                DecodedInstruction::Nullary("S_ENDPGM"),
+            }
+          : std::vector<DecodedInstruction>{
+                DecodedInstruction::ThreeOperand(
+                    test_case.opcode, InstructionOperand::Vgpr(kAddressReg),
+                    InstructionOperand::Vgpr(kDataReg),
+                    InstructionOperand::Imm32(0)),
+                DecodedInstruction::Nullary("S_ENDPGM"),
+            };
 
   std::string error_message;
   if (use_compiled_program) {
@@ -495,8 +528,20 @@ bool RunFlatAtomicSemanticCase(
                 << +dword_index << " mismatch\n";
       return false;
     }
-    if (state.vgprs[kReturnReg + dword_index][0] !=
-        test_case.expected_return[dword_index]) {
+  }
+  for (std::uint8_t dword_index = 0; dword_index < test_case.data_dword_count;
+       ++dword_index) {
+    if (state.vgprs[kDataReg + dword_index][0] != test_case.data[dword_index]) {
+      std::cerr << test_case.opcode << ": flat atomic data dword "
+                << +dword_index << " mismatch\n";
+      return false;
+    }
+  }
+  for (std::uint8_t dword_index = 0; dword_index < test_case.memory_dword_count;
+       ++dword_index) {
+    const std::uint32_t expected_return =
+        has_return_operand ? test_case.expected_return[dword_index] : 0xdeadbeefu;
+    if (state.vgprs[kReturnReg + dword_index][0] != expected_return) {
       std::cerr << test_case.opcode << ": flat atomic return dword "
                 << +dword_index << " mismatch\n";
       return false;
@@ -17999,8 +18044,10 @@ int main() {
        TwoDwords(5ULL), TwoDwords(7ULL)},
   };
   for (const AtomicSemanticCase& test_case : atomic_cases) {
-    if (!RunAtomicSemanticCase(interpreter, test_case, false) ||
-        !RunAtomicSemanticCase(interpreter, test_case, true)) {
+    if (!RunAtomicSemanticCase(interpreter, test_case, false, true) ||
+        !RunAtomicSemanticCase(interpreter, test_case, true, true) ||
+        !RunAtomicSemanticCase(interpreter, test_case, false, false) ||
+        !RunAtomicSemanticCase(interpreter, test_case, true, false)) {
       return 1;
     }
   }
@@ -18023,8 +18070,10 @@ int main() {
         "FLAT_" + std::string(test_case.opcode.substr(7));
     AtomicSemanticCase flat_case = test_case;
     flat_case.opcode = flat_opcode;
-    if (!RunFlatAtomicSemanticCase(interpreter, flat_case, false) ||
-        !RunFlatAtomicSemanticCase(interpreter, flat_case, true)) {
+    if (!RunFlatAtomicSemanticCase(interpreter, flat_case, false, true) ||
+        !RunFlatAtomicSemanticCase(interpreter, flat_case, true, true) ||
+        !RunFlatAtomicSemanticCase(interpreter, flat_case, false, false) ||
+        !RunFlatAtomicSemanticCase(interpreter, flat_case, true, false)) {
       return 1;
     }
   }
