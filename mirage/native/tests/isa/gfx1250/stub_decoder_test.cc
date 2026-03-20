@@ -779,6 +779,28 @@ bool MatchesUnsupportedSeedDecode(const StubDecodedInstruction& decoded,
          decoded.operand_descriptors.descriptor_count == 0;
 }
 
+bool MatchesUnknownDecode(const StubDecodedInstruction& decoded,
+                         std::string_view instruction_name) {
+  return decoded.instruction_name == instruction_name &&
+         decoded.status == StubDecodeStatus::kUnknownInstruction &&
+         decoded.route == StubDecoderRoute::kUnsupported &&
+         decoded.route_name == "kUnsupported" &&
+         decoded.entrypoint_name == "DecodeUnsupportedStub" &&
+         decoded.route_priority == 0 &&
+         decoded.rdna4_encoding_name.empty() &&
+         decoded.rdna4_opcode == 0 &&
+         decoded.rdna4_operand_count == 0 &&
+         !decoded.appears_in_rdna4_xml && !decoded.is_target_specific &&
+         decoded.opcode_shape == StubOpcodeShape::kUnknown &&
+         decoded.execution_domain == StubExecutionDomain::kUnknown &&
+         !decoded.uses_accumulator && !decoded.uses_tensor_memory &&
+         !decoded.uses_scale_path && !decoded.uses_paired_operands &&
+         decoded.operand_layout.layout_kind == StubOperandLayoutKind::kUnknown &&
+         decoded.operand_roles.binding_count == 0 &&
+         decoded.operand_slots.binding_count == 0 &&
+         decoded.operand_descriptors.descriptor_count == 0;
+}
+
 StubOperandRole ExpectedRoleForSlotKind(StubOperandSlotKind slot_kind) {
   switch (slot_kind) {
     case StubOperandSlotKind::kDestination:
@@ -7042,13 +7064,18 @@ int main() {
 
   const StubDecodedInstruction unknown =
       DecodeStubInstruction("NO_SUCH_GFX1250_OPCODE");
-  if (!Expect(unknown.status == StubDecodeStatus::kUnknownInstruction,
-              "expected unknown instruction status for missing opcode")) {
+  if (!Expect(MatchesUnknownDecode(unknown, "NO_SUCH_GFX1250_OPCODE"),
+              "expected exact unknown-instruction decode shape for missing opcode")) {
     return 1;
   }
-  if (!Expect(unknown.opcode_shape == StubOpcodeShape::kUnknown,
-              "expected unknown opcode shape for missing opcode")) {
-    return 1;
+  for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
+    const StubDecodedInstruction via_entrypoint =
+        DecodeViaExplicitRouteEntrypoint(manifest.route,
+                                        "NO_SUCH_GFX1250_OPCODE");
+    if (!Expect(MatchesUnknownDecode(via_entrypoint, "NO_SUCH_GFX1250_OPCODE"),
+                "expected unknown opcode to keep exact route-keyed unknown parity")) {
+      return 1;
+    }
   }
 
   const StubDecoderEntrypointManifest* vop3p_manifest =
@@ -7059,6 +7086,11 @@ int main() {
   }
   if (!Expect(vop3p_manifest->entrypoint_name == "DecodeVop3pStub",
               "expected VOP3P entrypoint manifest name")) {
+    return 1;
+  }
+  if (!Expect(FindStubDecoderEntrypointManifest(StubDecoderRoute::kUnsupported) ==
+                  nullptr,
+              "expected no entrypoint manifest for unsupported route")) {
     return 1;
   }
 
@@ -7201,6 +7233,11 @@ int main() {
   if (!Expect(sdst_route_manifest->route_name == "kVop3Sdst" &&
                   sdst_route_manifest->route_priority == 4,
               "expected VOP3 SDST route manifest metadata")) {
+    return 1;
+  }
+  if (!Expect(FindStubDecoderRouteManifest(StubDecoderRoute::kUnsupported) ==
+                  nullptr,
+              "expected no route manifest for unsupported route")) {
     return 1;
   }
 
