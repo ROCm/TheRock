@@ -1,0 +1,35 @@
+From 98b55d06d8d6e50db0a4426971fd48b542b78ae2 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Fri, 20 Mar 2026 20:47:32 +0000
+Subject: [PATCH] Fix hipfft tests build break on ppc64le
+
+---
+ projects/hipfft/CMakeLists.txt | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/projects/hipfft/CMakeLists.txt b/projects/hipfft/CMakeLists.txt
+index 7424b5d0e0..f27441acea 100644
+--- a/projects/hipfft/CMakeLists.txt
++++ b/projects/hipfft/CMakeLists.txt
+@@ -192,7 +192,17 @@ if( BUILD_CLIENTS )
+ endif()
+ 
+ if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+-    set( BUILD_CLIENTS_TESTS OFF )
++  # The Alias: Map the problematic _Float16 to the supported __fp16
++  add_compile_definitions("$<$<COMPILE_LANGUAGE:CXX>:_Float16=__fp16>")
++
++  # The Driver Flag: Tell Clang it's okay to pass these in registers
++  set(PPC_PFE_FLAGS "-Xclang" "-fallow-half-arguments-and-returns")
++  add_compile_options("$<$<OR:$<COMPILE_LANGUAGE:CXX>,$<COMPILE_LANGUAGE:C>>:${PPC_PFE_FLAGS}>")
++  add_compile_options("$<$<OR:$<COMPILE_LANGUAGE:CXX>,$<COMPILE_LANGUAGE:C>>:-Wno-narrowing>")
++
++  # The Operator Block: Stop the headers from trying to use GPU-only math operators on host
++  add_compile_definitions("$<$<COMPILE_LANGUAGE:CXX>:__HIP_NO_HALF_OPERATORS__=1>")
++  add_compile_definitions("$<$<COMPILE_LANGUAGE:CXX>:__HIP_NO_HALF_CONVERSIONS__=1>")
+ endif()
+ 
+ # old name for BUILD_CLIENTS_BENCH
+-- 
+2.47.3
+
