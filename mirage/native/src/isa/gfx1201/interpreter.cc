@@ -54,7 +54,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 412> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 415> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -144,6 +144,9 @@ constexpr std::array<std::string_view, 412> kExecutableSeedOpcodes{{
     "GLOBAL_ATOMIC_XOR_B64",
     "GLOBAL_ATOMIC_INC_U64",
     "GLOBAL_ATOMIC_DEC_U64",
+    "GLOBAL_ATOMIC_ADD_F32",
+    "GLOBAL_ATOMIC_MIN_NUM_F32",
+    "GLOBAL_ATOMIC_MAX_NUM_F32",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1194,6 +1197,18 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "GLOBAL_ATOMIC_DEC_U64") {
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicDecU64;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_ADD_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicAddF32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_MIN_NUM_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicMinNumF32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_MAX_NUM_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicMaxNumF32;
     return true;
   }
   if (opcode == "S_LOAD_B32") {
@@ -3193,6 +3208,15 @@ bool ExecuteVectorGlobalAtomicAtAddress(const DecodedInstruction& instruction,
                    BitCast<std::int32_t>(data_value)));
     } else if (opcode == "GLOBAL_ATOMIC_MAX_U32") {
       new_value = std::max(old_value, data_value);
+    } else if (opcode == "GLOBAL_ATOMIC_ADD_F32") {
+      new_value = BitCast<std::uint32_t>(BitCast<float>(old_value) +
+                                         BitCast<float>(data_value));
+    } else if (opcode == "GLOBAL_ATOMIC_MIN_NUM_F32") {
+      new_value = BitCast<std::uint32_t>(
+          std::fmin(BitCast<float>(old_value), BitCast<float>(data_value)));
+    } else if (opcode == "GLOBAL_ATOMIC_MAX_NUM_F32") {
+      new_value = BitCast<std::uint32_t>(
+          std::fmax(BitCast<float>(old_value), BitCast<float>(data_value)));
     } else if (opcode == "GLOBAL_ATOMIC_AND_B32") {
       new_value = old_value & data_value;
     } else if (opcode == "GLOBAL_ATOMIC_OR_B32") {
@@ -5627,6 +5651,9 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "GLOBAL_ATOMIC_MIN_U32" ||
       instruction.opcode == "GLOBAL_ATOMIC_MAX_I32" ||
       instruction.opcode == "GLOBAL_ATOMIC_MAX_U32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_ADD_F32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_MIN_NUM_F32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_MAX_NUM_F32" ||
       instruction.opcode == "GLOBAL_ATOMIC_AND_B32" ||
       instruction.opcode == "GLOBAL_ATOMIC_OR_B32" ||
       instruction.opcode == "GLOBAL_ATOMIC_XOR_B32" ||
@@ -6729,6 +6756,9 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kGlobalAtomicMinU32:
     case Gfx1201CompiledOpcode::kGlobalAtomicMaxI32:
     case Gfx1201CompiledOpcode::kGlobalAtomicMaxU32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicAddF32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicMinNumF32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicMaxNumF32:
     case Gfx1201CompiledOpcode::kGlobalAtomicAndB32:
     case Gfx1201CompiledOpcode::kGlobalAtomicOrB32:
     case Gfx1201CompiledOpcode::kGlobalAtomicXorB32:

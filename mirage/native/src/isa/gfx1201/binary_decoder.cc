@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 412> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 415> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -107,6 +107,9 @@ constexpr std::array<std::string_view, 412> kPhase0ExecutableOpcodes{{
     "GLOBAL_ATOMIC_XOR_B64",
     "GLOBAL_ATOMIC_INC_U64",
     "GLOBAL_ATOMIC_DEC_U64",
+    "GLOBAL_ATOMIC_ADD_F32",
+    "GLOBAL_ATOMIC_MIN_NUM_F32",
+    "GLOBAL_ATOMIC_MAX_NUM_F32",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1396,6 +1399,9 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "GLOBAL_ATOMIC_MIN_U32" ||
              instruction_name == "GLOBAL_ATOMIC_MAX_I32" ||
              instruction_name == "GLOBAL_ATOMIC_MAX_U32" ||
+             instruction_name == "GLOBAL_ATOMIC_ADD_F32" ||
+             instruction_name == "GLOBAL_ATOMIC_MIN_NUM_F32" ||
+             instruction_name == "GLOBAL_ATOMIC_MAX_NUM_F32" ||
              instruction_name == "GLOBAL_ATOMIC_AND_B32" ||
              instruction_name == "GLOBAL_ATOMIC_OR_B32" ||
              instruction_name == "GLOBAL_ATOMIC_XOR_B32" ||

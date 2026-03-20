@@ -183,7 +183,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 412u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 415u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -306,6 +306,14 @@ int main() {
               "expected GLOBAL_ATOMIC_INC_U64 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_ATOMIC_DEC_U64"),
               "expected GLOBAL_ATOMIC_DEC_U64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("GLOBAL_ATOMIC_ADD_F32"),
+              "expected GLOBAL_ATOMIC_ADD_F32 executable decode support") ||
+      !Expect(
+          decoder.SupportsPhase0ExecutableOpcode("GLOBAL_ATOMIC_MIN_NUM_F32"),
+          "expected GLOBAL_ATOMIC_MIN_NUM_F32 executable decode support") ||
+      !Expect(
+          decoder.SupportsPhase0ExecutableOpcode("GLOBAL_ATOMIC_MAX_NUM_F32"),
+          "expected GLOBAL_ATOMIC_MAX_NUM_F32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B32"),
               "expected S_LOAD_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B64"),
@@ -1133,6 +1141,37 @@ int main() {
     return 1;
   }
 
+  const auto global_atomic_add_f32_words =
+      MakeGlobal(86u, 66u, 67u, 42u, 42u, 40);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      global_atomic_add_f32_words.data(),
+                      global_atomic_add_f32_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected GLOBAL_ATOMIC_ADD_F32 decode success") ||
+      !Expect(words_consumed == 2u, "expected two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "GLOBAL_ATOMIC_ADD_F32",
+              "expected GLOBAL_ATOMIC_ADD_F32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 5u,
+              "expected GLOBAL_ATOMIC_ADD_F32 five-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 66u,
+              "expected GLOBAL_ATOMIC_ADD_F32 vector destination") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[1].index == 42u,
+              "expected GLOBAL_ATOMIC_ADD_F32 vector data") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[2].index == 67u,
+              "expected GLOBAL_ATOMIC_ADD_F32 vector address") ||
+      !Expect(decoded_instruction.operands[3].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[3].index == 42u,
+              "expected GLOBAL_ATOMIC_ADD_F32 scalar address") ||
+      !Expect(decoded_instruction.operands[4].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[4].imm32 == 40u,
+              "expected GLOBAL_ATOMIC_ADD_F32 inline offset")) {
+    return 1;
+  }
+
   const auto load_b32_words = MakeSmem(0u, 18u, 4u, true, 12u);
   if (!Expect(decoder.DecodeInstruction(
                   std::span<const std::uint32_t>(load_b32_words.data(),
@@ -1434,7 +1473,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 412u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 415u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -1558,6 +1597,12 @@ int main() {
               "expected interpreter support for GLOBAL_ATOMIC_INC_U64") ||
       !Expect(interpreter.Supports("GLOBAL_ATOMIC_DEC_U64"),
               "expected interpreter support for GLOBAL_ATOMIC_DEC_U64") ||
+      !Expect(interpreter.Supports("GLOBAL_ATOMIC_ADD_F32"),
+              "expected interpreter support for GLOBAL_ATOMIC_ADD_F32") ||
+      !Expect(interpreter.Supports("GLOBAL_ATOMIC_MIN_NUM_F32"),
+              "expected interpreter support for GLOBAL_ATOMIC_MIN_NUM_F32") ||
+      !Expect(interpreter.Supports("GLOBAL_ATOMIC_MAX_NUM_F32"),
+              "expected interpreter support for GLOBAL_ATOMIC_MAX_NUM_F32") ||
       !Expect(interpreter.Supports("S_LOAD_B32"),
               "expected interpreter support for S_LOAD_B32") ||
       !Expect(interpreter.Supports("S_LOAD_B64"),
