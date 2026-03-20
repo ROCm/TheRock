@@ -11788,36 +11788,96 @@ int main() {
   };
   const auto make_scalar_maintenance_state = []() {
     WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
     state.sgprs[0] = 0x200u;
     state.sgprs[1] = 0u;
     state.sgprs[2] = 0x80u;
+    state.sgprs[3] = 0x12345678u;
+    state.sgprs[8] = 0x9abcdef0u;
+    state.vgprs[12][0] = 0x01020304u;
+    state.vgprs[12][1] = 0x11121314u;
+    state.vgprs[12][2] = 0x21222324u;
+    state.vgprs[12][3] = 0x31323334u;
     return state;
   };
+  const auto make_scalar_maintenance_memory = []() {
+    LinearExecutionMemory memory(0x400, 0);
+    memory.WriteU32(0x20u, 0x11223344u);
+    memory.WriteU32(0x80u, 0x55667788u);
+    memory.WriteU32(0x200u, 0x99aabbccu);
+    memory.WriteU32(0x240u, 0xddeeff00u);
+    return memory;
+  };
   const auto validate_scalar_maintenance_state =
-      [&](const WaveExecutionState& state, const char* mode) {
-        if (!Expect(state.halted, "expected scalar maintenance program to halt") ||
-            !Expect(state.sgprs[0] == 0x200u,
-                    "expected scalar maintenance to preserve base") ||
-            !Expect(state.sgprs[2] == 0x80u,
-                    "expected scalar maintenance to preserve offset") ||
+      [&](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+          const char* mode) {
+        std::uint32_t value = 0;
+        if (!Expect(state.halted,
+                    (std::string(mode) + " scalar maintenance program to halt")
+                        .c_str()) ||
+            !Expect(state.exec_mask == 0b1011ULL,
+                    (std::string(mode) + " scalar maintenance to preserve exec")
+                        .c_str()) ||
+            !Expect(state.sgprs[0] == 0x200u && state.sgprs[1] == 0u &&
+                        state.sgprs[2] == 0x80u &&
+                        state.sgprs[3] == 0x12345678u &&
+                        state.sgprs[8] == 0x9abcdef0u,
+                    (std::string(mode) + " scalar maintenance to preserve sgprs")
+                        .c_str()) ||
             !Expect(state.sgprs[4] != 0u || state.sgprs[5] != 0u,
-                    "expected s_memtime to write a timestamp") ||
+                    (std::string(mode) + " s_memtime to write a timestamp")
+                        .c_str()) ||
             !Expect(state.sgprs[6] != 0u || state.sgprs[7] != 0u,
-                    "expected s_memrealtime to write a timestamp")) {
+                    (std::string(mode) + " s_memrealtime to write a timestamp")
+                        .c_str()) ||
+            !Expect(state.vgprs[12][0] == 0x01020304u &&
+                        state.vgprs[12][1] == 0x11121314u &&
+                        state.vgprs[12][2] == 0x21222324u &&
+                        state.vgprs[12][3] == 0x31323334u,
+                    (std::string(mode) + " scalar maintenance to preserve vgprs")
+                        .c_str()) ||
+            !Expect(memory.ReadU32(0x20u, &value),
+                    (std::string(mode) + " scalar maintenance memory read")
+                        .c_str()) ||
+            !Expect(value == 0x11223344u,
+                    (std::string(mode) + " scalar maintenance memory result")
+                        .c_str()) ||
+            !Expect(memory.ReadU32(0x80u, &value),
+                    (std::string(mode) + " scalar maintenance memory read")
+                        .c_str()) ||
+            !Expect(value == 0x55667788u,
+                    (std::string(mode) + " scalar maintenance memory result")
+                        .c_str()) ||
+            !Expect(memory.ReadU32(0x200u, &value),
+                    (std::string(mode) + " scalar maintenance memory read")
+                        .c_str()) ||
+            !Expect(value == 0x99aabbccu,
+                    (std::string(mode) + " scalar maintenance memory result")
+                        .c_str()) ||
+            !Expect(memory.ReadU32(0x240u, &value),
+                    (std::string(mode) + " scalar maintenance memory read")
+                        .c_str()) ||
+            !Expect(value == 0xddeeff00u,
+                    (std::string(mode) + " scalar maintenance memory result")
+                        .c_str())) {
           std::cerr << mode << '\n';
           return false;
         }
         return true;
       };
 
+  LinearExecutionMemory decoded_scalar_maintenance_memory =
+      make_scalar_maintenance_memory();
   WaveExecutionState decoded_scalar_maintenance_state =
       make_scalar_maintenance_state();
   if (!Expect(interpreter.ExecuteProgram(scalar_maintenance_program,
                                          &decoded_scalar_maintenance_state,
+                                         &decoded_scalar_maintenance_memory,
                                          &error_message),
               error_message.c_str()) ||
       !validate_scalar_maintenance_state(decoded_scalar_maintenance_state,
-                                         "decoded scalar maintenance")) {
+                                         decoded_scalar_maintenance_memory,
+                                         "decoded")) {
     return 1;
   }
 
@@ -11828,14 +11888,18 @@ int main() {
               error_message.c_str())) {
     return 1;
   }
+  LinearExecutionMemory compiled_scalar_maintenance_memory =
+      make_scalar_maintenance_memory();
   WaveExecutionState compiled_scalar_maintenance_state =
       make_scalar_maintenance_state();
   if (!Expect(interpreter.ExecuteProgram(compiled_scalar_maintenance_program,
                                          &compiled_scalar_maintenance_state,
+                                         &compiled_scalar_maintenance_memory,
                                          &error_message),
               error_message.c_str()) ||
       !validate_scalar_maintenance_state(compiled_scalar_maintenance_state,
-                                         "compiled scalar maintenance")) {
+                                         compiled_scalar_maintenance_memory,
+                                         "compiled")) {
     return 1;
   }
   }
@@ -11854,6 +11918,7 @@ int main() {
   };
   const auto make_scalar_probe_state = []() {
     WaveExecutionState state{};
+    state.exec_mask = 0b0101ULL;
     state.sgprs[0] = 0x180u;
     state.sgprs[1] = 0u;
     state.sgprs[8] = 0x240u;
@@ -11861,30 +11926,69 @@ int main() {
     state.sgprs[10] = 0x100u;
     state.sgprs[11] = 0u;
     state.sgprs[12] = 0x20u;
+    state.sgprs[13] = 0xdeadbeefu;
+    state.vgprs[14][0] = 0x22222222u;
+    state.vgprs[14][1] = 0x33333333u;
+    state.vgprs[14][2] = 0x44444444u;
+    state.vgprs[14][3] = 0x55555555u;
     return state;
   };
+  const auto make_scalar_probe_memory = []() {
+    LinearExecutionMemory memory(0x400, 0);
+    memory.WriteU32(0x20u, 0x0badc0deu);
+    memory.WriteU32(0x180u, 0x11224488u);
+    memory.WriteU32(0x240u, 0x99cc33f0u);
+    return memory;
+  };
   const auto validate_scalar_probe_state =
-      [&](const WaveExecutionState& state, const char* mode) {
-        if (!Expect(state.halted, "expected scalar probe program to halt") ||
-            !Expect(state.sgprs[0] == 0x180u,
-                    "expected s_atc_probe to preserve base") ||
-            !Expect(state.sgprs[8] == 0x240u,
-                    "expected s_atc_probe_buffer to preserve descriptor") ||
-            !Expect(state.sgprs[12] == 0x20u,
-                    "expected s_atc_probe_buffer to preserve soffset")) {
+      [&](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+          const char* mode) {
+        std::uint32_t value = 0;
+        if (!Expect(state.halted,
+                    (std::string(mode) + " scalar probe program to halt").c_str()) ||
+            !Expect(state.exec_mask == 0b0101ULL,
+                    (std::string(mode) + " scalar probe to preserve exec")
+                        .c_str()) ||
+            !Expect(state.sgprs[0] == 0x180u && state.sgprs[1] == 0u &&
+                        state.sgprs[8] == 0x240u && state.sgprs[9] == 0u &&
+                        state.sgprs[10] == 0x100u && state.sgprs[11] == 0u &&
+                        state.sgprs[12] == 0x20u &&
+                        state.sgprs[13] == 0xdeadbeefu,
+                    (std::string(mode) + " scalar probe to preserve sgprs")
+                        .c_str()) ||
+            !Expect(state.vgprs[14][0] == 0x22222222u &&
+                        state.vgprs[14][1] == 0x33333333u &&
+                        state.vgprs[14][2] == 0x44444444u &&
+                        state.vgprs[14][3] == 0x55555555u,
+                    (std::string(mode) + " scalar probe to preserve vgprs")
+                        .c_str()) ||
+            !Expect(memory.ReadU32(0x20u, &value),
+                    (std::string(mode) + " scalar probe memory read").c_str()) ||
+            !Expect(value == 0x0badc0deu,
+                    (std::string(mode) + " scalar probe memory result").c_str()) ||
+            !Expect(memory.ReadU32(0x180u, &value),
+                    (std::string(mode) + " scalar probe memory read").c_str()) ||
+            !Expect(value == 0x11224488u,
+                    (std::string(mode) + " scalar probe memory result").c_str()) ||
+            !Expect(memory.ReadU32(0x240u, &value),
+                    (std::string(mode) + " scalar probe memory read").c_str()) ||
+            !Expect(value == 0x99cc33f0u,
+                    (std::string(mode) + " scalar probe memory result").c_str())) {
           std::cerr << mode << '\n';
           return false;
         }
         return true;
       };
 
+  LinearExecutionMemory decoded_scalar_probe_memory = make_scalar_probe_memory();
   WaveExecutionState decoded_scalar_probe_state = make_scalar_probe_state();
   if (!Expect(interpreter.ExecuteProgram(scalar_probe_program,
                                          &decoded_scalar_probe_state,
+                                         &decoded_scalar_probe_memory,
                                          &error_message),
               error_message.c_str()) ||
       !validate_scalar_probe_state(decoded_scalar_probe_state,
-                                   "decoded scalar probe")) {
+                                   decoded_scalar_probe_memory, "decoded")) {
     return 1;
   }
 
@@ -11895,13 +11999,15 @@ int main() {
               error_message.c_str())) {
     return 1;
   }
+  LinearExecutionMemory compiled_scalar_probe_memory = make_scalar_probe_memory();
   WaveExecutionState compiled_scalar_probe_state = make_scalar_probe_state();
   if (!Expect(interpreter.ExecuteProgram(compiled_scalar_probe_program,
                                          &compiled_scalar_probe_state,
+                                         &compiled_scalar_probe_memory,
                                          &error_message),
               error_message.c_str()) ||
       !validate_scalar_probe_state(compiled_scalar_probe_state,
-                                   "compiled scalar probe")) {
+                                   compiled_scalar_probe_memory, "compiled")) {
     return 1;
   }
   }
