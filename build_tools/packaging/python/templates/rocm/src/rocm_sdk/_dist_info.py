@@ -235,6 +235,7 @@ LibraryEntry("amdhip64", "core", "libamdhip64.so*", "amdhip64*.dll")
 # If DLLs with no version suffix are later added we will need a different pattern.
 LibraryEntry("hiprtc", "core", "libhiprtc.so*", "hiprtc0*.dll")
 LibraryEntry("roctx64", "core", "libroctx64.so*", "")
+LibraryEntry("rocprofiler-sdk", "core", "librocprofiler-sdk.so*", "")
 LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so*", "")
 LibraryEntry("roctracer64", "core", "libroctracer64.so*", "")
 LibraryEntry(

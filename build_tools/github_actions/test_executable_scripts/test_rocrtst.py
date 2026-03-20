@@ -51,8 +51,8 @@ TEST_TO_IGNORE = {
     },
 }
 
-# If smoke tests are enabled, run smoke tests only. Otherwise, run the full suite.
-SMOKE_TESTS = [
+# If quick tests are enabled, run quick tests only. Otherwise, run the full suite.
+QUICK_TESTS = [
     "rocrtst.Test_Example",
     "rocrtstFunc.MemoryAccessTests",
     "rocrtstFunc.GroupMemoryAllocationTest",
@@ -76,8 +76,8 @@ if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILI
 
 test_type = os.getenv("TEST_TYPE", "full")
 
-if test_type == "smoke":
-    environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS) + ":" + exclude_filter
+if test_type == "quick":
+    environ_vars["GTEST_FILTER"] = ":".join(QUICK_TESTS) + ":" + exclude_filter
 else:
     environ_vars["GTEST_FILTER"] = exclude_filter
 
