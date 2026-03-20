@@ -10,6 +10,7 @@
 
 #include "lib/sim/isa/common/decoded_instruction.h"
 #include "lib/sim/isa/common/execution_memory.h"
+#include "lib/sim/isa/common/numeric_conversions.h"
 #include "lib/sim/isa/common/wave_execution_state.h"
 #include "lib/sim/isa/gfx1201/binary_decoder.h"
 #include "lib/sim/isa/gfx1201/interpreter.h"
@@ -40,6 +41,18 @@ float BitsToFloat(std::uint32_t value) {
   float result = 0.0f;
   std::memcpy(&result, &value, sizeof(result));
   return result;
+}
+
+std::uint32_t PackF16Pair(float low, float high) {
+  using mirage::sim::isa::FloatToHalf;
+  return static_cast<std::uint32_t>(FloatToHalf(low)) |
+         (static_cast<std::uint32_t>(FloatToHalf(high)) << 16);
+}
+
+std::uint32_t PackBf16Pair(float low, float high) {
+  using mirage::sim::isa::FloatToBFloat16;
+  return static_cast<std::uint32_t>(FloatToBFloat16(low)) |
+         (static_cast<std::uint32_t>(FloatToBFloat16(high)) << 16);
 }
 
 std::uint64_t DoubleBits(double value) {
@@ -1783,7 +1796,7 @@ struct GlobalAtomicU64Case {
   bool is_cmpswap;
 };
 
-constexpr std::array<GlobalAtomicU64Case, 13> kGlobalAtomicU64Cases{{
+constexpr std::array<GlobalAtomicU64Case, 14> kGlobalAtomicU64Cases{{
     {"GLOBAL_ATOMIC_SWAP_B64", 65u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kGlobalAtomicSwapB64, 20u, 60u,
      0x000u, false},
@@ -1823,6 +1836,9 @@ constexpr std::array<GlobalAtomicU64Case, 13> kGlobalAtomicU64Cases{{
     {"GLOBAL_ATOMIC_DEC_U64", 77u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kGlobalAtomicDecU64, 44u, 88u,
      0xc00u, false},
+    {"GLOBAL_ATOMIC_ORDERED_ADD_B64", 115u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kGlobalAtomicOrderedAddB64, 46u,
+     90u, 0xd00u, false},
 }};
 
 constexpr std::uint16_t kGlobalAtomicF32BaseSgpr = 28;
@@ -1848,6 +1864,29 @@ constexpr std::array<GlobalAtomicF32Case, 3> kGlobalAtomicF32Cases{{
     {"GLOBAL_ATOMIC_MAX_NUM_F32", 82u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kGlobalAtomicMaxNumF32, 92u,
      98u, 0x200u},
+}};
+
+constexpr std::uint16_t kGlobalAtomicPackedBaseSgpr = 30;
+constexpr std::uint16_t kGlobalAtomicPackedAddressVgpr = 16;
+constexpr std::uint64_t kGlobalAtomicPackedBaseAddress = 0xf000u;
+
+struct GlobalAtomicPackedCase {
+  const char* opcode;
+  std::uint32_t op;
+  mirage::sim::isa::Gfx1201CompiledOpcode compiled;
+  std::uint16_t dst;
+  std::uint16_t data;
+  std::uint32_t offset;
+  bool use_bf16;
+};
+
+constexpr std::array<GlobalAtomicPackedCase, 2> kGlobalAtomicPackedCases{{
+    {"GLOBAL_ATOMIC_PK_ADD_F16", 89u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kGlobalAtomicPkAddF16, 100u,
+     104u, 0x000u, false},
+    {"GLOBAL_ATOMIC_PK_ADD_BF16", 90u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kGlobalAtomicPkAddBf16, 101u,
+     105u, 0x100u, true},
 }};
 
 bool IsGlobalAtomicLaneActive(std::size_t lane) {
@@ -2269,6 +2308,9 @@ std::uint64_t InitialGlobalAtomicU64OldValue(std::size_t case_index,
       return lane == 0u ? 4ull : (lane == 2u ? 3ull : 8ull);
     case 12:
       return lane == 0u ? 0ull : (lane == 2u ? 5ull : 4ull);
+    case 13:
+      return lane == 0u ? 11ull
+                        : (lane == 2u ? 0x100ull : 0xfffffffffffffff0ull);
     default:
       return 0ull;
   }
@@ -2321,6 +2363,8 @@ std::uint64_t InitialGlobalAtomicU64DataValue(std::size_t case_index,
       return 4ull;
     case 12:
       return 4ull;
+    case 13:
+      return lane == 0u ? 5ull : (lane == 2u ? 7ull : 0x20ull);
     default:
       return 0ull;
   }
@@ -2371,6 +2415,8 @@ std::uint64_t ExpectedGlobalAtomicU64NewValue(std::size_t case_index,
     case 12:
       return (old_value == 0ull || old_value > data_value) ? data_value
                                                             : old_value - 1ull;
+    case 13:
+      return old_value + data_value;
     default:
       return old_value;
   }
@@ -2864,6 +2910,271 @@ bool RunGlobalAtomicF32BatchTest(
               "expected compiled GLOBAL atomic F32 state") ||
       !Expect(expect_atomic_memory(&compiled_atomic_memory),
               "expected compiled GLOBAL atomic F32 memory state")) {
+    return false;
+  }
+
+  return true;
+}
+
+std::uint32_t GlobalAtomicPackedSentinel(std::size_t case_index,
+                                         std::size_t lane) {
+  return 0xed000000u + static_cast<std::uint32_t>(case_index << 8) +
+         static_cast<std::uint32_t>(lane);
+}
+
+std::uint32_t InitialGlobalAtomicPackedOldValue(std::size_t case_index,
+                                                std::size_t lane) {
+  if (!IsGlobalAtomicLaneActive(lane)) {
+    return 0xf4000000u + static_cast<std::uint32_t>(case_index << 8) +
+           static_cast<std::uint32_t>(lane);
+  }
+
+  switch (case_index) {
+    case 0:
+      return lane == 0u ? PackF16Pair(1.0f, 2.0f)
+                        : (lane == 2u ? PackF16Pair(-4.0f, 0.5f)
+                                       : PackF16Pair(7.0f, -1.5f));
+    case 1:
+      return lane == 0u ? PackBf16Pair(1.0f, 2.0f)
+                        : (lane == 2u ? PackBf16Pair(-4.0f, 0.5f)
+                                       : PackBf16Pair(7.0f, -1.5f));
+    default:
+      return 0u;
+  }
+}
+
+std::uint32_t InitialGlobalAtomicPackedDataValue(std::size_t case_index,
+                                                 std::size_t lane) {
+  if (!IsGlobalAtomicLaneActive(lane)) {
+    return 0x54000000u + static_cast<std::uint32_t>(case_index << 8) +
+           static_cast<std::uint32_t>(lane);
+  }
+
+  switch (case_index) {
+    case 0:
+      return lane == 0u ? PackF16Pair(0.5f, -1.0f)
+                        : (lane == 2u ? PackF16Pair(3.0f, -0.25f)
+                                       : PackF16Pair(-1.0f, 2.0f));
+    case 1:
+      return lane == 0u ? PackBf16Pair(0.5f, -1.0f)
+                        : (lane == 2u ? PackBf16Pair(3.0f, -0.25f)
+                                       : PackBf16Pair(-1.0f, 2.0f));
+    default:
+      return 0u;
+  }
+}
+
+std::uint32_t ExpectedGlobalAtomicPackedNewValue(std::size_t case_index,
+                                                 std::uint32_t old_value,
+                                                 std::uint32_t data_value) {
+  using mirage::sim::isa::PackedBFloat16Add;
+  using mirage::sim::isa::PackedHalfAdd;
+
+  switch (case_index) {
+    case 0:
+      return PackedHalfAdd(old_value, data_value);
+    case 1:
+      return PackedBFloat16Add(old_value, data_value);
+    default:
+      return old_value;
+  }
+}
+
+bool RunGlobalAtomicPackedBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  std::vector<std::uint32_t> atomic_program_words;
+  atomic_program_words.reserve(kGlobalAtomicPackedCases.size() * 2u + 1u);
+  for (const GlobalAtomicPackedCase& atomic_case : kGlobalAtomicPackedCases) {
+    const auto words =
+        MakeGlobal(atomic_case.op, atomic_case.dst,
+                   kGlobalAtomicPackedAddressVgpr, atomic_case.data,
+                   kGlobalAtomicPackedBaseSgpr, atomic_case.offset);
+    atomic_program_words.push_back(words[0]);
+    atomic_program_words.push_back(words[1]);
+  }
+  atomic_program_words.push_back(MakeSopp(48u));
+
+  std::vector<DecodedInstruction> atomic_program;
+  if (!Expect(decoder.DecodeProgram(atomic_program_words, &atomic_program,
+                                    error_message),
+              "expected GLOBAL atomic packed program decode success") ||
+      !Expect(atomic_program.size() == kGlobalAtomicPackedCases.size() + 1u,
+              "expected decoded GLOBAL atomic packed instruction count")) {
+    return false;
+  }
+
+  for (std::size_t i = 0; i < kGlobalAtomicPackedCases.size(); ++i) {
+    if (!Expect(atomic_program[i].opcode == kGlobalAtomicPackedCases[i].opcode,
+                "expected decoded GLOBAL atomic packed opcode order")) {
+      return false;
+    }
+  }
+  if (!Expect(atomic_program.back().opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after GLOBAL atomic packed batch")) {
+    return false;
+  }
+
+  auto initialize_atomic_state = [](WaveExecutionState* state) {
+    state->exec_mask = kGlobalAtomicExecMask;
+    state->sgprs[kGlobalAtomicPackedBaseSgpr] =
+        static_cast<std::uint32_t>(kGlobalAtomicPackedBaseAddress);
+    state->sgprs[kGlobalAtomicPackedBaseSgpr + 1u] = 0u;
+
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      state->vgprs[kGlobalAtomicPackedAddressVgpr][lane] =
+          static_cast<std::uint32_t>(lane * 4u);
+      for (std::size_t case_index = 0;
+           case_index < kGlobalAtomicPackedCases.size(); ++case_index) {
+        const GlobalAtomicPackedCase& atomic_case =
+            kGlobalAtomicPackedCases[case_index];
+        state->vgprs[atomic_case.dst][lane] =
+            GlobalAtomicPackedSentinel(case_index, lane);
+        state->vgprs[atomic_case.data][lane] =
+            InitialGlobalAtomicPackedDataValue(case_index, lane);
+      }
+    }
+  };
+
+  auto expect_atomic_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == kGlobalAtomicExecMask &&
+          state.sgprs[kGlobalAtomicPackedBaseSgpr] ==
+              static_cast<std::uint32_t>(kGlobalAtomicPackedBaseAddress) &&
+          state.sgprs[kGlobalAtomicPackedBaseSgpr + 1u] == 0u &&
+          state.halted && !state.waiting_on_barrier &&
+          state.pc == kGlobalAtomicPackedCases.size())) {
+      return false;
+    }
+
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      if (state.vgprs[kGlobalAtomicPackedAddressVgpr][lane] !=
+          static_cast<std::uint32_t>(lane * 4u)) {
+        return false;
+      }
+      for (std::size_t case_index = 0;
+           case_index < kGlobalAtomicPackedCases.size(); ++case_index) {
+        const GlobalAtomicPackedCase& atomic_case =
+            kGlobalAtomicPackedCases[case_index];
+        const std::uint32_t expected_dst =
+            IsGlobalAtomicLaneActive(lane)
+                ? InitialGlobalAtomicPackedOldValue(case_index, lane)
+                : GlobalAtomicPackedSentinel(case_index, lane);
+        if (state.vgprs[atomic_case.dst][lane] != expected_dst ||
+            state.vgprs[atomic_case.data][lane] !=
+                InitialGlobalAtomicPackedDataValue(case_index, lane)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  auto initialize_atomic_memory = [](LinearExecutionMemory* memory) {
+    for (std::size_t case_index = 0;
+         case_index < kGlobalAtomicPackedCases.size(); ++case_index) {
+      const GlobalAtomicPackedCase& atomic_case =
+          kGlobalAtomicPackedCases[case_index];
+      for (std::size_t lane = 0; lane < 32u; ++lane) {
+        const std::uint64_t address =
+            kGlobalAtomicPackedBaseAddress + atomic_case.offset + lane * 4u;
+        if (!memory->StoreU32(
+                address, InitialGlobalAtomicPackedOldValue(case_index, lane))) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  auto expect_atomic_memory = [](LinearExecutionMemory* memory) {
+    for (std::size_t case_index = 0;
+         case_index < kGlobalAtomicPackedCases.size(); ++case_index) {
+      const GlobalAtomicPackedCase& atomic_case =
+          kGlobalAtomicPackedCases[case_index];
+      for (std::size_t lane = 0; lane < 32u; ++lane) {
+        const std::uint64_t address =
+            kGlobalAtomicPackedBaseAddress + atomic_case.offset + lane * 4u;
+        std::uint32_t value = 0;
+        if (!memory->LoadU32(address, &value)) {
+          return false;
+        }
+        const std::uint32_t old_value =
+            InitialGlobalAtomicPackedOldValue(case_index, lane);
+        const std::uint32_t expected_value =
+            IsGlobalAtomicLaneActive(lane)
+                ? ExpectedGlobalAtomicPackedNewValue(
+                      case_index, old_value,
+                      InitialGlobalAtomicPackedDataValue(case_index, lane))
+                : old_value;
+        if (value != expected_value) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  LinearExecutionMemory decoded_atomic_memory(0x1000u,
+                                              kGlobalAtomicPackedBaseAddress);
+  if (!Expect(initialize_atomic_memory(&decoded_atomic_memory),
+              "expected GLOBAL atomic packed decoded memory initialization")) {
+    return false;
+  }
+  WaveExecutionState decoded_atomic_state;
+  initialize_atomic_state(&decoded_atomic_state);
+  if (!Expect(interpreter.ExecuteProgram(atomic_program, &decoded_atomic_state,
+                                         &decoded_atomic_memory, error_message),
+              "expected decoded GLOBAL atomic packed execution success") ||
+      !Expect(expect_atomic_state(decoded_atomic_state),
+              "expected decoded GLOBAL atomic packed state") ||
+      !Expect(expect_atomic_memory(&decoded_atomic_memory),
+              "expected decoded GLOBAL atomic packed memory state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_atomic_program;
+  if (!Expect(interpreter.CompileProgram(atomic_program, &compiled_atomic_program,
+                                         error_message),
+              "expected compiled GLOBAL atomic packed program success") ||
+      !Expect(compiled_atomic_program.size() ==
+                  kGlobalAtomicPackedCases.size() + 1u,
+              "expected compiled GLOBAL atomic packed instruction count")) {
+    return false;
+  }
+
+  for (std::size_t i = 0; i < kGlobalAtomicPackedCases.size(); ++i) {
+    if (!Expect(compiled_atomic_program[i].opcode ==
+                    kGlobalAtomicPackedCases[i].compiled,
+                "expected compiled GLOBAL atomic packed opcode order")) {
+      return false;
+    }
+  }
+  if (!Expect(compiled_atomic_program.back().opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after GLOBAL atomic packed batch")) {
+    return false;
+  }
+
+  LinearExecutionMemory compiled_atomic_memory(0x1000u,
+                                               kGlobalAtomicPackedBaseAddress);
+  if (!Expect(initialize_atomic_memory(&compiled_atomic_memory),
+              "expected GLOBAL atomic packed compiled memory initialization")) {
+    return false;
+  }
+  WaveExecutionState compiled_atomic_state;
+  initialize_atomic_state(&compiled_atomic_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_atomic_program,
+                                         &compiled_atomic_state,
+                                         &compiled_atomic_memory,
+                                         error_message),
+              "expected compiled GLOBAL atomic packed execution success") ||
+      !Expect(expect_atomic_state(compiled_atomic_state),
+              "expected compiled GLOBAL atomic packed state") ||
+      !Expect(expect_atomic_memory(&compiled_atomic_memory),
+              "expected compiled GLOBAL atomic packed memory state")) {
     return false;
   }
 
@@ -8810,6 +9121,92 @@ int main() {
     return 1;
   }
 
+  const auto global_atomic_pk_add_f16_words =
+      MakeGlobal(89u, 68u, 69u, 44u, 41u, 0x24);
+  DecodedInstruction global_atomic_pk_add_f16_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      global_atomic_pk_add_f16_words.data(),
+                      global_atomic_pk_add_f16_words.size()),
+                  &global_atomic_pk_add_f16_instruction, &global_words_consumed,
+                  &error_message),
+              "expected GLOBAL_ATOMIC_PK_ADD_F16 direct decode success") ||
+      !Expect(global_atomic_pk_add_f16_instruction.opcode ==
+                  "GLOBAL_ATOMIC_PK_ADD_F16",
+              "expected decoded GLOBAL_ATOMIC_PK_ADD_F16 opcode") ||
+      !Expect(global_atomic_pk_add_f16_instruction.operand_count == 5u,
+              "expected GLOBAL_ATOMIC_PK_ADD_F16 operand count") ||
+      !Expect(global_atomic_pk_add_f16_instruction.operands[0].kind ==
+                  OperandKind::kVgpr &&
+                  global_atomic_pk_add_f16_instruction.operands[0].index == 68u,
+              "expected GLOBAL_ATOMIC_PK_ADD_F16 vector destination") ||
+      !Expect(global_atomic_pk_add_f16_instruction.operands[1].kind ==
+                  OperandKind::kVgpr &&
+                  global_atomic_pk_add_f16_instruction.operands[1].index == 44u,
+              "expected GLOBAL_ATOMIC_PK_ADD_F16 vector data") ||
+      !Expect(global_atomic_pk_add_f16_instruction.operands[2].kind ==
+                  OperandKind::kVgpr &&
+                  global_atomic_pk_add_f16_instruction.operands[2].index == 69u,
+              "expected GLOBAL_ATOMIC_PK_ADD_F16 vector address") ||
+      !Expect(global_atomic_pk_add_f16_instruction.operands[3].kind ==
+                  OperandKind::kSgpr &&
+                  global_atomic_pk_add_f16_instruction.operands[3].index == 41u,
+              "expected GLOBAL_ATOMIC_PK_ADD_F16 scalar address") ||
+      !Expect(global_atomic_pk_add_f16_instruction.operands[4].kind ==
+                  OperandKind::kImm32 &&
+                  global_atomic_pk_add_f16_instruction.operands[4].imm32 ==
+                      0x24u,
+              "expected GLOBAL_ATOMIC_PK_ADD_F16 inline offset") ||
+      !Expect(global_words_consumed == 2u,
+              "expected GLOBAL_ATOMIC_PK_ADD_F16 to consume two dwords")) {
+    return 1;
+  }
+
+  const auto global_atomic_ordered_add_b64_words =
+      MakeGlobal(115u, 70u, 71u, 46u, 42u, 0x28);
+  DecodedInstruction global_atomic_ordered_add_b64_instruction;
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      global_atomic_ordered_add_b64_words.data(),
+                      global_atomic_ordered_add_b64_words.size()),
+                  &global_atomic_ordered_add_b64_instruction,
+                  &global_words_consumed, &error_message),
+              "expected GLOBAL_ATOMIC_ORDERED_ADD_B64 direct decode success") ||
+      !Expect(global_atomic_ordered_add_b64_instruction.opcode ==
+                  "GLOBAL_ATOMIC_ORDERED_ADD_B64",
+              "expected decoded GLOBAL_ATOMIC_ORDERED_ADD_B64 opcode") ||
+      !Expect(global_atomic_ordered_add_b64_instruction.operand_count == 5u,
+              "expected GLOBAL_ATOMIC_ORDERED_ADD_B64 operand count") ||
+      !Expect(global_atomic_ordered_add_b64_instruction.operands[0].kind ==
+                  OperandKind::kVgpr &&
+                  global_atomic_ordered_add_b64_instruction.operands[0].index ==
+                      70u,
+              "expected GLOBAL_ATOMIC_ORDERED_ADD_B64 vector destination") ||
+      !Expect(global_atomic_ordered_add_b64_instruction.operands[1].kind ==
+                  OperandKind::kVgpr &&
+                  global_atomic_ordered_add_b64_instruction.operands[1].index ==
+                      46u,
+              "expected GLOBAL_ATOMIC_ORDERED_ADD_B64 vector data") ||
+      !Expect(global_atomic_ordered_add_b64_instruction.operands[2].kind ==
+                  OperandKind::kVgpr &&
+                  global_atomic_ordered_add_b64_instruction.operands[2].index ==
+                      71u,
+              "expected GLOBAL_ATOMIC_ORDERED_ADD_B64 vector address") ||
+      !Expect(global_atomic_ordered_add_b64_instruction.operands[3].kind ==
+                  OperandKind::kSgpr &&
+                  global_atomic_ordered_add_b64_instruction.operands[3].index ==
+                      42u,
+              "expected GLOBAL_ATOMIC_ORDERED_ADD_B64 scalar address") ||
+      !Expect(global_atomic_ordered_add_b64_instruction.operands[4].kind ==
+                  OperandKind::kImm32 &&
+                  global_atomic_ordered_add_b64_instruction.operands[4].imm32 ==
+                      0x28u,
+              "expected GLOBAL_ATOMIC_ORDERED_ADD_B64 inline offset") ||
+      !Expect(global_words_consumed == 2u,
+              "expected GLOBAL_ATOMIC_ORDERED_ADD_B64 to consume two dwords")) {
+    return 1;
+  }
+
   const std::array<std::uint32_t, 7> global_hint_program_words{
       global_inv_words[0], global_inv_words[1], global_wb_words[0],
       global_wb_words[1], global_wbinv_words[0], global_wbinv_words[1],
@@ -10276,6 +10673,9 @@ int main() {
     return 1;
   }
   if (!RunGlobalAtomicF32BatchTest(decoder, interpreter, &error_message)) {
+    return 1;
+  }
+  if (!RunGlobalAtomicPackedBatchTest(decoder, interpreter, &error_message)) {
     return 1;
   }
 

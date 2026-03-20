@@ -10,11 +10,12 @@
 namespace mirage::sim::isa {
 namespace {
 
-constexpr std::array<std::string_view, 4> kTrackedEncodings{{
+constexpr std::array<std::string_view, 5> kTrackedEncodings{{
     "ENC_VOP1",
     "ENC_VOP2",
     "ENC_VOPC",
     "ENC_SMEM",
+    "ENC_VGLOBAL",
 }};
 
 constexpr std::array<std::string_view, 4> kNextRiskEncodings{{

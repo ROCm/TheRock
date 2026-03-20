@@ -2,7 +2,7 @@
   "target": "gfx1201",
   "slice": "phase0_wave32_boundary",
   "wave_size": 32,
-  "phase0_executable_count": 415,
+  "phase0_executable_count": 418,
   "tracked_encodings": [
     {
       "encoding_name": "ENC_VOP1",
@@ -27,13 +27,20 @@
       "seeded_instruction_count": 28,
       "executable_instruction_count": 28,
       "fully_executable": true
+    },
+    {
+      "encoding_name": "ENC_VGLOBAL",
+      "seeded_instruction_count": 65,
+      "executable_instruction_count": 65,
+      "fully_executable": true
     }
   ],
   "saturated_encodings": [
     "ENC_VOP1",
     "ENC_VOP2",
     "ENC_VOPC",
-    "ENC_SMEM"
+    "ENC_SMEM",
+    "ENC_VGLOBAL"
   ],
   "next_risk_encodings": [
     "ENC_SMEM",
@@ -47,7 +54,7 @@
     "ENC_VDS",
     "ENC_VOP3"
   ],
-  "recommended_next_frontier": "ENC_VGLOBAL",
+  "recommended_next_frontier": "ENC_VDS",
   "remaining_narrow_instruction_encoding_pairs": 0,
   "next_risk_encoding_statuses": [
     {
@@ -96,7 +103,7 @@
       "encoding_name": "ENC_VGLOBAL",
       "example_instruction": "GLOBAL_LOAD_B32",
       "seeded_instruction_count": 65,
-      "executable_instruction_count": 62,
+      "executable_instruction_count": 65,
       "first_executable_instruction": "GLOBAL_ATOMIC_ADD_F32",
       "transferable_as_is_count": 3,
       "transferable_with_decoder_work_count": 0,
@@ -108,10 +115,10 @@
     }
   ],
   "notes": [
-    "All currently seeded ENC_VOP1, ENC_VOP2, ENC_VOPC, and ENC_SMEM instruction/encoding pairs are executable on the local wave32 path.",
-    "There are no remaining imported ENC_VOP1, ENC_VOP2, ENC_VOPC, or ENC_SMEM instruction/encoding pairs outside the current seed surface.",
+    "All currently seeded ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, and ENC_VGLOBAL instruction/encoding pairs are executable on the local wave32 path.",
+    "There are no remaining imported ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, or ENC_VGLOBAL instruction/encoding pairs outside the current seed surface.",
     "ENC_SMEM is now saturated through S_DCACHE_INV, the prefetch and ATC-probe footholds, the full non-buffer S_LOAD_* slice, and the matching S_BUFFER_LOAD_* slice, leaving no seeded scalar-memory instructions scaffolded.",
-    "ENC_VGLOBAL remains the recommended next frontier because ENC_SMEM is saturated and the local VGLOBAL footholds now include GLOBAL_INV, GLOBAL_WB, GLOBAL_WBINV, the plain GLOBAL_LOAD_U8/I8/U16/I16/B32/B64/B96/B128 slice, GLOBAL_LOAD_ADDTID_B32, GLOBAL_LOAD_BLOCK, GLOBAL_LOAD_TR_B64/B128, the packed GLOBAL_LOAD_D16_U8/I8/B16 and GLOBAL_LOAD_D16_HI_U8/I8/B16 slice, the plain GLOBAL_STORE_B8/B16/B32/B64/B96/B128 slice, GLOBAL_STORE_ADDTID_B32, GLOBAL_STORE_BLOCK, GLOBAL_STORE_D16_HI_B8/B16, the 32-bit integer atomic slice GLOBAL_ATOMIC_SWAP_B32, GLOBAL_ATOMIC_CMPSWAP_B32, GLOBAL_ATOMIC_ADD/SUB/SUB_CLAMP_U32, GLOBAL_ATOMIC_MIN/MAX_I32/U32, GLOBAL_ATOMIC_AND/OR/XOR_B32, GLOBAL_ATOMIC_INC_U32, GLOBAL_ATOMIC_DEC_U32, and GLOBAL_ATOMIC_COND_SUB_U32, the 64-bit integer atomic slice GLOBAL_ATOMIC_SWAP_B64, GLOBAL_ATOMIC_CMPSWAP_B64, GLOBAL_ATOMIC_ADD/SUB_U64, GLOBAL_ATOMIC_MIN/MAX_I64/U64, GLOBAL_ATOMIC_AND/OR/XOR_B64, GLOBAL_ATOMIC_INC_U64, and GLOBAL_ATOMIC_DEC_U64, and the F32 atomic slice GLOBAL_ATOMIC_ADD_F32 and GLOBAL_ATOMIC_MIN/MAX_NUM_F32, leaving the packed-half and ordered-add atomic vector-memory surface as the remaining local VGLOBAL boundary.",
-    "The next coherent phase-0 extensions stay on ENC_VGLOBAL first, then move onward into ENC_VDS and ENC_VOP3, or require broader shared-layer churn."
+    "ENC_VGLOBAL is now saturated because ENC_SMEM is already saturated and the local VGLOBAL footholds now include GLOBAL_INV, GLOBAL_WB, GLOBAL_WBINV, the plain GLOBAL_LOAD_U8/I8/U16/I16/B32/B64/B96/B128 slice, GLOBAL_LOAD_ADDTID_B32, GLOBAL_LOAD_BLOCK, GLOBAL_LOAD_TR_B64/B128, the packed GLOBAL_LOAD_D16_U8/I8/B16 and GLOBAL_LOAD_D16_HI_U8/I8/B16 slice, the plain GLOBAL_STORE_B8/B16/B32/B64/B96/B128 slice, GLOBAL_STORE_ADDTID_B32, GLOBAL_STORE_BLOCK, GLOBAL_STORE_D16_HI_B8/B16, the 32-bit integer atomic slice GLOBAL_ATOMIC_SWAP_B32, GLOBAL_ATOMIC_CMPSWAP_B32, GLOBAL_ATOMIC_ADD/SUB/SUB_CLAMP_U32, GLOBAL_ATOMIC_MIN/MAX_I32/U32, GLOBAL_ATOMIC_AND/OR/XOR_B32, GLOBAL_ATOMIC_INC_U32, GLOBAL_ATOMIC_DEC_U32, and GLOBAL_ATOMIC_COND_SUB_U32, the 64-bit integer atomic slice GLOBAL_ATOMIC_SWAP_B64, GLOBAL_ATOMIC_CMPSWAP_B64, GLOBAL_ATOMIC_ADD/SUB_U64, GLOBAL_ATOMIC_MIN/MAX_I64/U64, GLOBAL_ATOMIC_AND/OR/XOR_B64, GLOBAL_ATOMIC_INC_U64, and GLOBAL_ATOMIC_DEC_U64, the F32 atomic slice GLOBAL_ATOMIC_ADD_F32 and GLOBAL_ATOMIC_MIN/MAX_NUM_F32, the packed-half atomic pair GLOBAL_ATOMIC_PK_ADD_F16/GLOBAL_ATOMIC_PK_ADD_BF16, and GLOBAL_ATOMIC_ORDERED_ADD_B64.",
+    "The next coherent phase-0 extensions now move onward into ENC_VDS and ENC_VOP3, or require broader shared-layer churn."
   ]
 }

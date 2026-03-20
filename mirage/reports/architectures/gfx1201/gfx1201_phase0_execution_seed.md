@@ -2,7 +2,7 @@
 
 This report captures the current executable `gfx1201` seed slice layered on top of the
 existing phase-0 compute selector and seed catalog. The local seed surface now covers
-415 executable phase-0 ops without leaving architecture-local `gfx1201` files, and
+418 executable phase-0 ops without leaving architecture-local `gfx1201` files, and
 the local interpreter continues to normalize execution to wave32.
 
 ## Executable opcodes
@@ -99,6 +99,9 @@ the local interpreter continues to normalize execution to wave32.
 - `GLOBAL_ATOMIC_ADD_F32`
 - `GLOBAL_ATOMIC_MIN_NUM_F32`
 - `GLOBAL_ATOMIC_MAX_NUM_F32`
+- `GLOBAL_ATOMIC_PK_ADD_F16`
+- `GLOBAL_ATOMIC_PK_ADD_BF16`
+- `GLOBAL_ATOMIC_ORDERED_ADD_B64`
 - `S_ADD_U32`
 - `S_ADD_I32`
 - `S_SUB_U32`
@@ -512,6 +515,7 @@ the local interpreter continues to normalize execution to wave32.
 - `GLOBAL_ATOMIC_SWAP_B32`, `GLOBAL_ATOMIC_CMPSWAP_B32`, `GLOBAL_ATOMIC_ADD_U32`, `GLOBAL_ATOMIC_SUB_U32`, `GLOBAL_ATOMIC_SUB_CLAMP_U32`, `GLOBAL_ATOMIC_MIN_I32`, `GLOBAL_ATOMIC_MIN_U32`, `GLOBAL_ATOMIC_MAX_I32`, `GLOBAL_ATOMIC_MAX_U32`, `GLOBAL_ATOMIC_AND_B32`, `GLOBAL_ATOMIC_OR_B32`, `GLOBAL_ATOMIC_XOR_B32`, `GLOBAL_ATOMIC_INC_U32`, `GLOBAL_ATOMIC_DEC_U32`, and `GLOBAL_ATOMIC_COND_SUB_U32` now decode and execute on the same real wave32-local `VADDR + SADDR + inline offset` route, returning the old 32-bit memory value in `VDST` while committing the per-op atomic update through `ExecutionMemory`.
 - `GLOBAL_ATOMIC_SWAP_B64`, `GLOBAL_ATOMIC_CMPSWAP_B64`, `GLOBAL_ATOMIC_ADD_U64`, `GLOBAL_ATOMIC_SUB_U64`, `GLOBAL_ATOMIC_MIN_I64`, `GLOBAL_ATOMIC_MIN_U64`, `GLOBAL_ATOMIC_MAX_I64`, `GLOBAL_ATOMIC_MAX_U64`, `GLOBAL_ATOMIC_AND_B64`, `GLOBAL_ATOMIC_OR_B64`, `GLOBAL_ATOMIC_XOR_B64`, `GLOBAL_ATOMIC_INC_U64`, and `GLOBAL_ATOMIC_DEC_U64` now decode and execute on the same real wave32-local `VADDR + SADDR + inline offset` route, returning the old 64-bit memory value in a `VDST` VGPR pair while committing the per-op atomic update through `ExecutionMemory`.
 - `GLOBAL_ATOMIC_ADD_F32`, `GLOBAL_ATOMIC_MIN_NUM_F32`, and `GLOBAL_ATOMIC_MAX_NUM_F32` now decode and execute on the same real wave32-local `VADDR + SADDR + inline offset` route, returning the old 32-bit memory value in `VDST` while committing the per-op `F32` atomic update through `ExecutionMemory`.
+- `GLOBAL_ATOMIC_PK_ADD_F16`, `GLOBAL_ATOMIC_PK_ADD_BF16`, and `GLOBAL_ATOMIC_ORDERED_ADD_B64` now decode and execute on the same real wave32-local `ENC_VGLOBAL` atomic route, reusing the existing packed-32-bit and wide-64-bit forms without widening the vector-memory model beyond the current phase-0 `ExecutionMemory` path.
 - Scalar add/sub updates `SCC` using the imported carry/borrow behavior.
 - `V_MOV_B32` execution respects `exec_mask`.
 - `V_NOP` now executes as a wave32-local no-op on both the decoded and compiled seed paths.
@@ -570,8 +574,8 @@ the local interpreter continues to normalize execution to wave32.
 - Route-matched but non-executable phase-0 compute instructions continue to fail with
   the existing selector-aware stub errors.
 - `ENC_SMEM` is now fully bootstrapped through `S_DCACHE_INV`, `S_PREFETCH_INST`, `S_PREFETCH_INST_PC_REL`, `S_PREFETCH_DATA`, `S_BUFFER_PREFETCH_DATA`, `S_PREFETCH_DATA_PC_REL`, `S_ATC_PROBE`, `S_ATC_PROBE_BUFFER`, the full non-buffer `S_LOAD_*` slice, and the matching `S_BUFFER_LOAD_*` slice, leaving no scalar-memory seed instructions scaffolded.
-- `ENC_VGLOBAL` now has executable footholds through `GLOBAL_INV`, `GLOBAL_WB`, `GLOBAL_WBINV`, the plain `GLOBAL_LOAD_U8`/`I8`/`U16`/`I16`/`B32`/`B64`/`B96`/`B128` slice, `GLOBAL_LOAD_ADDTID_B32`, `GLOBAL_LOAD_BLOCK`, `GLOBAL_LOAD_TR_B64`/`B128`, the packed `GLOBAL_LOAD_D16_U8`/`I8`/`B16` and `GLOBAL_LOAD_D16_HI_U8`/`I8`/`B16` slice, the plain `GLOBAL_STORE_B8`/`B16`/`B32`/`B64`/`B96`/`B128` slice, `GLOBAL_STORE_ADDTID_B32`, `GLOBAL_STORE_BLOCK`, `GLOBAL_STORE_D16_HI_B8`/`B16`, the 32-bit integer atomic slice `GLOBAL_ATOMIC_SWAP_B32`, `GLOBAL_ATOMIC_CMPSWAP_B32`, `GLOBAL_ATOMIC_ADD/SUB/SUB_CLAMP_U32`, `GLOBAL_ATOMIC_MIN/MAX_I32/U32`, `GLOBAL_ATOMIC_AND/OR/XOR_B32`, `GLOBAL_ATOMIC_INC_U32`, `GLOBAL_ATOMIC_DEC_U32`, and `GLOBAL_ATOMIC_COND_SUB_U32`, the 64-bit integer atomic slice `GLOBAL_ATOMIC_SWAP_B64`, `GLOBAL_ATOMIC_CMPSWAP_B64`, `GLOBAL_ATOMIC_ADD/SUB_U64`, `GLOBAL_ATOMIC_MIN/MAX_I64/U64`, `GLOBAL_ATOMIC_AND/OR/XOR_B64`, `GLOBAL_ATOMIC_INC_U64`, and `GLOBAL_ATOMIC_DEC_U64`, and the `F32` atomic slice `GLOBAL_ATOMIC_ADD_F32` and `GLOBAL_ATOMIC_MIN/MAX_NUM_F32`, leaving the packed-half and ordered-add atomic global-memory surface route-only in this slice.
+- `ENC_VGLOBAL` is now fully bootstrapped through `GLOBAL_INV`, `GLOBAL_WB`, `GLOBAL_WBINV`, the plain `GLOBAL_LOAD_U8`/`I8`/`U16`/`I16`/`B32`/`B64`/`B96`/`B128` slice, `GLOBAL_LOAD_ADDTID_B32`, `GLOBAL_LOAD_BLOCK`, `GLOBAL_LOAD_TR_B64`/`B128`, the packed `GLOBAL_LOAD_D16_U8`/`I8`/`B16` and `GLOBAL_LOAD_D16_HI_U8`/`I8`/`B16` slice, the plain `GLOBAL_STORE_B8`/`B16`/`B32`/`B64`/`B96`/`B128` slice, `GLOBAL_STORE_ADDTID_B32`, `GLOBAL_STORE_BLOCK`, `GLOBAL_STORE_D16_HI_B8`/`B16`, the 32-bit integer atomic slice `GLOBAL_ATOMIC_SWAP_B32`, `GLOBAL_ATOMIC_CMPSWAP_B32`, `GLOBAL_ATOMIC_ADD/SUB/SUB_CLAMP_U32`, `GLOBAL_ATOMIC_MIN/MAX_I32/U32`, `GLOBAL_ATOMIC_AND/OR/XOR_B32`, `GLOBAL_ATOMIC_INC_U32`, `GLOBAL_ATOMIC_DEC_U32`, and `GLOBAL_ATOMIC_COND_SUB_U32`, the 64-bit integer atomic slice `GLOBAL_ATOMIC_SWAP_B64`, `GLOBAL_ATOMIC_CMPSWAP_B64`, `GLOBAL_ATOMIC_ADD/SUB_U64`, `GLOBAL_ATOMIC_MIN/MAX_I64/U64`, `GLOBAL_ATOMIC_AND/OR/XOR_B64`, `GLOBAL_ATOMIC_INC_U64`, and `GLOBAL_ATOMIC_DEC_U64`, the `F32` atomic slice `GLOBAL_ATOMIC_ADD_F32` and `GLOBAL_ATOMIC_MIN/MAX_NUM_F32`, the packed-half atomic pair `GLOBAL_ATOMIC_PK_ADD_F16`/`GLOBAL_ATOMIC_PK_ADD_BF16`, and `GLOBAL_ATOMIC_ORDERED_ADD_B64`, leaving no seeded vector-global instructions scaffolded.
 - `ENC_VOP3` and `ENC_VDS` remain route-only in this slice.
 - The remaining `ENC_VOPC` surface outside this seed is now primarily packed and other wider forms not yet on the current local path.
-- The current wave32-local `ENC_VOP1`, `ENC_VOP2`, and `ENC_VOPC` seed surface is saturated: all currently seeded instruction/encoding pairs are executable on the local path.
-- The next coherent extension points stay on `ENC_VGLOBAL` first, then move onward into `ENC_VDS` and `ENC_VOP3`, rather than more narrow `VOP1`/`VOP2`/`VOPC` seed churn.
+- The current wave32-local `ENC_VOP1`, `ENC_VOP2`, `ENC_VOPC`, `ENC_SMEM`, and `ENC_VGLOBAL` seed surface is saturated: all currently seeded instruction/encoding pairs are executable on the local path.
+- The next coherent extension points now move onward into `ENC_VDS` and `ENC_VOP3`, rather than more narrow `VOP1`/`VOP2`/`VOPC`/`VGLOBAL` seed churn.

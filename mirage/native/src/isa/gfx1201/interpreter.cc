@@ -8,6 +8,7 @@
 #include <limits>
 #include <string>
 
+#include "lib/sim/isa/common/numeric_conversions.h"
 #include "lib/sim/isa/gfx1201/support_catalog.h"
 
 namespace mirage::sim::isa {
@@ -54,7 +55,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 415> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 418> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -145,8 +146,11 @@ constexpr std::array<std::string_view, 415> kExecutableSeedOpcodes{{
     "GLOBAL_ATOMIC_INC_U64",
     "GLOBAL_ATOMIC_DEC_U64",
     "GLOBAL_ATOMIC_ADD_F32",
+    "GLOBAL_ATOMIC_PK_ADD_F16",
+    "GLOBAL_ATOMIC_PK_ADD_BF16",
     "GLOBAL_ATOMIC_MIN_NUM_F32",
     "GLOBAL_ATOMIC_MAX_NUM_F32",
+    "GLOBAL_ATOMIC_ORDERED_ADD_B64",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1203,12 +1207,24 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicAddF32;
     return true;
   }
+  if (opcode == "GLOBAL_ATOMIC_PK_ADD_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicPkAddF16;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_PK_ADD_BF16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicPkAddBf16;
+    return true;
+  }
   if (opcode == "GLOBAL_ATOMIC_MIN_NUM_F32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicMinNumF32;
     return true;
   }
   if (opcode == "GLOBAL_ATOMIC_MAX_NUM_F32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicMaxNumF32;
+    return true;
+  }
+  if (opcode == "GLOBAL_ATOMIC_ORDERED_ADD_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kGlobalAtomicOrderedAddB64;
     return true;
   }
   if (opcode == "S_LOAD_B32") {
@@ -3211,6 +3227,10 @@ bool ExecuteVectorGlobalAtomicAtAddress(const DecodedInstruction& instruction,
     } else if (opcode == "GLOBAL_ATOMIC_ADD_F32") {
       new_value = BitCast<std::uint32_t>(BitCast<float>(old_value) +
                                          BitCast<float>(data_value));
+    } else if (opcode == "GLOBAL_ATOMIC_PK_ADD_F16") {
+      new_value = PackedHalfAdd(old_value, data_value);
+    } else if (opcode == "GLOBAL_ATOMIC_PK_ADD_BF16") {
+      new_value = PackedBFloat16Add(old_value, data_value);
     } else if (opcode == "GLOBAL_ATOMIC_MIN_NUM_F32") {
       new_value = BitCast<std::uint32_t>(
           std::fmin(BitCast<float>(old_value), BitCast<float>(data_value)));
@@ -3281,6 +3301,10 @@ bool ExecuteVectorGlobalAtomic64AtAddress(const DecodedInstruction& instruction,
     if (opcode == "GLOBAL_ATOMIC_SWAP_B64") {
       new_value = data_value;
     } else if (opcode == "GLOBAL_ATOMIC_ADD_U64") {
+      new_value = old_value + data_value;
+    } else if (opcode == "GLOBAL_ATOMIC_ORDERED_ADD_B64") {
+      // The phase-0 single-wave memory model has no cross-wave ordering state,
+      // so ordered add shares the local numeric update with ADD_U64.
       new_value = old_value + data_value;
     } else if (opcode == "GLOBAL_ATOMIC_SUB_U64") {
       new_value = old_value - data_value;
@@ -5652,6 +5676,8 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "GLOBAL_ATOMIC_MAX_I32" ||
       instruction.opcode == "GLOBAL_ATOMIC_MAX_U32" ||
       instruction.opcode == "GLOBAL_ATOMIC_ADD_F32" ||
+      instruction.opcode == "GLOBAL_ATOMIC_PK_ADD_F16" ||
+      instruction.opcode == "GLOBAL_ATOMIC_PK_ADD_BF16" ||
       instruction.opcode == "GLOBAL_ATOMIC_MIN_NUM_F32" ||
       instruction.opcode == "GLOBAL_ATOMIC_MAX_NUM_F32" ||
       instruction.opcode == "GLOBAL_ATOMIC_AND_B32" ||
@@ -5693,6 +5719,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
   if (instruction.opcode == "GLOBAL_ATOMIC_SWAP_B64" ||
       instruction.opcode == "GLOBAL_ATOMIC_CMPSWAP_B64" ||
       instruction.opcode == "GLOBAL_ATOMIC_ADD_U64" ||
+      instruction.opcode == "GLOBAL_ATOMIC_ORDERED_ADD_B64" ||
       instruction.opcode == "GLOBAL_ATOMIC_SUB_U64" ||
       instruction.opcode == "GLOBAL_ATOMIC_MIN_I64" ||
       instruction.opcode == "GLOBAL_ATOMIC_MIN_U64" ||
@@ -6757,6 +6784,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kGlobalAtomicMaxI32:
     case Gfx1201CompiledOpcode::kGlobalAtomicMaxU32:
     case Gfx1201CompiledOpcode::kGlobalAtomicAddF32:
+    case Gfx1201CompiledOpcode::kGlobalAtomicPkAddF16:
+    case Gfx1201CompiledOpcode::kGlobalAtomicPkAddBf16:
     case Gfx1201CompiledOpcode::kGlobalAtomicMinNumF32:
     case Gfx1201CompiledOpcode::kGlobalAtomicMaxNumF32:
     case Gfx1201CompiledOpcode::kGlobalAtomicAndB32:
@@ -6768,6 +6797,7 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kGlobalAtomicSwapB64:
     case Gfx1201CompiledOpcode::kGlobalAtomicCmpswapB64:
     case Gfx1201CompiledOpcode::kGlobalAtomicAddU64:
+    case Gfx1201CompiledOpcode::kGlobalAtomicOrderedAddB64:
     case Gfx1201CompiledOpcode::kGlobalAtomicSubU64:
     case Gfx1201CompiledOpcode::kGlobalAtomicMinI64:
     case Gfx1201CompiledOpcode::kGlobalAtomicMinU64:
