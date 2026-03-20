@@ -9,7 +9,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_subproject_fetch(therock-libnl-sources
       SOURCE_DIR "${_source_dir}"
       # Originally from: https://github.com/thom311/libnl/releases/download/libnl3_12_0/libnl-3.12.0.tar.gz
-      URL "https://github.com/thom311/libnl/releases/download/libnl3_12_0/libnl-3.12.0.tar.gz"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/libnl-3.12.0.tar.gz"
       URL_HASH "SHA256=fc51ca7196f1a3f5fdf6ffd3864b50f4f9c02333be28be4eeca057e103c0dd18"
 
       TOUCH "${_download_stamp}"
