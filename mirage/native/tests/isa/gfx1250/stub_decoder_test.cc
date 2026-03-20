@@ -7025,6 +7025,15 @@ int main() {
                 "expected unsupported seeded op to keep exact unsupported-route decode parity")) {
       return 1;
     }
+    for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
+      const StubDecodedInstruction via_entrypoint =
+          DecodeViaExplicitRouteEntrypoint(manifest.route,
+                                          seed.instruction_name);
+      if (!Expect(MatchesUnsupportedSeedDecode(via_entrypoint, seed),
+                  "expected unsupported seeded op to keep exact route-keyed unsupported parity")) {
+        return 1;
+      }
+    }
   }
   if (!Expect(unsupported_seed_count > 0,
               "expected at least one unsupported seeded op to validate")) {

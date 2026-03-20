@@ -66,7 +66,7 @@
   - exact routed-instruction-name uniqueness plus one-to-one coverage checks between `GetStubDecoderRouteInfos()` and `GetStubDecoderRouteInstructions()` across `kVop3p`, `kMimgTensor`, `kVop1`, and `kVop3Sdst`
   - exact routed-seed-catalog parity checks now pin route manifests, per-seed route-info fields, routed instruction-list membership, and unsupported-seed exclusion directly against `GetDecoderSeedInfos()` across `kVop3p`, `kMimgTensor`, `kVop1`, and `kVop3Sdst`
   - exact routed-seed ordering checks now pin `GetStubDecoderRouteInstructions()` and the full `GetStubDecoderRouteInfos()` sequence directly against the sorted routed subset of `GetDecoderSeedInfos()`
-  - exact negative-path checks now pin `DecodeVop3pStub` / `DecodeMimgTensorStub` / `DecodeVop1Stub` / `DecodeVop3SdstStub` wrong-entrypoint rejection across the full routed seed set and pin `DecodeStubInstruction()` unsupported-route behavior across the unsupported seeded slice
+  - exact negative-path checks now pin `DecodeVop3pStub` / `DecodeMimgTensorStub` / `DecodeVop1Stub` / `DecodeVop3SdstStub` wrong-entrypoint rejection across the full routed seed set and pin both `DecodeStubInstruction()` and all four route-keyed entrypoints on the unsupported seeded slice
 
 - `VOP3P` packed BF16 slice:
   - `V_PK_ADD_BF16`
