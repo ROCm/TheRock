@@ -42,23 +42,13 @@ jobs:
           owner: "ROCm"
           repositories: "rocm-libraries"
 
-      - name: Generate GitHub App token TheRock
-        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
-        id: therock-token
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.PRIVATE_KEY }}
-          owner: "ROCm"
-          repositories: "TheRock"
-
       - name: Run scheduled bump automation
         if: github.event_name == 'schedule'
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "schedule" \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
-            --therock_token "${{ steps.therock-token.outputs.token }}"
+            --libraries_token "${{ steps.librarian-token.outputs.token }}"
 
       - name: Run push automation
         if: github.event_name == 'push'
@@ -68,5 +58,4 @@ jobs:
             --before "${{ github.event.before }}" \
             --after "${{ github.sha }}" \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
-            --therock_token "${{ steps.therock-token.outputs.token }}"
+            --libraries_token "${{ steps.librarian-token.outputs.token }}"

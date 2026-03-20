@@ -153,10 +153,10 @@ def update_ref_in_file(file_path, new_sha):
     print(f"[INFO] Updated {file_path}")
 
 
-def close_stale_prs(submodule, old_sha, therock_token):
+def close_stale_prs(submodule, old_sha, systems_token):
     """Close all open PRs on TheRock that originated from old submodule SHA"""
     old_short = old_sha[:7]
-    prs_json = gh_api(therock_token, f"repos/{THEROCK_REPO}/pulls?state=open")
+    prs_json = gh_api(systems_token, f"repos/{THEROCK_REPO}/pulls?state=open")
     prs = json.loads(prs_json)
     for pr in prs:
         title = pr["title"].lower()
@@ -166,7 +166,7 @@ def close_stale_prs(submodule, old_sha, therock_token):
 
             # Add a comment to the PR being closed
             gh_api(
-                therock_token,
+                systems_token,
                 f"repos/{THEROCK_REPO}/issues/{number}/comments",
                 method="POST",
                 data={"body": "Closing stale PR."},
@@ -174,7 +174,7 @@ def close_stale_prs(submodule, old_sha, therock_token):
 
             # Close the PR
             gh_api(
-                therock_token,
+                systems_token,
                 f"repos/{THEROCK_REPO}/pulls/{number}",
                 method="PATCH",
                 data={"state": "closed"},
@@ -246,13 +246,13 @@ def create_therock_bump(submodule, token):
         os.chdir(original_cwd)
 
 
-def handle_schedule(therock_token):
+def handle_schedule(systems_token, libraries_token):
     """Create bump PRs for both submodules"""
-    create_therock_bump("rocm-systems", therock_token)
-    create_therock_bump("rocm-libraries", therock_token)
+    create_therock_bump("rocm-systems", systems_token)
+    create_therock_bump("rocm-libraries", libraries_token)
 
 
-def handle_push(before, after, systems_token, libraries_token, therock_token):
+def handle_push(before, after, systems_token, libraries_token):
     """Push event: update TheRock refs, close stale PRs, create next bump PR"""
     changed = None
     for m in SUBMODULE_CONFIG:
@@ -268,7 +268,7 @@ def handle_push(before, after, systems_token, libraries_token, therock_token):
 
     print(f"[INFO] Detected {changed} change: {old_sha[:7]} → {new_sha[:7]}")
 
-    close_stale_prs(changed, old_sha, therock_token)
+    close_stale_prs(changed, old_sha, systems_token)
 
     # update workflow YAML
     config = SUBMODULE_CONFIG[changed]
@@ -315,18 +315,16 @@ def main():
     parser.add_argument("--after")
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
-    parser.add_argument("--therock_token", required=True)
     args = parser.parse_args()
 
     if args.event_type == "schedule":
-        handle_schedule(args.therock_token)
+        handle_schedule(args.systems_token, args.libraries_token)
     elif args.event_type == "push":
         handle_push(
             args.before,
             args.after,
             args.systems_token,
             args.libraries_token,
-            args.therock_token,
         )
 
 

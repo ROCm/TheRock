@@ -185,7 +185,18 @@ def _s3_retry(operation: str, location: str, func, *args, **kwargs):
 
 
 class S3StorageBackend(StorageBackend):
-    """S3 storage backend using boto3."""
+    """S3 storage backend using boto3.
+
+    The S3 client is lazily initialized on first use.  Credentials are
+    resolved through boto3's default credential chain, which checks (in
+    order): environment variables, shared credentials file
+    (``AWS_SHARED_CREDENTIALS_FILE``), instance metadata, etc.  This
+    matches how the ``aws`` CLI resolves credentials.
+
+    ``upload_files()`` uploads in parallel using a thread pool whose size
+    is controlled by *upload_concurrency* (default: 10, matching the AWS
+    CLI).  The boto3 connection pool is sized to match.
+    """
 
     def __init__(
         self,
@@ -199,18 +210,7 @@ class S3StorageBackend(StorageBackend):
 
     @property
     def s3_client(self):
-        """Lazy-initialized boto3 S3 client.
-
-        Credentials are resolved through boto3's default credential chain
-        (see https://docs.aws.amazon.com/boto3/latest/guide/credentials.html).
-        Relevant locations are checked in order:
-        1. Environment variables:
-           `AWS_ACCESS_KEY_ID`
-           `AWS_SECRET_ACCESS_KEY`
-           `AWS_SESSION_TOKEN`
-        2. Assume role providers
-        3. Shared credentials file: `AWS_SHARED_CREDENTIALS_FILE`
-        """
+        """Lazy-initialized boto3 S3 client."""
         if self._s3_client is None:
             import boto3
             from botocore.config import Config
