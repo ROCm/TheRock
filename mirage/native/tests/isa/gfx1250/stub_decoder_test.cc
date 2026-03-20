@@ -2,18 +2,22 @@
 #include <initializer_list>
 #include <string_view>
 
+#include "lib/sim/isa/gfx1250/decoder_seed_catalog.h"
 #include "lib/sim/isa/gfx1250/stub_decoder.h"
 
 namespace {
 
 using mirage::sim::isa::gfx1250::DecodeMimgTensorStub;
+using mirage::sim::isa::gfx1250::DecodeSeedHint;
 using mirage::sim::isa::gfx1250::DecodeStubInstruction;
 using mirage::sim::isa::gfx1250::DecodeVop1Stub;
 using mirage::sim::isa::gfx1250::DecodeVop3SdstStub;
 using mirage::sim::isa::gfx1250::DecodeVop3pStub;
+using mirage::sim::isa::gfx1250::DecoderSeedInfo;
 using mirage::sim::isa::gfx1250::FindStubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteInfo;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteManifest;
+using mirage::sim::isa::gfx1250::GetDecoderSeedInfos;
 using mirage::sim::isa::gfx1250::GetStubDecoderEntrypointManifests;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteInstructions;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteManifests;
@@ -704,6 +708,75 @@ StubDecodedInstruction DecodeViaRouteEntrypoint(
       break;
   }
   return {};
+}
+
+StubDecodedInstruction DecodeViaExplicitRouteEntrypoint(
+    StubDecoderRoute route,
+    std::string_view instruction_name) {
+  switch (route) {
+    case StubDecoderRoute::kVop3p:
+      return DecodeVop3pStub(instruction_name);
+    case StubDecoderRoute::kMimgTensor:
+      return DecodeMimgTensorStub(instruction_name);
+    case StubDecoderRoute::kVop1:
+      return DecodeVop1Stub(instruction_name);
+    case StubDecoderRoute::kVop3Sdst:
+      return DecodeVop3SdstStub(instruction_name);
+    case StubDecoderRoute::kUnsupported:
+      break;
+  }
+  return {};
+}
+
+bool IsUnsupportedSeededInstruction(const DecoderSeedInfo& seed) {
+  return seed.decode_hint == DecodeSeedHint::kUnknown ||
+         seed.decode_hint == DecodeSeedHint::kVop3;
+}
+
+bool MatchesUnsupportedRouteDecodeForRoutedSeed(
+    const StubDecodedInstruction& decoded,
+    const StubDecoderRouteInfo& route_info) {
+  return decoded.instruction_name == route_info.instruction_name &&
+         decoded.status == StubDecodeStatus::kUnsupportedRoute &&
+         decoded.route == route_info.route &&
+         decoded.route_name == route_info.route_name &&
+         decoded.entrypoint_name == "DecodeUnsupportedStub" &&
+         decoded.route_priority == route_info.route_priority &&
+         decoded.rdna4_encoding_name == route_info.rdna4_encoding_name &&
+         decoded.rdna4_opcode == route_info.rdna4_opcode &&
+         decoded.rdna4_operand_count == route_info.rdna4_operand_count &&
+         decoded.appears_in_rdna4_xml == route_info.appears_in_rdna4_xml &&
+         decoded.is_target_specific == route_info.is_target_specific &&
+         decoded.opcode_shape == StubOpcodeShape::kUnknown &&
+         decoded.execution_domain == StubExecutionDomain::kUnknown &&
+         !decoded.uses_accumulator && !decoded.uses_tensor_memory &&
+         !decoded.uses_scale_path && !decoded.uses_paired_operands &&
+         decoded.operand_layout.layout_kind == StubOperandLayoutKind::kUnknown &&
+         decoded.operand_roles.binding_count == 0 &&
+         decoded.operand_slots.binding_count == 0 &&
+         decoded.operand_descriptors.descriptor_count == 0;
+}
+
+bool MatchesUnsupportedSeedDecode(const StubDecodedInstruction& decoded,
+                                  const DecoderSeedInfo& seed) {
+  return decoded.instruction_name == seed.instruction_name &&
+         decoded.status == StubDecodeStatus::kUnsupportedRoute &&
+         decoded.route == StubDecoderRoute::kUnsupported &&
+         decoded.route_name == "kUnsupported" &&
+         decoded.entrypoint_name == "DecodeUnsupportedStub" &&
+         decoded.route_priority == 0 &&
+         decoded.rdna4_encoding_name.empty() &&
+         decoded.rdna4_opcode == 0 &&
+         decoded.rdna4_operand_count == 0 &&
+         !decoded.appears_in_rdna4_xml && !decoded.is_target_specific &&
+         decoded.opcode_shape == StubOpcodeShape::kUnknown &&
+         decoded.execution_domain == StubExecutionDomain::kUnknown &&
+         !decoded.uses_accumulator && !decoded.uses_tensor_memory &&
+         !decoded.uses_scale_path && !decoded.uses_paired_operands &&
+         decoded.operand_layout.layout_kind == StubOperandLayoutKind::kUnknown &&
+         decoded.operand_roles.binding_count == 0 &&
+         decoded.operand_slots.binding_count == 0 &&
+         decoded.operand_descriptors.descriptor_count == 0;
 }
 
 StubOperandRole ExpectedRoleForSlotKind(StubOperandSlotKind slot_kind) {
@@ -6939,6 +7012,24 @@ int main() {
               "expected unsupported route to surface unsupported entrypoint")) {
     return 1;
   }
+  std::uint32_t unsupported_seed_count = 0;
+  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
+    if (!IsUnsupportedSeededInstruction(seed)) {
+      continue;
+    }
+    ++unsupported_seed_count;
+    const StubDecodedInstruction decoded =
+        DecodeStubInstruction(seed.instruction_name);
+    if (!Expect(MatchesUnsupportedSeedDecode(decoded, seed) &&
+                    FindStubDecoderRouteInfo(seed.instruction_name) == nullptr,
+                "expected unsupported seeded op to keep exact unsupported-route decode parity")) {
+      return 1;
+    }
+  }
+  if (!Expect(unsupported_seed_count > 0,
+              "expected at least one unsupported seeded op to validate")) {
+    return 1;
+  }
 
   const StubDecodedInstruction unknown =
       DecodeStubInstruction("NO_SUCH_GFX1250_OPCODE");
@@ -7149,6 +7240,22 @@ int main() {
                     AllValueClassHelperNamesKnown(via_name),
                 "expected routed seed to keep exact helper-name parity and coverage")) {
       return 1;
+    }
+  }
+  for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
+    for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
+      if (manifest.route == route_info.route) {
+        continue;
+      }
+      const StubDecodedInstruction wrong_entrypoint =
+          DecodeViaExplicitRouteEntrypoint(manifest.route,
+                                          route_info.instruction_name);
+      if (!Expect(
+              MatchesUnsupportedRouteDecodeForRoutedSeed(wrong_entrypoint,
+                                                         route_info),
+              "expected wrong route-keyed entrypoint to reject routed seed while preserving route metadata")) {
+        return 1;
+      }
     }
   }
 
