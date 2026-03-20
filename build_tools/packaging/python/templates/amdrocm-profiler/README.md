@@ -1,4 +1,4 @@
-# rocm-sdk-profilers
+# amdrocm-profiler
 
 ROCm profiler applications package.
 

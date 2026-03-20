@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Main rocm-sdk-profilers (OS specific)."""
+"""Main amdrocm-profiler (OS specific)."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ if version == "DEFAULT":
 
 
 setup(
-    name="rocm-sdk-profilers",
+    name="amdrocm-profiler",
     version=version,
     description="ROCm profiler applications (rocprofiler-systems and rocprofiler-compute)",
     packages=find_packages(where="src"),
@@ -51,13 +51,13 @@ setup(
     entry_points={
         "console_scripts": (
             [
-                "rocprof-compute=rocm_sdk_profilers._cli:rocprof_compute",
-                "rocprof-sys-avail=rocm_sdk_profilers._cli:rocprof_sys_avail",
-                "rocprof-sys-causal=rocm_sdk_profilers._cli:rocprof_sys_causal",
-                "rocprof-sys-instrument=rocm_sdk_profilers._cli:rocprof_sys_instrument",
-                "rocprof-sys-run=rocm_sdk_profilers._cli:rocprof_sys_run",
-                "rocprof-sys-sample=rocm_sdk_profilers._cli:rocprof_sys_sample",
-                "rocprof-sys-python=rocm_sdk_profilers._cli:rocprof_sys_python",
+                "rocprof-compute=amdrocm_profiler._cli:rocprof_compute",
+                "rocprof-sys-avail=amdrocm_profiler._cli:rocprof_sys_avail",
+                "rocprof-sys-causal=amdrocm_profiler._cli:rocprof_sys_causal",
+                "rocprof-sys-instrument=amdrocm_profiler._cli:rocprof_sys_instrument",
+                "rocprof-sys-run=amdrocm_profiler._cli:rocprof_sys_run",
+                "rocprof-sys-sample=amdrocm_profiler._cli:rocprof_sys_sample",
+                "rocprof-sys-python=amdrocm_profiler._cli:rocprof_sys_python",
             ]
             if platform.system() != "Windows"
             else []

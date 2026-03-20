@@ -41,14 +41,14 @@ def _find_platform_root() -> Path:
 
     raise FileNotFoundError(
         "Could not locate packaged ROCm profiler binaries. "
-        "Expected a directory containing `bin/` under the installed rocm_sdk_profilers package."
+        "Expected a directory containing `bin/` under the installed amdrocm_profiler package."
     )
 
 
 def _exec(relpath: str) -> None:
 
     if platform.system() == "Windows":
-        raise RuntimeError("rocm-sdk-profilers is not supported on Windows.")
+        raise RuntimeError("amdrocm-profiler is not supported on Windows.")
 
     root = _find_platform_root()
     full_path = root / relpath
