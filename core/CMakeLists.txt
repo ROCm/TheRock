@@ -359,6 +359,15 @@ therock_cmake_subproject_declare(ocl-icd
   INTERFACE_INSTALL_RPATH_DIRS
     "lib"
 )
+
+therock_provide_artifact(core-openclICD
+  TARGET_NEUTRAL
+  DESCRIPTOR artifact-core-openclICD.toml
+  COMPONENTS
+    lib
+  SUBPROJECT_DEPS
+    opencl
+)
 therock_cmake_subproject_activate(ocl-icd)
 
 if(THEROCK_ENABLE_OCL_RUNTIME)

@@ -1,0 +1,5 @@
+# opencl
+[components.lib."core/opencl/stage"]
+include = [
+  "bin/**",
+]
