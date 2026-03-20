@@ -340,6 +340,7 @@ def do_fetch(args: argparse.Namespace):
         run_id=args.run_id,
         github_repository=args.run_github_repo,
         platform=args.platform,
+        gfx_families=target_families,
     )
     log(f"Using backend: {backend.base_uri}")
 
@@ -819,6 +820,7 @@ def do_copy(args: argparse.Namespace):
     dest_backend = create_backend_from_env(
         run_id=args.run_id,
         platform=args.platform,
+        gfx_families=target_families,
     )
 
     log(f"Source: {source_backend.base_uri}")
