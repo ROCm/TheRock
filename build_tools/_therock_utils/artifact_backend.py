@@ -1,16 +1,19 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Abstraction layer for artifact storage backends (S3 or local directory).
+"""Abstraction layer for artifact storage backends (S3, local directory, or HTTP).
 
-This module provides a unified interface for artifact storage that works with
-both local directories (for prototyping/testing) and S3 (for CI/CD).
+This module provides a unified interface for artifact storage that works with:
+- Local directories (for prototyping/testing)
+- S3 (for CI/CD)
+- HTTP artifact server (read-only access to workflow builds)
 
 TODO(scotttodd): Consolidate with StorageBackend in storage_backend.py? Both
 modules manage S3 clients and local directory mirroring. ArtifactBackend has
 download/list/exists operations that StorageBackend doesn't have yet.
 
 Environment-based switching:
+- THEROCK_HTTP_RUN_ID set → use HTTPBackend (read-only)
 - THEROCK_LOCAL_STAGING_DIR set → use LocalDirectoryBackend
 - Otherwise → use S3Backend
 """
@@ -19,8 +22,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Set
+import hashlib
 import os
+import re
 import shutil
+import urllib.request
 
 from .workflow_outputs import WorkflowOutputRoot
 
@@ -330,28 +336,320 @@ class S3Backend(ArtifactBackend):
             return False
 
 
+class HTTPBackend(ArtifactBackend):
+    """Read-only backend for HTTP artifact server.
+
+    Accesses artifacts from:
+    {base_url}/{run_id}-{platform}/
+
+    Artifacts are organized by gfx target via index-{gfx_family}.html files.
+
+    Usage:
+        # Create backend for specific run
+        backend = HTTPBackend(
+            run_id="23309603946",
+            platform="linux",
+            gfx_families=["gfx94X-dcgpu", "gfx1200"],
+            base_url="https://example.com/artifacts"
+        )
+
+        # List available artifacts (across all specified GFX families)
+        artifacts = backend.list_artifacts(name_filter="blas")
+
+        # Download artifact with checksum verification
+        backend.download_artifact("blas_lib_gfx1200.tar.zst", Path("/tmp/blas.tar.zst"))
+
+        # Or use factory function with target families
+        import os
+        os.environ["THEROCK_RUN_ID"] = "23309603946"
+        os.environ["THEROCK_HTTP_BASE_URL"] = "https://example.com/artifacts"
+        backend = create_backend_from_env(gfx_families=["gfx94X-dcgpu", "gfx1200"])
+
+    Environment Variables:
+        THEROCK_RUN_ID: Workflow run ID (falls back to GITHUB_RUN_ID or "local")
+        THEROCK_HTTP_BASE_URL: Base URL for artifact server (required for HTTP backend)
+        THEROCK_AMDGPU_FAMILIES: Comma-separated list of GFX families (e.g., "gfx94X-dcgpu,gfx1200")
+        THEROCK_PLATFORM: Platform name (default: "linux")
+    """
+
+    def __init__(
+        self,
+        run_id: str,
+        base_url: str,
+        gfx_families: List[str],
+        platform: str = "linux",
+    ):
+        self.run_id = run_id
+        self.base_url = base_url
+        self.platform = platform
+        self.gfx_families = gfx_families
+        self._artifact_cache: Optional[List[str]] = None  # Lazy-loaded artifact list
+
+    @property
+    def base_uri(self) -> str:
+        """Return the base URI for this backend."""
+        return f"{self.base_url}/{self.run_id}-{self.platform}"
+
+    def _download_file(self, url: str, dest: Path) -> None:
+        """Download a file from URL to destination path."""
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            urllib.request.urlretrieve(url, dest)
+        except Exception as e:
+            raise FileNotFoundError(f"Failed to download {url}: {e}")
+
+    def _parse_index_html(self, html_content: str) -> List[str]:
+        """Parse artifact index HTML to extract artifact filenames."""
+        # Extract all href values
+        hrefs = re.findall(r'href="([^"]+)"', html_content)
+
+        # Filter to artifact archives only
+        artifacts = []
+        for href in hrefs:
+            # Skip parent directory, index files, http links, anchors
+            if href.startswith(("..", "index", "http", "#")):
+                continue
+            # Only include recognized artifact archives
+            if _is_artifact_archive(href):
+                artifacts.append(href)
+
+        return artifacts
+
+    def _fetch_index(self, gfx_family: str) -> List[str]:
+        """Fetch artifact list from index-{gfx_family}.html."""
+        index_url = f"{self.base_uri}/index-{gfx_family}.html"
+        try:
+            with urllib.request.urlopen(index_url) as response:
+                html_content = response.read().decode("utf-8")
+            return self._parse_index_html(html_content)
+        except Exception:
+            # Index doesn't exist for this target
+            return []
+
+    def _discover_gfx_families_from_master_index(self) -> List[str]:
+        """Discover available GFX families from master index.
+
+        TODO: Future enhancement - Master index discovery
+        ==================================================
+        This stub will be implemented to fetch and parse the master index at:
+        {base_url}/{workflow_id}-linux/index.html
+
+        The master index should contain links to all available index files:
+          <a href="../{run_id}-{platform}/index-gfx94X-dcgpu.html">...</a>
+          <a href="../{run_id}-{platform}/index-gfx120X-all.html">...</a>
+
+        Implementation plan:
+        1. Fetch {base_url}/{workflow_id}-linux/index.html
+        2. Parse HTML for links matching pattern: index-{gfx_family}.html
+        3. Extract gfx_family from each link
+        4. Return list of discovered targets
+
+        This will replace the hardcoded common_targets list and enable
+        automatic discovery of all available GFX families.
+
+        Returns:
+            List of discovered GFX families (e.g., ["gfx94X-dcgpu", "gfx120X-all", "gfx908"])
+        """
+        # TODO: Implement master index parsing
+        # master_index_url = f"{self.base_url}/{workflow_id}-linux/index.html"
+        # try:
+        #     with urllib.request.urlopen(master_index_url) as response:
+        #         html_content = response.read().decode("utf-8")
+        #
+        #     # Parse for links like: href="../{run_id}-{platform}/index-{gfx_family}.html"
+        #     pattern = rf'href="[^"]*/{self.run_id}-{self.platform}/index-([^"]+)\.html"'
+        #     matches = re.findall(pattern, html_content)
+        #     return matches
+        # except Exception:
+        #     # Fall back to hardcoded targets if master index unavailable
+        #     return []
+
+        # For now, return empty list to indicate not implemented
+        return []
+
+    def _list_all_artifacts(self) -> List[str]:
+        """List artifacts across all available index files.
+
+        TODO: Future enhancement - Use master index discovery
+        =======================================================
+        Once _discover_gfx_families_from_master_index() is implemented,
+        this method should:
+        1. First try to discover targets from master index
+        2. Fall back to hardcoded common_targets if master index unavailable
+
+        Example:
+            discovered_targets = self._discover_gfx_families_from_master_index()
+            targets = discovered_targets if discovered_targets else common_targets
+        """
+        # TODO: Replace hardcoded list with master index discovery
+        # discovered_targets = self._discover_gfx_families_from_master_index()
+        # common_targets = discovered_targets if discovered_targets else ["gfx1200", "gfx1201", "generic"]
+
+        common_targets = ["gfx1200", "gfx1201", "generic"]
+        all_artifacts = set()
+
+        for target in common_targets:
+            try:
+                artifacts = self._fetch_index(target)
+                all_artifacts.update(artifacts)
+            except Exception:
+                # Index doesn't exist for this target, skip
+                continue
+
+        return sorted(all_artifacts)
+
+    def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
+        """List available artifact filenames across all specified GFX families.
+
+        Args:
+            name_filter: Optional artifact name prefix to filter by (e.g., "blas" to match "blas_lib_*")
+
+        Returns:
+            List of artifact filenames (e.g., ["blas_lib_gfx1200.tar.zst", "rocfft_lib_gfx1200.tar.xz"])
+        """
+        # Use cache if available
+        if self._artifact_cache is None:
+            # Fetch from all specified GFX families
+            all_artifacts = set()
+            for family in self.gfx_families:
+                try:
+                    artifacts = self._fetch_index(family)
+                    all_artifacts.update(artifacts)
+                except Exception:
+                    # Index doesn't exist for this family - this is expected until
+                    # master index is available. Skip silently.
+                    continue
+            self._artifact_cache = sorted(all_artifacts)
+
+        artifacts = self._artifact_cache
+
+        # Apply name filter if provided
+        if name_filter is not None:
+            artifacts = [a for a in artifacts if a.startswith(f"{name_filter}_")]
+
+        return sorted(artifacts)
+
+    def _verify_checksum(self, artifact_path: Path) -> bool:
+        """Verify artifact SHA256 checksum against .sha256sum file."""
+        checksum_file = artifact_path.parent / f"{artifact_path.name}.sha256sum"
+        if not checksum_file.exists():
+            return False
+
+        # Read expected checksum (first word of .sha256sum file)
+        expected = checksum_file.read_text().split()[0]
+
+        # Calculate actual checksum
+        sha256 = hashlib.sha256()
+        with open(artifact_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                sha256.update(chunk)
+        actual = sha256.hexdigest()
+
+        return expected == actual
+
+    def download_artifact(self, artifact_key: str, dest_path: Path) -> None:
+        """Download artifact with checksum verification.
+
+        Args:
+            artifact_key: The artifact filename (e.g., "blas_lib_gfx1200.tar.zst")
+            dest_path: Local path to write the artifact to
+
+        Raises:
+            FileNotFoundError: If artifact or checksum not found
+            ValueError: If checksum verification fails
+        """
+        artifact_url = f"{self.base_uri}/{artifact_key}"
+        checksum_url = f"{artifact_url}.sha256sum"
+
+        # Download artifact
+        self._download_file(artifact_url, dest_path)
+
+        # Download checksum
+        checksum_path = dest_path.parent / f"{artifact_key}.sha256sum"
+        try:
+            self._download_file(checksum_url, checksum_path)
+
+            # Verify checksum
+            if not self._verify_checksum(dest_path):
+                # Clean up and raise error
+                dest_path.unlink(missing_ok=True)
+                checksum_path.unlink(missing_ok=True)
+                raise ValueError(f"Checksum verification failed for {artifact_key}")
+
+        except FileNotFoundError:
+            # Artifacts are allowed to be downloaded without checksums
+            pass
+
+
+    def upload_artifact(self, source_path: Path, artifact_key: str) -> None:
+        """Upload is not supported - HTTPBackend is read-only."""
+        raise NotImplementedError("HTTPBackend is read-only")
+
+    def copy_artifact(
+        self, artifact_key: str, source_backend: "ArtifactBackend"
+    ) -> None:
+        """Copy is not supported - HTTPBackend is read-only."""
+        raise NotImplementedError("HTTPBackend is read-only")
+
+    def artifact_exists(self, artifact_key: str) -> bool:
+        """Check if an artifact exists in the backend."""
+        # Check if artifact is in cached list (if cache is populated)
+        if self._artifact_cache is not None:
+            return artifact_key in self._artifact_cache
+
+        # Otherwise, try HTTP HEAD request
+        artifact_url = f"{self.base_uri}/{artifact_key}"
+        try:
+            req = urllib.request.Request(artifact_url, method="HEAD")
+            urllib.request.urlopen(req)
+            return True
+        except Exception:
+            return False
+
+
 def create_backend_from_env(
     run_id: Optional[str] = None,
     platform: Optional[str] = None,
+    gfx_families: Optional[List[str]] = None,
 ) -> ArtifactBackend:
     """Create the appropriate backend based on environment variables.
 
-    Environment variables:
-    - THEROCK_LOCAL_STAGING_DIR: If set, use local backend
-    - THEROCK_RUN_ID: Override run ID (default: "local" or GITHUB_RUN_ID)
-    - THEROCK_PLATFORM: Override platform (default: current platform)
+    Backend priority:
+    1. Local directory (THEROCK_LOCAL_STAGING_DIR) - highest priority for local dev
+    2. S3 with credentials (AWS_* vars present) - CI upload contexts
+    3. HTTP (THEROCK_HTTP_BASE_URL set, no S3 creds) - read-only artifact access
+    4. S3 without credentials - fallback for read-only S3 access
 
-    For S3 backend (when THEROCK_LOCAL_STAGING_DIR is not set):
+    Args:
+        run_id: Override run ID (default: THEROCK_RUN_ID or GITHUB_RUN_ID or "local")
+        platform: Override platform (default: THEROCK_PLATFORM or system platform)
+        gfx_families: List of GFX families for HTTP backend (e.g., ["gfx94X-dcgpu", "gfx1200"])
+                    If None, reads from THEROCK_AMDGPU_FAMILIES environment variable (comma-separated)
+                    Required for HTTP backend.
+
+    Environment variables:
+    - THEROCK_RUN_ID: Workflow run ID (default: GITHUB_RUN_ID or "local")
+    - THEROCK_PLATFORM: Override platform (default: current platform)
+    - THEROCK_LOCAL_STAGING_DIR: If set, use local backend
+    - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN: If all present,
+      prioritize S3 backend for upload capability (CI contexts)
+    - THEROCK_HTTP_BASE_URL: Base URL for HTTP artifact server
+      (if set and no S3 credentials, use HTTP backend for read-only access)
+    - THEROCK_AMDGPU_FAMILIES: Comma-separated list of GFX families (e.g., "gfx94X-dcgpu,gfx1200")
+      Required for HTTP backend if gfx_families parameter not provided.
+
+    For S3 backend:
     - Uses WorkflowOutputRoot.from_workflow_run() for bucket selection
     """
     import platform as platform_module
 
-    local_staging = os.getenv("THEROCK_LOCAL_STAGING_DIR")
     platform_name = platform or os.getenv(
         "THEROCK_PLATFORM", platform_module.system().lower()
     )
     run_id = run_id or os.getenv("THEROCK_RUN_ID", os.getenv("GITHUB_RUN_ID", "local"))
 
+    # Priority 1: Local directory backend (for local development)
+    local_staging = os.getenv("THEROCK_LOCAL_STAGING_DIR")
     if local_staging:
         output_root = WorkflowOutputRoot.for_local(
             run_id=run_id, platform=platform_name
@@ -361,6 +659,44 @@ def create_backend_from_env(
             output_root=output_root,
         )
 
+    # Priority 2: S3 backend when AWS credentials are present (CI upload contexts)
+    # Check for all three required AWS credentials
+    has_s3_credentials = all(
+        os.getenv(var)
+        for var in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"]
+    )
+    if has_s3_credentials:
+        output_root = WorkflowOutputRoot.from_workflow_run(
+            run_id=run_id, platform=platform_name
+        )
+        return S3Backend(output_root=output_root)
+
+    # Priority 3: HTTP backend for read-only access (no upload capability)
+    # Only use HTTP backend if base URL is explicitly configured
+    http_base_url = os.getenv("THEROCK_HTTP_BASE_URL")
+    if http_base_url:
+        # Get GFX families from parameter or environment variable
+        targets = gfx_families
+        if targets is None:
+            targets_env = os.getenv("THEROCK_AMDGPU_FAMILIES")
+            if targets_env:
+                targets = [t.strip() for t in targets_env.split(",")]
+
+        if not targets:
+            raise ValueError(
+                "HTTPBackend requires gfx_families. "
+                "Provide via gfx_families parameter or THEROCK_AMDGPU_FAMILIES environment variable "
+                "(comma-separated list, e.g., 'gfx94X-dcgpu,gfx1200')"
+            )
+
+        return HTTPBackend(
+            run_id=run_id,
+            base_url=http_base_url,
+            gfx_families=targets,
+            platform=platform_name,
+        )
+
+    # Priority 4: S3 backend without credentials (read-only fallback)
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=run_id, platform=platform_name
     )
