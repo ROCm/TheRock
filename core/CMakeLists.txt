@@ -342,33 +342,34 @@ endif(THEROCK_ENABLE_HIP_RUNTIME)
 ################################################################################
 # ocl-icd
 ################################################################################
+if(THEROCK_ENABLE_OCL_ICD)
+  therock_cmake_subproject_declare(ocl-icd
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/icd"
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/OpenCL-Headers"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/opencl/icd"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      "-DOPENCL_ICD_LOADER_REQUIRE_WDK=OFF"
+      "-DOPENCL_ICD_LOADER_HEADERS_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/headers/opencl2.2"
 
-therock_cmake_subproject_declare(ocl-icd
-  USE_DIST_AMDGPU_TARGETS
-  EXTERNAL_SOURCE_DIR
-    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/icd"
-    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/OpenCL-Headers"
-  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/opencl/icd"
-  BACKGROUND_BUILD
-  CMAKE_ARGS
-    "-DOPENCL_ICD_LOADER_REQUIRE_WDK=OFF"
-    "-DOPENCL_ICD_LOADER_HEADERS_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/headers/opencl2.2"
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
+  )
 
-  INTERFACE_LINK_DIRS
-    "lib"
-  INTERFACE_INSTALL_RPATH_DIRS
-    "lib"
-)
-
-therock_provide_artifact(core-openclICD
-  TARGET_NEUTRAL
-  DESCRIPTOR artifact-core-openclICD.toml
-  COMPONENTS
-    lib
-  SUBPROJECT_DEPS
-    opencl
-)
-therock_cmake_subproject_activate(ocl-icd)
+  therock_provide_artifact(core-ocl-icd
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-core-ocl-icd.toml
+    COMPONENTS
+      lib
+    SUBPROJECT_DEPS
+      opencl
+  )
+  therock_cmake_subproject_activate(ocl-icd)
+endif(THEROCK_ENABLE_OCL_ICD)
 
 if(THEROCK_ENABLE_OCL_RUNTIME)
   set(OCL_CLR_CMAKE_ARGS)
