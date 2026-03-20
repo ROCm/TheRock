@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Centralized constants for test execution, API, and system configuration."""
 
 from pathlib import Path

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Script meant to be used in the ccache compiler_check directive on POSIX.
 
 Syntax:

@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Download prerelease packages from S3 bucket for promotion to release.
 
 This script downloads release candidate packages from the therock-prerelease-python

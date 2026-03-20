@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # This finder resolves the virtual BLAS package for sub-projects.
 # It defers to the built host-blas, if available, otherwise, failing.
 cmake_policy(PUSH)
@@ -6,11 +9,19 @@ cmake_policy(SET CMP0057 NEW)
 if("OpenBLAS" IN_LIST THEROCK_PROVIDED_PACKAGES)
   cmake_policy(POP)
   message(STATUS "Resolving bundled host-blas library from super-project")
-  find_package(OpenBLAS CONFIG REQUIRED)
+
+  if(DEFINED BLA_SIZEOF_INTEGER AND BLA_SIZEOF_INTEGER EQUAL 8)
+    find_package(OpenBLAS64 CONFIG REQUIRED)
+    set(_OPENBLAS OpenBLAS64)
+  else()
+    find_package(OpenBLAS CONFIG REQUIRED)
+    set(_OPENBLAS OpenBLAS)
+  endif()
+
   # See: https://cmake.org/cmake/help/latest/module/FindBLAS.html
   set(BLAS_LINKER_FLAGS)
-  set(BLAS_LIBRARIES OpenBLAS::OpenBLAS)
-  add_library(BLAS::BLAS ALIAS OpenBLAS::OpenBLAS)
+  set(BLAS_LIBRARIES ${_OPENBLAS}::OpenBLAS)
+  add_library(BLAS::BLAS ALIAS ${_OPENBLAS}::OpenBLAS)
   set(BLAS95_LIBRARIES)
   set(BLAS95_FOUND FALSE)
   set(BLAS_FOUND TRUE)

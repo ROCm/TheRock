@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # TODO: HIP language support not based on an /opt/rocm installed SDK
 # must have these three cache variables set to avoid language setup
 # error. https://github.com/ROCm/TheRock/issues/102

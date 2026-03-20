@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Build with:
 #   cmake -GNinja -S. -Bbuild -DCMAKE_PREFIX_PATH=path/to/rocm
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Tests validating inputs to benc-uk/workflow-dispatch in workflow files.
 
 The https://github.com/benc-uk/workflow-dispatch action triggers workflows via
@@ -10,24 +13,7 @@ https://github.com/ROCm/TheRock/pull/2557#discussion_r2717677336. These tests
 add an extra layer of validation.
 
 This file creates test cases for each file in .github/workflows/ that uses
-benc-uk/workflow-dispatch. It is run like a standard unit test, e.g.:
-
-```
-python ./build_tools/github_actions/tests/workflow_dispatch_inputs_test.py --v
-test_no_unexpected_inputs__release_portable_linux_packages (__main__.WorkflowDispatchInputsTest.test_no_unexpected_inputs__release_portable_linux_packages)
-No unexpected dispatch inputs in release_portable_linux_packages.yml ... ok
-test_no_unexpected_inputs__release_windows_packages (__main__.WorkflowDispatchInputsTest.test_no_unexpected_inputs__release_windows_packages)
-No unexpected dispatch inputs in release_windows_packages.yml ... ok
-test_required_inputs_passed__release_portable_linux_packages (__main__.WorkflowDispatchInputsTest.test_required_inputs_passed__release_portable_linux_packages)
-All required dispatch inputs passed in release_portable_linux_packages.yml ... ok
-test_required_inputs_passed__release_windows_packages (__main__.WorkflowDispatchInputsTest.test_required_inputs_passed__release_windows_packages)
-All required dispatch inputs passed in release_windows_packages.yml ... ok
-
-----------------------------------------------------------------------
-Ran 4 tests in 0.087s
-
-OK
-```
+benc-uk/workflow-dispatch. It is run like a standard unit test.
 """
 
 from dataclasses import dataclass
@@ -35,78 +21,18 @@ import json
 from pathlib import Path
 import unittest
 
-import yaml
-
-WORKFLOWS_DIR = Path(__file__).resolve().parents[3] / ".github" / "workflows"
+from workflow_utils import (
+    WORKFLOWS_DIR,
+    get_choice_options,
+    get_required_workflow_dispatch_inputs,
+    get_workflow_dispatch_inputs,
+    load_workflow,
+)
 
 WORKFLOW_DISPATCH_ACTION_NAME = "benc-uk/workflow-dispatch"
 
 
-def load_workflow(path: Path) -> dict:
-    """Loads a YAML workflow file from the given Path as a JSON dictionary."""
-    with open(path) as f:
-        return yaml.safe_load(f)
-
-
-def get_workflow_dispatch_inputs(workflow: dict) -> set:
-    """Extracts input names from a workflow's on.workflow_dispatch.inputs section.
-
-    For a workflow with:
-        on:
-          workflow_dispatch:
-            inputs:
-              amdgpu_family: ...
-              release_type: ...
-
-    Returns: {"amdgpu_family", "release_type"}
-    """
-    # PyYAML parses the unquoted YAML key `on:` as boolean True.
-    on_block = workflow.get("on") or workflow.get(True)
-    if not isinstance(on_block, dict):
-        return set()
-    dispatch = on_block.get("workflow_dispatch")
-    if not isinstance(dispatch, dict):
-        return set()
-    inputs = dispatch.get("inputs")
-    if not isinstance(inputs, dict):
-        return set()
-    return set(inputs.keys())
-
-
-def get_required_workflow_dispatch_inputs(workflow: dict) -> set:
-    """Extracts required input names (no default) from workflow_dispatch.
-
-    For a workflow with:
-        on:
-          workflow_dispatch:
-            inputs:
-              amdgpu_family:
-                required: true
-              release_type:
-                required: true
-                default: dev
-
-    Returns: {"amdgpu_family"}  (release_type has a default)
-    """
-    # PyYAML parses the unquoted YAML key `on:` as boolean True.
-    on_block = workflow.get("on") or workflow.get(True)
-    if not isinstance(on_block, dict):
-        return set()
-    dispatch = on_block.get("workflow_dispatch")
-    if not isinstance(dispatch, dict):
-        return set()
-    inputs_def = dispatch.get("inputs")
-    if not isinstance(inputs_def, dict):
-        return set()
-    required = set()
-    for name, props in inputs_def.items():
-        if isinstance(props, dict):
-            if props.get("required", False) and "default" not in props:
-                required.add(name)
-    return required
-
-
-def parse_dispatch_inputs_json(inputs_raw: str) -> set:
+def parse_dispatch_inputs_json(inputs_raw: str) -> dict:
     """Parses the JSON inputs string from a benc-uk/workflow-dispatch step.
 
     For an action step with:
@@ -114,18 +40,18 @@ def parse_dispatch_inputs_json(inputs_raw: str) -> set:
         with:
           inputs: |
             { "amdgpu_family": "${{ matrix.amdgpu_family }}",
-              "release_type": "${{ env.RELEASE_TYPE }}" }
+              "release_type": "dev" }
 
-    Parses the inputs value and returns: {"amdgpu_family", "release_type"}
+    Returns: {"amdgpu_family": "${{ matrix.amdgpu_family }}", "release_type": "dev"}
     """
     if not inputs_raw:
-        return set()
+        return {}
 
     parsed = json.loads(inputs_raw)
     if isinstance(parsed, dict):
-        return set(parsed.keys())
+        return parsed
 
-    return set()
+    return {}
 
 
 @dataclass
@@ -134,7 +60,7 @@ class DispatchCall:
 
     step_name: str
     target_workflow: str
-    passed_inputs: set
+    passed_inputs: dict
 
 
 def find_dispatch_calls_in_workflow(workflow: dict) -> list[DispatchCall]:
@@ -192,7 +118,7 @@ def _make_unexpected_inputs_test(workflow_path: Path):
 
             target_workflow = load_workflow(target_path)
             accepted_inputs = get_workflow_dispatch_inputs(target_workflow)
-            unexpected = call.passed_inputs - accepted_inputs
+            unexpected = call.passed_inputs.keys() - accepted_inputs
             if unexpected:
                 errors.append(
                     f"step '{call.step_name}' passes unexpected inputs to "
@@ -220,12 +146,55 @@ def _make_required_inputs_test(workflow_path: Path):
 
             target_workflow = load_workflow(target_path)
             required_inputs = get_required_workflow_dispatch_inputs(target_workflow)
-            missing = required_inputs - call.passed_inputs
+            missing = required_inputs - call.passed_inputs.keys()
             if missing:
                 errors.append(
                     f"step '{call.step_name}' does not pass required inputs to "
                     f"'{call.target_workflow}': {sorted(missing)}"
                 )
+
+        if errors:
+            self.fail("\n".join(errors))
+
+    return test_method
+
+
+def _is_expression(value: str) -> bool:
+    """Returns True if the value contains a GitHub Actions expression."""
+    return "${{" in str(value)
+
+
+def _make_literal_choice_values_test(workflow_path: Path):
+    """Creates a test that checks literal values are valid for choice inputs.
+
+    When a dispatch step passes a literal string (not a ${{ }} expression) to a
+    target input that is type: choice, the literal must be in the target's
+    allowed options list. GitHub rejects invalid choice values at dispatch time.
+    """
+
+    def test_method(self):
+        workflow = load_workflow(workflow_path)
+        calls = find_dispatch_calls_in_workflow(workflow)
+        errors = []
+        for call in calls:
+            target_path = WORKFLOWS_DIR / call.target_workflow
+            if not target_path.exists():
+                continue
+
+            target_workflow = load_workflow(target_path)
+            for input_name, value in call.passed_inputs.items():
+                if _is_expression(value):
+                    continue
+                options = get_choice_options(target_workflow, input_name)
+                if options is None:
+                    continue
+                if value not in options:
+                    errors.append(
+                        f"step '{call.step_name}' passes literal "
+                        f"'{value}' for '{input_name}' to "
+                        f"'{call.target_workflow}', but allowed options are: "
+                        f"{options}"
+                    )
 
         if errors:
             self.fail("\n".join(errors))
@@ -254,6 +223,16 @@ for _workflow_path in sorted(WORKFLOWS_DIR.glob("*.yml")):
     _test.__doc__ = f"All required dispatch inputs passed in {_workflow_path.name}"
     setattr(
         WorkflowDispatchInputsTest, f"test_required_inputs_passed__{_suffix}", _test
+    )
+
+    _test = _make_literal_choice_values_test(_workflow_path)
+    _test.__doc__ = (
+        f"Literal dispatch values are valid for choice inputs in {_workflow_path.name}"
+    )
+    setattr(
+        WorkflowDispatchInputsTest,
+        f"test_literal_values_valid_for_choices__{_suffix}",
+        _test,
     )
 
 

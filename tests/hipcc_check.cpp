@@ -1,3 +1,6 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
 #include <cstdio>
 #include <hip/hip_runtime.h>
 __global__ void squares(int *buf) {

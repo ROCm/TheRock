@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-SuiteSparse-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/DrTimothyAldenDavis/SuiteSparse/archive/refs/tags/v7.8.3.tar.gz
@@ -12,6 +15,8 @@ therock_cmake_subproject_declare(therock-SuiteSparse
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
   INSTALL_DESTINATION "lib/host-math"
   # RPATH logic needs to know that executables/libs for this project are in
   # a non-default location.

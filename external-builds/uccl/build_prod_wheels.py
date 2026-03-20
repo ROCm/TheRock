@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 r"""Builds production UCCL wheel based on the rocm wheels.
 
 The UCCL project already has a TheRock build target that is currently

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """API client for submitting benchmark test results to the configured results tracking API.
 
 Uploads performance metrics, system metadata, and test configurations for regression detection and analysis.

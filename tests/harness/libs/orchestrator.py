@@ -1,4 +1,7 @@
 #!/usr/bin/python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 
 import logging
 from libs import utils

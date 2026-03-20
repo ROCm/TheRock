@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Dual-mode CMakeLists.txt for simde (header-only library)
 #
 # NOTE: simde upstream uses meson, but we bypass it entirely because:
@@ -34,6 +37,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     NO_MERGE_COMPILE_COMMANDS
     BACKGROUND_BUILD
     OUTPUT_ON_FAILURE
+    COMPILER_TOOLCHAIN
+      amd-llvm
     CMAKE_ARGS
       "-DSOURCE_DIR=${_source_dir}"
       "-DSIMDE_VERSION=${SIMDE_VERSION}"

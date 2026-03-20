@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # See corresponding linux_portable_build.py which invokes this within a
 # container.
 set -e

@@ -16,7 +16,7 @@ $ curl -LsSf https://astral.sh/uv/install.sh | bash && source $HOME/.local/bin/e
 $ git clone https://github.com/ROCm/TheRock.git && cd TheRock
 $ uv venv .venv && source .venv/bin/activate
 $ uv pip install -r requirements-test.txt
-$ GITHUB_REPOSITORY={GITHUB_REPO} python build_tools/install_rocm_from_artifacts.py --run-id {CI_RUN_ID} --amdgpu-family {GPU_FAMILY} --tests
+$ GITHUB_REPOSITORY={GITHUB_REPO} python build_tools/install_rocm_from_artifacts.py --run-id {CI_RUN_ID} --amdgpu-family {GPU_FAMILY} --tests {ADDITIONAL_FLAGS}
 $ export THEROCK_BIN_DIR=./therock-build/bin
 # The python test scripts are in directory "build_tools/github_actions/test_executable_scripts/"
 # Below is an example on how to run "test_rocblas.py"
@@ -28,5 +28,7 @@ $ python build_tools/github_actions/test_executable_scripts/test_rocblas.py
 - CI_RUN_ID is sourced from the CI run (ex: https://github.com/ROCm/TheRock/actions/runs/16948046392 -> CI_RUN_ID = 16948046392)
 - GPU_FAMILY is the LLVM target name (ex: gfx94X-dcgpu, gfx1151, gfx110X-all)
 - GITHUB_REPO is the GitHub repository that this CI run was executed. (ex: ROCm/rocm-libraries, ROCm/rccl)
+- ADDITIONAL FLAGS (optional) are found in [installing_artifacts.md](https://github.com/ROCm/TheRock/blob/main/docs/development/installing_artifacts.md#component-selection)
+  - In CI runs, all components use flags to install specific components (and avoid installing everything). Refer to the CI logs to see what flags are used
 
 To view which python test wrappers we have, please checkout [`test_executable_scripts/`](https://github.com/ROCm/TheRock/tree/main/build_tools/github_actions/test_executable_scripts)

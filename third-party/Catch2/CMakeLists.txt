@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-catch2-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/catchorg/Catch2/archive/refs/tags/v3.8.1.tar.gz
@@ -12,6 +15,8 @@ therock_cmake_subproject_declare(therock-catch2
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
 )
 therock_cmake_subproject_provide_package(therock-catch2 Catch2 lib/cmake)
 therock_cmake_subproject_activate(therock-catch2)

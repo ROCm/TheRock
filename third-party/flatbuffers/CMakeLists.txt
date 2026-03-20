@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-flatbuffers-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/google/flatbuffers/archive/refs/tags/v25.9.23.tar.gz
@@ -12,6 +15,8 @@ therock_cmake_subproject_declare(therock-flatbuffers
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
   CMAKE_ARGS
     -DFLATBUFFERS_BUILD_TESTS=OFF
     -DFLATBUFFERS_BUILD_FLATC=ON

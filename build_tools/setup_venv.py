@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 """Sets up a Python venv and optionally installs rocm packages into it.
 
@@ -40,7 +42,7 @@ import subprocess
 import sys
 import re
 
-from github_actions.github_actions_utils import *
+from github_actions.github_actions_api import *
 
 is_windows = platform.system() == "Windows"
 

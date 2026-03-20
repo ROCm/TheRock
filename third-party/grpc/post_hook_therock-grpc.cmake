@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Platform-specific post-install patches for gRPC
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(_grpc_patch_script "${CMAKE_CURRENT_LIST_DIR}/patch_install_linux.sh")

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(NOT WIN32)
   # Configure roctracer if on a supported operating system (Linux).
   # rocSPARSE has deprecated dependencies on roctracer. We apply a patch to redirect

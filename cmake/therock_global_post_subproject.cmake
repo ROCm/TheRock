@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # This file is called as a hook at the end of every sub-project's configure.
 # It performs additional super-project level fixups and invokes the user's
 # post hook if applicable (see THEROCK_USER_POST_HOOK).

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 skip_tests = {
     "common": {
         "autograd": [
@@ -45,19 +48,20 @@ skip_tests = {
             # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
             # TypeError: 'CustomDecompTable' object is not a mapping
             "test_record_stream_on_shifted_view",
+            # AssertionError: Scalars are not close!
+            "test_allocator_settings",
         ],
         "torch": [
             "test_index_add_correctness",
+            # AssertionError: False is not true
+            "test_cpp_warnings_have_python_context_cuda",
         ],
     },
-    "gfx942": {
+    "gfx94": {
         "autograd": [
             # fixed or just good with no caching?
             # "test_reentrant_parent_error_on_cpu_cuda",
             # "test_multi_grad_all_hooks",
-            # flaky, was good some itme
-            "test_side_stream_backward_overlap",
-            "test_side_stream_backward_overlap_cuda"
             #
             #  Test run says they are good????
             # # AttributeError: 'torch._C._autograd.SavedTensor' object has no attribute 'data'
@@ -93,13 +97,10 @@ skip_tests = {
             "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
             # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
             "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
-            # AssertionError: Scalars are not close!
-            "test_allocator_settings",
             # AttributeError: Unknown attribute allow_bf16_reduced_precision_reduction_split_k
             "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
             # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
             "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
-            "test_allocator_settings",
         ],
         "nn": [
             # Is now skipped.. on pytorch side
@@ -112,15 +113,6 @@ skip_tests = {
         ],
         "torch": [
             "test_terminate_handler_on_crash",  # flaky !! hangs forever or works... can need up to 30 sec to pass
-            "test_cpp_warnings_have_python_context_cuda",
-            # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
-            # TypeError: 'CustomDecompTable' object is not a mapping
-            "test_fx_memory_profiler_augmentation",
-        ],
-    },
-    "gfx950": {
-        "cuda": [
-            "test_cpp_warnings_have_python_context_cuda",
         ],
     },
     "windows": {
@@ -130,6 +122,10 @@ skip_tests = {
             "test_grad_scaling_autocast_foreach0_fused0_Adam_cuda_float32",
         ],
         "cuda": [
+            # Flaky? See https://github.com/ROCm/TheRock/issues/3724
+            # ROCm allocator does not raise OOM in the same path as CUDA
+            #   AssertionError: RuntimeError not raised
+            "test_out_of_memory_retry",
             # This test uses subprocess.run, so it hangs.
             # See https://github.com/ROCm/TheRock/issues/999.
             "test_pinned_memory_use_background_threads",

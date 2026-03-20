@@ -1,8 +1,16 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 ##############################################################################
 # IREE Compiler - builds libIREECompiler.so
 ##############################################################################
 if(THEROCK_ENABLE_IREE_COMPILER)
   therock_cmake_subproject_declare(iree-compiler
+    # IREE compiler has general support for many GPUs/backends and doesn't
+    # compile device code. The build infrastructure requires generic stages to
+    # pass through DIST_AMDGPU_TARGETS even if the list isn't used by the
+    # underlying project.
+    USE_DIST_AMDGPU_TARGETS
     NO_MERGE_COMPILE_COMMANDS
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/iree-compiler"
     EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/iree"
@@ -26,6 +34,8 @@ if(THEROCK_ENABLE_IREE_COMPILER)
       -DIREE_BUILD_BINDINGS_TFLITE_JAVA=OFF
       # Disable runtime, it's built into fusilli, we only need the compiler
       -DIREE_HAL_DRIVER_DEFAULTS=OFF
+    INSTALL_OPTIONAL_COMPONENTS
+      IREEDevLibraries-Compiler
     BUILD_DEPS
       hip-clr  # Provides HIP headers for IREE_USE_SYSTEM_DEPS
   )
@@ -37,6 +47,7 @@ if(THEROCK_ENABLE_IREE_COMPILER)
     COMPONENTS
       lib
       dbg
+      dev
     SUBPROJECT_DEPS
       iree-compiler
   )
@@ -80,7 +91,7 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
   ##############################################################################
   therock_cmake_subproject_declare(fusilliprovider
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fusilli/plugins/hipdnn-plugin"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/fusilli-provider"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/fusilliprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -94,10 +105,8 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
       fusilli
       hipDNN
       therock-flatbuffers
-      therock-fmt
       therock-googletest
       therock-nlohmann-json
-      therock-spdlog
     RUNTIME_DEPS
       hip-clr
       hipDNN
@@ -111,6 +120,7 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
   therock_cmake_subproject_activate(fusilliprovider)
 
   therock_provide_artifact(fusilliprovider
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-fusilliprovider.toml
     COMPONENTS
       dbg

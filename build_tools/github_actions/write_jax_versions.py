@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Writes jaxlib_version, jax_plugin_version, jax_pjrt_version, and jax_version to GITHUB_OUTPUT.
 
 Fails if any expected JAX wheels are not found.
@@ -15,7 +18,7 @@ suitable for installing the `jax` package from PyPI.
 import argparse
 import glob
 import os
-from github_actions_utils import *
+from github_actions_api import *
 
 
 def _log(*args, **kwargs):

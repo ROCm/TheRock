@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-FunctionalPlus-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/Dobiasd/FunctionalPlus/archive/refs/tags/v0.2.25.tar.gz
@@ -12,6 +15,8 @@ therock_cmake_subproject_declare(therock-FunctionalPlus
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
 )
 therock_cmake_subproject_provide_package(
   therock-FunctionalPlus FunctionalPlus lib/cmake/FunctionalPlus)

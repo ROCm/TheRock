@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Test binary installed to share/amd_smi/tests/, but libamd_smi.so is under lib/
 if(TARGET amdsmitst)
   set_target_properties(amdsmitst PROPERTIES

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-libdivide-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/ridiculousfish/libdivide/archive/refs/tags/v5.2.0.tar.gz
@@ -12,6 +15,8 @@ therock_cmake_subproject_declare(therock-libdivide
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
   CMAKE_ARGS
     -DLIBDIVIDE_BUILD_TESTS=OFF
 )
