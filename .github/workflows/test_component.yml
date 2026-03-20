@@ -155,7 +155,8 @@ jobs:
           TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
         run: |
-          ${{ fromJSON(inputs.component).test_script }}
+          python ./build_tools/memory_monitor.py --phase "Test ${{ fromJSON(inputs.component).job_name }}" -- \
+            bash -c '${{ fromJSON(inputs.component).test_script }}'
 
       - name: Print test reproduction steps
         # TODO: Add windows reproduction steps

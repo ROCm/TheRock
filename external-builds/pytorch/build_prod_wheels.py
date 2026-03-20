@@ -152,7 +152,9 @@ is_windows = platform.system() == "Windows"
 LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amdhip64",
+    "rocprofiler-sdk",  # Linux only: needed by torch since kineto uses rocprofiler-sdk.
     "rocprofiler-sdk-roctx",  # Linux only for the moment.
+    # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
     "roctracer64",  # Linux only for the moment.
     "roctx64",  # Linux only for the moment.
     "hiprtc",
@@ -783,8 +785,8 @@ def do_build_pytorch(
     is_pytorch_2_11_or_later = pytorch_build_version_parsed.release[:2] >= (2, 11)
 
     # aotriton is not supported on certain architectures yet.
-    # gfx906/gfx908/gfx101X/gfx103X: https://github.com/ROCm/TheRock/issues/1925
-    AOTRITON_UNSUPPORTED_ARCHS = ["gfx906", "gfx908", "gfx101", "gfx103"]
+    # gfx900/gfx906/gfx908/gfx101X/gfx103X: https://github.com/ROCm/TheRock/issues/1925
+    AOTRITON_UNSUPPORTED_ARCHS = ["gfx900", "gfx906", "gfx908", "gfx101", "gfx103"]
     # gfx1152/53: supported in aotriton 0.11.2b+ (https://github.com/ROCm/aotriton/pull/142),
     #   which is pinned by pytorch >= 2.11. Older versions don't include it.
     if not is_pytorch_2_11_or_later:
