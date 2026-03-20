@@ -352,7 +352,9 @@ def main() -> int:
         default=DEFAULT_CONTAINER_IMAGE,
         help="Docker image (Linux only)",
     )
-    parser.add_argument("--fetch-artifact-args", default="", help="Extra artifact args")
+    parser.add_argument(
+        "--fetch-artifact-args", nargs="?", default="", help="Extra artifact args"
+    )
     parser.add_argument(
         "--setup-only", action="store_true", help="Setup only, don't run test"
     )
