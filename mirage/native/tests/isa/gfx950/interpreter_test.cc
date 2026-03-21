@@ -9063,6 +9063,7 @@ int main() {
   auto make_ds_access_state = []() {
     WaveExecutionState state;
     state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x13572468u;
     state.vgprs[0][0] = 0u;
     state.vgprs[0][1] = 4u;
     state.vgprs[0][3] = 8u;
@@ -9105,14 +9106,54 @@ int main() {
     state.vgprs[27][0] = 0xaaaa5566u;
     state.vgprs[27][1] = 0xbbbb1234u;
     state.vgprs[27][3] = 0xccccabcdu;
+    state.vgprs[31][0] = 0x01020304u;
+    state.vgprs[31][1] = 0x11121314u;
+    state.vgprs[31][2] = 0x21222324u;
+    state.vgprs[31][3] = 0x31323334u;
     for (std::uint16_t vgpr = 10; vgpr <= 30; ++vgpr) {
       state.vgprs[vgpr][2] = (vgpr & 1u) == 0u ? 0xdeadbeefu : 0xcafebabeu;
     }
+    const std::uint32_t untouched_lds = 0x11223344u;
+    std::memcpy(state.lds_bytes.data() + 0x300u, &untouched_lds,
+                sizeof(untouched_lds));
     return state;
   };
   auto validate_ds_access_state = [&](const WaveExecutionState& state,
                                       const char* mode) {
-    if (!Expect(state.halted, "expected ds access program to halt")) {
+    const auto expect_active_vgpr =
+        [&](std::uint16_t vgpr, std::uint32_t lane0, std::uint32_t lane1,
+            std::uint32_t lane3, const char* label) {
+          return Expect(state.vgprs[vgpr][0] == lane0 &&
+                            state.vgprs[vgpr][1] == lane1 &&
+                            state.vgprs[vgpr][3] == lane3,
+                        label);
+        };
+    if (!Expect(state.halted, "expected ds access program to halt") ||
+        !Expect(state.exec_mask == 0b1011ULL,
+                "expected ds access to preserve exec") ||
+        !Expect(state.sgprs[0] == 0x13572468u,
+                "expected ds access to preserve sgprs") ||
+        !expect_active_vgpr(0, 0u, 4u, 8u,
+                            "expected ds access to preserve base addresses") ||
+        !expect_active_vgpr(1, 0x80ff1122u, 0x7f008877u, 0x1234fedcu,
+                            "expected ds access to preserve subword sources") ||
+        !expect_active_vgpr(2, 32u, 64u, 96u,
+                            "expected ds access to preserve read2 addresses") ||
+        !expect_active_vgpr(5, 128u, 160u, 192u,
+                            "expected ds access to preserve read2st64 addresses") ||
+        !expect_active_vgpr(18, 224u, 228u, 232u,
+                            "expected ds access to preserve d16 byte addresses") ||
+        !expect_active_vgpr(20, 0x00000180u, 0x1234007fu, 0xffff00ffu,
+                            "expected ds access to preserve d16 byte sources") ||
+        !expect_active_vgpr(25, 256u, 260u, 264u,
+                            "expected ds access to preserve d16 half addresses") ||
+        !expect_active_vgpr(27, 0xaaaa5566u, 0xbbbb1234u, 0xccccabcdu,
+                            "expected ds access to preserve d16 half sources") ||
+        !Expect(state.vgprs[31][0] == 0x01020304u &&
+                    state.vgprs[31][1] == 0x11121314u &&
+                    state.vgprs[31][2] == 0x21222324u &&
+                    state.vgprs[31][3] == 0x31323334u,
+                "expected ds access to preserve unrelated vgprs")) {
       std::cerr << mode << '\n';
       return false;
     }
@@ -9245,9 +9286,9 @@ int main() {
       return false;
     }
 
-    std::uint32_t value = 0;
-    if (!Expect((std::memcpy(&value, state.lds_bytes.data() + 36, sizeof(value)), value) ==
-                    0xaaaaaaaau,
+	    std::uint32_t value = 0;
+	    if (!Expect((std::memcpy(&value, state.lds_bytes.data() + 36, sizeof(value)), value) ==
+	                    0xaaaaaaaau,
                 "expected ds_write2 lane 0 low store") ||
         !Expect((std::memcpy(&value, state.lds_bytes.data() + 44, sizeof(value)), value) ==
                     0xbbbbbbbbu,
@@ -9294,15 +9335,18 @@ int main() {
         !Expect((std::memcpy(&value, state.lds_bytes.data() + 256, sizeof(value)), value) ==
                     0x55663344u,
                 "expected ds_write_b16_d16_hi lane 0 store") ||
-        !Expect((std::memcpy(&value, state.lds_bytes.data() + 260, sizeof(value)), value) ==
-                    0x1234ccddu,
-                "expected ds_write_b16_d16_hi lane 1 store") ||
-        !Expect((std::memcpy(&value, state.lds_bytes.data() + 264, sizeof(value)), value) ==
-                    0xabcd0304u,
-                "expected ds_write_b16_d16_hi lane 3 store")) {
-      std::cerr << mode << '\n';
-      return false;
-    }
+	        !Expect((std::memcpy(&value, state.lds_bytes.data() + 260, sizeof(value)), value) ==
+	                    0x1234ccddu,
+	                "expected ds_write_b16_d16_hi lane 1 store") ||
+	        !Expect((std::memcpy(&value, state.lds_bytes.data() + 264, sizeof(value)), value) ==
+	                    0xabcd0304u,
+	                "expected ds_write_b16_d16_hi lane 3 store") ||
+	        !Expect((std::memcpy(&value, state.lds_bytes.data() + 0x300u, sizeof(value)), value) ==
+	                    0x11223344u,
+	                "expected ds access to preserve unrelated lds")) {
+	      std::cerr << mode << '\n';
+	      return false;
+	    }
     return true;
   };
 
