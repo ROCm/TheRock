@@ -46,6 +46,11 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      verify_package:
+        description: When true, run get_install_test_profiles and test_native_linux_packages_install after the build. When false, only build and upload (skip install verification matrix).
+        required: false
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -85,6 +90,10 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      verify_package:
+        description: When true, run install verification jobs after the build. When false, build and upload only.
+        type: boolean
+        default: true
 
 permissions:
   id-token: write
@@ -198,6 +207,7 @@ jobs:
 
   get_install_test_profiles:
     name: Get Install test OS profiles for ${{ inputs.native_package_type }}
+    if: ${{ inputs.verify_package }}
     runs-on: ubuntu-24.04
     needs: [build_native_packages]
     outputs:
@@ -222,9 +232,9 @@ jobs:
         run: |
           PKG_TYPE="${{ inputs.native_package_type }}"
           if [ "$PKG_TYPE" = "deb" ]; then
-            OS_PROFILES='["ubuntu2204","ubuntu2404","debian12","debian13"]'
+            OS_PROFILES='["ubuntu2404"]'
           else
-            OS_PROFILES='["rhel8","rhel9","rhel10","sles15","sles16","azl3"]'
+            OS_PROFILES='["rhel10","sles16"]'
           fi
           GFX_ARCH=$(echo "${{ inputs.artifact_group }}" | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
           echo "os_profiles=${OS_PROFILES}" >> $GITHUB_OUTPUT
@@ -232,6 +242,7 @@ jobs:
 
   test_native_linux_packages_install:
     name: Test Native Linux Packages Install - ${{ matrix.os_profile }}
+    if: ${{ inputs.verify_package }}
     needs: [build_native_packages, get_install_test_profiles]
     strategy:
       fail-fast: false

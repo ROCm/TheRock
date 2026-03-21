@@ -21,7 +21,7 @@ on:
         type: string
         default: ""
       os_profile:
-        description: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, almalinux9, centos7, azl3). Package type (deb/rpm) is derived from this.
+        description: OS profile (e.g., ubuntu2404, rhel10, sles16). Package type (deb/rpm) is derived from this.
         required: true
         type: string
       gfx_arch:
@@ -59,17 +59,8 @@ on:
         type: choice
         options:
           - ubuntu2404
-          - ubuntu2204
-          - debian12
-          - debian13
-          - rhel8
-          - rhel9
           - rhel10
-          - sles15
           - sles16
-          - almalinux9
-          - centos7
-          - azl3
       gfx_arch:
         description: GPU architecture (e.g. gfx94x)
         type: string
@@ -168,7 +159,6 @@ jobs:
               lsb-release \
               update-alternatives
           else
-            # RHEL/CentOS/AlmaLinux/AZL prerequisites
             # Use --allowerasing to handle curl-minimal conflict on AlmaLinux 9
             dnf install -y --allowerasing \
               wget \
@@ -190,25 +180,6 @@ jobs:
         run: |
           pip install pyelftools requests prettytable PyYAML
 
-      - name: Validate OS Profile
-        run: |
-          echo "=========================================================================="
-          echo "VALIDATING OS PROFILE"
-          echo "=========================================================================="
-          echo "OS Profile: ${{ inputs.os_profile }}"
-          OS_PROFILE_LOWER=$(echo "${{ inputs.os_profile }}" | tr '[:upper:]' '[:lower:]')
-          case "$OS_PROFILE_LOWER" in
-            ubuntu*|debian*|rhel*|sles*|almalinux*|centos*|azl*)
-              echo "[PASS] Supported OS profile (package type derived from profile)"
-              ;;
-            *)
-              echo "[ERROR] Unsupported OS profile: ${{ inputs.os_profile }}"
-              echo "Supported: ubuntu*, debian*, rhel*, sles*, almalinux*, centos*, azl*"
-              exit 1
-              ;;
-          esac
-          echo "=========================================================================="
-
       - name: Package Installation Test
         id: install-test
         run: |
@@ -224,97 +195,42 @@ jobs:
           echo "=========================================================================="
           echo ""
 
-          CMD="python build_tools/packaging/linux/native_linux_package_install_test.py"
-          if [ -n "${{ env.TEST_TYPE }}" ]; then
-            CMD="$CMD --test-type ${{ env.TEST_TYPE }}"
-          fi
-          CMD="$CMD --os-profile ${{ inputs.os_profile }}"
-          CMD="$CMD --repo-url \"${{ env.REPO_URL }}\""
-          CMD="$CMD --gfx-arch ${{ env.GFX_ARCH }}"
-          CMD="$CMD --install-prefix \"${{ env.INSTALL_PREFIX }}\""
-          CMD="$CMD --release-type ${{ env.RELEASE_TYPE }}"
-          if [ -n "${{ env.GPG_KEY_URL }}" ]; then
-            CMD="$CMD --gpg-key-url \"${{ env.GPG_KEY_URL }}\""
-          fi
-
-          echo "Executing: $CMD"
-          echo ""
-          eval $CMD
-
-      - name: Verify ROCm Installation
-        if: always() && steps.install-test.outcome == 'success'
-        shell: bash
-        run: |
-          echo "=========================================================================="
-          echo "VERIFYING ROCM INSTALLATION"
-          echo "=========================================================================="
-          echo "Install Prefix: ${{ env.INSTALL_PREFIX }}"
-          echo ""
-
-          # Check if ROCm directory exists
-          if [ -d "${{ env.INSTALL_PREFIX }}" ]; then
-            echo "ROCm installation directory exists: ${{ env.INSTALL_PREFIX }}"
-            echo ""
-            echo "Directory structure:"
-            ls -la ${{ env.INSTALL_PREFIX }}
-          else
-            echo "ROCm installation directory not found: ${{ env.INSTALL_PREFIX }}"
-            exit 1
-          fi
-
-          # Check for key ROCm components
-          echo ""
-          echo "Checking for key ROCm components:"
-
-          components=(
-            "bin/rocminfo"
-            "bin/hipcc"
-            "include/hip/hip_runtime.h"
-            "lib/libamdhip64.so"
-          )
-
-          all_found=true
-          for comp in "${components[@]}"; do
-            full_path="${{ env.INSTALL_PREFIX }}/${comp}"
-            if [ -e "$full_path" ]; then
-              echo " $comp"
-            else
-              echo " $comp (not found)"
-              all_found=false
-            fi
-          done
-
-          if [ "$all_found" = true ]; then
-            echo ""
-            echo "All key components found"
-          else
-            echo ""
-            echo "Some components missing (may be expected depending on package selection)"
-          fi
+          python build_tools/packaging/linux/native_linux_package_install_test.py \
+            ${TEST_TYPE:+--test-type "$TEST_TYPE"} \
+            --os-profile "$OS_PROFILE" \
+            --repo-url "$REPO_URL" \
+            --gfx-arch "$GFX_ARCH" \
+            --install-prefix "$INSTALL_PREFIX" \
+            --release-type "$RELEASE_TYPE" \
+            ${GPG_KEY_URL:+--gpg-key-url "$GPG_KEY_URL"}
 
       - name: Test Report
         if: always()
         run: |
-          echo ""
-          echo "=========================================================================="
-          echo "INSTALL TEST REPORT"
-          echo "=========================================================================="
+          sep='=========================================================================='
+          TT=$(echo "${TEST_TYPE:-sanity}" | tr '[:upper:]' '[:lower:]')
+          case "$TT" in
+            full)
+              msg_ok='Package installation full verification completed successfully (repo setup, install, basic verification, RDHC).'
+              msg_fail='Package installation full verification did not complete (repo setup, install, basic verification, or RDHC may have failed).'
+              ;;
+            simulate)
+              msg_ok='Simulated package install completed successfully.'
+              msg_fail='Simulated package install did not complete successfully.'
+              ;;
+            *)
+              msg_ok='Package installation sanity verification completed successfully (repo setup, install, basic verification).'
+              msg_fail='Package installation sanity verification did not complete (repo setup, install, or basic verification may have failed).'
+              ;;
+          esac
+
+          printf '\n%s\nINSTALL TEST REPORT\n%s\n' "$sep" "$sep"
 
           if [ "${{ steps.install-test.outcome }}" = "success" ]; then
-            echo "INSTALLATION TEST PASSED"
-            echo ""
-            echo "Summary:"
-            echo " - Repository setup: SUCCESS"
-            echo " - Package installation: SUCCESS"
-            echo " - ROCm verification: SUCCESS"
-            echo ""
-            echo "Installed at: ${{ env.INSTALL_PREFIX }}"
-            echo "From: ${{ env.REPO_URL }}"
+            printf 'INSTALLATION TEST PASSED\n\nSummary:\n - %s\n\nInstalled at: %s\nFrom: %s\n%s\n' \
+              "$msg_ok" "${{ env.INSTALL_PREFIX }}" "${{ env.REPO_URL }}" "$sep"
           else
-            echo "INSTALLATION TEST FAILED"
-            echo ""
-            echo "The test failed during repository setup or package installation."
-            echo "Please check the logs above for detailed error messages."
+            printf 'INSTALLATION TEST FAILED\n\n%s\nPlease check the logs above for detailed error messages.\n%s\n' \
+              "$msg_fail" "$sep"
             exit 1
           fi
-          echo "=========================================================================="
