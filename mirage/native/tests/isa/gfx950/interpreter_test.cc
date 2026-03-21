@@ -9944,6 +9944,7 @@ int main() {
   auto make_ds_b64_update_state = []() {
     WaveExecutionState state;
     state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x13572468u;
     auto write_lds_u64 = [](WaveExecutionState* wave,
                             std::uint64_t address,
                             std::uint64_t value) {
@@ -10039,11 +10040,47 @@ int main() {
     seed_active_lds(240u, DoubleBits(1.5));
     seed_active_lds(256u, DoubleBits(4.0));
     seed_active_lds(272u, DoubleBits(4.0));
+    state.vgprs[63][0] = 0x01020304u;
+    state.vgprs[63][1] = 0x11121314u;
+    state.vgprs[63][2] = 0x21222324u;
+    state.vgprs[63][3] = 0x31323334u;
+    write_lds_u64(&state, 0x600u, 0x1122334455667788ULL);
     return state;
   };
   auto validate_ds_b64_update_state = [&](const WaveExecutionState& state,
                                           const char* mode) {
-    if (!Expect(state.halted, "expected ds b64 update program to halt")) {
+    static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+    const auto expect_active_u64 = [&](std::uint16_t reg, std::uint64_t expected,
+                                       const char* label) {
+      for (std::size_t lane : kObservedLanes) {
+        if (!Expect(ComposeU64(state.vgprs[reg][lane],
+                               state.vgprs[static_cast<std::uint16_t>(reg + 1u)]
+                                          [lane]) == expected,
+                    label)) {
+          return false;
+        }
+      }
+      return true;
+    };
+    if (!Expect(state.halted, "expected ds b64 update program to halt") ||
+        !Expect(state.exec_mask == 0b1011ULL,
+                "expected ds b64 update to preserve exec") ||
+        !Expect(state.sgprs[0] == 0x13572468u,
+                "expected ds b64 update to preserve sgprs") ||
+        !Expect(state.vgprs[0][0] == 0u && state.vgprs[0][1] == 0x200u &&
+                    state.vgprs[0][3] == 0x400u,
+                "expected ds b64 update to preserve representative addresses") ||
+        !expect_active_u64(
+            1u, 5u,
+            "expected ds b64 update to preserve representative integer sources") ||
+        !expect_active_u64(
+            55u, DoubleBits(2.25),
+            "expected ds b64 update to preserve representative f64 sources") ||
+        !Expect(state.vgprs[63][0] == 0x01020304u &&
+                    state.vgprs[63][1] == 0x11121314u &&
+                    state.vgprs[63][2] == 0x21222324u &&
+                    state.vgprs[63][3] == 0x31323334u,
+                "expected ds b64 update to preserve unrelated vgprs")) {
       std::cerr << mode << '\n';
       return false;
     }
@@ -10087,6 +10124,11 @@ int main() {
           return false;
         }
       }
+    }
+    if (!Expect(read_lds_u64(0x600u) == 0x1122334455667788ULL,
+                "expected ds b64 update to preserve unrelated lds")) {
+      std::cerr << mode << '\n';
+      return false;
     }
     return true;
   };
