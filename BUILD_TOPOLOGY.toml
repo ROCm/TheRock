@@ -152,7 +152,6 @@ artifact_groups = [
     "core-runtime",
     "hip-runtime",
     "opencl-runtime",
-    "opencl-icd",
     "profiler-core",
     "rocrtst"
 ]
@@ -263,12 +262,6 @@ source_sets = ["rocm-systems"]  # clr is in rocm-systems
 
 [artifact_groups.opencl-runtime]
 description = "OpenCL runtime"
-type = "generic"
-artifact_group_deps = ["core-runtime", "compiler"]
-source_sets = ["rocm-systems"]  # clr is in rocm-systems
-
-[artifact_groups.opencl-icd]
-description = "OpenCL ICD"
 type = "generic"
 artifact_group_deps = ["core-runtime", "compiler"]
 source_sets = ["rocm-systems"]  # clr is in rocm-systems
@@ -529,7 +522,7 @@ feature_name = "OCL_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.core-ocl-icd]
-artifact_group = "opencl-icd"
+artifact_group = "opencl-runtime"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "amd-llvm"]
 feature_name = "OCL_ICD"
