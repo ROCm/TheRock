@@ -97,6 +97,20 @@
     "GLOBAL_ATOMIC_PK_ADD_F16",
     "GLOBAL_ATOMIC_PK_ADD_BF16",
     "GLOBAL_ATOMIC_ORDERED_ADD_B64",
+    "DS_NOP",
+    "DS_ADD_F32",
+    "DS_ADD_U32",
+    "DS_SUB_U32",
+    "DS_RSUB_U32",
+    "DS_INC_U32",
+    "DS_DEC_U32",
+    "DS_MIN_I32",
+    "DS_MIN_U32",
+    "DS_MAX_I32",
+    "DS_MAX_U32",
+    "DS_AND_B32",
+    "DS_OR_B32",
+    "DS_XOR_B32",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -555,6 +569,22 @@
       "GLOBAL_ATOMIC_PK_ADD_BF16",
       "GLOBAL_ATOMIC_ORDERED_ADD_B64"
     ],
+    "ENC_VDS": [
+      "DS_NOP",
+      "DS_ADD_F32",
+      "DS_ADD_U32",
+      "DS_SUB_U32",
+      "DS_RSUB_U32",
+      "DS_INC_U32",
+      "DS_DEC_U32",
+      "DS_MIN_I32",
+      "DS_MIN_U32",
+      "DS_MAX_I32",
+      "DS_MAX_U32",
+      "DS_AND_B32",
+      "DS_OR_B32",
+      "DS_XOR_B32"
+    ],
     "ENC_VOP1": [
       "V_NOP",
       "V_PIPEFLUSH",
@@ -927,7 +957,8 @@
     "Decodes the current 32-bit integer GLOBAL atomic slice from ENC_VGLOBAL on the same real path: GLOBAL_ATOMIC_SWAP_B32, GLOBAL_ATOMIC_CMPSWAP_B32, GLOBAL_ATOMIC_ADD_U32, GLOBAL_ATOMIC_SUB_U32, GLOBAL_ATOMIC_SUB_CLAMP_U32, GLOBAL_ATOMIC_MIN_I32, GLOBAL_ATOMIC_MIN_U32, GLOBAL_ATOMIC_MAX_I32, GLOBAL_ATOMIC_MAX_U32, GLOBAL_ATOMIC_AND_B32, GLOBAL_ATOMIC_OR_B32, GLOBAL_ATOMIC_XOR_B32, GLOBAL_ATOMIC_INC_U32, GLOBAL_ATOMIC_DEC_U32, and GLOBAL_ATOMIC_COND_SUB_U32, reusing the existing VADDR plus scalar SADDR plus inline offset form without broadening the local vector-memory route.",
     "Decodes the current 64-bit integer GLOBAL atomic slice from ENC_VGLOBAL on the same real path: GLOBAL_ATOMIC_SWAP_B64, GLOBAL_ATOMIC_CMPSWAP_B64, GLOBAL_ATOMIC_ADD_U64, GLOBAL_ATOMIC_SUB_U64, GLOBAL_ATOMIC_MIN_I64, GLOBAL_ATOMIC_MIN_U64, GLOBAL_ATOMIC_MAX_I64, GLOBAL_ATOMIC_MAX_U64, GLOBAL_ATOMIC_AND_B64, GLOBAL_ATOMIC_OR_B64, GLOBAL_ATOMIC_XOR_B64, GLOBAL_ATOMIC_INC_U64, and GLOBAL_ATOMIC_DEC_U64, using wide VGPR-pair destinations and wide vector data operands while keeping the local VADDR plus scalar SADDR plus inline offset route architecture-local.",
     "Decodes the current F32 GLOBAL atomic slice from ENC_VGLOBAL on the same real path: GLOBAL_ATOMIC_ADD_F32, GLOBAL_ATOMIC_MIN_NUM_F32, and GLOBAL_ATOMIC_MAX_NUM_F32, reusing the same 32-bit VADDR plus scalar SADDR plus inline offset form without widening the local vector-memory route.",
-    "Decodes the remaining packed-half and ordered-add GLOBAL atomic slice from ENC_VGLOBAL on the same real path: GLOBAL_ATOMIC_PK_ADD_F16, GLOBAL_ATOMIC_PK_ADD_BF16, and GLOBAL_ATOMIC_ORDERED_ADD_B64, reusing the existing 32-bit packed-data and wide 64-bit atomic forms without broadening the local vector-memory route."
+    "Decodes the remaining packed-half and ordered-add GLOBAL atomic slice from ENC_VGLOBAL on the same real path: GLOBAL_ATOMIC_PK_ADD_F16, GLOBAL_ATOMIC_PK_ADD_BF16, and GLOBAL_ATOMIC_ORDERED_ADD_B64, reusing the existing 32-bit packed-data and wide 64-bit atomic forms without broadening the local vector-memory route.",
+    "Decodes the first local ENC_VDS starter batch on the real path: DS_NOP plus DS_ADD_F32, DS_ADD_U32, DS_SUB_U32, DS_RSUB_U32, DS_INC_U32, DS_DEC_U32, DS_MIN_I32, DS_MIN_U32, DS_MAX_I32, DS_MAX_U32, DS_AND_B32, DS_OR_B32, and DS_XOR_B32, using the current one-address, non-return LDS form with VADDR, DATA0, and offset0 while rejecting GDS and offset1."
   ],
   "execution_capabilities": [
     "Halts waves with S_ENDPGM.",
@@ -1001,16 +1032,17 @@
     "Executes GLOBAL_ATOMIC_SWAP_B32, GLOBAL_ATOMIC_CMPSWAP_B32, GLOBAL_ATOMIC_ADD_U32, GLOBAL_ATOMIC_SUB_U32, GLOBAL_ATOMIC_SUB_CLAMP_U32, GLOBAL_ATOMIC_MIN_I32, GLOBAL_ATOMIC_MIN_U32, GLOBAL_ATOMIC_MAX_I32, GLOBAL_ATOMIC_MAX_U32, GLOBAL_ATOMIC_AND_B32, GLOBAL_ATOMIC_OR_B32, GLOBAL_ATOMIC_XOR_B32, GLOBAL_ATOMIC_INC_U32, GLOBAL_ATOMIC_DEC_U32, and GLOBAL_ATOMIC_COND_SUB_U32 lane-wise under exec_mask through ExecutionMemory, returning the old 32-bit memory value in the destination VGPR while committing the per-op atomic update back to memory.",
     "Executes GLOBAL_ATOMIC_SWAP_B64, GLOBAL_ATOMIC_CMPSWAP_B64, GLOBAL_ATOMIC_ADD_U64, GLOBAL_ATOMIC_SUB_U64, GLOBAL_ATOMIC_MIN_I64, GLOBAL_ATOMIC_MIN_U64, GLOBAL_ATOMIC_MAX_I64, GLOBAL_ATOMIC_MAX_U64, GLOBAL_ATOMIC_AND_B64, GLOBAL_ATOMIC_OR_B64, GLOBAL_ATOMIC_XOR_B64, GLOBAL_ATOMIC_INC_U64, and GLOBAL_ATOMIC_DEC_U64 lane-wise under exec_mask through ExecutionMemory, returning the old 64-bit memory value in the destination VGPR pair while committing the per-op atomic update back to memory.",
     "Executes GLOBAL_ATOMIC_ADD_F32, GLOBAL_ATOMIC_MIN_NUM_F32, and GLOBAL_ATOMIC_MAX_NUM_F32 lane-wise under exec_mask through ExecutionMemory, returning the old 32-bit memory value in the destination VGPR while committing the per-op F32 atomic update back to memory.",
-    "Executes GLOBAL_ATOMIC_PK_ADD_F16, GLOBAL_ATOMIC_PK_ADD_BF16, and GLOBAL_ATOMIC_ORDERED_ADD_B64 lane-wise under exec_mask through ExecutionMemory, returning the old packed-32-bit or wide-64-bit memory value in the destination VGPR while committing the per-op packed-half, packed-bfloat16, or ordered-add numeric update back to memory on the current single-wave phase-0 path."
+    "Executes GLOBAL_ATOMIC_PK_ADD_F16, GLOBAL_ATOMIC_PK_ADD_BF16, and GLOBAL_ATOMIC_ORDERED_ADD_B64 lane-wise under exec_mask through ExecutionMemory, returning the old packed-32-bit or wide-64-bit memory value in the destination VGPR while committing the per-op packed-half, packed-bfloat16, or ordered-add numeric update back to memory on the current single-wave phase-0 path.",
+    "Executes DS_NOP as a local no-op and executes DS_ADD_F32, DS_ADD_U32, DS_SUB_U32, DS_RSUB_U32, DS_INC_U32, DS_DEC_U32, DS_MIN_I32, DS_MIN_U32, DS_MAX_I32, DS_MAX_U32, DS_AND_B32, DS_OR_B32, and DS_XOR_B32 lane-wise under exec_mask through ExecutionMemory as the first architecture-local LDS update slice, using VADDR plus offset0 addressing while preserving inactive lanes and leaving the non-return forms without a VDST writeback."
   ],
   "still_scaffolded": [
     "Route-matched but non-executable phase-0 compute instructions still return selector-aware stub errors.",
     "ENC_SMEM is now fully bootstrapped through S_DCACHE_INV, S_PREFETCH_INST, S_PREFETCH_INST_PC_REL, S_PREFETCH_DATA, S_BUFFER_PREFETCH_DATA, S_PREFETCH_DATA_PC_REL, S_ATC_PROBE, S_ATC_PROBE_BUFFER, the full non-buffer S_LOAD_* slice, and the matching S_BUFFER_LOAD_* slice, leaving no remaining scalar-memory seed instructions scaffolded.",
     "ENC_VGLOBAL is now fully bootstrapped through GLOBAL_INV, GLOBAL_WB, GLOBAL_WBINV, the plain GLOBAL_LOAD_U8/I8/U16/I16/B32/B64/B96/B128 slice, GLOBAL_LOAD_ADDTID_B32, GLOBAL_LOAD_BLOCK, GLOBAL_LOAD_TR_B64/B128, the packed GLOBAL_LOAD_D16_U8/I8/B16 and GLOBAL_LOAD_D16_HI_U8/I8/B16 slice, the plain GLOBAL_STORE_B8/B16/B32/B64/B96/B128 slice, GLOBAL_STORE_ADDTID_B32, GLOBAL_STORE_BLOCK, GLOBAL_STORE_D16_HI_B8/B16, the 32-bit integer atomic slice GLOBAL_ATOMIC_SWAP_B32, GLOBAL_ATOMIC_CMPSWAP_B32, GLOBAL_ATOMIC_ADD/SUB/SUB_CLAMP_U32, GLOBAL_ATOMIC_MIN/MAX_I32/U32, GLOBAL_ATOMIC_AND/OR/XOR_B32, GLOBAL_ATOMIC_INC_U32, GLOBAL_ATOMIC_DEC_U32, and GLOBAL_ATOMIC_COND_SUB_U32, the 64-bit integer atomic slice GLOBAL_ATOMIC_SWAP_B64, GLOBAL_ATOMIC_CMPSWAP_B64, GLOBAL_ATOMIC_ADD/SUB_U64, GLOBAL_ATOMIC_MIN/MAX_I64/U64, GLOBAL_ATOMIC_AND/OR/XOR_B64, GLOBAL_ATOMIC_INC_U64, and GLOBAL_ATOMIC_DEC_U64, the F32 atomic slice GLOBAL_ATOMIC_ADD_F32 and GLOBAL_ATOMIC_MIN/MAX_NUM_F32, the packed-half atomic pair GLOBAL_ATOMIC_PK_ADD_F16/GLOBAL_ATOMIC_PK_ADD_BF16, and GLOBAL_ATOMIC_ORDERED_ADD_B64, leaving no remaining vector-global seed instructions scaffolded.",
+    "ENC_VDS now has its first architecture-local executable footholds through DS_NOP and the one-address non-return 32-bit LDS update slice DS_ADD_F32, DS_ADD_U32, DS_SUB_U32, DS_RSUB_U32, DS_INC_U32, DS_DEC_U32, DS_MIN_I32, DS_MIN_U32, DS_MAX_I32, DS_MAX_U32, DS_AND_B32, DS_OR_B32, and DS_XOR_B32.",
     "ENC_VOP3",
-    "ENC_VDS",
     "The remaining ENC_VOPC surface outside this seed is now primarily packed and other wider forms not yet on the current local path.",
     "The current wave32-local ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, and ENC_VGLOBAL seed surface is saturated: all currently seeded instruction/encoding pairs are executable on the local path.",
-    "The next coherent extension points now move onward into ENC_VDS and ENC_VOP3, rather than more narrow VOP1/VOP2/VOPC/VGLOBAL seed churn."
+    "The next coherent extension points now move further into ENC_VDS and ENC_VOP3, rather than more narrow VOP1/VOP2/VOPC/VGLOBAL seed churn."
   ]
 }

@@ -125,6 +125,28 @@ std::array<std::uint32_t, 2> MakeSmemBufferLoad(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeDs(std::uint32_t op,
+                                    std::uint32_t vdst,
+                                    std::uint32_t addr,
+                                    std::uint32_t data0,
+                                    std::uint32_t data1,
+                                    std::uint32_t offset0,
+                                    std::uint32_t offset1 = 0,
+                                    bool gds = false) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(offset0 & 0xffu) << 0;
+  word |= static_cast<std::uint64_t>(offset1 & 0xffu) << 8;
+  word |= static_cast<std::uint64_t>(gds ? 1u : 0u) << 16;
+  word |= static_cast<std::uint64_t>(op & 0xffu) << 17;
+  word |= static_cast<std::uint64_t>(0x36u) << 26;
+  word |= static_cast<std::uint64_t>(addr & 0xffu) << 32;
+  word |= static_cast<std::uint64_t>(data0 & 0xffu) << 40;
+  word |= static_cast<std::uint64_t>(data1 & 0xffu) << 48;
+  word |= static_cast<std::uint64_t>(vdst & 0xffu) << 56;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 std::array<std::uint32_t, 2> MakeGlobal(std::uint32_t op,
                                         std::uint32_t vdst,
                                         std::uint32_t addr,
@@ -183,7 +205,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 418u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 432u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -321,6 +343,34 @@ int main() {
       !Expect(
           decoder.SupportsPhase0ExecutableOpcode("GLOBAL_ATOMIC_ORDERED_ADD_B64"),
           "expected GLOBAL_ATOMIC_ORDERED_ADD_B64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_NOP"),
+              "expected DS_NOP executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_ADD_F32"),
+              "expected DS_ADD_F32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_ADD_U32"),
+              "expected DS_ADD_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_SUB_U32"),
+              "expected DS_SUB_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_RSUB_U32"),
+              "expected DS_RSUB_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_INC_U32"),
+              "expected DS_INC_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_DEC_U32"),
+              "expected DS_DEC_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_MIN_I32"),
+              "expected DS_MIN_I32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_MIN_U32"),
+              "expected DS_MIN_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_MAX_I32"),
+              "expected DS_MAX_I32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_MAX_U32"),
+              "expected DS_MAX_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_AND_B32"),
+              "expected DS_AND_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_OR_B32"),
+              "expected DS_OR_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_XOR_B32"),
+              "expected DS_XOR_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B32"),
               "expected S_LOAD_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B64"),
@@ -1241,6 +1291,46 @@ int main() {
     return 1;
   }
 
+  const auto ds_nop_words = MakeDs(20u, 0u, 0u, 0u, 0u, 0u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(ds_nop_words.data(),
+                                                 ds_nop_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected DS_NOP decode success") ||
+      !Expect(words_consumed == 2u, "expected DS_NOP two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "DS_NOP",
+              "expected DS_NOP opcode") ||
+      !Expect(decoded_instruction.operand_count == 0u,
+              "expected DS_NOP nullary decode")) {
+    return 1;
+  }
+
+  const auto ds_add_u32_words = MakeDs(0u, 99u, 60u, 61u, 62u, 0x56u, 0x34u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(ds_add_u32_words.data(),
+                                                 ds_add_u32_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected DS_ADD_U32 decode success") ||
+      !Expect(words_consumed == 2u, "expected DS_ADD_U32 two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "DS_ADD_U32",
+              "expected DS_ADD_U32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 4u,
+              "expected DS_ADD_U32 four-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 60u,
+              "expected DS_ADD_U32 address VGPR") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[1].index == 61u,
+              "expected DS_ADD_U32 data VGPR") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[2].imm32 == 0x56u,
+              "expected DS_ADD_U32 offset0") ||
+      !Expect(decoded_instruction.operands[3].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[3].imm32 == 0x34u,
+              "expected DS_ADD_U32 offset1")) {
+    return 1;
+  }
+
   const auto load_b32_words = MakeSmem(0u, 18u, 4u, true, 12u);
   if (!Expect(decoder.DecodeInstruction(
                   std::span<const std::uint32_t>(load_b32_words.data(),
@@ -1542,7 +1632,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 418u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 432u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -1678,6 +1768,34 @@ int main() {
               "expected interpreter support for GLOBAL_ATOMIC_MAX_NUM_F32") ||
       !Expect(interpreter.Supports("GLOBAL_ATOMIC_ORDERED_ADD_B64"),
               "expected interpreter support for GLOBAL_ATOMIC_ORDERED_ADD_B64") ||
+      !Expect(interpreter.Supports("DS_NOP"),
+              "expected interpreter support for DS_NOP") ||
+      !Expect(interpreter.Supports("DS_ADD_F32"),
+              "expected interpreter support for DS_ADD_F32") ||
+      !Expect(interpreter.Supports("DS_ADD_U32"),
+              "expected interpreter support for DS_ADD_U32") ||
+      !Expect(interpreter.Supports("DS_SUB_U32"),
+              "expected interpreter support for DS_SUB_U32") ||
+      !Expect(interpreter.Supports("DS_RSUB_U32"),
+              "expected interpreter support for DS_RSUB_U32") ||
+      !Expect(interpreter.Supports("DS_INC_U32"),
+              "expected interpreter support for DS_INC_U32") ||
+      !Expect(interpreter.Supports("DS_DEC_U32"),
+              "expected interpreter support for DS_DEC_U32") ||
+      !Expect(interpreter.Supports("DS_MIN_I32"),
+              "expected interpreter support for DS_MIN_I32") ||
+      !Expect(interpreter.Supports("DS_MIN_U32"),
+              "expected interpreter support for DS_MIN_U32") ||
+      !Expect(interpreter.Supports("DS_MAX_I32"),
+              "expected interpreter support for DS_MAX_I32") ||
+      !Expect(interpreter.Supports("DS_MAX_U32"),
+              "expected interpreter support for DS_MAX_U32") ||
+      !Expect(interpreter.Supports("DS_AND_B32"),
+              "expected interpreter support for DS_AND_B32") ||
+      !Expect(interpreter.Supports("DS_OR_B32"),
+              "expected interpreter support for DS_OR_B32") ||
+      !Expect(interpreter.Supports("DS_XOR_B32"),
+              "expected interpreter support for DS_XOR_B32") ||
       !Expect(interpreter.Supports("S_LOAD_B32"),
               "expected interpreter support for S_LOAD_B32") ||
       !Expect(interpreter.Supports("S_LOAD_B64"),

@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 418> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 432> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -113,6 +113,20 @@ constexpr std::array<std::string_view, 418> kPhase0ExecutableOpcodes{{
     "GLOBAL_ATOMIC_MIN_NUM_F32",
     "GLOBAL_ATOMIC_MAX_NUM_F32",
     "GLOBAL_ATOMIC_ORDERED_ADD_B64",
+    "DS_NOP",
+    "DS_ADD_F32",
+    "DS_ADD_U32",
+    "DS_SUB_U32",
+    "DS_RSUB_U32",
+    "DS_INC_U32",
+    "DS_DEC_U32",
+    "DS_MIN_I32",
+    "DS_MIN_U32",
+    "DS_MAX_I32",
+    "DS_MAX_U32",
+    "DS_AND_B32",
+    "DS_OR_B32",
+    "DS_XOR_B32",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1074,6 +1088,69 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       return false;
     }
     *instruction = DecodedInstruction::Nullary(instruction_name);
+    *words_consumed = 2;
+  } else if (instruction_name == "DS_NOP") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = "DS_NOP requires 2 dwords";
+      }
+      return false;
+    }
+    *instruction = DecodedInstruction::Nullary(instruction_name);
+    *words_consumed = 2;
+  } else if (instruction_name == "DS_ADD_F32" ||
+             instruction_name == "DS_ADD_U32" ||
+             instruction_name == "DS_SUB_U32" ||
+             instruction_name == "DS_RSUB_U32" ||
+             instruction_name == "DS_INC_U32" ||
+             instruction_name == "DS_DEC_U32" ||
+             instruction_name == "DS_MIN_I32" ||
+             instruction_name == "DS_MIN_U32" ||
+             instruction_name == "DS_MAX_I32" ||
+             instruction_name == "DS_MAX_U32" ||
+             instruction_name == "DS_AND_B32" ||
+             instruction_name == "DS_OR_B32" ||
+             instruction_name == "DS_XOR_B32") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+    if (ExtractBits(word, 16, 1) != 0u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) +
+                         " GDS mode is out of scope for phase-0";
+      }
+      return false;
+    }
+
+    InstructionOperand vaddr;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 0, 8), &vaddr,
+                                    error_message)) {
+      return false;
+    }
+
+    InstructionOperand vdata0;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 8, 8), &vdata0,
+                                    error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::FourOperand(
+        instruction_name,
+        DescribeSourceOperand(vaddr, OperandRole::kSource0,
+                              OperandSlotKind::kSource0),
+        DescribeSourceOperand(vdata0, OperandRole::kSource1,
+                              OperandSlotKind::kSource1),
+        InstructionOperand::Imm32(ExtractBits(word, 0, 8))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource2,
+                                                   OperandSlotKind::kSource2,
+                                                   8u)),
+        InstructionOperand::Imm32(ExtractBits(word, 8, 8))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kUnknown,
+                                                   OperandSlotKind::kUnknown,
+                                                   8u)));
     *words_consumed = 2;
   } else if (instruction_name == "GLOBAL_INV" ||
              instruction_name == "GLOBAL_WB" ||
