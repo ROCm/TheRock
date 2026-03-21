@@ -42,6 +42,7 @@
   - route-wide exact route-info and RDNA4 provenance parity validation across the current routed matrix and non-matrix seed sets
   - route-wide exact caller-supplied route-info metadata preservation with instruction-derived structural parity across the current routed seed set
   - exact route-manifest parity validation across the current routed family set
+  - exact entrypoint-manifest vs route-manifest metadata/count parity validation across the current routed family set
   - route-wide exact top-level flag composition validation across the current routed matrix and non-matrix seed sets
   - route-wide exact route-info-based vs name-based decode parity validation across the current routed seed set
   - route-wide exact route-keyed entrypoint vs generic decode parity validation across the current routed seed set
@@ -62,6 +63,7 @@
   - route-wide exact `DecodeStubInstruction(route_info)` vs `DecodeStubInstruction(instruction_name)` parity checks across the current routed seed set
   - route-wide exact caller-supplied route-info metadata preservation plus instruction-derived structural parity checks across the current routed seed set
   - route-wide exact route-keyed entrypoint decode vs `DecodeStubInstruction(instruction_name)` parity checks across the current routed seed set
+  - exact cross-surface parity checks now pin `GetStubDecoderEntrypointManifests()` against `GetStubDecoderRouteManifests()` route-by-route, and pin entrypoint instruction counts against both routed instruction lists and routed route-info totals
   - route-wide exact decoded route / entrypoint metadata and routed-instruction-list parity checks across the current routed seed set
   - route-wide exact opcode-shape / execution-domain / operand-layout helper-name parity plus routed role/slot/value-class helper coverage checks across the current routed seed set
   - exact `GetStubDecoderEntrypointManifests()` / `GetStubDecoderRouteManifests()` route-priority ordering plus routed-instruction-list sequence parity checks across `kVop3p`, `kMimgTensor`, `kVop1`, and `kVop3Sdst`

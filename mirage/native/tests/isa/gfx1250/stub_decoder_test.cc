@@ -1076,6 +1076,39 @@ bool RouteManifestLookupMatchesSequenceEntries() {
   return true;
 }
 
+bool EntrypointAndRouteManifestSequencesMatchExactly() {
+  const auto entrypoint_manifests = GetStubDecoderEntrypointManifests();
+  const auto route_manifests = GetStubDecoderRouteManifests();
+  if (entrypoint_manifests.size() != route_manifests.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < entrypoint_manifests.size(); ++i) {
+    const StubDecoderEntrypointManifest& entrypoint_manifest =
+        entrypoint_manifests[i];
+    const StubDecoderRouteManifest& route_manifest = route_manifests[i];
+    if (entrypoint_manifest.route != route_manifest.route ||
+        entrypoint_manifest.route_name != route_manifest.route_name ||
+        entrypoint_manifest.route_priority != route_manifest.route_priority ||
+        entrypoint_manifest.instruction_count !=
+            route_manifest.instruction_count) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool EntrypointManifestCountsMatchRoutedSurfaces() {
+  for (const StubDecoderEntrypointManifest& manifest :
+       GetStubDecoderEntrypointManifests()) {
+    if (manifest.instruction_count !=
+            GetStubDecoderRouteInstructions(manifest.route).size() ||
+        manifest.instruction_count != CountRouteInfosForRoute(manifest.route)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool RoutedInstructionNamesFormUniqueBijection() {
   const auto route_infos = GetStubDecoderRouteInfos();
   for (std::size_t i = 0; i < route_infos.size(); ++i) {
@@ -7203,6 +7236,14 @@ int main() {
   }
   if (!Expect(EntrypointManifestLookupMatchesSequenceEntries(),
               "expected entrypoint manifest lookup to return sequence-stable entries")) {
+    return 1;
+  }
+  if (!Expect(EntrypointAndRouteManifestSequencesMatchExactly(),
+              "expected entrypoint and route manifest sequences to match exactly by route metadata and count")) {
+    return 1;
+  }
+  if (!Expect(EntrypointManifestCountsMatchRoutedSurfaces(),
+              "expected entrypoint manifest counts to match routed instruction lists and route infos per route")) {
     return 1;
   }
 
