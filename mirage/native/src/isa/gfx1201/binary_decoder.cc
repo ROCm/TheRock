@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 445> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 453> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -140,6 +140,14 @@ constexpr std::array<std::string_view, 445> kPhase0ExecutableOpcodes{{
     "DS_OR_B32",
     "DS_XOR_RTN_B32",
     "DS_XOR_B32",
+    "DS_LOAD_B32",
+    "DS_LOAD_B64",
+    "DS_LOAD_B96",
+    "DS_LOAD_B128",
+    "DS_LOAD_I8",
+    "DS_LOAD_U8",
+    "DS_LOAD_I16",
+    "DS_LOAD_U16",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1213,6 +1221,65 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
                                                      OperandSlotKind::kUnknown,
                                                      8u)));
     }
+    *words_consumed = 2;
+  } else if (instruction_name == "DS_LOAD_B32" ||
+             instruction_name == "DS_LOAD_B64" ||
+             instruction_name == "DS_LOAD_B96" ||
+             instruction_name == "DS_LOAD_B128" ||
+             instruction_name == "DS_LOAD_I8" ||
+             instruction_name == "DS_LOAD_U8" ||
+             instruction_name == "DS_LOAD_I16" ||
+             instruction_name == "DS_LOAD_U16") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+    if (ExtractBits(word, 16, 1) != 0u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) +
+                         " GDS mode is out of scope for phase-0";
+      }
+      return false;
+    }
+    if (ExtractBits(word, 8, 8) != 0u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) +
+                         " requires offset1 == 0 on the phase-0 path";
+      }
+      return false;
+    }
+
+    InstructionOperand vdst;
+    if (!DecodeVectorDestination(ExtractBits(words[1], 24, 8), &vdst,
+                                 error_message)) {
+      return false;
+    }
+
+    InstructionOperand vaddr;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 0, 8), &vaddr,
+                                    error_message)) {
+      return false;
+    }
+
+    InstructionOperand described_vdst = DescribeVectorDestinationOperand(vdst);
+    if (instruction_name == "DS_LOAD_B64") {
+      described_vdst = DescribeWideVectorDestinationOperand(vdst);
+    } else if (instruction_name == "DS_LOAD_B96") {
+      described_vdst = DescribeWideVectorDestinationOperand(vdst, 3u);
+    } else if (instruction_name == "DS_LOAD_B128") {
+      described_vdst = DescribeWideVectorDestinationOperand(vdst, 4u);
+    }
+
+    *instruction = DecodedInstruction::ThreeOperand(
+        instruction_name, described_vdst,
+        DescribeSourceOperand(vaddr, OperandRole::kSource0,
+                              OperandSlotKind::kSource0),
+        InstructionOperand::Imm32(ExtractBits(word, 0, 8))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource1,
+                                                   OperandSlotKind::kSource1,
+                                                   8u)));
     *words_consumed = 2;
   } else if (instruction_name == "GLOBAL_INV" ||
              instruction_name == "GLOBAL_WB" ||

@@ -55,7 +55,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 445> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 453> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -178,6 +178,14 @@ constexpr std::array<std::string_view, 445> kExecutableSeedOpcodes{{
     "DS_OR_B32",
     "DS_XOR_RTN_B32",
     "DS_XOR_B32",
+    "DS_LOAD_B32",
+    "DS_LOAD_B64",
+    "DS_LOAD_B96",
+    "DS_LOAD_B128",
+    "DS_LOAD_I8",
+    "DS_LOAD_U8",
+    "DS_LOAD_I16",
+    "DS_LOAD_U16",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1360,6 +1368,38 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "DS_XOR_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsXorB32;
+    return true;
+  }
+  if (opcode == "DS_LOAD_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsLoadB32;
+    return true;
+  }
+  if (opcode == "DS_LOAD_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsLoadB64;
+    return true;
+  }
+  if (opcode == "DS_LOAD_B96") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsLoadB96;
+    return true;
+  }
+  if (opcode == "DS_LOAD_B128") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsLoadB128;
+    return true;
+  }
+  if (opcode == "DS_LOAD_I8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsLoadI8;
+    return true;
+  }
+  if (opcode == "DS_LOAD_U8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsLoadU8;
+    return true;
+  }
+  if (opcode == "DS_LOAD_I16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsLoadI16;
+    return true;
+  }
+  if (opcode == "DS_LOAD_U16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsLoadU16;
     return true;
   }
   if (opcode == "S_LOAD_B32") {
@@ -3500,6 +3540,13 @@ bool IsDsAtomic32Opcode(std::string_view opcode) {
          opcode == "DS_XOR_B32" || IsDsAtomic32ReturnOpcode(opcode);
 }
 
+bool IsDsLoadOpcode(std::string_view opcode) {
+  return opcode == "DS_LOAD_B32" || opcode == "DS_LOAD_B64" ||
+         opcode == "DS_LOAD_B96" || opcode == "DS_LOAD_B128" ||
+         opcode == "DS_LOAD_I8" || opcode == "DS_LOAD_U8" ||
+         opcode == "DS_LOAD_I16" || opcode == "DS_LOAD_U16";
+}
+
 std::size_t DsAtomic32AddressOperandIndex(std::string_view opcode) {
   return IsDsAtomic32ReturnOpcode(opcode) ? 1u : 0u;
 }
@@ -3565,6 +3612,45 @@ bool ComputeDsAddress(const DecodedInstruction& instruction,
       *error_message = std::string(instruction.opcode) +
                        " requires offset1 == 0 on the phase-0 path";
     }
+    return false;
+  }
+
+  *address = static_cast<std::uint64_t>(vaddr) +
+             static_cast<std::uint64_t>(offset0);
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool ComputeDsLoadAddress(const DecodedInstruction& instruction,
+                         const WaveExecutionState& state,
+                         std::size_t lane_index,
+                         std::uint64_t* address,
+                         std::string* error_message) {
+  if (address == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "DS load address output must not be null";
+    }
+    return false;
+  }
+  if (instruction.operands[1].kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = std::string(instruction.opcode) +
+                       " expected VGPR address source";
+    }
+    return false;
+  }
+
+  const std::uint32_t vaddr =
+      ReadVectorOperand(instruction.operands[1], state, lane_index,
+                        error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+  const std::uint32_t offset0 =
+      ReadScalarOperand(instruction.operands[2], state, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
     return false;
   }
 
@@ -3663,6 +3749,93 @@ bool ExecuteDsAtomic32AtAddress(const DecodedInstruction& instruction,
     error_message->clear();
   }
   return true;
+}
+
+bool ExecuteDsLoadAtAddress(const DecodedInstruction& instruction,
+                           std::uint64_t address,
+                           std::size_t lane_index,
+                           WaveExecutionState* state,
+                           ExecutionMemory* memory,
+                           std::string* error_message) {
+  const std::string_view opcode = instruction.opcode;
+
+  if (opcode == "DS_LOAD_B32") {
+    std::uint32_t value = 0;
+    if (!memory->LoadU32(address, &value)) {
+      if (error_message != nullptr) {
+        *error_message = std::string(opcode) + " memory read failed";
+      }
+      return false;
+    }
+    return WriteVectorOperand(instruction.operands[0], lane_index, value, state,
+                              error_message);
+  }
+
+  if (opcode == "DS_LOAD_B64") {
+    std::uint32_t low = 0;
+    std::uint32_t high = 0;
+    if (!memory->LoadU32(address, &low) ||
+        !memory->LoadU32(address + 4u, &high)) {
+      if (error_message != nullptr) {
+        *error_message = std::string(opcode) + " memory read failed";
+      }
+      return false;
+    }
+    const std::uint64_t value = static_cast<std::uint64_t>(low) |
+                                (static_cast<std::uint64_t>(high) << 32);
+    return WriteWideVectorOperand(instruction.operands[0], lane_index, value,
+                                  state, error_message);
+  }
+
+  if (opcode == "DS_LOAD_B96" || opcode == "DS_LOAD_B128") {
+    const std::size_t word_count = opcode == "DS_LOAD_B96" ? 3u : 4u;
+    std::array<std::uint32_t, 4> values{};
+    for (std::size_t i = 0; i < word_count; ++i) {
+      if (!memory->LoadU32(address + static_cast<std::uint64_t>(i * 4u),
+                           &values[i])) {
+        if (error_message != nullptr) {
+          *error_message = std::string(opcode) + " memory read failed";
+        }
+        return false;
+      }
+    }
+    return WriteVectorOperandSequence(
+        instruction.operands[0], lane_index,
+        std::span<const std::uint32_t>(values.data(), word_count), state,
+        error_message);
+  }
+
+  if (opcode == "DS_LOAD_I8" || opcode == "DS_LOAD_U8") {
+    std::uint8_t value = 0;
+    if (!memory->LoadU8(address, &value)) {
+      if (error_message != nullptr) {
+        *error_message = std::string(opcode) + " memory read failed";
+      }
+      return false;
+    }
+    const std::uint32_t extended =
+        opcode == "DS_LOAD_I8"
+            ? static_cast<std::uint32_t>(
+                  static_cast<std::int32_t>(static_cast<std::int8_t>(value)))
+            : static_cast<std::uint32_t>(value);
+    return WriteVectorOperand(instruction.operands[0], lane_index, extended,
+                              state, error_message);
+  }
+
+  std::uint16_t value = 0;
+  if (!memory->LoadU16(address, &value)) {
+    if (error_message != nullptr) {
+      *error_message = std::string(opcode) + " memory read failed";
+    }
+    return false;
+  }
+  const std::uint32_t extended =
+      opcode == "DS_LOAD_I16"
+          ? static_cast<std::uint32_t>(
+                static_cast<std::int32_t>(static_cast<std::int16_t>(value)))
+          : static_cast<std::uint32_t>(value);
+  return WriteVectorOperand(instruction.operands[0], lane_index, extended,
+                            state, error_message);
 }
 
 bool ExecuteVectorGlobalLoadBlockAtAddress(const DecodedInstruction& instruction,
@@ -5814,6 +5987,37 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     }
     return true;
   }
+  if (IsDsLoadOpcode(instruction.opcode)) {
+    if (!ValidateOperandCount(instruction, 3u, error_message)) {
+      return false;
+    }
+    if (memory == nullptr) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " requires execution memory";
+      }
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < kGfx1201LaneCount;
+         ++lane_index) {
+      if ((MaskToGfx1201Wave32(state->exec_mask) & (1ull << lane_index)) == 0u) {
+        continue;
+      }
+      std::uint64_t address = 0;
+      if (!ComputeDsLoadAddress(instruction, *state, lane_index, &address,
+                                error_message)) {
+        return false;
+      }
+      if (!ExecuteDsLoadAtAddress(instruction, address, lane_index, state,
+                                  memory, error_message)) {
+        return false;
+      }
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
   if (instruction.opcode == "GLOBAL_INV" || instruction.opcode == "GLOBAL_WB" ||
       instruction.opcode == "GLOBAL_WBINV") {
     return ValidateOperandCount(instruction, 0, error_message);
@@ -7196,6 +7400,14 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kDsOrB32:
     case Gfx1201CompiledOpcode::kDsXorRtnB32:
     case Gfx1201CompiledOpcode::kDsXorB32:
+    case Gfx1201CompiledOpcode::kDsLoadB32:
+    case Gfx1201CompiledOpcode::kDsLoadB64:
+    case Gfx1201CompiledOpcode::kDsLoadB96:
+    case Gfx1201CompiledOpcode::kDsLoadB128:
+    case Gfx1201CompiledOpcode::kDsLoadI8:
+    case Gfx1201CompiledOpcode::kDsLoadU8:
+    case Gfx1201CompiledOpcode::kDsLoadI16:
+    case Gfx1201CompiledOpcode::kDsLoadU16:
     case Gfx1201CompiledOpcode::kSLoadB32:
     case Gfx1201CompiledOpcode::kSLoadB64:
     case Gfx1201CompiledOpcode::kSLoadB96:
