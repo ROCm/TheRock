@@ -258,6 +258,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
   ##############################################################################
   # rocprofiler-systems
   ##############################################################################
+  # Examples (e.g. jacobi-hip) use find_library(roctx64). therock_explicit_finders
+  # only searches CMAKE_LIBRARY_PATH from RUNTIME_DEPS; libroctx64 is staged under
+  # roctracer, so roctracer must be a dependency here.
   # rocprofiler-systems requires GCC, but sanitizer builds use Clang.
   # Skip enabling rocprofiler-systems when building with sanitizers.
   if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
@@ -326,6 +329,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
+        roctracer
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
         ${_openmpi_optional_dep}
@@ -349,6 +353,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       SUBPROJECT_DEPS
         amdsmi
         rocprofiler-sdk
+        roctracer
         rocprofiler-systems
       )
   endif(THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
