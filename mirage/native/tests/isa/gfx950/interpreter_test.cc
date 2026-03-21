@@ -8680,6 +8680,7 @@ int main() {
     WaveExecutionState state;
     state.exec_mask = (1ULL << 0) | (1ULL << 1) | (1ULL << 3) |
                       (1ULL << 32) | (1ULL << 33);
+    state.sgprs[0] = 0x13572468u;
     state.vgprs[0][0] = 11u;
     state.vgprs[0][1] = 22u;
     state.vgprs[0][2] = 33u;
@@ -8687,11 +8688,34 @@ int main() {
     state.vgprs[0][32] = 320u;
     state.vgprs[0][33] = 330u;
     state.vgprs[1][2] = 0xdeadbeefu;
+    state.vgprs[7][0] = 0x01020304u;
+    state.vgprs[7][1] = 0x11121314u;
+    state.vgprs[7][2] = 0x21222324u;
+    state.vgprs[7][3] = 0x31323334u;
+    state.vgprs[7][32] = 0x20212223u;
+    state.vgprs[7][33] = 0x30313233u;
     return state;
   };
   auto validate_ds_swizzle_state = [&](const WaveExecutionState& state,
                                        const char* mode) {
     if (!Expect(state.halted, "expected ds swizzle program to halt") ||
+        !Expect(state.exec_mask ==
+                    ((1ULL << 0) | (1ULL << 1) | (1ULL << 3) | (1ULL << 32) |
+                     (1ULL << 33)),
+                "expected ds swizzle to preserve exec") ||
+        !Expect(state.sgprs[0] == 0x13572468u,
+                "expected ds swizzle to preserve sgprs") ||
+        !Expect(state.vgprs[0][0] == 11u && state.vgprs[0][1] == 22u &&
+                    state.vgprs[0][2] == 33u && state.vgprs[0][3] == 44u &&
+                    state.vgprs[0][32] == 320u && state.vgprs[0][33] == 330u,
+                "expected ds swizzle to preserve source vgprs") ||
+        !Expect(state.vgprs[7][0] == 0x01020304u &&
+                    state.vgprs[7][1] == 0x11121314u &&
+                    state.vgprs[7][2] == 0x21222324u &&
+                    state.vgprs[7][3] == 0x31323334u &&
+                    state.vgprs[7][32] == 0x20212223u &&
+                    state.vgprs[7][33] == 0x30313233u,
+                "expected ds swizzle to preserve unrelated vgprs") ||
         !Expect(state.vgprs[1][0] == 22u,
                 "expected ds swizzle lane 0 result") ||
         !Expect(state.vgprs[1][1] == 11u,
@@ -8753,6 +8777,7 @@ int main() {
   auto make_ds_permute_state = []() {
     WaveExecutionState state;
     state.exec_mask = 0x0fULL;
+    state.sgprs[0] = 0x24681357u;
     state.vgprs[0][0] = 8u;
     state.vgprs[0][1] = 0u;
     state.vgprs[0][2] = 12u;
@@ -8771,11 +8796,35 @@ int main() {
     state.vgprs[5][3] = 1004u;
     state.vgprs[2][4] = 0xdeadbeefu;
     state.vgprs[6][4] = 0xcafebabeu;
+    state.vgprs[7][0] = 0x01020304u;
+    state.vgprs[7][1] = 0x11121314u;
+    state.vgprs[7][2] = 0x21222324u;
+    state.vgprs[7][3] = 0x31323334u;
     return state;
   };
   auto validate_ds_permute_state = [&](const WaveExecutionState& state,
                                        const char* mode) {
     if (!Expect(state.halted, "expected ds permute program to halt") ||
+        !Expect(state.exec_mask == 0x0fULL,
+                "expected ds permute to preserve exec") ||
+        !Expect(state.sgprs[0] == 0x24681357u,
+                "expected ds permute to preserve sgprs") ||
+        !Expect(state.vgprs[0][0] == 8u && state.vgprs[0][1] == 0u &&
+                    state.vgprs[0][2] == 12u && state.vgprs[0][3] == 4u &&
+                    state.vgprs[1][0] == 101u && state.vgprs[1][1] == 202u &&
+                    state.vgprs[1][2] == 303u && state.vgprs[1][3] == 404u &&
+                    state.vgprs[4][0] == 4u && state.vgprs[4][1] == 0u &&
+                    state.vgprs[4][2] == 12u && state.vgprs[4][3] == 0u &&
+                    state.vgprs[5][0] == 1001u &&
+                    state.vgprs[5][1] == 1002u &&
+                    state.vgprs[5][2] == 1003u &&
+                    state.vgprs[5][3] == 1004u,
+                "expected ds permute to preserve source vgprs") ||
+        !Expect(state.vgprs[7][0] == 0x01020304u &&
+                    state.vgprs[7][1] == 0x11121314u &&
+                    state.vgprs[7][2] == 0x21222324u &&
+                    state.vgprs[7][3] == 0x31323334u,
+                "expected ds permute to preserve unrelated vgprs") ||
         !Expect(state.vgprs[2][0] == 303u,
                 "expected ds_bpermute lane 0 result") ||
         !Expect(state.vgprs[2][1] == 101u,
