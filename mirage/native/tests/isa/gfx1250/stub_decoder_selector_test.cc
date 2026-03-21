@@ -7,6 +7,7 @@
 
 namespace {
 
+using mirage::sim::isa::gfx1250::DecodeSeedHint;
 using mirage::sim::isa::gfx1250::DecoderSeedInfo;
 using mirage::sim::isa::gfx1250::GetDecoderSeedInfos;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteInfo;
@@ -37,77 +38,37 @@ bool Contains(StubDecoderRoute route, std::string_view instruction_name) {
   return false;
 }
 
-bool ListedInAnyRoute(std::string_view instruction_name) {
-  for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
-    if (Contains(manifest.route, instruction_name)) {
-      return true;
-    }
+StubDecoderRoute ExpectedRouteForDecodeHint(DecodeSeedHint decode_hint) {
+  switch (decode_hint) {
+    case DecodeSeedHint::kVop3p:
+      return StubDecoderRoute::kVop3p;
+    case DecodeSeedHint::kMimgTensor:
+      return StubDecoderRoute::kMimgTensor;
+    case DecodeSeedHint::kVop1:
+      return StubDecoderRoute::kVop1;
+    case DecodeSeedHint::kVop3Sdst:
+      return StubDecoderRoute::kVop3Sdst;
+    case DecodeSeedHint::kUnknown:
+    case DecodeSeedHint::kVop3:
+      return StubDecoderRoute::kUnsupported;
   }
-  return false;
+  return StubDecoderRoute::kUnsupported;
 }
 
-std::uint32_t CountSeededInstructionsForRoute(StubDecoderRoute route) {
-  std::uint32_t count = 0;
-  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
-    if (SelectStubDecoderRoute(seed.decode_hint) == route) {
-      ++count;
-    }
+std::string_view ExpectedRouteName(StubDecoderRoute route) {
+  switch (route) {
+    case StubDecoderRoute::kVop3p:
+      return "kVop3p";
+    case StubDecoderRoute::kMimgTensor:
+      return "kMimgTensor";
+    case StubDecoderRoute::kVop1:
+      return "kVop1";
+    case StubDecoderRoute::kVop3Sdst:
+      return "kVop3Sdst";
+    case StubDecoderRoute::kUnsupported:
+      break;
   }
-  return count;
-}
-
-std::uint32_t CountXmlBackedSeededInstructionsForRoute(StubDecoderRoute route) {
-  std::uint32_t count = 0;
-  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
-    if (SelectStubDecoderRoute(seed.decode_hint) == route &&
-        seed.appears_in_rdna4_xml) {
-      ++count;
-    }
-  }
-  return count;
-}
-
-std::uint32_t CountLlvmOnlySeededInstructionsForRoute(StubDecoderRoute route) {
-  std::uint32_t count = 0;
-  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
-    if (SelectStubDecoderRoute(seed.decode_hint) == route &&
-        !seed.appears_in_rdna4_xml) {
-      ++count;
-    }
-  }
-  return count;
-}
-
-std::uint32_t CountTargetSpecificSeededInstructionsForRoute(
-    StubDecoderRoute route) {
-  std::uint32_t count = 0;
-  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
-    if (SelectStubDecoderRoute(seed.decode_hint) == route &&
-        seed.is_target_specific) {
-      ++count;
-    }
-  }
-  return count;
-}
-
-bool MatchesSeedCatalogParity(const StubDecoderRouteInfo& route_info,
-                              const DecoderSeedInfo& seed) {
-  const StubDecoderRoute expected_route = SelectStubDecoderRoute(seed.decode_hint);
-  const StubDecoderRouteManifest* manifest =
-      FindStubDecoderRouteManifest(expected_route);
-  if (manifest == nullptr) {
-    return false;
-  }
-  return route_info.instruction_name == seed.instruction_name &&
-         route_info.route == expected_route &&
-         route_info.route_name == manifest->route_name &&
-         route_info.route_priority == manifest->route_priority &&
-         route_info.decode_hint == seed.decode_hint &&
-         route_info.rdna4_encoding_name == seed.rdna4_encoding_name &&
-         route_info.rdna4_opcode == seed.rdna4_opcode &&
-         route_info.rdna4_operand_count == seed.rdna4_operand_count &&
-         route_info.appears_in_rdna4_xml == seed.appears_in_rdna4_xml &&
-         route_info.is_target_specific == seed.is_target_specific;
+  return "kUnsupported";
 }
 
 std::uint32_t ExpectedRoutePriority(StubDecoderRoute route) {
@@ -126,10 +87,86 @@ std::uint32_t ExpectedRoutePriority(StubDecoderRoute route) {
   return 0;
 }
 
+bool ListedInAnyRoute(std::string_view instruction_name) {
+  for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
+    if (Contains(manifest.route, instruction_name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::uint32_t CountSeededInstructionsForRoute(StubDecoderRoute route) {
+  std::uint32_t count = 0;
+  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
+    if (ExpectedRouteForDecodeHint(seed.decode_hint) == route) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountXmlBackedSeededInstructionsForRoute(StubDecoderRoute route) {
+  std::uint32_t count = 0;
+  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
+    if (ExpectedRouteForDecodeHint(seed.decode_hint) == route &&
+        seed.appears_in_rdna4_xml) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountLlvmOnlySeededInstructionsForRoute(StubDecoderRoute route) {
+  std::uint32_t count = 0;
+  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
+    if (ExpectedRouteForDecodeHint(seed.decode_hint) == route &&
+        !seed.appears_in_rdna4_xml) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountTargetSpecificSeededInstructionsForRoute(
+    StubDecoderRoute route) {
+  std::uint32_t count = 0;
+  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
+    if (ExpectedRouteForDecodeHint(seed.decode_hint) == route &&
+        seed.is_target_specific) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+bool MatchesSeedCatalogParity(const StubDecoderRouteInfo& route_info,
+                              const DecoderSeedInfo& seed) {
+  const StubDecoderRoute expected_route =
+      ExpectedRouteForDecodeHint(seed.decode_hint);
+  const StubDecoderRouteManifest* manifest =
+      FindStubDecoderRouteManifest(expected_route);
+  if (manifest == nullptr) {
+    return false;
+  }
+  return route_info.instruction_name == seed.instruction_name &&
+         route_info.route == expected_route &&
+         route_info.route_name == ExpectedRouteName(expected_route) &&
+         route_info.route_name == manifest->route_name &&
+         route_info.route_priority == ExpectedRoutePriority(expected_route) &&
+         route_info.route_priority == manifest->route_priority &&
+         route_info.decode_hint == seed.decode_hint &&
+         route_info.rdna4_encoding_name == seed.rdna4_encoding_name &&
+         route_info.rdna4_opcode == seed.rdna4_opcode &&
+         route_info.rdna4_operand_count == seed.rdna4_operand_count &&
+         route_info.appears_in_rdna4_xml == seed.appears_in_rdna4_xml &&
+         route_info.is_target_specific == seed.is_target_specific;
+}
+
 bool RouteInstructionListMatchesSeedCatalogOrder(StubDecoderRoute route) {
   std::vector<std::string_view> expected;
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
-    if (SelectStubDecoderRoute(seed.decode_hint) == route) {
+    if (ExpectedRouteForDecodeHint(seed.decode_hint) == route) {
       expected.push_back(seed.instruction_name);
     }
   }
@@ -150,16 +187,17 @@ bool RouteInstructionListMatchesSeedCatalogOrder(StubDecoderRoute route) {
 bool RouteInfoSequenceMatchesSeedCatalogOrder() {
   std::vector<const DecoderSeedInfo*> expected;
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
-    if (SelectStubDecoderRoute(seed.decode_hint) != StubDecoderRoute::kUnsupported) {
+    if (ExpectedRouteForDecodeHint(seed.decode_hint) !=
+        StubDecoderRoute::kUnsupported) {
       expected.push_back(&seed);
     }
   }
   std::sort(expected.begin(), expected.end(),
             [](const DecoderSeedInfo* lhs, const DecoderSeedInfo* rhs) {
               const StubDecoderRoute lhs_route =
-                  SelectStubDecoderRoute(lhs->decode_hint);
+                  ExpectedRouteForDecodeHint(lhs->decode_hint);
               const StubDecoderRoute rhs_route =
-                  SelectStubDecoderRoute(rhs->decode_hint);
+                  ExpectedRouteForDecodeHint(rhs->decode_hint);
               const std::uint32_t lhs_priority = ExpectedRoutePriority(lhs_route);
               const std::uint32_t rhs_priority = ExpectedRoutePriority(rhs_route);
               if (lhs_priority != rhs_priority) {
@@ -286,7 +324,12 @@ int main() {
                         CountLlvmOnlySeededInstructionsForRoute(manifest.route) &&
                     manifest.target_specific_count ==
                         CountTargetSpecificSeededInstructionsForRoute(
-                            manifest.route),
+                            manifest.route) &&
+                    manifest.route_name == ExpectedRouteName(manifest.route) &&
+                    manifest.route_name ==
+                        GetStubDecoderRouteName(manifest.route) &&
+                    manifest.route_priority ==
+                        ExpectedRoutePriority(manifest.route),
                 "expected route manifest counts to match the routed seed-catalog slice")) {
       return 1;
     }
@@ -327,9 +370,12 @@ int main() {
   }
 
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
-    const StubDecoderRoute expected_route = SelectStubDecoderRoute(seed.decode_hint);
+    const StubDecoderRoute expected_route =
+        ExpectedRouteForDecodeHint(seed.decode_hint);
     if (expected_route == StubDecoderRoute::kUnsupported) {
-      if (!Expect(SelectStubDecoderRoute(seed.instruction_name) ==
+      if (!Expect(SelectStubDecoderRoute(seed.decode_hint) ==
+                          StubDecoderRoute::kUnsupported &&
+                      SelectStubDecoderRoute(seed.instruction_name) ==
                           StubDecoderRoute::kUnsupported &&
                       FindStubDecoderRouteInfo(seed.instruction_name) == nullptr &&
                       !ListedInAnyRoute(seed.instruction_name),
@@ -342,8 +388,12 @@ int main() {
     const StubDecoderRouteInfo* route_info =
         FindStubDecoderRouteInfo(seed.instruction_name);
     if (!Expect(route_info != nullptr &&
+                    SelectStubDecoderRoute(seed.decode_hint) ==
+                        expected_route &&
                     SelectStubDecoderRoute(seed.instruction_name) ==
                         expected_route &&
+                    GetStubDecoderRouteName(expected_route) ==
+                        ExpectedRouteName(expected_route) &&
                     Contains(expected_route, seed.instruction_name) &&
                     MatchesSeedCatalogParity(*route_info, seed),
                 "expected routed seed to keep exact seed-catalog parity across selector surfaces")) {
