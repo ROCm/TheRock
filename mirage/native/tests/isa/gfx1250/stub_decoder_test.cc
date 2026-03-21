@@ -492,6 +492,37 @@ bool MatchesDecodedInstruction(const StubDecodedInstruction& lhs,
                                         rhs.operand_descriptors);
 }
 
+bool MatchesDecodedInstructionStructure(const StubDecodedInstruction& lhs,
+                                        const StubDecodedInstruction& rhs) {
+  return lhs.instruction_name == rhs.instruction_name &&
+         lhs.status == rhs.status &&
+         lhs.entrypoint_name == rhs.entrypoint_name &&
+         lhs.opcode_shape == rhs.opcode_shape &&
+         lhs.execution_domain == rhs.execution_domain &&
+         lhs.uses_accumulator == rhs.uses_accumulator &&
+         lhs.uses_tensor_memory == rhs.uses_tensor_memory &&
+         lhs.uses_scale_path == rhs.uses_scale_path &&
+         lhs.uses_paired_operands == rhs.uses_paired_operands &&
+         lhs.operand_layout.layout_kind == rhs.operand_layout.layout_kind &&
+         lhs.operand_layout.source_count == rhs.operand_layout.source_count &&
+         lhs.operand_layout.destination_count ==
+             rhs.operand_layout.destination_count &&
+         lhs.operand_layout.accumulator_source_count ==
+             rhs.operand_layout.accumulator_source_count &&
+         lhs.operand_layout.has_scale_operand ==
+             rhs.operand_layout.has_scale_operand &&
+         lhs.operand_layout.has_paired_scale_operand ==
+             rhs.operand_layout.has_paired_scale_operand &&
+         lhs.operand_layout.has_tensor_descriptor ==
+             rhs.operand_layout.has_tensor_descriptor &&
+         lhs.operand_layout.touches_lds == rhs.operand_layout.touches_lds &&
+         lhs.operand_layout.is_store == rhs.operand_layout.is_store &&
+         MatchesOperandRoleRecord(lhs.operand_roles, rhs.operand_roles) &&
+         MatchesOperandSlotRecord(lhs.operand_slots, rhs.operand_slots) &&
+         MatchesOperandDescriptorRecord(lhs.operand_descriptors,
+                                        rhs.operand_descriptors);
+}
+
 std::string_view ExpectedOpcodeShapeName(std::string_view instruction_name) {
   if (instruction_name == "V_PK_FMA_BF16") {
     return "kVop3pPackedFma";
@@ -7330,6 +7361,27 @@ int main() {
                     AllSlotKindHelperNamesKnown(via_name) &&
                     AllValueClassHelperNamesKnown(via_name),
                 "expected routed seed to keep exact helper-name parity and coverage")) {
+      return 1;
+    }
+  }
+  for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
+    StubDecoderRouteInfo synthetic = route_info;
+    synthetic.route_name = "kSyntheticRoute";
+    synthetic.route_priority = route_info.route_priority + 100u;
+    synthetic.rdna4_encoding_name = "SYNTHETIC_ENC";
+    synthetic.rdna4_opcode = route_info.rdna4_opcode + 1000u;
+    synthetic.rdna4_operand_count = route_info.rdna4_operand_count + 10u;
+    synthetic.appears_in_rdna4_xml = !route_info.appears_in_rdna4_xml;
+    synthetic.is_target_specific = !route_info.is_target_specific;
+
+    const StubDecodedInstruction via_name =
+        DecodeStubInstruction(route_info.instruction_name);
+    const StubDecodedInstruction via_synthetic =
+        DecodeStubInstruction(synthetic);
+    if (!Expect(MatchesRouteInfoPayload(via_synthetic, synthetic) &&
+                    MatchesDecodedInstructionStructure(via_synthetic,
+                                                      via_name),
+                "expected route-info decode to preserve caller metadata while keeping structural parity")) {
       return 1;
     }
   }
