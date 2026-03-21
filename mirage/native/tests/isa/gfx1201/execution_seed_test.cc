@@ -3216,6 +3216,16 @@ struct DsCase {
   std::uint32_t offset;
 };
 
+struct DsRtnCase {
+  const char* opcode;
+  std::uint32_t op;
+  mirage::sim::isa::Gfx1201CompiledOpcode compiled;
+  std::uint16_t dest;
+  std::uint16_t addr;
+  std::uint16_t data;
+  std::uint32_t offset;
+};
+
 constexpr std::array<DsCase, 13> kDsCases{{
     {"DS_ADD_F32", 21u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsAddF32, 64u, 80u, 0x000u},
@@ -3243,6 +3253,48 @@ constexpr std::array<DsCase, 13> kDsCases{{
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsOrB32, 75u, 91u, 0x0b0u},
     {"DS_XOR_B32", 11u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsXorB32, 76u, 92u, 0x0c0u},
+}};
+
+constexpr std::array<DsRtnCase, 13> kDsRtnCases{{
+    {"DS_ADD_RTN_F32", 121u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsAddRtnF32, 32u, 96u, 112u,
+     0x000u},
+    {"DS_ADD_RTN_U32", 32u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsAddRtnU32, 33u, 97u, 113u,
+     0x010u},
+    {"DS_SUB_RTN_U32", 33u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsSubRtnU32, 34u, 98u, 114u,
+     0x020u},
+    {"DS_RSUB_RTN_U32", 34u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsRsubRtnU32, 35u, 99u, 115u,
+     0x030u},
+    {"DS_INC_RTN_U32", 35u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsIncRtnU32, 36u, 100u, 116u,
+     0x040u},
+    {"DS_DEC_RTN_U32", 36u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsDecRtnU32, 37u, 101u, 117u,
+     0x050u},
+    {"DS_MIN_RTN_I32", 37u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMinRtnI32, 38u, 102u, 118u,
+     0x060u},
+    {"DS_MIN_RTN_U32", 39u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMinRtnU32, 39u, 103u, 119u,
+     0x070u},
+    {"DS_MAX_RTN_I32", 38u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMaxRtnI32, 40u, 104u, 120u,
+     0x080u},
+    {"DS_MAX_RTN_U32", 40u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMaxRtnU32, 41u, 105u, 121u,
+     0x090u},
+    {"DS_AND_RTN_B32", 41u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsAndRtnB32, 42u, 106u, 122u,
+     0x0a0u},
+    {"DS_OR_RTN_B32", 42u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsOrRtnB32, 43u, 107u, 123u,
+     0x0b0u},
+    {"DS_XOR_RTN_B32", 43u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsXorRtnB32, 44u, 108u, 124u,
+     0x0c0u},
 }};
 
 std::uint64_t DsCaseBaseAddress(std::size_t case_index) {
@@ -3544,6 +3596,194 @@ bool RunDsBatchTest(const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
               "expected compiled DS state") ||
       !Expect(expect_ds_memory(&compiled_ds_memory),
               "expected compiled DS memory state")) {
+    return false;
+  }
+
+  return true;
+}
+
+bool RunDsRtnBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  std::vector<std::uint32_t> ds_program_words;
+  ds_program_words.reserve((kDsRtnCases.size() + 1u) * 2u + 1u);
+  const auto ds_nop_words = MakeDs(20u, 0u, 0u, 0u, 0u, 0u);
+  ds_program_words.push_back(ds_nop_words[0]);
+  ds_program_words.push_back(ds_nop_words[1]);
+  for (const DsRtnCase& ds_case : kDsRtnCases) {
+    const auto words = MakeDs(ds_case.op, ds_case.dest, ds_case.addr,
+                              ds_case.data, 0u, ds_case.offset);
+    ds_program_words.push_back(words[0]);
+    ds_program_words.push_back(words[1]);
+  }
+  ds_program_words.push_back(MakeSopp(48u));
+
+  std::vector<DecodedInstruction> ds_program;
+  if (!Expect(decoder.DecodeProgram(ds_program_words, &ds_program, error_message),
+              "expected DS return batch decode success") ||
+      !Expect(ds_program.size() == kDsRtnCases.size() + 2u,
+              "expected decoded DS return instruction count") ||
+      !Expect(ds_program.front().opcode == "DS_NOP",
+              "expected decoded DS_NOP at return batch start")) {
+    return false;
+  }
+  for (std::size_t i = 0; i < kDsRtnCases.size(); ++i) {
+    if (!Expect(ds_program[i + 1u].opcode == kDsRtnCases[i].opcode,
+                "expected decoded DS return opcode order")) {
+      return false;
+    }
+  }
+  if (!Expect(ds_program.back().opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after DS return batch")) {
+    return false;
+  }
+
+  auto initialize_ds_state = [](WaveExecutionState* state) {
+    state->exec_mask = kDsExecMask;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      for (std::size_t case_index = 0; case_index < kDsRtnCases.size();
+           ++case_index) {
+        state->vgprs[kDsRtnCases[case_index].dest][lane] =
+            0xacce0000u + static_cast<std::uint32_t>(case_index << 8) +
+            static_cast<std::uint32_t>(lane);
+        state->vgprs[kDsRtnCases[case_index].addr][lane] =
+            static_cast<std::uint32_t>(DsCaseBaseAddress(case_index) + 0x2000u +
+                                       lane * 4u);
+        state->vgprs[kDsRtnCases[case_index].data][lane] =
+            InitialDsDataValue(case_index, lane);
+      }
+    }
+  };
+
+  auto expect_ds_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == kDsExecMask &&
+          state.halted && !state.waiting_on_barrier &&
+          state.pc == kDsRtnCases.size() + 1u)) {
+      return false;
+    }
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      for (std::size_t case_index = 0; case_index < kDsRtnCases.size();
+           ++case_index) {
+        if (state.vgprs[kDsRtnCases[case_index].addr][lane] !=
+            static_cast<std::uint32_t>(DsCaseBaseAddress(case_index) + 0x2000u +
+                                       lane * 4u)) {
+          return false;
+        }
+        if (state.vgprs[kDsRtnCases[case_index].data][lane] !=
+            InitialDsDataValue(case_index, lane)) {
+          return false;
+        }
+        const std::uint32_t expected_dest =
+            IsDsLaneActive(lane)
+                ? InitialDsOldValue(case_index, lane)
+                : 0xacce0000u + static_cast<std::uint32_t>(case_index << 8) +
+                      static_cast<std::uint32_t>(lane);
+        if (state.vgprs[kDsRtnCases[case_index].dest][lane] != expected_dest) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  auto initialize_ds_memory = [](LinearExecutionMemory* memory) {
+    for (std::size_t case_index = 0; case_index < kDsRtnCases.size();
+         ++case_index) {
+      for (std::size_t lane = 0; lane < 32u; ++lane) {
+        const std::uint64_t address =
+            DsCaseBaseAddress(case_index) + 0x2000u +
+            kDsRtnCases[case_index].offset + lane * 4u;
+        if (!memory->StoreU32(address, InitialDsOldValue(case_index, lane))) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  auto expect_ds_memory = [](LinearExecutionMemory* memory) {
+    for (std::size_t case_index = 0; case_index < kDsRtnCases.size();
+         ++case_index) {
+      for (std::size_t lane = 0; lane < 32u; ++lane) {
+        const std::uint64_t address =
+            DsCaseBaseAddress(case_index) + 0x2000u +
+            kDsRtnCases[case_index].offset + lane * 4u;
+        std::uint32_t value = 0;
+        if (!memory->LoadU32(address, &value)) {
+          return false;
+        }
+        const std::uint32_t old_value = InitialDsOldValue(case_index, lane);
+        const std::uint32_t expected_value =
+            IsDsLaneActive(lane)
+                ? ExpectedDsNewValue(case_index, old_value,
+                                     InitialDsDataValue(case_index, lane))
+                : old_value;
+        if (value != expected_value) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  LinearExecutionMemory decoded_ds_memory(0x4000u, kDsBaseAddress);
+  if (!Expect(initialize_ds_memory(&decoded_ds_memory),
+              "expected DS return decoded memory initialization")) {
+    return false;
+  }
+  WaveExecutionState decoded_ds_state;
+  initialize_ds_state(&decoded_ds_state);
+  if (!Expect(interpreter.ExecuteProgram(ds_program, &decoded_ds_state,
+                                         &decoded_ds_memory, error_message),
+              "expected decoded DS return execution success") ||
+      !Expect(expect_ds_state(decoded_ds_state),
+              "expected decoded DS return state") ||
+      !Expect(expect_ds_memory(&decoded_ds_memory),
+              "expected decoded DS return memory state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_ds_program;
+  if (!Expect(interpreter.CompileProgram(ds_program, &compiled_ds_program,
+                                         error_message),
+              "expected compiled DS return program success") ||
+      !Expect(compiled_ds_program.size() == kDsRtnCases.size() + 2u,
+              "expected compiled DS return instruction count") ||
+      !Expect(compiled_ds_program.front().opcode == Gfx1201CompiledOpcode::kSNop,
+              "expected compiled DS return NOP as kSNop")) {
+    return false;
+  }
+  for (std::size_t i = 0; i < kDsRtnCases.size(); ++i) {
+    if (!Expect(compiled_ds_program[i + 1u].opcode == kDsRtnCases[i].compiled,
+                "expected compiled DS return opcode order")) {
+      return false;
+    }
+  }
+  if (!Expect(compiled_ds_program.back().opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after DS return batch")) {
+    return false;
+  }
+
+  LinearExecutionMemory compiled_ds_memory(0x4000u, kDsBaseAddress);
+  if (!Expect(initialize_ds_memory(&compiled_ds_memory),
+              "expected DS return compiled memory initialization")) {
+    return false;
+  }
+  WaveExecutionState compiled_ds_state;
+  initialize_ds_state(&compiled_ds_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_program,
+                                         &compiled_ds_state,
+                                         &compiled_ds_memory,
+                                         error_message),
+              "expected compiled DS return execution success") ||
+      !Expect(expect_ds_state(compiled_ds_state),
+              "expected compiled DS return state") ||
+      !Expect(expect_ds_memory(&compiled_ds_memory),
+              "expected compiled DS return memory state")) {
     return false;
   }
 
@@ -11048,6 +11288,9 @@ int main() {
     return 1;
   }
   if (!RunDsBatchTest(decoder, interpreter, &error_message)) {
+    return 1;
+  }
+  if (!RunDsRtnBatchTest(decoder, interpreter, &error_message)) {
     return 1;
   }
 

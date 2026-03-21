@@ -110,7 +110,7 @@ int main() {
               "expected ENC_VOP3 gfx1201-specific count") ||
       !Expect(vds->seeded_instruction_count == 123u,
               "expected ENC_VDS seeded instruction count") ||
-      !Expect(vds->executable_instruction_count == 14u,
+      !Expect(vds->executable_instruction_count == 27u,
               "expected ENC_VDS executable foothold count") ||
       !Expect(vds->HasExecutableFoothold(),
               "expected ENC_VDS executable foothold helper") ||
@@ -131,7 +131,7 @@ int main() {
     return 1;
   }
 
-  if (!Expect(decoder.Phase0ExecutableOpcodes().size() == 432u,
+  if (!Expect(decoder.Phase0ExecutableOpcodes().size() == 445u,
               "expected phase-0 executable opcode count") ||
       !Expect(IsGfx1201Wave32Phase0EncodingSaturated("ENC_VOP1"),
               "expected ENC_VOP1 saturation helper") ||

@@ -55,7 +55,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 432> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 445> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -152,18 +152,31 @@ constexpr std::array<std::string_view, 432> kExecutableSeedOpcodes{{
     "GLOBAL_ATOMIC_MAX_NUM_F32",
     "GLOBAL_ATOMIC_ORDERED_ADD_B64",
     "DS_NOP",
+    "DS_ADD_RTN_F32",
     "DS_ADD_F32",
+    "DS_ADD_RTN_U32",
     "DS_ADD_U32",
+    "DS_SUB_RTN_U32",
     "DS_SUB_U32",
+    "DS_RSUB_RTN_U32",
     "DS_RSUB_U32",
+    "DS_INC_RTN_U32",
     "DS_INC_U32",
+    "DS_DEC_RTN_U32",
     "DS_DEC_U32",
+    "DS_MIN_RTN_I32",
     "DS_MIN_I32",
+    "DS_MIN_RTN_U32",
     "DS_MIN_U32",
+    "DS_MAX_RTN_I32",
     "DS_MAX_I32",
+    "DS_MAX_RTN_U32",
     "DS_MAX_U32",
+    "DS_AND_RTN_B32",
     "DS_AND_B32",
+    "DS_OR_RTN_B32",
     "DS_OR_B32",
+    "DS_XOR_RTN_B32",
     "DS_XOR_B32",
     "S_ADD_U32",
     "S_ADD_I32",
@@ -1245,52 +1258,104 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kSNop;
     return true;
   }
+  if (opcode == "DS_ADD_RTN_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsAddRtnF32;
+    return true;
+  }
   if (opcode == "DS_ADD_F32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsAddF32;
+    return true;
+  }
+  if (opcode == "DS_ADD_RTN_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsAddRtnU32;
     return true;
   }
   if (opcode == "DS_ADD_U32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsAddU32;
     return true;
   }
+  if (opcode == "DS_SUB_RTN_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsSubRtnU32;
+    return true;
+  }
   if (opcode == "DS_SUB_U32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsSubU32;
+    return true;
+  }
+  if (opcode == "DS_RSUB_RTN_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsRsubRtnU32;
     return true;
   }
   if (opcode == "DS_RSUB_U32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsRsubU32;
     return true;
   }
+  if (opcode == "DS_INC_RTN_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsIncRtnU32;
+    return true;
+  }
   if (opcode == "DS_INC_U32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsIncU32;
+    return true;
+  }
+  if (opcode == "DS_DEC_RTN_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsDecRtnU32;
     return true;
   }
   if (opcode == "DS_DEC_U32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsDecU32;
     return true;
   }
+  if (opcode == "DS_MIN_RTN_I32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMinRtnI32;
+    return true;
+  }
   if (opcode == "DS_MIN_I32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsMinI32;
+    return true;
+  }
+  if (opcode == "DS_MIN_RTN_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMinRtnU32;
     return true;
   }
   if (opcode == "DS_MIN_U32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsMinU32;
     return true;
   }
+  if (opcode == "DS_MAX_RTN_I32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMaxRtnI32;
+    return true;
+  }
   if (opcode == "DS_MAX_I32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsMaxI32;
+    return true;
+  }
+  if (opcode == "DS_MAX_RTN_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMaxRtnU32;
     return true;
   }
   if (opcode == "DS_MAX_U32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsMaxU32;
     return true;
   }
+  if (opcode == "DS_AND_RTN_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsAndRtnB32;
+    return true;
+  }
   if (opcode == "DS_AND_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsAndB32;
     return true;
   }
+  if (opcode == "DS_OR_RTN_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsOrRtnB32;
+    return true;
+  }
   if (opcode == "DS_OR_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsOrB32;
+    return true;
+  }
+  if (opcode == "DS_XOR_RTN_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsXorRtnB32;
     return true;
   }
   if (opcode == "DS_XOR_B32") {
@@ -3415,6 +3480,42 @@ bool ExecuteVectorGlobalAtomic64AtAddress(const DecodedInstruction& instruction,
                                 state, error_message);
 }
 
+bool IsDsAtomic32ReturnOpcode(std::string_view opcode) {
+  return opcode == "DS_ADD_RTN_F32" || opcode == "DS_ADD_RTN_U32" ||
+         opcode == "DS_SUB_RTN_U32" || opcode == "DS_RSUB_RTN_U32" ||
+         opcode == "DS_INC_RTN_U32" || opcode == "DS_DEC_RTN_U32" ||
+         opcode == "DS_MIN_RTN_I32" || opcode == "DS_MIN_RTN_U32" ||
+         opcode == "DS_MAX_RTN_I32" || opcode == "DS_MAX_RTN_U32" ||
+         opcode == "DS_AND_RTN_B32" || opcode == "DS_OR_RTN_B32" ||
+         opcode == "DS_XOR_RTN_B32";
+}
+
+bool IsDsAtomic32Opcode(std::string_view opcode) {
+  return opcode == "DS_ADD_F32" || opcode == "DS_ADD_U32" ||
+         opcode == "DS_SUB_U32" || opcode == "DS_RSUB_U32" ||
+         opcode == "DS_INC_U32" || opcode == "DS_DEC_U32" ||
+         opcode == "DS_MIN_I32" || opcode == "DS_MIN_U32" ||
+         opcode == "DS_MAX_I32" || opcode == "DS_MAX_U32" ||
+         opcode == "DS_AND_B32" || opcode == "DS_OR_B32" ||
+         opcode == "DS_XOR_B32" || IsDsAtomic32ReturnOpcode(opcode);
+}
+
+std::size_t DsAtomic32AddressOperandIndex(std::string_view opcode) {
+  return IsDsAtomic32ReturnOpcode(opcode) ? 1u : 0u;
+}
+
+std::size_t DsAtomic32DataOperandIndex(std::string_view opcode) {
+  return IsDsAtomic32ReturnOpcode(opcode) ? 2u : 1u;
+}
+
+std::size_t DsAtomic32Offset0OperandIndex(std::string_view opcode) {
+  return IsDsAtomic32ReturnOpcode(opcode) ? 3u : 2u;
+}
+
+std::size_t DsAtomic32Offset1OperandIndex(std::string_view opcode) {
+  return IsDsAtomic32ReturnOpcode(opcode) ? 4u : 3u;
+}
+
 bool ComputeDsAddress(const DecodedInstruction& instruction,
                       const WaveExecutionState& state,
                       std::size_t lane_index,
@@ -3426,7 +3527,14 @@ bool ComputeDsAddress(const DecodedInstruction& instruction,
     }
     return false;
   }
-  if (instruction.operands[0].kind != OperandKind::kVgpr) {
+  const std::size_t address_operand_index =
+      DsAtomic32AddressOperandIndex(instruction.opcode);
+  const std::size_t offset0_operand_index =
+      DsAtomic32Offset0OperandIndex(instruction.opcode);
+  const std::size_t offset1_operand_index =
+      DsAtomic32Offset1OperandIndex(instruction.opcode);
+
+  if (instruction.operands[address_operand_index].kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
       *error_message = std::string(instruction.opcode) +
                        " expected VGPR address source";
@@ -3434,18 +3542,21 @@ bool ComputeDsAddress(const DecodedInstruction& instruction,
     return false;
   }
 
-  const std::uint32_t vaddr = ReadVectorOperand(instruction.operands[0], state,
-                                                lane_index, error_message);
+  const std::uint32_t vaddr =
+      ReadVectorOperand(instruction.operands[address_operand_index], state,
+                        lane_index, error_message);
   if (error_message != nullptr && !error_message->empty()) {
     return false;
   }
   const std::uint32_t offset0 =
-      ReadScalarOperand(instruction.operands[2], state, error_message);
+      ReadScalarOperand(instruction.operands[offset0_operand_index], state,
+                        error_message);
   if (error_message != nullptr && !error_message->empty()) {
     return false;
   }
   const std::uint32_t offset1 =
-      ReadScalarOperand(instruction.operands[3], state, error_message);
+      ReadScalarOperand(instruction.operands[offset1_operand_index], state,
+                        error_message);
   if (error_message != nullptr && !error_message->empty()) {
     return false;
   }
@@ -3470,6 +3581,7 @@ bool ExecuteDsAtomic32AtAddress(const DecodedInstruction& instruction,
                                 std::size_t lane_index,
                                 WaveExecutionState* state,
                                 ExecutionMemory* memory,
+                                std::uint32_t* old_value_out,
                                 std::string* error_message) {
   std::uint32_t old_value = 0;
   if (!memory->LoadU32(address, &old_value)) {
@@ -3480,42 +3592,56 @@ bool ExecuteDsAtomic32AtAddress(const DecodedInstruction& instruction,
   }
 
   const std::uint32_t data_value = ReadVectorOperand(
-      instruction.operands[1], *state, lane_index, error_message);
+      instruction.operands[DsAtomic32DataOperandIndex(instruction.opcode)],
+      *state, lane_index, error_message);
   if (error_message != nullptr && !error_message->empty()) {
     return false;
   }
 
   std::uint32_t new_value = old_value;
-  if (instruction.opcode == "DS_ADD_F32") {
+  if (instruction.opcode == "DS_ADD_F32" ||
+      instruction.opcode == "DS_ADD_RTN_F32") {
     new_value = BitCast<std::uint32_t>(BitCast<float>(old_value) +
                                        BitCast<float>(data_value));
-  } else if (instruction.opcode == "DS_ADD_U32") {
+  } else if (instruction.opcode == "DS_ADD_U32" ||
+             instruction.opcode == "DS_ADD_RTN_U32") {
     new_value = old_value + data_value;
-  } else if (instruction.opcode == "DS_SUB_U32") {
+  } else if (instruction.opcode == "DS_SUB_U32" ||
+             instruction.opcode == "DS_SUB_RTN_U32") {
     new_value = old_value - data_value;
-  } else if (instruction.opcode == "DS_RSUB_U32") {
+  } else if (instruction.opcode == "DS_RSUB_U32" ||
+             instruction.opcode == "DS_RSUB_RTN_U32") {
     new_value = data_value - old_value;
-  } else if (instruction.opcode == "DS_INC_U32") {
+  } else if (instruction.opcode == "DS_INC_U32" ||
+             instruction.opcode == "DS_INC_RTN_U32") {
     new_value = AtomicIncU32(old_value, data_value);
-  } else if (instruction.opcode == "DS_DEC_U32") {
+  } else if (instruction.opcode == "DS_DEC_U32" ||
+             instruction.opcode == "DS_DEC_RTN_U32") {
     new_value = AtomicDecU32(old_value, data_value);
-  } else if (instruction.opcode == "DS_MIN_I32") {
+  } else if (instruction.opcode == "DS_MIN_I32" ||
+             instruction.opcode == "DS_MIN_RTN_I32") {
     new_value = BitCast<std::uint32_t>(
         std::min(BitCast<std::int32_t>(old_value),
                  BitCast<std::int32_t>(data_value)));
-  } else if (instruction.opcode == "DS_MIN_U32") {
+  } else if (instruction.opcode == "DS_MIN_U32" ||
+             instruction.opcode == "DS_MIN_RTN_U32") {
     new_value = std::min(old_value, data_value);
-  } else if (instruction.opcode == "DS_MAX_I32") {
+  } else if (instruction.opcode == "DS_MAX_I32" ||
+             instruction.opcode == "DS_MAX_RTN_I32") {
     new_value = BitCast<std::uint32_t>(
         std::max(BitCast<std::int32_t>(old_value),
                  BitCast<std::int32_t>(data_value)));
-  } else if (instruction.opcode == "DS_MAX_U32") {
+  } else if (instruction.opcode == "DS_MAX_U32" ||
+             instruction.opcode == "DS_MAX_RTN_U32") {
     new_value = std::max(old_value, data_value);
-  } else if (instruction.opcode == "DS_AND_B32") {
+  } else if (instruction.opcode == "DS_AND_B32" ||
+             instruction.opcode == "DS_AND_RTN_B32") {
     new_value = old_value & data_value;
-  } else if (instruction.opcode == "DS_OR_B32") {
+  } else if (instruction.opcode == "DS_OR_B32" ||
+             instruction.opcode == "DS_OR_RTN_B32") {
     new_value = old_value | data_value;
-  } else if (instruction.opcode == "DS_XOR_B32") {
+  } else if (instruction.opcode == "DS_XOR_B32" ||
+             instruction.opcode == "DS_XOR_RTN_B32") {
     new_value = old_value ^ data_value;
   } else {
     if (error_message != nullptr) {
@@ -3529,6 +3655,9 @@ bool ExecuteDsAtomic32AtAddress(const DecodedInstruction& instruction,
       *error_message = std::string(instruction.opcode) + " memory write failed";
     }
     return false;
+  }
+  if (old_value_out != nullptr) {
+    *old_value_out = old_value;
   }
   if (error_message != nullptr) {
     error_message->clear();
@@ -5646,20 +5775,10 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
   if (instruction.opcode == "DS_NOP") {
     return ValidateOperandCount(instruction, 0, error_message);
   }
-  if (instruction.opcode == "DS_ADD_F32" ||
-      instruction.opcode == "DS_ADD_U32" ||
-      instruction.opcode == "DS_SUB_U32" ||
-      instruction.opcode == "DS_RSUB_U32" ||
-      instruction.opcode == "DS_INC_U32" ||
-      instruction.opcode == "DS_DEC_U32" ||
-      instruction.opcode == "DS_MIN_I32" ||
-      instruction.opcode == "DS_MIN_U32" ||
-      instruction.opcode == "DS_MAX_I32" ||
-      instruction.opcode == "DS_MAX_U32" ||
-      instruction.opcode == "DS_AND_B32" ||
-      instruction.opcode == "DS_OR_B32" ||
-      instruction.opcode == "DS_XOR_B32") {
-    if (!ValidateOperandCount(instruction, 4, error_message)) {
+  if (IsDsAtomic32Opcode(instruction.opcode)) {
+    const bool returns_old = IsDsAtomic32ReturnOpcode(instruction.opcode);
+    if (!ValidateOperandCount(instruction, returns_old ? 5u : 4u,
+                              error_message)) {
       return false;
     }
     if (memory == nullptr) {
@@ -5679,8 +5798,14 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
                             error_message)) {
         return false;
       }
+      std::uint32_t old_value = 0;
       if (!ExecuteDsAtomic32AtAddress(instruction, address, lane_index, state,
-                                      memory, error_message)) {
+                                      memory, &old_value, error_message)) {
+        return false;
+      }
+      if (returns_old &&
+          !WriteVectorOperand(instruction.operands[0], lane_index, old_value,
+                              state, error_message)) {
         return false;
       }
     }
@@ -7045,18 +7170,31 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kGlobalAtomicXorB64:
     case Gfx1201CompiledOpcode::kGlobalAtomicIncU64:
     case Gfx1201CompiledOpcode::kGlobalAtomicDecU64:
+    case Gfx1201CompiledOpcode::kDsAddRtnF32:
+    case Gfx1201CompiledOpcode::kDsAddRtnU32:
     case Gfx1201CompiledOpcode::kDsAddF32:
     case Gfx1201CompiledOpcode::kDsAddU32:
+    case Gfx1201CompiledOpcode::kDsSubRtnU32:
     case Gfx1201CompiledOpcode::kDsSubU32:
+    case Gfx1201CompiledOpcode::kDsRsubRtnU32:
     case Gfx1201CompiledOpcode::kDsRsubU32:
+    case Gfx1201CompiledOpcode::kDsIncRtnU32:
     case Gfx1201CompiledOpcode::kDsIncU32:
+    case Gfx1201CompiledOpcode::kDsDecRtnU32:
     case Gfx1201CompiledOpcode::kDsDecU32:
+    case Gfx1201CompiledOpcode::kDsMinRtnI32:
     case Gfx1201CompiledOpcode::kDsMinI32:
+    case Gfx1201CompiledOpcode::kDsMinRtnU32:
     case Gfx1201CompiledOpcode::kDsMinU32:
+    case Gfx1201CompiledOpcode::kDsMaxRtnI32:
     case Gfx1201CompiledOpcode::kDsMaxI32:
+    case Gfx1201CompiledOpcode::kDsMaxRtnU32:
     case Gfx1201CompiledOpcode::kDsMaxU32:
+    case Gfx1201CompiledOpcode::kDsAndRtnB32:
     case Gfx1201CompiledOpcode::kDsAndB32:
+    case Gfx1201CompiledOpcode::kDsOrRtnB32:
     case Gfx1201CompiledOpcode::kDsOrB32:
+    case Gfx1201CompiledOpcode::kDsXorRtnB32:
     case Gfx1201CompiledOpcode::kDsXorB32:
     case Gfx1201CompiledOpcode::kSLoadB32:
     case Gfx1201CompiledOpcode::kSLoadB64:
