@@ -55,7 +55,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 467> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 471> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -178,6 +178,10 @@ constexpr std::array<std::string_view, 467> kExecutableSeedOpcodes{{
     "DS_OR_B32",
     "DS_XOR_RTN_B32",
     "DS_XOR_B32",
+    "DS_COND_SUB_RTN_U32",
+    "DS_COND_SUB_U32",
+    "DS_SUB_CLAMP_RTN_U32",
+    "DS_SUB_CLAMP_U32",
     "DS_LOAD_B32",
     "DS_LOAD_B64",
     "DS_LOAD_B96",
@@ -1382,6 +1386,22 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "DS_XOR_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsXorB32;
+    return true;
+  }
+  if (opcode == "DS_COND_SUB_RTN_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsCondSubRtnU32;
+    return true;
+  }
+  if (opcode == "DS_COND_SUB_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsCondSubU32;
+    return true;
+  }
+  if (opcode == "DS_SUB_CLAMP_RTN_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsSubClampRtnU32;
+    return true;
+  }
+  if (opcode == "DS_SUB_CLAMP_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsSubClampU32;
     return true;
   }
   if (opcode == "DS_LOAD_B32") {
@@ -3597,7 +3617,8 @@ bool IsDsAtomic32ReturnOpcode(std::string_view opcode) {
          opcode == "DS_MIN_RTN_I32" || opcode == "DS_MIN_RTN_U32" ||
          opcode == "DS_MAX_RTN_I32" || opcode == "DS_MAX_RTN_U32" ||
          opcode == "DS_AND_RTN_B32" || opcode == "DS_OR_RTN_B32" ||
-         opcode == "DS_XOR_RTN_B32";
+         opcode == "DS_XOR_RTN_B32" || opcode == "DS_COND_SUB_RTN_U32" ||
+         opcode == "DS_SUB_CLAMP_RTN_U32";
 }
 
 bool IsDsAtomic32Opcode(std::string_view opcode) {
@@ -3607,7 +3628,8 @@ bool IsDsAtomic32Opcode(std::string_view opcode) {
          opcode == "DS_MIN_I32" || opcode == "DS_MIN_U32" ||
          opcode == "DS_MAX_I32" || opcode == "DS_MAX_U32" ||
          opcode == "DS_AND_B32" || opcode == "DS_OR_B32" ||
-         opcode == "DS_XOR_B32" || IsDsAtomic32ReturnOpcode(opcode);
+         opcode == "DS_XOR_B32" || opcode == "DS_COND_SUB_U32" ||
+         opcode == "DS_SUB_CLAMP_U32" || IsDsAtomic32ReturnOpcode(opcode);
 }
 
 bool IsDsLoadOpcode(std::string_view opcode) {
@@ -3824,6 +3846,12 @@ bool ExecuteDsAtomic32AtAddress(const DecodedInstruction& instruction,
   } else if (instruction.opcode == "DS_DEC_U32" ||
              instruction.opcode == "DS_DEC_RTN_U32") {
     new_value = AtomicDecU32(old_value, data_value);
+  } else if (instruction.opcode == "DS_COND_SUB_U32" ||
+             instruction.opcode == "DS_COND_SUB_RTN_U32") {
+    new_value = old_value >= data_value ? old_value - data_value : old_value;
+  } else if (instruction.opcode == "DS_SUB_CLAMP_U32" ||
+             instruction.opcode == "DS_SUB_CLAMP_RTN_U32") {
+    new_value = data_value > old_value ? data_value - old_value : 0u;
   } else if (instruction.opcode == "DS_MIN_I32" ||
              instruction.opcode == "DS_MIN_RTN_I32") {
     new_value = BitCast<std::uint32_t>(
@@ -7740,6 +7768,10 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kDsOrB32:
     case Gfx1201CompiledOpcode::kDsXorRtnB32:
     case Gfx1201CompiledOpcode::kDsXorB32:
+    case Gfx1201CompiledOpcode::kDsCondSubRtnU32:
+    case Gfx1201CompiledOpcode::kDsCondSubU32:
+    case Gfx1201CompiledOpcode::kDsSubClampRtnU32:
+    case Gfx1201CompiledOpcode::kDsSubClampU32:
     case Gfx1201CompiledOpcode::kDsLoadB32:
     case Gfx1201CompiledOpcode::kDsLoadB64:
     case Gfx1201CompiledOpcode::kDsLoadB96:

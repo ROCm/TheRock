@@ -3235,7 +3235,7 @@ struct DsLoadCase {
   std::uint32_t offset;
 };
 
-constexpr std::array<DsCase, 13> kDsCases{{
+constexpr std::array<DsCase, 15> kDsCases{{
     {"DS_ADD_F32", 21u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsAddF32, 64u, 80u, 0x000u},
     {"DS_ADD_U32", 0u,
@@ -3262,9 +3262,14 @@ constexpr std::array<DsCase, 13> kDsCases{{
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsOrB32, 75u, 91u, 0x0b0u},
     {"DS_XOR_B32", 11u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsXorB32, 76u, 92u, 0x0c0u},
+    {"DS_COND_SUB_U32", 152u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsCondSubU32, 77u, 93u, 0x0d0u},
+    {"DS_SUB_CLAMP_U32", 153u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsSubClampU32, 78u, 94u,
+     0x0e0u},
 }};
 
-constexpr std::array<DsRtnCase, 13> kDsRtnCases{{
+constexpr std::array<DsRtnCase, 15> kDsRtnCases{{
     {"DS_ADD_RTN_F32", 121u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsAddRtnF32, 32u, 96u, 112u,
      0x000u},
@@ -3304,6 +3309,12 @@ constexpr std::array<DsRtnCase, 13> kDsRtnCases{{
     {"DS_XOR_RTN_B32", 43u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsXorRtnB32, 44u, 108u, 124u,
      0x0c0u},
+    {"DS_COND_SUB_RTN_U32", 168u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsCondSubRtnU32, 45u, 109u,
+     125u, 0x0d0u},
+    {"DS_SUB_CLAMP_RTN_U32", 169u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsSubClampRtnU32, 46u, 110u,
+     126u, 0x0e0u},
 }};
 
 constexpr std::uint64_t kDsLoadBaseAddress = 0x16000u;
@@ -3566,6 +3577,10 @@ std::uint32_t InitialDsOldValue(std::size_t case_index, std::size_t lane) {
     case 12:
       return lane == 0u ? 0xaaaa5555u
                         : (lane == 1u ? 0x12345678u : 0xffffffffu);
+    case 13:
+      return lane == 0u ? 9u : (lane == 1u ? 3u : 4u);
+    case 14:
+      return lane == 0u ? 5u : (lane == 1u ? 7u : 1u);
     default:
       return 0u;
   }
@@ -3609,6 +3624,10 @@ std::uint32_t InitialDsDataValue(std::size_t case_index, std::size_t lane) {
     case 12:
       return lane == 0u ? 0xffff0000u
                         : (lane == 1u ? 0x0f0f0f0fu : 0x12345678u);
+    case 13:
+      return lane == 0u ? 4u : (lane == 1u ? 7u : 4u);
+    case 14:
+      return lane == 0u ? 9u : (lane == 1u ? 2u : 1u);
     default:
       return 0u;
   }
@@ -3645,6 +3664,10 @@ std::uint32_t ExpectedDsNewValue(std::size_t case_index,
       return old_value | data_value;
     case 12:
       return old_value ^ data_value;
+    case 13:
+      return old_value >= data_value ? old_value - data_value : old_value;
+    case 14:
+      return data_value > old_value ? data_value - old_value : 0u;
     default:
       return old_value;
   }

@@ -205,7 +205,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 467u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 471u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -397,6 +397,14 @@ int main() {
               "expected DS_XOR_RTN_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_XOR_B32"),
               "expected DS_XOR_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_COND_SUB_RTN_U32"),
+              "expected DS_COND_SUB_RTN_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_COND_SUB_U32"),
+              "expected DS_COND_SUB_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_SUB_CLAMP_RTN_U32"),
+              "expected DS_SUB_CLAMP_RTN_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_SUB_CLAMP_U32"),
+              "expected DS_SUB_CLAMP_U32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_B32"),
               "expected DS_LOAD_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_B64"),
@@ -1531,6 +1539,65 @@ int main() {
     return 1;
   }
 
+  const auto ds_cond_sub_rtn_u32_words =
+      MakeDs(168u, 59u, 60u, 61u, 62u, 0x39u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      ds_cond_sub_rtn_u32_words.data(),
+                      ds_cond_sub_rtn_u32_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected DS_COND_SUB_RTN_U32 decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected DS_COND_SUB_RTN_U32 two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "DS_COND_SUB_RTN_U32",
+              "expected DS_COND_SUB_RTN_U32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 5u,
+              "expected DS_COND_SUB_RTN_U32 five-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 59u,
+              "expected DS_COND_SUB_RTN_U32 destination VGPR") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[1].index == 60u,
+              "expected DS_COND_SUB_RTN_U32 address VGPR") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[2].index == 61u,
+              "expected DS_COND_SUB_RTN_U32 data VGPR") ||
+      !Expect(decoded_instruction.operands[3].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[3].imm32 == 0x39u,
+              "expected DS_COND_SUB_RTN_U32 offset0") ||
+      !Expect(decoded_instruction.operands[4].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[4].imm32 == 0u,
+              "expected DS_COND_SUB_RTN_U32 offset1")) {
+    return 1;
+  }
+
+  const auto ds_sub_clamp_u32_words = MakeDs(153u, 59u, 60u, 61u, 62u, 0x3au);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(ds_sub_clamp_u32_words.data(),
+                                                 ds_sub_clamp_u32_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected DS_SUB_CLAMP_U32 decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected DS_SUB_CLAMP_U32 two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "DS_SUB_CLAMP_U32",
+              "expected DS_SUB_CLAMP_U32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 4u,
+              "expected DS_SUB_CLAMP_U32 four-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 60u,
+              "expected DS_SUB_CLAMP_U32 address VGPR") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[1].index == 61u,
+              "expected DS_SUB_CLAMP_U32 data VGPR") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[2].imm32 == 0x3au,
+              "expected DS_SUB_CLAMP_U32 offset0") ||
+      !Expect(decoded_instruction.operands[3].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[3].imm32 == 0u,
+              "expected DS_SUB_CLAMP_U32 offset1")) {
+    return 1;
+  }
+
   const auto load_b32_words = MakeSmem(0u, 18u, 4u, true, 12u);
   if (!Expect(decoder.DecodeInstruction(
                   std::span<const std::uint32_t>(load_b32_words.data(),
@@ -1832,7 +1899,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 467u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 471u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -2022,6 +2089,14 @@ int main() {
               "expected interpreter support for DS_XOR_RTN_B32") ||
       !Expect(interpreter.Supports("DS_XOR_B32"),
               "expected interpreter support for DS_XOR_B32") ||
+      !Expect(interpreter.Supports("DS_COND_SUB_RTN_U32"),
+              "expected interpreter support for DS_COND_SUB_RTN_U32") ||
+      !Expect(interpreter.Supports("DS_COND_SUB_U32"),
+              "expected interpreter support for DS_COND_SUB_U32") ||
+      !Expect(interpreter.Supports("DS_SUB_CLAMP_RTN_U32"),
+              "expected interpreter support for DS_SUB_CLAMP_RTN_U32") ||
+      !Expect(interpreter.Supports("DS_SUB_CLAMP_U32"),
+              "expected interpreter support for DS_SUB_CLAMP_U32") ||
       !Expect(interpreter.Supports("DS_LOAD_B32"),
               "expected interpreter support for DS_LOAD_B32") ||
       !Expect(interpreter.Supports("DS_LOAD_B64"),

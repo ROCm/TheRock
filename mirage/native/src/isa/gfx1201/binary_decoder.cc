@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 467> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 471> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -140,6 +140,10 @@ constexpr std::array<std::string_view, 467> kPhase0ExecutableOpcodes{{
     "DS_OR_B32",
     "DS_XOR_RTN_B32",
     "DS_XOR_B32",
+    "DS_COND_SUB_RTN_U32",
+    "DS_COND_SUB_U32",
+    "DS_SUB_CLAMP_RTN_U32",
+    "DS_SUB_CLAMP_U32",
     "DS_LOAD_B32",
     "DS_LOAD_B64",
     "DS_LOAD_B96",
@@ -1158,7 +1162,11 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "DS_OR_RTN_B32" ||
              instruction_name == "DS_OR_B32" ||
              instruction_name == "DS_XOR_RTN_B32" ||
-             instruction_name == "DS_XOR_B32") {
+             instruction_name == "DS_XOR_B32" ||
+             instruction_name == "DS_COND_SUB_RTN_U32" ||
+             instruction_name == "DS_COND_SUB_U32" ||
+             instruction_name == "DS_SUB_CLAMP_RTN_U32" ||
+             instruction_name == "DS_SUB_CLAMP_U32") {
     if (words.size() < 2u) {
       if (error_message != nullptr) {
         *error_message = std::string(instruction_name) + " requires 2 dwords";
@@ -1198,7 +1206,9 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         instruction_name == "DS_MAX_RTN_U32" ||
         instruction_name == "DS_AND_RTN_B32" ||
         instruction_name == "DS_OR_RTN_B32" ||
-        instruction_name == "DS_XOR_RTN_B32";
+        instruction_name == "DS_XOR_RTN_B32" ||
+        instruction_name == "DS_COND_SUB_RTN_U32" ||
+        instruction_name == "DS_SUB_CLAMP_RTN_U32";
     if (returns_old) {
       InstructionOperand vdst;
       if (!DecodeVectorDestination(ExtractBits(words[1], 24, 8), &vdst,
