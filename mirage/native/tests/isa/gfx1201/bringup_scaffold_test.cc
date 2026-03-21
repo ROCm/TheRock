@@ -205,7 +205,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 459u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 467u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -413,6 +413,18 @@ int main() {
               "expected DS_LOAD_I16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_U16"),
               "expected DS_LOAD_U16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_U8_D16"),
+              "expected DS_LOAD_U8_D16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_U8_D16_HI"),
+              "expected DS_LOAD_U8_D16_HI executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_I8_D16"),
+              "expected DS_LOAD_I8_D16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_I8_D16_HI"),
+              "expected DS_LOAD_I8_D16_HI executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_U16_D16"),
+              "expected DS_LOAD_U16_D16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_U16_D16_HI"),
+              "expected DS_LOAD_U16_D16_HI executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B8"),
               "expected DS_STORE_B8 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B16"),
@@ -425,6 +437,10 @@ int main() {
               "expected DS_STORE_B96 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B128"),
               "expected DS_STORE_B128 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B8_D16_HI"),
+              "expected DS_STORE_B8_D16_HI executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B16_D16_HI"),
+              "expected DS_STORE_B16_D16_HI executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B32"),
               "expected S_LOAD_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B64"),
@@ -1464,6 +1480,57 @@ int main() {
     return 1;
   }
 
+  const auto ds_load_u16_d16_hi_words =
+      MakeDs(167u, 59u, 60u, 61u, 62u, 0x78u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(ds_load_u16_d16_hi_words.data(),
+                                                 ds_load_u16_d16_hi_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected DS_LOAD_U16_D16_HI decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected DS_LOAD_U16_D16_HI two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "DS_LOAD_U16_D16_HI",
+              "expected DS_LOAD_U16_D16_HI opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected DS_LOAD_U16_D16_HI three-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 59u,
+              "expected DS_LOAD_U16_D16_HI destination VGPR") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[1].index == 60u,
+              "expected DS_LOAD_U16_D16_HI address VGPR") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[2].imm32 == 0x78u,
+              "expected DS_LOAD_U16_D16_HI offset0")) {
+    return 1;
+  }
+
+  const auto ds_store_b16_d16_hi_words =
+      MakeDs(161u, 59u, 60u, 61u, 62u, 0x35u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      ds_store_b16_d16_hi_words.data(),
+                      ds_store_b16_d16_hi_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected DS_STORE_B16_D16_HI decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected DS_STORE_B16_D16_HI two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "DS_STORE_B16_D16_HI",
+              "expected DS_STORE_B16_D16_HI opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected DS_STORE_B16_D16_HI three-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 61u,
+              "expected DS_STORE_B16_D16_HI data VGPR") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[1].index == 60u,
+              "expected DS_STORE_B16_D16_HI address VGPR") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[2].imm32 == 0x35u,
+              "expected DS_STORE_B16_D16_HI offset0")) {
+    return 1;
+  }
+
   const auto load_b32_words = MakeSmem(0u, 18u, 4u, true, 12u);
   if (!Expect(decoder.DecodeInstruction(
                   std::span<const std::uint32_t>(load_b32_words.data(),
@@ -1765,7 +1832,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 459u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 467u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -1971,6 +2038,18 @@ int main() {
               "expected interpreter support for DS_LOAD_I16") ||
       !Expect(interpreter.Supports("DS_LOAD_U16"),
               "expected interpreter support for DS_LOAD_U16") ||
+      !Expect(interpreter.Supports("DS_LOAD_U8_D16"),
+              "expected interpreter support for DS_LOAD_U8_D16") ||
+      !Expect(interpreter.Supports("DS_LOAD_U8_D16_HI"),
+              "expected interpreter support for DS_LOAD_U8_D16_HI") ||
+      !Expect(interpreter.Supports("DS_LOAD_I8_D16"),
+              "expected interpreter support for DS_LOAD_I8_D16") ||
+      !Expect(interpreter.Supports("DS_LOAD_I8_D16_HI"),
+              "expected interpreter support for DS_LOAD_I8_D16_HI") ||
+      !Expect(interpreter.Supports("DS_LOAD_U16_D16"),
+              "expected interpreter support for DS_LOAD_U16_D16") ||
+      !Expect(interpreter.Supports("DS_LOAD_U16_D16_HI"),
+              "expected interpreter support for DS_LOAD_U16_D16_HI") ||
       !Expect(interpreter.Supports("DS_STORE_B8"),
               "expected interpreter support for DS_STORE_B8") ||
       !Expect(interpreter.Supports("DS_STORE_B16"),
@@ -1983,6 +2062,10 @@ int main() {
               "expected interpreter support for DS_STORE_B96") ||
       !Expect(interpreter.Supports("DS_STORE_B128"),
               "expected interpreter support for DS_STORE_B128") ||
+      !Expect(interpreter.Supports("DS_STORE_B8_D16_HI"),
+              "expected interpreter support for DS_STORE_B8_D16_HI") ||
+      !Expect(interpreter.Supports("DS_STORE_B16_D16_HI"),
+              "expected interpreter support for DS_STORE_B16_D16_HI") ||
       !Expect(interpreter.Supports("S_LOAD_B32"),
               "expected interpreter support for S_LOAD_B32") ||
       !Expect(interpreter.Supports("S_LOAD_B64"),

@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 459> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 467> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -148,12 +148,20 @@ constexpr std::array<std::string_view, 459> kPhase0ExecutableOpcodes{{
     "DS_LOAD_U8",
     "DS_LOAD_I16",
     "DS_LOAD_U16",
+    "DS_LOAD_U8_D16",
+    "DS_LOAD_U8_D16_HI",
+    "DS_LOAD_I8_D16",
+    "DS_LOAD_I8_D16_HI",
+    "DS_LOAD_U16_D16",
+    "DS_LOAD_U16_D16_HI",
     "DS_STORE_B8",
     "DS_STORE_B16",
     "DS_STORE_B32",
     "DS_STORE_B64",
     "DS_STORE_B96",
     "DS_STORE_B128",
+    "DS_STORE_B8_D16_HI",
+    "DS_STORE_B16_D16_HI",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1235,7 +1243,13 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "DS_LOAD_I8" ||
              instruction_name == "DS_LOAD_U8" ||
              instruction_name == "DS_LOAD_I16" ||
-             instruction_name == "DS_LOAD_U16") {
+             instruction_name == "DS_LOAD_U16" ||
+             instruction_name == "DS_LOAD_U8_D16" ||
+             instruction_name == "DS_LOAD_U8_D16_HI" ||
+             instruction_name == "DS_LOAD_I8_D16" ||
+             instruction_name == "DS_LOAD_I8_D16_HI" ||
+             instruction_name == "DS_LOAD_U16_D16" ||
+             instruction_name == "DS_LOAD_U16_D16_HI") {
     if (words.size() < 2u) {
       if (error_message != nullptr) {
         *error_message = std::string(instruction_name) + " requires 2 dwords";
@@ -1276,6 +1290,14 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       described_vdst = DescribeWideVectorDestinationOperand(vdst, 3u);
     } else if (instruction_name == "DS_LOAD_B128") {
       described_vdst = DescribeWideVectorDestinationOperand(vdst, 4u);
+    } else if (instruction_name == "DS_LOAD_U8_D16" ||
+               instruction_name == "DS_LOAD_U8_D16_HI" ||
+               instruction_name == "DS_LOAD_I8_D16" ||
+               instruction_name == "DS_LOAD_I8_D16_HI" ||
+               instruction_name == "DS_LOAD_U16_D16" ||
+               instruction_name == "DS_LOAD_U16_D16_HI") {
+      described_vdst = DescribeReadWriteVectorOperand(
+          vdst, OperandRole::kDestination, OperandSlotKind::kDestination, 16u);
     }
 
     *instruction = DecodedInstruction::ThreeOperand(
@@ -1292,7 +1314,9 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "DS_STORE_B32" ||
              instruction_name == "DS_STORE_B64" ||
              instruction_name == "DS_STORE_B96" ||
-             instruction_name == "DS_STORE_B128") {
+             instruction_name == "DS_STORE_B128" ||
+             instruction_name == "DS_STORE_B8_D16_HI" ||
+             instruction_name == "DS_STORE_B16_D16_HI") {
     if (words.size() < 2u) {
       if (error_message != nullptr) {
         *error_message = std::string(instruction_name) + " requires 2 dwords";
@@ -1338,6 +1362,12 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
     } else if (instruction_name == "DS_STORE_B128") {
       described_vdata = DescribeWideVectorSourceOperand(
           vdata, OperandRole::kSource0, OperandSlotKind::kSource0, 4u);
+    } else if (instruction_name == "DS_STORE_B8_D16_HI") {
+      described_vdata = DescribePackedSourceOperand(
+          vdata, OperandRole::kSource0, OperandSlotKind::kSource0, 8u);
+    } else if (instruction_name == "DS_STORE_B16_D16_HI") {
+      described_vdata = DescribePackedSourceOperand(
+          vdata, OperandRole::kSource0, OperandSlotKind::kSource0, 16u);
     }
 
     *instruction = DecodedInstruction::ThreeOperand(
