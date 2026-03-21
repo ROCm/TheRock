@@ -855,6 +855,15 @@ bool MatchesUnknownDecode(const StubDecodedInstruction& decoded,
          decoded.operand_descriptors.descriptor_count == 0;
 }
 
+bool MatchesUnknownHelperSurface(const StubDecodedInstruction& decoded) {
+  return GetStubOpcodeShapeName(decoded.opcode_shape) == "kUnknown" &&
+         GetStubExecutionDomainName(decoded.execution_domain) == "kUnknown" &&
+         GetStubOperandLayoutName(decoded.operand_layout.layout_kind) ==
+             "kUnknown" &&
+         AllRoleHelperNamesKnown(decoded) && AllSlotKindHelperNamesKnown(decoded) &&
+         AllValueClassHelperNamesKnown(decoded);
+}
+
 StubOperandRole ExpectedRoleForSlotKind(StubOperandSlotKind slot_kind) {
   switch (slot_kind) {
     case StubOperandSlotKind::kDestination:
@@ -7150,6 +7159,7 @@ int main() {
     const StubDecodedInstruction decoded =
         DecodeStubInstruction(seed.instruction_name);
     if (!Expect(MatchesUnsupportedSeedDecode(decoded, seed) &&
+                    MatchesUnknownHelperSurface(decoded) &&
                     MatchesUnsupportedInstructionDecode(decoded,
                                                         seed.instruction_name) &&
                     FindStubDecoderRouteInfo(seed.instruction_name) == nullptr,
@@ -7160,7 +7170,8 @@ int main() {
       const StubDecodedInstruction via_entrypoint =
           DecodeViaExplicitRouteEntrypoint(manifest.route,
                                           seed.instruction_name);
-      if (!Expect(MatchesUnsupportedSeedDecode(via_entrypoint, seed),
+      if (!Expect(MatchesUnsupportedSeedDecode(via_entrypoint, seed) &&
+                      MatchesUnknownHelperSurface(via_entrypoint),
                   "expected unsupported seeded op to keep exact route-keyed unsupported parity")) {
         return 1;
       }
@@ -7173,7 +7184,8 @@ int main() {
 
   const StubDecodedInstruction unknown =
       DecodeStubInstruction("NO_SUCH_GFX1250_OPCODE");
-  if (!Expect(MatchesUnknownDecode(unknown, "NO_SUCH_GFX1250_OPCODE"),
+  if (!Expect(MatchesUnknownDecode(unknown, "NO_SUCH_GFX1250_OPCODE") &&
+                  MatchesUnknownHelperSurface(unknown),
               "expected exact unknown-instruction decode shape for missing opcode")) {
     return 1;
   }
@@ -7181,10 +7193,26 @@ int main() {
     const StubDecodedInstruction via_entrypoint =
         DecodeViaExplicitRouteEntrypoint(manifest.route,
                                         "NO_SUCH_GFX1250_OPCODE");
-    if (!Expect(MatchesUnknownDecode(via_entrypoint, "NO_SUCH_GFX1250_OPCODE"),
+    if (!Expect(MatchesUnknownDecode(via_entrypoint, "NO_SUCH_GFX1250_OPCODE") &&
+                    MatchesUnknownHelperSurface(via_entrypoint),
                 "expected unknown opcode to keep exact route-keyed unknown parity")) {
       return 1;
     }
+  }
+  if (!Expect(GetStubOpcodeShapeName(static_cast<StubOpcodeShape>(99)) ==
+                      "kUnknown" &&
+                  GetStubExecutionDomainName(
+                      static_cast<StubExecutionDomain>(99)) == "kUnknown" &&
+                  GetStubOperandLayoutName(
+                      static_cast<StubOperandLayoutKind>(99)) == "kUnknown" &&
+                  GetStubOperandRoleName(static_cast<StubOperandRole>(99)) ==
+                      "kUnknown" &&
+                  GetStubOperandSlotKindName(
+                      static_cast<StubOperandSlotKind>(99)) == "kUnknown" &&
+                  GetStubOperandValueClassName(
+                      static_cast<StubOperandValueClass>(99)) == "kUnknown",
+              "expected helper-name fallbacks for invalid gfx1250 stub enums")) {
+    return 1;
   }
 
   const StubDecoderEntrypointManifest* vop3p_manifest =

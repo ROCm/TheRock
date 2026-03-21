@@ -48,6 +48,7 @@
   - route-wide exact route-keyed entrypoint vs generic decode parity validation across the current routed seed set
   - route-wide exact decoded-route-to-manifest parity validation across the current routed seed set
   - route-wide exact helper-name parity and helper-coverage validation across the current routed seed set
+  - exact negative-path helper-surface parity and invalid-helper-enum fallback validation across the current local stub API
   - exact route-priority ordering and routed-instruction-list sequence validation across the current routed family set
   - exact collection lookup parity and global route-info ordering validation across the current routed family set
   - exact routed-instruction-name uniqueness and route-info/list bijection validation across the current routed family set
@@ -73,6 +74,7 @@
   - exact routed-seed ordering checks now pin `GetStubDecoderRouteInstructions()` and the full `GetStubDecoderRouteInfos()` sequence directly against the sorted routed subset of `GetDecoderSeedInfos()`
   - exact decode-hint mapping checks now pin `DecodeSeedHint -> StubDecoderRoute`, route names, and route priorities through hardcoded expectations rather than selector-derived expectations
   - exact negative-path checks now pin `DecodeVop3pStub` / `DecodeMimgTensorStub` / `DecodeVop1Stub` / `DecodeVop3SdstStub` wrong-entrypoint rejection across the full routed seed set, pin both `DecodeStubInstruction()` and all four route-keyed entrypoints on the unsupported seeded slice, pin `DecodeStubInstruction(const StubDecoderRouteInfo&)` normalization for unsupported route infos, pin route-keyed unknown-op parity, and pin null manifest lookups for `kUnsupported`
+  - exact negative-path helper checks now pin `kUnknown` opcode-shape / execution-domain / operand-layout helper surfaces across unsupported and unknown decodes, and pin direct invalid-enum helper fallbacks to `kUnknown`
 
 - `VOP3P` packed BF16 slice:
   - `V_PK_ADD_BF16`
