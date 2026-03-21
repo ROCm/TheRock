@@ -8841,16 +8841,37 @@ int main() {
   auto make_ds_addtid_state = []() {
     WaveExecutionState state;
     state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x13572468u;
     state.sgprs[124] = 0x00010020u;
     state.vgprs[1][0] = 111u;
     state.vgprs[1][1] = 222u;
     state.vgprs[1][3] = 444u;
     state.vgprs[2][2] = 0xdeadbeefu;
+    state.vgprs[3][0] = 0x01020304u;
+    state.vgprs[3][1] = 0x11121314u;
+    state.vgprs[3][2] = 0x21222324u;
+    state.vgprs[3][3] = 0x31323334u;
+    const std::uint32_t inactive_lane_lds = 0x55667788u;
+    const std::uint32_t untouched_lds = 0x99aabbccu;
+    std::memcpy(state.lds_bytes.data() + 56u, &inactive_lane_lds,
+                sizeof(inactive_lane_lds));
+    std::memcpy(state.lds_bytes.data() + 64u, &untouched_lds,
+                sizeof(untouched_lds));
     return state;
   };
   auto validate_ds_addtid_state = [&](const WaveExecutionState& state,
                                       const char* mode) {
     if (!Expect(state.halted, "expected ds addtid program to halt") ||
+        !Expect(state.exec_mask == 0b1011ULL,
+                "expected ds addtid to preserve exec") ||
+        !Expect(state.sgprs[0] == 0x13572468u &&
+                    state.sgprs[124] == 0x00010020u,
+                "expected ds addtid to preserve sgprs") ||
+        !Expect(state.vgprs[3][0] == 0x01020304u &&
+                    state.vgprs[3][1] == 0x11121314u &&
+                    state.vgprs[3][2] == 0x21222324u &&
+                    state.vgprs[3][3] == 0x31323334u,
+                "expected ds addtid to preserve unrelated vgprs") ||
         !Expect(state.vgprs[2][0] == 111u,
                 "expected ds read_addtid lane 0 result") ||
         !Expect(state.vgprs[2][1] == 222u,
@@ -8872,7 +8893,11 @@ int main() {
     };
     if (!expect_lds_value(48u, 111u, "expected ds write_addtid lane 0 lds") ||
         !expect_lds_value(52u, 222u, "expected ds write_addtid lane 1 lds") ||
-        !expect_lds_value(60u, 444u, "expected ds write_addtid lane 3 lds")) {
+        !expect_lds_value(56u, 0x55667788u,
+                          "expected ds write_addtid inactive lane lds") ||
+        !expect_lds_value(60u, 444u, "expected ds write_addtid lane 3 lds") ||
+        !expect_lds_value(64u, 0x99aabbccu,
+                          "expected ds write_addtid unrelated lds")) {
       std::cerr << mode << '\n';
       return false;
     }
