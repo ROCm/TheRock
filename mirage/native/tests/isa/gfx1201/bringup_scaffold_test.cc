@@ -205,7 +205,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 453u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 459u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -413,6 +413,18 @@ int main() {
               "expected DS_LOAD_I16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_U16"),
               "expected DS_LOAD_U16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B8"),
+              "expected DS_STORE_B8 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B16"),
+              "expected DS_STORE_B16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B32"),
+              "expected DS_STORE_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B64"),
+              "expected DS_STORE_B64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B96"),
+              "expected DS_STORE_B96 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B128"),
+              "expected DS_STORE_B128 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B32"),
               "expected S_LOAD_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B64"),
@@ -1428,6 +1440,30 @@ int main() {
     return 1;
   }
 
+  const auto ds_store_b128_words = MakeDs(223u, 59u, 60u, 61u, 62u, 0x34u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(ds_store_b128_words.data(),
+                                                 ds_store_b128_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected DS_STORE_B128 decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected DS_STORE_B128 two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "DS_STORE_B128",
+              "expected DS_STORE_B128 opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected DS_STORE_B128 three-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 61u,
+              "expected DS_STORE_B128 data VGPR") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[1].index == 60u,
+              "expected DS_STORE_B128 address VGPR") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[2].imm32 == 0x34u,
+              "expected DS_STORE_B128 offset0")) {
+    return 1;
+  }
+
   const auto load_b32_words = MakeSmem(0u, 18u, 4u, true, 12u);
   if (!Expect(decoder.DecodeInstruction(
                   std::span<const std::uint32_t>(load_b32_words.data(),
@@ -1729,7 +1765,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 453u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 459u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -1935,6 +1971,18 @@ int main() {
               "expected interpreter support for DS_LOAD_I16") ||
       !Expect(interpreter.Supports("DS_LOAD_U16"),
               "expected interpreter support for DS_LOAD_U16") ||
+      !Expect(interpreter.Supports("DS_STORE_B8"),
+              "expected interpreter support for DS_STORE_B8") ||
+      !Expect(interpreter.Supports("DS_STORE_B16"),
+              "expected interpreter support for DS_STORE_B16") ||
+      !Expect(interpreter.Supports("DS_STORE_B32"),
+              "expected interpreter support for DS_STORE_B32") ||
+      !Expect(interpreter.Supports("DS_STORE_B64"),
+              "expected interpreter support for DS_STORE_B64") ||
+      !Expect(interpreter.Supports("DS_STORE_B96"),
+              "expected interpreter support for DS_STORE_B96") ||
+      !Expect(interpreter.Supports("DS_STORE_B128"),
+              "expected interpreter support for DS_STORE_B128") ||
       !Expect(interpreter.Supports("S_LOAD_B32"),
               "expected interpreter support for S_LOAD_B32") ||
       !Expect(interpreter.Supports("S_LOAD_B64"),

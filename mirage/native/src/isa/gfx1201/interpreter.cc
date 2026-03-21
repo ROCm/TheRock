@@ -55,7 +55,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 453> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 459> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -186,6 +186,12 @@ constexpr std::array<std::string_view, 453> kExecutableSeedOpcodes{{
     "DS_LOAD_U8",
     "DS_LOAD_I16",
     "DS_LOAD_U16",
+    "DS_STORE_B8",
+    "DS_STORE_B16",
+    "DS_STORE_B32",
+    "DS_STORE_B64",
+    "DS_STORE_B96",
+    "DS_STORE_B128",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1400,6 +1406,30 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "DS_LOAD_U16") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsLoadU16;
+    return true;
+  }
+  if (opcode == "DS_STORE_B8") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsStoreB8;
+    return true;
+  }
+  if (opcode == "DS_STORE_B16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsStoreB16;
+    return true;
+  }
+  if (opcode == "DS_STORE_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsStoreB32;
+    return true;
+  }
+  if (opcode == "DS_STORE_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsStoreB64;
+    return true;
+  }
+  if (opcode == "DS_STORE_B96") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsStoreB96;
+    return true;
+  }
+  if (opcode == "DS_STORE_B128") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsStoreB128;
     return true;
   }
   if (opcode == "S_LOAD_B32") {
@@ -3547,6 +3577,12 @@ bool IsDsLoadOpcode(std::string_view opcode) {
          opcode == "DS_LOAD_I16" || opcode == "DS_LOAD_U16";
 }
 
+bool IsDsStoreOpcode(std::string_view opcode) {
+  return opcode == "DS_STORE_B8" || opcode == "DS_STORE_B16" ||
+         opcode == "DS_STORE_B32" || opcode == "DS_STORE_B64" ||
+         opcode == "DS_STORE_B96" || opcode == "DS_STORE_B128";
+}
+
 std::size_t DsAtomic32AddressOperandIndex(std::string_view opcode) {
   return IsDsAtomic32ReturnOpcode(opcode) ? 1u : 0u;
 }
@@ -3624,13 +3660,52 @@ bool ComputeDsAddress(const DecodedInstruction& instruction,
 }
 
 bool ComputeDsLoadAddress(const DecodedInstruction& instruction,
-                         const WaveExecutionState& state,
-                         std::size_t lane_index,
-                         std::uint64_t* address,
-                         std::string* error_message) {
+                          const WaveExecutionState& state,
+                          std::size_t lane_index,
+                          std::uint64_t* address,
+                          std::string* error_message) {
   if (address == nullptr) {
     if (error_message != nullptr) {
       *error_message = "DS load address output must not be null";
+    }
+    return false;
+  }
+  if (instruction.operands[1].kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = std::string(instruction.opcode) +
+                       " expected VGPR address source";
+    }
+    return false;
+  }
+
+  const std::uint32_t vaddr =
+      ReadVectorOperand(instruction.operands[1], state, lane_index,
+                        error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+  const std::uint32_t offset0 =
+      ReadScalarOperand(instruction.operands[2], state, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+
+  *address = static_cast<std::uint64_t>(vaddr) +
+             static_cast<std::uint64_t>(offset0);
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool ComputeDsStoreAddress(const DecodedInstruction& instruction,
+                           const WaveExecutionState& state,
+                           std::size_t lane_index,
+                           std::uint64_t* address,
+                           std::string* error_message) {
+  if (address == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "DS store address output must not be null";
     }
     return false;
   }
@@ -3752,10 +3827,10 @@ bool ExecuteDsAtomic32AtAddress(const DecodedInstruction& instruction,
 }
 
 bool ExecuteDsLoadAtAddress(const DecodedInstruction& instruction,
-                           std::uint64_t address,
-                           std::size_t lane_index,
-                           WaveExecutionState* state,
-                           ExecutionMemory* memory,
+                            std::uint64_t address,
+                            std::size_t lane_index,
+                            WaveExecutionState* state,
+                            ExecutionMemory* memory,
                            std::string* error_message) {
   const std::string_view opcode = instruction.opcode;
 
@@ -3836,6 +3911,119 @@ bool ExecuteDsLoadAtAddress(const DecodedInstruction& instruction,
           : static_cast<std::uint32_t>(value);
   return WriteVectorOperand(instruction.operands[0], lane_index, extended,
                             state, error_message);
+}
+
+bool ExecuteDsStoreAtAddress(const DecodedInstruction& instruction,
+                             std::uint64_t address,
+                             std::size_t lane_index,
+                             const WaveExecutionState& state,
+                             ExecutionMemory* memory,
+                             std::string* error_message) {
+  const std::string_view opcode = instruction.opcode;
+
+  if (opcode == "DS_STORE_B8") {
+    const std::uint32_t value = ReadVectorOperand(instruction.operands[0], state,
+                                                  lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU8(address, static_cast<std::uint8_t>(value))) {
+      if (error_message != nullptr) {
+        *error_message = "DS_STORE_B8 memory write failed";
+      }
+      return false;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (opcode == "DS_STORE_B16") {
+    const std::uint32_t value = ReadVectorOperand(instruction.operands[0], state,
+                                                  lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU16(address, static_cast<std::uint16_t>(value))) {
+      if (error_message != nullptr) {
+        *error_message = "DS_STORE_B16 memory write failed";
+      }
+      return false;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (opcode == "DS_STORE_B32") {
+    const std::uint32_t value = ReadVectorOperand(instruction.operands[0], state,
+                                                  lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU32(address, value)) {
+      if (error_message != nullptr) {
+        *error_message = "DS_STORE_B32 memory write failed";
+      }
+      return false;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (opcode == "DS_STORE_B64") {
+    const std::uint64_t value = ReadWideSourceOperand(
+        instruction.operands[0], state, lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU32(address, static_cast<std::uint32_t>(value)) ||
+        !memory->StoreU32(address + 4u,
+                          static_cast<std::uint32_t>(value >> 32))) {
+      if (error_message != nullptr) {
+        *error_message = "DS_STORE_B64 memory write failed";
+      }
+      return false;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (instruction.operands[0].kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "expected vector source operand";
+    }
+    return false;
+  }
+
+  const std::size_t word_count = opcode == "DS_STORE_B96" ? 3u : 4u;
+  for (std::size_t i = 0; i < word_count; ++i) {
+    InstructionOperand element_operand =
+        InstructionOperand::Vgpr(static_cast<std::uint16_t>(
+            instruction.operands[0].index + static_cast<std::uint16_t>(i)));
+    const std::uint32_t value = ReadVectorOperand(element_operand, state,
+                                                  lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!memory->StoreU32(address + static_cast<std::uint64_t>(i * 4u), value)) {
+      if (error_message != nullptr) {
+        *error_message = std::string(opcode) + " memory write failed";
+      }
+      return false;
+    }
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
 }
 
 bool ExecuteVectorGlobalLoadBlockAtAddress(const DecodedInstruction& instruction,
@@ -6018,6 +6206,37 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     }
     return true;
   }
+  if (IsDsStoreOpcode(instruction.opcode)) {
+    if (!ValidateOperandCount(instruction, 3u, error_message)) {
+      return false;
+    }
+    if (memory == nullptr) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " requires execution memory";
+      }
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < kGfx1201LaneCount;
+         ++lane_index) {
+      if ((MaskToGfx1201Wave32(state->exec_mask) & (1ull << lane_index)) == 0u) {
+        continue;
+      }
+      std::uint64_t address = 0;
+      if (!ComputeDsStoreAddress(instruction, *state, lane_index, &address,
+                                 error_message)) {
+        return false;
+      }
+      if (!ExecuteDsStoreAtAddress(instruction, address, lane_index, *state,
+                                   memory, error_message)) {
+        return false;
+      }
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
   if (instruction.opcode == "GLOBAL_INV" || instruction.opcode == "GLOBAL_WB" ||
       instruction.opcode == "GLOBAL_WBINV") {
     return ValidateOperandCount(instruction, 0, error_message);
@@ -7408,6 +7627,12 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kDsLoadU8:
     case Gfx1201CompiledOpcode::kDsLoadI16:
     case Gfx1201CompiledOpcode::kDsLoadU16:
+    case Gfx1201CompiledOpcode::kDsStoreB8:
+    case Gfx1201CompiledOpcode::kDsStoreB16:
+    case Gfx1201CompiledOpcode::kDsStoreB32:
+    case Gfx1201CompiledOpcode::kDsStoreB64:
+    case Gfx1201CompiledOpcode::kDsStoreB96:
+    case Gfx1201CompiledOpcode::kDsStoreB128:
     case Gfx1201CompiledOpcode::kSLoadB32:
     case Gfx1201CompiledOpcode::kSLoadB64:
     case Gfx1201CompiledOpcode::kSLoadB96:
