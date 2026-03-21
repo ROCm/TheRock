@@ -779,6 +779,29 @@ bool MatchesUnsupportedSeedDecode(const StubDecodedInstruction& decoded,
          decoded.operand_descriptors.descriptor_count == 0;
 }
 
+bool MatchesUnsupportedInstructionDecode(
+    const StubDecodedInstruction& decoded,
+    std::string_view instruction_name) {
+  return decoded.instruction_name == instruction_name &&
+         decoded.status == StubDecodeStatus::kUnsupportedRoute &&
+         decoded.route == StubDecoderRoute::kUnsupported &&
+         decoded.route_name == "kUnsupported" &&
+         decoded.entrypoint_name == "DecodeUnsupportedStub" &&
+         decoded.route_priority == 0 &&
+         decoded.rdna4_encoding_name.empty() &&
+         decoded.rdna4_opcode == 0 &&
+         decoded.rdna4_operand_count == 0 &&
+         !decoded.appears_in_rdna4_xml && !decoded.is_target_specific &&
+         decoded.opcode_shape == StubOpcodeShape::kUnknown &&
+         decoded.execution_domain == StubExecutionDomain::kUnknown &&
+         !decoded.uses_accumulator && !decoded.uses_tensor_memory &&
+         !decoded.uses_scale_path && !decoded.uses_paired_operands &&
+         decoded.operand_layout.layout_kind == StubOperandLayoutKind::kUnknown &&
+         decoded.operand_roles.binding_count == 0 &&
+         decoded.operand_slots.binding_count == 0 &&
+         decoded.operand_descriptors.descriptor_count == 0;
+}
+
 bool MatchesUnknownDecode(const StubDecodedInstruction& decoded,
                          std::string_view instruction_name) {
   return decoded.instruction_name == instruction_name &&
@@ -7034,6 +7057,26 @@ int main() {
               "expected unsupported route to surface unsupported entrypoint")) {
     return 1;
   }
+  const StubDecoderRouteInfo synthetic_unsupported_info{
+      "SYNTHETIC_GFX1250_UNSUPPORTED",
+      StubDecoderRoute::kUnsupported,
+      "kBogusRoute",
+      99,
+      DecodeSeedHint::kUnknown,
+      "BOGUS_ENC",
+      123,
+      7,
+      true,
+      true,
+  };
+  const StubDecodedInstruction via_unsupported_info =
+      DecodeStubInstruction(synthetic_unsupported_info);
+  if (!Expect(MatchesUnsupportedInstructionDecode(
+                  via_unsupported_info,
+                  synthetic_unsupported_info.instruction_name),
+              "expected unsupported route-info decode to normalize to exact unsupported shape")) {
+    return 1;
+  }
   std::uint32_t unsupported_seed_count = 0;
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
     if (!IsUnsupportedSeededInstruction(seed)) {
@@ -7043,6 +7086,8 @@ int main() {
     const StubDecodedInstruction decoded =
         DecodeStubInstruction(seed.instruction_name);
     if (!Expect(MatchesUnsupportedSeedDecode(decoded, seed) &&
+                    MatchesUnsupportedInstructionDecode(decoded,
+                                                        seed.instruction_name) &&
                     FindStubDecoderRouteInfo(seed.instruction_name) == nullptr,
                 "expected unsupported seeded op to keep exact unsupported-route decode parity")) {
       return 1;
