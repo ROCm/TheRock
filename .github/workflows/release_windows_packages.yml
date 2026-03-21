@@ -217,7 +217,7 @@ jobs:
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Enable cache
-        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ${{ env.CACHE_DIR }}
           key: windows-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
@@ -359,7 +359,7 @@ jobs:
             }
 
       - name: Save cache
-        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         if: ${{ !cancelled() }}
         with:
           path: ${{ env.CACHE_DIR }}
