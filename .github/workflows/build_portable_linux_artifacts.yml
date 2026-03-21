@@ -133,7 +133,7 @@ jobs:
       - name: Run comgr tests
         continue-on-error: true
         run: |
-          ninja -C build/amd-comgr/build check-comgr
+          ninja -C build/compiler/amd-comgr/build check-comgr
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
