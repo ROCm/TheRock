@@ -205,7 +205,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 471u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 475u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -449,6 +449,14 @@ int main() {
               "expected DS_STORE_B8_D16_HI executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B16_D16_HI"),
               "expected DS_STORE_B16_D16_HI executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_PK_ADD_RTN_F16"),
+              "expected DS_PK_ADD_RTN_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_PK_ADD_F16"),
+              "expected DS_PK_ADD_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_PK_ADD_RTN_BF16"),
+              "expected DS_PK_ADD_RTN_BF16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_PK_ADD_BF16"),
+              "expected DS_PK_ADD_BF16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B32"),
               "expected S_LOAD_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B64"),
@@ -1598,6 +1606,64 @@ int main() {
     return 1;
   }
 
+  const auto ds_pk_add_rtn_bf16_words =
+      MakeDs(171u, 59u, 60u, 61u, 62u, 0x3bu);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(ds_pk_add_rtn_bf16_words.data(),
+                                                 ds_pk_add_rtn_bf16_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected DS_PK_ADD_RTN_BF16 decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected DS_PK_ADD_RTN_BF16 two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "DS_PK_ADD_RTN_BF16",
+              "expected DS_PK_ADD_RTN_BF16 opcode") ||
+      !Expect(decoded_instruction.operand_count == 5u,
+              "expected DS_PK_ADD_RTN_BF16 five-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 59u,
+              "expected DS_PK_ADD_RTN_BF16 destination VGPR") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[1].index == 60u,
+              "expected DS_PK_ADD_RTN_BF16 address VGPR") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[2].index == 61u,
+              "expected DS_PK_ADD_RTN_BF16 data VGPR") ||
+      !Expect(decoded_instruction.operands[3].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[3].imm32 == 0x3bu,
+              "expected DS_PK_ADD_RTN_BF16 offset0") ||
+      !Expect(decoded_instruction.operands[4].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[4].imm32 == 0u,
+              "expected DS_PK_ADD_RTN_BF16 offset1")) {
+    return 1;
+  }
+
+  const auto ds_pk_add_f16_words = MakeDs(154u, 59u, 60u, 61u, 62u, 0x3cu);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(ds_pk_add_f16_words.data(),
+                                                 ds_pk_add_f16_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected DS_PK_ADD_F16 decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected DS_PK_ADD_F16 two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "DS_PK_ADD_F16",
+              "expected DS_PK_ADD_F16 opcode") ||
+      !Expect(decoded_instruction.operand_count == 4u,
+              "expected DS_PK_ADD_F16 four-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 60u,
+              "expected DS_PK_ADD_F16 address VGPR") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[1].index == 61u,
+              "expected DS_PK_ADD_F16 data VGPR") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[2].imm32 == 0x3cu,
+              "expected DS_PK_ADD_F16 offset0") ||
+      !Expect(decoded_instruction.operands[3].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[3].imm32 == 0u,
+              "expected DS_PK_ADD_F16 offset1")) {
+    return 1;
+  }
+
   const auto load_b32_words = MakeSmem(0u, 18u, 4u, true, 12u);
   if (!Expect(decoder.DecodeInstruction(
                   std::span<const std::uint32_t>(load_b32_words.data(),
@@ -1899,7 +1965,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 471u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 475u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -2097,6 +2163,14 @@ int main() {
               "expected interpreter support for DS_SUB_CLAMP_RTN_U32") ||
       !Expect(interpreter.Supports("DS_SUB_CLAMP_U32"),
               "expected interpreter support for DS_SUB_CLAMP_U32") ||
+      !Expect(interpreter.Supports("DS_PK_ADD_RTN_F16"),
+              "expected interpreter support for DS_PK_ADD_RTN_F16") ||
+      !Expect(interpreter.Supports("DS_PK_ADD_F16"),
+              "expected interpreter support for DS_PK_ADD_F16") ||
+      !Expect(interpreter.Supports("DS_PK_ADD_RTN_BF16"),
+              "expected interpreter support for DS_PK_ADD_RTN_BF16") ||
+      !Expect(interpreter.Supports("DS_PK_ADD_BF16"),
+              "expected interpreter support for DS_PK_ADD_BF16") ||
       !Expect(interpreter.Supports("DS_LOAD_B32"),
               "expected interpreter support for DS_LOAD_B32") ||
       !Expect(interpreter.Supports("DS_LOAD_B64"),

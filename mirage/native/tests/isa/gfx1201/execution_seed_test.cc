@@ -3235,7 +3235,7 @@ struct DsLoadCase {
   std::uint32_t offset;
 };
 
-constexpr std::array<DsCase, 15> kDsCases{{
+constexpr std::array<DsCase, 17> kDsCases{{
     {"DS_ADD_F32", 21u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsAddF32, 64u, 80u, 0x000u},
     {"DS_ADD_U32", 0u,
@@ -3267,9 +3267,14 @@ constexpr std::array<DsCase, 15> kDsCases{{
     {"DS_SUB_CLAMP_U32", 153u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsSubClampU32, 78u, 94u,
      0x0e0u},
+    {"DS_PK_ADD_F16", 154u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsPkAddF16, 97u, 99u, 0x0f0u},
+    {"DS_PK_ADD_BF16", 155u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsPkAddBf16, 98u, 100u,
+     0x0f4u},
 }};
 
-constexpr std::array<DsRtnCase, 15> kDsRtnCases{{
+constexpr std::array<DsRtnCase, 17> kDsRtnCases{{
     {"DS_ADD_RTN_F32", 121u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsAddRtnF32, 32u, 96u, 112u,
      0x000u},
@@ -3315,6 +3320,12 @@ constexpr std::array<DsRtnCase, 15> kDsRtnCases{{
     {"DS_SUB_CLAMP_RTN_U32", 169u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsSubClampRtnU32, 46u, 110u,
      126u, 0x0e0u},
+    {"DS_PK_ADD_RTN_F16", 170u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsPkAddRtnF16, 47u, 111u,
+     80u, 0x0f0u},
+    {"DS_PK_ADD_RTN_BF16", 171u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsPkAddRtnBf16, 48u, 82u,
+     81u, 0x0f4u},
 }};
 
 constexpr std::uint64_t kDsLoadBaseAddress = 0x16000u;
@@ -3581,6 +3592,14 @@ std::uint32_t InitialDsOldValue(std::size_t case_index, std::size_t lane) {
       return lane == 0u ? 9u : (lane == 1u ? 3u : 4u);
     case 14:
       return lane == 0u ? 5u : (lane == 1u ? 7u : 1u);
+    case 15:
+      return lane == 0u ? PackF16Pair(1.0f, -2.0f)
+                        : (lane == 1u ? PackF16Pair(-1.25f, 3.0f)
+                                       : PackF16Pair(0.0f, -4.0f));
+    case 16:
+      return lane == 0u ? PackBf16Pair(1.0f, -2.0f)
+                        : (lane == 1u ? PackBf16Pair(-1.5f, 3.0f)
+                                       : PackBf16Pair(0.25f, -4.0f));
     default:
       return 0u;
   }
@@ -3628,6 +3647,14 @@ std::uint32_t InitialDsDataValue(std::size_t case_index, std::size_t lane) {
       return lane == 0u ? 4u : (lane == 1u ? 7u : 4u);
     case 14:
       return lane == 0u ? 9u : (lane == 1u ? 2u : 1u);
+    case 15:
+      return lane == 0u ? PackF16Pair(0.5f, 1.0f)
+                        : (lane == 1u ? PackF16Pair(2.0f, -0.5f)
+                                       : PackF16Pair(-0.5f, 1.5f));
+    case 16:
+      return lane == 0u ? PackBf16Pair(0.5f, 1.0f)
+                        : (lane == 1u ? PackBf16Pair(2.0f, -0.5f)
+                                       : PackBf16Pair(-0.25f, 1.5f));
     default:
       return 0u;
   }
@@ -3636,6 +3663,9 @@ std::uint32_t InitialDsDataValue(std::size_t case_index, std::size_t lane) {
 std::uint32_t ExpectedDsNewValue(std::size_t case_index,
                                  std::uint32_t old_value,
                                  std::uint32_t data_value) {
+  using mirage::sim::isa::PackedBFloat16Add;
+  using mirage::sim::isa::PackedHalfAdd;
+
   switch (case_index) {
     case 0:
       return FloatBits(BitsToFloat(old_value) + BitsToFloat(data_value));
@@ -3668,6 +3698,10 @@ std::uint32_t ExpectedDsNewValue(std::size_t case_index,
       return old_value >= data_value ? old_value - data_value : old_value;
     case 14:
       return data_value > old_value ? data_value - old_value : 0u;
+    case 15:
+      return PackedHalfAdd(old_value, data_value);
+    case 16:
+      return PackedBFloat16Add(old_value, data_value);
     default:
       return old_value;
   }

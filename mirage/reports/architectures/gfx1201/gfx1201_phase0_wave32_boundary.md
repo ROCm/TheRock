@@ -13,7 +13,7 @@ execution path.
 
 ## Summary
 
-- Phase-0 executable opcodes: `471`
+- Phase-0 executable opcodes: `475`
 - Wave size: `32`
 - All currently seeded `ENC_VOP1`, `ENC_VOP2`, `ENC_VOPC`, `ENC_SMEM`, and `ENC_VGLOBAL` instruction/encoding pairs are executable on the local path.
 - There are no remaining imported `ENC_VOP1`, `ENC_VOP2`, `ENC_VOPC`, `ENC_SMEM`, or `ENC_VGLOBAL` instruction/encoding pairs outside the current seed surface.
@@ -40,7 +40,7 @@ execution path.
 
 - `ENC_SMEM`: example `S_LOAD_B32`, seeded `28`, executable `28` via `S_ATC_PROBE`, as-is `0`, decoder-rollup `3`, semantic-only `0`, gfx1201-specific `25`
 - `ENC_VOP3`: example `V_ADD3_U32`, seeded `434`, executable `0`, as-is `232`, decoder-rollup `91`, semantic-only `24`, gfx1201-specific `87`
-- `ENC_VDS`: example `DS_ADD_U32`, seeded `123`, executable `53` via `DS_ADD_F32`, as-is `27`, decoder-rollup `38`, semantic-only `0`, gfx1201-specific `58`
+- `ENC_VDS`: example `DS_ADD_U32`, seeded `123`, executable `57` via `DS_ADD_F32`, as-is `27`, decoder-rollup `38`, semantic-only `0`, gfx1201-specific `58`
 - `ENC_VGLOBAL`: example `GLOBAL_LOAD_B32`, seeded `65`, executable `65` via `GLOBAL_ATOMIC_ADD_F32`, as-is `3`, decoder-rollup `0`, semantic-only `0`, gfx1201-specific `62`
 
 `ENC_VGLOBAL` is now saturated because `ENC_SMEM` is already saturated,
@@ -64,8 +64,8 @@ the packed-half atomic pair `GLOBAL_ATOMIC_PK_ADD_F16`/`GLOBAL_ATOMIC_PK_ADD_BF1
 `DS_LOAD_B96`, `DS_LOAD_B128`, `DS_LOAD_I8`, `DS_LOAD_U8`, `DS_LOAD_I16`, `DS_LOAD_U16`, `DS_LOAD_U8_D16`,
 `DS_LOAD_U8_D16_HI`, `DS_LOAD_I8_D16`, `DS_LOAD_I8_D16_HI`, `DS_LOAD_U16_D16`, and `DS_LOAD_U16_D16_HI`, and the matching
 simple one-address LDS store slice `DS_STORE_B8`, `DS_STORE_B16`, `DS_STORE_B32`, `DS_STORE_B64`, `DS_STORE_B96`,
-`DS_STORE_B128`, `DS_STORE_B8_D16_HI`, and `DS_STORE_B16_D16_HI`, while
+`DS_STORE_B128`, `DS_STORE_B8_D16_HI`, `DS_STORE_B16_D16_HI`, `DS_PK_ADD_RTN_F16`, `DS_PK_ADD_F16`, `DS_PK_ADD_RTN_BF16`, and `DS_PK_ADD_BF16`, while
 remaining the recommended next frontier.
-The next coherent local frontier therefore moves further into `ENC_VDS` through nearby single-address utilities or packed LDS tails, with later frontier steps moving into broader
+The next coherent local frontier therefore moves further into `ENC_VDS` through nearby single-address utilities or the remaining low-risk packed LDS tail, with later frontier steps moving into broader
 decoder/execution churn, and with `ENC_VOP3` remaining the later broadest
 step.
