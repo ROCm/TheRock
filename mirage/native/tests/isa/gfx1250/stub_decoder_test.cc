@@ -7235,6 +7235,21 @@ int main() {
       return 1;
     }
   }
+  const StubDecodedInstruction empty_instruction = DecodeStubInstruction("");
+  if (!Expect(MatchesUnknownDecode(empty_instruction, "") &&
+                  MatchesUnknownHelperSurface(empty_instruction),
+              "expected empty instruction name to keep exact unknown decode parity")) {
+    return 1;
+  }
+  for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
+    const StubDecodedInstruction via_entrypoint =
+        DecodeViaExplicitRouteEntrypoint(manifest.route, "");
+    if (!Expect(MatchesUnknownDecode(via_entrypoint, "") &&
+                    MatchesUnknownHelperSurface(via_entrypoint),
+                "expected empty instruction name to keep exact route-keyed unknown parity")) {
+      return 1;
+    }
+  }
   if (!Expect(GetStubOpcodeShapeName(static_cast<StubOpcodeShape>(99)) ==
                       "kUnknown" &&
                   GetStubExecutionDomainName(

@@ -57,7 +57,7 @@
   - exact route-selector ordering parity against the sorted routed seed-catalog slice
   - exact negative-path parity validation across routed wrong-entrypoint decodes and unsupported seeded ops
   - exact decode-hint-to-route/name/priority parity validation independent of selector implementation
-  - exact selector negative-path fallback validation for unsupported routes, invalid routes, invalid decode hints, and unknown instructions
+  - exact selector negative-path fallback validation for unsupported routes, invalid routes, invalid decode hints, unknown instructions, and empty instruction names
 
 ## Routed Seed Metadata Coverage
 
@@ -75,8 +75,8 @@
   - exact routed-seed-catalog parity checks now pin route manifests, per-seed route-info fields, routed instruction-list membership, and unsupported-seed exclusion directly against `GetDecoderSeedInfos()` across `kVop3p`, `kMimgTensor`, `kVop1`, and `kVop3Sdst`
   - exact routed-seed ordering checks now pin `GetStubDecoderRouteInstructions()` and the full `GetStubDecoderRouteInfos()` sequence directly against the sorted routed subset of `GetDecoderSeedInfos()`
   - exact decode-hint mapping checks now pin `DecodeSeedHint -> StubDecoderRoute`, route names, and route priorities through hardcoded expectations rather than selector-derived expectations
-  - exact selector negative-path checks now pin `SelectStubDecoderRoute(invalid_hint)`, `GetStubDecoderRouteName(invalid_route)`, `GetStubDecoderRouteInstructions(unsupported_or_invalid_route)`, `FindStubDecoderRouteManifest(unsupported_or_invalid_route)`, and unknown-instruction lookup exclusion
-  - exact negative-path checks now pin `DecodeVop3pStub` / `DecodeMimgTensorStub` / `DecodeVop1Stub` / `DecodeVop3SdstStub` wrong-entrypoint rejection across the full routed seed set, pin both `DecodeStubInstruction()` and all four route-keyed entrypoints on the unsupported seeded slice, pin `DecodeStubInstruction(const StubDecoderRouteInfo&)` normalization for both unsupported and invalid route infos, pin route-keyed unknown-op parity, and pin null manifest lookups for `kUnsupported`
+  - exact selector negative-path checks now pin `SelectStubDecoderRoute(invalid_hint)`, `GetStubDecoderRouteName(invalid_route)`, `GetStubDecoderRouteInstructions(unsupported_or_invalid_route)`, `FindStubDecoderRouteManifest(unsupported_or_invalid_route)`, plus both unknown-instruction and empty-instruction lookup exclusion
+  - exact negative-path checks now pin `DecodeVop3pStub` / `DecodeMimgTensorStub` / `DecodeVop1Stub` / `DecodeVop3SdstStub` wrong-entrypoint rejection across the full routed seed set, pin both `DecodeStubInstruction()` and all four route-keyed entrypoints on the unsupported seeded slice, pin `DecodeStubInstruction(const StubDecoderRouteInfo&)` normalization for both unsupported and invalid route infos, pin both unknown-op and empty-instruction route-keyed parity, and pin null manifest lookups for `kUnsupported`
   - exact negative-path helper checks now pin `kUnknown` opcode-shape / execution-domain / operand-layout helper surfaces across unsupported and unknown decodes, and pin direct invalid-enum helper fallbacks to `kUnknown`
   - exact route-info negative-path checks now pin supported synthetic `StubDecoderRouteInfo` inputs with unknown instruction names to preserve caller route metadata while returning an empty `kUnknown` structural decode through the route-specific entrypoint name
 

@@ -399,6 +399,12 @@ int main() {
               "expected unknown instruction to stay excluded from all routed selector surfaces")) {
     return 1;
   }
+  if (!Expect(SelectStubDecoderRoute("") == StubDecoderRoute::kUnsupported &&
+                  FindStubDecoderRouteInfo("") == nullptr &&
+                  !ListedInAnyRoute(""),
+              "expected empty instruction name to stay excluded from all routed selector surfaces")) {
+    return 1;
+  }
 
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
     const StubDecoderRoute expected_route =
