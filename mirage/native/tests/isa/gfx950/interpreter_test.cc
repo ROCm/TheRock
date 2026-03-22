@@ -1005,31 +1005,40 @@ bool RunDsPairReturnProgramTest(
   auto make_ds_pair_return_state = []() {
     WaveExecutionState state;
     state.exec_mask = 0b1011ULL;
+    state.sgprs[5] = 0x13579bdfu;
     state.vgprs[0][0] = 64u;
     state.vgprs[0][1] = 96u;
+    state.vgprs[0][2] = 160u;
     state.vgprs[0][3] = 128u;
     state.vgprs[2][0] = 1001u;
     state.vgprs[2][1] = 2001u;
+    state.vgprs[2][2] = 0xabc00101u;
     state.vgprs[2][3] = 3001u;
     state.vgprs[3][0] = 1002u;
     state.vgprs[3][1] = 2002u;
+    state.vgprs[3][2] = 0xabc00102u;
     state.vgprs[3][3] = 3002u;
 
     state.vgprs[4][0] = 1536u;
     state.vgprs[4][1] = 2560u;
+    state.vgprs[4][2] = 9728u;
     state.vgprs[4][3] = 3584u;
     state.vgprs[6][0] = 4101u;
     state.vgprs[6][1] = 4201u;
+    state.vgprs[6][2] = 0xabc00201u;
     state.vgprs[6][3] = 4301u;
     state.vgprs[7][0] = 4102u;
     state.vgprs[7][1] = 4202u;
+    state.vgprs[7][2] = 0xabc00202u;
     state.vgprs[7][3] = 4302u;
 
     state.vgprs[8][0] = 4608u;
     state.vgprs[8][1] = 4640u;
+    state.vgprs[8][2] = 4704u;
     state.vgprs[8][3] = 4672u;
     state.vgprs[16][0] = 5120u;
     state.vgprs[16][1] = 6656u;
+    state.vgprs[16][2] = 9728u;
     state.vgprs[16][3] = 8192u;
 
     auto set_lane_u64 = [&](std::uint16_t reg, std::size_t lane,
@@ -1042,15 +1051,19 @@ bool RunDsPairReturnProgramTest(
     };
     set_lane_u64(12, 0u, 0x1111222233334444ULL);
     set_lane_u64(12, 1u, 0x9999aaaabbbbccccULL);
+    set_lane_u64(12, 2u, 0xabc0030100000001ULL);
     set_lane_u64(12, 3u, 0x0123456789abcdefULL);
     set_lane_u64(14, 0u, 0x5555666677778888ULL);
     set_lane_u64(14, 1u, 0xddddeeeeffff0001ULL);
+    set_lane_u64(14, 2u, 0xabc0030200000002ULL);
     set_lane_u64(14, 3u, 0xfedcba9876543210ULL);
     set_lane_u64(18, 0u, 0xaaaaaaaa00000001ULL);
     set_lane_u64(18, 1u, 0xbbbbbbbb00000002ULL);
+    set_lane_u64(18, 2u, 0xabc0040100000003ULL);
     set_lane_u64(18, 3u, 0xcccccccc00000003ULL);
     set_lane_u64(20, 0u, 0xdddddddd00000004ULL);
     set_lane_u64(20, 1u, 0xeeeeeeee00000005ULL);
+    set_lane_u64(20, 2u, 0xabc0040200000004ULL);
     set_lane_u64(20, 3u, 0xffffffff00000006ULL);
 
     auto write_lds_u32 = [&](std::uint64_t address, std::uint32_t value) {
@@ -1083,15 +1096,104 @@ bool RunDsPairReturnProgramTest(
     write_lds_u64(7680u, 0x7070707080808080ULL);
     write_lds_u64(8704u, 0x90909090a0a0a0a0ULL);
     write_lds_u64(9216u, 0xb0b0b0b0c0c0c0c0ULL);
+    write_lds_u32(32u, 0x1234abcdu);
+    write_lds_u32(164u, 0x12340001u);
+    write_lds_u32(172u, 0x12340002u);
+    write_lds_u32(9984u, 0x12340003u);
+    write_lds_u32(10240u, 0x12340004u);
+    write_lds_u64(4712u, 0x1234000500000005ULL);
+    write_lds_u64(4720u, 0x1234000600000006ULL);
+    write_lds_u64(10752u, 0x1234000700000007ULL);
+    write_lds_u64(11264u, 0x1234000800000008ULL);
 
     for (std::uint16_t vgpr = 40; vgpr <= 57; ++vgpr) {
       state.vgprs[vgpr][2] = 0x80000000u + vgpr;
     }
+    state.vgprs[30][0] = 0x11111111u;
+    state.vgprs[30][1] = 0x22222222u;
+    state.vgprs[30][2] = 0x33333333u;
+    state.vgprs[30][3] = 0x44444444u;
     return state;
   };
   auto validate_ds_pair_return_state = [&](const WaveExecutionState& state,
                                            const char* mode) {
     if (!Expect(state.halted, "expected ds pair-return program to halt")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    if (!Expect(state.exec_mask == 0b1011ULL,
+                "expected ds pair-return exec preservation") ||
+        !Expect(state.sgprs[5] == 0x13579bdfu,
+                "expected ds pair-return sgpr preservation") ||
+        !Expect(state.vgprs[0][0] == 64u && state.vgprs[0][1] == 96u &&
+                    state.vgprs[0][2] == 160u && state.vgprs[0][3] == 128u,
+                "expected ds pair-return b32 address preservation") ||
+        !Expect(state.vgprs[4][0] == 1536u && state.vgprs[4][1] == 2560u &&
+                    state.vgprs[4][2] == 9728u && state.vgprs[4][3] == 3584u,
+                "expected ds pair-return b32 st64 address preservation") ||
+        !Expect(state.vgprs[8][0] == 4608u && state.vgprs[8][1] == 4640u &&
+                    state.vgprs[8][2] == 4704u && state.vgprs[8][3] == 4672u,
+                "expected ds pair-return b64 address preservation") ||
+        !Expect(state.vgprs[16][0] == 5120u && state.vgprs[16][1] == 6656u &&
+                    state.vgprs[16][2] == 9728u && state.vgprs[16][3] == 8192u,
+                "expected ds pair-return b64 st64 address preservation") ||
+        !Expect(state.vgprs[2][0] == 1001u && state.vgprs[2][1] == 2001u &&
+                    state.vgprs[2][2] == 0xabc00101u &&
+                    state.vgprs[2][3] == 3001u,
+                "expected ds pair-return b32 data0 preservation") ||
+        !Expect(state.vgprs[3][0] == 1002u && state.vgprs[3][1] == 2002u &&
+                    state.vgprs[3][2] == 0xabc00102u &&
+                    state.vgprs[3][3] == 3002u,
+                "expected ds pair-return b32 data1 preservation") ||
+        !Expect(state.vgprs[6][0] == 4101u && state.vgprs[6][1] == 4201u &&
+                    state.vgprs[6][2] == 0xabc00201u &&
+                    state.vgprs[6][3] == 4301u,
+                "expected ds pair-return b32 st64 data0 preservation") ||
+        !Expect(state.vgprs[7][0] == 4102u && state.vgprs[7][1] == 4202u &&
+                    state.vgprs[7][2] == 0xabc00202u &&
+                    state.vgprs[7][3] == 4302u,
+                "expected ds pair-return b32 st64 data1 preservation") ||
+        !Expect(ComposeU64(state.vgprs[12][0], state.vgprs[13][0]) ==
+                        0x1111222233334444ULL &&
+                    ComposeU64(state.vgprs[12][1], state.vgprs[13][1]) ==
+                        0x9999aaaabbbbccccULL &&
+                    ComposeU64(state.vgprs[12][2], state.vgprs[13][2]) ==
+                        0xabc0030100000001ULL &&
+                    ComposeU64(state.vgprs[12][3], state.vgprs[13][3]) ==
+                        0x0123456789abcdefULL,
+                "expected ds pair-return b64 data0 preservation") ||
+        !Expect(ComposeU64(state.vgprs[14][0], state.vgprs[15][0]) ==
+                        0x5555666677778888ULL &&
+                    ComposeU64(state.vgprs[14][1], state.vgprs[15][1]) ==
+                        0xddddeeeeffff0001ULL &&
+                    ComposeU64(state.vgprs[14][2], state.vgprs[15][2]) ==
+                        0xabc0030200000002ULL &&
+                    ComposeU64(state.vgprs[14][3], state.vgprs[15][3]) ==
+                        0xfedcba9876543210ULL,
+                "expected ds pair-return b64 data1 preservation") ||
+        !Expect(ComposeU64(state.vgprs[18][0], state.vgprs[19][0]) ==
+                        0xaaaaaaaa00000001ULL &&
+                    ComposeU64(state.vgprs[18][1], state.vgprs[19][1]) ==
+                        0xbbbbbbbb00000002ULL &&
+                    ComposeU64(state.vgprs[18][2], state.vgprs[19][2]) ==
+                        0xabc0040100000003ULL &&
+                    ComposeU64(state.vgprs[18][3], state.vgprs[19][3]) ==
+                        0xcccccccc00000003ULL,
+                "expected ds pair-return b64 st64 data0 preservation") ||
+        !Expect(ComposeU64(state.vgprs[20][0], state.vgprs[21][0]) ==
+                        0xdddddddd00000004ULL &&
+                    ComposeU64(state.vgprs[20][1], state.vgprs[21][1]) ==
+                        0xeeeeeeee00000005ULL &&
+                    ComposeU64(state.vgprs[20][2], state.vgprs[21][2]) ==
+                        0xabc0040200000004ULL &&
+                    ComposeU64(state.vgprs[20][3], state.vgprs[21][3]) ==
+                        0xffffffff00000006ULL,
+                "expected ds pair-return b64 st64 data1 preservation") ||
+        !Expect(state.vgprs[30][0] == 0x11111111u &&
+                    state.vgprs[30][1] == 0x22222222u &&
+                    state.vgprs[30][2] == 0x33333333u &&
+                    state.vgprs[30][3] == 0x44444444u,
+                "expected ds pair-return unrelated vgpr preservation")) {
       std::cerr << mode << '\n';
       return false;
     }
@@ -1263,6 +1365,53 @@ bool RunDsPairReturnProgramTest(
         std::cerr << mode << " vgpr=" << vgpr << '\n';
         return false;
       }
+    }
+    std::uint32_t inactive_b32_low = 0;
+    std::uint32_t inactive_b32_high = 0;
+    std::uint32_t inactive_b32_st64_low = 0;
+    std::uint32_t inactive_b32_st64_high = 0;
+    std::uint32_t untouched_lds = 0;
+    std::uint64_t inactive_b64_low = 0;
+    std::uint64_t inactive_b64_high = 0;
+    std::uint64_t inactive_b64_st64_low = 0;
+    std::uint64_t inactive_b64_st64_high = 0;
+    std::memcpy(&untouched_lds, state.lds_bytes.data() + 32u, sizeof(untouched_lds));
+    std::memcpy(&inactive_b32_low, state.lds_bytes.data() + 164u,
+                sizeof(inactive_b32_low));
+    std::memcpy(&inactive_b32_high, state.lds_bytes.data() + 172u,
+                sizeof(inactive_b32_high));
+    std::memcpy(&inactive_b32_st64_low, state.lds_bytes.data() + 9984u,
+                sizeof(inactive_b32_st64_low));
+    std::memcpy(&inactive_b32_st64_high, state.lds_bytes.data() + 10240u,
+                sizeof(inactive_b32_st64_high));
+    std::memcpy(&inactive_b64_low, state.lds_bytes.data() + 4712u,
+                sizeof(inactive_b64_low));
+    std::memcpy(&inactive_b64_high, state.lds_bytes.data() + 4720u,
+                sizeof(inactive_b64_high));
+    std::memcpy(&inactive_b64_st64_low, state.lds_bytes.data() + 10752u,
+                sizeof(inactive_b64_st64_low));
+    std::memcpy(&inactive_b64_st64_high, state.lds_bytes.data() + 11264u,
+                sizeof(inactive_b64_st64_high));
+    if (!Expect(untouched_lds == 0x1234abcdu,
+                "expected ds pair-return unrelated lds preservation") ||
+        !Expect(inactive_b32_low == 0x12340001u,
+                "expected ds pair-return inactive b32 low suppression") ||
+        !Expect(inactive_b32_high == 0x12340002u,
+                "expected ds pair-return inactive b32 high suppression") ||
+        !Expect(inactive_b32_st64_low == 0x12340003u,
+                "expected ds pair-return inactive b32 st64 low suppression") ||
+        !Expect(inactive_b32_st64_high == 0x12340004u,
+                "expected ds pair-return inactive b32 st64 high suppression") ||
+        !Expect(inactive_b64_low == 0x1234000500000005ULL,
+                "expected ds pair-return inactive b64 low suppression") ||
+        !Expect(inactive_b64_high == 0x1234000600000006ULL,
+                "expected ds pair-return inactive b64 high suppression") ||
+        !Expect(inactive_b64_st64_low == 0x1234000700000007ULL,
+                "expected ds pair-return inactive b64 st64 low suppression") ||
+        !Expect(inactive_b64_st64_high == 0x1234000800000008ULL,
+                "expected ds pair-return inactive b64 st64 high suppression")) {
+      std::cerr << mode << '\n';
+      return false;
     }
     return true;
   };
