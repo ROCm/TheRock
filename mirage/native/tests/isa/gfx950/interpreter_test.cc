@@ -1323,17 +1323,28 @@ bool RunDsReturnTests(const mirage::sim::isa::Gfx950Interpreter& interpreter) {
 
         WaveExecutionState state;
         state.exec_mask = 0b1011ULL;
+        state.sgprs[5] = 0x13579bdfu;
         state.vgprs[0][0] = 0u;
         state.vgprs[0][1] = 4u;
+        state.vgprs[0][2] = 0xfeed0002u;
         state.vgprs[0][3] = 8u;
         state.vgprs[1][0] = test_case.initial_values[0];
         state.vgprs[1][1] = test_case.initial_values[1];
+        state.vgprs[1][2] = 0xbaadf00du;
         state.vgprs[1][3] = test_case.initial_values[2];
         state.vgprs[3][0] = test_case.data_values[0];
         state.vgprs[3][1] = test_case.data_values[1];
+        state.vgprs[3][2] = 0xc001d00du;
         state.vgprs[3][3] = test_case.data_values[2];
         state.vgprs[2][2] = 0xdeadbeefu;
         state.vgprs[4][2] = 0xcafebabeu;
+        state.vgprs[6][0] = 0x11111111u;
+        state.vgprs[6][1] = 0x22222222u;
+        state.vgprs[6][2] = 0x33333333u;
+        state.vgprs[6][3] = 0x44444444u;
+        const std::uint32_t untouched_lds_value = 0x55667788u;
+        std::memcpy(state.lds_bytes.data() + 12u, &untouched_lds_value,
+                    sizeof(untouched_lds_value));
 
         std::string case_error;
         if (use_compiled_program) {
@@ -1355,6 +1366,32 @@ bool RunDsReturnTests(const mirage::sim::isa::Gfx950Interpreter& interpreter) {
 
         const char* mode = use_compiled_program ? "compiled" : "decoded";
         if (!Expect(state.halted, "expected ds return test to halt")) {
+          std::cerr << test_case.opcode << ' ' << mode << '\n';
+          return false;
+        }
+        if (!Expect(state.exec_mask == 0b1011ULL,
+                    "expected ds return exec preservation") ||
+            !Expect(state.sgprs[5] == 0x13579bdfu,
+                    "expected ds return sgpr preservation") ||
+            !Expect(state.vgprs[0][0] == 0u && state.vgprs[0][1] == 4u &&
+                        state.vgprs[0][2] == 0xfeed0002u &&
+                        state.vgprs[0][3] == 8u,
+                    "expected ds return address preservation") ||
+            !Expect(state.vgprs[1][0] == test_case.initial_values[0] &&
+                        state.vgprs[1][1] == test_case.initial_values[1] &&
+                        state.vgprs[1][2] == 0xbaadf00du &&
+                        state.vgprs[1][3] == test_case.initial_values[2],
+                    "expected ds return initial-value preservation") ||
+            !Expect(state.vgprs[3][0] == test_case.data_values[0] &&
+                        state.vgprs[3][1] == test_case.data_values[1] &&
+                        state.vgprs[3][2] == 0xc001d00du &&
+                        state.vgprs[3][3] == test_case.data_values[2],
+                    "expected ds return source preservation") ||
+            !Expect(state.vgprs[6][0] == 0x11111111u &&
+                        state.vgprs[6][1] == 0x22222222u &&
+                        state.vgprs[6][2] == 0x33333333u &&
+                        state.vgprs[6][3] == 0x44444444u,
+                    "expected ds return unrelated vgpr preservation")) {
           std::cerr << test_case.opcode << ' ' << mode << '\n';
           return false;
         }
@@ -1391,6 +1428,15 @@ bool RunDsReturnTests(const mirage::sim::isa::Gfx950Interpreter& interpreter) {
                     "expected inactive ds return destination preservation") ||
             !Expect(state.vgprs[4][2] == 0xcafebabeu,
                     "expected inactive ds return read preservation")) {
+          std::cerr << test_case.opcode << ' ' << mode << '\n';
+          return false;
+        }
+
+        std::uint32_t untouched_lds_observed = 0;
+        std::memcpy(&untouched_lds_observed, state.lds_bytes.data() + 12u,
+                    sizeof(untouched_lds_observed));
+        if (!Expect(untouched_lds_observed == untouched_lds_value,
+                    "expected ds return unrelated lds preservation")) {
           std::cerr << test_case.opcode << ' ' << mode << '\n';
           return false;
         }
@@ -1495,20 +1541,35 @@ bool RunDsDualDataTests(
 
         WaveExecutionState state;
         state.exec_mask = 0b1011ULL;
+        state.sgprs[5] = 0x2468ace0u;
         state.vgprs[0][0] = 0u;
         state.vgprs[0][1] = 4u;
+        state.vgprs[0][2] = 0xfeed0002u;
         state.vgprs[0][3] = 8u;
         state.vgprs[1][0] = test_case.initial_values[0];
         state.vgprs[1][1] = test_case.initial_values[1];
+        state.vgprs[1][2] = 0xbaadf00du;
         state.vgprs[1][3] = test_case.initial_values[2];
+        state.vgprs[2][0] = 0x11111111u;
+        state.vgprs[2][1] = 0x22222222u;
         state.vgprs[3][0] = test_case.data0_values[0];
         state.vgprs[3][1] = test_case.data0_values[1];
+        state.vgprs[3][2] = 0xc001d00du;
         state.vgprs[3][3] = test_case.data0_values[2];
         state.vgprs[4][0] = test_case.data1_values[0];
         state.vgprs[4][1] = test_case.data1_values[1];
+        state.vgprs[4][2] = 0xface1234u;
         state.vgprs[4][3] = test_case.data1_values[2];
         state.vgprs[2][2] = 0xdeadbeefu;
+        state.vgprs[2][3] = 0x44444444u;
         state.vgprs[5][2] = 0xcafebabeu;
+        state.vgprs[6][0] = 0xaaaaaaaau;
+        state.vgprs[6][1] = 0xbbbbbbbbu;
+        state.vgprs[6][2] = 0xccccccccu;
+        state.vgprs[6][3] = 0xddddddddu;
+        const std::uint32_t untouched_lds_value = 0x55667788u;
+        std::memcpy(state.lds_bytes.data() + 12u, &untouched_lds_value,
+                    sizeof(untouched_lds_value));
 
         std::string case_error;
         if (use_compiled_program) {
@@ -1530,6 +1591,37 @@ bool RunDsDualDataTests(
 
         const char* mode = use_compiled_program ? "compiled" : "decoded";
         if (!Expect(state.halted, "expected ds dual-data test to halt")) {
+          std::cerr << test_case.opcode << ' ' << mode << '\n';
+          return false;
+        }
+        if (!Expect(state.exec_mask == 0b1011ULL,
+                    "expected ds dual-data exec preservation") ||
+            !Expect(state.sgprs[5] == 0x2468ace0u,
+                    "expected ds dual-data sgpr preservation") ||
+            !Expect(state.vgprs[0][0] == 0u && state.vgprs[0][1] == 4u &&
+                        state.vgprs[0][2] == 0xfeed0002u &&
+                        state.vgprs[0][3] == 8u,
+                    "expected ds dual-data address preservation") ||
+            !Expect(state.vgprs[1][0] == test_case.initial_values[0] &&
+                        state.vgprs[1][1] == test_case.initial_values[1] &&
+                        state.vgprs[1][2] == 0xbaadf00du &&
+                        state.vgprs[1][3] == test_case.initial_values[2],
+                    "expected ds dual-data initial-value preservation") ||
+            !Expect(state.vgprs[3][0] == test_case.data0_values[0] &&
+                        state.vgprs[3][1] == test_case.data0_values[1] &&
+                        state.vgprs[3][2] == 0xc001d00du &&
+                        state.vgprs[3][3] == test_case.data0_values[2],
+                    "expected ds dual-data data0 preservation") ||
+            !Expect(state.vgprs[4][0] == test_case.data1_values[0] &&
+                        state.vgprs[4][1] == test_case.data1_values[1] &&
+                        state.vgprs[4][2] == 0xface1234u &&
+                        state.vgprs[4][3] == test_case.data1_values[2],
+                    "expected ds dual-data data1 preservation") ||
+            !Expect(state.vgprs[6][0] == 0xaaaaaaaau &&
+                        state.vgprs[6][1] == 0xbbbbbbbbu &&
+                        state.vgprs[6][2] == 0xccccccccu &&
+                        state.vgprs[6][3] == 0xddddddddu,
+                    "expected ds dual-data unrelated vgpr preservation")) {
           std::cerr << test_case.opcode << ' ' << mode << '\n';
           return false;
         }
@@ -1574,6 +1666,23 @@ bool RunDsDualDataTests(
         }
         if (!Expect(state.vgprs[5][2] == 0xcafebabeu,
                     "expected inactive ds dual-data read preservation")) {
+          std::cerr << test_case.opcode << ' ' << mode << '\n';
+          return false;
+        }
+        if (!test_case.has_return &&
+            !Expect(state.vgprs[2][0] == 0x11111111u &&
+                        state.vgprs[2][1] == 0x22222222u &&
+                        state.vgprs[2][2] == 0xdeadbeefu &&
+                        state.vgprs[2][3] == 0x44444444u,
+                    "expected ds dual-data no-return register preservation")) {
+          std::cerr << test_case.opcode << ' ' << mode << '\n';
+          return false;
+        }
+        std::uint32_t untouched_lds_observed = 0;
+        std::memcpy(&untouched_lds_observed, state.lds_bytes.data() + 12u,
+                    sizeof(untouched_lds_observed));
+        if (!Expect(untouched_lds_observed == untouched_lds_value,
+                    "expected ds dual-data unrelated lds preservation")) {
           std::cerr << test_case.opcode << ' ' << mode << '\n';
           return false;
         }
