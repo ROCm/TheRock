@@ -10520,6 +10520,7 @@ int main() {
   auto make_ds_condxchg32_rtn_b64_state = []() {
     WaveExecutionState state;
     state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x13572468u;
     auto set_lane_vgpr_u64 = [](WaveExecutionState* wave,
                                 std::uint16_t reg,
                                 std::size_t lane,
@@ -10540,6 +10541,10 @@ int main() {
       state.vgprs[4][kObservedLanes[index]] = 0xdeadbeefu;
       state.vgprs[5][kObservedLanes[index]] = 0xcafebabeu;
     }
+    state.vgprs[6][0] = 0x01020304u;
+    state.vgprs[6][1] = 0x11121314u;
+    state.vgprs[6][2] = 0x21222324u;
+    state.vgprs[6][3] = 0x31323334u;
     state.vgprs[4][2] = 0xdeadbeefu;
     state.vgprs[5][2] = 0xcafebabeu;
     const std::uint64_t initial_value = ComposeU64(0x11111111u, 0x22222222u);
@@ -10547,6 +10552,9 @@ int main() {
       std::memcpy(state.lds_bytes.data() + address, &initial_value,
                   sizeof(initial_value));
     }
+    const std::uint64_t untouched_lds = 0x1122334455667788ULL;
+    std::memcpy(state.lds_bytes.data() + 0x300u, &untouched_lds,
+                sizeof(untouched_lds));
     return state;
   };
   auto validate_ds_condxchg32_rtn_b64_state =
@@ -10560,7 +10568,26 @@ int main() {
         static constexpr std::array<std::uint32_t, 3> kLaneAddresses = {64u, 128u,
                                                                         192u};
         if (!Expect(state.halted,
-                    "expected ds condxchg32 rtn b64 program to halt")) {
+                    "expected ds condxchg32 rtn b64 program to halt") ||
+            !Expect(state.exec_mask == 0b1011ULL,
+                    "expected ds condxchg32 rtn b64 to preserve exec") ||
+            !Expect(state.sgprs[0] == 0x13572468u,
+                    "expected ds condxchg32 rtn b64 to preserve sgprs") ||
+            !Expect(state.vgprs[0][0] == 64u && state.vgprs[0][1] == 128u &&
+                        state.vgprs[0][3] == 192u,
+                    "expected ds condxchg32 rtn b64 to preserve addresses") ||
+            !Expect(read_lane_vgpr_u64(1u, 0u) ==
+                        ComposeU64(0x80000033u, 0x00000044u) &&
+                    read_lane_vgpr_u64(1u, 1u) ==
+                        ComposeU64(0x80000033u, 0x00000044u) &&
+                    read_lane_vgpr_u64(1u, 3u) ==
+                        ComposeU64(0x80000033u, 0x00000044u),
+                    "expected ds condxchg32 rtn b64 to preserve source values") ||
+            !Expect(state.vgprs[6][0] == 0x01020304u &&
+                        state.vgprs[6][1] == 0x11121314u &&
+                        state.vgprs[6][2] == 0x21222324u &&
+                        state.vgprs[6][3] == 0x31323334u,
+                    "expected ds condxchg32 rtn b64 to preserve unrelated vgprs")) {
           std::cerr << mode << '\n';
           return false;
         }
@@ -10581,6 +10608,14 @@ int main() {
                     "expected inactive ds condxchg32 rtn b64 low lane untouched") ||
             !Expect(state.vgprs[5][2] == 0xcafebabeu,
                     "expected inactive ds condxchg32 rtn b64 high lane untouched")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        std::uint64_t untouched_lds = 0;
+        std::memcpy(&untouched_lds, state.lds_bytes.data() + 0x300u,
+                    sizeof(untouched_lds));
+        if (!Expect(untouched_lds == 0x1122334455667788ULL,
+                    "expected ds condxchg32 rtn b64 to preserve unrelated lds")) {
           std::cerr << mode << '\n';
           return false;
         }
