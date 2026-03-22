@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 479> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 483> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -152,6 +152,10 @@ constexpr std::array<std::string_view, 479> kPhase0ExecutableOpcodes{{
     "DS_MIN_NUM_F32",
     "DS_MAX_NUM_RTN_F32",
     "DS_MAX_NUM_F32",
+    "DS_MIN_NUM_RTN_F64",
+    "DS_MIN_NUM_F64",
+    "DS_MAX_NUM_RTN_F64",
+    "DS_MAX_NUM_F64",
     "DS_LOAD_B32",
     "DS_LOAD_B64",
     "DS_LOAD_B96",
@@ -1182,7 +1186,11 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "DS_MIN_NUM_RTN_F32" ||
              instruction_name == "DS_MIN_NUM_F32" ||
              instruction_name == "DS_MAX_NUM_RTN_F32" ||
-             instruction_name == "DS_MAX_NUM_F32") {
+             instruction_name == "DS_MAX_NUM_F32" ||
+             instruction_name == "DS_MIN_NUM_RTN_F64" ||
+             instruction_name == "DS_MIN_NUM_F64" ||
+             instruction_name == "DS_MAX_NUM_RTN_F64" ||
+             instruction_name == "DS_MAX_NUM_F64") {
     if (words.size() < 2u) {
       if (error_message != nullptr) {
         *error_message = std::string(instruction_name) + " requires 2 dwords";
@@ -1209,6 +1217,19 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       return false;
     }
 
+    const bool is_wide_f64 =
+        instruction_name == "DS_MIN_NUM_RTN_F64" ||
+        instruction_name == "DS_MIN_NUM_F64" ||
+        instruction_name == "DS_MAX_NUM_RTN_F64" ||
+        instruction_name == "DS_MAX_NUM_F64";
+
+    const InstructionOperand described_vdata0 =
+        is_wide_f64
+            ? DescribeWideVectorSourceOperand(
+                  vdata0, OperandRole::kSource1, OperandSlotKind::kSource1, 2u)
+            : DescribeSourceOperand(vdata0, OperandRole::kSource1,
+                                    OperandSlotKind::kSource1);
+
     const bool returns_old =
         instruction_name == "DS_ADD_RTN_F32" ||
         instruction_name == "DS_ADD_RTN_U32" ||
@@ -1228,7 +1249,9 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         instruction_name == "DS_PK_ADD_RTN_F16" ||
         instruction_name == "DS_PK_ADD_RTN_BF16" ||
         instruction_name == "DS_MIN_NUM_RTN_F32" ||
-        instruction_name == "DS_MAX_NUM_RTN_F32";
+        instruction_name == "DS_MAX_NUM_RTN_F32" ||
+        instruction_name == "DS_MIN_NUM_RTN_F64" ||
+        instruction_name == "DS_MAX_NUM_RTN_F64";
     if (returns_old) {
       InstructionOperand vdst;
       if (!DecodeVectorDestination(ExtractBits(words[1], 24, 8), &vdst,
@@ -1236,11 +1259,12 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         return false;
       }
       *instruction = DecodedInstruction::FiveOperand(
-          instruction_name, DescribeVectorDestinationOperand(vdst),
+          instruction_name,
+          is_wide_f64 ? DescribeWideVectorDestinationOperand(vdst)
+                      : DescribeVectorDestinationOperand(vdst),
           DescribeSourceOperand(vaddr, OperandRole::kSource0,
                                 OperandSlotKind::kSource0),
-          DescribeSourceOperand(vdata0, OperandRole::kSource1,
-                                OperandSlotKind::kSource1),
+          described_vdata0,
           InstructionOperand::Imm32(ExtractBits(word, 0, 8))
               .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource2,
                                                      OperandSlotKind::kSource2,
@@ -1254,8 +1278,7 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
           instruction_name,
           DescribeSourceOperand(vaddr, OperandRole::kSource0,
                                 OperandSlotKind::kSource0),
-          DescribeSourceOperand(vdata0, OperandRole::kSource1,
-                                OperandSlotKind::kSource1),
+          described_vdata0,
           InstructionOperand::Imm32(ExtractBits(word, 0, 8))
               .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource2,
                                                      OperandSlotKind::kSource2,

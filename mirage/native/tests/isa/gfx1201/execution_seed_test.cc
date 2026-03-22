@@ -61,6 +61,12 @@ std::uint64_t DoubleBits(double value) {
   return result;
 }
 
+double BitsToDouble(std::uint64_t value) {
+  double result = 0.0;
+  std::memcpy(&result, &value, sizeof(result));
+  return result;
+}
+
 void SplitU64(std::uint64_t value, std::uint32_t* low, std::uint32_t* high) {
   *low = static_cast<std::uint32_t>(value);
   *high = static_cast<std::uint32_t>(value >> 32);
@@ -3235,6 +3241,17 @@ struct DsLoadCase {
   std::uint32_t offset;
 };
 
+struct DsWideCase {
+  const char* opcode;
+  std::uint32_t op;
+  mirage::sim::isa::Gfx1201CompiledOpcode compiled;
+  std::uint16_t dest;
+  std::uint16_t addr;
+  std::uint16_t data;
+  std::uint32_t offset;
+  bool returns_old;
+};
+
 constexpr std::array<DsCase, 19> kDsCases{{
     {"DS_ADD_F32", 21u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsAddF32, 64u, 80u, 0x000u},
@@ -3338,6 +3355,23 @@ constexpr std::array<DsRtnCase, 19> kDsRtnCases{{
     {"DS_MAX_NUM_RTN_F32", 51u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsMaxNumRtnF32, 50u, 84u,
      86u, 0x0fcu},
+}};
+
+constexpr std::uint64_t kDsWideBaseAddress = 0x56000u;
+
+constexpr std::array<DsWideCase, 4> kDsWideCases{{
+    {"DS_MIN_NUM_F64", 82u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMinNumF64, 0u, 88u, 96u,
+     0x000u, false},
+    {"DS_MAX_NUM_F64", 83u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMaxNumF64, 0u, 89u, 98u,
+     0x010u, false},
+    {"DS_MIN_NUM_RTN_F64", 114u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMinNumRtnF64, 64u, 90u, 100u,
+     0x020u, true},
+    {"DS_MAX_NUM_RTN_F64", 115u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMaxNumRtnF64, 66u, 91u, 102u,
+     0x030u, true},
 }};
 
 constexpr std::uint64_t kDsLoadBaseAddress = 0x16000u;
@@ -3454,6 +3488,11 @@ std::uint64_t DsCaseBaseAddress(std::size_t case_index) {
 
 std::uint64_t DsLoadCaseBaseAddress(std::size_t case_index) {
   return kDsLoadBaseAddress + static_cast<std::uint64_t>(case_index) * 0x1000u;
+}
+
+std::uint64_t DsWideCaseBaseAddress(std::size_t case_index) {
+  return kDsWideBaseAddress +
+         static_cast<std::uint64_t>(case_index) * 0x1000u;
 }
 
 std::uint64_t DsLoadLaneBaseAddress(std::size_t case_index, std::size_t lane) {
@@ -3624,6 +3663,33 @@ std::uint32_t InitialDsOldValue(std::size_t case_index, std::size_t lane) {
   }
 }
 
+std::uint64_t InitialDsWideOldValue(std::size_t case_index, std::size_t lane) {
+  if (!IsDsLaneActive(lane)) {
+    return 0xfa00000000000000ull +
+           static_cast<std::uint64_t>(case_index << 8) +
+           static_cast<std::uint64_t>(lane);
+  }
+
+  switch (case_index) {
+    case 0:
+      return lane == 0u ? DoubleBits(4.5)
+                        : (lane == 1u ? kQuietNaNF64Bits : DoubleBits(7.0));
+    case 1:
+      return lane == 0u ? DoubleBits(4.5)
+                        : (lane == 1u ? DoubleBits(-1.0)
+                                       : DoubleBits(-7.0));
+    case 2:
+      return lane == 0u ? DoubleBits(5.0)
+                        : (lane == 1u ? kQuietNaNF64Bits : DoubleBits(8.0));
+    case 3:
+      return lane == 0u ? DoubleBits(-5.0)
+                        : (lane == 1u ? DoubleBits(6.0)
+                                       : DoubleBits(-8.0));
+    default:
+      return 0u;
+  }
+}
+
 std::uint32_t InitialDsDataValue(std::size_t case_index, std::size_t lane) {
   if (!IsDsLaneActive(lane)) {
     return 0x56000000u + static_cast<std::uint32_t>(case_index << 8) +
@@ -3686,6 +3752,33 @@ std::uint32_t InitialDsDataValue(std::size_t case_index, std::size_t lane) {
   }
 }
 
+std::uint64_t InitialDsWideDataValue(std::size_t case_index, std::size_t lane) {
+  if (!IsDsLaneActive(lane)) {
+    return 0x5a00000000000000ull +
+           static_cast<std::uint64_t>(case_index << 8) +
+           static_cast<std::uint64_t>(lane);
+  }
+
+  switch (case_index) {
+    case 0:
+      return lane == 0u ? DoubleBits(2.0)
+                        : (lane == 1u ? DoubleBits(3.0)
+                                       : DoubleBits(-4.0));
+    case 1:
+      return lane == 0u ? DoubleBits(2.0)
+                        : (lane == 1u ? kQuietNaNF64Bits : DoubleBits(4.0));
+    case 2:
+      return lane == 0u ? DoubleBits(2.5)
+                        : (lane == 1u ? DoubleBits(-3.0)
+                                       : DoubleBits(1.0));
+    case 3:
+      return lane == 0u ? DoubleBits(-2.5)
+                        : (lane == 1u ? kQuietNaNF64Bits : DoubleBits(3.0));
+    default:
+      return 0u;
+  }
+}
+
 std::uint32_t ExpectedDsNewValue(std::size_t case_index,
                                  std::uint32_t old_value,
                                  std::uint32_t data_value) {
@@ -3737,6 +3830,15 @@ std::uint32_t ExpectedDsNewValue(std::size_t case_index,
     default:
       return old_value;
   }
+}
+
+std::uint64_t ExpectedDsWideNewValue(std::size_t case_index,
+                                     std::uint64_t old_value,
+                                     std::uint64_t data_value) {
+  if (case_index == 0u || case_index == 2u) {
+    return DoubleBits(std::fmin(BitsToDouble(old_value), BitsToDouble(data_value)));
+  }
+  return DoubleBits(std::fmax(BitsToDouble(old_value), BitsToDouble(data_value)));
 }
 
 std::size_t DsLoadWordCount(std::size_t case_index) {
@@ -4263,6 +4365,211 @@ bool RunDsRtnBatchTest(
               "expected compiled DS return state") ||
       !Expect(expect_ds_memory(&compiled_ds_memory),
               "expected compiled DS return memory state")) {
+    return false;
+  }
+
+  return true;
+}
+
+bool RunDsWideBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  std::vector<std::uint32_t> ds_program_words;
+  ds_program_words.reserve((kDsWideCases.size() + 1u) * 2u + 1u);
+  const auto ds_nop_words = MakeDs(20u, 0u, 0u, 0u, 0u, 0u);
+  ds_program_words.push_back(ds_nop_words[0]);
+  ds_program_words.push_back(ds_nop_words[1]);
+  for (const DsWideCase& ds_case : kDsWideCases) {
+    const auto words = MakeDs(ds_case.op, ds_case.dest, ds_case.addr,
+                              ds_case.data, 0u, ds_case.offset);
+    ds_program_words.push_back(words[0]);
+    ds_program_words.push_back(words[1]);
+  }
+  ds_program_words.push_back(MakeSopp(48u));
+
+  std::vector<DecodedInstruction> ds_program;
+  if (!Expect(decoder.DecodeProgram(ds_program_words, &ds_program, error_message),
+              "expected DS wide batch decode success") ||
+      !Expect(ds_program.size() == kDsWideCases.size() + 2u,
+              "expected decoded DS wide instruction count") ||
+      !Expect(ds_program.front().opcode == "DS_NOP",
+              "expected decoded DS_NOP at wide batch start")) {
+    return false;
+  }
+  for (std::size_t i = 0; i < kDsWideCases.size(); ++i) {
+    if (!Expect(ds_program[i + 1u].opcode == kDsWideCases[i].opcode,
+                "expected decoded DS wide opcode order")) {
+      return false;
+    }
+  }
+  if (!Expect(ds_program.back().opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after DS wide batch")) {
+    return false;
+  }
+
+  auto initialize_ds_state = [](WaveExecutionState* state) {
+    state->exec_mask = kDsExecMask;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      for (std::size_t case_index = 0; case_index < kDsWideCases.size();
+           ++case_index) {
+        state->vgprs[kDsWideCases[case_index].addr][lane] =
+            static_cast<std::uint32_t>(DsWideCaseBaseAddress(case_index) +
+                                       lane * 8u);
+        const std::uint64_t data_value = InitialDsWideDataValue(case_index, lane);
+        SplitU64(data_value, &state->vgprs[kDsWideCases[case_index].data][lane],
+                 &state->vgprs[kDsWideCases[case_index].data + 1u][lane]);
+        if (kDsWideCases[case_index].returns_old) {
+          const std::uint64_t sentinel =
+              0xacce000000000000ull +
+              static_cast<std::uint64_t>(case_index << 8) +
+              static_cast<std::uint64_t>(lane);
+          SplitU64(sentinel, &state->vgprs[kDsWideCases[case_index].dest][lane],
+                   &state->vgprs[kDsWideCases[case_index].dest + 1u][lane]);
+        }
+      }
+    }
+  };
+
+  auto expect_ds_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == kDsExecMask &&
+          state.halted && !state.waiting_on_barrier &&
+          state.pc == kDsWideCases.size() + 1u)) {
+      return false;
+    }
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      for (std::size_t case_index = 0; case_index < kDsWideCases.size();
+           ++case_index) {
+        if (state.vgprs[kDsWideCases[case_index].addr][lane] !=
+            static_cast<std::uint32_t>(DsWideCaseBaseAddress(case_index) +
+                                       lane * 8u)) {
+          return false;
+        }
+        std::uint32_t data_low = 0;
+        std::uint32_t data_high = 0;
+        SplitU64(InitialDsWideDataValue(case_index, lane), &data_low, &data_high);
+        if (state.vgprs[kDsWideCases[case_index].data][lane] != data_low ||
+            state.vgprs[kDsWideCases[case_index].data + 1u][lane] != data_high) {
+          return false;
+        }
+        if (kDsWideCases[case_index].returns_old) {
+          const std::uint64_t expected_dest =
+              IsDsLaneActive(lane)
+                  ? InitialDsWideOldValue(case_index, lane)
+                  : (0xacce000000000000ull +
+                     static_cast<std::uint64_t>(case_index << 8) +
+                     static_cast<std::uint64_t>(lane));
+          std::uint32_t dest_low = 0;
+          std::uint32_t dest_high = 0;
+          SplitU64(expected_dest, &dest_low, &dest_high);
+          if (state.vgprs[kDsWideCases[case_index].dest][lane] != dest_low ||
+              state.vgprs[kDsWideCases[case_index].dest + 1u][lane] !=
+                  dest_high) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  };
+
+  auto initialize_ds_memory = [](LinearExecutionMemory* memory) {
+    for (std::size_t case_index = 0; case_index < kDsWideCases.size();
+         ++case_index) {
+      for (std::size_t lane = 0; lane < 32u; ++lane) {
+        const std::uint64_t address =
+            DsWideCaseBaseAddress(case_index) + kDsWideCases[case_index].offset +
+            lane * 8u;
+        if (!StoreU64(memory, address, InitialDsWideOldValue(case_index, lane))) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  auto expect_ds_memory = [](LinearExecutionMemory* memory) {
+    for (std::size_t case_index = 0; case_index < kDsWideCases.size();
+         ++case_index) {
+      for (std::size_t lane = 0; lane < 32u; ++lane) {
+        const std::uint64_t address =
+            DsWideCaseBaseAddress(case_index) + kDsWideCases[case_index].offset +
+            lane * 8u;
+        std::uint64_t value = 0;
+        if (!LoadU64(memory, address, &value)) {
+          return false;
+        }
+        const std::uint64_t old_value = InitialDsWideOldValue(case_index, lane);
+        const std::uint64_t expected_value =
+            IsDsLaneActive(lane)
+                ? ExpectedDsWideNewValue(case_index, old_value,
+                                         InitialDsWideDataValue(case_index, lane))
+                : old_value;
+        if (value != expected_value) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  LinearExecutionMemory decoded_ds_memory(0x8000u, kDsWideBaseAddress);
+  if (!Expect(initialize_ds_memory(&decoded_ds_memory),
+              "expected DS wide decoded memory initialization")) {
+    return false;
+  }
+  WaveExecutionState decoded_ds_state;
+  initialize_ds_state(&decoded_ds_state);
+  if (!Expect(interpreter.ExecuteProgram(ds_program, &decoded_ds_state,
+                                         &decoded_ds_memory, error_message),
+              "expected decoded DS wide execution success") ||
+      !Expect(expect_ds_state(decoded_ds_state),
+              "expected decoded DS wide state") ||
+      !Expect(expect_ds_memory(&decoded_ds_memory),
+              "expected decoded DS wide memory state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_ds_program;
+  if (!Expect(interpreter.CompileProgram(ds_program, &compiled_ds_program,
+                                         error_message),
+              "expected compiled DS wide program success") ||
+      !Expect(compiled_ds_program.size() == kDsWideCases.size() + 2u,
+              "expected compiled DS wide instruction count") ||
+      !Expect(compiled_ds_program.front().opcode == Gfx1201CompiledOpcode::kSNop,
+              "expected compiled DS wide NOP as kSNop")) {
+    return false;
+  }
+  for (std::size_t i = 0; i < kDsWideCases.size(); ++i) {
+    if (!Expect(compiled_ds_program[i + 1u].opcode == kDsWideCases[i].compiled,
+                "expected compiled DS wide opcode order")) {
+      return false;
+    }
+  }
+  if (!Expect(compiled_ds_program.back().opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after DS wide batch")) {
+    return false;
+  }
+
+  LinearExecutionMemory compiled_ds_memory(0x8000u, kDsWideBaseAddress);
+  if (!Expect(initialize_ds_memory(&compiled_ds_memory),
+              "expected DS wide compiled memory initialization")) {
+    return false;
+  }
+  WaveExecutionState compiled_ds_state;
+  initialize_ds_state(&compiled_ds_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_program,
+                                         &compiled_ds_state,
+                                         &compiled_ds_memory,
+                                         error_message),
+              "expected compiled DS wide execution success") ||
+      !Expect(expect_ds_state(compiled_ds_state),
+              "expected compiled DS wide state") ||
+      !Expect(expect_ds_memory(&compiled_ds_memory),
+              "expected compiled DS wide memory state")) {
     return false;
   }
 
@@ -12523,6 +12830,9 @@ int main() {
     return 1;
   }
   if (!RunDsRtnBatchTest(decoder, interpreter, &error_message)) {
+    return 1;
+  }
+  if (!RunDsWideBatchTest(decoder, interpreter, &error_message)) {
     return 1;
   }
   if (!RunDsLoadBatchTest(decoder, interpreter, &error_message)) {

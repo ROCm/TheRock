@@ -55,7 +55,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 479> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 483> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -190,6 +190,10 @@ constexpr std::array<std::string_view, 479> kExecutableSeedOpcodes{{
     "DS_MIN_NUM_F32",
     "DS_MAX_NUM_RTN_F32",
     "DS_MAX_NUM_F32",
+    "DS_MIN_NUM_RTN_F64",
+    "DS_MIN_NUM_F64",
+    "DS_MAX_NUM_RTN_F64",
+    "DS_MAX_NUM_F64",
     "DS_LOAD_B32",
     "DS_LOAD_B64",
     "DS_LOAD_B96",
@@ -1442,6 +1446,22 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "DS_MAX_NUM_F32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsMaxNumF32;
+    return true;
+  }
+  if (opcode == "DS_MIN_NUM_RTN_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMinNumRtnF64;
+    return true;
+  }
+  if (opcode == "DS_MIN_NUM_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMinNumF64;
+    return true;
+  }
+  if (opcode == "DS_MAX_NUM_RTN_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMaxNumRtnF64;
+    return true;
+  }
+  if (opcode == "DS_MAX_NUM_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMaxNumF64;
     return true;
   }
   if (opcode == "DS_LOAD_B32") {
@@ -3678,6 +3698,15 @@ bool IsDsAtomic32Opcode(std::string_view opcode) {
          opcode == "DS_MAX_NUM_F32" || IsDsAtomic32ReturnOpcode(opcode);
 }
 
+bool IsDsAtomic64ReturnOpcode(std::string_view opcode) {
+  return opcode == "DS_MIN_NUM_RTN_F64" || opcode == "DS_MAX_NUM_RTN_F64";
+}
+
+bool IsDsAtomic64Opcode(std::string_view opcode) {
+  return opcode == "DS_MIN_NUM_F64" || opcode == "DS_MAX_NUM_F64" ||
+         IsDsAtomic64ReturnOpcode(opcode);
+}
+
 bool IsDsLoadOpcode(std::string_view opcode) {
   return opcode == "DS_LOAD_B32" || opcode == "DS_LOAD_B64" ||
          opcode == "DS_LOAD_B96" || opcode == "DS_LOAD_B128" ||
@@ -3697,7 +3726,9 @@ bool IsDsStoreOpcode(std::string_view opcode) {
 }
 
 std::size_t DsAtomic32AddressOperandIndex(std::string_view opcode) {
-  return IsDsAtomic32ReturnOpcode(opcode) ? 1u : 0u;
+  return (IsDsAtomic32ReturnOpcode(opcode) || IsDsAtomic64ReturnOpcode(opcode))
+             ? 1u
+             : 0u;
 }
 
 std::size_t DsAtomic32DataOperandIndex(std::string_view opcode) {
@@ -3705,11 +3736,15 @@ std::size_t DsAtomic32DataOperandIndex(std::string_view opcode) {
 }
 
 std::size_t DsAtomic32Offset0OperandIndex(std::string_view opcode) {
-  return IsDsAtomic32ReturnOpcode(opcode) ? 3u : 2u;
+  return (IsDsAtomic32ReturnOpcode(opcode) || IsDsAtomic64ReturnOpcode(opcode))
+             ? 3u
+             : 2u;
 }
 
 std::size_t DsAtomic32Offset1OperandIndex(std::string_view opcode) {
-  return IsDsAtomic32ReturnOpcode(opcode) ? 4u : 3u;
+  return (IsDsAtomic32ReturnOpcode(opcode) || IsDsAtomic64ReturnOpcode(opcode))
+             ? 4u
+             : 3u;
 }
 
 bool ComputeDsAddress(const DecodedInstruction& instruction,
@@ -3952,6 +3987,55 @@ bool ExecuteDsAtomic32AtAddress(const DecodedInstruction& instruction,
   }
   if (old_value_out != nullptr) {
     *old_value_out = old_value;
+  }
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool ExecuteDsAtomic64AtAddress(const DecodedInstruction& instruction,
+                                std::uint64_t address,
+                                std::size_t lane_index,
+                                WaveExecutionState* state,
+                                ExecutionMemory* memory,
+                                std::string* error_message) {
+  std::uint64_t old_value = 0;
+  if (!LoadU64(memory, address, &old_value, error_message, instruction.opcode)) {
+    return false;
+  }
+
+  const std::size_t data_operand_index =
+      IsDsAtomic64ReturnOpcode(instruction.opcode) ? 2u : 1u;
+  const std::uint64_t data_value =
+      ReadWideSourceOperand(instruction.operands[data_operand_index], *state,
+                            lane_index, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+
+  std::uint64_t new_value = old_value;
+  if (instruction.opcode == "DS_MIN_NUM_F64" ||
+      instruction.opcode == "DS_MIN_NUM_RTN_F64") {
+    new_value = BitCast<std::uint64_t>(
+        std::fmin(BitCast<double>(old_value), BitCast<double>(data_value)));
+  } else if (instruction.opcode == "DS_MAX_NUM_F64" ||
+             instruction.opcode == "DS_MAX_NUM_RTN_F64") {
+    new_value = BitCast<std::uint64_t>(
+        std::fmax(BitCast<double>(old_value), BitCast<double>(data_value)));
+  } else {
+    if (error_message != nullptr) {
+      *error_message = "unsupported 64-bit DS opcode";
+    }
+    return false;
+  }
+
+  if (!StoreU64(memory, address, new_value, error_message, instruction.opcode)) {
+    return false;
+  }
+  if (IsDsAtomic64ReturnOpcode(instruction.opcode)) {
+    return WriteWideVectorOperand(instruction.operands[0], lane_index, old_value,
+                                  state, error_message);
   }
   if (error_message != nullptr) {
     error_message->clear();
@@ -6384,6 +6468,39 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     }
     return true;
   }
+  if (IsDsAtomic64Opcode(instruction.opcode)) {
+    const bool returns_old = IsDsAtomic64ReturnOpcode(instruction.opcode);
+    if (!ValidateOperandCount(instruction, returns_old ? 5u : 4u,
+                              error_message)) {
+      return false;
+    }
+    if (memory == nullptr) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " requires execution memory";
+      }
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < kGfx1201LaneCount;
+         ++lane_index) {
+      if ((MaskToGfx1201Wave32(state->exec_mask) & (1ull << lane_index)) == 0u) {
+        continue;
+      }
+      std::uint64_t address = 0;
+      if (!ComputeDsAddress(instruction, *state, lane_index, &address,
+                            error_message)) {
+        return false;
+      }
+      if (!ExecuteDsAtomic64AtAddress(instruction, address, lane_index, state,
+                                      memory, error_message)) {
+        return false;
+      }
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
   if (IsDsLoadOpcode(instruction.opcode)) {
     if (!ValidateOperandCount(instruction, 3u, error_message)) {
       return false;
@@ -7840,6 +7957,10 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kDsMinNumF32:
     case Gfx1201CompiledOpcode::kDsMaxNumRtnF32:
     case Gfx1201CompiledOpcode::kDsMaxNumF32:
+    case Gfx1201CompiledOpcode::kDsMinNumRtnF64:
+    case Gfx1201CompiledOpcode::kDsMinNumF64:
+    case Gfx1201CompiledOpcode::kDsMaxNumRtnF64:
+    case Gfx1201CompiledOpcode::kDsMaxNumF64:
     case Gfx1201CompiledOpcode::kDsLoadB32:
     case Gfx1201CompiledOpcode::kDsLoadB64:
     case Gfx1201CompiledOpcode::kDsLoadB96:
