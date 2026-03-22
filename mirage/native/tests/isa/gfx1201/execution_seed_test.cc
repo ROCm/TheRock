@@ -3232,6 +3232,18 @@ struct DsRtnCase {
   std::uint32_t offset;
 };
 
+struct DsMskorCase {
+  const char* opcode;
+  std::uint32_t op;
+  mirage::sim::isa::Gfx1201CompiledOpcode compiled;
+  std::uint16_t dest;
+  std::uint16_t addr;
+  std::uint16_t mask;
+  std::uint16_t value;
+  std::uint32_t offset;
+  bool returns_old;
+};
+
 struct DsLoadCase {
   const char* opcode;
   std::uint32_t op;
@@ -3355,6 +3367,17 @@ constexpr std::array<DsRtnCase, 19> kDsRtnCases{{
     {"DS_MAX_NUM_RTN_F32", 51u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsMaxNumRtnF32, 50u, 84u,
      86u, 0x0fcu},
+}};
+
+constexpr std::uint64_t kDsMskorBaseAddress = 0x4e000u;
+
+constexpr std::array<DsMskorCase, 2> kDsMskorCases{{
+    {"DS_MSKOR_B32", 12u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMskorB32, 0u, 44u, 46u, 48u,
+     0x000u, false},
+    {"DS_MSKOR_RTN_B32", 44u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMskorRtnB32, 40u, 45u, 47u,
+     49u, 0x010u, true},
 }};
 
 constexpr std::uint64_t kDsWideBaseAddress = 0x56000u;
@@ -3513,6 +3536,11 @@ std::uint64_t DsCaseBaseAddress(std::size_t case_index) {
 
 std::uint64_t DsLoadCaseBaseAddress(std::size_t case_index) {
   return kDsLoadBaseAddress + static_cast<std::uint64_t>(case_index) * 0x1000u;
+}
+
+std::uint64_t DsMskorCaseBaseAddress(std::size_t case_index) {
+  return kDsMskorBaseAddress +
+         static_cast<std::uint64_t>(case_index) * 0x1000u;
 }
 
 std::uint64_t DsWideCaseBaseAddress(std::size_t case_index) {
@@ -3920,6 +3948,69 @@ std::uint32_t ExpectedDsNewValue(std::size_t case_index,
     default:
       return old_value;
   }
+}
+
+std::uint32_t InitialDsMskorOldValue(std::size_t case_index,
+                                     std::size_t lane) {
+  if (!IsDsLaneActive(lane)) {
+    return 0xf7000000u + static_cast<std::uint32_t>(case_index << 8) +
+           static_cast<std::uint32_t>(lane);
+  }
+
+  switch (case_index) {
+    case 0:
+      return lane == 0u ? 0xf0f00f0fu
+                        : (lane == 1u ? 0x12345678u : 0xaaaaaaaau);
+    case 1:
+      return lane == 0u ? 0x0f0ff0f0u
+                        : (lane == 1u ? 0x87654321u : 0xffff0000u);
+    default:
+      return 0u;
+  }
+}
+
+std::uint32_t InitialDsMskorMaskValue(std::size_t case_index,
+                                      std::size_t lane) {
+  if (!IsDsLaneActive(lane)) {
+    return 0x57000000u + static_cast<std::uint32_t>(case_index << 8) +
+           static_cast<std::uint32_t>(lane);
+  }
+
+  switch (case_index) {
+    case 0:
+      return lane == 0u ? 0x00ff00ffu
+                        : (lane == 1u ? 0x0f0f0f0fu : 0xff00ff00u);
+    case 1:
+      return lane == 0u ? 0x0000ffffu
+                        : (lane == 1u ? 0xff00ff00u : 0x00ff00ffu);
+    default:
+      return 0u;
+  }
+}
+
+std::uint32_t InitialDsMskorValue(std::size_t case_index,
+                                  std::size_t lane) {
+  if (!IsDsLaneActive(lane)) {
+    return 0x58000000u + static_cast<std::uint32_t>(case_index << 8) +
+           static_cast<std::uint32_t>(lane);
+  }
+
+  switch (case_index) {
+    case 0:
+      return lane == 0u ? 0x00550055u
+                        : (lane == 1u ? 0xf000f000u : 0x12345678u);
+    case 1:
+      return lane == 0u ? 0x89ab4567u
+                        : (lane == 1u ? 0x00aa00aau : 0xff00ff00u);
+    default:
+      return 0u;
+  }
+}
+
+std::uint32_t ExpectedDsMskorNewValue(std::uint32_t old_value,
+                                      std::uint32_t mask_value,
+                                      std::uint32_t value) {
+  return (old_value & ~mask_value) | value;
 }
 
 std::uint64_t ExpectedDsWideNewValue(std::size_t case_index,
@@ -4488,6 +4579,211 @@ bool RunDsRtnBatchTest(
               "expected compiled DS return state") ||
       !Expect(expect_ds_memory(&compiled_ds_memory),
               "expected compiled DS return memory state")) {
+    return false;
+  }
+
+  return true;
+}
+
+bool RunDsMskorBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  std::vector<std::uint32_t> ds_program_words;
+  ds_program_words.reserve((kDsMskorCases.size() + 1u) * 2u + 1u);
+  const auto ds_nop_words = MakeDs(20u, 0u, 0u, 0u, 0u, 0u);
+  ds_program_words.push_back(ds_nop_words[0]);
+  ds_program_words.push_back(ds_nop_words[1]);
+  for (const DsMskorCase& ds_case : kDsMskorCases) {
+    const auto words = MakeDs(ds_case.op,
+                              ds_case.returns_old ? ds_case.dest : 0u,
+                              ds_case.addr, ds_case.mask, ds_case.value,
+                              ds_case.offset);
+    ds_program_words.push_back(words[0]);
+    ds_program_words.push_back(words[1]);
+  }
+  ds_program_words.push_back(MakeSopp(48u));
+
+  std::vector<DecodedInstruction> ds_program;
+  if (!Expect(decoder.DecodeProgram(ds_program_words, &ds_program, error_message),
+              "expected DS MSKOR batch decode success") ||
+      !Expect(ds_program.size() == kDsMskorCases.size() + 2u,
+              "expected decoded DS MSKOR instruction count") ||
+      !Expect(ds_program.front().opcode == "DS_NOP",
+              "expected decoded DS_NOP at MSKOR batch start")) {
+    return false;
+  }
+  for (std::size_t i = 0; i < kDsMskorCases.size(); ++i) {
+    if (!Expect(ds_program[i + 1u].opcode == kDsMskorCases[i].opcode,
+                "expected decoded DS MSKOR opcode order")) {
+      return false;
+    }
+  }
+  if (!Expect(ds_program.back().opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after DS MSKOR batch")) {
+    return false;
+  }
+
+  auto initialize_ds_state = [](WaveExecutionState* state) {
+    state->exec_mask = kDsExecMask;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      for (std::size_t case_index = 0; case_index < kDsMskorCases.size();
+           ++case_index) {
+        const auto base = DsMskorCaseBaseAddress(case_index);
+        const DsMskorCase& ds_case = kDsMskorCases[case_index];
+        state->vgprs[ds_case.addr][lane] =
+            static_cast<std::uint32_t>(base + lane * 4u);
+        state->vgprs[ds_case.mask][lane] =
+            InitialDsMskorMaskValue(case_index, lane);
+        state->vgprs[ds_case.value][lane] =
+            InitialDsMskorValue(case_index, lane);
+        if (ds_case.returns_old) {
+          state->vgprs[ds_case.dest][lane] =
+              0xad000000u + static_cast<std::uint32_t>(case_index << 8) +
+              static_cast<std::uint32_t>(lane);
+        }
+      }
+    }
+  };
+
+  auto expect_ds_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == kDsExecMask &&
+          state.halted && !state.waiting_on_barrier &&
+          state.pc == kDsMskorCases.size() + 1u)) {
+      return false;
+    }
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      for (std::size_t case_index = 0; case_index < kDsMskorCases.size();
+           ++case_index) {
+        const auto base = DsMskorCaseBaseAddress(case_index);
+        const DsMskorCase& ds_case = kDsMskorCases[case_index];
+        if (state.vgprs[ds_case.addr][lane] !=
+            static_cast<std::uint32_t>(base + lane * 4u)) {
+          return false;
+        }
+        if (state.vgprs[ds_case.mask][lane] !=
+            InitialDsMskorMaskValue(case_index, lane)) {
+          return false;
+        }
+        if (state.vgprs[ds_case.value][lane] !=
+            InitialDsMskorValue(case_index, lane)) {
+          return false;
+        }
+        if (ds_case.returns_old) {
+          const std::uint32_t expected_dest =
+              IsDsLaneActive(lane)
+                  ? InitialDsMskorOldValue(case_index, lane)
+                  : 0xad000000u + static_cast<std::uint32_t>(case_index << 8) +
+                        static_cast<std::uint32_t>(lane);
+          if (state.vgprs[ds_case.dest][lane] != expected_dest) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  };
+
+  auto initialize_ds_memory = [](LinearExecutionMemory* memory) {
+    for (std::size_t case_index = 0; case_index < kDsMskorCases.size();
+         ++case_index) {
+      for (std::size_t lane = 0; lane < 32u; ++lane) {
+        const std::uint64_t address =
+            DsMskorCaseBaseAddress(case_index) + kDsMskorCases[case_index].offset +
+            lane * 4u;
+        if (!memory->StoreU32(address,
+                              InitialDsMskorOldValue(case_index, lane))) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  auto expect_ds_memory = [](LinearExecutionMemory* memory) {
+    for (std::size_t case_index = 0; case_index < kDsMskorCases.size();
+         ++case_index) {
+      for (std::size_t lane = 0; lane < 32u; ++lane) {
+        const std::uint64_t address =
+            DsMskorCaseBaseAddress(case_index) + kDsMskorCases[case_index].offset +
+            lane * 4u;
+        std::uint32_t value = 0;
+        if (!memory->LoadU32(address, &value)) {
+          return false;
+        }
+        const std::uint32_t old_value =
+            InitialDsMskorOldValue(case_index, lane);
+        const std::uint32_t expected_value =
+            IsDsLaneActive(lane)
+                ? ExpectedDsMskorNewValue(
+                      old_value, InitialDsMskorMaskValue(case_index, lane),
+                      InitialDsMskorValue(case_index, lane))
+                : old_value;
+        if (value != expected_value) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  LinearExecutionMemory decoded_ds_memory(0x2000u, kDsMskorBaseAddress);
+  if (!Expect(initialize_ds_memory(&decoded_ds_memory),
+              "expected DS MSKOR decoded memory initialization")) {
+    return false;
+  }
+  WaveExecutionState decoded_ds_state;
+  initialize_ds_state(&decoded_ds_state);
+  if (!Expect(interpreter.ExecuteProgram(ds_program, &decoded_ds_state,
+                                         &decoded_ds_memory, error_message),
+              "expected decoded DS MSKOR execution success") ||
+      !Expect(expect_ds_state(decoded_ds_state),
+              "expected decoded DS MSKOR state") ||
+      !Expect(expect_ds_memory(&decoded_ds_memory),
+              "expected decoded DS MSKOR memory state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_ds_program;
+  if (!Expect(interpreter.CompileProgram(ds_program, &compiled_ds_program,
+                                         error_message),
+              "expected compiled DS MSKOR program success") ||
+      !Expect(compiled_ds_program.size() == kDsMskorCases.size() + 2u,
+              "expected compiled DS MSKOR instruction count") ||
+      !Expect(compiled_ds_program.front().opcode == Gfx1201CompiledOpcode::kSNop,
+              "expected compiled DS MSKOR NOP as kSNop")) {
+    return false;
+  }
+  for (std::size_t i = 0; i < kDsMskorCases.size(); ++i) {
+    if (!Expect(compiled_ds_program[i + 1u].opcode == kDsMskorCases[i].compiled,
+                "expected compiled DS MSKOR opcode order")) {
+      return false;
+    }
+  }
+  if (!Expect(compiled_ds_program.back().opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after DS MSKOR batch")) {
+    return false;
+  }
+
+  LinearExecutionMemory compiled_ds_memory(0x2000u, kDsMskorBaseAddress);
+  if (!Expect(initialize_ds_memory(&compiled_ds_memory),
+              "expected DS MSKOR compiled memory initialization")) {
+    return false;
+  }
+  WaveExecutionState compiled_ds_state;
+  initialize_ds_state(&compiled_ds_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_program,
+                                         &compiled_ds_state,
+                                         &compiled_ds_memory,
+                                         error_message),
+              "expected compiled DS MSKOR execution success") ||
+      !Expect(expect_ds_state(compiled_ds_state),
+              "expected compiled DS MSKOR state") ||
+      !Expect(expect_ds_memory(&compiled_ds_memory),
+              "expected compiled DS MSKOR memory state")) {
     return false;
   }
 
@@ -12953,6 +13249,9 @@ int main() {
     return 1;
   }
   if (!RunDsRtnBatchTest(decoder, interpreter, &error_message)) {
+    return 1;
+  }
+  if (!RunDsMskorBatchTest(decoder, interpreter, &error_message)) {
     return 1;
   }
   if (!RunDsWideBatchTest(decoder, interpreter, &error_message)) {

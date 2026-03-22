@@ -105,6 +105,8 @@ enum class Gfx1201CompiledOpcode : std::uint16_t {
   kDsOrB32,
   kDsXorRtnB32,
   kDsXorB32,
+  kDsMskorRtnB32,
+  kDsMskorB32,
   kDsCondSubRtnU32,
   kDsCondSubU32,
   kDsSubClampRtnU32,

@@ -55,7 +55,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 495> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 497> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -178,6 +178,8 @@ constexpr std::array<std::string_view, 495> kExecutableSeedOpcodes{{
     "DS_OR_B32",
     "DS_XOR_RTN_B32",
     "DS_XOR_B32",
+    "DS_MSKOR_RTN_B32",
+    "DS_MSKOR_B32",
     "DS_COND_SUB_RTN_U32",
     "DS_COND_SUB_U32",
     "DS_SUB_CLAMP_RTN_U32",
@@ -1410,6 +1412,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "DS_XOR_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsXorB32;
+    return true;
+  }
+  if (opcode == "DS_MSKOR_RTN_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMskorRtnB32;
+    return true;
+  }
+  if (opcode == "DS_MSKOR_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMskorB32;
     return true;
   }
   if (opcode == "DS_COND_SUB_RTN_U32") {
@@ -3737,12 +3747,17 @@ bool IsDsAtomic32ReturnOpcode(std::string_view opcode) {
          opcode == "DS_MIN_RTN_I32" || opcode == "DS_MIN_RTN_U32" ||
          opcode == "DS_MAX_RTN_I32" || opcode == "DS_MAX_RTN_U32" ||
          opcode == "DS_AND_RTN_B32" || opcode == "DS_OR_RTN_B32" ||
-         opcode == "DS_XOR_RTN_B32" || opcode == "DS_COND_SUB_RTN_U32" ||
+         opcode == "DS_XOR_RTN_B32" || opcode == "DS_MSKOR_RTN_B32" ||
+         opcode == "DS_COND_SUB_RTN_U32" ||
          opcode == "DS_SUB_CLAMP_RTN_U32" ||
          opcode == "DS_PK_ADD_RTN_F16" ||
          opcode == "DS_PK_ADD_RTN_BF16" ||
          opcode == "DS_MIN_NUM_RTN_F32" ||
          opcode == "DS_MAX_NUM_RTN_F32";
+}
+
+bool IsDsAtomic32DualDataOpcode(std::string_view opcode) {
+  return opcode == "DS_MSKOR_B32" || opcode == "DS_MSKOR_RTN_B32";
 }
 
 bool IsDsAtomic32Opcode(std::string_view opcode) {
@@ -3752,7 +3767,8 @@ bool IsDsAtomic32Opcode(std::string_view opcode) {
          opcode == "DS_MIN_I32" || opcode == "DS_MIN_U32" ||
          opcode == "DS_MAX_I32" || opcode == "DS_MAX_U32" ||
          opcode == "DS_AND_B32" || opcode == "DS_OR_B32" ||
-         opcode == "DS_XOR_B32" || opcode == "DS_COND_SUB_U32" ||
+         opcode == "DS_XOR_B32" || opcode == "DS_MSKOR_B32" ||
+         opcode == "DS_COND_SUB_U32" ||
          opcode == "DS_SUB_CLAMP_U32" || opcode == "DS_PK_ADD_F16" ||
          opcode == "DS_PK_ADD_BF16" || opcode == "DS_MIN_NUM_F32" ||
          opcode == "DS_MAX_NUM_F32" || IsDsAtomic32ReturnOpcode(opcode);
@@ -3801,13 +3817,23 @@ std::size_t DsAtomic32DataOperandIndex(std::string_view opcode) {
   return IsDsAtomic32ReturnOpcode(opcode) ? 2u : 1u;
 }
 
+std::size_t DsAtomic32Data1OperandIndex(std::string_view opcode) {
+  return IsDsAtomic32ReturnOpcode(opcode) ? 3u : 2u;
+}
+
 std::size_t DsAtomic32Offset0OperandIndex(std::string_view opcode) {
+  if (IsDsAtomic32DualDataOpcode(opcode)) {
+    return IsDsAtomic32ReturnOpcode(opcode) ? 4u : 3u;
+  }
   return (IsDsAtomic32ReturnOpcode(opcode) || IsDsAtomic64ReturnOpcode(opcode))
              ? 3u
              : 2u;
 }
 
 std::size_t DsAtomic32Offset1OperandIndex(std::string_view opcode) {
+  if (IsDsAtomic32DualDataOpcode(opcode)) {
+    return IsDsAtomic32ReturnOpcode(opcode) ? 5u : 4u;
+  }
   return (IsDsAtomic32ReturnOpcode(opcode) || IsDsAtomic64ReturnOpcode(opcode))
              ? 4u
              : 3u;
@@ -3973,6 +3999,16 @@ bool ExecuteDsAtomic32AtAddress(const DecodedInstruction& instruction,
     return false;
   }
 
+  std::uint32_t data1_value = 0;
+  if (IsDsAtomic32DualDataOpcode(instruction.opcode)) {
+    data1_value = ReadVectorOperand(
+        instruction.operands[DsAtomic32Data1OperandIndex(instruction.opcode)],
+        *state, lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+  }
+
   std::uint32_t new_value = old_value;
   if (instruction.opcode == "DS_ADD_F32" ||
       instruction.opcode == "DS_ADD_RTN_F32") {
@@ -4038,6 +4074,9 @@ bool ExecuteDsAtomic32AtAddress(const DecodedInstruction& instruction,
   } else if (instruction.opcode == "DS_XOR_B32" ||
              instruction.opcode == "DS_XOR_RTN_B32") {
     new_value = old_value ^ data_value;
+  } else if (instruction.opcode == "DS_MSKOR_B32" ||
+             instruction.opcode == "DS_MSKOR_RTN_B32") {
+    new_value = (old_value & ~data_value) | data1_value;
   } else {
     if (error_message != nullptr) {
       *error_message = "unsupported DS opcode";
@@ -6525,8 +6564,10 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
   }
   if (IsDsAtomic32Opcode(instruction.opcode)) {
     const bool returns_old = IsDsAtomic32ReturnOpcode(instruction.opcode);
-    if (!ValidateOperandCount(instruction, returns_old ? 5u : 4u,
-                              error_message)) {
+    const bool has_second_data = IsDsAtomic32DualDataOpcode(instruction.opcode);
+    const std::size_t operand_count =
+        has_second_data ? (returns_old ? 6u : 5u) : (returns_old ? 5u : 4u);
+    if (!ValidateOperandCount(instruction, operand_count, error_message)) {
       return false;
     }
     if (memory == nullptr) {
@@ -8039,6 +8080,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kDsOrB32:
     case Gfx1201CompiledOpcode::kDsXorRtnB32:
     case Gfx1201CompiledOpcode::kDsXorB32:
+    case Gfx1201CompiledOpcode::kDsMskorRtnB32:
+    case Gfx1201CompiledOpcode::kDsMskorB32:
     case Gfx1201CompiledOpcode::kDsCondSubRtnU32:
     case Gfx1201CompiledOpcode::kDsCondSubU32:
     case Gfx1201CompiledOpcode::kDsSubClampRtnU32:

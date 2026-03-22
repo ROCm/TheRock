@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 495> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 497> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -140,6 +140,8 @@ constexpr std::array<std::string_view, 495> kPhase0ExecutableOpcodes{{
     "DS_OR_B32",
     "DS_XOR_RTN_B32",
     "DS_XOR_B32",
+    "DS_MSKOR_RTN_B32",
+    "DS_MSKOR_B32",
     "DS_COND_SUB_RTN_U32",
     "DS_COND_SUB_U32",
     "DS_SUB_CLAMP_RTN_U32",
@@ -1187,6 +1189,8 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "DS_OR_B32" ||
              instruction_name == "DS_XOR_RTN_B32" ||
              instruction_name == "DS_XOR_B32" ||
+             instruction_name == "DS_MSKOR_RTN_B32" ||
+             instruction_name == "DS_MSKOR_B32" ||
              instruction_name == "DS_COND_SUB_RTN_U32" ||
              instruction_name == "DS_COND_SUB_U32" ||
              instruction_name == "DS_SUB_CLAMP_RTN_U32" ||
@@ -1266,6 +1270,21 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
             : DescribeSourceOperand(vdata0, OperandRole::kSource1,
                                     OperandSlotKind::kSource1);
 
+    const bool has_second_data =
+        instruction_name == "DS_MSKOR_RTN_B32" ||
+        instruction_name == "DS_MSKOR_B32";
+    InstructionOperand described_vdata1;
+    if (has_second_data) {
+      InstructionOperand vdata1;
+      if (!DecodeVectorRegisterSource(ExtractBits(words[1], 16, 8), &vdata1,
+                                      error_message)) {
+        return false;
+      }
+      described_vdata1 =
+          DescribeSourceOperand(vdata1, OperandRole::kSource2,
+                                OperandSlotKind::kSource2);
+    }
+
     const bool returns_old =
         instruction_name == "DS_ADD_RTN_F32" ||
         instruction_name == "DS_ADD_RTN_U32" ||
@@ -1280,6 +1299,7 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         instruction_name == "DS_AND_RTN_B32" ||
         instruction_name == "DS_OR_RTN_B32" ||
         instruction_name == "DS_XOR_RTN_B32" ||
+        instruction_name == "DS_MSKOR_RTN_B32" ||
         instruction_name == "DS_COND_SUB_RTN_U32" ||
         instruction_name == "DS_SUB_CLAMP_RTN_U32" ||
         instruction_name == "DS_PK_ADD_RTN_F16" ||
@@ -1309,6 +1329,21 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
               .WithDescriptor(MakeImmediateDescriptor(OperandRole::kUnknown,
                                                      OperandSlotKind::kUnknown,
                                                      8u)));
+      if (has_second_data) {
+        *instruction = DecodedInstruction::SixOperand(
+            instruction_name,
+            DescribeVectorDestinationOperand(vdst),
+            DescribeSourceOperand(vaddr, OperandRole::kSource0,
+                                  OperandSlotKind::kSource0),
+            described_vdata0,
+            described_vdata1,
+            InstructionOperand::Imm32(ExtractBits(word, 0, 8))
+                .WithDescriptor(MakeImmediateDescriptor(
+                    OperandRole::kUnknown, OperandSlotKind::kUnknown, 8u)),
+            InstructionOperand::Imm32(ExtractBits(word, 8, 8))
+                .WithDescriptor(MakeImmediateDescriptor(
+                    OperandRole::kUnknown, OperandSlotKind::kUnknown, 8u)));
+      }
     } else {
       *instruction = DecodedInstruction::FourOperand(
           instruction_name,
@@ -1323,6 +1358,20 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
               .WithDescriptor(MakeImmediateDescriptor(OperandRole::kUnknown,
                                                      OperandSlotKind::kUnknown,
                                                      8u)));
+      if (has_second_data) {
+        *instruction = DecodedInstruction::FiveOperand(
+            instruction_name,
+            DescribeSourceOperand(vaddr, OperandRole::kSource0,
+                                  OperandSlotKind::kSource0),
+            described_vdata0,
+            described_vdata1,
+            InstructionOperand::Imm32(ExtractBits(word, 0, 8))
+                .WithDescriptor(MakeImmediateDescriptor(
+                    OperandRole::kUnknown, OperandSlotKind::kUnknown, 8u)),
+            InstructionOperand::Imm32(ExtractBits(word, 8, 8))
+                .WithDescriptor(MakeImmediateDescriptor(
+                    OperandRole::kUnknown, OperandSlotKind::kUnknown, 8u)));
+      }
     }
     *words_consumed = 2;
   } else if (instruction_name == "DS_LOAD_B32" ||
