@@ -3235,7 +3235,7 @@ struct DsLoadCase {
   std::uint32_t offset;
 };
 
-constexpr std::array<DsCase, 17> kDsCases{{
+constexpr std::array<DsCase, 19> kDsCases{{
     {"DS_ADD_F32", 21u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsAddF32, 64u, 80u, 0x000u},
     {"DS_ADD_U32", 0u,
@@ -3272,9 +3272,15 @@ constexpr std::array<DsCase, 17> kDsCases{{
     {"DS_PK_ADD_BF16", 155u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsPkAddBf16, 98u, 100u,
      0x0f4u},
+    {"DS_MIN_NUM_F32", 18u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMinNumF32, 101u, 103u,
+     0x0f8u},
+    {"DS_MAX_NUM_F32", 19u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMaxNumF32, 102u, 104u,
+     0x0fcu},
 }};
 
-constexpr std::array<DsRtnCase, 17> kDsRtnCases{{
+constexpr std::array<DsRtnCase, 19> kDsRtnCases{{
     {"DS_ADD_RTN_F32", 121u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsAddRtnF32, 32u, 96u, 112u,
      0x000u},
@@ -3326,6 +3332,12 @@ constexpr std::array<DsRtnCase, 17> kDsRtnCases{{
     {"DS_PK_ADD_RTN_BF16", 171u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsPkAddRtnBf16, 48u, 82u,
      81u, 0x0f4u},
+    {"DS_MIN_NUM_RTN_F32", 50u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMinNumRtnF32, 49u, 83u,
+     85u, 0x0f8u},
+    {"DS_MAX_NUM_RTN_F32", 51u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMaxNumRtnF32, 50u, 84u,
+     86u, 0x0fcu},
 }};
 
 constexpr std::uint64_t kDsLoadBaseAddress = 0x16000u;
@@ -3600,6 +3612,13 @@ std::uint32_t InitialDsOldValue(std::size_t case_index, std::size_t lane) {
       return lane == 0u ? PackBf16Pair(1.0f, -2.0f)
                         : (lane == 1u ? PackBf16Pair(-1.5f, 3.0f)
                                        : PackBf16Pair(0.25f, -4.0f));
+    case 17:
+      return lane == 0u ? FloatBits(4.5f)
+                        : (lane == 1u ? kQuietNaNF32Bits : FloatBits(7.0f));
+    case 18:
+      return lane == 0u ? FloatBits(4.5f)
+                        : (lane == 1u ? FloatBits(-1.0f)
+                                       : FloatBits(-7.0f));
     default:
       return 0u;
   }
@@ -3655,6 +3674,13 @@ std::uint32_t InitialDsDataValue(std::size_t case_index, std::size_t lane) {
       return lane == 0u ? PackBf16Pair(0.5f, 1.0f)
                         : (lane == 1u ? PackBf16Pair(2.0f, -0.5f)
                                        : PackBf16Pair(-0.25f, 1.5f));
+    case 17:
+      return lane == 0u ? FloatBits(2.0f)
+                        : (lane == 1u ? FloatBits(3.0f)
+                                       : FloatBits(-4.0f));
+    case 18:
+      return lane == 0u ? FloatBits(2.0f)
+                        : (lane == 1u ? kQuietNaNF32Bits : FloatBits(4.0f));
     default:
       return 0u;
   }
@@ -3702,6 +3728,12 @@ std::uint32_t ExpectedDsNewValue(std::size_t case_index,
       return PackedHalfAdd(old_value, data_value);
     case 16:
       return PackedBFloat16Add(old_value, data_value);
+    case 17:
+      return FloatBits(
+          std::fmin(BitsToFloat(old_value), BitsToFloat(data_value)));
+    case 18:
+      return FloatBits(
+          std::fmax(BitsToFloat(old_value), BitsToFloat(data_value)));
     default:
       return old_value;
   }
