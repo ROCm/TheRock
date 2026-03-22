@@ -49,6 +49,7 @@
   - route-wide exact decoded-route-to-manifest parity validation across the current routed seed set
   - route-wide exact helper-name parity and helper-coverage validation across the current routed seed set
   - exact negative-path helper-surface parity and invalid-helper-enum fallback validation across the current local stub API
+  - exact supported-route-info unknown-name fallback validation across the current routed entrypoint set
   - exact route-priority ordering and routed-instruction-list sequence validation across the current routed family set
   - exact collection lookup parity and global route-info ordering validation across the current routed family set
   - exact routed-instruction-name uniqueness and route-info/list bijection validation across the current routed family set
@@ -77,6 +78,7 @@
   - exact selector negative-path checks now pin `SelectStubDecoderRoute(invalid_hint)`, `GetStubDecoderRouteName(invalid_route)`, `GetStubDecoderRouteInstructions(unsupported_or_invalid_route)`, `FindStubDecoderRouteManifest(unsupported_or_invalid_route)`, and unknown-instruction lookup exclusion
   - exact negative-path checks now pin `DecodeVop3pStub` / `DecodeMimgTensorStub` / `DecodeVop1Stub` / `DecodeVop3SdstStub` wrong-entrypoint rejection across the full routed seed set, pin both `DecodeStubInstruction()` and all four route-keyed entrypoints on the unsupported seeded slice, pin `DecodeStubInstruction(const StubDecoderRouteInfo&)` normalization for unsupported route infos, pin route-keyed unknown-op parity, and pin null manifest lookups for `kUnsupported`
   - exact negative-path helper checks now pin `kUnknown` opcode-shape / execution-domain / operand-layout helper surfaces across unsupported and unknown decodes, and pin direct invalid-enum helper fallbacks to `kUnknown`
+  - exact route-info negative-path checks now pin supported synthetic `StubDecoderRouteInfo` inputs with unknown instruction names to preserve caller route metadata while returning an empty `kUnknown` structural decode through the route-specific entrypoint name
 
 - `VOP3P` packed BF16 slice:
   - `V_PK_ADD_BF16`

@@ -759,6 +759,22 @@ StubDecodedInstruction DecodeViaExplicitRouteEntrypoint(
   return {};
 }
 
+std::string_view SyntheticUnknownInstructionForRoute(StubDecoderRoute route) {
+  switch (route) {
+    case StubDecoderRoute::kVop3p:
+      return "SYNTHETIC_GFX1250_VOP3P_UNKNOWN";
+    case StubDecoderRoute::kMimgTensor:
+      return "SYNTHETIC_GFX1250_MIMGTENSOR_UNKNOWN";
+    case StubDecoderRoute::kVop1:
+      return "SYNTHETIC_GFX1250_VOP1_UNKNOWN";
+    case StubDecoderRoute::kVop3Sdst:
+      return "SYNTHETIC_GFX1250_VOP3SDST_UNKNOWN";
+    case StubDecoderRoute::kUnsupported:
+      break;
+  }
+  return "SYNTHETIC_GFX1250_UNSUPPORTED_UNKNOWN";
+}
+
 bool IsUnsupportedSeededInstruction(const DecoderSeedInfo& seed) {
   return seed.decode_hint == DecodeSeedHint::kUnknown ||
          seed.decode_hint == DecodeSeedHint::kVop3;
@@ -7451,6 +7467,35 @@ int main() {
                     MatchesDecodedInstructionStructure(via_synthetic,
                                                       via_name),
                 "expected route-info decode to preserve caller metadata while keeping structural parity")) {
+      return 1;
+    }
+  }
+  for (const StubDecoderEntrypointManifest& manifest :
+       GetStubDecoderEntrypointManifests()) {
+    const StubDecoderRouteInfo synthetic_unknown{
+        SyntheticUnknownInstructionForRoute(manifest.route),
+        manifest.route,
+        "kSyntheticRouteInfoUnknown",
+        manifest.route_priority + 100u,
+        DecodeSeedHint::kUnknown,
+        "SYNTHETIC_UNKNOWN_ENC",
+        1000u + manifest.route_priority,
+        10u + manifest.route_priority,
+        true,
+        true,
+    };
+    const StubDecodedInstruction decoded =
+        DecodeStubInstruction(synthetic_unknown);
+    if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub &&
+                    MatchesRouteInfoPayload(decoded, synthetic_unknown) &&
+                    decoded.entrypoint_name == manifest.entrypoint_name &&
+                    MatchesUnknownHelperSurface(decoded) &&
+                    MatchesTopLevelFlags(decoded, false, false, false, false) &&
+                    MatchesLayout(decoded, ExpectedLayout{}) &&
+                    decoded.operand_roles.binding_count == 0 &&
+                    decoded.operand_slots.binding_count == 0 &&
+                    decoded.operand_descriptors.descriptor_count == 0,
+                "expected synthetic routed route-info with unknown instruction name to preserve caller metadata while keeping empty unknown structure")) {
       return 1;
     }
   }
