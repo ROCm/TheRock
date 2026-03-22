@@ -397,6 +397,26 @@ class MultiArchPackagingTest(TmpDirTestCase):
 
 
 # ---------------------------------------------------------------------------
+# Tests for Parameters construction edge cases
+# ---------------------------------------------------------------------------
+
+
+class ParametersConstructionTest(TmpDirTestCase):
+    def test_no_arch_specific_artifacts_does_not_crash(self):
+        # Regression: Parameters.__init__ raised IndexError when all_target_families
+        # was empty because it did sorted(...)[0] unconditionally.
+        artifact_dir = self.temp_dir / "artifacts"
+        artifact_dir.mkdir()
+        params = Parameters(
+            dest_dir=self.temp_dir / "packages",
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+        )
+        self.assertIsNone(params.default_target_family)
+
+
+# ---------------------------------------------------------------------------
 # Unit tests for restrict_families (per-family meta package)
 # ---------------------------------------------------------------------------
 

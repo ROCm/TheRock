@@ -1,12 +1,6 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-if(WIN32)
-  set(LLVM_LINK_LLVM_DYLIB OFF)
-else()
-  set(LLVM_LINK_LLVM_DYLIB ON)
-endif()
-
 set(COMGR_DISABLE_SPIRV OFF)
 
 # Enable ASAN for Comgr when THEROCK_SANITIZER is set to ASAN or HOST_ASAN
@@ -15,8 +9,7 @@ if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN")
   message(STATUS "Enabling ASAN for Comgr (THEROCK_SANITIZER=${THEROCK_SANITIZER})")
 endif()
 
-# Enable comgr tests when LLVM tests are enabled.
-if(THEROCK_ENABLE_LLVM_TESTS)
+if(THEROCK_BUILD_COMGR_TESTS)
   set(BUILD_TESTING ON CACHE BOOL "Enable comgr tests" FORCE)
 else()
   set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)

@@ -46,7 +46,7 @@ import platform as platform_module
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.storage_location import StorageLocation
-from github_actions.github_actions_utils import gha_query_workflow_run_by_id
+from github_actions.github_actions_api import gha_query_workflow_run_by_id
 
 
 def _log(*args, **kwargs):
@@ -182,13 +182,17 @@ class WorkflowOutputRoot:
 
     # -- Python packages --------------------------------------------------------
 
-    def python_packages(self, artifact_group: str) -> StorageLocation:
+    def python_packages(self, artifact_group: str = "") -> StorageLocation:
         """Location for the Python packages directory.
 
         Args:
-            artifact_group: Build variant (e.g., 'gfx110X-all')
+            artifact_group: Build variant (e.g., 'gfx110X-all'). If empty,
+                packages are stored directly under python/ (used for
+                multi-arch builds where run_id already uniquely identifies
+                the build).
         """
-        return StorageLocation(self.bucket, f"{self.prefix}/python/{artifact_group}")
+        suffix = f"/{artifact_group}" if artifact_group else ""
+        return StorageLocation(self.bucket, f"{self.prefix}/python{suffix}")
 
     # -- Factories --------------------------------------------------------------
 
@@ -334,12 +338,6 @@ def _retrieve_bucket_info(
             bucket = "therock-ci-artifacts"
             if curr_commit_dt and curr_commit_dt <= _BUCKET_CUTOVER_DATE:
                 bucket = "therock-artifacts"
-        elif (
-            repo_name == "therock-releases-internal"
-            and owner == "ROCm"
-            and not is_pr_from_fork
-        ):
-            bucket = "therock-artifacts-internal"
         else:
             bucket = "therock-ci-artifacts-external"
             if curr_commit_dt and curr_commit_dt <= _BUCKET_CUTOVER_DATE:

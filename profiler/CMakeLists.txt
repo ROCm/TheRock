@@ -2,26 +2,26 @@
 # SPDX-License-Identifier: MIT
 
 if(THEROCK_ENABLE_ROCPROFV3)
-  set(_rocprofiler_sdk_optional_deps)
+  set(_openmpi_optional_dep)
+  if(THEROCK_ENABLE_MPI)
+    set(_openmpi_optional_dep therock-openmpi)
+  endif()
 
   ##############################################################################
-  # rocprof-trace-decoder-binary
-  # The trace decoder is responsible for decoding advanced thread traces from
-  # the GPU. It is a binary-only dependency of ROCm which is enabled at
-  # runtime via `rocprofv3 --att`. If an appropriate shared library is adjacent
-  # to the profiler shared libraries, it will be used by default.
+  # rocprof-trace-decoder
+  # The trace decoder is responsible for decoding advanced thread traces from the
+  # GPU and is used at runtime by `rocprofv3 --att`.
   # See: https://github.com/ROCm/rocprof-trace-decoder/
-  # The binaries are contained in the submodule rocprof-trace-decoder/binaries
-  # Our CMakeLists which installs them is local to this project.
   ##############################################################################
-  if(THEROCK_ENABLE_ROCPROF_TRACE_DECODER_BINARY)
-    therock_cmake_subproject_declare(rocprof-trace-decoder
-      EXTERNAL_SOURCE_DIR "rocprof-trace-decoder"
-      BACKGROUND_BUILD
-    )
-    therock_cmake_subproject_activate(rocprof-trace-decoder)
-    list(APPEND _rocprofiler_sdk_optional_deps rocprof-trace-decoder)
-  endif()
+  therock_cmake_subproject_declare(rocprof-trace-decoder
+    # The build infrastructure requires generic stages to pass through
+    # DIST_AMDGPU_TARGETS even if the list isn't used by the underlying project.
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprof-trace-decoder"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder"
+    BACKGROUND_BUILD
+  )
+  therock_cmake_subproject_activate(rocprof-trace-decoder)
 
   ##############################################################################
   # aqlprofile
@@ -98,8 +98,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
     RUNTIME_DEPS
       aqlprofile
       hip-clr
+      rocprof-trace-decoder
       rocprofiler-register
-      ${_rocprofiler_sdk_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
@@ -118,7 +118,23 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk lib/cmake/rocprofiler-sdk)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-roctx lib/cmake/rocprofiler-sdk-roctx)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-rocpd lib/cmake/rocprofiler-sdk-rocpd)
+  therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-rocattach lib/cmake/rocprofiler-sdk-rocattach)
   therock_cmake_subproject_activate(rocprofiler-sdk)
+
+  therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk/dist/lib
+    LIB_NAMES
+      librocprofiler-sdk.so
+      librocprofiler-sdk-roctx.so
+      librocprofiler-sdk-rocpd.so
+      librocprofiler-sdk-rocattach.so
+  )
+  therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk/dist/lib/rocprofiler-sdk
+    LIB_NAMES
+      libgotcha.so
+      librocprofiler-sdk-tool.so
+      librocprofiler-sdk-tool-kokkosp.so
+      librocprofv3-list-avail.so
+  )
 
   ##############################################################################
   # rocprofiler-compute
@@ -145,10 +161,10 @@ if(THEROCK_ENABLE_ROCPROFV3)
       aqlprofile
       hip-clr
       rocprofiler-register
-      ${_rocprofiler_sdk_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
+      ${_openmpi_optional_dep}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-compute
       SUBDIRS .
@@ -208,7 +224,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     SUBPROJECT_DEPS
       rocprofiler-sdk
       roctracer
-      ${_rocprofiler_sdk_optional_deps}
+      rocprof-trace-decoder
   )
 
   therock_provide_artifact(rocprofiler-compute
@@ -234,10 +250,10 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # Skip enabling rocprofiler-systems when building with sanitizers.
   if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
     # Escape semicolons in GPU targets list to prevent shell interpretation
-    if (THEROCK_DIST_AMDGPU_TARGETS STREQUAL "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND")
+    if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
       set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
     else()
-      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_DIST_AMDGPU_TARGETS}")
+      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_TEST_AMDGPU_TARGETS}")
     endif()
 
     therock_detect_python_versions(_rocprofsys_detected_python_executables _rocprofsys_detected_python_versions)
@@ -262,7 +278,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems
-      USE_DIST_AMDGPU_TARGETS
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
       BACKGROUND_BUILD
@@ -297,7 +313,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         rocprofiler-sdk
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
-        ${_rocprofiler_systems_optional_deps}
+        ${_openmpi_optional_dep}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems
       SUBDIRS .
@@ -314,6 +330,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         doc
         lib
         run
+        test
       SUBPROJECT_DEPS
         amdsmi
         rocprofiler-sdk

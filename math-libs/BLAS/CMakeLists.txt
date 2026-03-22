@@ -177,6 +177,15 @@ elseif(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
 endif()
 
+# Disable rocBLAS samples on Windows due to use of deprecated
+# <experimental/filesystem> in client_utility.cpp with MSVC.
+# TODO(#3630): Re-enable once upstream rocBLAS migrates to <filesystem>.
+if(WIN32)
+  set(_blas_build_samples OFF)
+else()
+  set(_blas_build_samples ${THEROCK_BUILD_TESTING})
+endif()
+
 therock_cmake_subproject_declare(rocBLAS
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocBLAS"
@@ -194,6 +203,7 @@ therock_cmake_subproject_declare(rocBLAS
     # doing a strict check of exact version.
     -DTENSILE_VERSION=
     -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
+    -DBUILD_CLIENTS_SAMPLES=${_blas_build_samples}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
     -DLINK_BLIS=OFF
   CMAKE_INCLUDES
