@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 483> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 495> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -156,6 +156,18 @@ constexpr std::array<std::string_view, 483> kPhase0ExecutableOpcodes{{
     "DS_MIN_NUM_F64",
     "DS_MAX_NUM_RTN_F64",
     "DS_MAX_NUM_F64",
+    "DS_ADD_U64",
+    "DS_SUB_U64",
+    "DS_RSUB_U64",
+    "DS_INC_U64",
+    "DS_DEC_U64",
+    "DS_MIN_I64",
+    "DS_MIN_U64",
+    "DS_MAX_I64",
+    "DS_MAX_U64",
+    "DS_AND_B64",
+    "DS_OR_B64",
+    "DS_XOR_B64",
     "DS_LOAD_B32",
     "DS_LOAD_B64",
     "DS_LOAD_B96",
@@ -1190,7 +1202,19 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "DS_MIN_NUM_RTN_F64" ||
              instruction_name == "DS_MIN_NUM_F64" ||
              instruction_name == "DS_MAX_NUM_RTN_F64" ||
-             instruction_name == "DS_MAX_NUM_F64") {
+             instruction_name == "DS_MAX_NUM_F64" ||
+             instruction_name == "DS_ADD_U64" ||
+             instruction_name == "DS_SUB_U64" ||
+             instruction_name == "DS_RSUB_U64" ||
+             instruction_name == "DS_INC_U64" ||
+             instruction_name == "DS_DEC_U64" ||
+             instruction_name == "DS_MIN_I64" ||
+             instruction_name == "DS_MIN_U64" ||
+             instruction_name == "DS_MAX_I64" ||
+             instruction_name == "DS_MAX_U64" ||
+             instruction_name == "DS_AND_B64" ||
+             instruction_name == "DS_OR_B64" ||
+             instruction_name == "DS_XOR_B64") {
     if (words.size() < 2u) {
       if (error_message != nullptr) {
         *error_message = std::string(instruction_name) + " requires 2 dwords";
@@ -1217,14 +1241,26 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       return false;
     }
 
-    const bool is_wide_f64 =
+    const bool is_wide_64 =
+        instruction_name == "DS_ADD_U64" ||
+        instruction_name == "DS_SUB_U64" ||
+        instruction_name == "DS_RSUB_U64" ||
+        instruction_name == "DS_INC_U64" ||
+        instruction_name == "DS_DEC_U64" ||
+        instruction_name == "DS_MIN_I64" ||
+        instruction_name == "DS_MIN_U64" ||
+        instruction_name == "DS_MAX_I64" ||
+        instruction_name == "DS_MAX_U64" ||
+        instruction_name == "DS_AND_B64" ||
+        instruction_name == "DS_OR_B64" ||
+        instruction_name == "DS_XOR_B64" ||
         instruction_name == "DS_MIN_NUM_RTN_F64" ||
         instruction_name == "DS_MIN_NUM_F64" ||
         instruction_name == "DS_MAX_NUM_RTN_F64" ||
         instruction_name == "DS_MAX_NUM_F64";
 
     const InstructionOperand described_vdata0 =
-        is_wide_f64
+        is_wide_64
             ? DescribeWideVectorSourceOperand(
                   vdata0, OperandRole::kSource1, OperandSlotKind::kSource1, 2u)
             : DescribeSourceOperand(vdata0, OperandRole::kSource1,
@@ -1260,8 +1296,8 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       }
       *instruction = DecodedInstruction::FiveOperand(
           instruction_name,
-          is_wide_f64 ? DescribeWideVectorDestinationOperand(vdst)
-                      : DescribeVectorDestinationOperand(vdst),
+          is_wide_64 ? DescribeWideVectorDestinationOperand(vdst)
+                     : DescribeVectorDestinationOperand(vdst),
           DescribeSourceOperand(vaddr, OperandRole::kSource0,
                                 OperandSlotKind::kSource0),
           described_vdata0,

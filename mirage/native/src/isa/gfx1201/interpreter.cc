@@ -55,7 +55,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 483> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 495> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -194,6 +194,18 @@ constexpr std::array<std::string_view, 483> kExecutableSeedOpcodes{{
     "DS_MIN_NUM_F64",
     "DS_MAX_NUM_RTN_F64",
     "DS_MAX_NUM_F64",
+    "DS_ADD_U64",
+    "DS_SUB_U64",
+    "DS_RSUB_U64",
+    "DS_INC_U64",
+    "DS_DEC_U64",
+    "DS_MIN_I64",
+    "DS_MIN_U64",
+    "DS_MAX_I64",
+    "DS_MAX_U64",
+    "DS_AND_B64",
+    "DS_OR_B64",
+    "DS_XOR_B64",
     "DS_LOAD_B32",
     "DS_LOAD_B64",
     "DS_LOAD_B96",
@@ -1462,6 +1474,54 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "DS_MAX_NUM_F64") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsMaxNumF64;
+    return true;
+  }
+  if (opcode == "DS_ADD_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsAddU64;
+    return true;
+  }
+  if (opcode == "DS_SUB_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsSubU64;
+    return true;
+  }
+  if (opcode == "DS_RSUB_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsRsubU64;
+    return true;
+  }
+  if (opcode == "DS_INC_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsIncU64;
+    return true;
+  }
+  if (opcode == "DS_DEC_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsDecU64;
+    return true;
+  }
+  if (opcode == "DS_MIN_I64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMinI64;
+    return true;
+  }
+  if (opcode == "DS_MIN_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMinU64;
+    return true;
+  }
+  if (opcode == "DS_MAX_I64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMaxI64;
+    return true;
+  }
+  if (opcode == "DS_MAX_U64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMaxU64;
+    return true;
+  }
+  if (opcode == "DS_AND_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsAndB64;
+    return true;
+  }
+  if (opcode == "DS_OR_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsOrB64;
+    return true;
+  }
+  if (opcode == "DS_XOR_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsXorB64;
     return true;
   }
   if (opcode == "DS_LOAD_B32") {
@@ -3703,7 +3763,13 @@ bool IsDsAtomic64ReturnOpcode(std::string_view opcode) {
 }
 
 bool IsDsAtomic64Opcode(std::string_view opcode) {
-  return opcode == "DS_MIN_NUM_F64" || opcode == "DS_MAX_NUM_F64" ||
+  return opcode == "DS_ADD_U64" || opcode == "DS_SUB_U64" ||
+         opcode == "DS_RSUB_U64" || opcode == "DS_INC_U64" ||
+         opcode == "DS_DEC_U64" || opcode == "DS_MIN_I64" ||
+         opcode == "DS_MIN_U64" || opcode == "DS_MAX_I64" ||
+         opcode == "DS_MAX_U64" || opcode == "DS_AND_B64" ||
+         opcode == "DS_OR_B64" || opcode == "DS_XOR_B64" ||
+         opcode == "DS_MIN_NUM_F64" || opcode == "DS_MAX_NUM_F64" ||
          IsDsAtomic64ReturnOpcode(opcode);
 }
 
@@ -4015,8 +4081,36 @@ bool ExecuteDsAtomic64AtAddress(const DecodedInstruction& instruction,
   }
 
   std::uint64_t new_value = old_value;
-  if (instruction.opcode == "DS_MIN_NUM_F64" ||
-      instruction.opcode == "DS_MIN_NUM_RTN_F64") {
+  if (instruction.opcode == "DS_ADD_U64") {
+    new_value = old_value + data_value;
+  } else if (instruction.opcode == "DS_SUB_U64") {
+    new_value = old_value - data_value;
+  } else if (instruction.opcode == "DS_RSUB_U64") {
+    new_value = data_value - old_value;
+  } else if (instruction.opcode == "DS_INC_U64") {
+    new_value = AtomicIncU64(old_value, data_value);
+  } else if (instruction.opcode == "DS_DEC_U64") {
+    new_value = AtomicDecU64(old_value, data_value);
+  } else if (instruction.opcode == "DS_MIN_I64") {
+    new_value = BitCast<std::uint64_t>(
+        std::min(BitCast<std::int64_t>(old_value),
+                 BitCast<std::int64_t>(data_value)));
+  } else if (instruction.opcode == "DS_MIN_U64") {
+    new_value = std::min(old_value, data_value);
+  } else if (instruction.opcode == "DS_MAX_I64") {
+    new_value = BitCast<std::uint64_t>(
+        std::max(BitCast<std::int64_t>(old_value),
+                 BitCast<std::int64_t>(data_value)));
+  } else if (instruction.opcode == "DS_MAX_U64") {
+    new_value = std::max(old_value, data_value);
+  } else if (instruction.opcode == "DS_AND_B64") {
+    new_value = old_value & data_value;
+  } else if (instruction.opcode == "DS_OR_B64") {
+    new_value = old_value | data_value;
+  } else if (instruction.opcode == "DS_XOR_B64") {
+    new_value = old_value ^ data_value;
+  } else if (instruction.opcode == "DS_MIN_NUM_F64" ||
+             instruction.opcode == "DS_MIN_NUM_RTN_F64") {
     new_value = BitCast<std::uint64_t>(
         std::fmin(BitCast<double>(old_value), BitCast<double>(data_value)));
   } else if (instruction.opcode == "DS_MAX_NUM_F64" ||
@@ -7961,6 +8055,18 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kDsMinNumF64:
     case Gfx1201CompiledOpcode::kDsMaxNumRtnF64:
     case Gfx1201CompiledOpcode::kDsMaxNumF64:
+    case Gfx1201CompiledOpcode::kDsAddU64:
+    case Gfx1201CompiledOpcode::kDsSubU64:
+    case Gfx1201CompiledOpcode::kDsRsubU64:
+    case Gfx1201CompiledOpcode::kDsIncU64:
+    case Gfx1201CompiledOpcode::kDsDecU64:
+    case Gfx1201CompiledOpcode::kDsMinI64:
+    case Gfx1201CompiledOpcode::kDsMinU64:
+    case Gfx1201CompiledOpcode::kDsMaxI64:
+    case Gfx1201CompiledOpcode::kDsMaxU64:
+    case Gfx1201CompiledOpcode::kDsAndB64:
+    case Gfx1201CompiledOpcode::kDsOrB64:
+    case Gfx1201CompiledOpcode::kDsXorB64:
     case Gfx1201CompiledOpcode::kDsLoadB32:
     case Gfx1201CompiledOpcode::kDsLoadB64:
     case Gfx1201CompiledOpcode::kDsLoadB96:

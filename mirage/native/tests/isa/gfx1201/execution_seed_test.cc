@@ -3359,7 +3359,7 @@ constexpr std::array<DsRtnCase, 19> kDsRtnCases{{
 
 constexpr std::uint64_t kDsWideBaseAddress = 0x56000u;
 
-constexpr std::array<DsWideCase, 4> kDsWideCases{{
+constexpr std::array<DsWideCase, 16> kDsWideCases{{
     {"DS_MIN_NUM_F64", 82u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsMinNumF64, 0u, 88u, 96u,
      0x000u, false},
@@ -3372,6 +3372,31 @@ constexpr std::array<DsWideCase, 4> kDsWideCases{{
     {"DS_MAX_NUM_RTN_F64", 115u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsMaxNumRtnF64, 66u, 91u, 102u,
      0x030u, true},
+    {"DS_ADD_U64", 64u, mirage::sim::isa::Gfx1201CompiledOpcode::kDsAddU64, 0u,
+     32u, 0u, 0x040u, false},
+    {"DS_SUB_U64", 65u, mirage::sim::isa::Gfx1201CompiledOpcode::kDsSubU64, 0u,
+     33u, 2u, 0x050u, false},
+    {"DS_RSUB_U64", 66u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsRsubU64, 0u, 34u, 4u,
+     0x060u, false},
+    {"DS_INC_U64", 67u, mirage::sim::isa::Gfx1201CompiledOpcode::kDsIncU64, 0u,
+     35u, 6u, 0x070u, false},
+    {"DS_DEC_U64", 68u, mirage::sim::isa::Gfx1201CompiledOpcode::kDsDecU64, 0u,
+     36u, 8u, 0x080u, false},
+    {"DS_MIN_I64", 69u, mirage::sim::isa::Gfx1201CompiledOpcode::kDsMinI64, 0u,
+     37u, 10u, 0x090u, false},
+    {"DS_MIN_U64", 71u, mirage::sim::isa::Gfx1201CompiledOpcode::kDsMinU64, 0u,
+     38u, 12u, 0x0a0u, false},
+    {"DS_MAX_I64", 70u, mirage::sim::isa::Gfx1201CompiledOpcode::kDsMaxI64, 0u,
+     39u, 14u, 0x0b0u, false},
+    {"DS_MAX_U64", 72u, mirage::sim::isa::Gfx1201CompiledOpcode::kDsMaxU64, 0u,
+     40u, 16u, 0x0c0u, false},
+    {"DS_AND_B64", 73u, mirage::sim::isa::Gfx1201CompiledOpcode::kDsAndB64, 0u,
+     41u, 18u, 0x0d0u, false},
+    {"DS_OR_B64", 74u, mirage::sim::isa::Gfx1201CompiledOpcode::kDsOrB64, 0u,
+     42u, 20u, 0x0e0u, false},
+    {"DS_XOR_B64", 75u, mirage::sim::isa::Gfx1201CompiledOpcode::kDsXorB64, 0u,
+     43u, 22u, 0x0f0u, false},
 }};
 
 constexpr std::uint64_t kDsLoadBaseAddress = 0x16000u;
@@ -3685,6 +3710,39 @@ std::uint64_t InitialDsWideOldValue(std::size_t case_index, std::size_t lane) {
       return lane == 0u ? DoubleBits(-5.0)
                         : (lane == 1u ? DoubleBits(6.0)
                                        : DoubleBits(-8.0));
+    case 4:
+      return lane == 0u ? 10ull
+                        : (lane == 1u ? 100ull : 0xfffffffffffffff0ull);
+    case 5:
+      return lane == 0u ? 20ull : (lane == 1u ? 5ull : 1ull);
+    case 6:
+      return lane == 0u ? 4ull : (lane == 1u ? 10ull : 1ull);
+    case 7:
+      return lane == 0u ? 4ull : (lane == 1u ? 3ull : 8ull);
+    case 8:
+      return lane == 0u ? 0ull : (lane == 1u ? 5ull : 4ull);
+    case 9:
+      return lane == 0u ? I64Bits(-5ll)
+                        : (lane == 1u ? 9ull : I64Bits(-1ll));
+    case 10:
+      return lane == 0u ? 5ull : (lane == 1u ? 9ull : 0xfffffffffffffff0ull);
+    case 11:
+      return lane == 0u ? I64Bits(-5ll)
+                        : (lane == 1u ? 9ull : I64Bits(-1ll));
+    case 12:
+      return lane == 0u ? 5ull : (lane == 1u ? 9ull : 0xfffffffffffffff0ull);
+    case 13:
+      return lane == 0u ? 0x0f0f00f00f0f00f0ull
+                        : (lane == 1u ? 0xff00ff00ff00ff00ull
+                                       : 0xaaaaaaaa55555555ull);
+    case 14:
+      return lane == 0u ? 0x000000f0000000f0ull
+                        : (lane == 1u ? 0x00ff000000ff0000ull
+                                       : 0x0f000f000f000f00ull);
+    case 15:
+      return lane == 0u ? 0xaaaa5555aaaa5555ull
+                        : (lane == 1u ? 0x123456789abcdef0ull
+                                       : 0xffffffffffffffffull);
     default:
       return 0u;
   }
@@ -3774,6 +3832,38 @@ std::uint64_t InitialDsWideDataValue(std::size_t case_index, std::size_t lane) {
     case 3:
       return lane == 0u ? DoubleBits(-2.5)
                         : (lane == 1u ? kQuietNaNF64Bits : DoubleBits(3.0));
+    case 4:
+      return lane == 0u ? 5ull : (lane == 1u ? 7ull : 0x20ull);
+    case 5:
+      return lane == 0u ? 3ull : (lane == 1u ? 7ull : 2ull);
+    case 6:
+      return lane == 0u ? 7ull : (lane == 1u ? 6ull : 1ull);
+    case 7:
+      return 4ull;
+    case 8:
+      return 4ull;
+    case 9:
+      return lane == 0u ? I64Bits(-2ll)
+                        : (lane == 1u ? I64Bits(-4ll) : 7ull);
+    case 10:
+      return lane == 0u ? 2ull : (lane == 1u ? 10ull : 0x10ull);
+    case 11:
+      return lane == 0u ? I64Bits(-2ll)
+                        : (lane == 1u ? I64Bits(-4ll) : 7ull);
+    case 12:
+      return lane == 0u ? 2ull : (lane == 1u ? 10ull : 0x10ull);
+    case 13:
+      return lane == 0u ? 0x00ff0ff000ff0ff0ull
+                        : (lane == 1u ? 0x0f0f0f0f0f0f0f0full
+                                       : 0x00ffff0000ffff00ull);
+    case 14:
+      return lane == 0u ? 0x00000f0000000f00ull
+                        : (lane == 1u ? 0x000000ff000000ffull
+                                       : 0xf000000ff000000full);
+    case 15:
+      return lane == 0u ? 0xffff0000ffff0000ull
+                        : (lane == 1u ? 0x0f0f0f0f0f0f0f0full
+                                       : 0x123456789abcdef0ull);
     default:
       return 0u;
   }
@@ -3836,9 +3926,42 @@ std::uint64_t ExpectedDsWideNewValue(std::size_t case_index,
                                      std::uint64_t old_value,
                                      std::uint64_t data_value) {
   if (case_index == 0u || case_index == 2u) {
-    return DoubleBits(std::fmin(BitsToDouble(old_value), BitsToDouble(data_value)));
+    return DoubleBits(
+        std::fmin(BitsToDouble(old_value), BitsToDouble(data_value)));
   }
-  return DoubleBits(std::fmax(BitsToDouble(old_value), BitsToDouble(data_value)));
+  if (case_index == 1u || case_index == 3u) {
+    return DoubleBits(
+        std::fmax(BitsToDouble(old_value), BitsToDouble(data_value)));
+  }
+  switch (case_index) {
+    case 4:
+      return old_value + data_value;
+    case 5:
+      return old_value - data_value;
+    case 6:
+      return data_value - old_value;
+    case 7:
+      return old_value >= data_value ? 0ull : old_value + 1ull;
+    case 8:
+      return (old_value == 0ull || old_value > data_value) ? data_value
+                                                            : old_value - 1ull;
+    case 9:
+      return I64Bits(std::min(BitsToI64(old_value), BitsToI64(data_value)));
+    case 10:
+      return std::min(old_value, data_value);
+    case 11:
+      return I64Bits(std::max(BitsToI64(old_value), BitsToI64(data_value)));
+    case 12:
+      return std::max(old_value, data_value);
+    case 13:
+      return old_value & data_value;
+    case 14:
+      return old_value | data_value;
+    case 15:
+      return old_value ^ data_value;
+    default:
+      return old_value;
+  }
 }
 
 std::size_t DsLoadWordCount(std::size_t case_index) {
@@ -4515,7 +4638,7 @@ bool RunDsWideBatchTest(
     return true;
   };
 
-  LinearExecutionMemory decoded_ds_memory(0x8000u, kDsWideBaseAddress);
+  LinearExecutionMemory decoded_ds_memory(0x12000u, kDsWideBaseAddress);
   if (!Expect(initialize_ds_memory(&decoded_ds_memory),
               "expected DS wide decoded memory initialization")) {
     return false;
@@ -4554,7 +4677,7 @@ bool RunDsWideBatchTest(
     return false;
   }
 
-  LinearExecutionMemory compiled_ds_memory(0x8000u, kDsWideBaseAddress);
+  LinearExecutionMemory compiled_ds_memory(0x12000u, kDsWideBaseAddress);
   if (!Expect(initialize_ds_memory(&compiled_ds_memory),
               "expected DS wide compiled memory initialization")) {
     return false;
