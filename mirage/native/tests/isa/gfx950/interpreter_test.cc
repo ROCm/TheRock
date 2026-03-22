@@ -10250,6 +10250,7 @@ int main() {
   auto make_ds_b64_return_state = []() {
     WaveExecutionState state;
     state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x24681357u;
     auto write_lds_u64 = [](WaveExecutionState* wave,
                             std::uint64_t address,
                             std::uint64_t value) {
@@ -10332,6 +10333,10 @@ int main() {
     for (std::uint16_t reg = 68; reg <= 126; ++reg) {
       state.vgprs[reg][2] = 0xdead0000u + reg;
     }
+    state.vgprs[67][0] = 0x01020304u;
+    state.vgprs[67][1] = 0x11121314u;
+    state.vgprs[67][2] = 0x21222324u;
+    state.vgprs[67][3] = 0x31323334u;
 
     seed_active_lds(0u, 10u);
     seed_active_lds(16u, 20u);
@@ -10352,11 +10357,24 @@ int main() {
     seed_active_lds(256u, 0xffff0000aaaa5555ULL);
     seed_active_lds(272u, 0x1122334455667788ULL);
     seed_active_lds(288u, DoubleBits(2.5));
+    write_lds_u64(&state, 0x700u, 0x1122334455667788ULL);
     return state;
   };
   auto validate_ds_b64_return_state = [&](const WaveExecutionState& state,
                                           const char* mode) {
-    if (!Expect(state.halted, "expected ds b64 return program to halt")) {
+    if (!Expect(state.halted, "expected ds b64 return program to halt") ||
+        !Expect(state.exec_mask == 0b1011ULL,
+                "expected ds b64 return to preserve exec") ||
+        !Expect(state.sgprs[0] == 0x24681357u,
+                "expected ds b64 return to preserve sgprs") ||
+        !Expect(state.vgprs[0][0] == 0u && state.vgprs[0][1] == 0x200u &&
+                    state.vgprs[0][3] == 0x400u,
+                "expected ds b64 return to preserve representative addresses") ||
+        !Expect(state.vgprs[67][0] == 0x01020304u &&
+                    state.vgprs[67][1] == 0x11121314u &&
+                    state.vgprs[67][2] == 0x21222324u &&
+                    state.vgprs[67][3] == 0x31323334u,
+                "expected ds b64 return to preserve unrelated vgprs")) {
       std::cerr << mode << '\n';
       return false;
     }
@@ -10372,6 +10390,24 @@ int main() {
     static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
     static constexpr std::array<std::uint64_t, 3> kLaneOffsets = {0u, 0x200u,
                                                                   0x400u};
+    const auto expect_active_u64 = [&](std::uint16_t reg, std::uint64_t expected,
+                                       const char* label) {
+      for (std::size_t lane : kObservedLanes) {
+        if (!Expect(read_lane_vgpr_u64(reg, lane) == expected, label)) {
+          return false;
+        }
+      }
+      return true;
+    };
+    if (!expect_active_u64(
+            1u, 5u,
+            "expected ds b64 return to preserve representative integer sources") ||
+        !expect_active_u64(
+            43u, DoubleBits(2.25),
+            "expected ds b64 return to preserve representative f64 sources")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
     const std::array<DsReturn64Expectation, 19> expectations = {{
         {80u, 10u, 0u, 15u, "expected ds_add_rtn_u64 return",
          "expected ds_add_rtn_u64 memory"},
@@ -10437,7 +10473,9 @@ int main() {
         !Expect(state.vgprs[125][2] == 0xdead007du,
                 "expected inactive ds_max_rtn_f64 low lane to remain untouched") ||
         !Expect(state.vgprs[126][2] == 0xdead007eu,
-                "expected inactive ds_max_rtn_f64 high lane to remain untouched")) {
+                "expected inactive ds_max_rtn_f64 high lane to remain untouched") ||
+        !Expect(read_lds_u64(0x700u) == 0x1122334455667788ULL,
+                "expected ds b64 return to preserve unrelated lds")) {
       std::cerr << mode << '\n';
       return false;
     }
