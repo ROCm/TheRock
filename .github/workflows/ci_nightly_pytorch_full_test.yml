@@ -1,6 +1,17 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Runs the full PyTorch unit-test suite against nightly wheels from v2-staging.
+#
+# Current scope: Linux gfx94X-dcgpu only.
+# TODO: Expand to additional GPU families (Radeon, gfx950, etc.) and Windows.
+#       Runner labels should eventually come from amdgpu_family_matrix.py /
+#       configure_target_run.py instead of being passed as inputs here.
+# TODO: This schedule-based trigger assumes the nightly build has completed.
+#       Consider integrating into the existing build/release workflows
+#       (build_portable_linux_pytorch_wheels.yml / release_portable_linux_packages.yml)
+#       so tests only run after a successful build.
+
 name: CI Nightly PyTorch Full Test
 
 on:
@@ -12,6 +23,18 @@ on:
         description: GPU family to test
         type: string
         default: "gfx94X-dcgpu"
+      test_runs_on:
+        description: Runner label for single-GPU test configs
+        type: string
+        default: "linux-gfx942-1gpu-ossci-rocm"
+      test_runs_on_multi_gpu:
+        description: Runner label for multi-GPU test configs (e.g. distributed)
+        type: string
+        default: "linux-gfx942-8gpu-ossci-rocm"
+      package_index_url:
+        description: "Base package index URL (without GPU family subdir)"
+        type: string
+        default: "https://rocm.nightlies.amd.com/v2-staging"
       torch_version:
         description: "Torch version to test (leave empty to auto-detect latest nightly)"
         type: string
@@ -45,7 +68,8 @@ jobs:
         run: |
           AMDGPU_FAMILY="${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}"
           PYTHON_VERSION="${{ inputs.python_version || '3.12' }}"
-          INDEX_URL="https://rocm.nightlies.amd.com/v2-staging/${AMDGPU_FAMILY}"
+          PACKAGE_INDEX_URL="${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}"
+          INDEX_URL="${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}"
 
           if [ -n "${{ inputs.torch_version }}" ]; then
             echo "torch_version=${{ inputs.torch_version }}" >> "$GITHUB_OUTPUT"
@@ -54,9 +78,13 @@ jobs:
           fi
 
           pip install packaging
+          # --platform ensures this works even when the runner OS differs from
+          # the target (e.g. querying Linux packages from an ubuntu runner that
+          # might later be replaced by a Windows runner for cross-platform support).
           TORCH_VERSION=$(pip index versions torch \
             --index-url "${INDEX_URL}" \
-            --python-version "${PYTHON_VERSION}" 2>/dev/null \
+            --python-version "${PYTHON_VERSION}" \
+            --platform linux_x86_64 2>/dev/null \
             | head -1 \
             | sed 's/torch (\(.*\))/\1/')
 
@@ -73,9 +101,9 @@ jobs:
     uses: ./.github/workflows/test_pytorch_wheels_full.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
-      test_runs_on: "linux-gfx942-1gpu-ossci-rocm"
-      test_runs_on_multi_gpu: "linux-gfx942-8gpu-ossci-rocm"
-      package_index_url: "https://rocm.nightlies.amd.com/v2-staging"
+      test_runs_on: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ossci-rocm' }}
+      test_runs_on_multi_gpu: ${{ inputs.test_runs_on_multi_gpu || 'linux-gfx942-8gpu-ossci-rocm' }}
+      package_index_url: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
       python_version: ${{ inputs.python_version || '3.12' }}
       torch_version: ${{ needs.resolve_torch_version.outputs.torch_version }}
       pytorch_git_ref: ${{ inputs.pytorch_git_ref || 'nightly' }}
