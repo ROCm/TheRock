@@ -368,6 +368,37 @@ int main() {
               "expected unsupported route name")) {
     return 1;
   }
+  if (!Expect(GetStubDecoderRouteInstructions(StubDecoderRoute::kUnsupported)
+                      .empty() &&
+                  FindStubDecoderRouteManifest(StubDecoderRoute::kUnsupported) ==
+                      nullptr,
+              "expected unsupported route to expose no routed instruction list or manifest")) {
+    return 1;
+  }
+  if (!Expect(SelectStubDecoderRoute(
+                      static_cast<DecodeSeedHint>(99)) ==
+                  StubDecoderRoute::kUnsupported,
+              "expected invalid decode hint to fall back to unsupported route")) {
+    return 1;
+  }
+  if (!Expect(GetStubDecoderRouteName(static_cast<StubDecoderRoute>(99)) ==
+                      "kUnsupported" &&
+                  GetStubDecoderRouteInstructions(
+                      static_cast<StubDecoderRoute>(99))
+                      .empty() &&
+                  FindStubDecoderRouteManifest(
+                      static_cast<StubDecoderRoute>(99)) == nullptr,
+              "expected invalid route enum to expose unsupported selector fallbacks")) {
+    return 1;
+  }
+  if (!Expect(SelectStubDecoderRoute("NO_SUCH_GFX1250_OPCODE") ==
+                      StubDecoderRoute::kUnsupported &&
+                  FindStubDecoderRouteInfo("NO_SUCH_GFX1250_OPCODE") ==
+                      nullptr &&
+                  !ListedInAnyRoute("NO_SUCH_GFX1250_OPCODE"),
+              "expected unknown instruction to stay excluded from all routed selector surfaces")) {
+    return 1;
+  }
 
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
     const StubDecoderRoute expected_route =
