@@ -10652,35 +10652,47 @@ int main() {
   }
   }
 
-  WaveExecutionState writer_wave;
-  writer_wave.exec_mask = 0b1011ULL;
-  writer_wave.workgroup_wave_count = 2;
-  writer_wave.sgprs[0] = 0u;
-  writer_wave.vgprs[0][0] = 0u;
-  writer_wave.vgprs[0][1] = 4u;
-  writer_wave.vgprs[0][3] = 12u;
-  writer_wave.vgprs[1][0] = 99u;
-  writer_wave.vgprs[1][1] = 123u;
-  writer_wave.vgprs[1][3] = 456u;
-  writer_wave.vgprs[2][0] = 0xaaaabbbbu;
-  writer_wave.vgprs[2][1] = 0xccccddddu;
-  writer_wave.vgprs[2][2] = 0x12345678u;
-  writer_wave.vgprs[2][3] = 0xeeeeffffu;
-  WaveExecutionState reader_wave;
-  reader_wave.exec_mask = 0b1011ULL;
-  reader_wave.workgroup_wave_count = 2;
-  reader_wave.sgprs[0] = 1u;
-  reader_wave.vgprs[0][0] = 0u;
-  reader_wave.vgprs[0][1] = 4u;
-  reader_wave.vgprs[0][3] = 12u;
-  reader_wave.vgprs[2][0] = 0xdead0000u;
-  reader_wave.vgprs[2][1] = 0xdead0001u;
-  reader_wave.vgprs[2][2] = 0xdeadbeefu;
-  reader_wave.vgprs[2][3] = 0xdead0003u;
-  std::vector<std::byte> shared_lds(WaveExecutionState::kLdsSizeBytes);
-  WorkgroupExecutionContext workgroup;
-  workgroup.shared_lds = std::span<std::byte>(shared_lds.data(), shared_lds.size());
-  workgroup.wave_count = 2;
+  const auto make_barrier_writer_wave = []() {
+    WaveExecutionState writer_wave;
+    writer_wave.exec_mask = 0b1011ULL;
+    writer_wave.workgroup_wave_count = 2;
+    writer_wave.sgprs[0] = 0u;
+    writer_wave.sgprs[5] = 0x13579bdfu;
+    writer_wave.vgprs[0][0] = 0u;
+    writer_wave.vgprs[0][1] = 4u;
+    writer_wave.vgprs[0][3] = 12u;
+    writer_wave.vgprs[1][0] = 99u;
+    writer_wave.vgprs[1][1] = 123u;
+    writer_wave.vgprs[1][3] = 456u;
+    writer_wave.vgprs[2][0] = 0xaaaabbbbu;
+    writer_wave.vgprs[2][1] = 0xccccddddu;
+    writer_wave.vgprs[2][2] = 0x12345678u;
+    writer_wave.vgprs[2][3] = 0xeeeeffffu;
+    writer_wave.vgprs[3][0] = 0x11111111u;
+    writer_wave.vgprs[3][1] = 0x22222222u;
+    writer_wave.vgprs[3][2] = 0x33333333u;
+    writer_wave.vgprs[3][3] = 0x44444444u;
+    return writer_wave;
+  };
+  const auto make_barrier_reader_wave = []() {
+    WaveExecutionState reader_wave;
+    reader_wave.exec_mask = 0b1011ULL;
+    reader_wave.workgroup_wave_count = 2;
+    reader_wave.sgprs[0] = 1u;
+    reader_wave.sgprs[5] = 0x2468ace0u;
+    reader_wave.vgprs[0][0] = 0u;
+    reader_wave.vgprs[0][1] = 4u;
+    reader_wave.vgprs[0][3] = 12u;
+    reader_wave.vgprs[2][0] = 0xdead0000u;
+    reader_wave.vgprs[2][1] = 0xdead0001u;
+    reader_wave.vgprs[2][2] = 0xdeadbeefu;
+    reader_wave.vgprs[2][3] = 0xdead0003u;
+    reader_wave.vgprs[3][0] = 0xabcdef01u;
+    reader_wave.vgprs[3][1] = 0xabcdef02u;
+    reader_wave.vgprs[3][2] = 0xabcdef03u;
+    reader_wave.vgprs[3][3] = 0xabcdef04u;
+    return reader_wave;
+  };
   const std::vector<DecodedInstruction> barrier_program = {
       DecodedInstruction::TwoOperand("S_CMP_EQ_U32", InstructionOperand::Sgpr(0),
                                      InstructionOperand::Imm32(0)),
@@ -10697,77 +10709,197 @@ int main() {
       DecodedInstruction::Nullary("S_BARRIER"),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
-  std::array<WaveExecutionState*, 2> waves = {&writer_wave, &reader_wave};
-  bool barrier_failed = false;
-  for (;;) {
-    bool all_done = true;
-    std::size_t blocked_waves = 0;
-    for (WaveExecutionState* wave : waves) {
-      if (wave->halted || wave->pc >= barrier_program.size()) {
-        continue;
-      }
-      all_done = false;
-      if (wave->waiting_on_barrier) {
-        ++blocked_waves;
-        continue;
+  const auto run_barrier_program = [&](const auto& program,
+                                       const char* mode) -> bool {
+    WaveExecutionState writer_wave = make_barrier_writer_wave();
+    WaveExecutionState reader_wave = make_barrier_reader_wave();
+    std::vector<std::byte> shared_lds(WaveExecutionState::kLdsSizeBytes);
+    WorkgroupExecutionContext workgroup;
+    workgroup.shared_lds =
+        std::span<std::byte>(shared_lds.data(), shared_lds.size());
+    workgroup.wave_count = 2;
+
+    const auto write_shared_lds_u32 = [&](std::size_t address,
+                                          std::uint32_t value) {
+      std::memcpy(shared_lds.data() + address, &value, sizeof(value));
+    };
+    const auto read_shared_lds_u32 = [&](std::size_t address) {
+      std::uint32_t value = 0;
+      std::memcpy(&value, shared_lds.data() + address, sizeof(value));
+      return value;
+    };
+    write_shared_lds_u32(8u, 0xfeedfaceu);
+    write_shared_lds_u32(16u, 0xabad1deau);
+
+    std::array<WaveExecutionState*, 2> waves = {&writer_wave, &reader_wave};
+    bool barrier_failed = false;
+    for (;;) {
+      bool all_done = true;
+      std::size_t blocked_waves = 0;
+      for (WaveExecutionState* wave : waves) {
+        if (wave->halted || wave->pc >= barrier_program.size()) {
+          continue;
+        }
+        all_done = false;
+        if (wave->waiting_on_barrier) {
+          ++blocked_waves;
+          continue;
+        }
+
+        ProgramRunState run_state = ProgramRunState::kCompleted;
+        if (!Expect(interpreter.ExecuteProgramUntilYield(
+                        program, wave, nullptr, &workgroup, &run_state,
+                        &error_message),
+                    error_message.c_str())) {
+          return false;
+        }
+        if (run_state == ProgramRunState::kBlockedOnBarrier) {
+          ++blocked_waves;
+        }
       }
 
-      ProgramRunState run_state = ProgramRunState::kCompleted;
-      if (!Expect(interpreter.ExecuteProgramUntilYield(
-                      barrier_program, wave, nullptr, &workgroup, &run_state,
-                      &error_message),
-                  error_message.c_str())) {
-        return 1;
-      }
-      if (run_state == ProgramRunState::kBlockedOnBarrier) {
-        ++blocked_waves;
-      }
-    }
-
-    if (all_done) {
-      break;
-    }
-    if (blocked_waves != 0) {
-      if (!Expect(blocked_waves == waves.size(),
-                  "expected all workgroup waves to rendezvous at barrier")) {
-        barrier_failed = true;
+      if (all_done) {
         break;
       }
-      for (WaveExecutionState* wave : waves) {
-        wave->waiting_on_barrier = false;
+      if (blocked_waves != 0) {
+        if (!Expect(blocked_waves == waves.size(),
+                    "expected all workgroup waves to rendezvous at barrier")) {
+          barrier_failed = true;
+          break;
+        }
+        for (WaveExecutionState* wave : waves) {
+          wave->waiting_on_barrier = false;
+        }
       }
     }
-  }
-  if (barrier_failed) {
+    if (barrier_failed) {
+      return false;
+    }
+
+    if (!Expect(writer_wave.halted,
+                (std::string(mode) + ": expected writer wave to halt").c_str()) ||
+        !Expect(reader_wave.halted,
+                (std::string(mode) + ": expected reader wave to halt").c_str()) ||
+        !Expect(!writer_wave.waiting_on_barrier,
+                (std::string(mode) +
+                 ": expected writer wave barrier flag to be cleared")
+                    .c_str()) ||
+        !Expect(!reader_wave.waiting_on_barrier,
+                (std::string(mode) +
+                 ": expected reader wave barrier flag to be cleared")
+                    .c_str()) ||
+        !Expect(writer_wave.exec_mask == 0b1011ULL,
+                (std::string(mode) + ": expected writer exec to be preserved")
+                    .c_str()) ||
+        !Expect(reader_wave.exec_mask == 0b1011ULL,
+                (std::string(mode) + ": expected reader exec to be preserved")
+                    .c_str()) ||
+        !Expect(writer_wave.sgprs[0] == 0u,
+                (std::string(mode) + ": expected writer sgpr0 to be preserved")
+                    .c_str()) ||
+        !Expect(reader_wave.sgprs[0] == 1u,
+                (std::string(mode) + ": expected reader sgpr0 to be preserved")
+                    .c_str()) ||
+        !Expect(writer_wave.sgprs[5] == 0x13579bdfu,
+                (std::string(mode) + ": expected writer sgpr5 to be preserved")
+                    .c_str()) ||
+        !Expect(reader_wave.sgprs[5] == 0x2468ace0u,
+                (std::string(mode) + ": expected reader sgpr5 to be preserved")
+                    .c_str()) ||
+        !Expect(writer_wave.vgprs[0][0] == 0u &&
+                    writer_wave.vgprs[0][1] == 4u &&
+                    writer_wave.vgprs[0][3] == 12u,
+                (std::string(mode) +
+                 ": expected writer address register to be preserved")
+                    .c_str()) ||
+        !Expect(reader_wave.vgprs[0][0] == 0u &&
+                    reader_wave.vgprs[0][1] == 4u &&
+                    reader_wave.vgprs[0][3] == 12u,
+                (std::string(mode) +
+                 ": expected reader address register to be preserved")
+                    .c_str()) ||
+        !Expect(writer_wave.vgprs[1][0] == 99u &&
+                    writer_wave.vgprs[1][1] == 123u &&
+                    writer_wave.vgprs[1][3] == 456u,
+                (std::string(mode) +
+                 ": expected writer source register to be preserved")
+                    .c_str()) ||
+        !Expect(reader_wave.vgprs[2][0] == 99u,
+                (std::string(mode) +
+                 ": expected reader wave lane 0 to observe shared lds write")
+                    .c_str()) ||
+        !Expect(reader_wave.vgprs[2][1] == 123u,
+                (std::string(mode) +
+                 ": expected reader wave lane 1 to observe shared lds write")
+                    .c_str()) ||
+        !Expect(reader_wave.vgprs[2][2] == 0xdeadbeefu,
+                (std::string(mode) +
+                 ": expected inactive reader lane to remain untouched")
+                    .c_str()) ||
+        !Expect(reader_wave.vgprs[2][3] == 456u,
+                (std::string(mode) +
+                 ": expected reader wave lane 3 to observe shared lds write")
+                    .c_str()) ||
+        !Expect(writer_wave.vgprs[2][0] == 0xaaaabbbbu,
+                (std::string(mode) +
+                 ": expected writer lane 0 destination register to remain untouched")
+                    .c_str()) ||
+        !Expect(writer_wave.vgprs[2][1] == 0xccccddddu,
+                (std::string(mode) +
+                 ": expected writer lane 1 destination register to remain untouched")
+                    .c_str()) ||
+        !Expect(writer_wave.vgprs[2][2] == 0x12345678u,
+                (std::string(mode) +
+                 ": expected inactive writer lane destination register to remain untouched")
+                    .c_str()) ||
+        !Expect(writer_wave.vgprs[2][3] == 0xeeeeffffu,
+                (std::string(mode) +
+                 ": expected writer lane 3 destination register to remain untouched")
+                    .c_str()) ||
+        !Expect(writer_wave.vgprs[3][0] == 0x11111111u &&
+                    writer_wave.vgprs[3][1] == 0x22222222u &&
+                    writer_wave.vgprs[3][2] == 0x33333333u &&
+                    writer_wave.vgprs[3][3] == 0x44444444u,
+                (std::string(mode) +
+                 ": expected writer unrelated vgpr to be preserved")
+                    .c_str()) ||
+        !Expect(reader_wave.vgprs[3][0] == 0xabcdef01u &&
+                    reader_wave.vgprs[3][1] == 0xabcdef02u &&
+                    reader_wave.vgprs[3][2] == 0xabcdef03u &&
+                    reader_wave.vgprs[3][3] == 0xabcdef04u,
+                (std::string(mode) +
+                 ": expected reader unrelated vgpr to be preserved")
+                    .c_str()) ||
+        !Expect(read_shared_lds_u32(0u) == 99u,
+                (std::string(mode) + ": expected shared lds lane 0 value")
+                    .c_str()) ||
+        !Expect(read_shared_lds_u32(4u) == 123u,
+                (std::string(mode) + ": expected shared lds lane 1 value")
+                    .c_str()) ||
+        !Expect(read_shared_lds_u32(8u) == 0xfeedfaceu,
+                (std::string(mode) +
+                 ": expected inactive lane shared lds slot to remain untouched")
+                    .c_str()) ||
+        !Expect(read_shared_lds_u32(12u) == 456u,
+                (std::string(mode) + ": expected shared lds lane 3 value")
+                    .c_str()) ||
+        !Expect(read_shared_lds_u32(16u) == 0xabad1deau,
+                (std::string(mode) +
+                 ": expected unrelated shared lds slot to be preserved")
+                    .c_str())) {
+      return false;
+    }
+    return true;
+  };
+  if (!run_barrier_program(barrier_program, "decoded")) {
     return 1;
   }
-
-  const auto read_shared_lds_u32 = [&](std::size_t address) {
-    std::uint32_t value = 0;
-    std::memcpy(&value, shared_lds.data() + address, sizeof(value));
-    return value;
-  };
-  if (!Expect(writer_wave.halted, "expected writer wave to halt") ||
-      !Expect(reader_wave.halted, "expected reader wave to halt") ||
-      !Expect(reader_wave.vgprs[2][0] == 99u,
-              "expected reader wave lane 0 to observe shared lds write") ||
-      !Expect(reader_wave.vgprs[2][1] == 123u,
-              "expected reader wave lane 1 to observe shared lds write") ||
-      !Expect(reader_wave.vgprs[2][2] == 0xdeadbeefu,
-              "expected inactive reader lane to remain untouched") ||
-      !Expect(reader_wave.vgprs[2][3] == 456u,
-              "expected reader wave lane 3 to observe shared lds write") ||
-      !Expect(writer_wave.vgprs[2][0] == 0xaaaabbbbu,
-              "expected writer wave lane 0 destination register to remain untouched") ||
-      !Expect(writer_wave.vgprs[2][1] == 0xccccddddu,
-              "expected writer wave lane 1 destination register to remain untouched") ||
-      !Expect(writer_wave.vgprs[2][2] == 0x12345678u,
-              "expected inactive writer lane destination register to remain untouched") ||
-      !Expect(writer_wave.vgprs[2][3] == 0xeeeeffffu,
-              "expected writer wave lane 3 destination register to remain untouched") ||
-      !Expect(read_shared_lds_u32(0u) == 99u, "expected shared lds lane 0 value") ||
-      !Expect(read_shared_lds_u32(4u) == 123u, "expected shared lds lane 1 value") ||
-      !Expect(read_shared_lds_u32(12u) == 456u, "expected shared lds lane 3 value")) {
+  std::vector<CompiledInstruction> compiled_barrier_program;
+  if (!Expect(interpreter.CompileProgram(barrier_program,
+                                         &compiled_barrier_program,
+                                         &error_message),
+              error_message.c_str()) ||
+      !run_barrier_program(compiled_barrier_program, "compiled")) {
     return 1;
   }
 
