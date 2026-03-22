@@ -7166,6 +7166,26 @@ int main() {
               "expected unsupported route-info decode to normalize to exact unsupported shape")) {
     return 1;
   }
+  const StubDecoderRouteInfo synthetic_invalid_route_info{
+      "SYNTHETIC_GFX1250_INVALID_ROUTE",
+      static_cast<StubDecoderRoute>(99),
+      "kInvalidRoute",
+      123,
+      DecodeSeedHint::kVop3p,
+      "INVALID_ENC",
+      456,
+      8,
+      true,
+      true,
+  };
+  const StubDecodedInstruction via_invalid_route_info =
+      DecodeStubInstruction(synthetic_invalid_route_info);
+  if (!Expect(MatchesUnsupportedInstructionDecode(
+                  via_invalid_route_info,
+                  synthetic_invalid_route_info.instruction_name),
+              "expected invalid route-info decode to normalize to exact unsupported shape")) {
+    return 1;
+  }
   std::uint32_t unsupported_seed_count = 0;
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
     if (!IsUnsupportedSeededInstruction(seed)) {
