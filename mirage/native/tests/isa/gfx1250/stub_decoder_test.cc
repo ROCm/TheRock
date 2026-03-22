@@ -7281,6 +7281,11 @@ int main() {
               "expected no entrypoint manifest for unsupported route")) {
     return 1;
   }
+  if (!Expect(FindStubDecoderEntrypointManifest(
+                  static_cast<StubDecoderRoute>(99)) == nullptr,
+              "expected no entrypoint manifest for invalid route")) {
+    return 1;
+  }
 
   const auto entrypoint_manifests = GetStubDecoderEntrypointManifests();
   if (!Expect(entrypoint_manifests.size() == 4 &&
@@ -7434,6 +7439,11 @@ int main() {
   if (!Expect(FindStubDecoderRouteManifest(StubDecoderRoute::kUnsupported) ==
                   nullptr,
               "expected no route manifest for unsupported route")) {
+    return 1;
+  }
+  if (!Expect(FindStubDecoderRouteManifest(static_cast<StubDecoderRoute>(99)) ==
+                  nullptr,
+              "expected no route manifest for invalid route")) {
     return 1;
   }
 
