@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 516> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 517> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -211,6 +211,7 @@ constexpr std::array<std::string_view, 516> kPhase0ExecutableOpcodes{{
     "DS_SWIZZLE_B32",
     "DS_PERMUTE_B32",
     "DS_BPERMUTE_B32",
+    "DS_BPERMUTE_FI_B32",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1219,7 +1220,8 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
                                                    16u)));
     *words_consumed = 2;
   } else if (instruction_name == "DS_PERMUTE_B32" ||
-             instruction_name == "DS_BPERMUTE_B32") {
+             instruction_name == "DS_BPERMUTE_B32" ||
+             instruction_name == "DS_BPERMUTE_FI_B32") {
     if (words.size() < 2u) {
       if (error_message != nullptr) {
         *error_message = std::string(instruction_name) + " requires 2 dwords";

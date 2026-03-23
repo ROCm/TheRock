@@ -209,7 +209,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 516u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 517u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -471,6 +471,8 @@ int main() {
               "expected DS_PERMUTE_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_BPERMUTE_B32"),
               "expected DS_BPERMUTE_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_BPERMUTE_FI_B32"),
+              "expected DS_BPERMUTE_FI_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_PK_ADD_RTN_F16"),
               "expected DS_PK_ADD_RTN_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_PK_ADD_F16"),
@@ -1708,10 +1710,11 @@ int main() {
     return 1;
   }
 
-  constexpr std::array<std::pair<std::string_view, std::uint32_t>, 2>
+  constexpr std::array<std::pair<std::string_view, std::uint32_t>, 3>
       kDsPermuteDecodeCases{{
           {"DS_PERMUTE_B32", 178u},
           {"DS_BPERMUTE_B32", 179u},
+          {"DS_BPERMUTE_FI_B32", 205u},
       }};
   for (const auto& ds_case : kDsPermuteDecodeCases) {
     const auto ds_permute_words =
@@ -2485,7 +2488,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 516u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 517u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -2817,6 +2820,8 @@ int main() {
               "expected interpreter support for DS_PERMUTE_B32") ||
       !Expect(interpreter.Supports("DS_BPERMUTE_B32"),
               "expected interpreter support for DS_BPERMUTE_B32") ||
+      !Expect(interpreter.Supports("DS_BPERMUTE_FI_B32"),
+              "expected interpreter support for DS_BPERMUTE_FI_B32") ||
       !Expect(interpreter.Supports("S_LOAD_B32"),
               "expected interpreter support for S_LOAD_B32") ||
       !Expect(interpreter.Supports("S_LOAD_B64"),

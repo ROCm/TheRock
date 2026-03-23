@@ -176,6 +176,7 @@ enum class Gfx1201CompiledOpcode : std::uint16_t {
   kDsSwizzleB32,
   kDsPermuteB32,
   kDsBpermuteB32,
+  kDsBpermuteFiB32,
   kSLoadB32,
   kSLoadB64,
   kSLoadB96,

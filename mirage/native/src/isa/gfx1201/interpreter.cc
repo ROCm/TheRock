@@ -55,7 +55,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 516> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 517> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -249,6 +249,7 @@ constexpr std::array<std::string_view, 516> kExecutableSeedOpcodes{{
     "DS_SWIZZLE_B32",
     "DS_PERMUTE_B32",
     "DS_BPERMUTE_B32",
+    "DS_BPERMUTE_FI_B32",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1715,6 +1716,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "DS_BPERMUTE_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsBpermuteB32;
+    return true;
+  }
+  if (opcode == "DS_BPERMUTE_FI_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsBpermuteFiB32;
     return true;
   }
   if (opcode == "S_LOAD_B32") {
@@ -3928,7 +3933,8 @@ bool IsDsSwizzleOpcode(std::string_view opcode) {
 }
 
 bool IsDsPermuteOpcode(std::string_view opcode) {
-  return opcode == "DS_PERMUTE_B32" || opcode == "DS_BPERMUTE_B32";
+  return opcode == "DS_PERMUTE_B32" || opcode == "DS_BPERMUTE_B32" ||
+         opcode == "DS_BPERMUTE_FI_B32";
 }
 
 bool IsDsLaneRoutingOpcode(std::string_view opcode) {
@@ -4018,6 +4024,25 @@ void ComputeDsBpermuteResults(
     if (((active_mask >> source_lane) & 1ULL) != 0u) {
       (*result_values)[lane_index] = data_values[source_lane];
     }
+  }
+}
+
+void ComputeDsBpermuteFiResults(
+    std::uint64_t exec_mask,
+    std::uint16_t offset,
+    const std::array<std::uint32_t, kGfx1201LaneCount>& address_values,
+    const std::array<std::uint32_t, kGfx1201LaneCount>& data_values,
+    std::array<std::uint32_t, kGfx1201LaneCount>* result_values) {
+  result_values->fill(0u);
+  const std::uint64_t active_mask = MaskToGfx1201Wave32(exec_mask);
+  for (std::size_t lane_index = 0; lane_index < kGfx1201LaneCount;
+       ++lane_index) {
+    if (((active_mask >> lane_index) & 1ULL) == 0u) {
+      continue;
+    }
+    const std::size_t source_lane =
+        ComputeDsPermuteLane(address_values[lane_index], offset);
+    (*result_values)[lane_index] = data_values[source_lane];
   }
 }
 
@@ -6912,15 +6937,19 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     std::array<std::uint32_t, kGfx1201LaneCount> data_values{};
     std::array<std::uint32_t, kGfx1201LaneCount> result_values{};
     const std::uint64_t active_mask = MaskToGfx1201Wave32(state->exec_mask);
+    const bool fetch_invalid_lanes = instruction.opcode == "DS_BPERMUTE_FI_B32";
     for (std::size_t lane_index = 0; lane_index < kGfx1201LaneCount;
          ++lane_index) {
-      if ((active_mask & (1ull << lane_index)) == 0u) {
-        continue;
+      const bool lane_active = (active_mask & (1ull << lane_index)) != 0u;
+      if (lane_active) {
+        address_values[lane_index] = ReadVectorOperand(
+            instruction.operands[1], *state, lane_index, error_message);
+        if (error_message != nullptr && !error_message->empty()) {
+          return false;
+        }
       }
-      address_values[lane_index] = ReadVectorOperand(
-          instruction.operands[1], *state, lane_index, error_message);
-      if (error_message != nullptr && !error_message->empty()) {
-        return false;
+      if (!lane_active && !fetch_invalid_lanes) {
+        continue;
       }
       data_values[lane_index] =
           is_swizzle
@@ -6940,9 +6969,12 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     } else if (instruction.opcode == "DS_PERMUTE_B32") {
       ComputeDsPermuteResults(state->exec_mask, routing_immediate,
                               address_values, data_values, &result_values);
-    } else {
+    } else if (instruction.opcode == "DS_BPERMUTE_B32") {
       ComputeDsBpermuteResults(state->exec_mask, routing_immediate,
                                address_values, data_values, &result_values);
+    } else {
+      ComputeDsBpermuteFiResults(state->exec_mask, routing_immediate,
+                                 address_values, data_values, &result_values);
     }
 
     for (std::size_t lane_index = 0; lane_index < kGfx1201LaneCount;
@@ -8552,6 +8584,7 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kDsSwizzleB32:
     case Gfx1201CompiledOpcode::kDsPermuteB32:
     case Gfx1201CompiledOpcode::kDsBpermuteB32:
+    case Gfx1201CompiledOpcode::kDsBpermuteFiB32:
     case Gfx1201CompiledOpcode::kSLoadB32:
     case Gfx1201CompiledOpcode::kSLoadB64:
     case Gfx1201CompiledOpcode::kSLoadB96:

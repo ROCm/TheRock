@@ -6539,18 +6539,20 @@ bool RunDsPermuteBatchTest(
   const auto ds_nop_words = MakeDs(20u, 0u, 0u, 0u, 0u, 0u);
   const auto ds_bpermute_words = MakeDs(179u, 42u, 40u, 41u, 0u, 0u);
   const auto ds_permute_words = MakeDs(178u, 46u, 44u, 45u, 0u, 0u);
+  const auto ds_bpermute_fi_words = MakeDs(205u, 50u, 48u, 49u, 0u, 0u);
 
   const std::vector<std::uint32_t> ds_program_words = {
       ds_nop_words[0], ds_nop_words[1],
       ds_bpermute_words[0], ds_bpermute_words[1],
       ds_permute_words[0], ds_permute_words[1],
+      ds_bpermute_fi_words[0], ds_bpermute_fi_words[1],
       MakeSopp(48u),
   };
 
   std::vector<DecodedInstruction> ds_program;
   if (!Expect(decoder.DecodeProgram(ds_program_words, &ds_program, error_message),
               "expected DS permute batch decode success") ||
-      !Expect(ds_program.size() == 4u,
+      !Expect(ds_program.size() == 5u,
               "expected decoded DS permute instruction count") ||
       !Expect(ds_program.front().opcode == "DS_NOP",
               "expected decoded DS_NOP at permute batch start") ||
@@ -6558,6 +6560,8 @@ bool RunDsPermuteBatchTest(
               "expected decoded DS_BPERMUTE_B32 opcode") ||
       !Expect(ds_program[2].opcode == "DS_PERMUTE_B32",
               "expected decoded DS_PERMUTE_B32 opcode") ||
+      !Expect(ds_program[3].opcode == "DS_BPERMUTE_FI_B32",
+              "expected decoded DS_BPERMUTE_FI_B32 opcode") ||
       !Expect(ds_program.back().opcode == "S_ENDPGM",
               "expected decoded S_ENDPGM after DS permute batch")) {
     return false;
@@ -6568,6 +6572,7 @@ bool RunDsPermuteBatchTest(
     for (std::size_t lane = 0; lane < 32u; ++lane) {
       state->vgprs[42][lane] = 0xdead0000u + static_cast<std::uint32_t>(lane);
       state->vgprs[46][lane] = 0xcafe0000u + static_cast<std::uint32_t>(lane);
+      state->vgprs[50][lane] = 0xbeef0000u + static_cast<std::uint32_t>(lane);
       state->vgprs[47][lane] = 0x11110000u + static_cast<std::uint32_t>(lane);
     }
     state->vgprs[40][0] = 8u;
@@ -6586,11 +6591,21 @@ bool RunDsPermuteBatchTest(
     state->vgprs[45][1] = 1002u;
     state->vgprs[45][2] = 1003u;
     state->vgprs[45][3] = 1004u;
+    state->vgprs[48][0] = 8u;
+    state->vgprs[48][1] = 16u;
+    state->vgprs[48][2] = 12u;
+    state->vgprs[48][3] = 20u;
+    state->vgprs[49][0] = 2001u;
+    state->vgprs[49][1] = 2002u;
+    state->vgprs[49][2] = 2003u;
+    state->vgprs[49][3] = 2004u;
+    state->vgprs[49][4] = 2005u;
+    state->vgprs[49][5] = 2006u;
   };
 
   auto expect_ds_state = [](const WaveExecutionState& state) {
     if (!(state.lane_count == 32u && state.exec_mask == kDsPermuteExecMask &&
-          state.halted && !state.waiting_on_barrier && state.pc == 3u)) {
+          state.halted && !state.waiting_on_barrier && state.pc == 4u)) {
       return false;
     }
     for (std::size_t lane = 0; lane < 32u; ++lane) {
@@ -6606,8 +6621,15 @@ bool RunDsPermuteBatchTest(
           : lane == 2u ? 0u
           : lane == 3u ? 1003u
                        : 0xcafe0000u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t expected_bpermute_fi =
+          lane == 0u   ? 2003u
+          : lane == 1u ? 2005u
+          : lane == 2u ? 2004u
+          : lane == 3u ? 2006u
+                       : 0xbeef0000u + static_cast<std::uint32_t>(lane);
       if (state.vgprs[42][lane] != expected_bpermute ||
           state.vgprs[46][lane] != expected_permute ||
+          state.vgprs[50][lane] != expected_bpermute_fi ||
           state.vgprs[47][lane] !=
               0x11110000u + static_cast<std::uint32_t>(lane)) {
         return false;
@@ -6620,7 +6642,12 @@ bool RunDsPermuteBatchTest(
            state.vgprs[44][0] == 4u && state.vgprs[44][1] == 0u &&
            state.vgprs[44][2] == 12u && state.vgprs[44][3] == 0u &&
            state.vgprs[45][0] == 1001u && state.vgprs[45][1] == 1002u &&
-           state.vgprs[45][2] == 1003u && state.vgprs[45][3] == 1004u;
+           state.vgprs[45][2] == 1003u && state.vgprs[45][3] == 1004u &&
+           state.vgprs[48][0] == 8u && state.vgprs[48][1] == 16u &&
+           state.vgprs[48][2] == 12u && state.vgprs[48][3] == 20u &&
+           state.vgprs[49][0] == 2001u && state.vgprs[49][1] == 2002u &&
+           state.vgprs[49][2] == 2003u && state.vgprs[49][3] == 2004u &&
+           state.vgprs[49][4] == 2005u && state.vgprs[49][5] == 2006u;
   };
 
   WaveExecutionState decoded_ds_state;
@@ -6637,7 +6664,7 @@ bool RunDsPermuteBatchTest(
   if (!Expect(interpreter.CompileProgram(ds_program, &compiled_ds_program,
                                          error_message),
               "expected compiled DS permute program success") ||
-      !Expect(compiled_ds_program.size() == 4u,
+      !Expect(compiled_ds_program.size() == 5u,
               "expected compiled DS permute instruction count") ||
       !Expect(compiled_ds_program.front().opcode == Gfx1201CompiledOpcode::kSNop,
               "expected compiled DS permute NOP as kSNop") ||
@@ -6647,6 +6674,9 @@ bool RunDsPermuteBatchTest(
       !Expect(compiled_ds_program[2].opcode ==
                   Gfx1201CompiledOpcode::kDsPermuteB32,
               "expected compiled DS_PERMUTE_B32 opcode") ||
+      !Expect(compiled_ds_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kDsBpermuteFiB32,
+              "expected compiled DS_BPERMUTE_FI_B32 opcode") ||
       !Expect(compiled_ds_program.back().opcode ==
                   Gfx1201CompiledOpcode::kSEndpgm,
               "expected compiled S_ENDPGM after DS permute batch")) {
