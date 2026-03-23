@@ -55,7 +55,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 512> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 514> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -220,6 +220,8 @@ constexpr std::array<std::string_view, 512> kExecutableSeedOpcodes{{
     "DS_OR_B64",
     "DS_XOR_RTN_B64",
     "DS_XOR_B64",
+    "DS_MSKOR_RTN_B64",
+    "DS_MSKOR_B64",
     "DS_LOAD_B32",
     "DS_LOAD_B64",
     "DS_LOAD_B96",
@@ -1435,6 +1437,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "DS_MSKOR_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsMskorB32;
+    return true;
+  }
+  if (opcode == "DS_MSKOR_RTN_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMskorRtnB64;
+    return true;
+  }
+  if (opcode == "DS_MSKOR_B64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsMskorB64;
     return true;
   }
   if (opcode == "DS_COND_SUB_RTN_U32") {
@@ -3835,6 +3845,10 @@ bool IsDsAtomic32DualDataOpcode(std::string_view opcode) {
   return opcode == "DS_MSKOR_B32" || opcode == "DS_MSKOR_RTN_B32";
 }
 
+bool IsDsAtomic64DualDataOpcode(std::string_view opcode) {
+  return opcode == "DS_MSKOR_B64" || opcode == "DS_MSKOR_RTN_B64";
+}
+
 bool IsDsAtomic32Opcode(std::string_view opcode) {
   return opcode == "DS_ADD_F32" || opcode == "DS_ADD_U32" ||
          opcode == "DS_SUB_U32" || opcode == "DS_RSUB_U32" ||
@@ -3856,7 +3870,8 @@ bool IsDsAtomic64ReturnOpcode(std::string_view opcode) {
          opcode == "DS_DEC_RTN_U64" || opcode == "DS_MIN_RTN_I64" ||
          opcode == "DS_MIN_RTN_U64" || opcode == "DS_MAX_RTN_I64" ||
          opcode == "DS_MAX_RTN_U64" || opcode == "DS_AND_RTN_B64" ||
-         opcode == "DS_OR_RTN_B64" || opcode == "DS_XOR_RTN_B64";
+         opcode == "DS_OR_RTN_B64" || opcode == "DS_XOR_RTN_B64" ||
+         opcode == "DS_MSKOR_RTN_B64";
 }
 
 bool IsDsAtomic64Opcode(std::string_view opcode) {
@@ -3866,6 +3881,7 @@ bool IsDsAtomic64Opcode(std::string_view opcode) {
          opcode == "DS_MIN_U64" || opcode == "DS_MAX_I64" ||
          opcode == "DS_MAX_U64" || opcode == "DS_AND_B64" ||
          opcode == "DS_OR_B64" || opcode == "DS_XOR_B64" ||
+         opcode == "DS_MSKOR_B64" ||
          opcode == "DS_MIN_NUM_F64" || opcode == "DS_MAX_NUM_F64" ||
          IsDsAtomic64ReturnOpcode(opcode);
 }
@@ -4001,8 +4017,11 @@ std::size_t DsAtomic32Data1OperandIndex(std::string_view opcode) {
 }
 
 std::size_t DsAtomic32Offset0OperandIndex(std::string_view opcode) {
-  if (IsDsAtomic32DualDataOpcode(opcode)) {
-    return IsDsAtomic32ReturnOpcode(opcode) ? 4u : 3u;
+  if (IsDsAtomic32DualDataOpcode(opcode) ||
+      IsDsAtomic64DualDataOpcode(opcode)) {
+    return (IsDsAtomic32ReturnOpcode(opcode) || IsDsAtomic64ReturnOpcode(opcode))
+               ? 4u
+               : 3u;
   }
   return (IsDsAtomic32ReturnOpcode(opcode) || IsDsAtomic64ReturnOpcode(opcode))
              ? 3u
@@ -4010,8 +4029,11 @@ std::size_t DsAtomic32Offset0OperandIndex(std::string_view opcode) {
 }
 
 std::size_t DsAtomic32Offset1OperandIndex(std::string_view opcode) {
-  if (IsDsAtomic32DualDataOpcode(opcode)) {
-    return IsDsAtomic32ReturnOpcode(opcode) ? 5u : 4u;
+  if (IsDsAtomic32DualDataOpcode(opcode) ||
+      IsDsAtomic64DualDataOpcode(opcode)) {
+    return (IsDsAtomic32ReturnOpcode(opcode) || IsDsAtomic64ReturnOpcode(opcode))
+               ? 5u
+               : 4u;
   }
   return (IsDsAtomic32ReturnOpcode(opcode) || IsDsAtomic64ReturnOpcode(opcode))
              ? 4u
@@ -4297,6 +4319,17 @@ bool ExecuteDsAtomic64AtAddress(const DecodedInstruction& instruction,
   if (error_message != nullptr && !error_message->empty()) {
     return false;
   }
+  std::uint64_t data1_value = 0;
+  if (IsDsAtomic64DualDataOpcode(instruction.opcode)) {
+    const std::size_t data1_operand_index =
+        IsDsAtomic64ReturnOpcode(instruction.opcode) ? 3u : 2u;
+    data1_value =
+        ReadWideSourceOperand(instruction.operands[data1_operand_index], *state,
+                              lane_index, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+  }
 
   std::uint64_t new_value = old_value;
   if (instruction.opcode == "DS_ADD_U64" ||
@@ -4339,6 +4372,9 @@ bool ExecuteDsAtomic64AtAddress(const DecodedInstruction& instruction,
   } else if (instruction.opcode == "DS_XOR_B64" ||
              instruction.opcode == "DS_XOR_RTN_B64") {
     new_value = old_value ^ data_value;
+  } else if (instruction.opcode == "DS_MSKOR_B64" ||
+             instruction.opcode == "DS_MSKOR_RTN_B64") {
+    new_value = (old_value & ~data_value) | data1_value;
   } else if (instruction.opcode == "DS_MIN_NUM_F64" ||
              instruction.opcode == "DS_MIN_NUM_RTN_F64") {
     new_value = BitCast<std::uint64_t>(
@@ -6870,8 +6906,10 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
   }
   if (IsDsAtomic64Opcode(instruction.opcode)) {
     const bool returns_old = IsDsAtomic64ReturnOpcode(instruction.opcode);
-    if (!ValidateOperandCount(instruction, returns_old ? 5u : 4u,
-                              error_message)) {
+    const bool has_second_data = IsDsAtomic64DualDataOpcode(instruction.opcode);
+    const std::size_t operand_count =
+        has_second_data ? (returns_old ? 6u : 5u) : (returns_old ? 5u : 4u);
+    if (!ValidateOperandCount(instruction, operand_count, error_message)) {
       return false;
     }
     if (memory == nullptr) {
@@ -8347,6 +8385,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kDsXorB32:
     case Gfx1201CompiledOpcode::kDsMskorRtnB32:
     case Gfx1201CompiledOpcode::kDsMskorB32:
+    case Gfx1201CompiledOpcode::kDsMskorRtnB64:
+    case Gfx1201CompiledOpcode::kDsMskorB64:
     case Gfx1201CompiledOpcode::kDsCondSubRtnU32:
     case Gfx1201CompiledOpcode::kDsCondSubU32:
     case Gfx1201CompiledOpcode::kDsSubClampRtnU32:

@@ -3244,6 +3244,18 @@ struct DsMskorCase {
   bool returns_old;
 };
 
+struct DsWideMskorCase {
+  const char* opcode;
+  std::uint32_t op;
+  mirage::sim::isa::Gfx1201CompiledOpcode compiled;
+  std::uint16_t dest;
+  std::uint16_t addr;
+  std::uint16_t mask;
+  std::uint16_t value;
+  std::uint32_t offset;
+  bool returns_old;
+};
+
 struct DsLoadCase {
   const char* opcode;
   std::uint32_t op;
@@ -3378,6 +3390,17 @@ constexpr std::array<DsMskorCase, 2> kDsMskorCases{{
     {"DS_MSKOR_RTN_B32", 44u,
      mirage::sim::isa::Gfx1201CompiledOpcode::kDsMskorRtnB32, 40u, 45u, 47u,
      49u, 0x010u, true},
+}};
+
+constexpr std::uint64_t kDsWideMskorBaseAddress = 0x52000u;
+
+constexpr std::array<DsWideMskorCase, 2> kDsWideMskorCases{{
+    {"DS_MSKOR_B64", 76u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMskorB64, 0u, 56u, 48u, 52u,
+     0x000u, false},
+    {"DS_MSKOR_RTN_B64", 108u,
+     mirage::sim::isa::Gfx1201CompiledOpcode::kDsMskorRtnB64, 72u, 57u, 50u,
+     54u, 0x010u, true},
 }};
 
 constexpr std::uint64_t kDsWideBaseAddress = 0x56000u;
@@ -3578,6 +3601,11 @@ std::uint64_t DsLoadCaseBaseAddress(std::size_t case_index) {
 
 std::uint64_t DsMskorCaseBaseAddress(std::size_t case_index) {
   return kDsMskorBaseAddress +
+         static_cast<std::uint64_t>(case_index) * 0x1000u;
+}
+
+std::uint64_t DsWideMskorCaseBaseAddress(std::size_t case_index) {
+  return kDsWideMskorBaseAddress +
          static_cast<std::uint64_t>(case_index) * 0x1000u;
 }
 
@@ -4113,6 +4141,78 @@ std::uint32_t InitialDsMskorValue(std::size_t case_index,
 std::uint32_t ExpectedDsMskorNewValue(std::uint32_t old_value,
                                       std::uint32_t mask_value,
                                       std::uint32_t value) {
+  return (old_value & ~mask_value) | value;
+}
+
+std::uint64_t InitialDsWideMskorOldValue(std::size_t case_index,
+                                         std::size_t lane) {
+  if (!IsDsLaneActive(lane)) {
+    return 0xf900000000000000ull +
+           static_cast<std::uint64_t>(case_index << 8) +
+           static_cast<std::uint64_t>(lane);
+  }
+
+  switch (case_index) {
+    case 0:
+      return lane == 0u ? 0xffff0000ffff0000ull
+                        : (lane == 1u ? 0x0f0f0f0f0f0f0f0full
+                                       : 0x123456789abcdef0ull);
+    case 1:
+      return lane == 0u ? 0xaaaaaaaa55555555ull
+                        : (lane == 1u ? 0x00ff00ff00ff00ffull
+                                       : 0xf0f0f0f00f0f0f0full);
+    default:
+      return 0u;
+  }
+}
+
+std::uint64_t InitialDsWideMskorMaskValue(std::size_t case_index,
+                                          std::size_t lane) {
+  if (!IsDsLaneActive(lane)) {
+    return 0x5900000000000000ull +
+           static_cast<std::uint64_t>(case_index << 8) +
+           static_cast<std::uint64_t>(lane);
+  }
+
+  switch (case_index) {
+    case 0:
+      return lane == 0u ? 0x0000ffff0000ffffull
+                        : (lane == 1u ? 0x00ff00ff00ff00ffull
+                                       : 0x0f0f0f0f00000000ull);
+    case 1:
+      return lane == 0u ? 0xff00ff00ff00ff00ull
+                        : (lane == 1u ? 0x0000ffff0000ffffull
+                                       : 0x00ff00ff00ff00ffull);
+    default:
+      return 0u;
+  }
+}
+
+std::uint64_t InitialDsWideMskorValue(std::size_t case_index,
+                                      std::size_t lane) {
+  if (!IsDsLaneActive(lane)) {
+    return 0x5a00000000000000ull +
+           static_cast<std::uint64_t>(case_index << 8) +
+           static_cast<std::uint64_t>(lane);
+  }
+
+  switch (case_index) {
+    case 0:
+      return lane == 0u ? 0x1111000011110000ull
+                        : (lane == 1u ? 0x3333000033330000ull
+                                       : 0x5555000055550000ull);
+    case 1:
+      return lane == 0u ? 0x00aa00aa00aa00aaull
+                        : (lane == 1u ? 0x1234000012340000ull
+                                       : 0xff0000ff0000ff00ull);
+    default:
+      return 0u;
+  }
+}
+
+std::uint64_t ExpectedDsWideMskorNewValue(std::uint64_t old_value,
+                                          std::uint64_t mask_value,
+                                          std::uint64_t value) {
   return (old_value & ~mask_value) | value;
 }
 
@@ -4889,6 +4989,245 @@ bool RunDsMskorBatchTest(
               "expected compiled DS MSKOR state") ||
       !Expect(expect_ds_memory(&compiled_ds_memory),
               "expected compiled DS MSKOR memory state")) {
+    return false;
+  }
+
+  return true;
+}
+
+bool RunDsWideMskorBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  std::vector<std::uint32_t> ds_program_words;
+  ds_program_words.reserve((kDsWideMskorCases.size() + 1u) * 2u + 1u);
+  const auto ds_nop_words = MakeDs(20u, 0u, 0u, 0u, 0u, 0u);
+  ds_program_words.push_back(ds_nop_words[0]);
+  ds_program_words.push_back(ds_nop_words[1]);
+  for (const DsWideMskorCase& ds_case : kDsWideMskorCases) {
+    const auto words = MakeDs(ds_case.op,
+                              ds_case.returns_old ? ds_case.dest : 0u,
+                              ds_case.addr, ds_case.mask, ds_case.value,
+                              ds_case.offset);
+    ds_program_words.push_back(words[0]);
+    ds_program_words.push_back(words[1]);
+  }
+  ds_program_words.push_back(MakeSopp(48u));
+
+  std::vector<DecodedInstruction> ds_program;
+  if (!Expect(decoder.DecodeProgram(ds_program_words, &ds_program, error_message),
+              "expected DS wide MSKOR batch decode success") ||
+      !Expect(ds_program.size() == kDsWideMskorCases.size() + 2u,
+              "expected decoded DS wide MSKOR instruction count") ||
+      !Expect(ds_program.front().opcode == "DS_NOP",
+              "expected decoded DS_NOP at wide MSKOR batch start")) {
+    return false;
+  }
+  for (std::size_t i = 0; i < kDsWideMskorCases.size(); ++i) {
+    if (!Expect(ds_program[i + 1u].opcode == kDsWideMskorCases[i].opcode,
+                "expected decoded DS wide MSKOR opcode order")) {
+      return false;
+    }
+  }
+  if (!Expect(ds_program.back().opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after DS wide MSKOR batch")) {
+    return false;
+  }
+
+  auto initialize_ds_state = [](WaveExecutionState* state) {
+    state->exec_mask = kDsExecMask;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      for (std::size_t case_index = 0; case_index < kDsWideMskorCases.size();
+           ++case_index) {
+        const auto base = DsWideMskorCaseBaseAddress(case_index);
+        const DsWideMskorCase& ds_case = kDsWideMskorCases[case_index];
+        state->vgprs[ds_case.addr][lane] =
+            static_cast<std::uint32_t>(base + lane * 8u);
+
+        std::uint32_t mask_low = 0;
+        std::uint32_t mask_high = 0;
+        SplitU64(InitialDsWideMskorMaskValue(case_index, lane), &mask_low,
+                 &mask_high);
+        state->vgprs[ds_case.mask][lane] = mask_low;
+        state->vgprs[ds_case.mask + 1u][lane] = mask_high;
+
+        std::uint32_t value_low = 0;
+        std::uint32_t value_high = 0;
+        SplitU64(InitialDsWideMskorValue(case_index, lane), &value_low,
+                 &value_high);
+        state->vgprs[ds_case.value][lane] = value_low;
+        state->vgprs[ds_case.value + 1u][lane] = value_high;
+
+        if (ds_case.returns_old) {
+          const std::uint64_t sentinel =
+              0xab00000000000000ull +
+              static_cast<std::uint64_t>(case_index << 8) +
+              static_cast<std::uint64_t>(lane);
+          std::uint32_t dest_low = 0;
+          std::uint32_t dest_high = 0;
+          SplitU64(sentinel, &dest_low, &dest_high);
+          state->vgprs[ds_case.dest][lane] = dest_low;
+          state->vgprs[ds_case.dest + 1u][lane] = dest_high;
+        }
+      }
+    }
+  };
+
+  auto expect_ds_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == kDsExecMask &&
+          state.halted && !state.waiting_on_barrier &&
+          state.pc == kDsWideMskorCases.size() + 1u)) {
+      return false;
+    }
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      for (std::size_t case_index = 0; case_index < kDsWideMskorCases.size();
+           ++case_index) {
+        const auto base = DsWideMskorCaseBaseAddress(case_index);
+        const DsWideMskorCase& ds_case = kDsWideMskorCases[case_index];
+        if (state.vgprs[ds_case.addr][lane] !=
+            static_cast<std::uint32_t>(base + lane * 8u)) {
+          return false;
+        }
+
+        std::uint32_t mask_low = 0;
+        std::uint32_t mask_high = 0;
+        SplitU64(InitialDsWideMskorMaskValue(case_index, lane), &mask_low,
+                 &mask_high);
+        if (state.vgprs[ds_case.mask][lane] != mask_low ||
+            state.vgprs[ds_case.mask + 1u][lane] != mask_high) {
+          return false;
+        }
+
+        std::uint32_t value_low = 0;
+        std::uint32_t value_high = 0;
+        SplitU64(InitialDsWideMskorValue(case_index, lane), &value_low,
+                 &value_high);
+        if (state.vgprs[ds_case.value][lane] != value_low ||
+            state.vgprs[ds_case.value + 1u][lane] != value_high) {
+          return false;
+        }
+
+        if (ds_case.returns_old) {
+          const std::uint64_t expected_dest =
+              IsDsLaneActive(lane)
+                  ? InitialDsWideMskorOldValue(case_index, lane)
+                  : (0xab00000000000000ull +
+                     static_cast<std::uint64_t>(case_index << 8) +
+                     static_cast<std::uint64_t>(lane));
+          std::uint32_t dest_low = 0;
+          std::uint32_t dest_high = 0;
+          SplitU64(expected_dest, &dest_low, &dest_high);
+          if (state.vgprs[ds_case.dest][lane] != dest_low ||
+              state.vgprs[ds_case.dest + 1u][lane] != dest_high) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  };
+
+  auto initialize_ds_memory = [](LinearExecutionMemory* memory) {
+    for (std::size_t case_index = 0; case_index < kDsWideMskorCases.size();
+         ++case_index) {
+      for (std::size_t lane = 0; lane < 32u; ++lane) {
+        const std::uint64_t address =
+            DsWideMskorCaseBaseAddress(case_index) +
+            kDsWideMskorCases[case_index].offset + lane * 8u;
+        if (!StoreU64(memory, address,
+                      InitialDsWideMskorOldValue(case_index, lane))) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  auto expect_ds_memory = [](LinearExecutionMemory* memory) {
+    for (std::size_t case_index = 0; case_index < kDsWideMskorCases.size();
+         ++case_index) {
+      for (std::size_t lane = 0; lane < 32u; ++lane) {
+        const std::uint64_t address =
+            DsWideMskorCaseBaseAddress(case_index) +
+            kDsWideMskorCases[case_index].offset + lane * 8u;
+        std::uint64_t value = 0;
+        if (!LoadU64(memory, address, &value)) {
+          return false;
+        }
+        const std::uint64_t old_value =
+            InitialDsWideMskorOldValue(case_index, lane);
+        const std::uint64_t expected_value =
+            IsDsLaneActive(lane)
+                ? ExpectedDsWideMskorNewValue(
+                      old_value, InitialDsWideMskorMaskValue(case_index, lane),
+                      InitialDsWideMskorValue(case_index, lane))
+                : old_value;
+        if (value != expected_value) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  LinearExecutionMemory decoded_ds_memory(0x2000u, kDsWideMskorBaseAddress);
+  if (!Expect(initialize_ds_memory(&decoded_ds_memory),
+              "expected DS wide MSKOR decoded memory initialization")) {
+    return false;
+  }
+  WaveExecutionState decoded_ds_state;
+  initialize_ds_state(&decoded_ds_state);
+  if (!Expect(interpreter.ExecuteProgram(ds_program, &decoded_ds_state,
+                                         &decoded_ds_memory, error_message),
+              "expected decoded DS wide MSKOR execution success") ||
+      !Expect(expect_ds_state(decoded_ds_state),
+              "expected decoded DS wide MSKOR state") ||
+      !Expect(expect_ds_memory(&decoded_ds_memory),
+              "expected decoded DS wide MSKOR memory state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_ds_program;
+  if (!Expect(interpreter.CompileProgram(ds_program, &compiled_ds_program,
+                                         error_message),
+              "expected compiled DS wide MSKOR program success") ||
+      !Expect(compiled_ds_program.size() == kDsWideMskorCases.size() + 2u,
+              "expected compiled DS wide MSKOR instruction count") ||
+      !Expect(compiled_ds_program.front().opcode == Gfx1201CompiledOpcode::kSNop,
+              "expected compiled DS wide MSKOR NOP as kSNop")) {
+    return false;
+  }
+  for (std::size_t i = 0; i < kDsWideMskorCases.size(); ++i) {
+    if (!Expect(compiled_ds_program[i + 1u].opcode ==
+                    kDsWideMskorCases[i].compiled,
+                "expected compiled DS wide MSKOR opcode order")) {
+      return false;
+    }
+  }
+  if (!Expect(compiled_ds_program.back().opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after DS wide MSKOR batch")) {
+    return false;
+  }
+
+  LinearExecutionMemory compiled_ds_memory(0x2000u, kDsWideMskorBaseAddress);
+  if (!Expect(initialize_ds_memory(&compiled_ds_memory),
+              "expected DS wide MSKOR compiled memory initialization")) {
+    return false;
+  }
+  WaveExecutionState compiled_ds_state;
+  initialize_ds_state(&compiled_ds_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_program,
+                                         &compiled_ds_state,
+                                         &compiled_ds_memory,
+                                         error_message),
+              "expected compiled DS wide MSKOR execution success") ||
+      !Expect(expect_ds_state(compiled_ds_state),
+              "expected compiled DS wide MSKOR state") ||
+      !Expect(expect_ds_memory(&compiled_ds_memory),
+              "expected compiled DS wide MSKOR memory state")) {
     return false;
   }
 
@@ -13592,6 +13931,9 @@ int main() {
     return 1;
   }
   if (!RunDsMskorBatchTest(decoder, interpreter, &error_message)) {
+    return 1;
+  }
+  if (!RunDsWideMskorBatchTest(decoder, interpreter, &error_message)) {
     return 1;
   }
   if (!RunDsWideBatchTest(decoder, interpreter, &error_message)) {
