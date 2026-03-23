@@ -31,6 +31,27 @@ However, if additional options are wanted, you can add a label to manipulate the
 - `test_runner:...`: Run tests on only custom test machines (e.g. `test_runner:oem`)
 - `test_filter:...`: Run tests based on the specified filter (e.g. `test_filter:comprehensive`). See [test_filtering.md](./test_filtering.md) for allowed test filters.
 
+#### Architecture-Specific Test Restrictions
+
+Some GPU architectures have limited test machine availability and use the `run-full-tests-only` flag in [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py). This flag prevents quick/sanity tests from running on those architectures during PRs, reserving the limited test capacity for more comprehensive testing scenarios.
+
+**How it works:**
+
+- By default, PRs run "quick" tests (sanity checks) for most architectures
+- When `run-full-tests-only` is set to `True` for an architecture, tests are **skipped** during regular PR builds
+- Tests only run for that architecture when:
+  - A `test:...` label triggers full tests on the PR
+  - A `test_filter:...` label specifies non-quick test types (standard/comprehensive/full)
+  - The workflow is a scheduled nightly run (which always runs full tests)
+  - The workflow is manually dispatched with full tests enabled
+
+**Current architectures using this flag:**
+
+- `gfx950` (MI325): Limited MI325 machine availability (see config at line 83)
+- `gfx1151` (Windows): Limited Windows test capacity until [#3299](https://github.com/ROCm/TheRock/issues/3299) is resolved (see config at line 125)
+
+This ensures that expensive test resources are reserved for comprehensive testing rather than being consumed by quick sanity checks on every PR.
+
 ### Workflow dispatch behavior
 
 For `workflow_dispatch`, you are able to trigger CI in [GitHub's ci.yml workflow page](https://github.com/ROCm/TheRock/actions/workflows/ci.yml). To trigger a workflow dispatch, click "Run workflow" and fill in the fields accordingly:
