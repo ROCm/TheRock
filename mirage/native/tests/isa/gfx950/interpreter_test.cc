@@ -16141,6 +16141,10 @@ int main() {
   buffer_format_low_component_state.vgprs[66][0] = 0x00001234u;
   buffer_format_low_component_state.vgprs[66][1] = 0x00005678u;
   buffer_format_low_component_state.vgprs[66][3] = 0x00009abcu;
+  buffer_format_low_component_state.vgprs[68][0] = 0x01020304u;
+  buffer_format_low_component_state.vgprs[68][1] = 0x11121314u;
+  buffer_format_low_component_state.vgprs[68][2] = 0x21222324u;
+  buffer_format_low_component_state.vgprs[68][3] = 0x31323334u;
   buffer_format_low_component_state.vgprs[70][2] = 0xdeadbeefu;
   buffer_format_low_component_state.vgprs[78][2] = 0xdeadbeefu;
   buffer_format_low_component_state.vgprs[79][2] = 0xdeadbeefu;
@@ -16211,9 +16215,9 @@ int main() {
   const WaveExecutionState initial_buffer_format_low_component_state =
       buffer_format_low_component_state;
   const auto validate_buffer_format_low_component =
-      [](const WaveExecutionState& state,
-         const LinearExecutionMemory& memory,
-         const char* mode) -> bool {
+      [&](const WaveExecutionState& state,
+          const LinearExecutionMemory& memory,
+          const char* mode) -> bool {
     static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
     const auto expect_lane_values =
         [&](std::uint16_t reg,
@@ -16232,12 +16236,83 @@ int main() {
       return Expect(state.vgprs[reg][2] == 0xdeadbeefu,
                     (std::string(mode) + label).c_str());
     };
+    const auto expect_sgprs_preserved =
+        [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+          for (std::uint16_t sgpr = begin; sgpr <= end; ++sgpr) {
+            if (state.sgprs[sgpr] !=
+                initial_buffer_format_low_component_state.sgprs[sgpr]) {
+              return Expect(false, (std::string(mode) + label).c_str());
+            }
+          }
+          return true;
+        };
+    const auto expect_vgpr_range_preserved =
+        [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+          for (std::uint16_t vgpr = begin; vgpr <= end; ++vgpr) {
+            for (std::size_t lane = 0; lane < 4; ++lane) {
+              if (state.vgprs[vgpr][lane] !=
+                  initial_buffer_format_low_component_state.vgprs[vgpr][lane]) {
+                return Expect(false, (std::string(mode) + label).c_str());
+              }
+            }
+          }
+          return true;
+        };
+    const auto expect_u8_preserved = [&](std::uint64_t address,
+                                         const char* label) {
+      std::uint8_t current = 0;
+      std::uint8_t initial = 0;
+      return Expect(
+                 ReadU8(initial_buffer_format_low_component_memory, address,
+                        &initial),
+                 (std::string(mode) + " buffer format source read").c_str()) &&
+             Expect(ReadU8(memory, address, &current),
+                    (std::string(mode) + " buffer format source read").c_str()) &&
+             Expect(current == initial, (std::string(mode) + label).c_str());
+    };
+    const auto expect_u16_preserved = [&](std::uint64_t address,
+                                          const char* label) {
+      std::uint16_t current = 0;
+      std::uint16_t initial = 0;
+      return Expect(
+                 ReadU16(initial_buffer_format_low_component_memory, address,
+                         &initial),
+                 (std::string(mode) + " buffer format source read").c_str()) &&
+             Expect(ReadU16(memory, address, &current),
+                    (std::string(mode) + " buffer format source read").c_str()) &&
+             Expect(current == initial, (std::string(mode) + label).c_str());
+    };
     std::uint8_t byte_value = 0;
     std::uint16_t short_value = 0;
     return Expect(state.halted,
                   (std::string(mode) +
                    " buffer format low-component program to halt")
                       .c_str()) &&
+           Expect(state.exec_mask == 0b1011ULL,
+                  (std::string(mode) +
+                   " buffer format low-component preserves exec")
+                      .c_str()) &&
+           expect_sgprs_preserved(
+               20u, 43u,
+               " buffer format low-component preserves descriptors") &&
+           expect_vgpr_range_preserved(
+               0u, 3u,
+               " buffer format low-component preserves addresses") &&
+           expect_vgpr_range_preserved(
+               30u, 30u,
+               " buffer format low-component preserves x store sources") &&
+           expect_vgpr_range_preserved(
+               44u, 45u,
+               " buffer format low-component preserves xy store sources") &&
+           expect_vgpr_range_preserved(
+               63u, 63u,
+               " buffer format low-component preserves d16 hi store sources") &&
+           expect_vgpr_range_preserved(
+               66u, 66u,
+               " buffer format low-component preserves d16 x store sources") &&
+           expect_vgpr_range_preserved(
+               68u, 68u,
+               " buffer format low-component preserves unrelated vgprs") &&
            expect_lane_values(
                70, {0x7au, 0x6bu, 0x5cu},
                (std::string(mode) + " buffer format x load result").c_str()) &&
@@ -16386,7 +16461,52 @@ int main() {
                       .c_str()) &&
            Expect(short_value == 0u,
                   (std::string(mode) + " inactive buffer format d16 hi store result")
-                      .c_str());
+                      .c_str()) &&
+           expect_u8_preserved(
+               0x100u,
+               " buffer format low-component x source lane 0 preserved") &&
+           expect_u8_preserved(
+               0x104u,
+               " buffer format low-component x source lane 1 preserved") &&
+           expect_u8_preserved(
+               0x108u,
+               " buffer format low-component x source lane 3 preserved") &&
+           expect_u8_preserved(
+               0x140u,
+               " buffer format low-component xy source lane 0 low preserved") &&
+           expect_u8_preserved(
+               0x141u,
+               " buffer format low-component xy source lane 0 high preserved") &&
+           expect_u8_preserved(
+               0x144u,
+               " buffer format low-component xy source lane 1 low preserved") &&
+           expect_u8_preserved(
+               0x145u,
+               " buffer format low-component xy source lane 1 high preserved") &&
+           expect_u8_preserved(
+               0x148u,
+               " buffer format low-component xy source lane 3 low preserved") &&
+           expect_u8_preserved(
+               0x149u,
+               " buffer format low-component xy source lane 3 high preserved") &&
+           expect_u16_preserved(
+               0x1c0u,
+               " buffer format low-component d16 x source lane 0 preserved") &&
+           expect_u16_preserved(
+               0x1c4u,
+               " buffer format low-component d16 x source lane 1 preserved") &&
+           expect_u16_preserved(
+               0x1c8u,
+               " buffer format low-component d16 x source lane 3 preserved") &&
+           expect_u16_preserved(
+               0x240u,
+               " buffer format low-component d16 hi source lane 0 preserved") &&
+           expect_u16_preserved(
+               0x244u,
+               " buffer format low-component d16 hi source lane 1 preserved") &&
+           expect_u16_preserved(
+               0x248u,
+               " buffer format low-component d16 hi source lane 3 preserved");
   };
   if (!Expect(interpreter.ExecuteProgram(buffer_format_low_component_program,
                                          &buffer_format_low_component_state,
