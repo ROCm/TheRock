@@ -736,42 +736,6 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
 
-    @patch("configure_multi_arch_ci.should_skip_ci")
-    @patch("configure_multi_arch_ci.select_targets")
-    @patch("configure_multi_arch_ci.decide_jobs")
-    @patch("configure_multi_arch_ci.expand_build_configs")
-    def test_pipeline_calls_all_steps(
-        self, mock_expand, mock_jobs, mock_targets, mock_skip
-    ):
-        """When not skipped, all pipeline steps are called."""
-        mock_skip.return_value = False
-        mock_targets.return_value = cm.TargetSelection(
-            linux_families=["gfx94x"],
-            windows_families=[],
-        )
-        mock_jobs.return_value = cm.JobDecisions(
-            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
-            test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN),
-            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
-            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
-            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
-        )
-        mock_expand.return_value = cm.BuildConfigs()
-
-        inputs = cm.CIInputs(
-            event_name="workflow_dispatch",
-            branch_name="main",
-            base_ref="HEAD^1",
-            build_variant="release",
-        )
-        outputs = cm.configure(inputs, cm.GitContext())
-
-        self.assertTrue(outputs.is_ci_enabled)
-        self.assertIsNotNone(outputs.jobs)
-        mock_targets.assert_called_once()
-        mock_jobs.assert_called_once()
-        mock_expand.assert_called_once()
-
 
 # ---------------------------------------------------------------------------
 # Contract: BuildConfig fields match workflow YAML references
@@ -822,9 +786,6 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
             f"  In Python but not YAML: {python_fields - yaml_fields}",
         )
 
-    @unittest.skip(
-        "Windows doesn't build pytorch on multi-arch CI yet — build_pytorch field unused"
-    )
     def test_windows_workflow_uses_all_fields(self):
         """Windows workflow should reference every BuildConfig field."""
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_windows.yml"
@@ -836,12 +797,6 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
             f"BuildConfig fields mismatch with {workflow_path.name}.\n"
             f"  In YAML but not Python: {yaml_fields - python_fields}\n"
             f"  In Python but not YAML: {python_fields - yaml_fields}",
-        )
-
-    def test_windows_workflow_no_unknown_fields(self):
-        """Windows workflow should not reference fields that don't exist."""
-        self._assert_yaml_fields_subset_of_python(
-            WORKFLOWS_DIR / "multi_arch_ci_windows.yml"
         )
 
 

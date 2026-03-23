@@ -55,7 +55,7 @@ def format_summary(
     # build-rocm
     lines.append("### build-rocm")
     lines.append("")
-    _append_build_rocm(lines, outputs, ci_inputs.build_variant)
+    _append_build_rocm(lines, outputs)
 
     # test-rocm
     lines.append("### test-rocm")
@@ -137,9 +137,7 @@ def _non_default_callouts(ci_inputs: CIInputs, outputs: CIOutputs) -> list[str]:
     return callouts
 
 
-def _append_build_rocm(
-    lines: list[str], outputs: CIOutputs, build_variant: str
-) -> None:
+def _append_build_rocm(lines: list[str], outputs: CIOutputs) -> None:
     jobs = outputs.jobs
 
     # Prebuilt info

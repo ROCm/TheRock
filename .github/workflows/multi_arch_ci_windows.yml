@@ -20,9 +20,6 @@ on:
         type: string
       test_type:
         type: string
-      build_pytorch:
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -127,11 +124,11 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    if: ${{ !failure() && !cancelled() && inputs.expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
     uses: ./.github/workflows/build_windows_python_packages.yml
     with:
-      artifact_group: ${{ inputs.artifact_group }}
-      amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
     permissions:
@@ -145,11 +142,11 @@ jobs:
   build_pytorch_wheels_per_family:
     needs: [build_python_packages]
     name: Build PyTorch | ${{ matrix.family_info.amdgpu_family }}
-    if: ${{ !failure() && !cancelled() && inputs.build_pytorch == true }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true }}
     strategy:
       fail-fast: false
       matrix:
-        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
+        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/build_windows_pytorch_wheels_ci.yml
     with:
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
