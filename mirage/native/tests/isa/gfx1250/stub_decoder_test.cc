@@ -28,6 +28,7 @@ using mirage::sim::isa::gfx1250::GetStubOperandSlotKindName;
 using mirage::sim::isa::gfx1250::GetStubOperandValueClassName;
 using mirage::sim::isa::gfx1250::GetStubOpcodeShapeName;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteInfos;
+using mirage::sim::isa::gfx1250::SelectStubDecoderRoute;
 using mirage::sim::isa::gfx1250::StubDecodedInstruction;
 using mirage::sim::isa::gfx1250::StubDecodeStatus;
 using mirage::sim::isa::gfx1250::StubDecoderEntrypointManifest;
@@ -878,6 +879,31 @@ bool MatchesUnknownHelperSurface(const StubDecodedInstruction& decoded) {
              "kUnknown" &&
          AllRoleHelperNamesKnown(decoded) && AllSlotKindHelperNamesKnown(decoded) &&
          AllValueClassHelperNamesKnown(decoded);
+}
+
+bool MatchesSelectorDecodeStatusParity(std::string_view instruction_name,
+                                      StubDecodeStatus expected_status) {
+  const StubDecoderRoute selected_route =
+      SelectStubDecoderRoute(instruction_name);
+  const StubDecoderRouteInfo* route_info =
+      FindStubDecoderRouteInfo(instruction_name);
+  const StubDecodedInstruction decoded = DecodeStubInstruction(instruction_name);
+
+  switch (expected_status) {
+    case StubDecodeStatus::kDecodedStub:
+      return selected_route != StubDecoderRoute::kUnsupported &&
+             route_info != nullptr && decoded.status == StubDecodeStatus::kDecodedStub &&
+             decoded.route == selected_route;
+    case StubDecodeStatus::kUnsupportedRoute:
+      return selected_route == StubDecoderRoute::kUnsupported &&
+             route_info == nullptr &&
+             decoded.status == StubDecodeStatus::kUnsupportedRoute;
+    case StubDecodeStatus::kUnknownInstruction:
+      return selected_route == StubDecoderRoute::kUnsupported &&
+             route_info == nullptr &&
+             decoded.status == StubDecodeStatus::kUnknownInstruction;
+  }
+  return false;
 }
 
 StubOperandRole ExpectedRoleForSlotKind(StubOperandSlotKind slot_kind) {
@@ -7217,6 +7243,16 @@ int main() {
               "expected at least one unsupported seeded op to validate")) {
     return 1;
   }
+  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
+    const StubDecodeStatus expected_status =
+        IsUnsupportedSeededInstruction(seed) ? StubDecodeStatus::kUnsupportedRoute
+                                             : StubDecodeStatus::kDecodedStub;
+    if (!Expect(MatchesSelectorDecodeStatusParity(seed.instruction_name,
+                                                  expected_status),
+                "expected selector and decode surfaces to agree on routed vs unsupported seeded status")) {
+      return 1;
+    }
+  }
 
   const StubDecodedInstruction unknown =
       DecodeStubInstruction("NO_SUCH_GFX1250_OPCODE");
@@ -7234,6 +7270,14 @@ int main() {
                 "expected unknown opcode to keep exact route-keyed unknown parity")) {
       return 1;
     }
+  }
+  if (!Expect(MatchesSelectorDecodeStatusParity(
+                  "NO_SUCH_GFX1250_OPCODE",
+                  StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "", StubDecodeStatus::kUnknownInstruction),
+              "expected selector and decode surfaces to agree on unknown-name status")) {
+    return 1;
   }
   const StubDecodedInstruction empty_instruction = DecodeStubInstruction("");
   if (!Expect(MatchesUnknownDecode(empty_instruction, "") &&
