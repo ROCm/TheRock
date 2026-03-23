@@ -8964,16 +8964,24 @@ int main() {
   typed_buffer_low_component_state.vgprs[13][2] = 0xdeadbeefu;
   typed_buffer_low_component_state.vgprs[20][0] = 0x6bu;
   typed_buffer_low_component_state.vgprs[20][1] = 0x7cu;
+  typed_buffer_low_component_state.vgprs[20][2] = 0x99u;
   typed_buffer_low_component_state.vgprs[20][3] = 0x8du;
   typed_buffer_low_component_state.vgprs[21][0] = 0xcdu;
   typed_buffer_low_component_state.vgprs[21][1] = 0x34u;
+  typed_buffer_low_component_state.vgprs[21][2] = 0x55u;
   typed_buffer_low_component_state.vgprs[21][3] = 0x78u;
   typed_buffer_low_component_state.vgprs[22][0] = 0xefu;
   typed_buffer_low_component_state.vgprs[22][1] = 0x56u;
+  typed_buffer_low_component_state.vgprs[22][2] = 0x44u;
   typed_buffer_low_component_state.vgprs[22][3] = 0x9au;
   typed_buffer_low_component_state.vgprs[23][0] = 0x00005678u;
   typed_buffer_low_component_state.vgprs[23][1] = 0x0000abcdu;
+  typed_buffer_low_component_state.vgprs[23][2] = 0x00001357u;
   typed_buffer_low_component_state.vgprs[23][3] = 0x0000ef01u;
+  typed_buffer_low_component_state.vgprs[24][0] = 0x01020304u;
+  typed_buffer_low_component_state.vgprs[24][1] = 0x11121314u;
+  typed_buffer_low_component_state.vgprs[24][2] = 0x21222324u;
+  typed_buffer_low_component_state.vgprs[24][3] = 0x31323334u;
 
   const std::vector<DecodedInstruction> typed_buffer_low_component_program = {
       DecodedInstruction::SevenOperand("TBUFFER_LOAD_FORMAT_X",
@@ -9066,6 +9074,65 @@ int main() {
     return Expect(state.halted,
                   (std::string(mode) +
                    " typed buffer low-component program to halt")
+                      .c_str()) &&
+           Expect(state.exec_mask == 0b1011ULL,
+                  (std::string(mode) +
+                   " typed buffer low-component preserves exec")
+                      .c_str()) &&
+           Expect(state.sgprs[60] == 0x380u && state.sgprs[61] == 0u &&
+                      state.sgprs[62] == 0x80u &&
+                      state.sgprs[63] == ((4u << 0) | (5u << 3) | (6u << 6) |
+                                          (7u << 9)) &&
+                      state.sgprs[64] == 0x3c0u && state.sgprs[65] == 0u &&
+                      state.sgprs[66] == 0x80u &&
+                      state.sgprs[67] == ((4u << 0) | (5u << 3) | (6u << 6) |
+                                          (7u << 9)) &&
+                      state.sgprs[68] == 0x400u && state.sgprs[69] == 0u &&
+                      state.sgprs[70] == 0x80u &&
+                      state.sgprs[71] == ((4u << 0) | (5u << 3) | (6u << 6) |
+                                          (7u << 9)),
+                  (std::string(mode) +
+                   " typed buffer low-component preserves descriptors")
+                      .c_str()) &&
+           Expect(state.vgprs[0][0] == 0x0u && state.vgprs[0][1] == 0x4u &&
+                      state.vgprs[0][2] == 0x0cu &&
+                      state.vgprs[0][3] == 0x8u &&
+                      state.vgprs[1][0] == 0x0u &&
+                      state.vgprs[1][1] == 0x4u &&
+                      state.vgprs[1][2] == 0x0cu &&
+                      state.vgprs[1][3] == 0x8u &&
+                      state.vgprs[2][0] == 0x0u &&
+                      state.vgprs[2][1] == 0x4u &&
+                      state.vgprs[2][2] == 0x0cu &&
+                      state.vgprs[2][3] == 0x8u,
+                  (std::string(mode) +
+                   " typed buffer low-component preserves addresses")
+                      .c_str()) &&
+           Expect(state.vgprs[20][0] == 0x6bu &&
+                      state.vgprs[20][1] == 0x7cu &&
+                      state.vgprs[20][2] == 0x99u &&
+                      state.vgprs[20][3] == 0x8du &&
+                      state.vgprs[21][0] == 0xcdu &&
+                      state.vgprs[21][1] == 0x34u &&
+                      state.vgprs[21][2] == 0x55u &&
+                      state.vgprs[21][3] == 0x78u &&
+                      state.vgprs[22][0] == 0xefu &&
+                      state.vgprs[22][1] == 0x56u &&
+                      state.vgprs[22][2] == 0x44u &&
+                      state.vgprs[22][3] == 0x9au &&
+                      state.vgprs[23][0] == 0x00005678u &&
+                      state.vgprs[23][1] == 0x0000abcdu &&
+                      state.vgprs[23][2] == 0x00001357u &&
+                      state.vgprs[23][3] == 0x0000ef01u,
+                  (std::string(mode) +
+                   " typed buffer low-component preserves store sources")
+                      .c_str()) &&
+           Expect(state.vgprs[24][0] == 0x01020304u &&
+                      state.vgprs[24][1] == 0x11121314u &&
+                      state.vgprs[24][2] == 0x21222324u &&
+                      state.vgprs[24][3] == 0x31323334u,
+                  (std::string(mode) +
+                   " typed buffer low-component preserves unrelated vgprs")
                       .c_str()) &&
            expect_lane_values(
                10, {0x5au, 0x6bu, 0x7cu},
@@ -9176,6 +9243,78 @@ int main() {
                       .c_str()) &&
            Expect(typed_buffer_low_component_short == 0u,
                   (std::string(mode) + " inactive typed buffer d16 x store result")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x380u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer x source lane 0 read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x5au,
+                  (std::string(mode) + " typed buffer x source lane 0 preserved")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x384u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer x source lane 1 read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x6bu,
+                  (std::string(mode) + " typed buffer x source lane 1 preserved")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x388u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer x source lane 3 read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x7cu,
+                  (std::string(mode) + " typed buffer x source lane 3 preserved")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3c0u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer xy source lane 0 low read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x09u,
+                  (std::string(mode) + " typed buffer xy source lane 0 low preserved")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3c1u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer xy source lane 0 high read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x0au,
+                  (std::string(mode) + " typed buffer xy source lane 0 high preserved")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3c4u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer xy source lane 1 low read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x19u,
+                  (std::string(mode) + " typed buffer xy source lane 1 low preserved")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3c5u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer xy source lane 1 high read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x1au,
+                  (std::string(mode) + " typed buffer xy source lane 1 high preserved")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3c8u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer xy source lane 3 low read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x29u,
+                  (std::string(mode) + " typed buffer xy source lane 3 low preserved")
+                      .c_str()) &&
+           Expect(ReadU8(memory, 0x3c9u, &typed_buffer_low_component_byte),
+                  (std::string(mode) + " typed buffer xy source lane 3 high read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_byte == 0x2au,
+                  (std::string(mode) + " typed buffer xy source lane 3 high preserved")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x400u, &typed_buffer_low_component_short),
+                  (std::string(mode) + " typed buffer d16 x source lane 0 read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_short == 0x1234u,
+                  (std::string(mode) + " typed buffer d16 x source lane 0 preserved")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x404u, &typed_buffer_low_component_short),
+                  (std::string(mode) + " typed buffer d16 x source lane 1 read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_short == 0x5678u,
+                  (std::string(mode) + " typed buffer d16 x source lane 1 preserved")
+                      .c_str()) &&
+           Expect(ReadU16(memory, 0x408u, &typed_buffer_low_component_short),
+                  (std::string(mode) + " typed buffer d16 x source lane 3 read")
+                      .c_str()) &&
+           Expect(typed_buffer_low_component_short == 0x9abcu,
+                  (std::string(mode) + " typed buffer d16 x source lane 3 preserved")
                       .c_str());
   };
   if (!Expect(interpreter.ExecuteProgram(typed_buffer_low_component_program,
