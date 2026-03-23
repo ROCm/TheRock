@@ -7,7 +7,7 @@
 # 1. foundation (generic) - sysdeps, base
 # 2. compiler-runtime (generic) - compiler, runtimes, profiler-core
 # 3. math-libs (per-arch) - BLAS, FFT, etc.
-# 4. comm-libs (per-arch) - RCCL (parallel to math-libs)
+# 4. comm-libs (per-arch) - RCCL, rocshmem (parallel to math-libs)
 # 5. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
 # 6. dctools-core (generic) - RDC (parallel to math-libs)
 # 7. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)

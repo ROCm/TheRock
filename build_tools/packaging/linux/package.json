@@ -467,10 +467,12 @@
     "DEBDepends": [
       "libc6",
       "amdrocm-runtime",
+      "amdrocm-solver",
       "amdrocm-profiler-base"
     ],
     "RPMRequires": [
       "amdrocm-runtime",
+      "amdrocm-solver",
       "amdrocm-profiler-base"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -746,10 +748,12 @@
     "DEBDepends": [
       "libc6",
       "amdrocm-blas",
+      "amdrocm-profiler-base",
       "amdrocm-runtime"
     ],
     "RPMRequires": [
       "amdrocm-blas",
+      "amdrocm-profiler-base",
       "amdrocm-runtime"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -838,20 +842,14 @@
     "DEBDepends": [
       "libc6",
       "amdrocm-math-common",
+      "amdrocm-sparse",
       "amdrocm-blas"
     ],
     "RPMRequires": [
       "amdrocm-math-common",
+      "amdrocm-sparse",
       "amdrocm-blas"
     ],
-    "RPMRecommends": [
-      "amdrocm-sparse"
-    ],
-
-    "DEBRecommends": [
-      "amdrocm-sparse"
-    ],
-
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD library for solver in ROCm",
     "Description_Long": "rocsolver and hipsolver libraries ",
@@ -1847,11 +1845,13 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "amdrocm-runtime",
+      "amdrocm-profiler-base",
       "amdrocm-blas",
       "amdrocm-sysdeps"
     ],
     "RPMRequires": [
       "amdrocm-runtime",
+      "amdrocm-profiler-base",
       "amdrocm-blas",
       "amdrocm-sysdeps"
     ],
