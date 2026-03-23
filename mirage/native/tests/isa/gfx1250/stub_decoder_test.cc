@@ -7278,6 +7278,12 @@ int main() {
                       "v_pk_add_bf16",
                       StubDecodeStatus::kUnknownInstruction) &&
                   MatchesSelectorDecodeStatusParity(
+                      " V_PK_ADD_BF16",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "V_PK_ADD_BF16 ",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
                       "", StubDecodeStatus::kUnknownInstruction),
               "expected selector and decode surfaces to agree on unknown-name status")) {
     return 1;
@@ -7311,6 +7317,26 @@ int main() {
                     MatchesUnknownHelperSurface(via_entrypoint),
                 "expected lowercase known opcode to keep exact route-keyed unknown parity")) {
       return 1;
+    }
+  }
+  for (std::string_view padded_instruction :
+       {" V_PK_ADD_BF16", "V_PK_ADD_BF16 "}) {
+    const StubDecodedInstruction padded_decode =
+        DecodeStubInstruction(padded_instruction);
+    if (!Expect(MatchesUnknownDecode(padded_decode, padded_instruction) &&
+                    MatchesUnknownHelperSurface(padded_decode),
+                "expected whitespace-padded known opcode to keep exact unknown decode parity")) {
+      return 1;
+    }
+    for (const StubDecoderRouteManifest& manifest :
+         GetStubDecoderRouteManifests()) {
+      const StubDecodedInstruction via_entrypoint =
+          DecodeViaExplicitRouteEntrypoint(manifest.route, padded_instruction);
+      if (!Expect(MatchesUnknownDecode(via_entrypoint, padded_instruction) &&
+                      MatchesUnknownHelperSurface(via_entrypoint),
+                  "expected whitespace-padded known opcode to keep exact route-keyed unknown parity")) {
+        return 1;
+      }
     }
   }
   if (!Expect(GetStubOpcodeShapeName(static_cast<StubOpcodeShape>(99)) ==

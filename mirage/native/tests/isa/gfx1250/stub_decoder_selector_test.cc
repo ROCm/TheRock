@@ -412,6 +412,16 @@ int main() {
               "expected lowercase known opcode to stay excluded from all routed selector surfaces")) {
     return 1;
   }
+  for (std::string_view padded_instruction :
+       {" V_PK_ADD_BF16", "V_PK_ADD_BF16 "}) {
+    if (!Expect(SelectStubDecoderRoute(padded_instruction) ==
+                        StubDecoderRoute::kUnsupported &&
+                    FindStubDecoderRouteInfo(padded_instruction) == nullptr &&
+                    !ListedInAnyRoute(padded_instruction),
+                "expected whitespace-padded known opcode to stay excluded from all routed selector surfaces")) {
+      return 1;
+    }
+  }
 
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
     const StubDecoderRoute expected_route =
