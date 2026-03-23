@@ -7686,6 +7686,35 @@ int main() {
                 "expected synthetic routed route-info with empty instruction name to preserve caller metadata while keeping empty unknown structure")) {
       return 1;
     }
+    StubDecoderRouteInfo synthetic_empty_invalid_hint = synthetic_empty;
+    synthetic_empty_invalid_hint.route_name =
+        "kSyntheticRouteInfoEmptyInvalidHint";
+    synthetic_empty_invalid_hint.route_priority =
+        manifest.route_priority + 135u;
+    synthetic_empty_invalid_hint.decode_hint =
+        static_cast<DecodeSeedHint>(99);
+    const StubDecodedInstruction empty_invalid_hint_decoded =
+        DecodeStubInstruction(synthetic_empty_invalid_hint);
+    if (!Expect(
+            empty_invalid_hint_decoded.status == StubDecodeStatus::kDecodedStub &&
+                MatchesRouteInfoPayload(empty_invalid_hint_decoded,
+                                        synthetic_empty_invalid_hint) &&
+                empty_invalid_hint_decoded.entrypoint_name ==
+                    manifest.entrypoint_name &&
+                MatchesUnknownHelperSurface(empty_invalid_hint_decoded) &&
+                MatchesTopLevelFlags(empty_invalid_hint_decoded,
+                                     false,
+                                     false,
+                                     false,
+                                     false) &&
+                MatchesLayout(empty_invalid_hint_decoded, ExpectedLayout{}) &&
+                empty_invalid_hint_decoded.operand_roles.binding_count == 0 &&
+                empty_invalid_hint_decoded.operand_slots.binding_count == 0 &&
+                empty_invalid_hint_decoded.operand_descriptors
+                        .descriptor_count == 0,
+            "expected synthetic routed route-info with empty instruction name to ignore invalid caller decode-hint while keeping empty unknown structure")) {
+      return 1;
+    }
     const StubDecoderRouteInfo synthetic_unsupported_seeded{
         "V_CVT_SCALEF32_PK8_FP8_F32",
         manifest.route,
@@ -7718,6 +7747,42 @@ int main() {
                 unsupported_seeded_decoded.operand_descriptors
                         .descriptor_count == 0,
             "expected synthetic routed route-info with clean unsupported seeded instruction to preserve caller metadata while keeping empty unknown structure")) {
+      return 1;
+    }
+    StubDecoderRouteInfo synthetic_unsupported_seeded_invalid_hint =
+        synthetic_unsupported_seeded;
+    synthetic_unsupported_seeded_invalid_hint.route_name =
+        "kSyntheticRouteInfoUnsupportedSeededInvalidHint";
+    synthetic_unsupported_seeded_invalid_hint.route_priority =
+        manifest.route_priority + 185u;
+    synthetic_unsupported_seeded_invalid_hint.decode_hint =
+        static_cast<DecodeSeedHint>(99);
+    const StubDecodedInstruction unsupported_seeded_invalid_hint_decoded =
+        DecodeStubInstruction(synthetic_unsupported_seeded_invalid_hint);
+    if (!Expect(
+            unsupported_seeded_invalid_hint_decoded.status ==
+                    StubDecodeStatus::kDecodedStub &&
+                MatchesRouteInfoPayload(
+                    unsupported_seeded_invalid_hint_decoded,
+                    synthetic_unsupported_seeded_invalid_hint) &&
+                unsupported_seeded_invalid_hint_decoded.entrypoint_name ==
+                    manifest.entrypoint_name &&
+                MatchesUnknownHelperSurface(
+                    unsupported_seeded_invalid_hint_decoded) &&
+                MatchesTopLevelFlags(unsupported_seeded_invalid_hint_decoded,
+                                     false,
+                                     false,
+                                     false,
+                                     false) &&
+                MatchesLayout(unsupported_seeded_invalid_hint_decoded,
+                              ExpectedLayout{}) &&
+                unsupported_seeded_invalid_hint_decoded.operand_roles
+                        .binding_count == 0 &&
+                unsupported_seeded_invalid_hint_decoded.operand_slots
+                        .binding_count == 0 &&
+                unsupported_seeded_invalid_hint_decoded.operand_descriptors
+                        .descriptor_count == 0,
+            "expected synthetic routed route-info with clean unsupported seeded instruction to ignore invalid caller decode-hint while keeping empty unknown structure")) {
       return 1;
     }
     StubDecoderRouteInfo synthetic_unknown_invalid_hint = synthetic_unknown;
