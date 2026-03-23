@@ -458,6 +458,11 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        # Media libs require FFmpeg dev libraries (libavcodec-dev, libavformat-dev,
+        # libavutil-dev) for test builds. These are not bundled in
+        # TheRock artifacts and are provided via the specialized media image.
+        # TODO: pin to a digest after the first publish of this image.
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media:latest",
     },
     "rocjpeg": {
         "job_name": "rocjpeg",
@@ -468,6 +473,11 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        # Media libs require FFmpeg dev libraries (libavcodec-dev, libavformat-dev,
+        # libavutil-dev) for test builds. These are not bundled in
+        # TheRock artifacts and are provided via the specialized media image.
+        # TODO: pin to a digest after the first publish of this image.
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media:latest",
     },
     # aqlprofile tests
     "aqlprofile": {
