@@ -7243,6 +7243,18 @@ int main() {
               "expected at least one unsupported seeded op to validate")) {
     return 1;
   }
+  bool found_clean_unsupported_seed = false;
+  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
+    if (seed.instruction_name == "V_CVT_SCALEF32_PK8_FP8_F32" &&
+        IsUnsupportedSeededInstruction(seed)) {
+      found_clean_unsupported_seed = true;
+      break;
+    }
+  }
+  if (!Expect(found_clean_unsupported_seed,
+              "expected clean unsupported seeded representative in gfx1250 seed catalog")) {
+    return 1;
+  }
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
     const StubDecodeStatus expected_status =
         IsUnsupportedSeededInstruction(seed) ? StubDecodeStatus::kUnsupportedRoute
@@ -7672,6 +7684,40 @@ int main() {
                     empty_decoded.operand_slots.binding_count == 0 &&
                     empty_decoded.operand_descriptors.descriptor_count == 0,
                 "expected synthetic routed route-info with empty instruction name to preserve caller metadata while keeping empty unknown structure")) {
+      return 1;
+    }
+    const StubDecoderRouteInfo synthetic_unsupported_seeded{
+        "V_CVT_SCALEF32_PK8_FP8_F32",
+        manifest.route,
+        "kSyntheticRouteInfoUnsupportedSeeded",
+        manifest.route_priority + 175u,
+        DecodeSeedHint::kUnknown,
+        "SYNTHETIC_UNSUPPORTED_SEEDED_ENC",
+        1750u + manifest.route_priority,
+        17u + manifest.route_priority,
+        false,
+        false,
+    };
+    const StubDecodedInstruction unsupported_seeded_decoded =
+        DecodeStubInstruction(synthetic_unsupported_seeded);
+    if (!Expect(
+            unsupported_seeded_decoded.status == StubDecodeStatus::kDecodedStub &&
+                MatchesRouteInfoPayload(unsupported_seeded_decoded,
+                                        synthetic_unsupported_seeded) &&
+                unsupported_seeded_decoded.entrypoint_name ==
+                    manifest.entrypoint_name &&
+                MatchesUnknownHelperSurface(unsupported_seeded_decoded) &&
+                MatchesTopLevelFlags(unsupported_seeded_decoded,
+                                     false,
+                                     false,
+                                     false,
+                                     false) &&
+                MatchesLayout(unsupported_seeded_decoded, ExpectedLayout{}) &&
+                unsupported_seeded_decoded.operand_roles.binding_count == 0 &&
+                unsupported_seeded_decoded.operand_slots.binding_count == 0 &&
+                unsupported_seeded_decoded.operand_descriptors
+                        .descriptor_count == 0,
+            "expected synthetic routed route-info with clean unsupported seeded instruction to preserve caller metadata while keeping empty unknown structure")) {
       return 1;
     }
     StubDecoderRouteInfo synthetic_unknown_invalid_hint = synthetic_unknown;
