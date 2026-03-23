@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include "lib/sim/isa/common/decoded_instruction.h"
@@ -205,7 +207,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 498u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 500u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -455,6 +457,10 @@ int main() {
               "expected DS_STORE_B16_D16_HI executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_SWIZZLE_B32"),
               "expected DS_SWIZZLE_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_PERMUTE_B32"),
+              "expected DS_PERMUTE_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_BPERMUTE_B32"),
+              "expected DS_BPERMUTE_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_PK_ADD_RTN_F16"),
               "expected DS_PK_ADD_RTN_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_PK_ADD_F16"),
@@ -1618,6 +1624,41 @@ int main() {
     return 1;
   }
 
+  constexpr std::array<std::pair<std::string_view, std::uint32_t>, 2>
+      kDsPermuteDecodeCases{{
+          {"DS_PERMUTE_B32", 178u},
+          {"DS_BPERMUTE_B32", 179u},
+      }};
+  for (const auto& ds_case : kDsPermuteDecodeCases) {
+    const auto ds_permute_words =
+        MakeDs(ds_case.second, 59u, 60u, 61u, 62u, 0x34u, 0x12u);
+    if (!Expect(decoder.DecodeInstruction(
+                    std::span<const std::uint32_t>(ds_permute_words.data(),
+                                                   ds_permute_words.size()),
+                    &decoded_instruction, &words_consumed, &error_message),
+                "expected DS permute decode success") ||
+        !Expect(words_consumed == 2u,
+                "expected DS permute two dwords consumed") ||
+        !Expect(decoded_instruction.opcode == ds_case.first,
+                "expected DS permute opcode") ||
+        !Expect(decoded_instruction.operand_count == 4u,
+                "expected DS permute four-operand decode") ||
+        !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                    decoded_instruction.operands[0].index == 59u,
+                "expected DS permute destination VGPR") ||
+        !Expect(decoded_instruction.operands[1].kind == OperandKind::kVgpr &&
+                    decoded_instruction.operands[1].index == 60u,
+                "expected DS permute address VGPR") ||
+        !Expect(decoded_instruction.operands[2].kind == OperandKind::kVgpr &&
+                    decoded_instruction.operands[2].index == 61u,
+                "expected DS permute data VGPR") ||
+        !Expect(decoded_instruction.operands[3].kind == OperandKind::kImm32 &&
+                    decoded_instruction.operands[3].imm32 == 0x1234u,
+                "expected DS permute combined offset")) {
+      return 1;
+    }
+  }
+
   const auto ds_cond_sub_rtn_u32_words =
       MakeDs(168u, 59u, 60u, 61u, 62u, 0x39u);
   if (!Expect(decoder.DecodeInstruction(
@@ -2245,7 +2286,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 498u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 500u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -2541,6 +2582,10 @@ int main() {
               "expected interpreter support for DS_STORE_B16_D16_HI") ||
       !Expect(interpreter.Supports("DS_SWIZZLE_B32"),
               "expected interpreter support for DS_SWIZZLE_B32") ||
+      !Expect(interpreter.Supports("DS_PERMUTE_B32"),
+              "expected interpreter support for DS_PERMUTE_B32") ||
+      !Expect(interpreter.Supports("DS_BPERMUTE_B32"),
+              "expected interpreter support for DS_BPERMUTE_B32") ||
       !Expect(interpreter.Supports("S_LOAD_B32"),
               "expected interpreter support for S_LOAD_B32") ||
       !Expect(interpreter.Supports("S_LOAD_B64"),

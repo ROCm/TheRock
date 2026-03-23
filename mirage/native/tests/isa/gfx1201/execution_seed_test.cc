@@ -5874,6 +5874,144 @@ bool RunDsSwizzleBatchTest(
   return true;
 }
 
+bool RunDsPermuteBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  constexpr std::uint64_t kDsPermuteExecMask = 0x0fULL;
+  const auto ds_nop_words = MakeDs(20u, 0u, 0u, 0u, 0u, 0u);
+  const auto ds_bpermute_words = MakeDs(179u, 42u, 40u, 41u, 0u, 0u);
+  const auto ds_permute_words = MakeDs(178u, 46u, 44u, 45u, 0u, 0u);
+
+  const std::vector<std::uint32_t> ds_program_words = {
+      ds_nop_words[0], ds_nop_words[1],
+      ds_bpermute_words[0], ds_bpermute_words[1],
+      ds_permute_words[0], ds_permute_words[1],
+      MakeSopp(48u),
+  };
+
+  std::vector<DecodedInstruction> ds_program;
+  if (!Expect(decoder.DecodeProgram(ds_program_words, &ds_program, error_message),
+              "expected DS permute batch decode success") ||
+      !Expect(ds_program.size() == 4u,
+              "expected decoded DS permute instruction count") ||
+      !Expect(ds_program.front().opcode == "DS_NOP",
+              "expected decoded DS_NOP at permute batch start") ||
+      !Expect(ds_program[1].opcode == "DS_BPERMUTE_B32",
+              "expected decoded DS_BPERMUTE_B32 opcode") ||
+      !Expect(ds_program[2].opcode == "DS_PERMUTE_B32",
+              "expected decoded DS_PERMUTE_B32 opcode") ||
+      !Expect(ds_program.back().opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after DS permute batch")) {
+    return false;
+  }
+
+  auto initialize_ds_state = [](WaveExecutionState* state) {
+    state->exec_mask = kDsPermuteExecMask;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      state->vgprs[42][lane] = 0xdead0000u + static_cast<std::uint32_t>(lane);
+      state->vgprs[46][lane] = 0xcafe0000u + static_cast<std::uint32_t>(lane);
+      state->vgprs[47][lane] = 0x11110000u + static_cast<std::uint32_t>(lane);
+    }
+    state->vgprs[40][0] = 8u;
+    state->vgprs[40][1] = 0u;
+    state->vgprs[40][2] = 12u;
+    state->vgprs[40][3] = 4u;
+    state->vgprs[41][0] = 101u;
+    state->vgprs[41][1] = 202u;
+    state->vgprs[41][2] = 303u;
+    state->vgprs[41][3] = 404u;
+    state->vgprs[44][0] = 4u;
+    state->vgprs[44][1] = 0u;
+    state->vgprs[44][2] = 12u;
+    state->vgprs[44][3] = 0u;
+    state->vgprs[45][0] = 1001u;
+    state->vgprs[45][1] = 1002u;
+    state->vgprs[45][2] = 1003u;
+    state->vgprs[45][3] = 1004u;
+  };
+
+  auto expect_ds_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == kDsPermuteExecMask &&
+          state.halted && !state.waiting_on_barrier && state.pc == 3u)) {
+      return false;
+    }
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      const std::uint32_t expected_bpermute =
+          lane == 0u   ? 303u
+          : lane == 1u ? 101u
+          : lane == 2u ? 404u
+          : lane == 3u ? 202u
+                       : 0xdead0000u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t expected_permute =
+          lane == 0u   ? 1004u
+          : lane == 1u ? 1001u
+          : lane == 2u ? 0u
+          : lane == 3u ? 1003u
+                       : 0xcafe0000u + static_cast<std::uint32_t>(lane);
+      if (state.vgprs[42][lane] != expected_bpermute ||
+          state.vgprs[46][lane] != expected_permute ||
+          state.vgprs[47][lane] !=
+              0x11110000u + static_cast<std::uint32_t>(lane)) {
+        return false;
+      }
+    }
+    return state.vgprs[40][0] == 8u && state.vgprs[40][1] == 0u &&
+           state.vgprs[40][2] == 12u && state.vgprs[40][3] == 4u &&
+           state.vgprs[41][0] == 101u && state.vgprs[41][1] == 202u &&
+           state.vgprs[41][2] == 303u && state.vgprs[41][3] == 404u &&
+           state.vgprs[44][0] == 4u && state.vgprs[44][1] == 0u &&
+           state.vgprs[44][2] == 12u && state.vgprs[44][3] == 0u &&
+           state.vgprs[45][0] == 1001u && state.vgprs[45][1] == 1002u &&
+           state.vgprs[45][2] == 1003u && state.vgprs[45][3] == 1004u;
+  };
+
+  WaveExecutionState decoded_ds_state;
+  initialize_ds_state(&decoded_ds_state);
+  if (!Expect(interpreter.ExecuteProgram(ds_program, &decoded_ds_state,
+                                         error_message),
+              "expected decoded DS permute execution success") ||
+      !Expect(expect_ds_state(decoded_ds_state),
+              "expected decoded DS permute state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_ds_program;
+  if (!Expect(interpreter.CompileProgram(ds_program, &compiled_ds_program,
+                                         error_message),
+              "expected compiled DS permute program success") ||
+      !Expect(compiled_ds_program.size() == 4u,
+              "expected compiled DS permute instruction count") ||
+      !Expect(compiled_ds_program.front().opcode == Gfx1201CompiledOpcode::kSNop,
+              "expected compiled DS permute NOP as kSNop") ||
+      !Expect(compiled_ds_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kDsBpermuteB32,
+              "expected compiled DS_BPERMUTE_B32 opcode") ||
+      !Expect(compiled_ds_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kDsPermuteB32,
+              "expected compiled DS_PERMUTE_B32 opcode") ||
+      !Expect(compiled_ds_program.back().opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after DS permute batch")) {
+    return false;
+  }
+
+  WaveExecutionState compiled_ds_state;
+  initialize_ds_state(&compiled_ds_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_program,
+                                         &compiled_ds_state,
+                                         error_message),
+              "expected compiled DS permute execution success") ||
+      !Expect(expect_ds_state(compiled_ds_state),
+              "expected compiled DS permute state")) {
+    return false;
+  }
+
+  return true;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -13396,6 +13534,9 @@ int main() {
     return 1;
   }
   if (!RunDsSwizzleBatchTest(decoder, interpreter, &error_message)) {
+    return 1;
+  }
+  if (!RunDsPermuteBatchTest(decoder, interpreter, &error_message)) {
     return 1;
   }
 

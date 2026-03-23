@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 498> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 500> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -193,6 +193,8 @@ constexpr std::array<std::string_view, 498> kPhase0ExecutableOpcodes{{
     "DS_STORE_B8_D16_HI",
     "DS_STORE_B16_D16_HI",
     "DS_SWIZZLE_B32",
+    "DS_PERMUTE_B32",
+    "DS_BPERMUTE_B32",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
@@ -1198,6 +1200,51 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         InstructionOperand::Imm32(ExtractBits(word, 0, 16))
             .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource1,
                                                    OperandSlotKind::kSource1,
+                                                   16u)));
+    *words_consumed = 2;
+  } else if (instruction_name == "DS_PERMUTE_B32" ||
+             instruction_name == "DS_BPERMUTE_B32") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) + " requires 2 dwords";
+      }
+      return false;
+    }
+    if (ExtractBits(word, 16, 1) != 0u) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction_name) +
+                         " GDS mode is out of scope for phase-0";
+      }
+      return false;
+    }
+
+    InstructionOperand vdst;
+    if (!DecodeVectorDestination(ExtractBits(words[1], 24, 8), &vdst,
+                                 error_message)) {
+      return false;
+    }
+
+    InstructionOperand addr;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 0, 8), &addr,
+                                    error_message)) {
+      return false;
+    }
+
+    InstructionOperand data;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 8, 8), &data,
+                                    error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::FourOperand(
+        instruction_name, DescribeVectorDestinationOperand(vdst),
+        DescribeSourceOperand(addr, OperandRole::kSource0,
+                              OperandSlotKind::kSource0),
+        DescribeSourceOperand(data, OperandRole::kSource1,
+                              OperandSlotKind::kSource1),
+        InstructionOperand::Imm32(ExtractBits(word, 0, 16))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource2,
+                                                   OperandSlotKind::kSource2,
                                                    16u)));
     *words_consumed = 2;
   } else if (instruction_name == "DS_ADD_RTN_F32" ||
