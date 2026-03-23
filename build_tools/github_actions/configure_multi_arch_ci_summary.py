@@ -1,32 +1,23 @@
 """Formats the GITHUB_STEP_SUMMARY markdown for configure_multi_arch_ci.py.
 
 Produces human-readable markdown explaining what CI will do and why.
-See reviews/summary_format_v5.md in the claude-rocm-workspace for the
-design rationale and example outputs.
 """
 
 from configure_multi_arch_ci import (
     CIInputs,
     CIOutputs,
-    GitContext,
-)
-
-_PATH_FILTERS_URL = (
-    "https://github.com/ROCm/TheRock/blob/main/"
-    "build_tools/github_actions/configure_ci_path_filters.py"
 )
 
 
 def format_summary(
     ci_inputs: CIInputs,
-    git_context: GitContext,
     outputs: CIOutputs,
 ) -> str:
     """Generate the full step summary markdown."""
     lines = ["## Multi-Arch CI Configuration", ""]
 
     if not outputs.is_ci_enabled:
-        return _format_skipped(lines, git_context)
+        return _format_skipped(lines, ci_inputs)
 
     if not outputs.jobs:
         return "\n".join(lines)
@@ -65,19 +56,16 @@ def format_summary(
     return "\n".join(lines)
 
 
-def _format_skipped(lines: list[str], git_context: GitContext) -> str:
-    lines.append(
-        f"CI was **skipped**: no CI-relevant files changed "
-        f"(see [configure_ci_path_filters.py]({_PATH_FILTERS_URL}) "
-        f"for skip patterns)."
-    )
-    if git_context.changed_files:
-        lines.append("")
-        lines.append("Changed files:")
-        lines.append("```")
-        for path in git_context.changed_files:
-            lines.append(path)
-        lines.append("```")
+def _format_skipped(lines: list[str], ci_inputs: CIInputs) -> str:
+    # Determine skip reason (same priority order as should_skip_ci).
+    if "ci:skip" in ci_inputs.pr_labels:
+        reason = "`ci:skip` PR label"
+    elif ci_inputs.is_pull_request and "ci:run-multi-arch" not in ci_inputs.pr_labels:
+        reason = "PR does not have `ci:run-multi-arch` label"
+    else:
+        reason = "no CI-relevant files changed"
+
+    lines.append(f"CI was **skipped**: {reason}. See logs for details.")
     return "\n".join(lines)
 
 

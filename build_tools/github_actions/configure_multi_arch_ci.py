@@ -843,7 +843,6 @@ def expand_build_configs(
 
 def write_outputs(
     ci_inputs: CIInputs,
-    git_context: GitContext,
     outputs: CIOutputs,
 ) -> None:
     """Write results to GITHUB_OUTPUT and GITHUB_STEP_SUMMARY.
@@ -871,7 +870,6 @@ def write_outputs(
     gha_append_step_summary(
         format_summary(
             ci_inputs=ci_inputs,
-            git_context=git_context,
             outputs=outputs,
         )
     )
@@ -942,7 +940,7 @@ def main():
         git_context = GitContext.empty()
 
     outputs = configure(ci_inputs, git_context)
-    write_outputs(ci_inputs=ci_inputs, git_context=git_context, outputs=outputs)
+    write_outputs(ci_inputs=ci_inputs, outputs=outputs)
 
 
 if __name__ == "__main__":

@@ -715,8 +715,7 @@ class TestFormatSummary(unittest.TestCase):
 
     def test_skipped_summary_does_not_raise(self):
         outputs = cm.CIOutputs.skipped()
-        git = cm.GitContext(changed_files=["docs/README.md"])
-        format_summary(self._inputs(), git, outputs)
+        format_summary(self._inputs(), outputs)
 
     def test_normal_summary_does_not_raise(self):
         jobs = cm.JobDecisions(
@@ -727,7 +726,7 @@ class TestFormatSummary(unittest.TestCase):
             test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
         )
         outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
-        format_summary(self._inputs(), cm.GitContext(), outputs)
+        format_summary(self._inputs(), outputs)
 
 
 # ---------------------------------------------------------------------------
