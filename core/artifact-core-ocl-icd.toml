@@ -1,5 +1,5 @@
 # opencl
-[components.lib."core/opencl/stage"]
+[components.lib."core/ocl-icd/stage"]
 include = [
   "bin/**",
 ]

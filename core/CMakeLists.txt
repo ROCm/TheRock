@@ -349,7 +349,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
   EXTERNAL_SOURCE_DIR
     "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/icd"
     "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/OpenCL-Headers"
-  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/opencl"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ocl-icd"
   BACKGROUND_BUILD
   CMAKE_ARGS
     "-DOPENCL_ICD_LOADER_REQUIRE_WDK=OFF"
@@ -361,13 +361,16 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
     "lib"
   )
 
-  therock_provide_artifact(core-ocl-icd
-  TARGET_NEUTRAL
-  DESCRIPTOR artifact-core-ocl-icd.toml
-  COMPONENTS
-    lib
-  )
   therock_cmake_subproject_activate(ocl-icd)
+
+  therock_provide_artifact(core-ocl-icd
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-core-ocl-icd.toml
+    COMPONENTS
+      lib
+    SUBPROJECT_DEPS
+      ocl-icd
+  )
 
   set(OCL_CLR_CMAKE_ARGS)
   set(OCL_CLR_RUNTIME_DEPS)
