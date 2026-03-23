@@ -193,7 +193,8 @@ def needs_update(mirror_path: Path, remote_url: str) -> bool:
         local_refs = _parse_ref_lines(local.stdout)
         remote_refs = _parse_ref_lines(remote.stdout)
         return local_refs != remote_refs
-    except Exception:
+    except (subprocess.CalledProcessError, OSError) as e:
+        log(f"  Could not compare refs for {remote_url}: {e}")
         return True
 
 

@@ -53,13 +53,13 @@ def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = 
     subprocess.check_call(args, cwd=str(cwd), env=full_env, stdin=subprocess.DEVNULL)
 
 
-def resolve_reference_dir(args) -> Path | None:
+def resolve_reference_dir(args: argparse.Namespace) -> Path | None:
     """Resolve the git mirror/reference directory from args or environment.
 
     Returns None if no reference directory is configured, which means
     submodule updates proceed with normal network fetches (unchanged behavior).
     """
-    ref_dir = getattr(args, "reference_dir", None)
+    ref_dir = args.reference_dir
     if ref_dir is None:
         env_val = os.environ.get(MIRROR_DIR_ENV)
         if env_val:
@@ -236,7 +236,10 @@ def _update_submodules_with_reference(
                     sp = futures[future]
                     try:
                         future.result()
-                    except Exception as exc:
+                    except (
+                        subprocess.CalledProcessError,
+                        OSError,
+                    ) as exc:
                         log(f"  ERROR: submodule update failed for {sp}: {exc}")
                         errors.append(exc)
             if errors:
