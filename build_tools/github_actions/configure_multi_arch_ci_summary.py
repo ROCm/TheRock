@@ -5,20 +5,11 @@ See reviews/summary_format_v5.md in the claude-rocm-workspace for the
 design rationale and example outputs.
 """
 
-import json
-
 from configure_multi_arch_ci import (
     CIInputs,
     CIOutputs,
     GitContext,
 )
-
-_DAG = """\
-```
-# Build graph
-build-rocm ──┬── test-rocm
-             └── build-rocm-python ── build-pytorch
-```"""
 
 _PATH_FILTERS_URL = (
     "https://github.com/ROCm/TheRock/blob/main/"
@@ -60,10 +51,6 @@ def format_summary(
         for callout in callouts:
             lines.append(f"> - {callout}")
         lines.append("")
-
-    # Fixed DAG
-    lines.append(_DAG)
-    lines.append("")
 
     # build-rocm
     lines.append("### build-rocm")
