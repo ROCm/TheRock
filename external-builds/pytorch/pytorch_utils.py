@@ -382,7 +382,7 @@ def detect_pytorch_version() -> str:
     return f"{v.major}.{v.minor}"
 
 
-def check_pytorch_source_version(pytorch_dir: Path) -> None:
+def check_pytorch_source_version(pytorch_dir: Path, allow_mismatch: bool) -> None:
     """Verify that the PyTorch test source version matches the installed wheel.
 
     Compares the major.minor version from <pytorch_dir>/version.txt against
@@ -422,7 +422,16 @@ def check_pytorch_source_version(pytorch_dir: Path) -> None:
             f"messages, collection errors). Check out matching test sources or\n"
             f"install a matching wheel."
         )
-        sys.exit(1)
+        if allow_mismatch:
+            print(
+                "[WARNING] allow_mismatch (--allow-version-mismatch) was set, so continuing anyway\n"
+            )
+            return
+        else:
+            print(
+                "[ERROR] Set allow_mismatch (--allow-version-mismatch) to bypass this check. Exiting"
+            )
+            sys.exit(1)
 
     print(
         f"PyTorch version check OK: source and wheel both "

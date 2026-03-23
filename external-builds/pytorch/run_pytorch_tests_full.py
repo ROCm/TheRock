@@ -260,6 +260,13 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         default=False,
         help="Pass --dry-run to run_test.py to list tests without running them.",
     )
+    parser.add_argument(
+        "--allow-version-mismatch",
+        default=False,
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        help="""Allows version mismatches between pytorch test sources and installed packages. Defaults to False, so mismatched versions block running tests""",
+    )
     args = parser.parse_args(argv)
 
     if not args.pytorch_dir.exists():
@@ -327,7 +334,9 @@ def build_run_test_cmd(
 
 def main(argv: list[str]) -> int:
     args, passthrough_args = cmd_arguments(argv)
-    check_pytorch_source_version(args.pytorch_dir)
+    check_pytorch_source_version(
+        pytorch_dir=args.pytorch_dir, allow_mismatch=args.allow_version_mismatch
+    )
 
     # Determine AMDGPU family and set HIP_VISIBLE_DEVICES BEFORE importing
     # torch or running pytest.  Once torch.cuda is initialized, changing
