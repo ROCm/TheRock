@@ -158,11 +158,11 @@ class TestCIInputsFromEnviron(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestCheckSkipCI(unittest.TestCase):
+class TestShouldSkipCI(unittest.TestCase):
     """Test the skip CI gate.
 
     Path filtering logic is tested in configure_ci_path_filters_test.py.
-    These tests mock is_ci_run_required and verify check_skip_ci's own
+    These tests mock is_ci_run_required and verify should_skip_ci's own
     logic: label handling, None changed_files passthrough, and delegation.
     """
 
@@ -180,32 +180,26 @@ class TestCheckSkipCI(unittest.TestCase):
         """PR with ci:skip label skips CI regardless of changed files."""
         inputs = self._inputs(pr_labels=["ci:skip", "ci:run-multi-arch"])
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
-        result = cm.check_skip_ci(inputs, git)
-        self.assertTrue(result.skip)
-        self.assertIn("ci:skip", result.reason)
+        self.assertTrue(cm.should_skip_ci(inputs, git))
 
     def test_pr_without_multi_arch_label_skips(self):
         """PR without ci:run-multi-arch label skips multi-arch CI."""
         inputs = self._inputs(pr_labels=[])
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
-        result = cm.check_skip_ci(inputs, git)
-        self.assertTrue(result.skip)
-        self.assertIn("ci:run-multi-arch", result.reason)
+        self.assertTrue(cm.should_skip_ci(inputs, git))
 
     def test_pr_with_multi_arch_label_proceeds(self):
         """PR with ci:run-multi-arch label proceeds to path filtering."""
         inputs = self._inputs(pr_labels=["ci:run-multi-arch"])
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
-        result = cm.check_skip_ci(inputs, git)
-        self.assertFalse(result.skip)
+        self.assertFalse(cm.should_skip_ci(inputs, git))
 
     @patch("configure_multi_arch_ci.is_ci_run_required", return_value=False)
     def test_path_filter_says_skip(self, mock_filter):
         """When is_ci_run_required returns False, skip CI."""
         inputs = self._inputs(pr_labels=["ci:run-multi-arch"])
         git = cm.GitContext(changed_files=["docs/README.md"])
-        result = cm.check_skip_ci(inputs, git)
-        self.assertTrue(result.skip)
+        self.assertTrue(cm.should_skip_ci(inputs, git))
         mock_filter.assert_called_once_with(["docs/README.md"])
 
     @patch("configure_multi_arch_ci.is_ci_run_required", return_value=True)
@@ -213,16 +207,14 @@ class TestCheckSkipCI(unittest.TestCase):
         """When is_ci_run_required returns True, don't skip."""
         inputs = self._inputs(pr_labels=["ci:run-multi-arch"])
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
-        result = cm.check_skip_ci(inputs, git)
-        self.assertFalse(result.skip)
+        self.assertFalse(cm.should_skip_ci(inputs, git))
 
     @patch("configure_multi_arch_ci.is_ci_run_required")
     def test_none_changed_files_skips_path_filter(self, mock_filter):
         """schedule/workflow_dispatch pass None → path filter not called."""
         inputs = self._inputs(event_name="schedule")
         git = cm.GitContext()
-        result = cm.check_skip_ci(inputs, git)
-        self.assertFalse(result.skip)
+        self.assertFalse(cm.should_skip_ci(inputs, git))
         mock_filter.assert_not_called()
 
 
@@ -704,7 +696,7 @@ class TestFormatSummary(unittest.TestCase):
         return cm.CIInputs(**defaults)
 
     def test_skipped_summary_does_not_raise(self):
-        outputs = cm.CIOutputs.skipped("only .md files changed")
+        outputs = cm.CIOutputs.skipped()
         git = cm.GitContext(changed_files=["docs/README.md"])
         format_summary(self._inputs(), git, outputs)
 
@@ -732,15 +724,15 @@ class TestConfigurePipeline(unittest.TestCase):
 
     def test_skipped_outputs(self):
         """CIOutputs.skipped produces empty, disabled outputs."""
-        outputs = cm.CIOutputs.skipped("test reason")
+        outputs = cm.CIOutputs.skipped()
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
         self.assertIsNone(outputs.builds.windows)
 
-    @patch("configure_multi_arch_ci.check_skip_ci")
+    @patch("configure_multi_arch_ci.should_skip_ci")
     def test_pipeline_skips_when_gate_says_skip(self, mock_skip):
-        """If check_skip_ci returns skip=True, pipeline short-circuits."""
-        mock_skip.return_value = cm.SkipDecision(skip=True, reason="ci:skip label")
+        """If should_skip_ci returns True, pipeline short-circuits."""
+        mock_skip.return_value = True
         inputs = cm.CIInputs(
             event_name="workflow_dispatch",
             branch_name="main",
@@ -751,7 +743,7 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
 
-    @patch("configure_multi_arch_ci.check_skip_ci")
+    @patch("configure_multi_arch_ci.should_skip_ci")
     @patch("configure_multi_arch_ci.select_targets")
     @patch("configure_multi_arch_ci.decide_jobs")
     @patch("configure_multi_arch_ci.expand_build_configs")
@@ -759,7 +751,7 @@ class TestConfigurePipeline(unittest.TestCase):
         self, mock_expand, mock_jobs, mock_targets, mock_skip
     ):
         """When not skipped, all pipeline steps are called."""
-        mock_skip.return_value = cm.SkipDecision(skip=False, reason="")
+        mock_skip.return_value = False
         mock_targets.return_value = cm.TargetSelection(
             linux_families=["gfx94x"],
             windows_families=[],

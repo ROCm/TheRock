@@ -228,14 +228,6 @@ class GitContext:
 
 
 @dataclass(frozen=True)
-class SkipDecision:
-    """Whether to skip CI entirely."""
-
-    skip: bool
-    reason: str  # e.g. "ci:skip label", "only .md files changed", ""
-
-
-@dataclass(frozen=True)
 class TargetSelection:
     """Which GPU families to build/test, per platform."""
 
@@ -414,7 +406,7 @@ class CIOutputs:
     windows_test_labels: str = ""
 
     @staticmethod
-    def skipped(reason: str) -> "CIOutputs":
+    def skipped() -> "CIOutputs":
         """Produce empty outputs when CI is skipped."""
         return CIOutputs(is_ci_enabled=False)
 
@@ -424,13 +416,13 @@ class CIOutputs:
 # ---------------------------------------------------------------------------
 
 
-def check_skip_ci(
+def should_skip_ci(
     ci_inputs: CIInputs,
     git_context: GitContext,
-) -> SkipDecision:
+) -> bool:
     """Determine whether CI should be skipped entirely.
 
-    Returns SkipDecision(skip=True) for:
+    Returns True for:
     - 'ci:skip' PR label
     - pull_request without 'ci:run-multi-arch' label (opt-in during transition)
     - Only skippable files changed (docs, .md, etc.)
@@ -440,17 +432,14 @@ def check_skip_ci(
     for those triggers, and they have no PR labels).
     """
     if "ci:skip" in ci_inputs.pr_labels:
-        print("  Found 'ci:skip' PR label")
-        return SkipDecision(skip=True, reason="ci:skip label")
+        print("  Skipping: 'ci:skip' PR label")
+        return True
 
     # Multi-arch CI on PRs requires explicit opt-in via label to avoid
     # doubling CI load during the transition. See #3337.
     if ci_inputs.is_pull_request and "ci:run-multi-arch" not in ci_inputs.pr_labels:
-        print("  PR without 'ci:run-multi-arch' label — skipping multi-arch CI")
-        return SkipDecision(
-            skip=True,
-            reason="ci:run-multi-arch label not found (add to opt in)",
-        )
+        print("  Skipping: PR without 'ci:run-multi-arch' label")
+        return True
 
     # changed_files is None for schedule/workflow_dispatch — always proceed.
     if git_context.changed_files is not None:
@@ -459,9 +448,10 @@ def check_skip_ci(
             f"against path filters..."
         )
         if not is_ci_run_required(git_context.changed_files):
-            return SkipDecision(skip=True, reason="no CI-relevant files changed")
+            print("  Skipping: no CI-relevant files changed")
+            return True
 
-    return SkipDecision(skip=False, reason="")
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -899,10 +889,8 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     git_context.log()
 
     print("\n=== Checking if CI should run ===")
-    skip_decision = check_skip_ci(ci_inputs=ci_inputs, git_context=git_context)
-    if skip_decision.skip:
-        print(f"Result: skipping CI ({skip_decision.reason})")
-        return CIOutputs.skipped(skip_decision.reason)
+    if should_skip_ci(ci_inputs=ci_inputs, git_context=git_context):
+        return CIOutputs.skipped()
     print("Result: CI will run")
 
     print("\n=== Deciding job configuration ===")
