@@ -6,8 +6,10 @@
 import os
 import subprocess
 import sys
+from pathlib import Path
 
-from importlib.metadata import version
+from importlib.metadata import version as get_package_version
+from packaging.version import Version
 
 
 def get_supported_and_visible_gpus() -> tuple[list[str], list[str]]:
@@ -376,5 +378,62 @@ def detect_pytorch_version() -> str:
     Returns:
         The detected PyTorch version as major.minor (e.g., "2.7").
     """
-    # Get version, remove build suffix (+rocm, +cpu, etc.) and patch version
-    return version("torch").rsplit("+", 1)[0].rsplit(".", 1)[0]
+    v = Version(get_package_version("torch"))
+    return f"{v.major}.{v.minor}"
+
+
+def check_pytorch_source_version(pytorch_dir: Path, allow_mismatch: bool) -> None:
+    """Verify that the PyTorch test source version matches the installed wheel.
+
+    Compares the major.minor version from <pytorch_dir>/version.txt against
+    the installed torch package. A mismatch causes confusing test failures
+    (missing attributes, changed APIs, collection errors) that look like real
+    bugs but are just version skew.
+
+    Args:
+        pytorch_dir: Path to the PyTorch source directory.
+
+    Raises:
+        SystemExit: If there is a major.minor version mismatch.
+    """
+    version_file = pytorch_dir / "version.txt"
+    if not version_file.exists():
+        print(
+            f"[WARNING] {version_file} not found — cannot verify test source "
+            f"version matches installed wheel. Proceeding anyway."
+        )
+        return
+
+    source_version = Version(version_file.read_text().strip())
+    installed_version = Version(get_package_version("torch"))
+
+    # Compare major.minor only (ignore patch, pre-release, local segments).
+    if source_version.release[:2] != installed_version.release[:2]:
+        print(
+            f"[ERROR] PyTorch version mismatch!\n"
+            f"  Test sources: {source_version.major}.{source_version.minor} "
+            f"(from {version_file}: {source_version})\n"
+            f"  Installed wheel: "
+            f"{installed_version.major}.{installed_version.minor} "
+            f"({installed_version})\n"
+            f"\n"
+            f"Running tests from a different PyTorch version than the installed\n"
+            f"wheel causes misleading failures (missing APIs, changed error\n"
+            f"messages, collection errors). Check out matching test sources or\n"
+            f"install a matching wheel."
+        )
+        if allow_mismatch:
+            print(
+                "[WARNING] allow_mismatch (--allow-version-mismatch) was set, so continuing anyway\n"
+            )
+            return
+        else:
+            print(
+                "[ERROR] Set allow_mismatch (--allow-version-mismatch) to bypass this check. Exiting"
+            )
+            sys.exit(1)
+
+    print(
+        f"PyTorch version check OK: source and wheel both "
+        f"{installed_version.major}.{installed_version.minor}"
+    )
