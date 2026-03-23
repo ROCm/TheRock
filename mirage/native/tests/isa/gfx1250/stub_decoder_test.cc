@@ -7632,6 +7632,42 @@ int main() {
                 "expected synthetic routed route-info with unknown instruction name to preserve caller metadata while keeping empty unknown structure")) {
       return 1;
     }
+    for (std::string_view near_miss_instruction :
+         {"v_pk_add_bf16", " V_PK_ADD_BF16"}) {
+      const StubDecoderRouteInfo synthetic_near_miss{
+          near_miss_instruction,
+          manifest.route,
+          "kSyntheticRouteInfoNearMiss",
+          manifest.route_priority + 200u,
+          DecodeSeedHint::kUnknown,
+          "SYNTHETIC_NEAR_MISS_ENC",
+          2000u + manifest.route_priority,
+          20u + manifest.route_priority,
+          false,
+          false,
+      };
+      const StubDecodedInstruction near_miss_decoded =
+          DecodeStubInstruction(synthetic_near_miss);
+      if (!Expect(near_miss_decoded.status == StubDecodeStatus::kDecodedStub &&
+                      MatchesRouteInfoPayload(near_miss_decoded,
+                                              synthetic_near_miss) &&
+                      near_miss_decoded.entrypoint_name ==
+                          manifest.entrypoint_name &&
+                      MatchesUnknownHelperSurface(near_miss_decoded) &&
+                      MatchesTopLevelFlags(near_miss_decoded,
+                                           false,
+                                           false,
+                                           false,
+                                           false) &&
+                      MatchesLayout(near_miss_decoded, ExpectedLayout{}) &&
+                      near_miss_decoded.operand_roles.binding_count == 0 &&
+                      near_miss_decoded.operand_slots.binding_count == 0 &&
+                      near_miss_decoded.operand_descriptors.descriptor_count ==
+                          0,
+                  "expected synthetic routed route-info with near-miss known opcode to preserve caller metadata while keeping empty unknown structure")) {
+        return 1;
+      }
+    }
   }
   for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
     for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
