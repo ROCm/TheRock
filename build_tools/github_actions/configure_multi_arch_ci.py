@@ -135,18 +135,13 @@ class CIInputs:
 
     @staticmethod
     def from_environ() -> "CIInputs":
-        """Parse from GitHub Actions environment.
-
-        Reads GITHUB_EVENT_PATH for the event payload and a few standard
-        env vars. This is the only function in the pipeline that touches
-        external state.
-        """
+        """Parse from GitHub Actions environment."""
         event_name = os.environ.get("GITHUB_EVENT_NAME", "")
         branch_name = os.environ.get("GITHUB_REF_NAME", "")
         if not branch_name:
             raise RuntimeError("GITHUB_REF_NAME is not set.")
 
-        # Read the full event payload
+        # Read the full event webhook payload.
         event_path = os.environ.get("GITHUB_EVENT_PATH", "")
         if event_path and Path(event_path).exists():
             with open(event_path) as f:
@@ -154,7 +149,7 @@ class CIInputs:
         else:
             event = {}
 
-        # Extract fields based on event type
+        # Extract fields based on event type.
         inputs = event.get("inputs") or {}
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
@@ -162,12 +157,12 @@ class CIInputs:
         if event_name == "pull_request":
             pr_obj = event.get("pull_request", {})
             pr_labels = [label["name"].lower() for label in pr_obj.get("labels", [])]
-            # The merge commit's first parent is the PR base
+            # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
         elif event_name == "push":
             base_ref = event.get("before", "HEAD^1")
 
-        # BUILD_VARIANT comes from workflow_call inputs, not the event payload
+        # BUILD_VARIANT comes from workflow_call inputs, not the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
 
         return CIInputs(
@@ -213,7 +208,11 @@ class GitContext:
 
     @staticmethod
     def empty() -> "GitContext":
-        """No git data (schedule/workflow_dispatch)."""
+        """Empty context with no git data.
+
+        This should typically be used for schedule/workflow_dispatch events
+        where we don't want to diff against a prior commit.
+        """
         return GitContext()
 
     def log(self) -> None:
