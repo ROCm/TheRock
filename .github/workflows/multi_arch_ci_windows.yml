@@ -36,6 +36,9 @@ on:
         type: string
       test_type:
         type: string
+      build_pytorch:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -131,7 +134,45 @@ jobs:
       # Use architecture-specific artifact group for fetching per-arch artifacts
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
+      amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
+
+  build_python_packages:
+    needs: [build_multi_arch_stages]
+    name: Build Python Packages
+    if: ${{ !failure() && !cancelled() && inputs.expect_failure == false }}
+    uses: ./.github/workflows/build_windows_python_packages.yml
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      multiarch_index: true
+      package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # NOTE: Per-family PyTorch builds — each family gets its own wheel built
+  # against that family's ROCm package index slice.
+  # TODO(future): Consider adding a combined multi-arch pytorch build job
+  # that builds once against the full multi-arch index (amdgpu_families=all).
+  build_pytorch_wheels_per_family:
+    needs: [build_python_packages]
+    name: Build PyTorch | ${{ matrix.family_info.amdgpu_family }}
+    if: ${{ !failure() && !cancelled() && inputs.build_pytorch == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
+    uses: ./.github/workflows/build_windows_pytorch_wheels_ci.yml
+    with:
+      artifact_group: ${{ matrix.family_info.amdgpu_family }}
+      python_version: "3.12"
+      pytorch_git_ref: "release/2.10"
+      rocm_package_find_links_url: "${{ needs.build_python_packages.outputs.package_find_links_url }}/${{ matrix.family_info.amdgpu_family }}/index.html"
+      rocm_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
