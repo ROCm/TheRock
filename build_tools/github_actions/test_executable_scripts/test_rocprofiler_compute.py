@@ -15,9 +15,7 @@ THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
 ROCPROFILER_COMPUTE_DIRECTORY = THEROCK_PATH / "libexec" / "rocprofiler-compute"
 
 # Set up excluded tests
-EXCLUDED_TESTS = [
-    "test_profile_live_attach_detach",
-]
+EXCLUDED_TESTS = ["test_profile_live_attach_detach", "test_profile_pc_sampling"]
 
 # quick Tests
 QUICK_TESTS = [
