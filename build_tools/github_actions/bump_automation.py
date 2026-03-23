@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import os
 from datetime import datetime
-import json
+import requests
 
 THEROCK_REPO = "ROCm/TheRock"
 
@@ -62,22 +62,24 @@ def submodule_changed(before, after, path):
     return bool(diff.strip())
 
 
-def gh_api(token, endpoint, method="GET", data=None, jq=None):
-    """Run gh api with a specific token"""
-    cmd = ["gh", "api", endpoint, "-H", f"Authorization: Bearer {token}"]
-    if method != "GET":
-        cmd += ["-X", method]
-    if data:
-        for k, v in data.items():
-            cmd += ["-f", f"{k}={v}"]
-    if jq:
-        cmd += ["--jq", jq]
-    return run(cmd)
+def gh_api(token, endpoint, method="GET", data=None):
+    url = f"https://api.github.com/{endpoint}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+    response = requests.request(method, url, headers=headers, json=data)
+
+    if not response.ok:
+        raise RuntimeError(f"GitHub API failed: {response.status_code} {response.text}")
+
+    return response.json()
 
 
 def latest_commit(repo, token):
-    """Return latest commit SHA from repo using token"""
-    return gh_api(token, f"repos/{repo}/commits", jq=".[0].sha")
+    data = gh_api(token, f"repos/{repo}/commits")
+    return data[0]["sha"]
 
 
 def generate_pr_body(repo, base, head):
@@ -156,8 +158,7 @@ def update_ref_in_file(file_path, new_sha):
 def close_stale_prs(submodule, old_sha, systems_token):
     """Close all open PRs on TheRock that originated from old submodule SHA"""
     old_short = old_sha[:7]
-    prs_json = gh_api(systems_token, f"repos/{THEROCK_REPO}/pulls?state=open")
-    prs = json.loads(prs_json)
+    prs = gh_api(systems_token, f"repos/{THEROCK_REPO}/pulls?state=open")
     for pr in prs:
         title = pr["title"].lower()
         if f"bump {submodule}" in title and f"from {old_short}" in title:

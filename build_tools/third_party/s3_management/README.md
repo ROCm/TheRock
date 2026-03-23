@@ -33,6 +33,17 @@ python -m pip install \
   "rocm[libraries,devel]"
 ```
 
+## Running tests
+
+`test_update_dependencies.py` contains unit tests for the wheel filtering
+logic in `update_dependencies.py`. No AWS credentials or network access
+are required.
+
+```bash
+cd build_tools/third_party/s3_management
+python -m pytest test_update_dependencies.py -v
+```
+
 ## Playbook for running the scripts
 
 While these scripts do run as part of some automated workflows with

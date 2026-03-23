@@ -118,6 +118,10 @@ if(THEROCK_ENABLE_ROCSHMEM)
   ##############################################################################
   set(_rocshmem_subproject_names)
   therock_cmake_subproject_declare(rocshmem
+    # rocshmem uses .hip_fatbin/.hip_gpubin_* ELF sections for device code
+    # instead of .hipFatBinSegment, making it incompatible with kpack injection.
+    # Build all GPU targets in a single target-neutral artifact as a workaround.
+    USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocshmem"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocshmem"
     # High latency LTO link of a single library.
@@ -166,6 +170,7 @@ if(THEROCK_ENABLE_ROCSHMEM)
   list(APPEND _rocshmem_subproject_names rocshmem)
 
   therock_provide_artifact(rocshmem
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-rocshmem.toml
     COMPONENTS
       dbg
