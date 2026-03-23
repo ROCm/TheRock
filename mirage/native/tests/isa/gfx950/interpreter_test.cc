@@ -15292,6 +15292,10 @@ int main() {
   buffer_format_high_component_state.vgprs[65][0] = 0x40003c00u;
   buffer_format_high_component_state.vgprs[65][1] = 0x44004000u;
   buffer_format_high_component_state.vgprs[65][3] = 0x48004600u;
+  buffer_format_high_component_state.vgprs[68][0] = 0x01020304u;
+  buffer_format_high_component_state.vgprs[68][1] = 0x11121314u;
+  buffer_format_high_component_state.vgprs[68][2] = 0x21222324u;
+  buffer_format_high_component_state.vgprs[68][3] = 0x31323334u;
   buffer_format_high_component_state.vgprs[71][2] = 0xdeadbeefu;
   buffer_format_high_component_state.vgprs[72][2] = 0xdeadbeefu;
   buffer_format_high_component_state.vgprs[73][2] = 0xdeadbeefu;
@@ -15381,9 +15385,9 @@ int main() {
   const WaveExecutionState initial_buffer_format_high_component_state =
       buffer_format_high_component_state;
   const auto validate_buffer_format_high_component =
-      [](const WaveExecutionState& state,
-         const LinearExecutionMemory& memory,
-         const char* mode) -> bool {
+      [&](const WaveExecutionState& state,
+          const LinearExecutionMemory& memory,
+          const char* mode) -> bool {
     static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
     const auto expect_lane_values =
         [&](std::uint16_t reg,
@@ -15402,6 +15406,63 @@ int main() {
       return Expect(state.vgprs[reg][2] == 0xdeadbeefu,
                     (std::string(mode) + label).c_str());
     };
+    const auto expect_sgprs_preserved =
+        [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+          for (std::uint16_t sgpr = begin; sgpr <= end; ++sgpr) {
+            if (state.sgprs[sgpr] !=
+                initial_buffer_format_high_component_state.sgprs[sgpr]) {
+              return Expect(false, (std::string(mode) + label).c_str());
+            }
+          }
+          return true;
+        };
+    const auto expect_vgpr_range_preserved =
+        [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+          for (std::uint16_t vgpr = begin; vgpr <= end; ++vgpr) {
+            for (std::size_t lane = 0; lane < 4; ++lane) {
+              if (state.vgprs[vgpr][lane] !=
+                  initial_buffer_format_high_component_state.vgprs[vgpr][lane]) {
+                return Expect(false, (std::string(mode) + label).c_str());
+              }
+            }
+          }
+          return true;
+        };
+    const auto expect_u8_preserved = [&](std::uint64_t address,
+                                         const char* label) {
+      std::uint8_t current = 0;
+      std::uint8_t initial = 0;
+      return Expect(
+                 ReadU8(initial_buffer_format_high_component_memory, address,
+                        &initial),
+                 (std::string(mode) + " buffer format source read").c_str()) &&
+             Expect(ReadU8(memory, address, &current),
+                    (std::string(mode) + " buffer format source read").c_str()) &&
+             Expect(current == initial, (std::string(mode) + label).c_str());
+    };
+    const auto expect_u16_preserved = [&](std::uint64_t address,
+                                          const char* label) {
+      std::uint16_t current = 0;
+      std::uint16_t initial = 0;
+      return Expect(
+                 ReadU16(initial_buffer_format_high_component_memory, address,
+                         &initial),
+                 (std::string(mode) + " buffer format source read").c_str()) &&
+             Expect(ReadU16(memory, address, &current),
+                    (std::string(mode) + " buffer format source read").c_str()) &&
+             Expect(current == initial, (std::string(mode) + label).c_str());
+    };
+    const auto expect_u32_preserved = [&](std::uint64_t address,
+                                          const char* label) {
+      std::uint32_t current = 0;
+      std::uint32_t initial = 0;
+      return Expect(initial_buffer_format_high_component_memory.ReadU32(
+                        address, &initial),
+                    (std::string(mode) + " buffer format source read").c_str()) &&
+             Expect(memory.ReadU32(address, &current),
+                    (std::string(mode) + " buffer format source read").c_str()) &&
+             Expect(current == initial, (std::string(mode) + label).c_str());
+    };
     std::uint8_t byte_value = 0;
     std::uint16_t short_value = 0;
     std::uint32_t dword_value = 0;
@@ -15409,6 +15470,28 @@ int main() {
                   (std::string(mode) +
                    " buffer format high-component program to halt")
                       .c_str()) &&
+           Expect(state.exec_mask == 0b1011ULL,
+                  (std::string(mode) +
+                   " buffer format high-component preserves exec")
+                      .c_str()) &&
+           expect_sgprs_preserved(
+               24u, 47u,
+               " buffer format high-component preserves descriptors") &&
+           expect_vgpr_range_preserved(
+               0u, 4u,
+               " buffer format high-component preserves addresses") &&
+           expect_vgpr_range_preserved(
+               40u, 43u,
+               " buffer format high-component preserves xyzw store sources") &&
+           expect_vgpr_range_preserved(
+               50u, 52u,
+               " buffer format high-component preserves xyz store sources") &&
+           expect_vgpr_range_preserved(
+               60u, 65u,
+               " buffer format high-component preserves d16 store sources") &&
+           expect_vgpr_range_preserved(
+               68u, 68u,
+               " buffer format high-component preserves unrelated vgprs") &&
            expect_lane_values(
                71, {0x01u, 0x11u, 0x21u},
                (std::string(mode) + " buffer format xyzw load x result").c_str()) &&
@@ -15796,7 +15879,145 @@ int main() {
            Expect(short_value == 0u,
                   (std::string(mode) +
                    " inactive buffer format d16 xyzw store result")
-                      .c_str());
+                      .c_str()) &&
+           expect_u8_preserved(
+               0x140u,
+               " buffer format high-component xyzw source lane 0 x preserved") &&
+           expect_u8_preserved(
+               0x141u,
+               " buffer format high-component xyzw source lane 0 y preserved") &&
+           expect_u8_preserved(
+               0x142u,
+               " buffer format high-component xyzw source lane 0 z preserved") &&
+           expect_u8_preserved(
+               0x143u,
+               " buffer format high-component xyzw source lane 0 w preserved") &&
+           expect_u8_preserved(
+               0x144u,
+               " buffer format high-component xyzw source lane 1 x preserved") &&
+           expect_u8_preserved(
+               0x145u,
+               " buffer format high-component xyzw source lane 1 y preserved") &&
+           expect_u8_preserved(
+               0x146u,
+               " buffer format high-component xyzw source lane 1 z preserved") &&
+           expect_u8_preserved(
+               0x147u,
+               " buffer format high-component xyzw source lane 1 w preserved") &&
+           expect_u8_preserved(
+               0x148u,
+               " buffer format high-component xyzw source lane 3 x preserved") &&
+           expect_u8_preserved(
+               0x149u,
+               " buffer format high-component xyzw source lane 3 y preserved") &&
+           expect_u8_preserved(
+               0x14au,
+               " buffer format high-component xyzw source lane 3 z preserved") &&
+           expect_u8_preserved(
+               0x14bu,
+               " buffer format high-component xyzw source lane 3 w preserved") &&
+           expect_u32_preserved(
+               0x180u,
+               " buffer format high-component xyz source lane 0 x preserved") &&
+           expect_u32_preserved(
+               0x184u,
+               " buffer format high-component xyz source lane 0 y preserved") &&
+           expect_u32_preserved(
+               0x188u,
+               " buffer format high-component xyz source lane 0 z preserved") &&
+           expect_u32_preserved(
+               0x18cu,
+               " buffer format high-component xyz source lane 1 x preserved") &&
+           expect_u32_preserved(
+               0x190u,
+               " buffer format high-component xyz source lane 1 y preserved") &&
+           expect_u32_preserved(
+               0x194u,
+               " buffer format high-component xyz source lane 1 z preserved") &&
+           expect_u32_preserved(
+               0x1b8u,
+               " buffer format high-component xyz source lane 3 z preserved") &&
+           expect_u16_preserved(
+               0x1c0u,
+               " buffer format high-component d16 xy source lane 0 x preserved") &&
+           expect_u16_preserved(
+               0x1c2u,
+               " buffer format high-component d16 xy source lane 0 y preserved") &&
+           expect_u16_preserved(
+               0x1c4u,
+               " buffer format high-component d16 xy source lane 1 x preserved") &&
+           expect_u16_preserved(
+               0x1c6u,
+               " buffer format high-component d16 xy source lane 1 y preserved") &&
+           expect_u16_preserved(
+               0x1c8u,
+               " buffer format high-component d16 xy source lane 3 x preserved") &&
+           expect_u16_preserved(
+               0x1cau,
+               " buffer format high-component d16 xy source lane 3 y preserved") &&
+           expect_u16_preserved(
+               0x200u,
+               " buffer format high-component d16 xyz source lane 0 x preserved") &&
+           expect_u16_preserved(
+               0x202u,
+               " buffer format high-component d16 xyz source lane 0 y preserved") &&
+           expect_u16_preserved(
+               0x204u,
+               " buffer format high-component d16 xyz source lane 0 z preserved") &&
+           expect_u16_preserved(
+               0x208u,
+               " buffer format high-component d16 xyz source lane 1 x preserved") &&
+           expect_u16_preserved(
+               0x20au,
+               " buffer format high-component d16 xyz source lane 1 y preserved") &&
+           expect_u16_preserved(
+               0x20cu,
+               " buffer format high-component d16 xyz source lane 1 z preserved") &&
+           expect_u16_preserved(
+               0x210u,
+               " buffer format high-component d16 xyz source lane 3 x preserved") &&
+           expect_u16_preserved(
+               0x212u,
+               " buffer format high-component d16 xyz source lane 3 y preserved") &&
+           expect_u16_preserved(
+               0x214u,
+               " buffer format high-component d16 xyz source lane 3 z preserved") &&
+           expect_u16_preserved(
+               0x280u,
+               " buffer format high-component d16 xyzw source lane 0 x preserved") &&
+           expect_u16_preserved(
+               0x282u,
+               " buffer format high-component d16 xyzw source lane 0 y preserved") &&
+           expect_u16_preserved(
+               0x284u,
+               " buffer format high-component d16 xyzw source lane 0 z preserved") &&
+           expect_u16_preserved(
+               0x286u,
+               " buffer format high-component d16 xyzw source lane 0 w preserved") &&
+           expect_u16_preserved(
+               0x288u,
+               " buffer format high-component d16 xyzw source lane 1 x preserved") &&
+           expect_u16_preserved(
+               0x28au,
+               " buffer format high-component d16 xyzw source lane 1 y preserved") &&
+           expect_u16_preserved(
+               0x28cu,
+               " buffer format high-component d16 xyzw source lane 1 z preserved") &&
+           expect_u16_preserved(
+               0x28eu,
+               " buffer format high-component d16 xyzw source lane 1 w preserved") &&
+           expect_u16_preserved(
+               0x290u,
+               " buffer format high-component d16 xyzw source lane 3 x preserved") &&
+           expect_u16_preserved(
+               0x292u,
+               " buffer format high-component d16 xyzw source lane 3 y preserved") &&
+           expect_u16_preserved(
+               0x294u,
+               " buffer format high-component d16 xyzw source lane 3 z preserved") &&
+           expect_u16_preserved(
+               0x296u,
+               " buffer format high-component d16 xyzw source lane 3 w preserved");
   };
   if (!Expect(interpreter.ExecuteProgram(buffer_format_high_component_program,
                                          &buffer_format_high_component_state,
