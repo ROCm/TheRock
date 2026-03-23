@@ -163,10 +163,13 @@ int main() {
 
   const auto next_risk_encodings = GetGfx1201Wave32Phase0NextRiskEncodings();
   const auto frontier_order = GetGfx1201Wave32Phase0FrontierOrder();
+  const auto vds_boundary_buckets = GetGfx1201Wave32Phase0VdsBoundaryBuckets();
   if (!Expect(next_risk_encodings.size() == kExpectedNextRiskEncodings.size(),
               "expected next-risk encoding count") ||
       !Expect(frontier_order.size() == kExpectedFrontierOrder.size(),
               "expected frontier order count") ||
+      !Expect(vds_boundary_buckets.size() == 4u,
+              "expected four VDS boundary buckets") ||
       !Expect(GetGfx1201Wave32Phase0RecommendedNextEncoding() == "ENC_VDS",
               "expected ENC_VDS as the recommended next frontier")) {
     return 1;
@@ -184,6 +187,36 @@ int main() {
                 "unexpected frontier order")) {
       return 1;
     }
+  }
+
+  if (!Expect(vds_boundary_buckets[0].bucket_name == "append_consume",
+              "expected append/consume VDS bucket") ||
+      !Expect(vds_boundary_buckets[0].example_instruction == "DS_APPEND",
+              "expected append/consume example") ||
+      !Expect(vds_boundary_buckets[0].instruction_count == 2u,
+              "expected append/consume count") ||
+      !Expect(vds_boundary_buckets[1].bucket_name == "exchange_compare_store",
+              "expected exchange/compare-store VDS bucket") ||
+      !Expect(vds_boundary_buckets[1].example_instruction ==
+                  "DS_CONDXCHG32_RTN_B64",
+              "expected exchange/compare-store example") ||
+      !Expect(vds_boundary_buckets[1].instruction_count == 7u,
+              "expected exchange/compare-store count") ||
+      !Expect(vds_boundary_buckets[2].bucket_name == "multi_address",
+              "expected multi-address VDS bucket") ||
+      !Expect(vds_boundary_buckets[2].example_instruction ==
+                  "DS_LOAD_2ADDR_B32",
+              "expected multi-address example") ||
+      !Expect(vds_boundary_buckets[2].instruction_count == 12u,
+              "expected multi-address count") ||
+      !Expect(vds_boundary_buckets[3].bucket_name == "bvh_stack",
+              "expected BVH-stack VDS bucket") ||
+      !Expect(vds_boundary_buckets[3].example_instruction ==
+                  "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
+              "expected BVH-stack example") ||
+      !Expect(vds_boundary_buckets[3].instruction_count == 3u,
+              "expected BVH-stack count")) {
+    return 1;
   }
 
   if (!Expect(smem->example_instruction == "S_LOAD_B32",

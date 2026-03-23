@@ -1213,6 +1213,6 @@
     "ENC_VOP3 remains route-only in this slice.",
     "The remaining ENC_VOPC surface outside this seed is now primarily packed and other wider forms not yet on the current local path.",
     "The current wave32-local ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, and ENC_VGLOBAL seed surface is saturated: all currently seeded instruction/encoding pairs are executable on the local path.",
-    "The next coherent extension points now move further into ENC_VDS through nearby single-address utilities or the remaining low-risk single-address LDS tail, with later frontier steps moving into multi-address, exchange/compare-store, GDS, and eventually ENC_VOP3."
+    "The remaining ENC_VDS tail is now explicitly bounded by append/consume allocator semantics, exchange and compare-store forms, multi-address LDS forms including stride64, and gfx1201-specific BVH stack instructions, which is the next verification-risk step before ENC_VOP3."
   ]
 }

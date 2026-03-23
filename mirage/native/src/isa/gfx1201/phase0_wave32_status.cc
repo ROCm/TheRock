@@ -32,6 +32,34 @@ constexpr std::array<std::string_view, 4> kFrontierOrder{{
     "ENC_VOP3",
 }};
 
+constexpr std::array<Gfx1201Wave32Phase0VdsBoundaryBucket, 4>
+    kVdsBoundaryBuckets{{
+        {
+            "append_consume",
+            "DS_APPEND",
+            "Append/consume allocator semantics are the first remaining non-local LDS tail.",
+            2,
+        },
+        {
+            "exchange_compare_store",
+            "DS_CONDXCHG32_RTN_B64",
+            "Exchange and compare-store forms are the next semantic-risk step on the VDS path.",
+            7,
+        },
+        {
+            "multi_address",
+            "DS_LOAD_2ADDR_B32",
+            "Remaining two-address and stride64 LDS forms would widen the current one-address execution model.",
+            12,
+        },
+        {
+            "bvh_stack",
+            "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
+            "BVH stack instructions are gfx1201-specific and sit outside the current LDS utility model.",
+            3,
+        },
+    }};
+
 struct ExecutableInstructionSummary {
   std::uint32_t executable_instruction_count = 0;
   std::string_view first_executable_instruction;
@@ -163,6 +191,11 @@ std::span<const std::string_view> GetGfx1201Wave32Phase0NextRiskEncodings() {
 
 std::span<const std::string_view> GetGfx1201Wave32Phase0FrontierOrder() {
   return kFrontierOrder;
+}
+
+std::span<const Gfx1201Wave32Phase0VdsBoundaryBucket>
+GetGfx1201Wave32Phase0VdsBoundaryBuckets() {
+  return kVdsBoundaryBuckets;
 }
 
 std::string_view GetGfx1201Wave32Phase0RecommendedNextEncoding() {
