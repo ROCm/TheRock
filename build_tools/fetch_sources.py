@@ -152,11 +152,15 @@ def _update_one_submodule(
                 f"  WARNING: --reference clone failed for {submodule_path}, "
                 f"retrying without reference..."
             )
-            fallback_cmd: list[str | Path] = [
-                "git",
-                "submodule",
-                "update",
-            ] + update_args + ["--", submodule_path]
+            fallback_cmd: list[str | Path] = (
+                [
+                    "git",
+                    "submodule",
+                    "update",
+                ]
+                + update_args
+                + ["--", submodule_path]
+            )
             run_command(fallback_cmd, cwd=THEROCK_DIR)
         else:
             raise
@@ -223,13 +227,9 @@ def _update_submodules_with_reference(
                 _update_one_submodule(sp, update_args, mirror)
         else:
             errors: list[Exception] = []
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=jobs
-            ) as pool:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
                 futures = {
-                    pool.submit(
-                        _update_one_submodule, sp, update_args, mirror
-                    ): sp
+                    pool.submit(_update_one_submodule, sp, update_args, mirror): sp
                     for sp, mirror in update_tasks
                 }
                 for future in concurrent.futures.as_completed(futures):
@@ -374,7 +374,9 @@ def run(args):
         if reference_dir:
             log(f"Using reference directory: {reference_dir}")
             _update_submodules_with_reference(
-                submodule_paths, update_args, reference_dir,
+                submodule_paths,
+                update_args,
+                reference_dir,
                 jobs=args.jobs if args.jobs is not None else 4,
             )
         else:

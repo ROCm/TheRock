@@ -54,17 +54,17 @@ class ParseRefLinesTest(unittest.TestCase):
             "789aaa refs/tags/v1.0\n"
         )
         result = _parse_ref_lines(output)
-        self.assertEqual(result, {
-            "refs/heads/main": "abc123",
-            "refs/heads/dev": "def456",
-            "refs/tags/v1.0": "789aaa",
-        })
+        self.assertEqual(
+            result,
+            {
+                "refs/heads/main": "abc123",
+                "refs/heads/dev": "def456",
+                "refs/tags/v1.0": "789aaa",
+            },
+        )
 
     def test_skips_head(self):
-        output = (
-            "abc123 HEAD\n"
-            "abc123 refs/heads/main\n"
-        )
+        output = "abc123 HEAD\n" "abc123 refs/heads/main\n"
         result = _parse_ref_lines(output)
         self.assertEqual(result, {"refs/heads/main": "abc123"})
         self.assertNotIn("HEAD", result)
@@ -84,10 +84,13 @@ class ParseRefLinesTest(unittest.TestCase):
         """ls-remote uses tabs; show-ref uses spaces. Both should work."""
         output = "abc123\trefs/heads/main\ndef456\trefs/tags/v1.0\n"
         result = _parse_ref_lines(output)
-        self.assertEqual(result, {
-            "refs/heads/main": "abc123",
-            "refs/tags/v1.0": "def456",
-        })
+        self.assertEqual(
+            result,
+            {
+                "refs/heads/main": "abc123",
+                "refs/tags/v1.0": "def456",
+            },
+        )
 
 
 class NeedsUpdateTest(unittest.TestCase):
@@ -95,35 +98,51 @@ class NeedsUpdateTest(unittest.TestCase):
 
     def _mock_run(self, local_stdout: str, remote_stdout: str, remote_rc: int = 0):
         """Return a side_effect callable for subprocess.run."""
+
         def side_effect(cmd, **kwargs):
             if "show-ref" in cmd:
-                return subprocess.CompletedProcess(cmd, 0, stdout=local_stdout, stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout=local_stdout, stderr=""
+                )
             if "ls-remote" in cmd:
-                return subprocess.CompletedProcess(cmd, remote_rc, stdout=remote_stdout, stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, remote_rc, stdout=remote_stdout, stderr=""
+                )
             raise ValueError(f"Unexpected command: {cmd}")
+
         return side_effect
 
     @mock.patch("setup_git_mirrors.subprocess.run")
     def test_refs_match_returns_false(self, mock_run):
         refs = "abc123 refs/heads/main\ndef456 refs/tags/v1.0\n"
         mock_run.side_effect = self._mock_run(refs, refs)
-        self.assertFalse(needs_update(Path("/mirrors/repo.git"), "https://example.com/repo.git"))
+        self.assertFalse(
+            needs_update(Path("/mirrors/repo.git"), "https://example.com/repo.git")
+        )
 
     @mock.patch("setup_git_mirrors.subprocess.run")
     def test_refs_differ_returns_true(self, mock_run):
         local = "abc123 refs/heads/main\n"
         remote = "abc123 refs/heads/main\nnew999 refs/heads/feature\n"
         mock_run.side_effect = self._mock_run(local, remote)
-        self.assertTrue(needs_update(Path("/mirrors/repo.git"), "https://example.com/repo.git"))
+        self.assertTrue(
+            needs_update(Path("/mirrors/repo.git"), "https://example.com/repo.git")
+        )
 
     @mock.patch("setup_git_mirrors.subprocess.run")
     def test_ls_remote_failure_returns_true(self, mock_run):
-        mock_run.side_effect = self._mock_run("abc123 refs/heads/main\n", "", remote_rc=1)
-        self.assertTrue(needs_update(Path("/mirrors/repo.git"), "https://example.com/repo.git"))
+        mock_run.side_effect = self._mock_run(
+            "abc123 refs/heads/main\n", "", remote_rc=1
+        )
+        self.assertTrue(
+            needs_update(Path("/mirrors/repo.git"), "https://example.com/repo.git")
+        )
 
     @mock.patch("setup_git_mirrors.subprocess.run", side_effect=OSError("no git"))
     def test_exception_returns_true(self, _mock_run):
-        self.assertTrue(needs_update(Path("/mirrors/repo.git"), "https://example.com/repo.git"))
+        self.assertTrue(
+            needs_update(Path("/mirrors/repo.git"), "https://example.com/repo.git")
+        )
 
 
 class CreateMirrorTest(unittest.TestCase):
@@ -144,7 +163,9 @@ class CreateMirrorTest(unittest.TestCase):
         self.assertEqual(result.submodule.name, "llvm-project")
         mock_git.assert_called_once()
 
-    @mock.patch("setup_git_mirrors.run_git", side_effect=subprocess.CalledProcessError(1, "git"))
+    @mock.patch(
+        "setup_git_mirrors.run_git", side_effect=subprocess.CalledProcessError(1, "git")
+    )
     def test_all_retries_exhausted(self, mock_git):
         result = create_mirror(self.sub, retries=2)
         self.assertFalse(result.success)
@@ -163,7 +184,9 @@ class CreateMirrorTest(unittest.TestCase):
         self.assertEqual(result.action, "created")
         mock_sleep.assert_called_once()
 
-    @mock.patch("setup_git_mirrors.run_git", side_effect=subprocess.CalledProcessError(1, "git"))
+    @mock.patch(
+        "setup_git_mirrors.run_git", side_effect=subprocess.CalledProcessError(1, "git")
+    )
     def test_cleans_up_partial_dir_on_failure(self, _mock_git):
         self.sub.mirror_path.mkdir(parents=True)
         (self.sub.mirror_path / "HEAD").touch()
@@ -289,7 +312,8 @@ class DiscoverSubmodulesTest(unittest.TestCase):
         def side_effect(cmd, **kwargs):
             if "--get-regexp" in cmd:
                 return subprocess.CompletedProcess(
-                    cmd, 0,
+                    cmd,
+                    0,
                     stdout="submodule.llvm-project.url https://github.com/ROCm/llvm-project.git\n",
                     stderr="",
                 )
@@ -301,7 +325,9 @@ class DiscoverSubmodulesTest(unittest.TestCase):
 
         mock_run.side_effect = side_effect
 
-        subs = discover_submodules(self.mirror_dir, gitmodules_path=self.gitmodules_path)
+        subs = discover_submodules(
+            self.mirror_dir, gitmodules_path=self.gitmodules_path
+        )
         self.assertEqual(len(subs), 1)
         self.assertEqual(subs[0].name, "llvm-project")
         self.assertEqual(subs[0].path, "compiler/amd-llvm")

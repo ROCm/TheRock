@@ -90,8 +90,6 @@ def run_git(
     return None
 
 
-
-
 def discover_submodules(
     mirror_dir: Path,
     gitmodules_path: Path | None = None,
@@ -269,7 +267,11 @@ def update_mirror(
     if not submodule.mirror_path.exists():
         return create_mirror(submodule, retries=retries)
 
-    if not force and skip_up_to_date and not needs_update(submodule.mirror_path, submodule.url):
+    if (
+        not force
+        and skip_up_to_date
+        and not needs_update(submodule.mirror_path, submodule.url)
+    ):
         log(f"  Mirror up-to-date: {submodule.name}")
         return MirrorResult(
             submodule=submodule,
@@ -447,8 +449,7 @@ def main(argv: list[str]) -> int:
             "to speed up git submodule init/update operations."
         ),
         epilog=(
-            "After setup, use with: "
-            "fetch_sources.py --reference-dir <mirror-dir>"
+            "After setup, use with: " "fetch_sources.py --reference-dir <mirror-dir>"
         ),
     )
     parser.add_argument(
@@ -521,7 +522,9 @@ def main(argv: list[str]) -> int:
     elif args.update:
         if args.force:
             log("Force update enabled - updating all mirrors regardless of status")
-        results = run_operation(submodules, "update", args.jobs, args.retries, force=args.force)
+        results = run_operation(
+            submodules, "update", args.jobs, args.retries, force=args.force
+        )
     else:
         if args.force:
             log("WARNING: --force only applies when used with --update, ignoring")

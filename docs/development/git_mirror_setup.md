@@ -141,9 +141,9 @@ python ./build_tools/setup_git_mirrors.py `
 To automate via Task Scheduler:
 
 1. Open Task Scheduler
-2. Create a new Basic Task named "ROCm Mirror Update"
-3. Set the trigger to repeat every 4 hours
-4. Set the action to run:
+1. Create a new Basic Task named "ROCm Mirror Update"
+1. Set the trigger to repeat every 4 hours
+1. Set the action to run:
    - Program: `python`
    - Arguments: `C:\path\to\TheRock\build_tools\setup_git_mirrors.py --mirror-dir C:\rocm-git-mirrors --update --jobs 4`
    - Start in: `C:\path\to\TheRock`

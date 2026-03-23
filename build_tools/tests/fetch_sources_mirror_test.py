@@ -170,10 +170,13 @@ class UpdateSubmodulesWithReferenceTest(unittest.TestCase):
     @mock.patch("fetch_sources._update_one_submodule")
     @mock.patch("fetch_sources.run_command")
     @mock.patch("fetch_sources._submodule_is_initialized", return_value=False)
-    @mock.patch("fetch_sources._get_submodule_url_map", return_value={
-        "compiler/amd-llvm": "https://github.com/ROCm/llvm-project.git"
-    })
-    def test_two_phase_init(self, _mock_urls, _mock_is_init, mock_run_cmd, mock_update_one):
+    @mock.patch(
+        "fetch_sources._get_submodule_url_map",
+        return_value={"compiler/amd-llvm": "https://github.com/ROCm/llvm-project.git"},
+    )
+    def test_two_phase_init(
+        self, _mock_urls, _mock_is_init, mock_run_cmd, mock_update_one
+    ):
         _update_submodules_with_reference(
             ["compiler/amd-llvm"], [], self.reference_dir, jobs=1
         )
@@ -188,7 +191,9 @@ class UpdateSubmodulesWithReferenceTest(unittest.TestCase):
     @mock.patch("fetch_sources.run_command")
     @mock.patch("fetch_sources._submodule_is_initialized", return_value=True)
     @mock.patch("fetch_sources._get_submodule_url_map", return_value={})
-    def test_already_initialized_uses_batch(self, _mock_urls, _mock_is_init, mock_run_cmd):
+    def test_already_initialized_uses_batch(
+        self, _mock_urls, _mock_is_init, mock_run_cmd
+    ):
         _update_submodules_with_reference(
             ["compiler/amd-llvm"], [], self.reference_dir, jobs=1
         )
@@ -201,11 +206,16 @@ class UpdateSubmodulesWithReferenceTest(unittest.TestCase):
     @mock.patch("fetch_sources._update_one_submodule")
     @mock.patch("fetch_sources.run_command")
     @mock.patch("fetch_sources._submodule_is_initialized", side_effect=[False, True])
-    @mock.patch("fetch_sources._get_submodule_url_map", return_value={
-        "compiler/amd-llvm": "https://github.com/ROCm/llvm-project.git",
-        "base/rocm-cmake": "https://github.com/ROCm/rocm-cmake.git",
-    })
-    def test_mixed_init_and_already_init(self, _mock_urls, _mock_is_init, mock_run_cmd, mock_update_one):
+    @mock.patch(
+        "fetch_sources._get_submodule_url_map",
+        return_value={
+            "compiler/amd-llvm": "https://github.com/ROCm/llvm-project.git",
+            "base/rocm-cmake": "https://github.com/ROCm/rocm-cmake.git",
+        },
+    )
+    def test_mixed_init_and_already_init(
+        self, _mock_urls, _mock_is_init, mock_run_cmd, mock_update_one
+    ):
         _update_submodules_with_reference(
             ["compiler/amd-llvm", "base/rocm-cmake"],
             [],
@@ -224,14 +234,17 @@ class UpdateSubmodulesWithReferenceTest(unittest.TestCase):
     @mock.patch("fetch_sources._update_one_submodule")
     @mock.patch("fetch_sources.run_command")
     @mock.patch("fetch_sources._submodule_is_initialized", return_value=False)
-    @mock.patch("fetch_sources._get_submodule_url_map", return_value={
-        "a": "https://github.com/ROCm/a.git",
-        "b": "https://github.com/ROCm/b.git",
-    })
-    def test_parallel_jobs_gt_one(self, _mock_urls, _mock_is_init, mock_run_cmd, mock_update_one):
-        _update_submodules_with_reference(
-            ["a", "b"], [], self.reference_dir, jobs=4
-        )
+    @mock.patch(
+        "fetch_sources._get_submodule_url_map",
+        return_value={
+            "a": "https://github.com/ROCm/a.git",
+            "b": "https://github.com/ROCm/b.git",
+        },
+    )
+    def test_parallel_jobs_gt_one(
+        self, _mock_urls, _mock_is_init, mock_run_cmd, mock_update_one
+    ):
+        _update_submodules_with_reference(["a", "b"], [], self.reference_dir, jobs=4)
 
         self.assertEqual(mock_update_one.call_count, 2)
 
