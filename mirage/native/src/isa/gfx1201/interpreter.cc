@@ -55,7 +55,7 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
                             WaveExecutionState* state,
                             std::string* error_message);
 
-constexpr std::array<std::string_view, 514> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 516> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -223,6 +223,7 @@ constexpr std::array<std::string_view, 514> kExecutableSeedOpcodes{{
     "DS_MSKOR_RTN_B64",
     "DS_MSKOR_B64",
     "DS_LOAD_B32",
+    "DS_LOAD_ADDTID_B32",
     "DS_LOAD_B64",
     "DS_LOAD_B96",
     "DS_LOAD_B128",
@@ -239,6 +240,7 @@ constexpr std::array<std::string_view, 514> kExecutableSeedOpcodes{{
     "DS_STORE_B8",
     "DS_STORE_B16",
     "DS_STORE_B32",
+    "DS_STORE_ADDTID_B32",
     "DS_STORE_B64",
     "DS_STORE_B96",
     "DS_STORE_B128",
@@ -1611,6 +1613,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kDsLoadB32;
     return true;
   }
+  if (opcode == "DS_LOAD_ADDTID_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsLoadAddtidB32;
+    return true;
+  }
   if (opcode == "DS_LOAD_B64") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsLoadB64;
     return true;
@@ -1673,6 +1679,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "DS_STORE_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kDsStoreB32;
+    return true;
+  }
+  if (opcode == "DS_STORE_ADDTID_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kDsStoreAddtidB32;
     return true;
   }
   if (opcode == "DS_STORE_B64") {
@@ -3886,6 +3896,14 @@ bool IsDsAtomic64Opcode(std::string_view opcode) {
          IsDsAtomic64ReturnOpcode(opcode);
 }
 
+bool IsDsAddTidLoadOpcode(std::string_view opcode) {
+  return opcode == "DS_LOAD_ADDTID_B32";
+}
+
+bool IsDsAddTidStoreOpcode(std::string_view opcode) {
+  return opcode == "DS_STORE_ADDTID_B32";
+}
+
 bool IsDsLoadOpcode(std::string_view opcode) {
   return opcode == "DS_LOAD_B32" || opcode == "DS_LOAD_B64" ||
          opcode == "DS_LOAD_B96" || opcode == "DS_LOAD_B128" ||
@@ -3893,7 +3911,8 @@ bool IsDsLoadOpcode(std::string_view opcode) {
          opcode == "DS_LOAD_I16" || opcode == "DS_LOAD_U16" ||
          opcode == "DS_LOAD_U8_D16" || opcode == "DS_LOAD_U8_D16_HI" ||
          opcode == "DS_LOAD_I8_D16" || opcode == "DS_LOAD_I8_D16_HI" ||
-         opcode == "DS_LOAD_U16_D16" || opcode == "DS_LOAD_U16_D16_HI";
+         opcode == "DS_LOAD_U16_D16" || opcode == "DS_LOAD_U16_D16_HI" ||
+         IsDsAddTidLoadOpcode(opcode);
 }
 
 bool IsDsStoreOpcode(std::string_view opcode) {
@@ -3901,7 +3920,7 @@ bool IsDsStoreOpcode(std::string_view opcode) {
          opcode == "DS_STORE_B32" || opcode == "DS_STORE_B64" ||
          opcode == "DS_STORE_B96" || opcode == "DS_STORE_B128" ||
          opcode == "DS_STORE_B8_D16_HI" ||
-         opcode == "DS_STORE_B16_D16_HI";
+         opcode == "DS_STORE_B16_D16_HI" || IsDsAddTidStoreOpcode(opcode);
 }
 
 bool IsDsSwizzleOpcode(std::string_view opcode) {
@@ -4100,6 +4119,37 @@ bool ComputeDsAddress(const DecodedInstruction& instruction,
   return true;
 }
 
+bool ComputeDsAddTidAddress(std::uint32_t offset,
+                            std::uint32_t m0_value,
+                            std::size_t lane_index,
+                            std::uint64_t* address,
+                            std::string* error_message) {
+  if (address == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "DS ADDTID address output must not be null";
+    }
+    return false;
+  }
+
+  const std::uint64_t m0_offset = static_cast<std::uint64_t>(m0_value & 0xffffu);
+  const std::uint64_t lane_offset =
+      static_cast<std::uint64_t>(lane_index) * sizeof(std::uint32_t);
+  if (m0_offset > std::numeric_limits<std::uint64_t>::max() - offset ||
+      m0_offset + offset >
+          std::numeric_limits<std::uint64_t>::max() - lane_offset) {
+    if (error_message != nullptr) {
+      *error_message = "DS ADDTID address overflow";
+    }
+    return false;
+  }
+
+  *address = m0_offset + static_cast<std::uint64_t>(offset) + lane_offset;
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
 bool ComputeDsLoadAddress(const DecodedInstruction& instruction,
                           const WaveExecutionState& state,
                           std::size_t lane_index,
@@ -4111,6 +4161,30 @@ bool ComputeDsLoadAddress(const DecodedInstruction& instruction,
     }
     return false;
   }
+  if (IsDsAddTidLoadOpcode(instruction.opcode)) {
+    if (instruction.operands[1].kind != OperandKind::kImm32) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " expected immediate base offset";
+      }
+      return false;
+    }
+    if (!IsImplicitM0SourceOperand(instruction.operands[2])) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " expected implicit M0 source operand";
+      }
+      return false;
+    }
+    const std::uint32_t m0_value =
+        ReadScalarOperand(instruction.operands[2], state, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    return ComputeDsAddTidAddress(instruction.operands[1].imm32, m0_value,
+                                  lane_index, address, error_message);
+  }
+
   if (instruction.operands[1].kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
       *error_message = std::string(instruction.opcode) +
@@ -4150,6 +4224,30 @@ bool ComputeDsStoreAddress(const DecodedInstruction& instruction,
     }
     return false;
   }
+  if (IsDsAddTidStoreOpcode(instruction.opcode)) {
+    if (instruction.operands[1].kind != OperandKind::kImm32) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " expected immediate base offset";
+      }
+      return false;
+    }
+    if (!IsImplicitM0SourceOperand(instruction.operands[2])) {
+      if (error_message != nullptr) {
+        *error_message = std::string(instruction.opcode) +
+                         " expected implicit M0 source operand";
+      }
+      return false;
+    }
+    const std::uint32_t m0_value =
+        ReadScalarOperand(instruction.operands[2], state, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    return ComputeDsAddTidAddress(instruction.operands[1].imm32, m0_value,
+                                  lane_index, address, error_message);
+  }
+
   if (instruction.operands[1].kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
       *error_message = std::string(instruction.opcode) +
@@ -4426,7 +4524,7 @@ bool ExecuteDsLoadAtAddress(const DecodedInstruction& instruction,
                               error_message);
   };
 
-  if (opcode == "DS_LOAD_B32") {
+  if (opcode == "DS_LOAD_B32" || opcode == "DS_LOAD_ADDTID_B32") {
     std::uint32_t value = 0;
     if (!memory->LoadU32(address, &value)) {
       if (error_message != nullptr) {
@@ -4610,7 +4708,7 @@ bool ExecuteDsStoreAtAddress(const DecodedInstruction& instruction,
     return true;
   }
 
-  if (opcode == "DS_STORE_B32") {
+  if (opcode == "DS_STORE_B32" || opcode == "DS_STORE_ADDTID_B32") {
     const std::uint32_t value = ReadVectorOperand(instruction.operands[0], state,
                                                   lane_index, error_message);
     if (error_message != nullptr && !error_message->empty()) {
@@ -8428,6 +8526,7 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kDsXorRtnB64:
     case Gfx1201CompiledOpcode::kDsXorB64:
     case Gfx1201CompiledOpcode::kDsLoadB32:
+    case Gfx1201CompiledOpcode::kDsLoadAddtidB32:
     case Gfx1201CompiledOpcode::kDsLoadB64:
     case Gfx1201CompiledOpcode::kDsLoadB96:
     case Gfx1201CompiledOpcode::kDsLoadB128:
@@ -8444,6 +8543,7 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kDsStoreB8:
     case Gfx1201CompiledOpcode::kDsStoreB16:
     case Gfx1201CompiledOpcode::kDsStoreB32:
+    case Gfx1201CompiledOpcode::kDsStoreAddtidB32:
     case Gfx1201CompiledOpcode::kDsStoreB64:
     case Gfx1201CompiledOpcode::kDsStoreB96:
     case Gfx1201CompiledOpcode::kDsStoreB128:

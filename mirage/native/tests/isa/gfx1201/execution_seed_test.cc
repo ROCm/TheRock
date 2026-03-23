@@ -5837,6 +5837,246 @@ bool RunDsStoreBatchTest(
   return true;
 }
 
+bool RunDsLoadAddtidBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  const auto ds_load_addtid_words = MakeDs(177u, 20u, 11u, 22u, 33u, 0x40u);
+  const std::array<std::uint32_t, 3> ds_load_addtid_program_words{
+      ds_load_addtid_words[0],
+      ds_load_addtid_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> ds_load_addtid_program;
+  if (!Expect(decoder.DecodeProgram(ds_load_addtid_program_words,
+                                    &ds_load_addtid_program, error_message),
+              "expected DS ADDTID load program decode success") ||
+      !Expect(ds_load_addtid_program.size() == 2u,
+              "expected two decoded DS ADDTID load instructions") ||
+      !Expect(ds_load_addtid_program[0].opcode == "DS_LOAD_ADDTID_B32",
+              "expected decoded DS_LOAD_ADDTID_B32 opcode") ||
+      !Expect(ds_load_addtid_program[0].operand_count == 3u,
+              "expected decoded DS_LOAD_ADDTID_B32 operand count") ||
+      !Expect(ds_load_addtid_program[0].operands[0].kind == OperandKind::kVgpr &&
+                  ds_load_addtid_program[0].operands[0].index == 20u,
+              "expected decoded DS_LOAD_ADDTID_B32 destination VGPR") ||
+      !Expect(ds_load_addtid_program[0].operands[1].kind == OperandKind::kImm32 &&
+                  ds_load_addtid_program[0].operands[1].imm32 == 0x40u,
+              "expected decoded DS_LOAD_ADDTID_B32 base immediate") ||
+      !Expect(ds_load_addtid_program[0].operands[2].kind == OperandKind::kSgpr &&
+                  ds_load_addtid_program[0].operands[2].index ==
+                      kM0RegisterIndex,
+              "expected decoded DS_LOAD_ADDTID_B32 implicit M0 source") ||
+      !Expect(ds_load_addtid_program[1].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after DS ADDTID load")) {
+    return false;
+  }
+
+  auto initialize_ds_load_addtid_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x80000005ull;
+    state->sgprs[kM0RegisterIndex] = 0x12348000u;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      state->vgprs[20][lane] = 0xe20000a0u + static_cast<std::uint32_t>(lane);
+    }
+  };
+  auto expect_ds_load_addtid_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == 0x80000005ull &&
+          state.sgprs[kM0RegisterIndex] == 0x12348000u && state.halted &&
+          !state.waiting_on_barrier && state.pc == 1u)) {
+      return false;
+    }
+    constexpr std::uint64_t kActiveMask = 0x80000005ull;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      const bool active = (kActiveMask & (1ull << lane)) != 0u;
+      const std::uint32_t initial_value =
+          0xe20000a0u + static_cast<std::uint32_t>(lane);
+      const std::uint32_t expected_value =
+          active ? (0x62000000u + static_cast<std::uint32_t>(lane))
+                 : initial_value;
+      if (state.vgprs[20][lane] != expected_value) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  LinearExecutionMemory decoded_ds_load_addtid_memory(0x1000u, 0x8000u);
+  for (std::uint32_t lane = 0; lane < 32u; ++lane) {
+    if (!Expect(decoded_ds_load_addtid_memory.StoreU32(
+                    0x8040u + lane * 4u, 0x62000000u + lane),
+                "expected DS ADDTID load test write")) {
+      return false;
+    }
+  }
+
+  WaveExecutionState decoded_ds_load_addtid_state;
+  initialize_ds_load_addtid_state(&decoded_ds_load_addtid_state);
+  if (!Expect(interpreter.ExecuteProgram(ds_load_addtid_program,
+                                         &decoded_ds_load_addtid_state,
+                                         &decoded_ds_load_addtid_memory,
+                                         error_message),
+              "expected decoded DS ADDTID load execution success") ||
+      !Expect(expect_ds_load_addtid_state(decoded_ds_load_addtid_state),
+              "expected decoded DS ADDTID load state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_ds_load_addtid_program;
+  if (!Expect(interpreter.CompileProgram(ds_load_addtid_program,
+                                         &compiled_ds_load_addtid_program,
+                                         error_message),
+              "expected compiled DS ADDTID load program success") ||
+      !Expect(compiled_ds_load_addtid_program.size() == 2u,
+              "expected two compiled DS ADDTID load instructions") ||
+      !Expect(compiled_ds_load_addtid_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kDsLoadAddtidB32,
+              "expected compiled DS_LOAD_ADDTID_B32 opcode") ||
+      !Expect(compiled_ds_load_addtid_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after DS ADDTID load")) {
+    return false;
+  }
+
+  WaveExecutionState compiled_ds_load_addtid_state;
+  initialize_ds_load_addtid_state(&compiled_ds_load_addtid_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_load_addtid_program,
+                                         &compiled_ds_load_addtid_state,
+                                         &decoded_ds_load_addtid_memory,
+                                         error_message),
+              "expected compiled DS ADDTID load execution success") ||
+      !Expect(expect_ds_load_addtid_state(compiled_ds_load_addtid_state),
+              "expected compiled DS ADDTID load state")) {
+    return false;
+  }
+
+  return true;
+}
+
+bool RunDsStoreAddtidBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  const auto ds_store_addtid_words = MakeDs(176u, 0u, 13u, 22u, 44u, 0x24u);
+  const std::array<std::uint32_t, 3> ds_store_addtid_program_words{
+      ds_store_addtid_words[0],
+      ds_store_addtid_words[1],
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> ds_store_addtid_program;
+  if (!Expect(decoder.DecodeProgram(ds_store_addtid_program_words,
+                                    &ds_store_addtid_program, error_message),
+              "expected DS ADDTID store program decode success") ||
+      !Expect(ds_store_addtid_program.size() == 2u,
+              "expected two decoded DS ADDTID store instructions") ||
+      !Expect(ds_store_addtid_program[0].opcode == "DS_STORE_ADDTID_B32",
+              "expected decoded DS_STORE_ADDTID_B32 opcode") ||
+      !Expect(ds_store_addtid_program[0].operand_count == 3u,
+              "expected decoded DS_STORE_ADDTID_B32 operand count") ||
+      !Expect(ds_store_addtid_program[0].operands[0].kind == OperandKind::kVgpr &&
+                  ds_store_addtid_program[0].operands[0].index == 22u,
+              "expected decoded DS_STORE_ADDTID_B32 data VGPR") ||
+      !Expect(ds_store_addtid_program[0].operands[1].kind == OperandKind::kImm32 &&
+                  ds_store_addtid_program[0].operands[1].imm32 == 0x24u,
+              "expected decoded DS_STORE_ADDTID_B32 base immediate") ||
+      !Expect(ds_store_addtid_program[0].operands[2].kind == OperandKind::kSgpr &&
+                  ds_store_addtid_program[0].operands[2].index ==
+                      kM0RegisterIndex,
+              "expected decoded DS_STORE_ADDTID_B32 implicit M0 source") ||
+      !Expect(ds_store_addtid_program[1].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after DS ADDTID store")) {
+    return false;
+  }
+
+  auto initialize_ds_store_addtid_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0x80000005ull;
+    state->sgprs[kM0RegisterIndex] = 0xabcd9000u;
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      state->vgprs[22][lane] = 0x72000000u + static_cast<std::uint32_t>(lane);
+    }
+  };
+  auto expect_ds_store_addtid_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u && state.exec_mask == 0x80000005ull &&
+          state.sgprs[kM0RegisterIndex] == 0xabcd9000u && state.halted &&
+          !state.waiting_on_barrier && state.pc == 1u)) {
+      return false;
+    }
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      if (state.vgprs[22][lane] !=
+          0x72000000u + static_cast<std::uint32_t>(lane)) {
+        return false;
+      }
+    }
+    return true;
+  };
+  auto expect_ds_store_addtid_memory = [](LinearExecutionMemory* memory) {
+    constexpr std::uint64_t kActiveMask = 0x80000005ull;
+    for (std::uint32_t lane = 0; lane < 32u; ++lane) {
+      std::uint32_t value = 0;
+      if (!memory->LoadU32(0x9024u + lane * 4u, &value)) {
+        return false;
+      }
+      const bool active = (kActiveMask & (1ull << lane)) != 0u;
+      const std::uint32_t expected = active ? (0x72000000u + lane) : 0u;
+      if (value != expected) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  LinearExecutionMemory decoded_ds_store_addtid_memory(0x1000u, 0x9000u);
+  WaveExecutionState decoded_ds_store_addtid_state;
+  initialize_ds_store_addtid_state(&decoded_ds_store_addtid_state);
+  if (!Expect(interpreter.ExecuteProgram(ds_store_addtid_program,
+                                         &decoded_ds_store_addtid_state,
+                                         &decoded_ds_store_addtid_memory,
+                                         error_message),
+              "expected decoded DS ADDTID store execution success") ||
+      !Expect(expect_ds_store_addtid_state(decoded_ds_store_addtid_state),
+              "expected decoded DS ADDTID store state") ||
+      !Expect(expect_ds_store_addtid_memory(&decoded_ds_store_addtid_memory),
+              "expected decoded DS ADDTID store memory state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_ds_store_addtid_program;
+  if (!Expect(interpreter.CompileProgram(ds_store_addtid_program,
+                                         &compiled_ds_store_addtid_program,
+                                         error_message),
+              "expected compiled DS ADDTID store program success") ||
+      !Expect(compiled_ds_store_addtid_program.size() == 2u,
+              "expected two compiled DS ADDTID store instructions") ||
+      !Expect(compiled_ds_store_addtid_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kDsStoreAddtidB32,
+              "expected compiled DS_STORE_ADDTID_B32 opcode") ||
+      !Expect(compiled_ds_store_addtid_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after DS ADDTID store")) {
+    return false;
+  }
+
+  LinearExecutionMemory compiled_ds_store_addtid_memory(0x1000u, 0x9000u);
+  WaveExecutionState compiled_ds_store_addtid_state;
+  initialize_ds_store_addtid_state(&compiled_ds_store_addtid_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_store_addtid_program,
+                                         &compiled_ds_store_addtid_state,
+                                         &compiled_ds_store_addtid_memory,
+                                         error_message),
+              "expected compiled DS ADDTID store execution success") ||
+      !Expect(expect_ds_store_addtid_state(compiled_ds_store_addtid_state),
+              "expected compiled DS ADDTID store state") ||
+      !Expect(expect_ds_store_addtid_memory(&compiled_ds_store_addtid_memory),
+              "expected compiled DS ADDTID store memory state")) {
+    return false;
+  }
+
+  return true;
+}
+
 bool RunDsLoadD16BatchTest(
     const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
     const mirage::sim::isa::Gfx1201Interpreter& interpreter,
@@ -13942,7 +14182,13 @@ int main() {
   if (!RunDsLoadBatchTest(decoder, interpreter, &error_message)) {
     return 1;
   }
+  if (!RunDsLoadAddtidBatchTest(decoder, interpreter, &error_message)) {
+    return 1;
+  }
   if (!RunDsStoreBatchTest(decoder, interpreter, &error_message)) {
+    return 1;
+  }
+  if (!RunDsStoreAddtidBatchTest(decoder, interpreter, &error_message)) {
     return 1;
   }
   if (!RunDsLoadD16BatchTest(decoder, interpreter, &error_message)) {

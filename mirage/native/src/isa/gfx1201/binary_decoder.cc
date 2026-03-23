@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 514> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 516> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -185,6 +185,7 @@ constexpr std::array<std::string_view, 514> kPhase0ExecutableOpcodes{{
     "DS_MSKOR_RTN_B64",
     "DS_MSKOR_B64",
     "DS_LOAD_B32",
+    "DS_LOAD_ADDTID_B32",
     "DS_LOAD_B64",
     "DS_LOAD_B96",
     "DS_LOAD_B128",
@@ -201,6 +202,7 @@ constexpr std::array<std::string_view, 514> kPhase0ExecutableOpcodes{{
     "DS_STORE_B8",
     "DS_STORE_B16",
     "DS_STORE_B32",
+    "DS_STORE_ADDTID_B32",
     "DS_STORE_B64",
     "DS_STORE_B96",
     "DS_STORE_B128",
@@ -1520,6 +1522,46 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       }
     }
     *words_consumed = 2;
+  } else if (instruction_name == "DS_LOAD_ADDTID_B32") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = "DS_LOAD_ADDTID_B32 requires 2 dwords";
+      }
+      return false;
+    }
+    if (ExtractBits(word, 16, 1) != 0u) {
+      if (error_message != nullptr) {
+        *error_message =
+            "DS_LOAD_ADDTID_B32 GDS mode is out of scope for phase-0";
+      }
+      return false;
+    }
+    if (ExtractBits(word, 8, 8) != 0u) {
+      if (error_message != nullptr) {
+        *error_message =
+            "DS_LOAD_ADDTID_B32 requires offset1 == 0 on the phase-0 path";
+      }
+      return false;
+    }
+
+    InstructionOperand vdst;
+    if (!DecodeVectorDestination(ExtractBits(words[1], 24, 8), &vdst,
+                                 error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::ThreeOperand(
+        instruction_name, DescribeVectorDestinationOperand(vdst),
+        InstructionOperand::Imm32(ExtractBits(word, 0, 8))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource0,
+                                                   OperandSlotKind::kSource0,
+                                                   8u)),
+        InstructionOperand::Sgpr(
+            kM0RegisterIndex,
+            MakeScalarRegisterDescriptor(OperandRole::kUnknown,
+                                         OperandSlotKind::kUnknown,
+                                         OperandAccess::kRead, 32, 1, true)));
+    *words_consumed = 2;
   } else if (instruction_name == "DS_LOAD_B32" ||
              instruction_name == "DS_LOAD_B64" ||
              instruction_name == "DS_LOAD_B96" ||
@@ -1592,6 +1634,48 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
             .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource1,
                                                    OperandSlotKind::kSource1,
                                                    8u)));
+    *words_consumed = 2;
+  } else if (instruction_name == "DS_STORE_ADDTID_B32") {
+    if (words.size() < 2u) {
+      if (error_message != nullptr) {
+        *error_message = "DS_STORE_ADDTID_B32 requires 2 dwords";
+      }
+      return false;
+    }
+    if (ExtractBits(word, 16, 1) != 0u) {
+      if (error_message != nullptr) {
+        *error_message =
+            "DS_STORE_ADDTID_B32 GDS mode is out of scope for phase-0";
+      }
+      return false;
+    }
+    if (ExtractBits(word, 8, 8) != 0u) {
+      if (error_message != nullptr) {
+        *error_message =
+            "DS_STORE_ADDTID_B32 requires offset1 == 0 on the phase-0 path";
+      }
+      return false;
+    }
+
+    InstructionOperand vdata;
+    if (!DecodeVectorRegisterSource(ExtractBits(words[1], 8, 8), &vdata,
+                                    error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::ThreeOperand(
+        instruction_name,
+        DescribeSourceOperand(vdata, OperandRole::kSource0,
+                              OperandSlotKind::kSource0),
+        InstructionOperand::Imm32(ExtractBits(word, 0, 8))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource1,
+                                                   OperandSlotKind::kSource1,
+                                                   8u)),
+        InstructionOperand::Sgpr(
+            kM0RegisterIndex,
+            MakeScalarRegisterDescriptor(OperandRole::kUnknown,
+                                         OperandSlotKind::kUnknown,
+                                         OperandAccess::kRead, 32, 1, true)));
     *words_consumed = 2;
   } else if (instruction_name == "DS_STORE_B8" ||
              instruction_name == "DS_STORE_B16" ||

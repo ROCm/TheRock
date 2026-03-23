@@ -15,6 +15,8 @@
 
 namespace {
 
+constexpr std::uint16_t kM0RegisterIndex = 124u;
+
 bool Expect(bool condition, const char* message) {
   if (!condition) {
     std::cerr << message << '\n';
@@ -207,7 +209,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 514u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 516u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -417,6 +419,8 @@ int main() {
               "expected DS_SUB_CLAMP_U32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_B32"),
               "expected DS_LOAD_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_ADDTID_B32"),
+              "expected DS_LOAD_ADDTID_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_B64"),
               "expected DS_LOAD_B64 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_LOAD_B96"),
@@ -449,6 +453,8 @@ int main() {
               "expected DS_STORE_B16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B32"),
               "expected DS_STORE_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_ADDTID_B32"),
+              "expected DS_STORE_ADDTID_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B64"),
               "expected DS_STORE_B64 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B96"),
@@ -1552,6 +1558,30 @@ int main() {
     return 1;
   }
 
+  const auto ds_load_addtid_b32_words = MakeDs(177u, 58u, 60u, 61u, 62u, 0x57u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(ds_load_addtid_b32_words.data(),
+                                                 ds_load_addtid_b32_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected DS_LOAD_ADDTID_B32 decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected DS_LOAD_ADDTID_B32 two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "DS_LOAD_ADDTID_B32",
+              "expected DS_LOAD_ADDTID_B32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected DS_LOAD_ADDTID_B32 ternary decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 58u,
+              "expected DS_LOAD_ADDTID_B32 destination VGPR") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[1].imm32 == 0x57u,
+              "expected DS_LOAD_ADDTID_B32 immediate base") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[2].index == kM0RegisterIndex,
+              "expected DS_LOAD_ADDTID_B32 implicit M0 source")) {
+    return 1;
+  }
+
   const auto ds_store_b128_words = MakeDs(223u, 59u, 60u, 61u, 62u, 0x34u);
   if (!Expect(decoder.DecodeInstruction(
                   std::span<const std::uint32_t>(ds_store_b128_words.data(),
@@ -1573,6 +1603,32 @@ int main() {
       !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
                   decoded_instruction.operands[2].imm32 == 0x34u,
               "expected DS_STORE_B128 offset0")) {
+    return 1;
+  }
+
+  const auto ds_store_addtid_b32_words =
+      MakeDs(176u, 59u, 60u, 61u, 62u, 0x58u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(
+                      ds_store_addtid_b32_words.data(),
+                      ds_store_addtid_b32_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected DS_STORE_ADDTID_B32 decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected DS_STORE_ADDTID_B32 two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "DS_STORE_ADDTID_B32",
+              "expected DS_STORE_ADDTID_B32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected DS_STORE_ADDTID_B32 ternary decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 61u,
+              "expected DS_STORE_ADDTID_B32 data VGPR") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[1].imm32 == 0x58u,
+              "expected DS_STORE_ADDTID_B32 immediate base") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kSgpr &&
+                  decoded_instruction.operands[2].index == kM0RegisterIndex,
+              "expected DS_STORE_ADDTID_B32 implicit M0 source")) {
     return 1;
   }
 
@@ -2429,7 +2485,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 514u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 516u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -2709,6 +2765,8 @@ int main() {
               "expected interpreter support for DS_XOR_RTN_B64") ||
       !Expect(interpreter.Supports("DS_LOAD_B32"),
               "expected interpreter support for DS_LOAD_B32") ||
+      !Expect(interpreter.Supports("DS_LOAD_ADDTID_B32"),
+              "expected interpreter support for DS_LOAD_ADDTID_B32") ||
       !Expect(interpreter.Supports("DS_LOAD_B64"),
               "expected interpreter support for DS_LOAD_B64") ||
       !Expect(interpreter.Supports("DS_LOAD_B96"),
@@ -2741,6 +2799,8 @@ int main() {
               "expected interpreter support for DS_STORE_B16") ||
       !Expect(interpreter.Supports("DS_STORE_B32"),
               "expected interpreter support for DS_STORE_B32") ||
+      !Expect(interpreter.Supports("DS_STORE_ADDTID_B32"),
+              "expected interpreter support for DS_STORE_ADDTID_B32") ||
       !Expect(interpreter.Supports("DS_STORE_B64"),
               "expected interpreter support for DS_STORE_B64") ||
       !Expect(interpreter.Supports("DS_STORE_B96"),
