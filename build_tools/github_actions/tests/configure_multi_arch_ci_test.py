@@ -240,11 +240,11 @@ class TestDecideJobs(unittest.TestCase):
         """All job groups are set to run (subgraph selection is Phase 4)."""
         result = cm.decide_jobs(self._inputs(), git_context=cm.GitContext())
         self.assertIsInstance(result, cm.JobDecisions)
-        self.assertEqual(result.build_rocm.action, "run")
-        self.assertEqual(result.test_rocm.action, "run")
-        self.assertEqual(result.build_rocm_python.action, "run")
-        self.assertEqual(result.build_pytorch.action, "run")
-        self.assertEqual(result.test_pytorch.action, "run")
+        self.assertEqual(result.build_rocm.action, cm.JobAction.RUN)
+        self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+        self.assertEqual(result.build_rocm_python.action, cm.JobAction.RUN)
+        self.assertEqual(result.build_pytorch.action, cm.JobAction.RUN)
+        self.assertEqual(result.test_pytorch.action, cm.JobAction.RUN)
 
     def test_default_test_type_is_quick(self):
         """Default test_type for PR/push with no special conditions."""
@@ -341,16 +341,11 @@ class TestDecideJobs(unittest.TestCase):
     def test_build_rocm_stage_partitioning(self):
         """BuildRocmDecision correctly partitions stages into prebuilt/rebuild."""
         decision = cm.BuildRocmDecision(
-            action="run",
-            reason="source changes",
+            action=cm.JobAction.RUN,
             stage_decisions={
-                "foundation": cm.StageDecision(action="prebuilt", reason="no changes"),
-                "compiler-runtime": cm.StageDecision(
-                    action="prebuilt", reason="no changes"
-                ),
-                "math-libs": cm.StageDecision(
-                    action="rebuild", reason="rocm-libraries changed"
-                ),
+                "foundation": cm.JobAction.PREBUILT,
+                "compiler-runtime": cm.JobAction.PREBUILT,
+                "math-libs": cm.JobAction.RUN,
             },
         )
         self.assertEqual(
@@ -702,13 +697,11 @@ class TestFormatSummary(unittest.TestCase):
 
     def test_normal_summary_does_not_raise(self):
         jobs = cm.JobDecisions(
-            build_rocm=cm.BuildRocmDecision(action="run", reason="default"),
-            test_rocm=cm.TestRocmDecision(
-                action="run", reason="default", test_type="full"
-            ),
-            build_rocm_python=cm.JobGroupDecision(action="run", reason="default"),
-            build_pytorch=cm.JobGroupDecision(action="run", reason="default"),
-            test_pytorch=cm.JobGroupDecision(action="run", reason="default"),
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
+            test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN, test_type="full"),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
         )
         outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
         format_summary(self._inputs(), cm.GitContext(), outputs)
@@ -757,11 +750,11 @@ class TestConfigurePipeline(unittest.TestCase):
             windows_families=[],
         )
         mock_jobs.return_value = cm.JobDecisions(
-            build_rocm=cm.BuildRocmDecision(action="run", reason="default"),
-            test_rocm=cm.TestRocmDecision(action="run", reason="default"),
-            build_rocm_python=cm.JobGroupDecision(action="run", reason="default"),
-            build_pytorch=cm.JobGroupDecision(action="run", reason="default"),
-            test_pytorch=cm.JobGroupDecision(action="run", reason="default"),
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
+            test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
         )
         mock_expand.return_value = cm.BuildConfigs()
 

@@ -46,11 +46,12 @@ Outputs (written to GITHUB_OUTPUT):
     test_type             : "quick", "standard", "comprehensive", or "full"
 """
 
+import enum
 import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+
 
 from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
 from configure_ci_path_filters import (
@@ -255,27 +256,28 @@ class TargetSelection:
 # ---------------------------------------------------------------------------
 
 
+class JobAction(enum.Enum):
+    """Action for a node in the CI job graph or a build stage."""
+
+    RUN = "run"
+    PREBUILT = "prebuilt"
+    SKIP = "skip"
+
+
 @dataclass(frozen=True)
 class JobGroupDecision:
-    """Decision for one node in the CI job graph."""
+    """Decision for one node in the CI job graph.
 
-    action: Literal["run", "prebuilt", "skip"]
-    reason: str
+    Nodes may inherit from this base class to add additional options."""
 
-
-@dataclass(frozen=True)
-class StageDecision:
-    """Decision for a single build stage within build-rocm."""
-
-    action: Literal["rebuild", "prebuilt"]
-    reason: str
+    action: JobAction
 
 
 @dataclass(frozen=True)
 class BuildRocmDecision(JobGroupDecision):
     """Build-rocm job group with per-stage granularity."""
 
-    stage_decisions: dict[str, StageDecision] = field(default_factory=dict)
+    stage_decisions: dict[str, JobAction] = field(default_factory=dict)
     # Run ID to fetch prebuilt stage artifacts from. Currently passed through
     # from workflow_dispatch input; TODO(#3399): derive automatically from
     # the current commit's parent workflow run.
@@ -284,13 +286,17 @@ class BuildRocmDecision(JobGroupDecision):
     @property
     def prebuilt_stages(self) -> list[str]:
         return [
-            name for name, d in self.stage_decisions.items() if d.action == "prebuilt"
+            name
+            for name, action in self.stage_decisions.items()
+            if action == JobAction.PREBUILT
         ]
 
     @property
     def rebuild_stages(self) -> list[str]:
         return [
-            name for name, d in self.stage_decisions.items() if d.action == "rebuild"
+            name
+            for name, action in self.stage_decisions.items()
+            if action == JobAction.RUN
         ]
 
 
@@ -330,11 +336,11 @@ class JobDecisions:
             f"  test_type: {self.test_rocm.test_type} "
             f"({self.test_rocm.test_type_reason})"
         )
-        print(f"  build_rocm: {self.build_rocm.action}")
-        print(f"  test_rocm: {self.test_rocm.action}")
-        print(f"  build_rocm_python: {self.build_rocm_python.action}")
-        print(f"  build_pytorch: {self.build_pytorch.action}")
-        print(f"  test_pytorch: {self.test_pytorch.action}")
+        print(f"  build_rocm: {self.build_rocm.action.value}")
+        print(f"  test_rocm: {self.test_rocm.action.value}")
+        print(f"  build_rocm_python: {self.build_rocm_python.action.value}")
+        print(f"  build_pytorch: {self.build_pytorch.action.value}")
+        print(f"  test_pytorch: {self.test_pytorch.action.value}")
 
 
 @dataclass(frozen=True)
@@ -545,47 +551,43 @@ def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
 ) -> JobDecisions:
-    """Determine which job groups to run, skip, or satisfy with prebuilt files.
+    """Determine which job groups to run, skip, or satisfy with prebuilt files."""
 
-    All job groups currently run unconditionally. test_type is determined
-    based on trigger type, labels, and changed files.
+    # Build ROCm.
+    # TODO(#3399): Use changed files and build_topology.py to:
+    #   1. set per-stage prebuilt decisions
+    #   2. skip job groups that aren't reachable from the changed files
+    # Parse explicit prebuilt stages from workflow_dispatch input.
+    stage_decisions: dict[str, JobAction] = {}
+    if ci_inputs.prebuilt_stages:
+        for stage in _parse_comma_list(ci_inputs.prebuilt_stages):
+            stage_decisions[stage] = JobAction.PREBUILT
+    build_rocm = BuildRocmDecision(
+        action=JobAction.RUN,
+        stage_decisions=stage_decisions,
+        baseline_run_id=ci_inputs.baseline_run_id,
+    )
 
-    TODO(#3399): Use changed files and BUILD_TOPOLOGY.toml to set per-stage
-    prebuilt decisions in BuildRocmDecision.stage_decisions, and skip job
-    groups that aren't reachable from the changed files.
-    """
+    # Test ROCm.
     test_type, test_type_reason = _determine_test_type(
         ci_inputs=ci_inputs,
         git_context=git_context,
     )
+    test_rocm = TestRocmDecision(
+        action=JobAction.RUN,
+        test_type=test_type,
+        test_type_reason=test_type_reason,
+    )
 
-    # Parse explicit prebuilt stages from workflow_dispatch input.
-    # TODO(#3399): Also derive prebuilt stages automatically from changed
-    # files and BUILD_TOPOLOGY.toml for pull_request triggers.
-    stage_decisions: dict[str, StageDecision] = {}
-    if ci_inputs.prebuilt_stages:
-        for stage in _parse_comma_list(ci_inputs.prebuilt_stages):
-            stage_decisions[stage] = StageDecision(
-                action="prebuilt",
-                reason="explicit workflow_dispatch input",
-            )
+    # Other jobs run unconditionally with no configuration.
+    # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
 
     return JobDecisions(
-        build_rocm=BuildRocmDecision(
-            action="run",
-            reason="default",
-            stage_decisions=stage_decisions,
-            baseline_run_id=ci_inputs.baseline_run_id,
-        ),
-        test_rocm=TestRocmDecision(
-            action="run",
-            reason="default",
-            test_type=test_type,
-            test_type_reason=test_type_reason,
-        ),
-        build_rocm_python=JobGroupDecision(action="run", reason="default"),
-        build_pytorch=JobGroupDecision(action="run", reason="default"),
-        test_pytorch=JobGroupDecision(action="run", reason="default"),
+        build_rocm=build_rocm,
+        test_rocm=test_rocm,
+        build_rocm_python=JobGroupDecision(action=JobAction.RUN),
+        build_pytorch=JobGroupDecision(action=JobAction.RUN),
+        test_pytorch=JobGroupDecision(action=JobAction.RUN),
     )
 
 
