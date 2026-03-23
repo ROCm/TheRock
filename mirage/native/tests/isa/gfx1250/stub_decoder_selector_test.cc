@@ -405,6 +405,13 @@ int main() {
               "expected empty instruction name to stay excluded from all routed selector surfaces")) {
     return 1;
   }
+  if (!Expect(SelectStubDecoderRoute("v_pk_add_bf16") ==
+                      StubDecoderRoute::kUnsupported &&
+                  FindStubDecoderRouteInfo("v_pk_add_bf16") == nullptr &&
+                  !ListedInAnyRoute("v_pk_add_bf16"),
+              "expected lowercase known opcode to stay excluded from all routed selector surfaces")) {
+    return 1;
+  }
 
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
     const StubDecoderRoute expected_route =

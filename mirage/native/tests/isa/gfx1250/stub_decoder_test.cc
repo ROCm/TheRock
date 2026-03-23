@@ -7275,6 +7275,9 @@ int main() {
                   "NO_SUCH_GFX1250_OPCODE",
                   StubDecodeStatus::kUnknownInstruction) &&
                   MatchesSelectorDecodeStatusParity(
+                      "v_pk_add_bf16",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
                       "", StubDecodeStatus::kUnknownInstruction),
               "expected selector and decode surfaces to agree on unknown-name status")) {
     return 1;
@@ -7291,6 +7294,22 @@ int main() {
     if (!Expect(MatchesUnknownDecode(via_entrypoint, "") &&
                     MatchesUnknownHelperSurface(via_entrypoint),
                 "expected empty instruction name to keep exact route-keyed unknown parity")) {
+      return 1;
+    }
+  }
+  const StubDecodedInstruction lowercase_instruction =
+      DecodeStubInstruction("v_pk_add_bf16");
+  if (!Expect(MatchesUnknownDecode(lowercase_instruction, "v_pk_add_bf16") &&
+                  MatchesUnknownHelperSurface(lowercase_instruction),
+              "expected lowercase known opcode to keep exact unknown decode parity")) {
+    return 1;
+  }
+  for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
+    const StubDecodedInstruction via_entrypoint =
+        DecodeViaExplicitRouteEntrypoint(manifest.route, "v_pk_add_bf16");
+    if (!Expect(MatchesUnknownDecode(via_entrypoint, "v_pk_add_bf16") &&
+                    MatchesUnknownHelperSurface(via_entrypoint),
+                "expected lowercase known opcode to keep exact route-keyed unknown parity")) {
       return 1;
     }
   }
