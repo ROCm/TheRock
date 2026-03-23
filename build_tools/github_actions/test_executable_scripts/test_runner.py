@@ -230,6 +230,8 @@ def main():
             file=sys.stderr,
         )
         category = "quick"
+    elif test_component_job_name == "miopen":
+        category = "standard"
 
     # Use AMDGPU_FAMILIES from environment variable, extract gfx<xxx> part
     gpu_arch = ""
