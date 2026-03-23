@@ -6,7 +6,7 @@
 
 This script is a pipeline of data transformations:
 
-    1. Parse Inputs    — read GitHub event context → CIInputs
+    1. Parse Inputs    — read GitHub event context → CIInputs, GitContext
     2. Check Skip CI   — gate: should we skip CI entirely?
     3. Decide Jobs     — changed files + topology → per-job-group decisions
     4. Select Targets  — trigger type + labels → per-platform GPU families
@@ -21,6 +21,8 @@ The CI pipeline is a DAG of job groups:
     build-rocm → test-rocm
                → build-rocm-python → build-pytorch → test-pytorch
                                    → build-jax     → test-jax (future)
+               → build-native-linux   → test-native-linux   (future)
+               → build-native-windows → test-native-windows (future)
 
 Step 4 determines which job groups to run, skip, or satisfy with prebuilt
 artifacts. Within build-rocm, per-stage rebuild/prebuilt granularity is
@@ -427,21 +429,21 @@ def should_skip_ci(
     - pull_request without 'ci:run-multi-arch' label (opt-in during transition)
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
-
-    schedule and workflow_dispatch always proceed (changed_files is None
-    for those triggers, and they have no PR labels).
     """
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
         return True
 
     # Multi-arch CI on PRs requires explicit opt-in via label to avoid
-    # doubling CI load during the transition. See #3337.
+    # doubling CI load during the transition.
+    # See https://github.com/ROCm/TheRock/issues/3337.
     if ci_inputs.is_pull_request and "ci:run-multi-arch" not in ci_inputs.pr_labels:
         print("  Skipping: PR without 'ci:run-multi-arch' label")
         return True
 
-    # changed_files is None for schedule/workflow_dispatch — always proceed.
+    # If we have a list of changed files (push/pull_request events), check if
+    # CI should run for that set of changed files. For example: if only .md
+    # files are changed, skip CI.
     if git_context.changed_files is not None:
         print(
             f"  Checking {len(git_context.changed_files)} changed file(s) "
@@ -450,6 +452,8 @@ def should_skip_ci(
         if not is_ci_run_required(git_context.changed_files):
             print("  Skipping: no CI-relevant files changed")
             return True
+        else:
+            print("  CI-relevant files changed, running CI")
 
     return False
 
@@ -927,12 +931,13 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 def main():
     ci_inputs = CIInputs.from_environ()
 
-    # Build git context for push/PR triggers (need changed files for
-    # ci:skip and test_type decisions). Schedule/workflow_dispatch don't
-    # need git data.
     if ci_inputs.is_pull_request or ci_inputs.is_push:
+        # 'pull_request' and 'push' events can use the list of changed files
+        # compared to the "prior commit" to affect job selections/options.
         git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)
     else:
+        # 'workflow_dispatch' and 'schedule' events don't have as natural
+        # a "prior commit" to compare against.
         git_context = GitContext.empty()
 
     outputs = configure(ci_inputs, git_context)
