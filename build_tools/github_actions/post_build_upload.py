@@ -35,7 +35,7 @@ import subprocess
 import sys
 import tarfile
 
-from github_actions_utils import gha_append_step_summary, str2bool
+from github_actions_api import gha_append_step_summary, str2bool
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()

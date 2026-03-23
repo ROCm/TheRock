@@ -13,15 +13,6 @@ unmatched_exclude = [
 #   lib/llvm/clang : Contains a prefix like tree that must always be
 #     accessible for library use, regardless of file type/association
 #     (and should be excluded from other components).
-[components.dbg."compiler/amd-llvm/stage"]
-[components.dev."compiler/amd-llvm/stage"]
-include = [
-  "lib/llvm/share/libc++/**",
-]
-exclude = [
-  "lib/llvm/lib/clang/**",
-]
-[components.doc."compiler/amd-llvm/stage"]
 [components.lib."compiler/amd-llvm/stage"]
 include = [
   "lib/llvm/amdgcn/**",
@@ -33,7 +24,6 @@ include = [
 force_include = [
   "lib/llvm/lib/clang/**",
 ]
-
 [components.run."compiler/amd-llvm/stage"]
 include = [
   "lib/llvm/bin/**",
@@ -43,19 +33,28 @@ include = [
 exclude = [
   "lib/llvm/lib/clang/**",
 ]
+[components.dbg."compiler/amd-llvm/stage"]
+[components.dev."compiler/amd-llvm/stage"]
+include = [
+  "lib/llvm/share/libc++/**",
+]
+exclude = [
+  "lib/llvm/lib/clang/**",
+]
+[components.doc."compiler/amd-llvm/stage"]
 
 # comgr and hipcc are considered part of the LLVM artifact (they are separated
 # in the build tree because they need to be built separately in order to
 # install to different prefixes).
+[components.lib."compiler/amd-comgr/stage"]
+[components.run."compiler/amd-comgr/stage"]
 [components.dbg."compiler/amd-comgr/stage"]
 [components.dev."compiler/amd-comgr/stage"]
 [components.doc."compiler/amd-comgr/stage"]
-[components.lib."compiler/amd-comgr/stage"]
-[components.run."compiler/amd-comgr/stage"]
 
 # hipcc
+[components.lib."compiler/hipcc/stage"]
+[components.run."compiler/hipcc/stage"]
 [components.dbg."compiler/hipcc/stage"]
 [components.dev."compiler/hipcc/stage"]
 [components.doc."compiler/hipcc/stage"]
-[components.lib."compiler/hipcc/stage"]
-[components.run."compiler/hipcc/stage"]

@@ -65,11 +65,6 @@ def parse_components(components: list[str]) -> list[list]:
             "rocm-cmake",
         ]
 
-    if "profiler" in components:
-        system_projects += [
-            "rocprof-trace-decoder",
-        ]
-
     if "rocm-libraries" in components:
         arguments.append("--include-rocm-libraries")
         arguments.append("--include-ml-frameworks")
