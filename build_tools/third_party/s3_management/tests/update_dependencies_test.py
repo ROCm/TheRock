@@ -1,7 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import os
+import sys
+from pathlib import Path
+
 import pytest
+
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from update_dependencies import is_wheel_allowed
 
