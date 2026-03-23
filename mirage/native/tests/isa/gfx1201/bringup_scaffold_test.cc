@@ -205,7 +205,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 497u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 498u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -453,6 +453,8 @@ int main() {
               "expected DS_STORE_B8_D16_HI executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_STORE_B16_D16_HI"),
               "expected DS_STORE_B16_D16_HI executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_SWIZZLE_B32"),
+              "expected DS_SWIZZLE_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_PK_ADD_RTN_F16"),
               "expected DS_PK_ADD_RTN_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_PK_ADD_F16"),
@@ -1591,6 +1593,31 @@ int main() {
     return 1;
   }
 
+  const auto ds_swizzle_b32_words =
+      MakeDs(53u, 59u, 60u, 61u, 62u, 0x1fu, 0x04u);
+  if (!Expect(decoder.DecodeInstruction(
+                  std::span<const std::uint32_t>(ds_swizzle_b32_words.data(),
+                                                 ds_swizzle_b32_words.size()),
+                  &decoded_instruction, &words_consumed, &error_message),
+              "expected DS_SWIZZLE_B32 decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected DS_SWIZZLE_B32 two dwords consumed") ||
+      !Expect(decoded_instruction.opcode == "DS_SWIZZLE_B32",
+              "expected DS_SWIZZLE_B32 opcode") ||
+      !Expect(decoded_instruction.operand_count == 3u,
+              "expected DS_SWIZZLE_B32 three-operand decode") ||
+      !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[0].index == 59u,
+              "expected DS_SWIZZLE_B32 destination VGPR") ||
+      !Expect(decoded_instruction.operands[1].kind == OperandKind::kVgpr &&
+                  decoded_instruction.operands[1].index == 60u,
+              "expected DS_SWIZZLE_B32 source VGPR") ||
+      !Expect(decoded_instruction.operands[2].kind == OperandKind::kImm32 &&
+                  decoded_instruction.operands[2].imm32 == 0x041fu,
+              "expected DS_SWIZZLE_B32 combined swizzle pattern")) {
+    return 1;
+  }
+
   const auto ds_cond_sub_rtn_u32_words =
       MakeDs(168u, 59u, 60u, 61u, 62u, 0x39u);
   if (!Expect(decoder.DecodeInstruction(
@@ -2218,7 +2245,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 497u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 498u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -2512,6 +2539,8 @@ int main() {
               "expected interpreter support for DS_STORE_B8_D16_HI") ||
       !Expect(interpreter.Supports("DS_STORE_B16_D16_HI"),
               "expected interpreter support for DS_STORE_B16_D16_HI") ||
+      !Expect(interpreter.Supports("DS_SWIZZLE_B32"),
+              "expected interpreter support for DS_SWIZZLE_B32") ||
       !Expect(interpreter.Supports("S_LOAD_B32"),
               "expected interpreter support for S_LOAD_B32") ||
       !Expect(interpreter.Supports("S_LOAD_B64"),

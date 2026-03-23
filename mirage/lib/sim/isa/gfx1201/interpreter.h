@@ -157,6 +157,7 @@ enum class Gfx1201CompiledOpcode : std::uint16_t {
   kDsStoreB128,
   kDsStoreB8D16Hi,
   kDsStoreB16D16Hi,
+  kDsSwizzleB32,
   kSLoadB32,
   kSLoadB64,
   kSLoadB96,

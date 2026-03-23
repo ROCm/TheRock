@@ -3530,6 +3530,8 @@ constexpr std::array<DsStoreD16Case, 2> kDsStoreD16Cases{{
      0x010u, false},
 }};
 
+constexpr std::uint32_t kDsSwizzlePattern = 0x041fu;
+
 std::uint64_t DsCaseBaseAddress(std::size_t case_index) {
   return kDsBaseAddress + static_cast<std::uint64_t>(case_index) * 0x100u;
 }
@@ -3555,6 +3557,33 @@ std::uint64_t DsLoadLaneBaseAddress(std::size_t case_index, std::size_t lane) {
 
 bool IsDsLaneActive(std::size_t lane) {
   return (kDsExecMask & (1ull << lane)) != 0u;
+}
+
+std::uint32_t InitialDsSwizzleSourceValue(std::size_t lane) {
+  return 0x1000u + static_cast<std::uint32_t>(lane) * 0x10u;
+}
+
+std::uint32_t InitialDsSwizzleDestValue(std::size_t lane) {
+  return 0xd00d0000u + static_cast<std::uint32_t>(lane);
+}
+
+std::uint32_t ExpectedDsSwizzleValue(std::size_t lane) {
+  if (lane == 0u) {
+    return InitialDsSwizzleSourceValue(1u);
+  }
+  if (lane == 1u) {
+    return InitialDsSwizzleSourceValue(0u);
+  }
+  if (lane == 3u) {
+    return 0u;
+  }
+  if (lane == 30u) {
+    return InitialDsSwizzleSourceValue(31u);
+  }
+  if (lane == 31u) {
+    return InitialDsSwizzleSourceValue(30u);
+  }
+  return InitialDsSwizzleDestValue(lane);
 }
 
 std::uint64_t DsStoreCaseBaseAddress(std::size_t case_index) {
@@ -5742,6 +5771,103 @@ bool RunDsStoreD16BatchTest(
               "expected compiled DS D16 store state") ||
       !Expect(expect_ds_memory(&compiled_ds_memory),
               "expected compiled DS D16 store memory state")) {
+    return false;
+  }
+
+  return true;
+}
+
+bool RunDsSwizzleBatchTest(
+    const mirage::sim::isa::Gfx1201BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx1201Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  const auto ds_nop_words = MakeDs(20u, 0u, 0u, 0u, 0u, 0u);
+  const auto ds_swizzle_words =
+      MakeDs(53u, 40u, 41u, 42u, 43u, 0x1fu, 0x04u);
+
+  const std::vector<std::uint32_t> ds_program_words = {
+      ds_nop_words[0], ds_nop_words[1],
+      ds_swizzle_words[0], ds_swizzle_words[1],
+      MakeSopp(48u),
+  };
+
+  std::vector<DecodedInstruction> ds_program;
+  if (!Expect(decoder.DecodeProgram(ds_program_words, &ds_program, error_message),
+              "expected DS swizzle batch decode success") ||
+      !Expect(ds_program.size() == 3u,
+              "expected decoded DS swizzle instruction count") ||
+      !Expect(ds_program.front().opcode == "DS_NOP",
+              "expected decoded DS_NOP at swizzle batch start") ||
+      !Expect(ds_program[1].opcode == "DS_SWIZZLE_B32",
+              "expected decoded DS_SWIZZLE_B32 opcode") ||
+      !Expect(ds_program.back().opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after DS swizzle batch")) {
+    return false;
+  }
+
+  auto initialize_ds_state = [](WaveExecutionState* state) {
+    state->exec_mask = kDsExecMask | (1ull << 30) | (1ull << 31);
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      state->vgprs[40][lane] = InitialDsSwizzleDestValue(lane);
+      state->vgprs[41][lane] = InitialDsSwizzleSourceValue(lane);
+    }
+  };
+
+  auto expect_ds_state = [](const WaveExecutionState& state) {
+    if (!(state.lane_count == 32u &&
+          state.exec_mask == (kDsExecMask | (1ull << 30) | (1ull << 31)) &&
+          state.halted &&
+          !state.waiting_on_barrier && state.pc == 2u)) {
+      return false;
+    }
+    for (std::size_t lane = 0; lane < 32u; ++lane) {
+      if (state.vgprs[41][lane] != InitialDsSwizzleSourceValue(lane)) {
+        return false;
+      }
+      if (state.vgprs[40][lane] != ExpectedDsSwizzleValue(lane)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  WaveExecutionState decoded_ds_state;
+  initialize_ds_state(&decoded_ds_state);
+  if (!Expect(interpreter.ExecuteProgram(ds_program, &decoded_ds_state,
+                                         error_message),
+              "expected decoded DS swizzle execution success") ||
+      !Expect(expect_ds_state(decoded_ds_state),
+              "expected decoded DS swizzle state")) {
+    return false;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_ds_program;
+  if (!Expect(interpreter.CompileProgram(ds_program, &compiled_ds_program,
+                                         error_message),
+              "expected compiled DS swizzle program success") ||
+      !Expect(compiled_ds_program.size() == 3u,
+              "expected compiled DS swizzle instruction count") ||
+      !Expect(compiled_ds_program.front().opcode == Gfx1201CompiledOpcode::kSNop,
+              "expected compiled DS swizzle NOP as kSNop") ||
+      !Expect(compiled_ds_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kDsSwizzleB32,
+              "expected compiled DS swizzle opcode") ||
+      !Expect(compiled_ds_program.back().opcode ==
+                  Gfx1201CompiledOpcode::kSEndpgm,
+              "expected compiled S_ENDPGM after DS swizzle batch")) {
+    return false;
+  }
+
+  WaveExecutionState compiled_ds_state;
+  initialize_ds_state(&compiled_ds_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_program,
+                                         &compiled_ds_state,
+                                         error_message),
+              "expected compiled DS swizzle execution success") ||
+      !Expect(expect_ds_state(compiled_ds_state),
+              "expected compiled DS swizzle state")) {
     return false;
   }
 
@@ -13267,6 +13393,9 @@ int main() {
     return 1;
   }
   if (!RunDsStoreD16BatchTest(decoder, interpreter, &error_message)) {
+    return 1;
+  }
+  if (!RunDsSwizzleBatchTest(decoder, interpreter, &error_message)) {
     return 1;
   }
 
