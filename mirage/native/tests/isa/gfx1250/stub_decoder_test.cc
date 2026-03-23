@@ -7603,6 +7603,18 @@ int main() {
                 "expected route-info decode to preserve caller metadata while keeping structural parity")) {
       return 1;
     }
+    StubDecoderRouteInfo synthetic_invalid_hint = synthetic;
+    synthetic_invalid_hint.route_name = "kSyntheticRouteInvalidHint";
+    synthetic_invalid_hint.route_priority = route_info.route_priority + 150u;
+    synthetic_invalid_hint.decode_hint = static_cast<DecodeSeedHint>(99);
+    const StubDecodedInstruction via_invalid_hint =
+        DecodeStubInstruction(synthetic_invalid_hint);
+    if (!Expect(
+            MatchesRouteInfoPayload(via_invalid_hint, synthetic_invalid_hint) &&
+                MatchesDecodedInstructionStructure(via_invalid_hint, via_name),
+            "expected routed route-info decode to ignore invalid caller decode-hint while preserving metadata")) {
+      return 1;
+    }
   }
   for (const StubDecoderEntrypointManifest& manifest :
        GetStubDecoderEntrypointManifests()) {
@@ -7630,6 +7642,35 @@ int main() {
                     decoded.operand_slots.binding_count == 0 &&
                     decoded.operand_descriptors.descriptor_count == 0,
                 "expected synthetic routed route-info with unknown instruction name to preserve caller metadata while keeping empty unknown structure")) {
+      return 1;
+    }
+    StubDecoderRouteInfo synthetic_unknown_invalid_hint = synthetic_unknown;
+    synthetic_unknown_invalid_hint.route_name =
+        "kSyntheticRouteInfoUnknownInvalidHint";
+    synthetic_unknown_invalid_hint.route_priority =
+        manifest.route_priority + 150u;
+    synthetic_unknown_invalid_hint.decode_hint =
+        static_cast<DecodeSeedHint>(99);
+    const StubDecodedInstruction unknown_invalid_hint_decoded =
+        DecodeStubInstruction(synthetic_unknown_invalid_hint);
+    if (!Expect(
+            unknown_invalid_hint_decoded.status == StubDecodeStatus::kDecodedStub &&
+                MatchesRouteInfoPayload(unknown_invalid_hint_decoded,
+                                        synthetic_unknown_invalid_hint) &&
+                unknown_invalid_hint_decoded.entrypoint_name ==
+                    manifest.entrypoint_name &&
+                MatchesUnknownHelperSurface(unknown_invalid_hint_decoded) &&
+                MatchesTopLevelFlags(unknown_invalid_hint_decoded,
+                                     false,
+                                     false,
+                                     false,
+                                     false) &&
+                MatchesLayout(unknown_invalid_hint_decoded, ExpectedLayout{}) &&
+                unknown_invalid_hint_decoded.operand_roles.binding_count == 0 &&
+                unknown_invalid_hint_decoded.operand_slots.binding_count == 0 &&
+                unknown_invalid_hint_decoded.operand_descriptors
+                        .descriptor_count == 0,
+            "expected synthetic routed route-info with invalid caller decode-hint to preserve metadata while keeping empty unknown structure")) {
       return 1;
     }
     for (std::string_view near_miss_instruction :
