@@ -16388,6 +16388,10 @@ int main() {
   typed_buffer_state.vgprs[124][0] = 0x40003c00u;
   typed_buffer_state.vgprs[124][1] = 0x46004400u;
   typed_buffer_state.vgprs[124][3] = 0x4e004c00u;
+  typed_buffer_state.vgprs[126][0] = 0x01020304u;
+  typed_buffer_state.vgprs[126][1] = 0x11121314u;
+  typed_buffer_state.vgprs[126][2] = 0x21222324u;
+  typed_buffer_state.vgprs[126][3] = 0x31323334u;
 
   const std::vector<DecodedInstruction> typed_buffer_program = {
       DecodedInstruction::SevenOperand("TBUFFER_LOAD_FORMAT_XYZW",
@@ -16483,8 +16487,8 @@ int main() {
   const LinearExecutionMemory initial_typed_buffer_memory = typed_buffer_memory;
   const WaveExecutionState initial_typed_buffer_state = typed_buffer_state;
   const auto validate_typed_buffer =
-      [](const WaveExecutionState& state, const LinearExecutionMemory& memory,
-         const char* mode) -> bool {
+      [&](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+          const char* mode) -> bool {
     static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
     const auto expect_lane_values =
         [&](std::uint16_t reg,
@@ -16503,11 +16507,75 @@ int main() {
       return Expect(state.vgprs[reg][2] == 0xdeadbeefu,
                     (std::string(mode) + label).c_str());
     };
+    const auto expect_sgprs_preserved =
+        [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+          for (std::uint16_t sgpr = begin; sgpr <= end; ++sgpr) {
+            if (state.sgprs[sgpr] != initial_typed_buffer_state.sgprs[sgpr]) {
+              return Expect(false, (std::string(mode) + label).c_str());
+            }
+          }
+          return true;
+        };
+    const auto expect_vgpr_range_preserved =
+        [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+          for (std::uint16_t vgpr = begin; vgpr <= end; ++vgpr) {
+            for (std::size_t lane = 0; lane < 4; ++lane) {
+              if (state.vgprs[vgpr][lane] !=
+                  initial_typed_buffer_state.vgprs[vgpr][lane]) {
+                return Expect(false, (std::string(mode) + label).c_str());
+              }
+            }
+          }
+          return true;
+        };
+    const auto expect_u8_preserved = [&](std::uint64_t address,
+                                         const char* label) {
+      std::uint8_t current = 0;
+      std::uint8_t initial = 0;
+      return Expect(ReadU8(initial_typed_buffer_memory, address, &initial),
+                    (std::string(mode) + " typed buffer source read").c_str()) &&
+             Expect(ReadU8(memory, address, &current),
+                    (std::string(mode) + " typed buffer source read").c_str()) &&
+             Expect(current == initial, (std::string(mode) + label).c_str());
+    };
+    const auto expect_u16_preserved = [&](std::uint64_t address,
+                                          const char* label) {
+      std::uint16_t current = 0;
+      std::uint16_t initial = 0;
+      return Expect(ReadU16(initial_typed_buffer_memory, address, &initial),
+                    (std::string(mode) + " typed buffer source read").c_str()) &&
+             Expect(ReadU16(memory, address, &current),
+                    (std::string(mode) + " typed buffer source read").c_str()) &&
+             Expect(current == initial, (std::string(mode) + label).c_str());
+    };
+    const auto expect_u32_preserved = [&](std::uint64_t address,
+                                          const char* label) {
+      std::uint32_t current = 0;
+      std::uint32_t initial = 0;
+      return Expect(initial_typed_buffer_memory.ReadU32(address, &initial),
+                    (std::string(mode) + " typed buffer source read").c_str()) &&
+             Expect(memory.ReadU32(address, &current),
+                    (std::string(mode) + " typed buffer source read").c_str()) &&
+             Expect(current == initial, (std::string(mode) + label).c_str());
+    };
     std::uint8_t byte_value = 0;
     std::uint16_t short_value = 0;
     std::uint32_t dword_value = 0;
     return Expect(state.halted,
                   (std::string(mode) + " typed buffer program to halt").c_str()) &&
+           Expect(state.exec_mask == 0b1011ULL,
+                  (std::string(mode) + " typed buffer preserves exec")
+                      .c_str()) &&
+           expect_sgprs_preserved(44u, 63u,
+                                  " typed buffer preserves descriptors") &&
+           expect_vgpr_range_preserved(0u, 4u,
+                                       " typed buffer preserves addresses") &&
+           expect_vgpr_range_preserved(100u, 103u,
+                                       " typed buffer preserves byte store sources") &&
+           expect_vgpr_range_preserved(110u, 124u,
+                                       " typed buffer preserves wide store sources") &&
+           expect_vgpr_range_preserved(126u, 126u,
+                                       " typed buffer preserves unrelated vgprs") &&
            expect_lane_values(
                90, {0x11u, 0x51u, 0x91u},
                (std::string(mode) + " typed buffer xyzw load x result").c_str()) &&
@@ -16889,7 +16957,99 @@ int main() {
            Expect(short_value == 0u,
                   (std::string(mode) +
                    " inactive typed buffer d16 xyzw store result")
-                      .c_str());
+                      .c_str()) &&
+           expect_u8_preserved(0x280u,
+                               " typed buffer xyzw source lane 0 x preserved") &&
+           expect_u8_preserved(0x281u,
+                               " typed buffer xyzw source lane 0 y preserved") &&
+           expect_u8_preserved(0x282u,
+                               " typed buffer xyzw source lane 0 z preserved") &&
+           expect_u8_preserved(0x283u,
+                               " typed buffer xyzw source lane 0 w preserved") &&
+           expect_u8_preserved(0x284u,
+                               " typed buffer xyzw source lane 1 x preserved") &&
+           expect_u8_preserved(0x285u,
+                               " typed buffer xyzw source lane 1 y preserved") &&
+           expect_u8_preserved(0x286u,
+                               " typed buffer xyzw source lane 1 z preserved") &&
+           expect_u8_preserved(0x287u,
+                               " typed buffer xyzw source lane 1 w preserved") &&
+           expect_u8_preserved(0x288u,
+                               " typed buffer xyzw source lane 3 x preserved") &&
+           expect_u8_preserved(0x289u,
+                               " typed buffer xyzw source lane 3 y preserved") &&
+           expect_u8_preserved(0x28au,
+                               " typed buffer xyzw source lane 3 z preserved") &&
+           expect_u8_preserved(0x28bu,
+                               " typed buffer xyzw source lane 3 w preserved") &&
+           expect_u32_preserved(0x2c0u,
+                                " typed buffer xyz source lane 0 x preserved") &&
+           expect_u32_preserved(0x2c4u,
+                                " typed buffer xyz source lane 0 y preserved") &&
+           expect_u32_preserved(0x2c8u,
+                                " typed buffer xyz source lane 0 z preserved") &&
+           expect_u32_preserved(0x2ccu,
+                                " typed buffer xyz source lane 1 x preserved") &&
+           expect_u32_preserved(0x2d0u,
+                                " typed buffer xyz source lane 1 y preserved") &&
+           expect_u32_preserved(0x2d4u,
+                                " typed buffer xyz source lane 1 z preserved") &&
+           expect_u32_preserved(0x2f8u,
+                                " typed buffer xyz source lane 3 z preserved") &&
+           expect_u16_preserved(0x300u,
+                                " typed buffer d16 xy source lane 0 x preserved") &&
+           expect_u16_preserved(0x302u,
+                                " typed buffer d16 xy source lane 0 y preserved") &&
+           expect_u16_preserved(0x304u,
+                                " typed buffer d16 xy source lane 1 x preserved") &&
+           expect_u16_preserved(0x306u,
+                                " typed buffer d16 xy source lane 1 y preserved") &&
+           expect_u16_preserved(0x308u,
+                                " typed buffer d16 xy source lane 3 x preserved") &&
+           expect_u16_preserved(0x30au,
+                                " typed buffer d16 xy source lane 3 y preserved") &&
+           expect_u16_preserved(0x340u,
+                                " typed buffer d16 xyz source lane 0 x preserved") &&
+           expect_u16_preserved(0x342u,
+                                " typed buffer d16 xyz source lane 0 y preserved") &&
+           expect_u16_preserved(0x344u,
+                                " typed buffer d16 xyz source lane 0 z preserved") &&
+           expect_u16_preserved(0x348u,
+                                " typed buffer d16 xyz source lane 1 x preserved") &&
+           expect_u16_preserved(0x34au,
+                                " typed buffer d16 xyz source lane 1 y preserved") &&
+           expect_u16_preserved(0x34cu,
+                                " typed buffer d16 xyz source lane 1 z preserved") &&
+           expect_u16_preserved(0x350u,
+                                " typed buffer d16 xyz source lane 3 x preserved") &&
+           expect_u16_preserved(0x352u,
+                                " typed buffer d16 xyz source lane 3 y preserved") &&
+           expect_u16_preserved(0x354u,
+                                " typed buffer d16 xyz source lane 3 z preserved") &&
+           expect_u16_preserved(0x380u,
+                                " typed buffer d16 xyzw source lane 0 x preserved") &&
+           expect_u16_preserved(0x382u,
+                                " typed buffer d16 xyzw source lane 0 y preserved") &&
+           expect_u16_preserved(0x384u,
+                                " typed buffer d16 xyzw source lane 0 z preserved") &&
+           expect_u16_preserved(0x386u,
+                                " typed buffer d16 xyzw source lane 0 w preserved") &&
+           expect_u16_preserved(0x388u,
+                                " typed buffer d16 xyzw source lane 1 x preserved") &&
+           expect_u16_preserved(0x38au,
+                                " typed buffer d16 xyzw source lane 1 y preserved") &&
+           expect_u16_preserved(0x38cu,
+                                " typed buffer d16 xyzw source lane 1 z preserved") &&
+           expect_u16_preserved(0x38eu,
+                                " typed buffer d16 xyzw source lane 1 w preserved") &&
+           expect_u16_preserved(0x390u,
+                                " typed buffer d16 xyzw source lane 3 x preserved") &&
+           expect_u16_preserved(0x392u,
+                                " typed buffer d16 xyzw source lane 3 y preserved") &&
+           expect_u16_preserved(0x394u,
+                                " typed buffer d16 xyzw source lane 3 z preserved") &&
+           expect_u16_preserved(0x396u,
+                                " typed buffer d16 xyzw source lane 3 w preserved");
   };
   if (!Expect(interpreter.ExecuteProgram(typed_buffer_program,
                                          &typed_buffer_state,
