@@ -40,8 +40,6 @@ Inputs:
 Outputs (written to GITHUB_OUTPUT):
     linux_build_config    : JSON object with build config, or "" if skipped
     windows_build_config  : JSON object with build config, or "" if skipped
-    linux_build_enabled   : "true" or "false"
-    windows_build_enabled : "true" or "false"
     enable_build_jobs     : "true" or "false"
     test_type             : "quick", "standard", "comprehensive", or "full"
 """
@@ -856,12 +854,10 @@ def write_outputs(
     linux = outputs.builds.linux
     windows = outputs.builds.windows
     output_vars = {
-        "linux_build_config": json.dumps(linux.to_dict()) if linux else "",
-        "windows_build_config": json.dumps(windows.to_dict()) if windows else "",
-        "linux_build_enabled": json.dumps(linux is not None),
-        "windows_build_enabled": json.dumps(windows is not None),
         # Workflow YAML references this as 'enable_build_jobs'
         "enable_build_jobs": json.dumps(outputs.is_ci_enabled),
+        "linux_build_config": json.dumps(linux.to_dict()) if linux else "",
+        "windows_build_config": json.dumps(windows.to_dict()) if windows else "",
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,

@@ -16,15 +16,9 @@ on:
       linux_build_config:
         description: JSON object with Linux build configuration, or empty string if skipped.
         value: ${{ jobs.setup.outputs.linux_build_config }}
-      linux_build_enabled:
-        description: Whether Linux builds are enabled.
-        value: ${{ jobs.setup.outputs.linux_build_enabled }}
       windows_build_config:
         description: JSON object with Windows build configuration, or empty string if skipped.
         value: ${{ jobs.setup.outputs.windows_build_config }}
-      windows_build_enabled:
-        description: Whether Windows builds are enabled.
-        value: ${{ jobs.setup.outputs.windows_build_enabled }}
       test_type:
         description: "The test type to run (quick, standard, comprehensive, full)."
         value: ${{ jobs.setup.outputs.test_type }}
@@ -47,9 +41,7 @@ jobs:
     outputs:
       enable_build_jobs: ${{ steps.configure.outputs.enable_build_jobs }}
       linux_build_config: ${{ steps.configure.outputs.linux_build_config }}
-      linux_build_enabled: ${{ steps.configure.outputs.linux_build_enabled }}
       windows_build_config: ${{ steps.configure.outputs.windows_build_config }}
-      windows_build_enabled: ${{ steps.configure.outputs.windows_build_enabled }}
       test_type: ${{ steps.configure.outputs.test_type }}
       linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}

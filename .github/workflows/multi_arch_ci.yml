@@ -69,7 +69,7 @@ jobs:
     needs: setup
     if: >-
       ${{
-        needs.setup.outputs.linux_build_enabled == 'true' &&
+        needs.setup.outputs.linux_build_config != '' &&
         needs.setup.outputs.enable_build_jobs == 'true'
       }}
     uses: ./.github/workflows/multi_arch_ci_linux.yml
@@ -88,7 +88,7 @@ jobs:
     needs: setup
     if: >-
       ${{
-        needs.setup.outputs.windows_build_enabled == 'true' &&
+        needs.setup.outputs.windows_build_config != '' &&
         needs.setup.outputs.enable_build_jobs == 'true'
       }}
     uses: ./.github/workflows/multi_arch_ci_windows.yml

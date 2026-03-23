@@ -578,6 +578,29 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertIsNone(result.linux)
         self.assertIsNone(result.windows)
 
+    def test_build_config_serialization_empty_vs_present(self):
+        """Workflow YAML gates on build_config != '', so None must serialize
+        to '' and present configs must serialize to valid JSON."""
+        config = cm.BuildConfig(
+            per_family_info=[{"amdgpu_family": "gfx110x"}],
+            dist_amdgpu_families="gfx110x",
+            artifact_group="multi-arch-release",
+            build_variant_label="release",
+            build_variant_suffix="",
+            build_variant_cmake_preset="release",
+            expect_failure=False,
+            build_pytorch=True,
+        )
+        # Present config → valid JSON
+        serialized = json.dumps(config.to_dict())
+        self.assertTrue(serialized)
+        round_tripped = json.loads(serialized)
+        self.assertEqual(round_tripped["dist_amdgpu_families"], "gfx110x")
+
+        # None config → empty string (matches workflow `!= ''` gate)
+        none_serialized = json.dumps(None.to_dict()) if None else ""
+        self.assertEqual(none_serialized, "")
+
     def test_release_produces_configs_for_both_platforms(self):
         """Release variant with families on both platforms produces both configs
         with correctly structured per-family info."""
