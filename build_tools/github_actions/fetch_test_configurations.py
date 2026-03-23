@@ -89,12 +89,14 @@ test_matrix = {
     "rocblas": {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocblas.py')}",
-        "platform": ["linux", "windows"],
+        # GHA step timeout: max category timeout in rocBLAS should be 24 hours / 6 shards = 4 hours per shard
+        # 240 min + 20% margin = 288 min
+        "timeout_minutes": 288,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 6,
+            "windows": 6,
         },
     },
     "rocroller": {
@@ -459,6 +461,26 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+    },
+    "rocdecode": {
+        "job_name": "rocdecode",
+        "fetch_artifact_args": "--rocdecode --tests",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocdecode.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "rocjpeg": {
+        "job_name": "rocjpeg",
+        "fetch_artifact_args": "--rocjpeg --tests",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocjpeg.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
         },
     },
     # aqlprofile tests

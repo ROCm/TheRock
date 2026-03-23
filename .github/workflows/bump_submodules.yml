@@ -9,6 +9,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - rocm-systems
+      - rocm-libraries
 jobs:
   bump-submodules:
     runs-on: ubuntu-24.04
@@ -41,6 +44,10 @@ jobs:
           private-key: ${{ secrets.ROCM_LIBRARIES_APP_PRIVATE_KEY }}
           owner: "ROCm"
           repositories: "rocm-libraries"
+
+      - name: Install prerequisites
+        run: |
+          pip install requests
 
       - name: Run scheduled bump automation
         if: github.event_name == 'schedule'
