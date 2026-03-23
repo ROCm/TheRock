@@ -15,7 +15,7 @@ import os
 from urllib.request import urlopen, Request
 import logging
 
-from github_actions_utils import *
+from github_actions_api import *
 
 logging.basicConfig(level=logging.INFO)
 

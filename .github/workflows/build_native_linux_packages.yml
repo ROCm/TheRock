@@ -110,7 +110,7 @@ jobs:
           # Install the needed tools for creating rpm / deb packages
           # Also install tools for creating repo files
           sudo apt update
-          sudo apt install -y llvm
+          sudo apt install -y llvm-20
           sudo apt install -y rpm debhelper-compat build-essential
           sudo apt install -y dpkg-dev createrepo-c
 
@@ -134,9 +134,6 @@ jobs:
             --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
             --pkg-type ${{ inputs.native_package_type }} \
             --version-suffix ${{ env.ARTIFACT_RUN_ID }}
-
-      - name: Install AWS CLI
-        run: bash ./dockerfiles/install_awscli.sh
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0

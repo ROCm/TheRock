@@ -72,6 +72,10 @@ if(THEROCK_FLAG_SETTINGS_FILE)
   list(APPEND _manifest_flag_args --flag-settings "${THEROCK_FLAG_SETTINGS_FILE}")
 endif()
 
+if(THEROCK_PACKAGE_VERSION)
+  list(APPEND _manifest_flag_args --rocm-package-version "${THEROCK_PACKAGE_VERSION}")
+endif()
+
 add_custom_command(
   OUTPUT "${THEROCK_MANIFEST_JSON}"
   COMMAND "${Python3_EXECUTABLE}" "${THEROCK_MANIFEST_SCRIPT}"

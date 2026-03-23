@@ -331,10 +331,21 @@ def main(argv: list[str]) -> int:
 
     # Determine AMDGPU family and set HIP_VISIBLE_DEVICES BEFORE importing
     # torch or running pytest.  Once torch.cuda is initialized, changing
-    # HIP_VISIBLE_DEVICES has no effect.  For unit tests we run on a single
-    # device (policy="single") to avoid multi-GPU contention.
-    ((first_arch, _),) = set_gpu_execution_policy(args.amdgpu_family, policy="single")
-    print(f"Using AMDGPU family: {first_arch}")
+    # HIP_VISIBLE_DEVICES has no effect.  Distributed tests need all GPUs;
+    # other configs use a single device to avoid multi-GPU contention.
+    gpu_policy = "all" if args.test_config == "distributed" else "single"
+    selected = set_gpu_execution_policy(args.amdgpu_family, policy=gpu_policy)
+    first_arch = selected[0][0]
+    unique_archs = sorted(set(arch for arch, _ in selected))
+    device_ids = [str(dev_id) for _, dev_id in selected]
+    print(
+        f"Selected {len(selected)} GPU(s): "
+        f"arch(es)={', '.join(unique_archs)}, "
+        f"device(s)={', '.join(device_ids)}"
+    )
+
+    # get_tests amdgpu_family requires list[str]
+    first_arch = [first_arch]
 
     pytorch_version = args.pytorch_version
     if not pytorch_version:
@@ -366,37 +377,5 @@ def main(argv: list[str]) -> int:
     return result.returncode
 
 
-def force_exit_with_code(retcode: int) -> None:
-    """Forces termination to work around https://github.com/ROCm/TheRock/issues/999."""
-    import signal
-
-    # We're going to kill the current process with SIGTERM below, which will
-    # return exit code 15. This preserves the original exit code in a file.
-    # Note: this path is relative to CWD, *not the script directory*.
-    # TODO(#2258): output a test report file that can be inspected on both
-    #              Linux and Windows then remove this special file
-    retcode_file = Path("run_pytorch_tests_full_exit_code.txt")
-    retcode_int = int(retcode)
-    print(f"Writing retcode {retcode_int} to '{retcode_file}'")
-    retcode_file.write_text(str(retcode_int))
-
-    print("Forcefully terminating to avoid https://github.com/ROCm/TheRock/issues/999")
-
-    # Flush output before we force exit so no logs get missed.
-    sys.stdout.flush()
-
-    # In order from "asking nicely" to "tear down immediately":
-    #   1. `sys.exit(retcode)`
-    #   2. `os._exit(retcode)`
-    #   3. `os.kill(os.getpid(), signal.SIGTERM)`
-    #   4. `subprocess.Popen(f'taskkill /F /PID {os.getpid()}', shell=True)`
-    # As options (1) and (2) are not sufficient, we use option (3) here.
-    os.kill(os.getpid(), signal.SIGTERM)
-
-
 if __name__ == "__main__":
-    retcode = main(sys.argv[1:])
-    if platform.system() == "Windows":
-        force_exit_with_code(retcode)
-    else:
-        sys.exit(retcode)
+    sys.exit(main(sys.argv[1:]))
