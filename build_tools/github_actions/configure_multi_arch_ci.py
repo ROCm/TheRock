@@ -360,7 +360,7 @@ class BuildConfig:
     expect_failure: bool
     build_pytorch: bool
     # Prebuilt stage configuration — set by configure() from JobDecisions.
-    prebuilt_stages: str = ""
+    prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
 
     def to_dict(self) -> dict:
@@ -374,7 +374,7 @@ class BuildConfig:
             "build_variant_cmake_preset": self.build_variant_cmake_preset,
             "expect_failure": self.expect_failure,
             "build_pytorch": self.build_pytorch,
-            "prebuilt_stages": self.prebuilt_stages,
+            "prebuilt_stages": ",".join(self.prebuilt_stages),
             "baseline_run_id": self.baseline_run_id,
         }
 
@@ -723,7 +723,7 @@ def _expand_build_config_for_platform(
     build_variant: str,
     all_families: dict[str, dict],
     variant_config: dict,
-    prebuilt_stages: str = "",
+    prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
     """Build a BuildConfig for one platform, or None if no families match.
@@ -781,7 +781,7 @@ def _expand_build_config_for_platform(
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         expect_failure=expect_failure,
         build_pytorch=not expect_failure and not expect_pytorch_failure,
-        prebuilt_stages=prebuilt_stages,
+        prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,
     )
 
@@ -789,7 +789,7 @@ def _expand_build_config_for_platform(
 def expand_build_configs(
     targets: TargetSelection,
     build_variant: str,
-    prebuilt_stages: str = "",
+    prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfigs:
     """Build a BuildConfig for each platform that supports the variant.
@@ -911,7 +911,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     builds = expand_build_configs(
         targets=targets,
         build_variant=ci_inputs.build_variant,
-        prebuilt_stages=",".join(jobs.build_rocm.prebuilt_stages),
+        prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
     )
     builds.log()
