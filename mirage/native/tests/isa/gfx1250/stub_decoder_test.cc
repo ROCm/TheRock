@@ -7644,6 +7644,36 @@ int main() {
                 "expected synthetic routed route-info with unknown instruction name to preserve caller metadata while keeping empty unknown structure")) {
       return 1;
     }
+    const StubDecoderRouteInfo synthetic_empty{
+        "",
+        manifest.route,
+        "kSyntheticRouteInfoEmpty",
+        manifest.route_priority + 125u,
+        DecodeSeedHint::kUnknown,
+        "SYNTHETIC_EMPTY_ENC",
+        1500u + manifest.route_priority,
+        15u + manifest.route_priority,
+        false,
+        false,
+    };
+    const StubDecodedInstruction empty_decoded =
+        DecodeStubInstruction(synthetic_empty);
+    if (!Expect(empty_decoded.status == StubDecodeStatus::kDecodedStub &&
+                    MatchesRouteInfoPayload(empty_decoded, synthetic_empty) &&
+                    empty_decoded.entrypoint_name == manifest.entrypoint_name &&
+                    MatchesUnknownHelperSurface(empty_decoded) &&
+                    MatchesTopLevelFlags(empty_decoded,
+                                         false,
+                                         false,
+                                         false,
+                                         false) &&
+                    MatchesLayout(empty_decoded, ExpectedLayout{}) &&
+                    empty_decoded.operand_roles.binding_count == 0 &&
+                    empty_decoded.operand_slots.binding_count == 0 &&
+                    empty_decoded.operand_descriptors.descriptor_count == 0,
+                "expected synthetic routed route-info with empty instruction name to preserve caller metadata while keeping empty unknown structure")) {
+      return 1;
+    }
     StubDecoderRouteInfo synthetic_unknown_invalid_hint = synthetic_unknown;
     synthetic_unknown_invalid_hint.route_name =
         "kSyntheticRouteInfoUnknownInvalidHint";
