@@ -123,9 +123,7 @@ def build_configure(build_dir, manylinux=False):
 
         # Python executables with shared libpython support. This is needed for
         # ROCgdb.
-        cmd.append(
-            f"-DTHEROCK_SHARED_PYTHON_EXECUTABLES={SHARED_PYTHON_EXECUTABLES}"
-        )
+        cmd.append(f"-DTHEROCK_SHARED_PYTHON_EXECUTABLES={SHARED_PYTHON_EXECUTABLES}")
 
     # Splitting cmake options into an array (ex: "-flag X" -> ["-flag", "X"]) for subprocess.run
     cmake_options_arr = extra_cmake_options.split()

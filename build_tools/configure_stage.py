@@ -152,9 +152,7 @@ def generate_cmake_args(
     # Manylinux Python executables for per-Python-version builds
     # Quote values since they contain semicolons (CMake list separator)
     if manylinux:
-        args.append(
-            f'-DTHEROCK_DIST_PYTHON_EXECUTABLES="{DIST_PYTHON_EXECUTABLES}"'
-        )
+        args.append(f'-DTHEROCK_DIST_PYTHON_EXECUTABLES="{DIST_PYTHON_EXECUTABLES}"')
         args.append(
             f'-DTHEROCK_SHARED_PYTHON_EXECUTABLES="{SHARED_PYTHON_EXECUTABLES}"'
         )
