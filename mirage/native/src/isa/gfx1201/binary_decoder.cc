@@ -17,7 +17,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 500> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 512> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_DCACHE_INV",
@@ -158,17 +158,29 @@ constexpr std::array<std::string_view, 500> kPhase0ExecutableOpcodes{{
     "DS_MIN_NUM_F64",
     "DS_MAX_NUM_RTN_F64",
     "DS_MAX_NUM_F64",
+    "DS_ADD_RTN_U64",
     "DS_ADD_U64",
+    "DS_SUB_RTN_U64",
     "DS_SUB_U64",
+    "DS_RSUB_RTN_U64",
     "DS_RSUB_U64",
+    "DS_INC_RTN_U64",
     "DS_INC_U64",
+    "DS_DEC_RTN_U64",
     "DS_DEC_U64",
+    "DS_MIN_RTN_I64",
     "DS_MIN_I64",
+    "DS_MIN_RTN_U64",
     "DS_MIN_U64",
+    "DS_MAX_RTN_I64",
     "DS_MAX_I64",
+    "DS_MAX_RTN_U64",
     "DS_MAX_U64",
+    "DS_AND_RTN_B64",
     "DS_AND_B64",
+    "DS_OR_RTN_B64",
     "DS_OR_B64",
+    "DS_XOR_RTN_B64",
     "DS_XOR_B64",
     "DS_LOAD_B32",
     "DS_LOAD_B64",
@@ -1291,17 +1303,29 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "DS_MIN_NUM_F64" ||
              instruction_name == "DS_MAX_NUM_RTN_F64" ||
              instruction_name == "DS_MAX_NUM_F64" ||
+             instruction_name == "DS_ADD_RTN_U64" ||
              instruction_name == "DS_ADD_U64" ||
+             instruction_name == "DS_SUB_RTN_U64" ||
              instruction_name == "DS_SUB_U64" ||
+             instruction_name == "DS_RSUB_RTN_U64" ||
              instruction_name == "DS_RSUB_U64" ||
+             instruction_name == "DS_INC_RTN_U64" ||
              instruction_name == "DS_INC_U64" ||
+             instruction_name == "DS_DEC_RTN_U64" ||
              instruction_name == "DS_DEC_U64" ||
+             instruction_name == "DS_MIN_RTN_I64" ||
              instruction_name == "DS_MIN_I64" ||
+             instruction_name == "DS_MIN_RTN_U64" ||
              instruction_name == "DS_MIN_U64" ||
+             instruction_name == "DS_MAX_RTN_I64" ||
              instruction_name == "DS_MAX_I64" ||
+             instruction_name == "DS_MAX_RTN_U64" ||
              instruction_name == "DS_MAX_U64" ||
+             instruction_name == "DS_AND_RTN_B64" ||
              instruction_name == "DS_AND_B64" ||
+             instruction_name == "DS_OR_RTN_B64" ||
              instruction_name == "DS_OR_B64" ||
+             instruction_name == "DS_XOR_RTN_B64" ||
              instruction_name == "DS_XOR_B64") {
     if (words.size() < 2u) {
       if (error_message != nullptr) {
@@ -1330,17 +1354,29 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
     }
 
     const bool is_wide_64 =
+        instruction_name == "DS_ADD_RTN_U64" ||
         instruction_name == "DS_ADD_U64" ||
+        instruction_name == "DS_SUB_RTN_U64" ||
         instruction_name == "DS_SUB_U64" ||
+        instruction_name == "DS_RSUB_RTN_U64" ||
         instruction_name == "DS_RSUB_U64" ||
+        instruction_name == "DS_INC_RTN_U64" ||
         instruction_name == "DS_INC_U64" ||
+        instruction_name == "DS_DEC_RTN_U64" ||
         instruction_name == "DS_DEC_U64" ||
+        instruction_name == "DS_MIN_RTN_I64" ||
         instruction_name == "DS_MIN_I64" ||
+        instruction_name == "DS_MIN_RTN_U64" ||
         instruction_name == "DS_MIN_U64" ||
+        instruction_name == "DS_MAX_RTN_I64" ||
         instruction_name == "DS_MAX_I64" ||
+        instruction_name == "DS_MAX_RTN_U64" ||
         instruction_name == "DS_MAX_U64" ||
+        instruction_name == "DS_AND_RTN_B64" ||
         instruction_name == "DS_AND_B64" ||
+        instruction_name == "DS_OR_RTN_B64" ||
         instruction_name == "DS_OR_B64" ||
+        instruction_name == "DS_XOR_RTN_B64" ||
         instruction_name == "DS_XOR_B64" ||
         instruction_name == "DS_MIN_NUM_RTN_F64" ||
         instruction_name == "DS_MIN_NUM_F64" ||
@@ -1391,7 +1427,19 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         instruction_name == "DS_MIN_NUM_RTN_F32" ||
         instruction_name == "DS_MAX_NUM_RTN_F32" ||
         instruction_name == "DS_MIN_NUM_RTN_F64" ||
-        instruction_name == "DS_MAX_NUM_RTN_F64";
+        instruction_name == "DS_MAX_NUM_RTN_F64" ||
+        instruction_name == "DS_ADD_RTN_U64" ||
+        instruction_name == "DS_SUB_RTN_U64" ||
+        instruction_name == "DS_RSUB_RTN_U64" ||
+        instruction_name == "DS_INC_RTN_U64" ||
+        instruction_name == "DS_DEC_RTN_U64" ||
+        instruction_name == "DS_MIN_RTN_I64" ||
+        instruction_name == "DS_MIN_RTN_U64" ||
+        instruction_name == "DS_MAX_RTN_I64" ||
+        instruction_name == "DS_MAX_RTN_U64" ||
+        instruction_name == "DS_AND_RTN_B64" ||
+        instruction_name == "DS_OR_RTN_B64" ||
+        instruction_name == "DS_XOR_RTN_B64";
     if (returns_old) {
       InstructionOperand vdst;
       if (!DecodeVectorDestination(ExtractBits(words[1], 24, 8), &vdst,

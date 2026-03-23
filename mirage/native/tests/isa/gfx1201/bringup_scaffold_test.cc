@@ -207,7 +207,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 500u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 512u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_DCACHE_INV"),
               "expected S_DCACHE_INV executable decode support") ||
@@ -509,6 +509,30 @@ int main() {
               "expected DS_OR_B64 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_XOR_B64"),
               "expected DS_XOR_B64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_ADD_RTN_U64"),
+              "expected DS_ADD_RTN_U64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_SUB_RTN_U64"),
+              "expected DS_SUB_RTN_U64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_RSUB_RTN_U64"),
+              "expected DS_RSUB_RTN_U64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_INC_RTN_U64"),
+              "expected DS_INC_RTN_U64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_DEC_RTN_U64"),
+              "expected DS_DEC_RTN_U64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_MIN_RTN_I64"),
+              "expected DS_MIN_RTN_I64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_MIN_RTN_U64"),
+              "expected DS_MIN_RTN_U64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_MAX_RTN_I64"),
+              "expected DS_MAX_RTN_I64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_MAX_RTN_U64"),
+              "expected DS_MAX_RTN_U64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_AND_RTN_B64"),
+              "expected DS_AND_RTN_B64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_OR_RTN_B64"),
+              "expected DS_OR_RTN_B64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("DS_XOR_RTN_B64"),
+              "expected DS_XOR_RTN_B64 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B32"),
               "expected S_LOAD_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_LOAD_B64"),
@@ -1985,6 +2009,57 @@ int main() {
     return 1;
   }
 
+  constexpr std::array<std::pair<std::string_view, std::uint32_t>, 12>
+      kDsReturnU64DecodeCases{{
+          {"DS_ADD_RTN_U64", 96u},
+          {"DS_SUB_RTN_U64", 97u},
+          {"DS_RSUB_RTN_U64", 98u},
+          {"DS_INC_RTN_U64", 99u},
+          {"DS_DEC_RTN_U64", 100u},
+          {"DS_MIN_RTN_I64", 101u},
+          {"DS_MAX_RTN_I64", 102u},
+          {"DS_MIN_RTN_U64", 103u},
+          {"DS_MAX_RTN_U64", 104u},
+          {"DS_AND_RTN_B64", 105u},
+          {"DS_OR_RTN_B64", 106u},
+          {"DS_XOR_RTN_B64", 107u},
+      }};
+  for (std::size_t i = 0; i < kDsReturnU64DecodeCases.size(); ++i) {
+    const auto ds_return_u64_words =
+        MakeDs(kDsReturnU64DecodeCases[i].second, 59u, 60u, 61u, 62u,
+               0x42u + static_cast<std::uint32_t>(i));
+    if (!Expect(decoder.DecodeInstruction(
+                    std::span<const std::uint32_t>(
+                        ds_return_u64_words.data(),
+                        ds_return_u64_words.size()),
+                    &decoded_instruction, &words_consumed, &error_message),
+                "expected DS return U64 decode success") ||
+        !Expect(words_consumed == 2u,
+                "expected DS return U64 two dwords consumed") ||
+        !Expect(decoded_instruction.opcode == kDsReturnU64DecodeCases[i].first,
+                "expected DS return U64 opcode") ||
+        !Expect(decoded_instruction.operand_count == 5u,
+                "expected DS return U64 five-operand decode") ||
+        !Expect(decoded_instruction.operands[0].kind == OperandKind::kVgpr &&
+                    decoded_instruction.operands[0].index == 59u,
+                "expected DS return U64 destination VGPR") ||
+        !Expect(decoded_instruction.operands[1].kind == OperandKind::kVgpr &&
+                    decoded_instruction.operands[1].index == 60u,
+                "expected DS return U64 address VGPR") ||
+        !Expect(decoded_instruction.operands[2].kind == OperandKind::kVgpr &&
+                    decoded_instruction.operands[2].index == 61u,
+                "expected DS return U64 data VGPR") ||
+        !Expect(decoded_instruction.operands[3].kind == OperandKind::kImm32 &&
+                    decoded_instruction.operands[3].imm32 ==
+                        0x42u + static_cast<std::uint32_t>(i),
+                "expected DS return U64 offset0") ||
+        !Expect(decoded_instruction.operands[4].kind == OperandKind::kImm32 &&
+                    decoded_instruction.operands[4].imm32 == 0u,
+                "expected DS return U64 offset1")) {
+      return 1;
+    }
+  }
+
   const auto load_b32_words = MakeSmem(0u, 18u, 4u, true, 12u);
   if (!Expect(decoder.DecodeInstruction(
                   std::span<const std::uint32_t>(load_b32_words.data(),
@@ -2286,7 +2361,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 500u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 512u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -2536,6 +2611,30 @@ int main() {
               "expected interpreter support for DS_OR_B64") ||
       !Expect(interpreter.Supports("DS_XOR_B64"),
               "expected interpreter support for DS_XOR_B64") ||
+      !Expect(interpreter.Supports("DS_ADD_RTN_U64"),
+              "expected interpreter support for DS_ADD_RTN_U64") ||
+      !Expect(interpreter.Supports("DS_SUB_RTN_U64"),
+              "expected interpreter support for DS_SUB_RTN_U64") ||
+      !Expect(interpreter.Supports("DS_RSUB_RTN_U64"),
+              "expected interpreter support for DS_RSUB_RTN_U64") ||
+      !Expect(interpreter.Supports("DS_INC_RTN_U64"),
+              "expected interpreter support for DS_INC_RTN_U64") ||
+      !Expect(interpreter.Supports("DS_DEC_RTN_U64"),
+              "expected interpreter support for DS_DEC_RTN_U64") ||
+      !Expect(interpreter.Supports("DS_MIN_RTN_I64"),
+              "expected interpreter support for DS_MIN_RTN_I64") ||
+      !Expect(interpreter.Supports("DS_MIN_RTN_U64"),
+              "expected interpreter support for DS_MIN_RTN_U64") ||
+      !Expect(interpreter.Supports("DS_MAX_RTN_I64"),
+              "expected interpreter support for DS_MAX_RTN_I64") ||
+      !Expect(interpreter.Supports("DS_MAX_RTN_U64"),
+              "expected interpreter support for DS_MAX_RTN_U64") ||
+      !Expect(interpreter.Supports("DS_AND_RTN_B64"),
+              "expected interpreter support for DS_AND_RTN_B64") ||
+      !Expect(interpreter.Supports("DS_OR_RTN_B64"),
+              "expected interpreter support for DS_OR_RTN_B64") ||
+      !Expect(interpreter.Supports("DS_XOR_RTN_B64"),
+              "expected interpreter support for DS_XOR_RTN_B64") ||
       !Expect(interpreter.Supports("DS_LOAD_B32"),
               "expected interpreter support for DS_LOAD_B32") ||
       !Expect(interpreter.Supports("DS_LOAD_B64"),
