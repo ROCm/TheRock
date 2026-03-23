@@ -245,10 +245,6 @@ class TargetSelection:
 # ---------------------------------------------------------------------------
 # Job decisions — the CI pipeline as a DAG of job groups
 #
-#   build-rocm → test-rocm
-#              → build-rocm-python → build-pytorch → test-pytorch
-#                                  → build-jax     → test-jax (future)
-#
 # Each node gets a JobGroupDecision (run/prebuilt/skip). Subclasses add
 # group-specific details (per-stage granularity, test type, etc.).
 # ---------------------------------------------------------------------------
