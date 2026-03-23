@@ -60,25 +60,57 @@
       "bucket_name": "append_consume",
       "example_instruction": "DS_APPEND",
       "instruction_count": 2,
-      "rationale": "Append/consume allocator semantics are the first remaining non-local LDS tail."
+      "rationale": "Append/consume allocator semantics are the first remaining non-local LDS tail.",
+      "instruction_names": [
+        "DS_APPEND",
+        "DS_CONSUME"
+      ]
     },
     {
       "bucket_name": "exchange_compare_store",
       "example_instruction": "DS_CONDXCHG32_RTN_B64",
       "instruction_count": 7,
-      "rationale": "Exchange and compare-store forms are the next semantic-risk step on the VDS path."
+      "rationale": "Exchange and compare-store forms are the next semantic-risk step on the VDS path.",
+      "instruction_names": [
+        "DS_CONDXCHG32_RTN_B64",
+        "DS_CMPSTORE_B32",
+        "DS_CMPSTORE_B64",
+        "DS_CMPSTORE_RTN_B32",
+        "DS_CMPSTORE_RTN_B64",
+        "DS_STOREXCHG_RTN_B32",
+        "DS_STOREXCHG_RTN_B64"
+      ]
     },
     {
       "bucket_name": "multi_address",
       "example_instruction": "DS_LOAD_2ADDR_B32",
       "instruction_count": 12,
-      "rationale": "Remaining two-address and stride64 LDS forms would widen the current one-address execution model."
+      "rationale": "Remaining two-address and stride64 LDS forms would widen the current one-address execution model.",
+      "instruction_names": [
+        "DS_LOAD_2ADDR_B32",
+        "DS_LOAD_2ADDR_B64",
+        "DS_LOAD_2ADDR_STRIDE64_B32",
+        "DS_LOAD_2ADDR_STRIDE64_B64",
+        "DS_STOREXCHG_2ADDR_RTN_B32",
+        "DS_STOREXCHG_2ADDR_RTN_B64",
+        "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32",
+        "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64",
+        "DS_STORE_2ADDR_B32",
+        "DS_STORE_2ADDR_B64",
+        "DS_STORE_2ADDR_STRIDE64_B32",
+        "DS_STORE_2ADDR_STRIDE64_B64"
+      ]
     },
     {
       "bucket_name": "bvh_stack",
       "example_instruction": "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
       "instruction_count": 3,
-      "rationale": "BVH stack instructions are gfx1201-specific and sit outside the current LDS utility model."
+      "rationale": "BVH stack instructions are gfx1201-specific and sit outside the current LDS utility model.",
+      "instruction_names": [
+        "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
+        "DS_BVH_STACK_PUSH8_POP1_RTN_B32",
+        "DS_BVH_STACK_PUSH8_POP2_RTN_B64"
+      ]
     }
   ],
   "remaining_narrow_instruction_encoding_pairs": 0,

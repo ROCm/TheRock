@@ -26,10 +26,10 @@ execution path.
 
 ## Remaining VDS Boundary
 
-- `append_consume`: `2` instructions, example `DS_APPEND`, covering the append/consume allocator semantics tail.
-- `exchange_compare_store`: `7` instructions, example `DS_CONDXCHG32_RTN_B64`, covering the remaining exchange and compare-store forms.
-- `multi_address`: `12` instructions, example `DS_LOAD_2ADDR_B32`, covering the two-address and stride64 LDS forms that widen the current one-address model.
-- `bvh_stack`: `3` instructions, example `DS_BVH_STACK_PUSH4_POP1_RTN_B32`, covering the gfx1201-specific BVH stack tail.
+- `append_consume`: `2` instructions, example `DS_APPEND`, covering `DS_APPEND` and `DS_CONSUME`.
+- `exchange_compare_store`: `7` instructions, example `DS_CONDXCHG32_RTN_B64`, covering `DS_CONDXCHG32_RTN_B64`, `DS_CMPSTORE_B32`, `DS_CMPSTORE_B64`, `DS_CMPSTORE_RTN_B32`, `DS_CMPSTORE_RTN_B64`, `DS_STOREXCHG_RTN_B32`, and `DS_STOREXCHG_RTN_B64`.
+- `multi_address`: `12` instructions, example `DS_LOAD_2ADDR_B32`, covering `DS_LOAD_2ADDR_B32`, `DS_LOAD_2ADDR_B64`, `DS_LOAD_2ADDR_STRIDE64_B32`, `DS_LOAD_2ADDR_STRIDE64_B64`, `DS_STOREXCHG_2ADDR_RTN_B32`, `DS_STOREXCHG_2ADDR_RTN_B64`, `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32`, `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64`, `DS_STORE_2ADDR_B32`, `DS_STORE_2ADDR_B64`, `DS_STORE_2ADDR_STRIDE64_B32`, and `DS_STORE_2ADDR_STRIDE64_B64`.
+- `bvh_stack`: `3` instructions, example `DS_BVH_STACK_PUSH4_POP1_RTN_B32`, covering `DS_BVH_STACK_PUSH4_POP1_RTN_B32`, `DS_BVH_STACK_PUSH8_POP1_RTN_B32`, and `DS_BVH_STACK_PUSH8_POP2_RTN_B64`.
 
 ## Next-Risk Encodings
 

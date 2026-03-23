@@ -42,6 +42,7 @@ struct Gfx1201Wave32Phase0VdsBoundaryBucket {
   std::string_view example_instruction;
   std::string_view rationale;
   std::uint32_t instruction_count = 0;
+  std::span<const std::string_view> instruction_names;
 };
 
 std::span<const Gfx1201Wave32Phase0EncodingStatus>

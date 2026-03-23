@@ -32,6 +32,43 @@ constexpr std::array<std::string_view, 4> kFrontierOrder{{
     "ENC_VOP3",
 }};
 
+constexpr std::array<std::string_view, 2> kAppendConsumeVdsInstructions{{
+    "DS_APPEND",
+    "DS_CONSUME",
+}};
+
+constexpr std::array<std::string_view, 7>
+    kExchangeCompareStoreVdsInstructions{{
+        "DS_CONDXCHG32_RTN_B64",
+        "DS_CMPSTORE_B32",
+        "DS_CMPSTORE_B64",
+        "DS_CMPSTORE_RTN_B32",
+        "DS_CMPSTORE_RTN_B64",
+        "DS_STOREXCHG_RTN_B32",
+        "DS_STOREXCHG_RTN_B64",
+    }};
+
+constexpr std::array<std::string_view, 12> kMultiAddressVdsInstructions{{
+    "DS_LOAD_2ADDR_B32",
+    "DS_LOAD_2ADDR_B64",
+    "DS_LOAD_2ADDR_STRIDE64_B32",
+    "DS_LOAD_2ADDR_STRIDE64_B64",
+    "DS_STOREXCHG_2ADDR_RTN_B32",
+    "DS_STOREXCHG_2ADDR_RTN_B64",
+    "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32",
+    "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64",
+    "DS_STORE_2ADDR_B32",
+    "DS_STORE_2ADDR_B64",
+    "DS_STORE_2ADDR_STRIDE64_B32",
+    "DS_STORE_2ADDR_STRIDE64_B64",
+}};
+
+constexpr std::array<std::string_view, 3> kBvhStackVdsInstructions{{
+    "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
+    "DS_BVH_STACK_PUSH8_POP1_RTN_B32",
+    "DS_BVH_STACK_PUSH8_POP2_RTN_B64",
+}};
+
 constexpr std::array<Gfx1201Wave32Phase0VdsBoundaryBucket, 4>
     kVdsBoundaryBuckets{{
         {
@@ -39,24 +76,28 @@ constexpr std::array<Gfx1201Wave32Phase0VdsBoundaryBucket, 4>
             "DS_APPEND",
             "Append/consume allocator semantics are the first remaining non-local LDS tail.",
             2,
+            std::span<const std::string_view>(kAppendConsumeVdsInstructions),
         },
         {
             "exchange_compare_store",
             "DS_CONDXCHG32_RTN_B64",
             "Exchange and compare-store forms are the next semantic-risk step on the VDS path.",
             7,
+            std::span<const std::string_view>(kExchangeCompareStoreVdsInstructions),
         },
         {
             "multi_address",
             "DS_LOAD_2ADDR_B32",
             "Remaining two-address and stride64 LDS forms would widen the current one-address execution model.",
             12,
+            std::span<const std::string_view>(kMultiAddressVdsInstructions),
         },
         {
             "bvh_stack",
             "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
             "BVH stack instructions are gfx1201-specific and sit outside the current LDS utility model.",
             3,
+            std::span<const std::string_view>(kBvhStackVdsInstructions),
         },
     }};
 

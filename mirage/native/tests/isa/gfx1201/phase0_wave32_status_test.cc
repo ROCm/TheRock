@@ -195,6 +195,11 @@ int main() {
               "expected append/consume example") ||
       !Expect(vds_boundary_buckets[0].instruction_count == 2u,
               "expected append/consume count") ||
+      !Expect(vds_boundary_buckets[0].instruction_names.size() == 2u,
+              "expected append/consume instruction list") ||
+      !Expect(vds_boundary_buckets[0].instruction_names[0] == "DS_APPEND" &&
+                  vds_boundary_buckets[0].instruction_names[1] == "DS_CONSUME",
+              "expected append/consume instruction names") ||
       !Expect(vds_boundary_buckets[1].bucket_name == "exchange_compare_store",
               "expected exchange/compare-store VDS bucket") ||
       !Expect(vds_boundary_buckets[1].example_instruction ==
@@ -202,6 +207,13 @@ int main() {
               "expected exchange/compare-store example") ||
       !Expect(vds_boundary_buckets[1].instruction_count == 7u,
               "expected exchange/compare-store count") ||
+      !Expect(vds_boundary_buckets[1].instruction_names.size() == 7u,
+              "expected exchange/compare-store instruction list") ||
+      !Expect(vds_boundary_buckets[1].instruction_names.front() ==
+                      "DS_CONDXCHG32_RTN_B64" &&
+                  vds_boundary_buckets[1].instruction_names.back() ==
+                      "DS_STOREXCHG_RTN_B64",
+              "expected exchange/compare-store instruction range") ||
       !Expect(vds_boundary_buckets[2].bucket_name == "multi_address",
               "expected multi-address VDS bucket") ||
       !Expect(vds_boundary_buckets[2].example_instruction ==
@@ -209,13 +221,29 @@ int main() {
               "expected multi-address example") ||
       !Expect(vds_boundary_buckets[2].instruction_count == 12u,
               "expected multi-address count") ||
+      !Expect(vds_boundary_buckets[2].instruction_names.size() == 12u,
+              "expected multi-address instruction list") ||
+      !Expect(vds_boundary_buckets[2].instruction_names.front() ==
+                      "DS_LOAD_2ADDR_B32" &&
+                  vds_boundary_buckets[2].instruction_names.back() ==
+                      "DS_STORE_2ADDR_STRIDE64_B64",
+              "expected multi-address instruction range") ||
       !Expect(vds_boundary_buckets[3].bucket_name == "bvh_stack",
               "expected BVH-stack VDS bucket") ||
       !Expect(vds_boundary_buckets[3].example_instruction ==
                   "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
               "expected BVH-stack example") ||
       !Expect(vds_boundary_buckets[3].instruction_count == 3u,
-              "expected BVH-stack count")) {
+              "expected BVH-stack count") ||
+      !Expect(vds_boundary_buckets[3].instruction_names.size() == 3u,
+              "expected BVH-stack instruction list") ||
+      !Expect(vds_boundary_buckets[3].instruction_names[0] ==
+                      "DS_BVH_STACK_PUSH4_POP1_RTN_B32" &&
+                  vds_boundary_buckets[3].instruction_names[1] ==
+                      "DS_BVH_STACK_PUSH8_POP1_RTN_B32" &&
+                  vds_boundary_buckets[3].instruction_names[2] ==
+                      "DS_BVH_STACK_PUSH8_POP2_RTN_B64",
+              "expected BVH-stack instruction names")) {
     return 1;
   }
 
