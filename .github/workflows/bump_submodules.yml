@@ -13,6 +13,11 @@ on:
     paths:
       - rocm-systems
       - rocm-libraries
+
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   bump-submodules:
     runs-on: ubuntu-24.04
@@ -27,6 +32,9 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
 
       - name: Generate GitHub App token rocm-systems
         uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
