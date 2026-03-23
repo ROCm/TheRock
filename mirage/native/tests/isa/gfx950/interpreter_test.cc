@@ -8228,18 +8228,6 @@ int main() {
     return 1;
   }
 
-  WaveExecutionState ds_state;
-  ds_state.exec_mask = 0b1011ULL;
-  ds_state.vgprs[0][0] = 0u;
-  ds_state.vgprs[0][1] = 4u;
-  ds_state.vgprs[0][3] = 8u;
-  ds_state.vgprs[1][0] = 10u;
-  ds_state.vgprs[1][1] = 20u;
-  ds_state.vgprs[1][3] = 40u;
-  ds_state.vgprs[2][0] = 1u;
-  ds_state.vgprs[2][1] = 2u;
-  ds_state.vgprs[2][3] = 4u;
-  ds_state.vgprs[3][2] = 0xdeadbeefu;
   const std::vector<DecodedInstruction> ds_program = {
       DecodedInstruction::Nullary("DS_NOP"),
       DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(0),
@@ -8253,70 +8241,104 @@ int main() {
                                        InstructionOperand::Imm32(0)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
-  if (!Expect(interpreter.ExecuteProgram(ds_program, &ds_state, &error_message),
+  auto make_basic_ds_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[5] = 0x13579bdfu;
+    state.vgprs[0][0] = 0u;
+    state.vgprs[0][1] = 4u;
+    state.vgprs[0][2] = 12u;
+    state.vgprs[0][3] = 8u;
+    state.vgprs[1][0] = 10u;
+    state.vgprs[1][1] = 20u;
+    state.vgprs[1][2] = 0xbaadf00du;
+    state.vgprs[1][3] = 40u;
+    state.vgprs[2][0] = 1u;
+    state.vgprs[2][1] = 2u;
+    state.vgprs[2][2] = 0xc001d00du;
+    state.vgprs[2][3] = 4u;
+    state.vgprs[3][2] = 0xdeadbeefu;
+    state.vgprs[4][0] = 0x11111111u;
+    state.vgprs[4][1] = 0x22222222u;
+    state.vgprs[4][2] = 0x33333333u;
+    state.vgprs[4][3] = 0x44444444u;
+    const std::uint32_t untouched_lds = 0x55667788u;
+    std::memcpy(state.lds_bytes.data() + 12u, &untouched_lds,
+                sizeof(untouched_lds));
+    return state;
+  };
+  const auto validate_basic_ds_state = [&](const WaveExecutionState& state,
+                                           const char* mode) {
+    if (!Expect(state.halted, "expected basic ds program to halt") ||
+        !Expect(state.exec_mask == 0b1011ULL,
+                "expected basic ds exec preservation") ||
+        !Expect(state.sgprs[5] == 0x13579bdfu,
+                "expected basic ds sgpr preservation") ||
+        !Expect(state.vgprs[0][0] == 0u && state.vgprs[0][1] == 4u &&
+                    state.vgprs[0][2] == 12u && state.vgprs[0][3] == 8u,
+                "expected basic ds address preservation") ||
+        !Expect(state.vgprs[1][0] == 10u && state.vgprs[1][1] == 20u &&
+                    state.vgprs[1][2] == 0xbaadf00du &&
+                    state.vgprs[1][3] == 40u,
+                "expected basic ds write-data preservation") ||
+        !Expect(state.vgprs[2][0] == 1u && state.vgprs[2][1] == 2u &&
+                    state.vgprs[2][2] == 0xc001d00du &&
+                    state.vgprs[2][3] == 4u,
+                "expected basic ds add-data preservation") ||
+        !Expect(state.vgprs[3][0] == 11u, "expected basic ds lane 0 read result") ||
+        !Expect(state.vgprs[3][1] == 22u, "expected basic ds lane 1 read result") ||
+        !Expect(state.vgprs[3][2] == 0xdeadbeefu,
+                "expected basic ds inactive lane preservation") ||
+        !Expect(state.vgprs[3][3] == 44u, "expected basic ds lane 3 read result") ||
+        !Expect(state.vgprs[4][0] == 0x11111111u &&
+                    state.vgprs[4][1] == 0x22222222u &&
+                    state.vgprs[4][2] == 0x33333333u &&
+                    state.vgprs[4][3] == 0x44444444u,
+                "expected basic ds unrelated vgpr preservation")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    std::uint32_t lds_lane0 = 0;
+    std::uint32_t lds_lane1 = 0;
+    std::uint32_t lds_lane3 = 0;
+    std::uint32_t untouched_lds = 0;
+    std::memcpy(&lds_lane0, state.lds_bytes.data() + 0u, sizeof(lds_lane0));
+    std::memcpy(&lds_lane1, state.lds_bytes.data() + 4u, sizeof(lds_lane1));
+    std::memcpy(&lds_lane3, state.lds_bytes.data() + 8u, sizeof(lds_lane3));
+    std::memcpy(&untouched_lds, state.lds_bytes.data() + 12u,
+                sizeof(untouched_lds));
+    if (!Expect(lds_lane0 == 11u, "expected basic ds lds lane 0 result") ||
+        !Expect(lds_lane1 == 22u, "expected basic ds lds lane 1 result") ||
+        !Expect(lds_lane3 == 44u, "expected basic ds lds lane 3 result") ||
+        !Expect(untouched_lds == 0x55667788u,
+                "expected basic ds inactive-slot lds preservation")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    return true;
+  };
+  WaveExecutionState decoded_basic_ds_state = make_basic_ds_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_program, &decoded_basic_ds_state,
+                                         &error_message),
               error_message.c_str()) ||
-      !Expect(ds_state.vgprs[3][0] == 11u, "expected ds lane 0 read result") ||
-      !Expect(ds_state.vgprs[3][1] == 22u, "expected ds lane 1 read result") ||
-      !Expect(ds_state.vgprs[3][2] == 0xdeadbeefu,
-              "expected inactive lane ds destination to remain untouched") ||
-      !Expect(ds_state.vgprs[3][3] == 44u, "expected ds lane 3 read result")) {
+      !validate_basic_ds_state(decoded_basic_ds_state, "decoded")) {
+    return 1;
+  }
+  std::vector<CompiledInstruction> compiled_ds_program;
+  if (!Expect(interpreter.CompileProgram(ds_program, &compiled_ds_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_basic_ds_state = make_basic_ds_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_program,
+                                         &compiled_basic_ds_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_basic_ds_state(compiled_basic_ds_state, "compiled")) {
     return 1;
   }
 
-  std::uint32_t lds_lane0 = 0;
-  std::uint32_t lds_lane1 = 0;
-  std::uint32_t lds_lane3 = 0;
-  std::memcpy(&lds_lane0, ds_state.lds_bytes.data() + 0, sizeof(lds_lane0));
-  std::memcpy(&lds_lane1, ds_state.lds_bytes.data() + 4, sizeof(lds_lane1));
-  std::memcpy(&lds_lane3, ds_state.lds_bytes.data() + 8, sizeof(lds_lane3));
-  if (!Expect(lds_lane0 == 11u, "expected lds lane 0 result") ||
-      !Expect(lds_lane1 == 22u, "expected lds lane 1 result") ||
-      !Expect(lds_lane3 == 44u, "expected lds lane 3 result")) {
-    return 1;
-  }
-
-  WaveExecutionState ds_integer_state;
-  ds_integer_state.exec_mask = 0b1011ULL;
-  ds_integer_state.vgprs[0][0] = 0u;
-  ds_integer_state.vgprs[0][1] = 4u;
-  ds_integer_state.vgprs[0][3] = 8u;
-  ds_integer_state.vgprs[1][0] = 10u;
-  ds_integer_state.vgprs[1][1] = 20u;
-  ds_integer_state.vgprs[1][3] = 40u;
-  ds_integer_state.vgprs[2][0] = 1u;
-  ds_integer_state.vgprs[2][1] = 2u;
-  ds_integer_state.vgprs[2][3] = 4u;
-  ds_integer_state.vgprs[3][0] = 100u;
-  ds_integer_state.vgprs[3][1] = 100u;
-  ds_integer_state.vgprs[3][3] = 100u;
-  ds_integer_state.vgprs[4][0] = 100u;
-  ds_integer_state.vgprs[4][1] = 82u;
-  ds_integer_state.vgprs[4][3] = 63u;
-  ds_integer_state.vgprs[5][0] = 10u;
-  ds_integer_state.vgprs[5][1] = 0u;
-  ds_integer_state.vgprs[5][3] = 5u;
-  ds_integer_state.vgprs[6][0] = 0xfffffff0u;
-  ds_integer_state.vgprs[6][1] = 5u;
-  ds_integer_state.vgprs[6][3] = 0xffffff00u;
-  ds_integer_state.vgprs[7][0] = 0xfffffff8u;
-  ds_integer_state.vgprs[7][1] = 0xffffffffu;
-  ds_integer_state.vgprs[7][3] = 0xffffff80u;
-  ds_integer_state.vgprs[8][0] = 3u;
-  ds_integer_state.vgprs[8][1] = 7u;
-  ds_integer_state.vgprs[8][3] = 1u;
-  ds_integer_state.vgprs[9][0] = 5u;
-  ds_integer_state.vgprs[9][1] = 9u;
-  ds_integer_state.vgprs[9][3] = 2u;
-  ds_integer_state.vgprs[10][0] = 7u;
-  ds_integer_state.vgprs[10][1] = 6u;
-  ds_integer_state.vgprs[10][3] = 3u;
-  ds_integer_state.vgprs[11][0] = 8u;
-  ds_integer_state.vgprs[11][1] = 1u;
-  ds_integer_state.vgprs[11][3] = 4u;
-  ds_integer_state.vgprs[12][0] = 2u;
-  ds_integer_state.vgprs[12][1] = 3u;
-  ds_integer_state.vgprs[12][3] = 5u;
-  ds_integer_state.vgprs[13][2] = 0xdeadbeefu;
   const std::vector<DecodedInstruction> ds_integer_program = {
       DecodedInstruction::Nullary("DS_NOP"),
       DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(0),
@@ -8360,78 +8382,146 @@ int main() {
                                        InstructionOperand::Imm32(0)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
+  auto make_ds_integer_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[5] = 0x2468ace0u;
+    state.vgprs[0][0] = 0u;
+    state.vgprs[0][1] = 4u;
+    state.vgprs[0][2] = 12u;
+    state.vgprs[0][3] = 8u;
+    state.vgprs[1][0] = 10u;
+    state.vgprs[1][1] = 20u;
+    state.vgprs[1][2] = 0xbaad0001u;
+    state.vgprs[1][3] = 40u;
+    state.vgprs[2][0] = 1u;
+    state.vgprs[2][1] = 2u;
+    state.vgprs[2][2] = 0xbaad0002u;
+    state.vgprs[2][3] = 4u;
+    state.vgprs[3][0] = 100u;
+    state.vgprs[3][1] = 100u;
+    state.vgprs[3][2] = 0xbaad0003u;
+    state.vgprs[3][3] = 100u;
+    state.vgprs[4][0] = 100u;
+    state.vgprs[4][1] = 82u;
+    state.vgprs[4][2] = 0xbaad0004u;
+    state.vgprs[4][3] = 63u;
+    state.vgprs[5][0] = 10u;
+    state.vgprs[5][1] = 0u;
+    state.vgprs[5][2] = 0xbaad0005u;
+    state.vgprs[5][3] = 5u;
+    state.vgprs[6][0] = 0xfffffff0u;
+    state.vgprs[6][1] = 5u;
+    state.vgprs[6][2] = 0xbaad0006u;
+    state.vgprs[6][3] = 0xffffff00u;
+    state.vgprs[7][0] = 0xfffffff8u;
+    state.vgprs[7][1] = 0xffffffffu;
+    state.vgprs[7][2] = 0xbaad0007u;
+    state.vgprs[7][3] = 0xffffff80u;
+    state.vgprs[8][0] = 3u;
+    state.vgprs[8][1] = 7u;
+    state.vgprs[8][2] = 0xbaad0008u;
+    state.vgprs[8][3] = 1u;
+    state.vgprs[9][0] = 5u;
+    state.vgprs[9][1] = 9u;
+    state.vgprs[9][2] = 0xbaad0009u;
+    state.vgprs[9][3] = 2u;
+    state.vgprs[10][0] = 7u;
+    state.vgprs[10][1] = 6u;
+    state.vgprs[10][2] = 0xbaad000au;
+    state.vgprs[10][3] = 3u;
+    state.vgprs[11][0] = 8u;
+    state.vgprs[11][1] = 1u;
+    state.vgprs[11][2] = 0xbaad000bu;
+    state.vgprs[11][3] = 4u;
+    state.vgprs[12][0] = 2u;
+    state.vgprs[12][1] = 3u;
+    state.vgprs[12][2] = 0xbaad000cu;
+    state.vgprs[12][3] = 5u;
+    state.vgprs[13][2] = 0xdeadbeefu;
+    state.vgprs[14][0] = 0x11111111u;
+    state.vgprs[14][1] = 0x22222222u;
+    state.vgprs[14][2] = 0x33333333u;
+    state.vgprs[14][3] = 0x44444444u;
+    const std::uint32_t untouched_lds = 0x55667788u;
+    std::memcpy(state.lds_bytes.data() + 12u, &untouched_lds,
+                sizeof(untouched_lds));
+    return state;
+  };
+  const auto validate_ds_integer_state = [&](const WaveExecutionState& state,
+                                             const char* mode) {
+    if (!Expect(state.halted, "expected ds integer program to halt") ||
+        !Expect(state.exec_mask == 0b1011ULL,
+                "expected ds integer exec preservation") ||
+        !Expect(state.sgprs[5] == 0x2468ace0u,
+                "expected ds integer sgpr preservation") ||
+        !Expect(state.vgprs[0][0] == 0u && state.vgprs[0][1] == 4u &&
+                    state.vgprs[0][2] == 12u && state.vgprs[0][3] == 8u,
+                "expected ds integer address preservation") ||
+        !Expect(state.vgprs[1][2] == 0xbaad0001u &&
+                    state.vgprs[2][2] == 0xbaad0002u &&
+                    state.vgprs[6][2] == 0xbaad0006u &&
+                    state.vgprs[12][2] == 0xbaad000cu,
+                "expected ds integer source preservation") ||
+        !Expect(state.vgprs[13][0] == 15u,
+                "expected ds integer lane 0 result") ||
+        !Expect(state.vgprs[13][1] == 2u,
+                "expected ds integer lane 1 result") ||
+        !Expect(state.vgprs[13][2] == 0xdeadbeefu,
+                "expected ds integer inactive lane result") ||
+        !Expect(state.vgprs[13][3] == 3u,
+                "expected ds integer lane 3 result") ||
+        !Expect(state.vgprs[14][0] == 0x11111111u &&
+                    state.vgprs[14][1] == 0x22222222u &&
+                    state.vgprs[14][2] == 0x33333333u &&
+                    state.vgprs[14][3] == 0x44444444u,
+                "expected ds integer unrelated vgpr preservation")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    std::uint32_t lds_lane0 = 0;
+    std::uint32_t lds_lane1 = 0;
+    std::uint32_t lds_lane3 = 0;
+    std::uint32_t untouched_lds = 0;
+    std::memcpy(&lds_lane0, state.lds_bytes.data() + 0u, sizeof(lds_lane0));
+    std::memcpy(&lds_lane1, state.lds_bytes.data() + 4u, sizeof(lds_lane1));
+    std::memcpy(&lds_lane3, state.lds_bytes.data() + 8u, sizeof(lds_lane3));
+    std::memcpy(&untouched_lds, state.lds_bytes.data() + 12u,
+                sizeof(untouched_lds));
+    if (!Expect(lds_lane0 == 15u, "expected ds integer lds lane 0") ||
+        !Expect(lds_lane1 == 2u, "expected ds integer lds lane 1") ||
+        !Expect(lds_lane3 == 3u, "expected ds integer lds lane 3") ||
+        !Expect(untouched_lds == 0x55667788u,
+                "expected ds integer inactive-slot lds preservation")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    return true;
+  };
+  WaveExecutionState decoded_ds_integer_state = make_ds_integer_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_integer_program,
+                                         &decoded_ds_integer_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_integer_state(decoded_ds_integer_state, "decoded")) {
+    return 1;
+  }
   std::vector<CompiledInstruction> compiled_ds_integer_program;
   if (!Expect(interpreter.CompileProgram(ds_integer_program,
                                          &compiled_ds_integer_program,
                                          &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_ds_integer_state = make_ds_integer_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_integer_program,
+                                         &compiled_ds_integer_state,
+                                         &error_message),
               error_message.c_str()) ||
-      !Expect(interpreter.ExecuteProgram(compiled_ds_integer_program,
-                                         &ds_integer_state, &error_message),
-              error_message.c_str()) ||
-      !Expect(ds_integer_state.vgprs[13][0] == 15u,
-              "expected compiled ds integer lane 0 result") ||
-      !Expect(ds_integer_state.vgprs[13][1] == 2u,
-              "expected compiled ds integer lane 1 result") ||
-      !Expect(ds_integer_state.vgprs[13][2] == 0xdeadbeefu,
-              "expected compiled ds integer inactive lane result") ||
-      !Expect(ds_integer_state.vgprs[13][3] == 3u,
-              "expected compiled ds integer lane 3 result")) {
+      !validate_ds_integer_state(compiled_ds_integer_state, "compiled")) {
     return 1;
   }
 
-  lds_lane0 = 0;
-  lds_lane1 = 0;
-  lds_lane3 = 0;
-  std::memcpy(&lds_lane0, ds_integer_state.lds_bytes.data() + 0,
-              sizeof(lds_lane0));
-  std::memcpy(&lds_lane1, ds_integer_state.lds_bytes.data() + 4,
-              sizeof(lds_lane1));
-  std::memcpy(&lds_lane3, ds_integer_state.lds_bytes.data() + 8,
-              sizeof(lds_lane3));
-  if (!Expect(lds_lane0 == 15u, "expected compiled ds integer lds lane 0") ||
-      !Expect(lds_lane1 == 2u, "expected compiled ds integer lds lane 1") ||
-      !Expect(lds_lane3 == 3u, "expected compiled ds integer lds lane 3")) {
-    return 1;
-  }
-
-  WaveExecutionState ds_float_state;
-  ds_float_state.exec_mask = 0b1011ULL;
-  ds_float_state.vgprs[0][0] = 0u;
-  ds_float_state.vgprs[0][1] = 4u;
-  ds_float_state.vgprs[0][3] = 8u;
-  ds_float_state.vgprs[1][0] = 0x3fc00000u;
-  ds_float_state.vgprs[1][1] = 0xc0000000u;
-  ds_float_state.vgprs[1][3] = 0x41200000u;
-  ds_float_state.vgprs[2][0] = 0x40100000u;
-  ds_float_state.vgprs[2][1] = 0x3f800000u;
-  ds_float_state.vgprs[2][3] = 0xc0a00000u;
-  ds_float_state.vgprs[3][0] = 0x40800000u;
-  ds_float_state.vgprs[3][1] = 0xc0400000u;
-  ds_float_state.vgprs[3][3] = 0x40c00000u;
-  ds_float_state.vgprs[4][0] = 0x40600000u;
-  ds_float_state.vgprs[4][1] = 0xc0200000u;
-  ds_float_state.vgprs[4][3] = 0x40e00000u;
-  ds_float_state.vgprs[5][2] = 0xdeadbeefu;
-  ds_float_state.vgprs[6][0] = 16u;
-  ds_float_state.vgprs[6][1] = 20u;
-  ds_float_state.vgprs[6][3] = 24u;
-  ds_float_state.vgprs[7][0] = 0x11223344u;
-  ds_float_state.vgprs[7][1] = 0xaabbccddu;
-  ds_float_state.vgprs[7][3] = 0x01020304u;
-  ds_float_state.vgprs[8][0] = 0x77u;
-  ds_float_state.vgprs[8][1] = 0x66u;
-  ds_float_state.vgprs[8][3] = 0xcdu;
-  ds_float_state.vgprs[10][2] = 0xdeadbeefu;
-  ds_float_state.vgprs[11][0] = 32u;
-  ds_float_state.vgprs[11][1] = 36u;
-  ds_float_state.vgprs[11][3] = 40u;
-  ds_float_state.vgprs[12][0] = 0x11223344u;
-  ds_float_state.vgprs[12][1] = 0xaabbccddu;
-  ds_float_state.vgprs[12][3] = 0x01020304u;
-  ds_float_state.vgprs[14][0] = 0x5566u;
-  ds_float_state.vgprs[14][1] = 0x1234u;
-  ds_float_state.vgprs[14][3] = 0xabcdu;
-  ds_float_state.vgprs[15][2] = 0xdeadbeefu;
   const std::vector<DecodedInstruction> ds_float_program = {
       DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(0),
                                        InstructionOperand::Vgpr(1),
@@ -8468,38 +8558,175 @@ int main() {
                                        InstructionOperand::Imm32(0)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
+  auto make_ds_float_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[5] = 0x0f1e2d3cu;
+    state.vgprs[0][0] = 0u;
+    state.vgprs[0][1] = 4u;
+    state.vgprs[0][2] = 12u;
+    state.vgprs[0][3] = 8u;
+    state.vgprs[1][0] = 0x3fc00000u;
+    state.vgprs[1][1] = 0xc0000000u;
+    state.vgprs[1][2] = 0xbaad1001u;
+    state.vgprs[1][3] = 0x41200000u;
+    state.vgprs[2][0] = 0x40100000u;
+    state.vgprs[2][1] = 0x3f800000u;
+    state.vgprs[2][2] = 0xbaad1002u;
+    state.vgprs[2][3] = 0xc0a00000u;
+    state.vgprs[3][0] = 0x40800000u;
+    state.vgprs[3][1] = 0xc0400000u;
+    state.vgprs[3][2] = 0xbaad1003u;
+    state.vgprs[3][3] = 0x40c00000u;
+    state.vgprs[4][0] = 0x40600000u;
+    state.vgprs[4][1] = 0xc0200000u;
+    state.vgprs[4][2] = 0xbaad1004u;
+    state.vgprs[4][3] = 0x40e00000u;
+    state.vgprs[5][2] = 0xdeadbeefu;
+    state.vgprs[6][0] = 16u;
+    state.vgprs[6][1] = 20u;
+    state.vgprs[6][2] = 28u;
+    state.vgprs[6][3] = 24u;
+    state.vgprs[7][0] = 0x11223344u;
+    state.vgprs[7][1] = 0xaabbccddu;
+    state.vgprs[7][2] = 0xbaad2001u;
+    state.vgprs[7][3] = 0x01020304u;
+    state.vgprs[8][0] = 0x77u;
+    state.vgprs[8][1] = 0x66u;
+    state.vgprs[8][2] = 0xbaad2002u;
+    state.vgprs[8][3] = 0xcdu;
+    state.vgprs[10][2] = 0xdeadbeefu;
+    state.vgprs[11][0] = 32u;
+    state.vgprs[11][1] = 36u;
+    state.vgprs[11][2] = 44u;
+    state.vgprs[11][3] = 40u;
+    state.vgprs[12][0] = 0x11223344u;
+    state.vgprs[12][1] = 0xaabbccddu;
+    state.vgprs[12][2] = 0xbaad3001u;
+    state.vgprs[12][3] = 0x01020304u;
+    state.vgprs[14][0] = 0x5566u;
+    state.vgprs[14][1] = 0x1234u;
+    state.vgprs[14][2] = 0xbaad3002u;
+    state.vgprs[14][3] = 0xabcdu;
+    state.vgprs[15][2] = 0xdeadbeefu;
+    state.vgprs[16][0] = 0x11111111u;
+    state.vgprs[16][1] = 0x22222222u;
+    state.vgprs[16][2] = 0x33333333u;
+    state.vgprs[16][3] = 0x44444444u;
+    const std::uint32_t untouched_lds0 = 0x55667788u;
+    const std::uint32_t untouched_lds1 = 0x66778899u;
+    const std::uint32_t untouched_lds2 = 0x778899aau;
+    std::memcpy(state.lds_bytes.data() + 12u, &untouched_lds0,
+                sizeof(untouched_lds0));
+    std::memcpy(state.lds_bytes.data() + 28u, &untouched_lds1,
+                sizeof(untouched_lds1));
+    std::memcpy(state.lds_bytes.data() + 44u, &untouched_lds2,
+                sizeof(untouched_lds2));
+    return state;
+  };
+  const auto validate_ds_float_state = [&](const WaveExecutionState& state,
+                                           const char* mode) {
+    if (!Expect(state.halted, "expected ds float program to halt") ||
+        !Expect(state.exec_mask == 0b1011ULL,
+                "expected ds float exec preservation") ||
+        !Expect(state.sgprs[5] == 0x0f1e2d3cu,
+                "expected ds float sgpr preservation") ||
+        !Expect(state.vgprs[0][2] == 12u && state.vgprs[6][2] == 28u &&
+                    state.vgprs[11][2] == 44u,
+                "expected ds float address preservation") ||
+        !Expect(state.vgprs[1][2] == 0xbaad1001u &&
+                    state.vgprs[2][2] == 0xbaad1002u &&
+                    state.vgprs[3][2] == 0xbaad1003u &&
+                    state.vgprs[4][2] == 0xbaad1004u &&
+                    state.vgprs[7][2] == 0xbaad2001u &&
+                    state.vgprs[8][2] == 0xbaad2002u &&
+                    state.vgprs[12][2] == 0xbaad3001u &&
+                    state.vgprs[14][2] == 0xbaad3002u,
+                "expected ds float source preservation") ||
+        !Expect(state.vgprs[5][0] == 0x40700000u,
+                "expected ds float lane 0 result") ||
+        !Expect(state.vgprs[5][1] == 0xc0200000u,
+                "expected ds float lane 1 result") ||
+        !Expect(state.vgprs[5][2] == 0xdeadbeefu,
+                "expected ds float inactive lane result") ||
+        !Expect(state.vgprs[5][3] == 0x40e00000u,
+                "expected ds float lane 3 result") ||
+        !Expect(state.vgprs[10][0] == 0x11223377u,
+                "expected ds float byte-write lane 0 result") ||
+        !Expect(state.vgprs[10][1] == 0xaabbcc66u,
+                "expected ds float byte-write lane 1 result") ||
+        !Expect(state.vgprs[10][2] == 0xdeadbeefu,
+                "expected ds float byte-write inactive lane result") ||
+        !Expect(state.vgprs[10][3] == 0x010203cdu,
+                "expected ds float byte-write lane 3 result") ||
+        !Expect(state.vgprs[15][0] == 0x11225566u,
+                "expected ds float half-write lane 0 result") ||
+        !Expect(state.vgprs[15][1] == 0xaabb1234u,
+                "expected ds float half-write lane 1 result") ||
+        !Expect(state.vgprs[15][2] == 0xdeadbeefu,
+                "expected ds float half-write inactive lane result") ||
+        !Expect(state.vgprs[15][3] == 0x0102abcdu,
+                "expected ds float half-write lane 3 result") ||
+        !Expect(state.vgprs[16][0] == 0x11111111u &&
+                    state.vgprs[16][1] == 0x22222222u &&
+                    state.vgprs[16][2] == 0x33333333u &&
+                    state.vgprs[16][3] == 0x44444444u,
+                "expected ds float unrelated vgpr preservation")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    const auto expect_lds_value = [&](std::size_t address, std::uint32_t expected,
+                                      const char* label) {
+      std::uint32_t value = 0;
+      std::memcpy(&value, state.lds_bytes.data() + address, sizeof(value));
+      return Expect(value == expected, label);
+    };
+    if (!expect_lds_value(0u, 0x40700000u, "expected ds float lds lane 0") ||
+        !expect_lds_value(4u, 0xc0200000u, "expected ds float lds lane 1") ||
+        !expect_lds_value(8u, 0x40e00000u, "expected ds float lds lane 3") ||
+        !expect_lds_value(12u, 0x55667788u,
+                          "expected ds float inactive-slot0 preservation") ||
+        !expect_lds_value(16u, 0x11223377u,
+                          "expected ds float byte-write lane 0") ||
+        !expect_lds_value(20u, 0xaabbcc66u,
+                          "expected ds float byte-write lane 1") ||
+        !expect_lds_value(24u, 0x010203cdu,
+                          "expected ds float byte-write lane 3") ||
+        !expect_lds_value(28u, 0x66778899u,
+                          "expected ds float inactive-slot1 preservation") ||
+        !expect_lds_value(32u, 0x11225566u,
+                          "expected ds float half-write lane 0") ||
+        !expect_lds_value(36u, 0xaabb1234u,
+                          "expected ds float half-write lane 1") ||
+        !expect_lds_value(40u, 0x0102abcdu,
+                          "expected ds float half-write lane 3") ||
+        !expect_lds_value(44u, 0x778899aau,
+                          "expected ds float inactive-slot2 preservation")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    return true;
+  };
+  WaveExecutionState decoded_ds_float_state = make_ds_float_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_float_program, &decoded_ds_float_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_float_state(decoded_ds_float_state, "decoded")) {
+    return 1;
+  }
   std::vector<CompiledInstruction> compiled_ds_float_program;
   if (!Expect(interpreter.CompileProgram(ds_float_program,
                                          &compiled_ds_float_program,
                                          &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_ds_float_state = make_ds_float_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_float_program,
+                                         &compiled_ds_float_state,
+                                         &error_message),
               error_message.c_str()) ||
-      !Expect(interpreter.ExecuteProgram(compiled_ds_float_program,
-                                         &ds_float_state, &error_message),
-              error_message.c_str()) ||
-      !Expect(ds_float_state.vgprs[5][0] == 0x40700000u,
-              "expected compiled ds float lane 0 result") ||
-      !Expect(ds_float_state.vgprs[5][1] == 0xc0200000u,
-              "expected compiled ds float lane 1 result") ||
-      !Expect(ds_float_state.vgprs[5][2] == 0xdeadbeefu,
-              "expected compiled ds float inactive lane result") ||
-      !Expect(ds_float_state.vgprs[5][3] == 0x40e00000u,
-              "expected compiled ds float lane 3 result") ||
-      !Expect(ds_float_state.vgprs[10][0] == 0x11223377u,
-              "expected compiled ds byte-write lane 0 result") ||
-      !Expect(ds_float_state.vgprs[10][1] == 0xaabbcc66u,
-              "expected compiled ds byte-write lane 1 result") ||
-      !Expect(ds_float_state.vgprs[10][2] == 0xdeadbeefu,
-              "expected compiled ds byte-write inactive lane result") ||
-      !Expect(ds_float_state.vgprs[10][3] == 0x010203cdu,
-              "expected compiled ds byte-write lane 3 result") ||
-      !Expect(ds_float_state.vgprs[15][0] == 0x11225566u,
-              "expected compiled ds half-write lane 0 result") ||
-      !Expect(ds_float_state.vgprs[15][1] == 0xaabb1234u,
-              "expected compiled ds half-write lane 1 result") ||
-      !Expect(ds_float_state.vgprs[15][2] == 0xdeadbeefu,
-              "expected compiled ds half-write inactive lane result") ||
-      !Expect(ds_float_state.vgprs[15][3] == 0x0102abcdu,
-              "expected compiled ds half-write lane 3 result")) {
+      !validate_ds_float_state(compiled_ds_float_state, "compiled")) {
     return 1;
   }
 
