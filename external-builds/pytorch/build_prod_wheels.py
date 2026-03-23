@@ -141,12 +141,17 @@ import shutil
 import shlex
 import subprocess
 import sys
+import tarfile
 import tempfile
 import textwrap
+import urllib.request
 
 script_dir = Path(__file__).resolve().parent
 
 is_windows = platform.system() == "Windows"
+
+# LLVM download URL for triton-windows
+LLVM_BASE_URL = "https://oaitriton.blob.core.windows.net/public/llvm-builds"
 
 # List of library preloads for Linux to generate into _rocm_init.py
 LINUX_LIBRARY_PRELOADS = [
@@ -258,6 +263,68 @@ def get_version_suffix_for_installed_rocm_package() -> str:
     version_suffix = f"+{base_name}{str(parsed_version).replace('+','-')}"
     print(f"Version suffix is: {version_suffix}")
     return version_suffix
+
+
+def get_triton_windows_llvm_hash(triton_dir: Path) -> str:
+    """Read the LLVM hash from triton-windows cmake/llvm-hash.txt."""
+    hash_file = triton_dir / "cmake" / "llvm-hash.txt"
+    if not hash_file.exists():
+        raise RuntimeError(f"LLVM hash file not found: {hash_file}")
+    return hash_file.read_text().strip()
+
+
+def download_llvm_for_triton_windows(triton_dir: Path) -> Path:
+    """Download and extract pre-built LLVM binaries for triton-windows.
+
+    triton-windows requires a specific LLVM version that matches the hash
+    in cmake/llvm-hash.txt. Pre-built binaries are hosted at oaitriton.blob.core.windows.net.
+    """
+    full_hash = get_triton_windows_llvm_hash(triton_dir)
+    short_hash = full_hash[:8]
+
+    llvm_dir = triton_dir.parent / f"llvm-{short_hash}-windows-x64"
+    llvm_hash_marker = llvm_dir / ".llvm-hash"
+
+    if llvm_hash_marker.exists():
+        installed_hash = llvm_hash_marker.read_text().strip()
+        if installed_hash == full_hash:
+            print(f"LLVM already downloaded: {llvm_dir}")
+            return llvm_dir
+
+    if llvm_dir.exists():
+        shutil.rmtree(llvm_dir)
+
+    filename = f"llvm-{short_hash}-windows-x64.tar.gz"
+    download_url = f"{LLVM_BASE_URL}/{filename}"
+
+    print(f"Downloading LLVM for triton-windows...")
+    print(f"  Hash: {short_hash}")
+    print(f"  URL: {download_url}")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        download_path = Path(temp_dir) / filename
+
+        print("  Downloading (this may take a few minutes, ~500MB)...")
+        try:
+            urllib.request.urlretrieve(download_url, download_path)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to download LLVM from {download_url}: {e}\n"
+                "You may need to download manually and extract to "
+                f"{llvm_dir}"
+            )
+
+        print("  Extracting...")
+        with tarfile.open(download_path, "r:gz") as tar:
+            tar.extractall(triton_dir.parent, filter="data")
+
+        if not llvm_dir.exists():
+            raise RuntimeError(f"Extracted LLVM directory not found: {llvm_dir}")
+
+        llvm_hash_marker.write_text(full_hash)
+
+    print(f"  LLVM downloaded to: {llvm_dir}")
+    return llvm_dir
 
 
 def get_rocm_path(path_name: str) -> Path:
@@ -650,9 +717,61 @@ def do_build(args: argparse.Namespace):
             print(f"ccache --show-stats output:\n{ccache_stats_output}")
 
 
-def do_build_triton(
+def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
+    """Build triton wheel for Windows using triton-windows repository."""
+    print("Building Triton for Windows (using triton-windows repository)")
+
+    llvm_build_dir = download_llvm_for_triton_windows(triton_dir)
+
+    # Prepare environment for triton-windows build.
+    # Note: MSVC environment (vcvars64.bat) must already be set up.
+    windows_env = dict(os.environ)
+    windows_env.update(
+        {
+            "PYTHONUTF8": "1",
+            "LLVM_BUILD_DIR": str(llvm_build_dir),
+            "LLVM_INCLUDE_DIRS": str(llvm_build_dir / "include"),
+            "LLVM_LIBRARY_DIR": str(llvm_build_dir / "lib"),
+            "LLVM_SYSPATH": str(llvm_build_dir),
+            "TRITON_BUILD_PROTON": "OFF",
+            "TRITON_APPEND_CMAKE_ARGS": "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE",
+            # Override package name to "triton" for consistency with Linux
+            "TRITON_WHEEL_NAME": "triton",
+        }
+    )
+
+    print("+++ Installing build dependencies:")
+    run_command(
+        [sys.executable, "-m", "pip", "install", "build", "wheel"],
+        cwd=triton_dir,
+    )
+
+    remove_dir_if_exists(triton_dir / "dist")
+    if args.clean:
+        remove_dir_if_exists(triton_dir / "build")
+
+    print("+++ Building triton:")
+    run_command(
+        [sys.executable, "-m", "build", "--wheel"],
+        cwd=triton_dir,
+        env=windows_env,
+    )
+
+    # Build produces wheel named "triton" (overridden via TRITON_WHEEL_NAME)
+    built_wheel = find_built_wheel(triton_dir / "dist", "triton")
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
+
+    wheel_version = built_wheel.stem.split("-")[1]
+    return f"triton=={wheel_version}"
+
+
+def build_triton_linux(
     args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
 ) -> str:
+    """Build triton wheel for Linux using ROCm/triton repository."""
+    print("Building Triton for Linux (using ROCm/triton repository)")
+
     version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
 
     # Triton's setup.py constructs the final version string by using
@@ -728,6 +847,16 @@ def do_build_triton(
 
     installed_triton_version = get_installed_package_version(triton_wheel_name)
     return f"{triton_wheel_name}=={installed_triton_version}"
+
+
+def do_build_triton(
+    args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
+) -> str:
+    """Build triton wheel. Dispatches to platform-specific build functions."""
+    if is_windows:
+        return build_triton_windows(args, triton_dir)
+    else:
+        return build_triton_linux(args, triton_dir, env)
 
 
 def copy_msvc_libomp_to_torch_lib(pytorch_dir: Path):

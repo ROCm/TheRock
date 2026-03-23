@@ -158,11 +158,10 @@ jobs:
           python ./build_tools/memory_monitor.py --phase "Test ${{ fromJSON(inputs.component).job_name }}" -- \
             bash -c '${{ fromJSON(inputs.component).test_script }}'
 
-      - name: Print test reproduction steps
-        # TODO: Add windows reproduction steps
-        if: ${{ failure() && steps.test.outcome == 'failure' && inputs.platform == 'linux' }}
+      - name: Print test reproduction command
+        if: ${{ failure() && steps.test.outcome == 'failure' }}
         run: |
-          python ./build_tools/github_actions/print_test_reproduction_steps.py \
+          python ./build_tools/github_actions/reproduce_test_failure.py \
             --run-id "${{ env.ARTIFACT_RUN_ID }}" \
             --repository "${{ github.repository }}" \
             --amdgpu-family "${{ inputs.amdgpu_families }}" \
@@ -170,7 +169,8 @@ jobs:
             --shard-index "${{ matrix.shard }}" \
             --total-shards "${{ fromJSON(inputs.component).total_shards }}" \
             --test-type "${{ fromJSON(inputs.component).test_type }}" \
-            --fetch-artifact-args "${{ fromJSON(inputs.component).fetch_artifact_args }}"
+            --print-cmd \
+            ${{ fromJSON(inputs.component).fetch_artifact_args && format('--fetch-artifact-args="{0}"', fromJSON(inputs.component).fetch_artifact_args) || '' }}
 
       # GitHub's 'Complete job' step is unaware of launched executables
       # and will fail to clean up orphan processes.

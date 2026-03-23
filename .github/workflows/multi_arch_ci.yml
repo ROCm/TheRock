@@ -125,6 +125,7 @@ jobs:
       baseline_run_id: ${{ inputs.baseline_run_id }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
+      build_pytorch: ${{ matrix.variant.build_pytorch == true }}
     permissions:
       contents: read
       id-token: write

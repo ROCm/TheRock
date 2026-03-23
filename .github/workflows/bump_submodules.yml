@@ -9,6 +9,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - rocm-systems
+      - rocm-libraries
 jobs:
   bump-submodules:
     runs-on: ubuntu-24.04

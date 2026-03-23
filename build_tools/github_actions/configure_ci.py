@@ -681,7 +681,11 @@ def main(base_args, linux_families, windows_families):
         # Multi-arch CI on PRs requires explicit opt-in via label.
         # This avoids doubling CI load during the transition from ci.yml
         # to multi_arch_ci.yml. See https://github.com/ROCm/TheRock/issues/3337
-        if multi_arch and "ci:run-multi-arch" not in (pr_labels or []):
+        if (
+            multi_arch
+            and is_pull_request
+            and "ci:run-multi-arch" not in (pr_labels or [])
+        ):
             print(
                 "Skipping multi-arch CI: 'ci:run-multi-arch' label not found. "
                 "Add the label to opt in."

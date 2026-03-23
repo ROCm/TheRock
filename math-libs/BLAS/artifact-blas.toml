@@ -101,7 +101,8 @@ include = [
   # Clients benchmarks
   "bin/rocblas-bench*",
   "bin/rocblas-gemm-tune*",
-  # Clients tests
+  # Clients tests (test_runner runs ctest from bin/rocblas/; needs CTestTestfile.cmake)
+  "bin/rocblas/**",
   "bin/rocblas-test*",
   "bin/rocblas_gentest.py",
   "bin/rocblas_gtest.data",
