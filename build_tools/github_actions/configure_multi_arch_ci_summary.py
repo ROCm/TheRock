@@ -106,10 +106,23 @@ def _non_default_callouts(ci_inputs: CIInputs, outputs: CIOutputs) -> list[str]:
             )
         elif label.startswith("test_filter:"):
             callouts.append(
-                f"Label `{label}`: overrode test level " f"(default would be `quick`)"
+                f"Label `{label}`: overrode test level (default would be `quick`)"
             )
         elif label.startswith("test:"):
             callouts.append(f"Label `{label}`: requested component tests")
+        elif label.startswith("ci:"):
+            callouts.append(f"Label `{label}`")
+
+    # Explicit test labels (workflow_dispatch)
+    if ci_inputs.is_workflow_dispatch:
+        if ci_inputs.linux_test_labels:
+            callouts.append(
+                f"Explicit Linux test labels: `{ci_inputs.linux_test_labels}`"
+            )
+        if ci_inputs.windows_test_labels:
+            callouts.append(
+                f"Explicit Windows test labels: `{ci_inputs.windows_test_labels}`"
+            )
 
     # Prebuilt stages
     if jobs and jobs.build_rocm.prebuilt_stages:
@@ -170,15 +183,11 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
         f"Test level: **{test_rocm.test_type}** ({test_rocm.test_type_reason})"
     )
 
-    # Component test labels
-    test_labels = []
+    # Component test labels (per platform)
     if outputs.linux_test_labels:
-        test_labels.append(outputs.linux_test_labels)
+        lines.append(f"Component tests (Linux): `{outputs.linux_test_labels}`")
     if outputs.windows_test_labels:
-        test_labels.append(outputs.windows_test_labels)
-    if test_labels:
-        labels_str = ", ".join(f"`{t}`" for t in test_labels)
-        lines.append(f"Component tests: {labels_str}")
+        lines.append(f"Component tests (Windows): `{outputs.windows_test_labels}`")
     lines.append("")
 
     # Per-family test runner table
