@@ -8756,31 +8756,75 @@ int main() {
   auto make_ds_packed_add_state = []() {
     WaveExecutionState state;
     state.exec_mask = 0b1011ULL;
+    state.sgprs[5] = 0x5a5a1234u;
     state.vgprs[0][0] = 0u;
     state.vgprs[0][1] = 4u;
+    state.vgprs[0][2] = 12u;
     state.vgprs[0][3] = 8u;
     state.vgprs[1][0] = 0x40003c00u;
     state.vgprs[1][1] = 0x0000bc00u;
+    state.vgprs[1][2] = 0xbaad4001u;
     state.vgprs[1][3] = 0x4400c000u;
     state.vgprs[2][0] = 0x3c004000u;
     state.vgprs[2][1] = 0x3c003800u;
+    state.vgprs[2][2] = 0xbaad4002u;
     state.vgprs[2][3] = 0x40003c00u;
     state.vgprs[4][0] = 16u;
     state.vgprs[4][1] = 20u;
+    state.vgprs[4][2] = 28u;
     state.vgprs[4][3] = 24u;
     state.vgprs[5][0] = 0x40003f80u;
     state.vgprs[5][1] = 0x0000bf80u;
+    state.vgprs[5][2] = 0xbaad5001u;
     state.vgprs[5][3] = 0x4080c000u;
     state.vgprs[6][0] = 0x3f804000u;
     state.vgprs[6][1] = 0x3f803f00u;
+    state.vgprs[6][2] = 0xbaad5002u;
     state.vgprs[6][3] = 0x40003f80u;
     state.vgprs[3][2] = 0xdeadbeefu;
     state.vgprs[7][2] = 0xcafebabeu;
+    state.vgprs[8][0] = 0x11111111u;
+    state.vgprs[8][1] = 0x22222222u;
+    state.vgprs[8][2] = 0x33333333u;
+    state.vgprs[8][3] = 0x44444444u;
+    const std::uint32_t untouched_lds0 = 0x55667788u;
+    const std::uint32_t untouched_lds1 = 0x66778899u;
+    std::memcpy(state.lds_bytes.data() + 12u, &untouched_lds0,
+                sizeof(untouched_lds0));
+    std::memcpy(state.lds_bytes.data() + 28u, &untouched_lds1,
+                sizeof(untouched_lds1));
     return state;
   };
   auto validate_ds_packed_add_state = [&](const WaveExecutionState& state,
                                           const char* mode) {
     if (!Expect(state.halted, "expected ds packed-add program to halt") ||
+        !Expect(state.exec_mask == 0b1011ULL,
+                "expected ds packed-add exec preservation") ||
+        !Expect(state.sgprs[5] == 0x5a5a1234u,
+                "expected ds packed-add sgpr preservation") ||
+        !Expect(state.vgprs[0][0] == 0u && state.vgprs[0][1] == 4u &&
+                    state.vgprs[0][2] == 12u && state.vgprs[0][3] == 8u &&
+                    state.vgprs[4][0] == 16u && state.vgprs[4][1] == 20u &&
+                    state.vgprs[4][2] == 28u && state.vgprs[4][3] == 24u,
+                "expected ds packed-add address preservation") ||
+        !Expect(state.vgprs[1][0] == 0x40003c00u &&
+                    state.vgprs[1][1] == 0x0000bc00u &&
+                    state.vgprs[1][2] == 0xbaad4001u &&
+                    state.vgprs[1][3] == 0x4400c000u &&
+                    state.vgprs[2][0] == 0x3c004000u &&
+                    state.vgprs[2][1] == 0x3c003800u &&
+                    state.vgprs[2][2] == 0xbaad4002u &&
+                    state.vgprs[2][3] == 0x40003c00u,
+                "expected ds packed-add f16 source preservation") ||
+        !Expect(state.vgprs[5][0] == 0x40003f80u &&
+                    state.vgprs[5][1] == 0x0000bf80u &&
+                    state.vgprs[5][2] == 0xbaad5001u &&
+                    state.vgprs[5][3] == 0x4080c000u &&
+                    state.vgprs[6][0] == 0x3f804000u &&
+                    state.vgprs[6][1] == 0x3f803f00u &&
+                    state.vgprs[6][2] == 0xbaad5002u &&
+                    state.vgprs[6][3] == 0x40003f80u,
+                "expected ds packed-add bf16 source preservation") ||
         !Expect(state.vgprs[3][0] == 0x42004200u,
                 "expected ds_pk_add_f16 lane 0 result") ||
         !Expect(state.vgprs[3][1] == 0x3c00b800u,
@@ -8796,7 +8840,12 @@ int main() {
         !Expect(state.vgprs[7][2] == 0xcafebabeu,
                 "expected ds_pk_add_bf16 inactive lane result") ||
         !Expect(state.vgprs[7][3] == 0x40c0bf80u,
-                "expected ds_pk_add_bf16 lane 3 result")) {
+                "expected ds_pk_add_bf16 lane 3 result") ||
+        !Expect(state.vgprs[8][0] == 0x11111111u &&
+                    state.vgprs[8][1] == 0x22222222u &&
+                    state.vgprs[8][2] == 0x33333333u &&
+                    state.vgprs[8][3] == 0x44444444u,
+                "expected ds packed-add unrelated vgpr preservation")) {
       std::cerr << mode << '\n';
       return false;
     }
@@ -8811,9 +8860,13 @@ int main() {
     if (!expect_lds_value(0u, 0x42004200u, "expected ds_pk_add_f16 lane 0 lds") ||
         !expect_lds_value(4u, 0x3c00b800u, "expected ds_pk_add_f16 lane 1 lds") ||
         !expect_lds_value(8u, 0x4600bc00u, "expected ds_pk_add_f16 lane 3 lds") ||
+        !expect_lds_value(12u, 0x55667788u,
+                          "expected ds_pk_add_f16 inactive-slot preservation") ||
         !expect_lds_value(16u, 0x40404040u, "expected ds_pk_add_bf16 lane 0 lds") ||
         !expect_lds_value(20u, 0x3f80bf00u, "expected ds_pk_add_bf16 lane 1 lds") ||
-        !expect_lds_value(24u, 0x40c0bf80u, "expected ds_pk_add_bf16 lane 3 lds")) {
+        !expect_lds_value(24u, 0x40c0bf80u, "expected ds_pk_add_bf16 lane 3 lds") ||
+        !expect_lds_value(28u, 0x66778899u,
+                          "expected ds_pk_add_bf16 inactive-slot preservation")) {
       std::cerr << mode << '\n';
       return false;
     }
