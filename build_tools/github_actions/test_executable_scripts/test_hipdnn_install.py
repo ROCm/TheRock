@@ -141,7 +141,9 @@ def run_list_engines_test():
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
-            logging.error(f"hipdnn_list_engines failed with return code {result.returncode}")
+            logging.error(
+                f"hipdnn_list_engines failed with return code {result.returncode}"
+            )
             logging.error(f"stdout: {result.stdout}")
             logging.error(f"stderr: {result.stderr}")
             raise RuntimeError(
@@ -149,29 +151,35 @@ def run_list_engines_test():
             )
 
         if "Loaded engines:" not in result.stdout:
-            logging.error(f"Unexpected output from hipdnn_list_engines:\n{result.stdout}")
+            logging.error(
+                f"Unexpected output from hipdnn_list_engines:\n{result.stdout}"
+            )
             raise RuntimeError(
                 f"hipdnn_list_engines ({description}) output missing 'Loaded engines:'"
             )
 
         for engine in expected_engines:
             if engine not in result.stdout:
-                logging.error(f"Unexpected output from hipdnn_list_engines:\n{result.stdout}")
+                logging.error(
+                    f"Unexpected output from hipdnn_list_engines:\n{result.stdout}"
+                )
                 raise RuntimeError(
                     f"hipdnn_list_engines ({description}) output missing expected engine: {engine}"
                 )
 
         logging.info(f"hipdnn_list_engines ({description}) output:\n{result.stdout}")
 
-    # Run 1: With explicit --plugin-dir argument
+    # Run 1: Test with explicit --plugin-dir argument
     cmd_explicit = [str(list_engines), "--plugin-dir", str(plugin_dir)]
     run_and_validate(cmd_explicit, "explicit plugin-dir")
 
-    # Run 2: Without --plugin-dir (use internal default path)
+    # Run 2: Test without --plugin-dir (use internal default path)
     cmd_default = [str(list_engines)]
     run_and_validate(cmd_default, "default plugin-dir")
 
-    logging.info("hipdnn_list_engines test passed (both explicit and default plugin-dir)")
+    logging.info(
+        "hipdnn_list_engines test passed (both explicit and default plugin-dir)"
+    )
 
 
 if __name__ == "__main__":
