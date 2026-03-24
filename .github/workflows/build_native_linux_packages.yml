@@ -252,6 +252,7 @@ jobs:
     with:
       repo_base_url: ${{ needs.get_install_test_profiles.outputs.repo_base_url }}
       repo_sub_folder: ${{ needs.get_install_test_profiles.outputs.repo_sub_folder }}
+      release_type: ${{ inputs.release_type }}
       os_profile: ${{ matrix.os_profile }}
       gpg_key_url: ${{ inputs.release_type == 'prerelease' && format('{0}/gpg/rocm.gpg', needs.get_install_test_profiles.outputs.repo_base_url) || '' }}
       gfx_arch: ${{ needs.get_install_test_profiles.outputs.gfx_arch }}
