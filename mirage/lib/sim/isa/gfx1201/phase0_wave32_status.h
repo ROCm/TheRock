@@ -59,6 +59,7 @@ std::span<const std::string_view> GetGfx1201Wave32Phase0NextRiskEncodings();
 std::span<const std::string_view> GetGfx1201Wave32Phase0FrontierOrder();
 std::span<const Gfx1201Wave32Phase0VdsBoundaryBucket>
 GetGfx1201Wave32Phase0VdsBoundaryBuckets();
+std::span<const std::string_view> GetGfx1201Wave32Phase0VdsBoundaryOrder();
 const Gfx1201Wave32Phase0VdsBoundaryBucket*
 FindGfx1201Wave32Phase0VdsBoundaryBucket(std::string_view bucket_name);
 const Gfx1201Wave32Phase0VdsBoundaryBucket*
@@ -66,6 +67,7 @@ FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
     std::string_view instruction_name);
 bool HasGfx1201Wave32SafeVdsContinuation();
 std::string_view GetGfx1201Wave32RecommendedNextVdsBucket();
+std::string_view GetGfx1201Wave32FirstUnsafeVdsBucket();
 std::string_view GetGfx1201Wave32Phase0RecommendedNextEncoding();
 bool IsGfx1201Wave32Phase0EncodingSaturated(std::string_view encoding_name);
 

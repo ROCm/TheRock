@@ -32,6 +32,13 @@ constexpr std::array<std::string_view, 4> kFrontierOrder{{
     "ENC_VOP3",
 }};
 
+constexpr std::array<std::string_view, 4> kVdsBoundaryOrder{{
+    "append_consume",
+    "exchange_compare_store",
+    "multi_address",
+    "bvh_stack",
+}};
+
 constexpr std::array<std::string_view, 2> kAppendConsumeVdsInstructions{{
     "DS_APPEND",
     "DS_CONSUME",
@@ -247,6 +254,10 @@ GetGfx1201Wave32Phase0VdsBoundaryBuckets() {
   return kVdsBoundaryBuckets;
 }
 
+std::span<const std::string_view> GetGfx1201Wave32Phase0VdsBoundaryOrder() {
+  return kVdsBoundaryOrder;
+}
+
 const Gfx1201Wave32Phase0VdsBoundaryBucket*
 FindGfx1201Wave32Phase0VdsBoundaryBucket(std::string_view bucket_name) {
   for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
@@ -286,6 +297,16 @@ std::string_view GetGfx1201Wave32RecommendedNextVdsBucket() {
   for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
        GetGfx1201Wave32Phase0VdsBoundaryBuckets()) {
     if (bucket.safe_under_current_request) {
+      return bucket.bucket_name;
+    }
+  }
+  return {};
+}
+
+std::string_view GetGfx1201Wave32FirstUnsafeVdsBucket() {
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
+       GetGfx1201Wave32Phase0VdsBoundaryBuckets()) {
+    if (!bucket.safe_under_current_request) {
       return bucket.bucket_name;
     }
   }

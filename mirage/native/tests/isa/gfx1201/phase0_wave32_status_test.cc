@@ -180,20 +180,31 @@ int main() {
       "ENC_VDS",
       "ENC_VOP3",
   }};
+  constexpr std::array<const char*, 4> kExpectedVdsBoundaryOrder{{
+      "append_consume",
+      "exchange_compare_store",
+      "multi_address",
+      "bvh_stack",
+  }};
 
   const auto next_risk_encodings = GetGfx1201Wave32Phase0NextRiskEncodings();
   const auto frontier_order = GetGfx1201Wave32Phase0FrontierOrder();
   const auto vds_boundary_buckets = GetGfx1201Wave32Phase0VdsBoundaryBuckets();
+  const auto vds_boundary_order = GetGfx1201Wave32Phase0VdsBoundaryOrder();
   if (!Expect(next_risk_encodings.size() == kExpectedNextRiskEncodings.size(),
               "expected next-risk encoding count") ||
       !Expect(frontier_order.size() == kExpectedFrontierOrder.size(),
               "expected frontier order count") ||
       !Expect(vds_boundary_buckets.size() == 4u,
               "expected four VDS boundary buckets") ||
+      !Expect(vds_boundary_order.size() == kExpectedVdsBoundaryOrder.size(),
+              "expected VDS boundary order count") ||
       !Expect(!HasGfx1201Wave32SafeVdsContinuation(),
               "expected no safe VDS continuation under the current boundary") ||
       !Expect(GetGfx1201Wave32RecommendedNextVdsBucket().empty(),
               "expected no recommended VDS bucket under the current boundary") ||
+      !Expect(GetGfx1201Wave32FirstUnsafeVdsBucket() == "append_consume",
+              "expected append/consume as the first unsafe VDS bucket") ||
       !Expect(GetGfx1201Wave32Phase0RecommendedNextEncoding() == "ENC_VDS",
               "expected ENC_VDS as the recommended next frontier")) {
     return 1;
@@ -209,6 +220,13 @@ int main() {
   for (std::size_t i = 0; i < kExpectedFrontierOrder.size(); ++i) {
     if (!Expect(frontier_order[i] == kExpectedFrontierOrder[i],
                 "unexpected frontier order")) {
+      return 1;
+    }
+  }
+
+  for (std::size_t i = 0; i < kExpectedVdsBoundaryOrder.size(); ++i) {
+    if (!Expect(vds_boundary_order[i] == kExpectedVdsBoundaryOrder[i],
+                "unexpected VDS boundary order")) {
       return 1;
     }
   }

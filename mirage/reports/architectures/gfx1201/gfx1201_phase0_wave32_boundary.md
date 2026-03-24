@@ -19,6 +19,8 @@ execution path.
 - Recommended next frontier: `ENC_VDS`
 - Safe VDS continuation under the current request: `false`
 - Recommended next VDS bucket under the current request: `""`
+- First unsafe VDS bucket: `append_consume`
+- Remaining VDS bucket order: `append_consume`, `exchange_compare_store`, `multi_address`, `bvh_stack`
 - All currently seeded ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, and ENC_VGLOBAL instruction/encoding pairs are executable on the local wave32 path.
 - There are no remaining imported ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, or ENC_VGLOBAL instruction/encoding pairs outside the current seed surface.
 - ENC_SMEM is now fully bootstrapped through S_DCACHE_INV, S_PREFETCH_INST, S_PREFETCH_INST_PC_REL, S_PREFETCH_DATA, S_BUFFER_PREFETCH_DATA, S_PREFETCH_DATA_PC_REL, S_ATC_PROBE, S_ATC_PROBE_BUFFER, the full non-buffer S_LOAD_* slice, and the matching S_BUFFER_LOAD_* slice, leaving no scalar-memory seed instructions scaffolded.
@@ -27,6 +29,7 @@ execution path.
 - The remaining ENC_VDS tail is now explicitly bounded by append/consume allocator semantics, exchange and compare-store forms, multi-address LDS forms including stride64, and gfx1201-specific BVH stack instructions, which is the next verification-risk step before ENC_VOP3.
 - There is no safe ENC_VDS continuation under the current request boundary: every remaining bucket crosses allocator-or-GDS, exchange/compare-store, multi-address, or gfx1201-specific BVH semantics.
 - The boundary report now carries an exact remaining-VDS instruction-to-bucket map so the unresolved tail can be queried directly by opcode name.
+- The exact unsafe-bucket escalation order is `append_consume`, then `exchange_compare_store`, then `multi_address`, then `bvh_stack`.
 
 ## Remaining VDS Boundary
 
