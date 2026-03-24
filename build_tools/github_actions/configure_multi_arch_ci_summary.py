@@ -8,6 +8,11 @@ from configure_multi_arch_ci import (
     CIOutputs,
 )
 
+# Hardcoded for now — prebuilt artifacts are always fetched from ROCm/TheRock
+# workflow runs. TODO(#3399): when baseline_run_id carries a repo qualifier,
+# pass the repo slug through from CIInputs instead of hardcoding.
+_REPO_SLUG = "ROCm/TheRock"
+
 
 def format_summary(
     ci_inputs: CIInputs,
@@ -116,7 +121,7 @@ def _non_default_callouts(ci_inputs: CIInputs, outputs: CIOutputs) -> list[str]:
     if jobs and jobs.build_rocm.prebuilt_stages:
         stage_list = ", ".join(jobs.build_rocm.prebuilt_stages)
         run_id = jobs.build_rocm.baseline_run_id
-        repo = _repo_slug()
+        repo = _REPO_SLUG
         callouts.append(
             f"Prebuilt stages: `[{stage_list}]` from run "
             f"[{run_id}](https://github.com/{repo}/actions/runs/{run_id})"
@@ -133,7 +138,7 @@ def _append_build_rocm(lines: list[str], outputs: CIOutputs) -> None:
     if prebuilt:
         stage_list = ", ".join(prebuilt)
         run_id = jobs.build_rocm.baseline_run_id
-        repo = _repo_slug()
+        repo = _REPO_SLUG
         lines.append(
             f"Using prebuilt artifacts for stages: `[{stage_list}]` "
             f"from run [{run_id}]"
@@ -195,10 +200,3 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
                 scope = test_rocm.test_type
             lines.append(f"| {platform} | {family} | {runner} | {scope} |")
     lines.append("")
-
-
-def _repo_slug() -> str:
-    """Return OWNER/REPO from GITHUB_REPOSITORY, or a placeholder."""
-    import os
-
-    return os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")

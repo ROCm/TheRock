@@ -554,7 +554,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
     expect_failure in the matrix data should not require test updates here.
     """
 
-    def test_build_config_to_dict_round_trips(self):
+    def test_build_config_to_dict_has_all_fields(self):
         """BuildConfig.to_dict() produces all expected keys."""
         config = cm.BuildConfig(
             per_family_info=[],
@@ -713,11 +713,16 @@ class TestFormatSummary(unittest.TestCase):
         defaults.update(kwargs)
         return cm.CIInputs(**defaults)
 
-    def test_skipped_summary_does_not_raise(self):
+    def test_skipped_summary(self):
         outputs = cm.CIOutputs.skipped()
-        format_summary(self._inputs(), outputs)
+        result = format_summary(self._inputs(), outputs)
+        # Just check the header. The output is markdown and asserting
+        # on more exact formatting would create a change detector test.
+        self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
 
-    def test_normal_summary_does_not_raise(self):
+    def test_normal_summary(self):
+        """Only checks header — output is markdown, not a contract.
+        Asserting on exact wording would create a change-detector test."""
         jobs = cm.JobDecisions(
             build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
             test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN, test_type="full"),
@@ -726,7 +731,10 @@ class TestFormatSummary(unittest.TestCase):
             test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
         )
         outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
-        format_summary(self._inputs(), outputs)
+        result = format_summary(self._inputs(), outputs)
+        # Just check the header. The output is markdown for humans and asserting
+        # on more exact formatting would create a change detector test.
+        self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
 
 
 # ---------------------------------------------------------------------------

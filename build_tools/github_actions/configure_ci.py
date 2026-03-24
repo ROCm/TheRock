@@ -589,7 +589,7 @@ def main(base_args, linux_families, windows_families):
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
-    # Format variants for summary - handle both regular and multi-arch modes
+    # Format variants for summary
     def format_variants(variants):
         result = []
         for item in variants:
