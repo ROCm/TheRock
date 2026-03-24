@@ -13463,6 +13463,10 @@ int main() {
   buffer_memory_state.vgprs[61][3] = 0x61000004u;
   buffer_memory_state.vgprs[62][3] = 0x62000004u;
   buffer_memory_state.vgprs[63][3] = 0x63000004u;
+  buffer_memory_state.vgprs[64][0] = 0x01020304u;
+  buffer_memory_state.vgprs[64][1] = 0x11121314u;
+  buffer_memory_state.vgprs[64][2] = 0x21222324u;
+  buffer_memory_state.vgprs[64][3] = 0x31323334u;
   for (std::uint16_t vgpr : {20u, 24u, 25u, 30u, 31u, 32u, 40u, 41u, 42u,
                              43u}) {
     buffer_memory_state.vgprs[vgpr][2] =
@@ -13530,11 +13534,57 @@ int main() {
   const LinearExecutionMemory initial_buffer_memory = buffer_memory;
   const WaveExecutionState initial_buffer_memory_state = buffer_memory_state;
   const auto validate_buffer_memory =
-      [](const WaveExecutionState& state, const LinearExecutionMemory& memory,
-         const char* mode) -> bool {
+      [&](const WaveExecutionState& state,
+          const LinearExecutionMemory& memory,
+          const char* mode) -> bool {
+    const auto expect_sgprs_preserved =
+        [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+          for (std::uint16_t sgpr = begin; sgpr <= end; ++sgpr) {
+            if (state.sgprs[sgpr] != initial_buffer_memory_state.sgprs[sgpr]) {
+              return Expect(false, (std::string(mode) + label).c_str());
+            }
+          }
+          return true;
+        };
+    const auto expect_vgpr_range_preserved =
+        [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+          for (std::uint16_t vgpr = begin; vgpr <= end; ++vgpr) {
+            for (std::size_t lane = 0; lane < 4; ++lane) {
+              if (state.vgprs[vgpr][lane] !=
+                  initial_buffer_memory_state.vgprs[vgpr][lane]) {
+                return Expect(false, (std::string(mode) + label).c_str());
+              }
+            }
+          }
+          return true;
+        };
+    const auto expect_u32_preserved = [&](std::uint64_t address,
+                                          const char* label) {
+      std::uint32_t current = 0;
+      std::uint32_t initial = 0;
+      return Expect(initial_buffer_memory.ReadU32(address, &initial),
+                    (std::string(mode) + " buffer source read").c_str()) &&
+             Expect(memory.ReadU32(address, &current),
+                    (std::string(mode) + " buffer source read").c_str()) &&
+             Expect(current == initial, (std::string(mode) + label).c_str());
+    };
     std::uint32_t value = 0;
     return Expect(state.halted,
                   (std::string(mode) + " buffer memory program to halt").c_str()) &&
+           Expect(state.exec_mask == 0b1011ULL,
+                  (std::string(mode) + " buffer memory preserves exec").c_str()) &&
+           expect_sgprs_preserved(8u, 11u,
+                                  " buffer memory preserves descriptors") &&
+           expect_sgprs_preserved(70u, 71u,
+                                  " buffer memory preserves soffset controls") &&
+           expect_vgpr_range_preserved(2u, 2u,
+                                       " buffer memory preserves addresses") &&
+           expect_vgpr_range_preserved(
+               50u, 63u,
+               " buffer memory preserves store sources") &&
+           expect_vgpr_range_preserved(
+               64u, 64u,
+               " buffer memory preserves unrelated vgprs") &&
            Expect(state.vgprs[20][0] == 0x11111111u,
                   (std::string(mode) + " buffer load lane 0 result").c_str()) &&
            Expect(state.vgprs[20][1] == 0x11111111u,
@@ -13659,7 +13709,63 @@ int main() {
            Expect(memory.ReadU32(0x27cu, &value),
                   (std::string(mode) + " inactive buffer storex4 dword 3 read").c_str()) &&
            Expect(value == 0u,
-                  (std::string(mode) + " inactive buffer storex4 dword 3 result").c_str());
+                  (std::string(mode) + " inactive buffer storex4 dword 3 result").c_str()) &&
+           expect_u32_preserved(0x100u,
+                                " buffer load source preserved") &&
+           expect_u32_preserved(0x114u,
+                                " buffer loadx2 lane 0 low source preserved") &&
+           expect_u32_preserved(0x118u,
+                                " buffer loadx2 lane 0 high source preserved") &&
+           expect_u32_preserved(0x124u,
+                                " buffer loadx2 lane 1 low source preserved") &&
+           expect_u32_preserved(0x128u,
+                                " buffer loadx2 lane 1 high source preserved") &&
+           expect_u32_preserved(0x134u,
+                                " buffer loadx2 lane 3 low source preserved") &&
+           expect_u32_preserved(0x138u,
+                                " buffer loadx2 lane 3 high source preserved") &&
+           expect_u32_preserved(0x150u,
+                                " buffer loadx3 lane 0 dword 0 source preserved") &&
+           expect_u32_preserved(0x154u,
+                                " buffer loadx3 lane 0 dword 1 source preserved") &&
+           expect_u32_preserved(0x158u,
+                                " buffer loadx3 lane 0 dword 2 source preserved") &&
+           expect_u32_preserved(0x160u,
+                                " buffer loadx3 lane 1 dword 0 source preserved") &&
+           expect_u32_preserved(0x164u,
+                                " buffer loadx3 lane 1 dword 1 source preserved") &&
+           expect_u32_preserved(0x168u,
+                                " buffer loadx3 lane 1 dword 2 source preserved") &&
+           expect_u32_preserved(0x170u,
+                                " buffer loadx3 lane 3 dword 0 source preserved") &&
+           expect_u32_preserved(0x174u,
+                                " buffer loadx3 lane 3 dword 1 source preserved") &&
+           expect_u32_preserved(0x178u,
+                                " buffer loadx3 lane 3 dword 2 source preserved") &&
+           expect_u32_preserved(0x190u,
+                                " buffer loadx4 lane 0 dword 0 source preserved") &&
+           expect_u32_preserved(0x194u,
+                                " buffer loadx4 lane 0 dword 1 source preserved") &&
+           expect_u32_preserved(0x198u,
+                                " buffer loadx4 lane 0 dword 2 source preserved") &&
+           expect_u32_preserved(0x19cu,
+                                " buffer loadx4 lane 0 dword 3 source preserved") &&
+           expect_u32_preserved(0x1a0u,
+                                " buffer loadx4 lane 1 dword 0 source preserved") &&
+           expect_u32_preserved(0x1a4u,
+                                " buffer loadx4 lane 1 dword 1 source preserved") &&
+           expect_u32_preserved(0x1a8u,
+                                " buffer loadx4 lane 1 dword 2 source preserved") &&
+           expect_u32_preserved(0x1acu,
+                                " buffer loadx4 lane 1 dword 3 source preserved") &&
+           expect_u32_preserved(0x1b0u,
+                                " buffer loadx4 lane 3 dword 0 source preserved") &&
+           expect_u32_preserved(0x1b4u,
+                                " buffer loadx4 lane 3 dword 1 source preserved") &&
+           expect_u32_preserved(0x1b8u,
+                                " buffer loadx4 lane 3 dword 2 source preserved") &&
+           expect_u32_preserved(0x1bcu,
+                                " buffer loadx4 lane 3 dword 3 source preserved");
   };
   if (!Expect(interpreter.ExecuteProgram(buffer_memory_program,
                                          &buffer_memory_state, &buffer_memory,
