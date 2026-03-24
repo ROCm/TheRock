@@ -138,6 +138,37 @@ def _validate_csv_row(csv_row: dict) -> list[str]:
     return missing_fields
 
 
+def _gpu_count_from_amd_smi_list_json() -> int:
+    return_code, stdout_text, stderr_text = _run_amd_smi(["list", "--json"])
+    assert (
+        return_code == 0
+    ), f"amd-smi list --json failed rc={return_code} stderr={stderr_text} stdout={stdout_text}"
+    try:
+        data = json.loads(stdout_text)
+    except Exception as e:
+        pytest.fail(
+            f"Failed to parse amd-smi list --json output as JSON: {e}\n{stdout_text}"
+        )
+    assert isinstance(
+        data, list
+    ), f"Expected JSON array from amd-smi list --json, got: {type(data)}"
+    assert data, "Expected at least one GPU entry in amd-smi list --json"
+    return len(data)
+
+
+def _assert_blocks_have_fields(stdout_text: str, required_fields: list[str]) -> None:
+    gpu_blocks = _parse_gpu_blocks(stdout_text)
+    assert gpu_blocks, f"No GPU blocks found in output:\n{stdout_text}"
+    for index, block in enumerate(gpu_blocks):
+        missing: list[str] = []
+        for field in required_fields:
+            if not re.search(rf"^\s*{re.escape(field)}:\s*.+", block, flags=re.M):
+                missing.append(field)
+        assert (
+            not missing
+        ), f"GPU block {index} missing fields {missing}. Block:\n{block}"
+
+
 def is_windows():
     return "windows" == platform.system().lower()
 
@@ -442,48 +473,253 @@ class TestROCmSanity:
     @pytest.mark.skipif(
         AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
     )
-    @pytest.mark.skipif(
-        AMDGPU_FAMILIES is None,
-        reason="AMDGPU_FAMILIES is not set (required for VDDBOARD expectations)",
-    )
-    def test_amd_smi_voltage_vddboard(self) -> None:
-        """Validate `amd-smi metric --voltage` reports VDDBOARD."""
-
-        return_code, stdout_text, stderr_text = _run_amd_smi(["metric", "--voltage"])
+    def test_amd_smi_version(self) -> None:
+        return_code, stdout_text, stderr_text = _run_amd_smi(["version"])
         assert (
             return_code == 0
-        ), f"amd-smi metric --voltage failed rc={return_code} stderr={stderr_text} stdout={stdout_text}"
+        ), f"amd-smi version failed rc={return_code} stderr={stderr_text} stdout={stdout_text}"
+        assert re.search(
+            r"AMDSMI Tool:\s\d+\.\d+\.\d+.*\sAMDSMI Library version:\s\d+\.\d+\.\d+.*",
+            stdout_text,
+        ), f"Unexpected amd-smi version output:\n{stdout_text}"
 
-        # Expected behavior:
-        # - Supported families: VDDBOARD: <number> mV
-        # - Unsupported families: VDDBOARD: N/A
-        supported_families = {"gfx94X-dcgpu", "gfx950-dcgpu"}
+    @pytest.mark.skipif(is_windows(), reason="amd-smi CLI not supported on Windows")
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
+    )
+    def test_amd_smi_static(self) -> None:
+        return_code, stdout_text, stderr_text = _run_amd_smi(["static"])
+        assert (
+            return_code == 0
+        ), f"amd-smi static failed rc={return_code} stderr={stderr_text} stdout={stdout_text}"
+        _assert_blocks_have_fields(stdout_text, ["ASIC", "BUS", "IFWI"])
 
-        # Capture the full value after 'VDDBOARD:' for each occurrence.
-        vddboard_values = [
-            raw_value.strip()
-            for raw_value in re.findall(r"VDDBOARD:\s*([^\r\n]+)", stdout_text)
+    @pytest.mark.skipif(is_windows(), reason="amd-smi CLI not supported on Windows")
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
+    )
+    @pytest.mark.parametrize(
+        "mode,subcommands",
+        [
+            ("plain", ["metric"]),
+            ("watch_time", ["metric", "--watch=1", "--watch_time=3"]),
+            ("iterations", ["metric", "--watch=1", "--iterations=3"]),
+        ],
+        ids=["plain", "watch_time", "iterations"],
+    )
+    def test_amd_smi_metric(self, mode: str, subcommands: list[str]) -> None:
+        return_code, stdout_text, stderr_text = _run_amd_smi(subcommands)
+        assert (
+            return_code == 0
+        ), f"amd-smi {' '.join(subcommands)} failed rc={return_code} stderr={stderr_text} stdout={stdout_text}"
+
+        ngpus = _gpu_count_from_amd_smi_list_json()
+        if mode == "watch_time":
+            # Expect more than one timestamp for watch_time mode.
+            assert (
+                len(re.findall(r"TIMESTAMP", stdout_text, flags=re.I)) > 1
+            ), f"Expected multiple TIMESTAMP entries in output. stdout:\n{stdout_text}"
+        elif mode == "iterations":
+            # Expect exactly 3 iterations per GPU in Linux output.
+            assert (
+                len(re.findall(r"TIMESTAMP", stdout_text, flags=re.I)) == 3 * ngpus
+            ), f"Expected {3 * ngpus} TIMESTAMP entries in output. stdout:\n{stdout_text}"
+
+        # Validate that each GPU reports TEMPERATURE and POWER at least once.
+        seen: dict[int, dict[str, bool]] = {
+            gpu: {"TEMPERATURE": False, "POWER": False} for gpu in range(ngpus)
+        }
+        current_gpu: int | None = None
+        for line in stdout_text.splitlines():
+            m1 = re.search(r"GPU:\s+(\d+)", line)
+            m2 = re.search(r"GPU\s+(\d+):", line)
+            if m1:
+                current_gpu = int(m1.group(1))
+            elif m2:
+                current_gpu = int(m2.group(1))
+
+            if current_gpu is None or current_gpu not in seen:
+                continue
+
+            if re.search(r"\s*TEMPERATURE:", line):
+                seen[current_gpu]["TEMPERATURE"] = True
+            if re.search(r"\s*POWER:", line):
+                seen[current_gpu]["POWER"] = True
+
+        missing = {
+            gpu: [k for k, v in fields.items() if not v]
+            for gpu, fields in seen.items()
+            if not all(fields.values())
+        }
+        assert (
+            not missing
+        ), f"Missing TEMPERATURE/POWER fields for GPUs: {missing}. stdout:\n{stdout_text}"
+
+    @pytest.mark.skipif(is_windows(), reason="amd-smi CLI not supported on Windows")
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
+    )
+    def test_amd_smi_firmware(self) -> None:
+        return_code, stdout_text, stderr_text = _run_amd_smi(["firmware"])
+        assert (
+            return_code == 0
+        ), f"amd-smi firmware failed rc={return_code} stderr={stderr_text} stdout={stdout_text}"
+
+        gpu_blocks = _parse_gpu_blocks(stdout_text)
+        assert gpu_blocks, f"No GPU blocks found in firmware output:\n{stdout_text}"
+        for index, block in enumerate(gpu_blocks):
+            assert re.search(
+                r"^\s*FW_VERSION:\s+\d+",
+                block,
+                flags=re.M,
+            ), f"GPU block {index} missing FW_VERSION. Block:\n{block}"
+
+    @pytest.mark.skipif(is_windows(), reason="amd-smi CLI not supported on Windows")
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
+    )
+    @pytest.mark.parametrize(
+        "mode,subcommands",
+        [
+            ("plain", ["process"]),
+            ("watch_time", ["process", "--watch=1", "--watch_time=3"]),
+            ("iterations", ["process", "--watch=1", "--iterations=3"]),
+        ],
+        ids=["plain", "watch_time", "iterations"],
+    )
+    def test_amd_smi_process(self, mode: str, subcommands: list[str]) -> None:
+        return_code, stdout_text, stderr_text = _run_amd_smi(subcommands)
+        assert (
+            return_code == 0
+        ), f"amd-smi {' '.join(subcommands)} failed rc={return_code} stderr={stderr_text} stdout={stdout_text}"
+
+        ngpus = _gpu_count_from_amd_smi_list_json()
+        if mode == "watch_time":
+            assert (
+                len(re.findall(r"TIMESTAMP:\s+\d+", stdout_text)) > 1
+            ), f"Expected multiple TIMESTAMP entries in output. stdout:\n{stdout_text}"
+        elif mode == "iterations":
+            assert (
+                len(re.findall(r"TIMESTAMP:\s+\d+", stdout_text)) == 3 * ngpus
+            ), f"Expected {3 * ngpus} TIMESTAMP entries in output. stdout:\n{stdout_text}"
+
+        # Validate that each GPU reports the no-running-processes message at least once.
+        seen: dict[int, bool] = {gpu: False for gpu in range(ngpus)}
+        current_gpu: int | None = None
+        for line in stdout_text.splitlines():
+            m1 = re.search(r"GPU:\s+(\d+)", line)
+            m2 = re.search(r"GPU\s+(\d+):", line)
+            if m1:
+                current_gpu = int(m1.group(1))
+            elif m2:
+                current_gpu = int(m2.group(1))
+
+            if current_gpu is None or current_gpu not in seen:
+                continue
+
+            if re.search(r"\s*PROCESS_INFO:\s*No running processes detected\s*", line):
+                seen[current_gpu] = True
+
+        missing = [gpu for gpu, ok in seen.items() if not ok]
+        assert (
+            not missing
+        ), f"Missing expected PROCESS_INFO message for GPUs: {missing}. stdout:\n{stdout_text}"
+
+    @pytest.mark.skipif(is_windows(), reason="amd-smi CLI not supported on Windows")
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
+    )
+    def test_amd_smi_monitor_qt(self) -> None:
+        return_code, stdout_text, stderr_text = _run_amd_smi(["monitor", "-qt"])
+        assert (
+            return_code == 0
+        ), f"amd-smi monitor -qt failed rc={return_code} stderr={stderr_text} stdout={stdout_text}"
+
+        output_lines = stdout_text.splitlines()
+        header_index: int | None = None
+        for idx, line in enumerate(output_lines):
+            if re.search(
+                r"GPU\s+NAME\s+PID\s+GTT_MEM\s+CPU_MEM\s+VRAM_MEM\s+MEM_USG\s+CU%\s+EVICT",
+                line,
+            ):
+                header_index = idx
+                break
+        assert (
+            header_index is not None
+        ), f"Expected header line not found. stdout:\n{stdout_text}"
+
+        ngpus = _gpu_count_from_amd_smi_list_json()
+        assert (
+            len(output_lines) >= header_index + 1 + ngpus
+        ), f"Expected at least {ngpus} data lines after header. stdout:\n{stdout_text}"
+
+        # Expected format:
+        # - either all N/A line, or numeric fields and CU% either N/A or '<num> %'.
+        cu_percentage = r"(?:N/A|\d+\.\d+\s+%)"
+        for gpu in range(ngpus):
+            line = output_lines[header_index + 1 + gpu]
+            all_na = re.search(
+                r"\d+\s+N/A\s+N/A\s+N/A\s+N/A\s+N/A\s+N/A\s+N/A\s+N/A", line
+            )
+            numeric = re.search(
+                rf"\d+\s+.*\s+\d+\s+\d+\.\d+\s+[GKMB]+\s+\d+\.\d+\s+[GKMB]+\s+\d+\.\d+\s+[GKMB]+\s+\d+\.\d+\s+[GKMB]+\s+{cu_percentage}\s+\d+\s+ms",
+                line,
+            )
+            assert (
+                all_na or numeric
+            ), f"Unexpected monitor -qt line for gpu_index={gpu}: {line!r}\nstdout:\n{stdout_text}"
+
+    @pytest.mark.skipif(is_windows(), reason="amd-smi CLI not supported on Windows")
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
+    )
+    def test_amd_smi_gfx_version_matches_rocminfo(self, rocm_info_output) -> None:
+        if not rocm_info_output:
+            pytest.fail("Command rocminfo failed to run")
+
+        return_code, stdout_text, stderr_text = _run_amd_smi(["static", "--asic"])
+        assert (
+            return_code == 0
+        ), f"amd-smi static --asic failed rc={return_code} stderr={stderr_text} stdout={stdout_text}"
+
+        amdsmi_pattern = r"TARGET_GRAPHICS_VERSION:\s*(\S+)"
+        rocminfo_pattern = r"Name:\s*(\S+)"
+
+        versions = re.findall(amdsmi_pattern, stdout_text)
+        # Filter to gfx names only, excluding 'amdgcn'.
+        names = [
+            n
+            for n in re.findall(rocminfo_pattern, rocm_info_output)
+            if re.search(r"gfx", n, flags=re.IGNORECASE) and "amdgcn" not in n
         ]
-        assert vddboard_values, (
-            "Expected VDDBOARD field in `amd-smi metric --voltage` output "
-            f"for family={AMDGPU_FAMILIES}. stdout=\n{stdout_text}\n\n"
-            f"stderr=\n{stderr_text}"
+
+        assert versions == names, (
+            "TARGET_GRAPHICS_VERSION list did not match rocminfo gfx names.\n"
+            f"amd-smi versions={versions}\nrocminfo names={names}\n"
+            f"amd-smi stdout:\n{stdout_text}\n"
         )
 
-        if AMDGPU_FAMILIES in supported_families:
-            # Example expected: '55079 mV'
-            for vddboard_value in vddboard_values:
-                assert re.search(
-                    r"^\d+(?:\.\d+)?\s*mV\b",
-                    vddboard_value,
-                    flags=re.IGNORECASE,
-                ), (
-                    "Expected VDDBOARD to be reported as '<number> mV' "
-                    f"for family={AMDGPU_FAMILIES}, got: {vddboard_value!r}. stdout=\n{stdout_text}"
-                )
-        else:
-            for vddboard_value in vddboard_values:
-                assert re.search(r"^N/A\b", vddboard_value, flags=re.IGNORECASE), (
-                    "Expected VDDBOARD to be reported as 'N/A' for unsupported families "
-                    f"(family={AMDGPU_FAMILIES}), got: {vddboard_value!r}. stdout=\n{stdout_text}"
-                )
+    @pytest.mark.skipif(is_windows(), reason="amd-smi CLI not supported on Windows")
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
+    )
+    def test_amd_smi_gpu_driver_version(self) -> None:
+        regex_match = (
+            r"AMDSMI Tool:\s\d+\.\d+\.\d+.*\sAMDSMI Library version:\s\d+\.\d+\.\d+.*"
+            r"\sROCm version:\s\d+\.\d+\.\d+\s.*\samdgpu version:\s\d+\.\d+\.\d+.*"
+        )
+
+        rc1, out1, err1 = _run_amd_smi(["version"])
+        assert rc1 == 0, f"amd-smi version failed rc={rc1} stderr={err1} stdout={out1}"
+
+        rc2, out2, err2 = _run_amd_smi(["version", "-g"])
+        assert (
+            rc2 == 0
+        ), f"amd-smi version -g failed rc={rc2} stderr={err2} stdout={out2}"
+
+        assert re.search(
+            regex_match, out1
+        ), f"Unexpected amd-smi version output:\n{out1}"
+        assert re.search(
+            regex_match, out2
+        ), f"Unexpected amd-smi version -g output:\n{out2}"
