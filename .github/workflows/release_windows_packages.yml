@@ -189,6 +189,8 @@ jobs:
       # TODO(amd-justchen): share with build_windows_artifacts.yml. Include in VM image? Dockerfile?
       - name: Install requirements
         run: |
+          choco source disable -n=chocolatey
+          choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
           choco install --no-progress -y ccache
           # ninja pinned due to a bug in the 1.13.0 release:
           # https://github.com/ninja-build/ninja/issues/2616

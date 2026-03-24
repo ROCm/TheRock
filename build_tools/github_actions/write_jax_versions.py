@@ -18,7 +18,7 @@ suitable for installing the `jax` package from PyPI.
 import argparse
 import glob
 import os
-from github_actions_utils import *
+from github_actions_api import *
 
 
 def _log(*args, **kwargs):
