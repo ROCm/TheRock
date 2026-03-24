@@ -15,8 +15,8 @@ THEROCK_PATH = THEROCK_BIN_PATH.parent
 
 # LIB Paths
 THEROCK_LIB_PATH = THEROCK_PATH / "lib"
-# THEROCK_SYSDEPS_PATH = THEROCK_LIB_PATH / "rocm_sysdeps"
-# THEROCK_SYSDEPS_LIB_PATH = THEROCK_SYSDEPS_PATH / "lib"
+THEROCK_SYSDEPS_PATH = THEROCK_LIB_PATH / "rocm_sysdeps"
+THEROCK_SYSDEPS_LIB_PATH = THEROCK_SYSDEPS_PATH / "lib"
 
 # LLVM Paths
 THEROCK_LLVM_BIN_PATH = THEROCK_PATH / "llvm" / "bin"
@@ -37,9 +37,10 @@ def setup_env():
     environ_vars["ROCPROFILER_METRICS_PATH"] = str(ROCPROFILER_SDK_PATH)
     environ_vars["HIP_PLATFORM"] = "amd"
 
-    ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
-    ld_lib_path.append(f"{THEROCK_LIB_PATH}")
-    environ_vars["LD_LIBRARY_PATH"] = ":".join(ld_lib_path)
+    old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
+    environ_vars["LD_LIBRARY_PATH"] = ":".join(
+        [f"{THEROCK_LIB_PATH}", f"{THEROCK_SYSDEPS_LIB_PATH}"] + old_ld_lib_path
+    )
 
 
 def cmake_config():
@@ -49,7 +50,7 @@ def cmake_config():
         "build",
         "-G",
         "Ninja",
-        f"-DCMAKE_PREFIX_PATH={THEROCK_PATH}",
+        f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_SYSDEPS_PATH}",
         f"-DCMAKE_HIP_COMPILER={THEROCK_CLANG_PLUS_PATH}",
         f"-DCMAKE_C_COMPILER={THEROCK_CLANG_PATH}",
         f"-DCMAKE_CXX_COMPILER={THEROCK_CLANG_PLUS_PATH}",
