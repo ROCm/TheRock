@@ -580,7 +580,6 @@ class HTTPBackend(ArtifactBackend):
             # Artifacts are allowed to be downloaded without checksums
             pass
 
-
     def upload_artifact(self, source_path: Path, artifact_key: str) -> None:
         """Upload is not supported - HTTPBackend is read-only."""
         raise NotImplementedError("HTTPBackend is read-only")
