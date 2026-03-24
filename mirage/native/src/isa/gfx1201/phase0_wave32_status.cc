@@ -75,28 +75,36 @@ constexpr std::array<Gfx1201Wave32Phase0VdsBoundaryBucket, 4>
             "append_consume",
             "DS_APPEND",
             "Append/consume allocator semantics are the first remaining non-local LDS tail.",
+            "allocator_or_gds_semantics",
             2,
+            false,
             std::span<const std::string_view>(kAppendConsumeVdsInstructions),
         },
         {
             "exchange_compare_store",
             "DS_CONDXCHG32_RTN_B64",
             "Exchange and compare-store forms are the next semantic-risk step on the VDS path.",
+            "exchange_compare_store_semantics",
             7,
+            false,
             std::span<const std::string_view>(kExchangeCompareStoreVdsInstructions),
         },
         {
             "multi_address",
             "DS_LOAD_2ADDR_B32",
             "Remaining two-address and stride64 LDS forms would widen the current one-address execution model.",
+            "multi_address_semantics",
             12,
+            false,
             std::span<const std::string_view>(kMultiAddressVdsInstructions),
         },
         {
             "bvh_stack",
             "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
             "BVH stack instructions are gfx1201-specific and sit outside the current LDS utility model.",
+            "gfx1201_specific_bvh_semantics",
             3,
+            false,
             std::span<const std::string_view>(kBvhStackVdsInstructions),
         },
     }};
@@ -237,6 +245,26 @@ std::span<const std::string_view> GetGfx1201Wave32Phase0FrontierOrder() {
 std::span<const Gfx1201Wave32Phase0VdsBoundaryBucket>
 GetGfx1201Wave32Phase0VdsBoundaryBuckets() {
   return kVdsBoundaryBuckets;
+}
+
+bool HasGfx1201Wave32SafeVdsContinuation() {
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
+       GetGfx1201Wave32Phase0VdsBoundaryBuckets()) {
+    if (bucket.safe_under_current_request) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::string_view GetGfx1201Wave32RecommendedNextVdsBucket() {
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
+       GetGfx1201Wave32Phase0VdsBoundaryBuckets()) {
+    if (bucket.safe_under_current_request) {
+      return bucket.bucket_name;
+    }
+  }
+  return {};
 }
 
 std::string_view GetGfx1201Wave32Phase0RecommendedNextEncoding() {

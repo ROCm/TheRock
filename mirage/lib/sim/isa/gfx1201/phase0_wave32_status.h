@@ -41,7 +41,9 @@ struct Gfx1201Wave32Phase0VdsBoundaryBucket {
   std::string_view bucket_name;
   std::string_view example_instruction;
   std::string_view rationale;
+  std::string_view blocking_dimension;
   std::uint32_t instruction_count = 0;
+  bool safe_under_current_request = false;
   std::span<const std::string_view> instruction_names;
 };
 
@@ -57,6 +59,8 @@ std::span<const std::string_view> GetGfx1201Wave32Phase0NextRiskEncodings();
 std::span<const std::string_view> GetGfx1201Wave32Phase0FrontierOrder();
 std::span<const Gfx1201Wave32Phase0VdsBoundaryBucket>
 GetGfx1201Wave32Phase0VdsBoundaryBuckets();
+bool HasGfx1201Wave32SafeVdsContinuation();
+std::string_view GetGfx1201Wave32RecommendedNextVdsBucket();
 std::string_view GetGfx1201Wave32Phase0RecommendedNextEncoding();
 bool IsGfx1201Wave32Phase0EncodingSaturated(std::string_view encoding_name);
 

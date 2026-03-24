@@ -170,6 +170,10 @@ int main() {
               "expected frontier order count") ||
       !Expect(vds_boundary_buckets.size() == 4u,
               "expected four VDS boundary buckets") ||
+      !Expect(!HasGfx1201Wave32SafeVdsContinuation(),
+              "expected no safe VDS continuation under the current boundary") ||
+      !Expect(GetGfx1201Wave32RecommendedNextVdsBucket().empty(),
+              "expected no recommended VDS bucket under the current boundary") ||
       !Expect(GetGfx1201Wave32Phase0RecommendedNextEncoding() == "ENC_VDS",
               "expected ENC_VDS as the recommended next frontier")) {
     return 1;
@@ -193,6 +197,11 @@ int main() {
               "expected append/consume VDS bucket") ||
       !Expect(vds_boundary_buckets[0].example_instruction == "DS_APPEND",
               "expected append/consume example") ||
+      !Expect(vds_boundary_buckets[0].blocking_dimension ==
+                  "allocator_or_gds_semantics",
+              "expected append/consume blocking dimension") ||
+      !Expect(!vds_boundary_buckets[0].safe_under_current_request,
+              "expected append/consume to stay outside the safe boundary") ||
       !Expect(vds_boundary_buckets[0].instruction_count == 2u,
               "expected append/consume count") ||
       !Expect(vds_boundary_buckets[0].instruction_names.size() == 2u,
@@ -205,6 +214,11 @@ int main() {
       !Expect(vds_boundary_buckets[1].example_instruction ==
                   "DS_CONDXCHG32_RTN_B64",
               "expected exchange/compare-store example") ||
+      !Expect(vds_boundary_buckets[1].blocking_dimension ==
+                  "exchange_compare_store_semantics",
+              "expected exchange/compare-store blocking dimension") ||
+      !Expect(!vds_boundary_buckets[1].safe_under_current_request,
+              "expected exchange/compare-store to stay outside the safe boundary") ||
       !Expect(vds_boundary_buckets[1].instruction_count == 7u,
               "expected exchange/compare-store count") ||
       !Expect(vds_boundary_buckets[1].instruction_names.size() == 7u,
@@ -219,6 +233,11 @@ int main() {
       !Expect(vds_boundary_buckets[2].example_instruction ==
                   "DS_LOAD_2ADDR_B32",
               "expected multi-address example") ||
+      !Expect(vds_boundary_buckets[2].blocking_dimension ==
+                  "multi_address_semantics",
+              "expected multi-address blocking dimension") ||
+      !Expect(!vds_boundary_buckets[2].safe_under_current_request,
+              "expected multi-address to stay outside the safe boundary") ||
       !Expect(vds_boundary_buckets[2].instruction_count == 12u,
               "expected multi-address count") ||
       !Expect(vds_boundary_buckets[2].instruction_names.size() == 12u,
@@ -233,6 +252,11 @@ int main() {
       !Expect(vds_boundary_buckets[3].example_instruction ==
                   "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
               "expected BVH-stack example") ||
+      !Expect(vds_boundary_buckets[3].blocking_dimension ==
+                  "gfx1201_specific_bvh_semantics",
+              "expected BVH-stack blocking dimension") ||
+      !Expect(!vds_boundary_buckets[3].safe_under_current_request,
+              "expected BVH-stack to stay outside the safe boundary") ||
       !Expect(vds_boundary_buckets[3].instruction_count == 3u,
               "expected BVH-stack count") ||
       !Expect(vds_boundary_buckets[3].instruction_names.size() == 3u,
