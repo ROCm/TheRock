@@ -43,7 +43,24 @@
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1",
         "CMAKE_CXX_FLAGS": "-g1",
-        "CMAKE_C_FLAGS": "-g1"
+        "CMAKE_C_FLAGS": "-g1",
+        "boost_SANITIZER": "OFF",
+        "Catch2_SANITIZER": "OFF",
+        "googletest_SANITIZER": "OFF",
+        "eigen_SANITIZER": "OFF",
+        "fftw3_SANITIZER": "OFF",
+        "flatbuffers_SANITIZER": "OFF",
+        "fmt_SANITIZER": "OFF",
+        "frugally-deep_SANITIZER": "OFF",
+        "FunctionalPlus_SANITIZER": "OFF",
+        "grpc_SANITIZER": "OFF",
+        "host-blas_SANITIZER": "OFF",
+        "libdivide_SANITIZER": "OFF",
+        "msgpack-cxx_SANITIZER": "OFF",
+        "nlohmann-json_SANITIZER": "OFF",
+        "simde_SANITIZER": "OFF",
+        "SuiteSparse_SANITIZER": "OFF",
+        "yaml-cpp_SANITIZER": "OFF"
       }
     },
     {
