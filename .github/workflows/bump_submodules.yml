@@ -39,6 +39,7 @@ jobs:
       - name: Generate GitHub App token rocm-systems
         uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
         id: systems-token
+        continue-on-error: true
         with:
           app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
           private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
@@ -48,6 +49,7 @@ jobs:
       - name: Generate GitHub App token rocm-libraries
         uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
         id: librarian-token
+        continue-on-error: true
         with:
           app-id: ${{ secrets.ROCM_LIBRARIES_APP_ID }}
           private-key: ${{ secrets.ROCM_LIBRARIES_APP_PRIVATE_KEY }}
@@ -63,8 +65,8 @@ jobs:
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "schedule" \
-            --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}"
+            --systems_token "${{ steps.systems-token.outputs.token || github.token }}" \
+            --libraries_token "${{ steps.librarian-token.outputs.token || github.token }}"
 
       - name: Run push automation
         if: github.event_name == 'push'
@@ -73,5 +75,5 @@ jobs:
             --event_type "push" \
             --before "${{ github.event.before }}" \
             --after "${{ github.sha }}" \
-            --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}"
+            --systems_token "${{ steps.systems-token.outputs.token || github.token }}" \
+            --libraries_token "${{ steps.librarian-token.outputs.token || github.token }}"
