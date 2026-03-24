@@ -33,7 +33,10 @@ def initialize_bucket(bucket_name: Optional[str]) -> None:
     # Resolve and configure the S3 bucket used for index updates.
     # CLI --bucket takes precedence over S3_BUCKET_PY; fails if neither is set.
     global BUCKET_NAME, BUCKET, INDEX_BUCKETS
-
+    # Bucket resolution order:
+    # 1. CLI --bucket (explicit override)
+    # 2. S3_BUCKET_PY environment variable
+    # Raises if neither is provided.
     BUCKET_NAME = bucket_name or getenv("S3_BUCKET_PY")
     if not BUCKET_NAME:
         raise RuntimeError("Bucket must be provided via --bucket or S3_BUCKET_PY")
