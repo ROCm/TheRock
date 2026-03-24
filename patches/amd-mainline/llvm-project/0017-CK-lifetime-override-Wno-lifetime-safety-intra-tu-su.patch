@@ -1,0 +1,13 @@
+diff --git a/clang/tools/driver/driver.cpp b/clang/tools/driver/driver.cpp
+index a6c409dc2d7d..f6513416d1ac 100644
+--- a/clang/tools/driver/driver.cpp
++++ b/clang/tools/driver/driver.cpp
+@@ -321,7 +321,7 @@ int clang_main(int Argc, char **Argv, const llvm::ToolContext &ToolContext) {
+     driver::applyOverrideOptions(Args, OverrideStr, SavedStrings,
+                                  "CCC_OVERRIDE_OPTIONS", &llvm::errs());
+   }
+-  { bool Noisy = false;
++  if (!ClangCLMode) { bool Noisy = false;
+     if (const char *OverrideStr = ::getenv("CCC_OVERRIDE_OPTIONS"))
+       Noisy |= OverrideStr[0] != '#';
+     if (const char *NoisyStr = ::getenv("NOISY_CK_OVERRIDE"))
