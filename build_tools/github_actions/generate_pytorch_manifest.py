@@ -14,135 +14,28 @@ Filename format:
 """
 
 import argparse
-from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
-import shlex
-import subprocess
 import sys
 
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-@dataclass(frozen=True)
-class GitSourceInfo:
-    """Git commit and origin repo for a source checkout."""
-
-    commit: str
-    repo: str
-    branch: str | None = None
-
-    def to_dict(self) -> dict[str, str]:
-        d = {"commit": self.commit, "repo": self.repo}
-        if self.branch is not None:
-            d["branch"] = self.branch
-        return d
-
-
-def capture(args: list[str | Path], cwd: Path) -> str:
-    args = [str(arg) for arg in args]
-    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
-    return (
-        subprocess.check_output(
-            args,
-            cwd=str(cwd),
-            stdin=subprocess.DEVNULL,
-        )
-        .decode()
-        .strip()
-    )
-
-
-def capture_optional(args: list[str | Path], cwd: Path) -> str | None:
-    """Like capture(), but returns None on failure."""
-    args = [str(arg) for arg in args]
-    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
-    try:
-        out = (
-            subprocess.check_output(
-                args,
-                cwd=str(cwd),
-                stdin=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            .decode()
-            .strip()
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
-    return out or None
-
-
-def git_head(dirpath: Path, *, label: str) -> GitSourceInfo:
-    """Return commit + origin repo for a git checkout."""
-    dirpath = dirpath.resolve()
-
-    if not dirpath.exists():
-        raise FileNotFoundError(
-            f"{label}: directory does not exist: {dirpath}\n"
-            "This indicates a misconfigured workflow or incomplete checkout."
-        )
-
-    if not (dirpath / ".git").exists():
-        raise FileNotFoundError(
-            f"{label}: not a git checkout (missing .git): {dirpath}\n"
-            "Manifest generation requires git commit hash and origin repo."
-        )
-
-    commit = capture(["git", "rev-parse", "HEAD"], cwd=dirpath)
-    repo = capture(["git", "remote", "get-url", "origin"], cwd=dirpath)
-    return GitSourceInfo(commit=commit, repo=repo)
-
-
-def git_branch_best_effort(dirpath: Path) -> str | None:
-    """Return current branch name if on a real branch; None if detached/unknown."""
-    dirpath = dirpath.resolve()
-
-    # Most reliable when on a branch; fails in detached HEAD.
-    b = capture_optional(
-        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=dirpath
-    )
-    if b and b != "HEAD":
-        return b
-
-    # Fallback. Returns empty on detached.
-    b = capture_optional(["git", "branch", "--show-current"], cwd=dirpath)
-    if b and b != "HEAD":
-        return b
-
-    return None
-
-
-def resolve_branch(*, inferred: str | None, provided: str | None) -> str | None:
-    """Choose inferred branch if available; else provided; else None."""
-    if inferred:
-        return inferred
-    if provided:
-        return provided
-    return None
-
-
-def normalize_release_track(pytorch_git_ref: str) -> str:
-    """Normalize a git ref for filenames by replacing path separators.
-
-    Examples:
-      nightly                 -> nightly
-      release/2.7             -> release-2.7
-      users/alice/experiment  -> users-alice-experiment
-    """
-    return pytorch_git_ref.replace("/", "-")
-
-
-def normalize_py(python_version: str) -> str:
-    """Normalize python version for filenames: 'py3.11' -> '3.11'."""
-    py = python_version.strip()
-    if py.startswith("py"):
-        py = py[2:]
-    return py
+from github_actions.manifest_utils import (
+    GitSourceInfo,
+    git_branch_best_effort,
+    git_head,
+    log,
+    normalize_python_version_for_filename,
+    normalize_ref_for_filename,
+    resolve_branch,
+)
 
 
 def manifest_filename(*, python_version: str, pytorch_git_ref: str) -> str:
-    py = normalize_py(python_version)
-    track = normalize_release_track(pytorch_git_ref)
+    py = normalize_python_version_for_filename(python_version)
+    track = normalize_ref_for_filename(pytorch_git_ref)
     return f"therock-manifest_torch_py{py}_{track}.json"
 
 
@@ -362,7 +255,7 @@ def main(argv: list[str]) -> None:
         json.dumps(manifest, indent=2, sort_keys=False) + "\n",
         encoding="utf-8",
     )
-    print(f"[pytorch-sources-manifest] wrote {out_path}")
+    log(f"[pytorch-sources-manifest] wrote {out_path}")
 
 
 if __name__ == "__main__":

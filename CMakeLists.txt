@@ -109,11 +109,15 @@ set(ROCM_SYMLINK_LIBS OFF)
 set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
 
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
+
 # TODO: Set default to true for Linux branch after necessary changes land
 cmake_dependent_option(THEROCK_ENABLE_MPI
   "Enables building components with Message Passing Interface (MPI) support"
   OFF "NOT WIN32" OFF)
-option(THEROCK_ENABLE_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
+
+option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
+option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
+option(THEROCK_BUILD_COMGR_TESTS "Enables building Comgr tests" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
@@ -408,12 +412,12 @@ if(THEROCK_BUNDLE_SYSDEPS)
     # macOS bundled deps - note: libcap, libdrm, numactl are Linux-specific
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
-    set(THEROCK_BUNDLED_EXPAT, therock-expat)
-    set(THEROCK_BUNDLED_GMP, therock-gmp)
+    set(THEROCK_BUNDLED_EXPAT therock-expat)
+    set(THEROCK_BUNDLED_GMP therock-gmp)
     set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
-    set(THEROCK_BUNDLED_MPFR, therock-mpfr)
-    set(THEROCK_BUNDLED_NCURSES, therock-ncurses)
+    set(THEROCK_BUNDLED_MPFR therock-mpfr)
+    set(THEROCK_BUNDLED_NCURSES therock-ncurses)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
