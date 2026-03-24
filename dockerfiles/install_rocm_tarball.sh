@@ -54,10 +54,33 @@ TARBALL_FILE="/tmp/rocm-tarball.tar.gz"
 
 echo "Downloading tarball..."
 # Use curl with -fsSL: fail on errors, silent, show errors, follow redirects
-curl -fsSL -o "$TARBALL_FILE" "$TARBALL_URL" || {
-    echo "Error: Failed to download tarball from $TARBALL_URL"
-    exit 1
-}
+# If direct URL fails, try fuzzy match (supports simplified AMDGPU_FAMILY like gfx110x)
+if ! curl -fsSL -o "$TARBALL_FILE" "$TARBALL_URL" 2>/dev/null; then
+    echo "Direct URL not found, searching for matching tarball..."
+    if [ "$RELEASE_TYPE" = "stable" ]; then
+        LISTING_URL="https://repo.amd.com/rocm/tarball/"
+    else
+        LISTING_URL="https://rocm.${RELEASE_TYPE}.amd.com/tarball/"
+    fi
+    # Case-insensitive search for tarball matching AMDGPU_FAMILY and VERSION
+    MATCHED_FILE=$(curl -fsSL "$LISTING_URL" 2>/dev/null \
+        | grep -ioP "therock-dist-linux-[^\"]*${AMDGPU_FAMILY}[^\"]*-${VERSION_ENCODED}\.tar\.gz" \
+        | head -1) || true
+    if [ -z "$MATCHED_FILE" ]; then
+        echo "Error: No tarball found matching '${AMDGPU_FAMILY}' and version '${VERSION}'"
+        echo "Tried direct URL: ${TARBALL_URL}"
+        echo "Tried fuzzy search at: ${LISTING_URL}"
+        echo "Hint: specify the full AMDGPU_FAMILY (e.g., gfx110X-all) or check available tarballs"
+        exit 1
+    fi
+    TARBALL_URL="${LISTING_URL}${MATCHED_FILE}"
+    echo "Found matching tarball: ${MATCHED_FILE}"
+    echo "Downloading from: ${TARBALL_URL}"
+    curl -fsSL -o "$TARBALL_FILE" "$TARBALL_URL" || {
+        echo "Error: Failed to download tarball from $TARBALL_URL"
+        exit 1
+    }
+fi
 
 # Verify download
 if [ ! -f "$TARBALL_FILE" ] || [ ! -s "$TARBALL_FILE" ]; then
