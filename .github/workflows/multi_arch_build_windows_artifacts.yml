@@ -62,6 +62,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
       BUILD_DIR: B:\build
       TEATIME_FORCE_INTERACTIVE: 0
+      IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
     steps:
       - name: Checkout Repository
@@ -140,7 +141,8 @@ jobs:
 
       - name: Build stage
         run: |
-          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+          python build_tools/memory_monitor.py --phase Build -- \
+            cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}

@@ -286,7 +286,7 @@ class TestMain:
 
     def test_failure_with_api_error_still_fails(self, capsys):
         """API errors should not prevent the script from reporting failures."""
-        from github_actions_utils import GitHubAPIError
+        from github_actions_api import GitHubAPIError
 
         with patch(
             "workflow_summary.gha_send_request",
