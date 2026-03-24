@@ -116,8 +116,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
-      options: --ipc host
-        --shm-size=10g
+      options: --shm-size=10g
         --cap-add=SYS_ADMIN
         --group-add video
         --device /dev/kfd
