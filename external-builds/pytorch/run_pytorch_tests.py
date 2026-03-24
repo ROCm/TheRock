@@ -77,6 +77,7 @@ from pathlib import Path
 import pytest
 
 from pytorch_utils import (
+    check_pytorch_source_version,
     set_gpu_execution_policy,
     detect_pytorch_version,
 )
@@ -195,6 +196,14 @@ By default the pytorch directory is determined based on this script's location
         help="""Enable pytest caching (default). Use --no-cache when only having read-only access to pytorch directory""",
     )
 
+    parser.add_argument(
+        "--allow-version-mismatch",
+        default=False,
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        help="""Allows version mismatches between pytorch test sources and installed packages. Defaults to False, so mismatched versions block running tests""",
+    )
+
     args = parser.parse_args(argv)
 
     if not args.pytorch_dir.exists():
@@ -215,6 +224,9 @@ def main() -> int:
         args, passthrough_pytest_args = cmd_arguments(sys.argv[1:])
 
         pytorch_dir = args.pytorch_dir
+        check_pytorch_source_version(
+            pytorch_dir=pytorch_dir, allow_mismatch=args.allow_version_mismatch
+        )
 
         # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
         # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
