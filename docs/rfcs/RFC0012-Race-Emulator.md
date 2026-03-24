@@ -54,9 +54,9 @@ within a workgroup) is required to avoid races.
 Given AMD GPU assembly code, detect all intra-workgroup races. Some
 examples are:
 
-1) A single thread issues a load from global memory to a register, but
+1. A single thread issues a load from global memory to a register, but
    does not wait for the load to complete before using the register.
-2) Two threads in different waves (but the same workgroup) write to the
+1. Two threads in different waves (but the same workgroup) write to the
    same address in LDS, without using a workgroup barrier to specify
    their relative order. The LDS address is subsequently read and used
    by a third thread.
@@ -180,6 +180,7 @@ Wave 1 Lane 63:
 17 --> |   ds_read_b32 v1, v2 offset:1020
 18     |   s_waitcnt lgkmcnt(0)
 ```
+
 Above, race-emulator has detected that a thread in wave 2 is writing to
 the same address that a thread in wave 1 is reading from, and that the
 order is not specified. This means that the value read by wave 1 is
@@ -294,7 +295,7 @@ which is the default when building from the monorepo (see
    [`race_check_custom_gfx1151.yaml`](../../projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/race_check_custom_gfx1151.yaml)
    for examples.
 
-2. **hipBLASLt (direct assembly)**: When custom assembly kernels are
+1. **hipBLASLt (direct assembly)**: When custom assembly kernels are
    loaded via the `HIPBLASLT_CUSTOM_ASM_DIR` environment variable, the
    race emulator automatically validates each kernel on first invocation.
    No code changes are needed — race checking is built into the direct
@@ -315,14 +316,14 @@ For the fastest feedback, add the `noCI` and
 `skip-therockci` labels to your PR to disable Jenkins and TheRock CI,
 leaving only the race-emulator jobs. The jobs are:
 
-| Job | Purpose |
-|-----|---------|
-| Linux (gcc) | Release build with `-Werror` |
-| Linux (clang-asan) | AddressSanitizer |
-| Linux (clang-ubsan) | UndefinedBehaviorSanitizer |
-| Linux (clang-tidy) | Static analysis |
-| Linux (coverage) | Test coverage (HTML artifact) |
-| Windows (MSVC) | Cross-platform build and test |
+| Job                 | Purpose                       |
+| ------------------- | ----------------------------- |
+| Linux (gcc)         | Release build with `-Werror`  |
+| Linux (clang-asan)  | AddressSanitizer              |
+| Linux (clang-ubsan) | UndefinedBehaviorSanitizer    |
+| Linux (clang-tidy)  | Static analysis               |
+| Linux (coverage)    | Test coverage (HTML artifact) |
+| Windows (MSVC)      | Cross-platform build and test |
 
 These jobs have been validated with intentional bug injection (see
 [PR #5151](https://github.com/ROCm/rocm-libraries/pull/5151)).
