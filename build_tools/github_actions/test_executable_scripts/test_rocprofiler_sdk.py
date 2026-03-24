@@ -38,7 +38,8 @@ def setup_env():
     environ_vars["HIP_PLATFORM"] = "amd"
 
     old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
-    environ_vars["LD_LIBRARY_PATH"] = ":".join(f"{THEROCK_LIB_PATH}", old_ld_lib_path)
+    ld_lib_path = old_ld_lib_path.append(f"{THEROCK_LIB_PATH}")
+    environ_vars["LD_LIBRARY_PATH"] = ":".join(ld_lib_path)
 
 
 def cmake_config():
