@@ -467,37 +467,6 @@ class HTTPBackend(ArtifactBackend):
         # For now, return empty list to indicate not implemented
         return []
 
-    def _list_all_artifacts(self) -> List[str]:
-        """List artifacts across all available index files.
-
-        TODO: Future enhancement - Use master index discovery
-        =======================================================
-        Once _discover_gfx_families_from_master_index() is implemented,
-        this method should:
-        1. First try to discover targets from master index
-        2. Fall back to hardcoded common_targets if master index unavailable
-
-        Example:
-            discovered_targets = self._discover_gfx_families_from_master_index()
-            targets = discovered_targets if discovered_targets else common_targets
-        """
-        # TODO: Replace hardcoded list with master index discovery
-        # discovered_targets = self._discover_gfx_families_from_master_index()
-        # common_targets = discovered_targets if discovered_targets else ["gfx1200", "gfx1201", "generic"]
-
-        common_targets = ["gfx1200", "gfx1201", "generic"]
-        all_artifacts = set()
-
-        for target in common_targets:
-            try:
-                artifacts = self._fetch_index(target)
-                all_artifacts.update(artifacts)
-            except Exception:
-                # Index doesn't exist for this target, skip
-                continue
-
-        return sorted(all_artifacts)
-
     def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
         """List available artifact filenames across all specified GFX families.
 
