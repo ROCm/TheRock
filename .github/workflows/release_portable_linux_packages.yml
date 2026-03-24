@@ -219,9 +219,12 @@ jobs:
         # env:
           # CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
         run: |
-          mkdir -p ${{ github.workspace }}/output/build/logs || true
-          touch ${{ github.workspace }}/output/build/logs/sccache_error.log || true
-          touch ${{ github.workspace }}/sccache.conf || true
+          echo ${{ github.workspace }} || true
+          ls -lartR ${{ github.workspace }} || true
+          mkdir -p ${{ github.workspace }}/output/build/logs || echo "log folder creation failed."
+          touch ${{ github.workspace }}/output/build/logs/sccache_error.log || echo "log file creation failed."
+          touch ${{ github.workspace }}/sccache.conf || echo "sccache.conf creation failed" || \
+            mkdir ${{ github.workspace }} && touch ${{ github.workspace }}/sccache.conf || tru
       #     ./build_tools/setup_ccache.py \
       #       --config-preset "github-oss-${{ env.CI_TYPE }}" \
       #       --dir "$(dirname $CCACHE_CONFIGPATH)" \
@@ -244,6 +247,8 @@ jobs:
         timeout-minutes: 30
         run: |
           ./build_tools/fetch_sources.py --jobs 10
+          ls -lart ${{ github.workspace }} || true
+
 
       - name: Configure Projects
         env:
