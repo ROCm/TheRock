@@ -7208,6 +7208,34 @@ int main() {
               "expected unsupported route-info decode to normalize to exact unsupported shape")) {
     return 1;
   }
+  StubDecoderRouteInfo synthetic_unsupported_info_valid_wrong_hint =
+      synthetic_unsupported_info;
+  synthetic_unsupported_info_valid_wrong_hint.instruction_name =
+      "SYNTHETIC_GFX1250_UNSUPPORTED_VALID_WRONG_HINT";
+  synthetic_unsupported_info_valid_wrong_hint.decode_hint =
+      DecodeSeedHint::kVop1;
+  const StubDecodedInstruction via_unsupported_info_valid_wrong_hint =
+      DecodeStubInstruction(synthetic_unsupported_info_valid_wrong_hint);
+  if (!Expect(MatchesUnsupportedInstructionDecode(
+                  via_unsupported_info_valid_wrong_hint,
+                  synthetic_unsupported_info_valid_wrong_hint.instruction_name),
+              "expected unsupported route-info decode to ignore valid mismatching caller decode-hint")) {
+    return 1;
+  }
+  StubDecoderRouteInfo synthetic_unsupported_info_invalid_hint =
+      synthetic_unsupported_info;
+  synthetic_unsupported_info_invalid_hint.instruction_name =
+      "SYNTHETIC_GFX1250_UNSUPPORTED_INVALID_HINT";
+  synthetic_unsupported_info_invalid_hint.decode_hint =
+      static_cast<DecodeSeedHint>(99);
+  const StubDecodedInstruction via_unsupported_info_invalid_hint =
+      DecodeStubInstruction(synthetic_unsupported_info_invalid_hint);
+  if (!Expect(MatchesUnsupportedInstructionDecode(
+                  via_unsupported_info_invalid_hint,
+                  synthetic_unsupported_info_invalid_hint.instruction_name),
+              "expected unsupported route-info decode to ignore invalid caller decode-hint")) {
+    return 1;
+  }
   const StubDecoderRouteInfo synthetic_invalid_route_info{
       "SYNTHETIC_GFX1250_INVALID_ROUTE",
       static_cast<StubDecoderRoute>(99),
@@ -7226,6 +7254,33 @@ int main() {
                   via_invalid_route_info,
                   synthetic_invalid_route_info.instruction_name),
               "expected invalid route-info decode to normalize to exact unsupported shape")) {
+    return 1;
+  }
+  StubDecoderRouteInfo synthetic_invalid_route_info_unknown_hint =
+      synthetic_invalid_route_info;
+  synthetic_invalid_route_info_unknown_hint.instruction_name =
+      "SYNTHETIC_GFX1250_INVALID_ROUTE_UNKNOWN_HINT";
+  synthetic_invalid_route_info_unknown_hint.decode_hint = DecodeSeedHint::kUnknown;
+  const StubDecodedInstruction via_invalid_route_info_unknown_hint =
+      DecodeStubInstruction(synthetic_invalid_route_info_unknown_hint);
+  if (!Expect(MatchesUnsupportedInstructionDecode(
+                  via_invalid_route_info_unknown_hint,
+                  synthetic_invalid_route_info_unknown_hint.instruction_name),
+              "expected invalid route-info decode to ignore alternate caller decode-hint")) {
+    return 1;
+  }
+  StubDecoderRouteInfo synthetic_invalid_route_info_invalid_hint =
+      synthetic_invalid_route_info;
+  synthetic_invalid_route_info_invalid_hint.instruction_name =
+      "SYNTHETIC_GFX1250_INVALID_ROUTE_INVALID_HINT";
+  synthetic_invalid_route_info_invalid_hint.decode_hint =
+      static_cast<DecodeSeedHint>(99);
+  const StubDecodedInstruction via_invalid_route_info_invalid_hint =
+      DecodeStubInstruction(synthetic_invalid_route_info_invalid_hint);
+  if (!Expect(MatchesUnsupportedInstructionDecode(
+                  via_invalid_route_info_invalid_hint,
+                  synthetic_invalid_route_info_invalid_hint.instruction_name),
+              "expected invalid route-info decode to ignore invalid caller decode-hint")) {
     return 1;
   }
   std::uint32_t unsupported_seed_count = 0;
