@@ -142,8 +142,7 @@ if platform.system() == "Linux":
     if target_lib.exists():
         try:
             subprocess.run(
-                [patchelf_exe, "--set-rpath", "$ORIGIN", str(target_lib)],
-                check=True
+                [patchelf_exe, "--set-rpath", "$ORIGIN", str(target_lib)], check=True
             )
         except subprocess.CalledProcessError as e:
             print(f"Warning: Failed to set RPATH on {target_lib}: {e}", flush=True)

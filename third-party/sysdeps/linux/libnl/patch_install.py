@@ -156,10 +156,12 @@ if platform.system() == "Linux":
                 try:
                     subprocess.run(
                         [patchelf_exe, "--set-rpath", "$ORIGIN", str(target_lib)],
-                        check=True
+                        check=True,
                     )
                 except subprocess.CalledProcessError as e:
-                    print(f"Warning: Failed to set RPATH on {target_lib}: {e}", flush=True)
+                    print(
+                        f"Warning: Failed to set RPATH on {target_lib}: {e}", flush=True
+                    )
 
     # Make .pc files relocatable
     pc_files = [

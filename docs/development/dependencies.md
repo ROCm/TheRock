@@ -165,7 +165,6 @@ Supported sub-libraries: `libnl` (core), `libnl-genl` (generic netlink)
 - Alternatives: `pkg_check_modules(LIBNL3_GENL REQUIRED IMPORTED_TARGET libnl-genl-3.0)`
 - Dependencies: Automatically links `libnl::libnl`
 
-
 ## MPFR
 
 - Canonical method: `find_package(mpfr)`
