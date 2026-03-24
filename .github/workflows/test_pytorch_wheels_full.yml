@@ -117,6 +117,7 @@ jobs:
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
       options: --ipc host
+        --shm-size=10g
         --group-add video
         --device /dev/kfd
         --device /dev/dri
@@ -152,6 +153,11 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ inputs.python_version }}
+
+      - name: Install system dependencies
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          apt-get update && apt-get install -y build-essential
 
       # TODO: also upload and reference test report together with this logging?
       - name: Summarize workflow inputs
