@@ -21,6 +21,7 @@ using mirage::sim::isa::gfx1250::GetDecoderSeedInfos;
 using mirage::sim::isa::gfx1250::GetStubDecoderEntrypointManifests;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteInstructions;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteManifests;
+using mirage::sim::isa::gfx1250::GetStubDecoderRouteName;
 using mirage::sim::isa::gfx1250::GetStubExecutionDomainName;
 using mirage::sim::isa::gfx1250::GetStubOperandLayoutName;
 using mirage::sim::isa::gfx1250::GetStubOperandRoleName;
@@ -1171,6 +1172,23 @@ bool EntrypointManifestCountsMatchRoutedSurfaces() {
             GetStubDecoderRouteInstructions(manifest.route).size() ||
         manifest.instruction_count != CountRouteInfosForRoute(manifest.route)) {
       return false;
+    }
+  }
+  return true;
+}
+
+bool EntrypointManifestHelperParityAndNameUniqueness() {
+  const auto manifests = GetStubDecoderEntrypointManifests();
+  for (std::size_t i = 0; i < manifests.size(); ++i) {
+    if (manifests[i].route_name != GetStubDecoderRouteName(manifests[i].route) ||
+        manifests[i].entrypoint_name.empty()) {
+      return false;
+    }
+    for (std::size_t j = i + 1; j < manifests.size(); ++j) {
+      if (manifests[i].route_name == manifests[j].route_name ||
+          manifests[i].entrypoint_name == manifests[j].entrypoint_name) {
+        return false;
+      }
     }
   }
   return true;
@@ -7500,6 +7518,10 @@ int main() {
   }
   if (!Expect(EntrypointManifestCountsMatchRoutedSurfaces(),
               "expected entrypoint manifest counts to match routed instruction lists and route infos per route")) {
+    return 1;
+  }
+  if (!Expect(EntrypointManifestHelperParityAndNameUniqueness(),
+              "expected entrypoint manifests to keep helper-aligned route names and unique entrypoint metadata")) {
     return 1;
   }
 

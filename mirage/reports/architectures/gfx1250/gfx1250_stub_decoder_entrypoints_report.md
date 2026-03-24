@@ -67,7 +67,7 @@
   - route-wide exact `DecodeStubInstruction(route_info)` vs `DecodeStubInstruction(instruction_name)` parity checks across the current routed seed set
   - route-wide exact caller-supplied route-info metadata preservation plus instruction-derived structural parity checks across the current routed seed set
   - route-wide exact route-keyed entrypoint decode vs `DecodeStubInstruction(instruction_name)` parity checks across the current routed seed set
-  - exact cross-surface parity checks now pin `GetStubDecoderEntrypointManifests()` against `GetStubDecoderRouteManifests()` route-by-route, and pin entrypoint instruction counts against both routed instruction lists and routed route-info totals
+  - exact cross-surface parity checks now pin `GetStubDecoderEntrypointManifests()` against `GetStubDecoderRouteManifests()` route-by-route, pin entrypoint instruction counts against both routed instruction lists and routed route-info totals, and pin entrypoint-manifest route names plus entrypoint names to stay helper-aligned and one-to-one
   - route-wide exact decoded route / entrypoint metadata and routed-instruction-list parity checks across the current routed seed set
   - route-wide exact opcode-shape / execution-domain / operand-layout helper-name parity plus routed role/slot/value-class helper coverage checks across the current routed seed set
   - exact `GetStubDecoderEntrypointManifests()` / `GetStubDecoderRouteManifests()` route-priority ordering plus routed-instruction-list sequence parity checks across `kVop3p`, `kMimgTensor`, `kVop1`, and `kVop3Sdst`
