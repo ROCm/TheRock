@@ -221,7 +221,12 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
 
 
 def main():
-    category = TEST_TYPE.lower() if TEST_TYPE else "quick"
+    # Determine test category based on TEST_TYPE and component-specific constraints                                                              
+    # MIOpen currently only maintains 'standard' and 'quick' categories
+    if test_component_job_name == "miopen":
+        category = "standard" if TEST_TYPE else "quick"
+    else:
+        category = TEST_TYPE.lower() if TEST_TYPE else "quick"
     if category not in VALID_TEST_CATEGORIES:
         print(
             f"ERROR: Invalid TEST_TYPE '{TEST_TYPE}'. "
@@ -230,8 +235,6 @@ def main():
             file=sys.stderr,
         )
         category = "quick"
-    elif test_component_job_name == "miopen":
-        category = "standard"
 
     # Use AMDGPU_FAMILIES from environment variable, extract gfx<xxx> part
     gpu_arch = ""
