@@ -2,10 +2,19 @@
 
 TheRock has two CI pipelines:
 
-- **CI** ([`ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/ci.yml)) — single-arch builds, configured by [`configure_ci.py`](../../build_tools/github_actions/configure_ci.py)
-- **Multi-Arch CI** ([`multi_arch_ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)) — multi-arch builds, configured by [`configure_multi_arch_ci.py`](../../build_tools/github_actions/configure_multi_arch_ci.py)
+- **CI** ([`ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/ci.yml)): single-arch builds, configured by [`configure_ci.py`](../../build_tools/github_actions/configure_ci.py)
+- **Multi-Arch CI** ([`multi_arch_ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)): multi-arch builds, configured by [`configure_ci.py`](../../build_tools/github_actions/configure_ci.py)
+
+<!-- TODO(#3399): link to configure_multi_arch_ci.py when it lands -->
 
 Both read GPU family definitions from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py).
+
+> [!IMPORTANT]
+> "Multi-arch CI" is set to replace "CI". See these issues for details:
+>
+> - [[Multi-arch] Extend and improve multi-arch CI (#3336)](https://github.com/ROCm/TheRock/issues/3336)
+> - [[Multi-arch] Enable multi-arch CI on pre-submit (#3337)](https://github.com/ROCm/TheRock/issues/3337)
+> - [[Multi-arch] Remove single stage (non-multi-arch) CI (#3340)](https://github.com/ROCm/TheRock/issues/3340)
 
 ## Trigger behavior
 
