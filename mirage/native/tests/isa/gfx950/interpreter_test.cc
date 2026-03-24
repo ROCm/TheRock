@@ -351,6 +351,8 @@ bool RunBufferAtomicSemanticCase(
   constexpr std::uint64_t kAtomicAddress = 0x100;
   constexpr std::uint16_t kDataReg = 20;
   constexpr std::uint16_t kResourceReg = 2;
+  constexpr std::uint16_t kUnrelatedScalarReg = 10;
+  constexpr std::uint16_t kUnrelatedVectorReg = 80;
 
   LinearExecutionMemory memory(0x400, 0);
   for (std::uint8_t dword_index = 0; dword_index < test_case.memory_dword_count;
@@ -361,6 +363,12 @@ bool RunBufferAtomicSemanticCase(
       return false;
     }
   }
+  if (!memory.WriteU32(0x80u, 0x11223344u) ||
+      !memory.WriteU32(0x140u, 0x55667788u)) {
+    std::cerr << test_case.opcode
+              << ": failed to seed unrelated buffer atomic memory\n";
+    return false;
+  }
 
   static thread_local WaveExecutionState state;
   state = {};
@@ -369,10 +377,19 @@ bool RunBufferAtomicSemanticCase(
   state.sgprs[kResourceReg + 1] = 0u;
   state.sgprs[kResourceReg + 2] = 0x100u;
   state.sgprs[kResourceReg + 3] = 0u;
+  state.sgprs[kUnrelatedScalarReg] = 0x12345678u;
+  state.sgprs[kUnrelatedScalarReg + 1] = 0x9abcdef0u;
   for (std::uint8_t dword_index = 0; dword_index < test_case.data_dword_count;
        ++dword_index) {
     state.vgprs[kDataReg + dword_index][0] = test_case.data[dword_index];
+    state.vgprs[kDataReg + dword_index][1] = 0xa5a50000u + dword_index;
+    state.vgprs[kDataReg + dword_index][2] = 0xb6b60000u + dword_index;
+    state.vgprs[kDataReg + dword_index][3] = 0xc7c70000u + dword_index;
   }
+  state.vgprs[kUnrelatedVectorReg][0] = 0x01020304u;
+  state.vgprs[kUnrelatedVectorReg][1] = 0x11121314u;
+  state.vgprs[kUnrelatedVectorReg][2] = 0x21222324u;
+  state.vgprs[kUnrelatedVectorReg][3] = 0x31323334u;
 
   const std::vector<DecodedInstruction> program = {
       DecodedInstruction::SixOperand(test_case.opcode,
@@ -435,6 +452,38 @@ bool RunBufferAtomicSemanticCase(
                 << +dword_index << " mismatch\n";
       return false;
     }
+  }
+  if (!state.halted || state.exec_mask != 0x1ULL ||
+      state.sgprs[kResourceReg] != static_cast<std::uint32_t>(kAtomicAddress) ||
+      state.sgprs[kResourceReg + 1] != 0u ||
+      state.sgprs[kResourceReg + 2] != 0x100u ||
+      state.sgprs[kResourceReg + 3] != 0u ||
+      state.sgprs[kUnrelatedScalarReg] != 0x12345678u ||
+      state.sgprs[kUnrelatedScalarReg + 1] != 0x9abcdef0u ||
+      state.vgprs[kUnrelatedVectorReg][0] != 0x01020304u ||
+      state.vgprs[kUnrelatedVectorReg][1] != 0x11121314u ||
+      state.vgprs[kUnrelatedVectorReg][2] != 0x21222324u ||
+      state.vgprs[kUnrelatedVectorReg][3] != 0x31323334u) {
+    std::cerr << test_case.opcode
+              << ": buffer atomic helper preservation mismatch\n";
+    return false;
+  }
+  for (std::uint8_t dword_index = 0; dword_index < test_case.data_dword_count;
+       ++dword_index) {
+    if (state.vgprs[kDataReg + dword_index][1] != 0xa5a50000u + dword_index ||
+        state.vgprs[kDataReg + dword_index][2] != 0xb6b60000u + dword_index ||
+        state.vgprs[kDataReg + dword_index][3] != 0xc7c70000u + dword_index) {
+      std::cerr << test_case.opcode << ": buffer atomic inactive lane mismatch\n";
+      return false;
+    }
+  }
+  std::uint32_t unrelated_value = 0;
+  if (!memory.ReadU32(0x80u, &unrelated_value) || unrelated_value != 0x11223344u ||
+      !memory.ReadU32(0x140u, &unrelated_value) ||
+      unrelated_value != 0x55667788u) {
+    std::cerr << test_case.opcode
+              << ": buffer atomic unrelated memory mismatch\n";
+    return false;
   }
   return true;
 }
