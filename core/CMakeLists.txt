@@ -342,7 +342,8 @@ endif(THEROCK_ENABLE_HIP_RUNTIME)
 ################################################################################
 # ocl-icd
 ################################################################################
-if(THEROCK_ENABLE_OCL_RUNTIME)
+
+if(THEROCK_ENABLE_OCL_ICD)
 
   therock_cmake_subproject_declare(ocl-icd
   USE_DIST_AMDGPU_TARGETS
@@ -371,6 +372,9 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
     SUBPROJECT_DEPS
       ocl-icd
   )
+endif(THEROCK_ENABLE_OCL_ICD)
+
+if(THEROCK_ENABLE_OCL_RUNTIME)
 
   set(OCL_CLR_CMAKE_ARGS)
   set(OCL_CLR_RUNTIME_DEPS)
