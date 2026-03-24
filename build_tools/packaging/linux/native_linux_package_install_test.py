@@ -30,9 +30,15 @@ Prerequisites:
  container or VM that matches the target OS (e.g., Ubuntu for deb, AlmaLinux/RHEL
  for rpm, SLES container for sles). Start the appropriate Docker image or VM
  first, then invoke this script from inside that environment.
-- Root or sudo is required (repository setup, package install, keyring writes).
-- System packages: python3, pip, wget, curl; pip packages: pyelftools, requests,
- prettytable, PyYAML.
+- Root or sudo permissions may be required (repository setup, package install, keyring writes).
+- System packages (install with the OS package manager):
+  Debian/Ubuntu: apt install -y python3 python3-pip wget curl
+  RHEL/Alma/CentOS/AZL: dnf install -y python3 python3-pip wget curl
+  SLES: zypper install -y python3 python3-pip wget curl
+- Python packages: listed in build_tools/packaging/linux/tests/requirements.txt.
+  Install with: pip install -r build_tools/packaging/linux/tests/requirements.txt
+  (or from build_tools/packaging/linux/tests: pip install -r requirements.txt).
+  Equivalent one-liner: pip install pyelftools requests prettytable PyYAML
 
 Example invocations:
 
@@ -63,6 +69,18 @@ Example invocations:
  --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
  --release-type prerelease \\
  --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+
+ # --test-type sanity (default): repo install + basic verification only (steps 1-2)
+ python3 native_linux_package_install_test.py --test-type sanity \\
+ --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+
+ # --test-type full: same as sanity plus rdhc full verification (steps 1-3)
+ python3 native_linux_package_install_test.py --test-type full \\
+ --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Simulate install (dry-run) from local .deb or .rpm directory
  python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
@@ -885,6 +903,16 @@ Examples:
  --repo-url https://rocm.prereleases.amd.com/packages/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
  --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+
+ # --test-type sanity (default): repo install + basic verification only
+ python native_linux_package_install_test.py --test-type sanity --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+
+ # --test-type full: install + basic verification + rdhc
+ python native_linux_package_install_test.py --test-type full --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Simulate install (dry-run) from local packages
  python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
