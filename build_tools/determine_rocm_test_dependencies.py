@@ -7,8 +7,9 @@ Compute package-level test dependencies for changed components.
 This module reads BUILD_TOPOLOGY.toml to extract artifact dependencies and
 determines which packages need testing when a specific package is updated.
 
-By default, we test the changed package plus its direct downstream dependents.
-Some packages have hardcoded overrides to limit testing scope.
+By default, we test the changed package plus its direct downstream dependents
+(computed from the reverse artifact_deps graph). Artifacts can optionally specify
+a test_deps field to override this behavior and limit testing to specific consumers.
 
 usage: determine_rocm_test_dependencies.py [-h] [--therock-dir THEROCK_DIR]
                                            [--changed PACKAGE [PACKAGE ...]]
@@ -35,19 +36,6 @@ except ImportError:
     import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 
 
-# Hardcoded overrides for packages that should only test specific direct dependents.
-# These are packages where testing the full downstream graph is too expensive or
-# unnecessary. The override specifies exactly which packages to test when the
-# key package changes (in addition to the package itself).
-#
-# Format: { "package_name": ["direct_dependent_1", "direct_dependent_2", ...] }
-#
-# If a package is not in this dict, all direct dependents are tested.
-DIRECT_DEPENDENT_OVERRIDES: Dict[str, List[str]] = {
-    # rocBLAS changes should only trigger tests for solver and hipblas,
-    # not the entire downstream graph (miopen, sparse, etc.)
-    "blas": ["solver"],
-}
 
 
 class ArtifactInfo:
@@ -57,6 +45,7 @@ class ArtifactInfo:
         self.name = name
         self.artifact_group = artifact_group
         self.artifact_deps: Set[str] = set()
+        self.test_deps: Optional[Set[str]] = None  # If set, overrides reverse deps
 
 
 class ArtifactDependencyAnalyzer:
@@ -88,6 +77,11 @@ class ArtifactDependencyAnalyzer:
             deps = artifact_data.get("artifact_deps", [])
             info.artifact_deps = set(deps)
 
+            # Get test dependencies (optional override)
+            test_deps = artifact_data.get("test_deps")
+            if test_deps is not None:
+                info.test_deps = set(test_deps)
+
             self.artifacts[artifact_name] = info
 
     def _build_reverse_dependency_graph(self):
@@ -114,24 +108,25 @@ class ArtifactDependencyAnalyzer:
         """
         Get all packages that need testing given a list of changed packages.
 
-        Returns the changed packages PLUS their direct downstream dependents.
-        Respects DIRECT_DEPENDENT_OVERRIDES for packages with limited test scope.
+        Returns the changed packages PLUS their downstream dependents.
+        - If an artifact specifies test_deps, only those artifacts are tested
+        - Otherwise, all direct downstream dependents (from reverse artifact_deps) are tested
 
-        Example: blas <- solver <- (nothing)
-            get_packages_to_test(["blas"]) -> {blas, solver}  # due to override
-            get_packages_to_test(["solver"]) -> {solver}
+        Example: blas <- solver <- sparse
+            If blas.test_deps = ["solver"]:
+                get_packages_to_test(["blas"]) -> {blas, solver}
+            If blas has no test_deps:
+                get_packages_to_test(["blas"]) -> {blas, solver, sparse, rocwmma, ...}
         """
         packages_to_test = set(changed_packages)
 
         for changed in changed_packages:
-            if changed in DIRECT_DEPENDENT_OVERRIDES:
-                # Use hardcoded overrides - only add specified dependents
-                override_deps = DIRECT_DEPENDENT_OVERRIDES[changed]
-                for dep in override_deps:
-                    if dep in self.artifacts:
-                        packages_to_test.add(dep)
+            artifact_info = self.artifacts.get(changed)
+            if artifact_info and artifact_info.test_deps is not None:
+                # Use explicit test_deps override
+                packages_to_test.update(artifact_info.test_deps)
             else:
-                # Add all direct dependents
+                # Add all direct dependents from reverse dependency graph
                 packages_to_test.update(self.reverse_deps.get(changed, set()))
 
         return packages_to_test

@@ -58,6 +58,11 @@
 #           for distribution. Use for kernel libraries where sharded builds
 #           improve CI parallelism and enable per-arch downloads.
 #   artifact_deps = ["dep1", "dep2"]        # Optional: other artifacts this depends on
+#   test_deps = ["dep1", "dep2"]            # Optional: artifacts to test when this changes
+#       If specified, only these artifacts (plus this artifact itself) are tested when
+#       this artifact changes. If not specified, all direct downstream dependents
+#       (computed from reverse artifact_deps graph) are tested. Use this to limit
+#       expensive test suites to only critical downstream consumers.
 #   feature_name = "FEATURE_NAME"           # Optional: override auto-generated name
 #   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
 #   platform = "windows"                    # Optional: platform-specific artifact
@@ -507,6 +512,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
+test_deps = ["solver"]  # Only test solver when blas changes (not full downstream graph)
 split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.fft]
