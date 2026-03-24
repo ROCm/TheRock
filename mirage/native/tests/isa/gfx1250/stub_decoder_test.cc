@@ -7849,6 +7849,41 @@ int main() {
                   "expected synthetic routed route-info with near-miss known opcode to preserve caller metadata while keeping empty unknown structure")) {
         return 1;
       }
+      StubDecoderRouteInfo synthetic_near_miss_invalid_hint =
+          synthetic_near_miss;
+      synthetic_near_miss_invalid_hint.route_name =
+          "kSyntheticRouteInfoNearMissInvalidHint";
+      synthetic_near_miss_invalid_hint.route_priority =
+          manifest.route_priority + 225u;
+      synthetic_near_miss_invalid_hint.decode_hint =
+          static_cast<DecodeSeedHint>(99);
+      const StubDecodedInstruction near_miss_invalid_hint_decoded =
+          DecodeStubInstruction(synthetic_near_miss_invalid_hint);
+      if (!Expect(
+              near_miss_invalid_hint_decoded.status ==
+                      StubDecodeStatus::kDecodedStub &&
+                  MatchesRouteInfoPayload(near_miss_invalid_hint_decoded,
+                                          synthetic_near_miss_invalid_hint) &&
+                  near_miss_invalid_hint_decoded.entrypoint_name ==
+                      manifest.entrypoint_name &&
+                  MatchesUnknownHelperSurface(
+                      near_miss_invalid_hint_decoded) &&
+                  MatchesTopLevelFlags(near_miss_invalid_hint_decoded,
+                                       false,
+                                       false,
+                                       false,
+                                       false) &&
+                  MatchesLayout(near_miss_invalid_hint_decoded,
+                                ExpectedLayout{}) &&
+                  near_miss_invalid_hint_decoded.operand_roles.binding_count ==
+                      0 &&
+                  near_miss_invalid_hint_decoded.operand_slots.binding_count ==
+                      0 &&
+                  near_miss_invalid_hint_decoded.operand_descriptors
+                          .descriptor_count == 0,
+              "expected synthetic routed route-info with near-miss known opcode to ignore invalid caller decode-hint while keeping empty unknown structure")) {
+        return 1;
+      }
     }
   }
   for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
