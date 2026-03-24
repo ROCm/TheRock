@@ -26,6 +26,7 @@ benefit from further discussion.
 - [RFC0008: Multi-Arch Packaging](./RFC0008-Multi-Arch-Packaging.md)
 - [RFC0009: OS Packaging Requirements](./RFC0009-OS-Packaging-Requirements.md)
 - [RFC0010: Test Scripts Migration to Owning Repositories](./RFC0010-Test-Scripts-Migration.md)
+- [RFC0012: Race Emulator](./RFC0012-Race-Emulator.md)
 
 ## Adding an RFC
 
