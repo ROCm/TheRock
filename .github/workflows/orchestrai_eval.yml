@@ -9,6 +9,7 @@ name: CI - OrchestrAI Eval Only
 
 on:
   workflow_dispatch:
+  pull_request:
 
 permissions:
   contents: read

@@ -7,6 +7,7 @@ name: CI - OrchestrAI Windows GPU Request
 
 on:
   workflow_dispatch:
+  pull_request:
 
 permissions:
   contents: read
@@ -74,7 +75,7 @@ jobs:
               "repository": "${{ github.repository }}",
               "platform": "windows",
               "gpu": "gpu_navi4x",
-              "count": 1  
+              "count": 1
             }
 
       - name: Wait for runners to be ready
