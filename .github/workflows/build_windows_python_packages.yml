@@ -15,10 +15,10 @@ on:
         type: string
         default: "17865324892" # TODO: default to the most recent successful run (using a script)
       artifact_group:
-        description: "The artifact group to build (ex: gfx94X-dcgpu, gfx101X-dgpu, gfx1151, gfx120X-all)"
+        description: "The artifact group to build (ex: gfx94X-dcgpu, gfx120X-all, multi-arch-release)"
         type: string
       amdgpu_families:
-        description: "Comma-separated list of GPU families for multi-arch builds (e.g., 'gfx94X-dcgpu,gfx120X-all'). Leave empty for single-family builds (uses artifact_group)."
+        description: "Semicolon-separated list of GPU families for multi-arch builds (e.g., 'gfx94X-dcgpu;gfx120X-all'). Leave empty for single-family builds (uses artifact_group)."
         type: string
         default: ""
       multiarch_index:
@@ -37,7 +37,7 @@ on:
       artifact_group:
         type: string
       amdgpu_families:
-        description: "Comma-separated GPU families for multi-arch. Empty = single-family mode using artifact_group."
+        description: "Semicolon-separated GPU families for multi-arch. Empty = single-family mode using artifact_group."
         type: string
         default: ""
       multiarch_index:
