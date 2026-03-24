@@ -1,0 +1,41 @@
+# OrchestrAI (RDNA Reservation Service) evaluation — use runners already in the self-hosted pool.
+# Request / release: separate manual workflows (OrchestrAI * Request / Release).
+# Trigger: workflow_dispatch or pull_request.
+# Requires: (1) ORCHESTRAI_APP_ID and ORCHESTRAI_APP_KEY in repo secrets; (2) that GitHub App
+# must be installed on AMD-SW-Infrastructure/ucicd-test-orchestra so the token can trigger repository_dispatch
+# (see Kia's doc https://amd.atlassian.net/wiki/x/_hjWW ). Repo must be registered with UCICD.
+
+name: CI - OrchestrAI Eval Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build_or_test_windows:
+    name: Run on OrchestrAI windows runner
+    runs-on: [self-hosted, gpu_navi3x, windows]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Minimal validation
+        shell: powershell
+        run: |
+          Write-Host "Computer: $env:COMPUTERNAME"
+          cmd /c ver
+          Write-Host "OrchestrAI eval windows runner OK"
+
+  build_or_test_linux:
+    name: Run on OrchestrAI linux runner
+    runs-on: [self-hosted, gpu_navi3x, linux]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Minimal validation
+        run: |
+          uname -a
+          echo "OrchestrAI eval linux runner OK"

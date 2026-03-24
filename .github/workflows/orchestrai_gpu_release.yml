@@ -1,0 +1,41 @@
+# Release OrchestrAI / UCICD runners for this repository (pair with manual request workflows).
+# Run manually when you are done using the allocated pool (e.g. end of session or maintenance).
+# Requires: ORCHESTRAI_APP_ID, ORCHESTRAI_APP_KEY; GitHub App installed on AMD-SW-Infrastructure/ucicd-test-orchestra.
+
+name: CI - OrchestrAI Release Runners
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release_orchestrai_runners:
+    name: Release OrchestrAI runners
+    runs-on: ubuntu-24.04
+    env:
+      UCICD_OWNER: AMD-SW-Infrastructure
+      UCICD_REPO: ucicd-test-orchestra
+    steps:
+      - name: Generate GitHub App Token (for UCICD dispatch)
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.ORCHESTRAI_APP_ID }}
+          private-key: ${{ secrets.ORCHESTRAI_APP_KEY }}
+          owner: ${{ env.UCICD_OWNER }}
+          repositories: ${{ env.UCICD_REPO }}
+
+      - name: Release Runners
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          repository: AMD-SW-Infrastructure/ucicd-test-orchestra
+          event-type: rdna-service-request
+          client-payload: |
+            {
+              "action": "release",
+              "repository": "${{ github.repository }}",
+              "prefix": "CS-UCICD"
+            }

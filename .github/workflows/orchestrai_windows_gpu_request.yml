@@ -1,0 +1,115 @@
+# Allocate Windows GPU runners via UCICD (OrchestrAI / rdna-service-request).
+# Run manually when you need runners in the org's self-hosted pool; do not tie to every PR if you want a one-time pool.
+# Requires: ORCHESTRAI_APP_ID, ORCHESTRAI_APP_KEY; GitHub App installed on AMD-SW-Infrastructure/ucicd-test-orchestra
+# (see https://amd.atlassian.net/wiki/x/_hjWW ). Repo must be registered with UCICD.
+
+name: CI - OrchestrAI Windows GPU Request
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  request_orchestrai_gpu_navi3x:
+    name: Request windows gpu_navi3x
+    runs-on: ubuntu-24.04
+    env:
+      UCICD_OWNER: AMD-SW-Infrastructure
+      UCICD_REPO: ucicd-test-orchestra
+    steps:
+      - name: Generate GitHub App Token (for UCICD dispatch)
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.ORCHESTRAI_APP_ID }}
+          private-key: ${{ secrets.ORCHESTRAI_APP_KEY }}
+          owner: ${{ env.UCICD_OWNER }}
+          repositories: ${{ env.UCICD_REPO }}
+
+      - name: Request GPU Runners
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          repository: AMD-SW-Infrastructure/ucicd-test-orchestra
+          event-type: rdna-service-request
+          client-payload: |
+            {
+              "action": "allocate",
+              "repository": "${{ github.repository }}",
+              "platform": "windows",
+              "gpu": "gpu_navi3x",
+              "count": 1
+            }
+
+      - name: Wait for runners to be ready
+        run: sleep 120
+
+  request_orchestrai_gpu_navi4x:
+    name: Request windows gpu_navi4x
+    runs-on: ubuntu-24.04
+    env:
+      UCICD_OWNER: AMD-SW-Infrastructure
+      UCICD_REPO: ucicd-test-orchestra
+    steps:
+      - name: Generate GitHub App Token (for UCICD dispatch)
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.ORCHESTRAI_APP_ID }}
+          private-key: ${{ secrets.ORCHESTRAI_APP_KEY }}
+          owner: ${{ env.UCICD_OWNER }}
+          repositories: ${{ env.UCICD_REPO }}
+
+      - name: Request GPU Runners
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          repository: AMD-SW-Infrastructure/ucicd-test-orchestra
+          event-type: rdna-service-request
+          client-payload: |
+            {
+              "action": "allocate",
+              "repository": "${{ github.repository }}",
+              "platform": "windows",
+              "gpu": "gpu_navi4x",
+              "count": 1  
+            }
+
+      - name: Wait for runners to be ready
+        run: sleep 120
+
+  request_orchestrai_igpu_stxh:
+    name: Request windows igpu_stxh
+    runs-on: ubuntu-24.04
+    env:
+      UCICD_OWNER: AMD-SW-Infrastructure
+      UCICD_REPO: ucicd-test-orchestra
+    steps:
+      - name: Generate GitHub App Token (for UCICD dispatch)
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.ORCHESTRAI_APP_ID }}
+          private-key: ${{ secrets.ORCHESTRAI_APP_KEY }}
+          owner: ${{ env.UCICD_OWNER }}
+          repositories: ${{ env.UCICD_REPO }}
+
+      - name: Request GPU Runners
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          repository: AMD-SW-Infrastructure/ucicd-test-orchestra
+          event-type: rdna-service-request
+          client-payload: |
+            {
+              "action": "allocate",
+              "repository": "${{ github.repository }}",
+              "platform": "windows",
+              "gpu": "igpu_stxh",
+              "count": 1
+            }
+
+      - name: Wait for runners to be ready
+        run: sleep 120
