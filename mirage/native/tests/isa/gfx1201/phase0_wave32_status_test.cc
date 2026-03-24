@@ -42,6 +42,16 @@ int main() {
       FindGfx1201Wave32Phase0NextRiskEncodingStatus("ENC_VDS");
   const Gfx1201Wave32Phase0NextRiskEncodingStatus* vglobal =
       FindGfx1201Wave32Phase0NextRiskEncodingStatus("ENC_VGLOBAL");
+  const Gfx1201Wave32Phase0VdsBoundaryBucket* append_consume_bucket =
+      FindGfx1201Wave32Phase0VdsBoundaryBucket("append_consume");
+  const Gfx1201Wave32Phase0VdsBoundaryBucket* exchange_compare_store_bucket =
+      FindGfx1201Wave32Phase0VdsBoundaryBucket("exchange_compare_store");
+  const Gfx1201Wave32Phase0VdsBoundaryBucket* multi_address_bucket =
+      FindGfx1201Wave32Phase0VdsBoundaryBucket("multi_address");
+  const Gfx1201Wave32Phase0VdsBoundaryBucket* bvh_stack_bucket =
+      FindGfx1201Wave32Phase0VdsBoundaryBucket("bvh_stack");
+  const Gfx1201Wave32Phase0VdsBoundaryBucket* missing_vds_bucket =
+      FindGfx1201Wave32Phase0VdsBoundaryBucket("not_a_bucket");
 
   if (!Expect(statuses.size() == 5u,
               "expected five tracked wave32-local encodings") ||
@@ -56,7 +66,17 @@ int main() {
       !Expect(smem != nullptr, "expected ENC_SMEM next-risk status") ||
       !Expect(vop3 != nullptr, "expected ENC_VOP3 next-risk status") ||
       !Expect(vds != nullptr, "expected ENC_VDS next-risk status") ||
-      !Expect(vglobal != nullptr, "expected ENC_VGLOBAL next-risk status")) {
+      !Expect(vglobal != nullptr, "expected ENC_VGLOBAL next-risk status") ||
+      !Expect(append_consume_bucket != nullptr,
+              "expected append/consume VDS bucket lookup") ||
+      !Expect(exchange_compare_store_bucket != nullptr,
+              "expected exchange/compare-store VDS bucket lookup") ||
+      !Expect(multi_address_bucket != nullptr,
+              "expected multi-address VDS bucket lookup") ||
+      !Expect(bvh_stack_bucket != nullptr,
+              "expected BVH-stack VDS bucket lookup") ||
+      !Expect(missing_vds_bucket == nullptr,
+              "expected missing VDS bucket lookup to fail")) {
     return 1;
   }
 
@@ -268,6 +288,39 @@ int main() {
                   vds_boundary_buckets[3].instruction_names[2] ==
                       "DS_BVH_STACK_PUSH8_POP2_RTN_B64",
               "expected BVH-stack instruction names")) {
+    return 1;
+  }
+
+  if (!Expect(FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
+                      "DS_APPEND") == append_consume_bucket &&
+                  FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
+                      "DS_CONSUME") == append_consume_bucket,
+              "expected append/consume instruction lookup") ||
+      !Expect(FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
+                      "DS_CONDXCHG32_RTN_B64") ==
+                      exchange_compare_store_bucket &&
+                  FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
+                      "DS_STOREXCHG_RTN_B64") ==
+                      exchange_compare_store_bucket,
+              "expected exchange/compare-store instruction lookup") ||
+      !Expect(FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
+                      "DS_LOAD_2ADDR_B32") == multi_address_bucket &&
+                  FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
+                      "DS_STORE_2ADDR_STRIDE64_B64") ==
+                      multi_address_bucket,
+              "expected multi-address instruction lookup") ||
+      !Expect(FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
+                      "DS_BVH_STACK_PUSH4_POP1_RTN_B32") ==
+                      bvh_stack_bucket &&
+                  FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
+                      "DS_BVH_STACK_PUSH8_POP2_RTN_B64") == bvh_stack_bucket,
+              "expected BVH-stack instruction lookup") ||
+      !Expect(FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
+                      "DS_BPERMUTE_FI_B32") == nullptr,
+              "expected executable VDS op to stay out of boundary buckets") ||
+      !Expect(FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
+                      "GLOBAL_LOAD_B32") == nullptr,
+              "expected non-VDS op to stay out of boundary buckets")) {
     return 1;
   }
 

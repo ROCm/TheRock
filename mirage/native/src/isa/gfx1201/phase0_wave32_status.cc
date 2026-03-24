@@ -247,6 +247,31 @@ GetGfx1201Wave32Phase0VdsBoundaryBuckets() {
   return kVdsBoundaryBuckets;
 }
 
+const Gfx1201Wave32Phase0VdsBoundaryBucket*
+FindGfx1201Wave32Phase0VdsBoundaryBucket(std::string_view bucket_name) {
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
+       GetGfx1201Wave32Phase0VdsBoundaryBuckets()) {
+    if (bucket.bucket_name == bucket_name) {
+      return &bucket;
+    }
+  }
+  return nullptr;
+}
+
+const Gfx1201Wave32Phase0VdsBoundaryBucket*
+FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
+    std::string_view instruction_name) {
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
+       GetGfx1201Wave32Phase0VdsBoundaryBuckets()) {
+    for (std::string_view candidate : bucket.instruction_names) {
+      if (candidate == instruction_name) {
+        return &bucket;
+      }
+    }
+  }
+  return nullptr;
+}
+
 bool HasGfx1201Wave32SafeVdsContinuation() {
   for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
        GetGfx1201Wave32Phase0VdsBoundaryBuckets()) {

@@ -26,6 +26,7 @@ execution path.
 - ENC_VDS now has architecture-local executable footholds through DS_NOP, the one-address non-return 32-bit LDS update slice DS_ADD_F32, DS_ADD_U32, DS_SUB_U32, DS_RSUB_U32, DS_INC_U32, DS_DEC_U32, DS_COND_SUB_U32, DS_SUB_CLAMP_U32, DS_PK_ADD_F16, DS_PK_ADD_BF16, DS_MIN_NUM_F32, DS_MAX_NUM_F32, DS_MIN_NUM_F64, DS_MAX_NUM_F64, DS_MIN_I32, DS_MIN_U32, DS_MAX_I32, DS_MAX_U32, DS_AND_B32, DS_OR_B32, DS_XOR_B32, and DS_MSKOR_B32, the matching one-address return-value 32-bit slice DS_ADD_RTN_F32, DS_ADD_RTN_U32, DS_SUB_RTN_U32, DS_RSUB_RTN_U32, DS_INC_RTN_U32, DS_DEC_RTN_U32, DS_COND_SUB_RTN_U32, DS_SUB_CLAMP_RTN_U32, DS_PK_ADD_RTN_F16, DS_PK_ADD_RTN_BF16, DS_MIN_NUM_RTN_F32, DS_MAX_NUM_RTN_F32, DS_MIN_NUM_RTN_F64, DS_MAX_NUM_RTN_F64, DS_MIN_RTN_I32, DS_MIN_RTN_U32, DS_MAX_RTN_I32, DS_MAX_RTN_U32, DS_AND_RTN_B32, DS_OR_RTN_B32, DS_XOR_RTN_B32, and DS_MSKOR_RTN_B32, the matching one-address return-value 64-bit integer LDS update slice DS_ADD_RTN_U64, DS_SUB_RTN_U64, DS_RSUB_RTN_U64, DS_INC_RTN_U64, DS_DEC_RTN_U64, DS_MIN_RTN_I64, DS_MIN_RTN_U64, DS_MAX_RTN_I64, DS_MAX_RTN_U64, DS_AND_RTN_B64, DS_OR_RTN_B64, DS_XOR_RTN_B64, and DS_MSKOR_RTN_B64, the one-address non-return 64-bit integer LDS update slice DS_ADD_U64, DS_SUB_U64, DS_RSUB_U64, DS_INC_U64, DS_DEC_U64, DS_MIN_I64, DS_MIN_U64, DS_MAX_I64, DS_MAX_U64, DS_AND_B64, DS_OR_B64, DS_XOR_B64, and DS_MSKOR_B64, the simple one-address LDS load slice DS_LOAD_B32, DS_LOAD_ADDTID_B32, DS_LOAD_B64, DS_LOAD_B96, DS_LOAD_B128, DS_LOAD_I8, DS_LOAD_U8, DS_LOAD_I16, DS_LOAD_U16, DS_LOAD_U8_D16, DS_LOAD_U8_D16_HI, DS_LOAD_I8_D16, DS_LOAD_I8_D16_HI, DS_LOAD_U16_D16, and DS_LOAD_U16_D16_HI, the matching simple one-address LDS store slice DS_STORE_B8, DS_STORE_B16, DS_STORE_B32, DS_STORE_ADDTID_B32, DS_STORE_B64, DS_STORE_B96, DS_STORE_B128, DS_STORE_B8_D16_HI, and DS_STORE_B16_D16_HI, and the single-address lane-routing utility slice DS_SWIZZLE_B32, DS_PERMUTE_B32, DS_BPERMUTE_B32, and DS_BPERMUTE_FI_B32.
 - The remaining ENC_VDS tail is now explicitly bounded by append/consume allocator semantics, exchange and compare-store forms, multi-address LDS forms including stride64, and gfx1201-specific BVH stack instructions, which is the next verification-risk step before ENC_VOP3.
 - There is no safe ENC_VDS continuation under the current request boundary: every remaining bucket crosses allocator-or-GDS, exchange/compare-store, multi-address, or gfx1201-specific BVH semantics.
+- The boundary report now carries an exact remaining-VDS instruction-to-bucket map so the unresolved tail can be queried directly by opcode name.
 
 ## Remaining VDS Boundary
 
@@ -33,6 +34,33 @@ execution path.
 - `exchange_compare_store`: `7` instructions, example `DS_CONDXCHG32_RTN_B64`, blocking dimension `exchange_compare_store_semantics`, safe under current request `false`, covering `DS_CONDXCHG32_RTN_B64`, `DS_CMPSTORE_B32`, `DS_CMPSTORE_B64`, `DS_CMPSTORE_RTN_B32`, `DS_CMPSTORE_RTN_B64`, `DS_STOREXCHG_RTN_B32`, and `DS_STOREXCHG_RTN_B64`.
 - `multi_address`: `12` instructions, example `DS_LOAD_2ADDR_B32`, blocking dimension `multi_address_semantics`, safe under current request `false`, covering `DS_LOAD_2ADDR_B32`, `DS_LOAD_2ADDR_B64`, `DS_LOAD_2ADDR_STRIDE64_B32`, `DS_LOAD_2ADDR_STRIDE64_B64`, `DS_STOREXCHG_2ADDR_RTN_B32`, `DS_STOREXCHG_2ADDR_RTN_B64`, `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32`, `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64`, `DS_STORE_2ADDR_B32`, `DS_STORE_2ADDR_B64`, `DS_STORE_2ADDR_STRIDE64_B32`, and `DS_STORE_2ADDR_STRIDE64_B64`.
 - `bvh_stack`: `3` instructions, example `DS_BVH_STACK_PUSH4_POP1_RTN_B32`, blocking dimension `gfx1201_specific_bvh_semantics`, safe under current request `false`, covering `DS_BVH_STACK_PUSH4_POP1_RTN_B32`, `DS_BVH_STACK_PUSH8_POP1_RTN_B32`, and `DS_BVH_STACK_PUSH8_POP2_RTN_B64`.
+
+## Remaining VDS Instruction Map
+
+- `DS_APPEND` -> `append_consume`
+- `DS_CONSUME` -> `append_consume`
+- `DS_CONDXCHG32_RTN_B64` -> `exchange_compare_store`
+- `DS_CMPSTORE_B32` -> `exchange_compare_store`
+- `DS_CMPSTORE_B64` -> `exchange_compare_store`
+- `DS_CMPSTORE_RTN_B32` -> `exchange_compare_store`
+- `DS_CMPSTORE_RTN_B64` -> `exchange_compare_store`
+- `DS_STOREXCHG_RTN_B32` -> `exchange_compare_store`
+- `DS_STOREXCHG_RTN_B64` -> `exchange_compare_store`
+- `DS_LOAD_2ADDR_B32` -> `multi_address`
+- `DS_LOAD_2ADDR_B64` -> `multi_address`
+- `DS_LOAD_2ADDR_STRIDE64_B32` -> `multi_address`
+- `DS_LOAD_2ADDR_STRIDE64_B64` -> `multi_address`
+- `DS_STOREXCHG_2ADDR_RTN_B32` -> `multi_address`
+- `DS_STOREXCHG_2ADDR_RTN_B64` -> `multi_address`
+- `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32` -> `multi_address`
+- `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64` -> `multi_address`
+- `DS_STORE_2ADDR_B32` -> `multi_address`
+- `DS_STORE_2ADDR_B64` -> `multi_address`
+- `DS_STORE_2ADDR_STRIDE64_B32` -> `multi_address`
+- `DS_STORE_2ADDR_STRIDE64_B64` -> `multi_address`
+- `DS_BVH_STACK_PUSH4_POP1_RTN_B32` -> `bvh_stack`
+- `DS_BVH_STACK_PUSH8_POP1_RTN_B32` -> `bvh_stack`
+- `DS_BVH_STACK_PUSH8_POP2_RTN_B64` -> `bvh_stack`
 
 ## Next-Risk Encodings
 
