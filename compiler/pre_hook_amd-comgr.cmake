@@ -1,8 +1,6 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-set(COMGR_DISABLE_SPIRV OFF)
-
 # Enable ASAN for Comgr when THEROCK_SANITIZER is set to ASAN or HOST_ASAN
 if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN")
   set(ADDRESS_SANITIZER ON)
