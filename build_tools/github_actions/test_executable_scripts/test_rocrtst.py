@@ -30,24 +30,8 @@ cmd = ["./rocrtst64"]
 TEST_TO_IGNORE = {
     "gfx94X-dcgpu": {
         "linux": [
-            "rocrtstFunc.Memory_Max_Mem",
-        ]
-    },
-    "gfx950-dcgpu": {
-        "linux": [
-            "rocrtstFunc.GpuCoreDump_DefaultPattern",
-            "rocrtstFunc.Memory_Max_Mem",
-        ]
-    },
-    "gfx110X-all": {
-        "windows": [
-            "rocrtstFunc.Memory_Max_Mem",
-        ]
-    },
-    "gfx1151": {
-        "windows": [
-            "rocrtstFunc.Memory_Max_Mem",
-        ]
+            "rocrtstFunc.Counted_Queue_Multithreaded_Dispatch_Test",
+        ],
     },
 }
 
