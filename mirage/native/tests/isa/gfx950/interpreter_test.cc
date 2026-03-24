@@ -12717,6 +12717,61 @@ int main() {
       {0xe8u, 0x9999aaaabbbbccccULL, 0x0123456789abcdefULL,
        0xfedcba9876543210ULL, 0xfedcba9876543210ULL},
   }};
+  constexpr std::uint64_t kScalarAtomicExec = 0x5aULL;
+  constexpr std::uint32_t kUnusedSgpr2 = 0x13579bdfu;
+  constexpr std::uint32_t kUnusedSgpr3 = 0x2468ace0u;
+  constexpr std::uint16_t kUnrelatedScalarReg = 140u;
+  constexpr std::uint16_t kUnrelatedVectorReg = 12u;
+  constexpr std::uint64_t kUnrelatedMemoryAddress0 = 0x20u;
+  constexpr std::uint64_t kUnrelatedMemoryAddress1 = 0x2f0u;
+
+  const auto seed_scalar_atomic_invariance =
+      [&](WaveExecutionState* state,
+          LinearExecutionMemory* memory,
+          bool uses_buffer_descriptor) {
+        state->exec_mask = kScalarAtomicExec;
+        state->sgprs[0] = 0x100u;
+        state->sgprs[1] = 0u;
+        state->sgprs[2] = uses_buffer_descriptor ? 0x200u : kUnusedSgpr2;
+        state->sgprs[3] = uses_buffer_descriptor ? 0u : kUnusedSgpr3;
+        state->sgprs[kUnrelatedScalarReg] = 0x12345678u;
+        state->sgprs[kUnrelatedScalarReg + 1u] = 0x9abcdef0u;
+        state->vgprs[kUnrelatedVectorReg][0] = 0x01020304u;
+        state->vgprs[kUnrelatedVectorReg][1] = 0x11121314u;
+        state->vgprs[kUnrelatedVectorReg][2] = 0x21222324u;
+        state->vgprs[kUnrelatedVectorReg][3] = 0x31323334u;
+        return memory->WriteU32(kUnrelatedMemoryAddress0, 0x11223344u) &&
+               memory->WriteU32(kUnrelatedMemoryAddress1, 0x55667788u);
+      };
+
+  const auto validate_scalar_atomic_invariance =
+      [&](const WaveExecutionState& state,
+          const LinearExecutionMemory& memory,
+          bool uses_buffer_descriptor,
+          std::string_view opcode) {
+        std::uint32_t memory_value = 0;
+        if (!state.halted || state.exec_mask != kScalarAtomicExec ||
+            state.sgprs[0] != 0x100u || state.sgprs[1] != 0u ||
+            state.sgprs[2] != (uses_buffer_descriptor ? 0x200u : kUnusedSgpr2) ||
+            state.sgprs[3] != (uses_buffer_descriptor ? 0u : kUnusedSgpr3) ||
+            state.sgprs[kUnrelatedScalarReg] != 0x12345678u ||
+            state.sgprs[kUnrelatedScalarReg + 1u] != 0x9abcdef0u ||
+            state.vgprs[kUnrelatedVectorReg][0] != 0x01020304u ||
+            state.vgprs[kUnrelatedVectorReg][1] != 0x11121314u ||
+            state.vgprs[kUnrelatedVectorReg][2] != 0x21222324u ||
+            state.vgprs[kUnrelatedVectorReg][3] != 0x31323334u) {
+          std::cerr << opcode << ": scalar atomic preservation mismatch\n";
+          return false;
+        }
+        if (!memory.ReadU32(kUnrelatedMemoryAddress0, &memory_value) ||
+            memory_value != 0x11223344u ||
+            !memory.ReadU32(kUnrelatedMemoryAddress1, &memory_value) ||
+            memory_value != 0x55667788u) {
+          std::cerr << opcode << ": scalar atomic unrelated memory mismatch\n";
+          return false;
+        }
+        return true;
+      };
 
   const auto execute_scalar_atomic_program =
       [&](const std::vector<DecodedInstruction>& program,
@@ -12749,11 +12804,11 @@ int main() {
           const char* mode) {
         WaveExecutionState state{};
         LinearExecutionMemory memory(0x400, 0);
-        state.sgprs[0] = 0x100u;
-        state.sgprs[1] = 0u;
-        if (uses_buffer_descriptor) {
-          state.sgprs[2] = 0x200u;
-          state.sgprs[3] = 0u;
+        if (!Expect(seed_scalar_atomic_invariance(&state, &memory,
+                                                  uses_buffer_descriptor),
+                    "expected scalar atomic invariance seed writes")) {
+          std::cerr << mode << '\n';
+          return false;
         }
 
         std::vector<DecodedInstruction> program;
@@ -12798,6 +12853,11 @@ int main() {
             return false;
           }
         }
+        if (!validate_scalar_atomic_invariance(state, memory,
+                                               uses_buffer_descriptor, mode)) {
+          std::cerr << mode << '\n';
+          return false;
+        }
         return true;
       };
 
@@ -12809,11 +12869,11 @@ int main() {
           const char* mode) {
         WaveExecutionState state{};
         LinearExecutionMemory memory(0x400, 0);
-        state.sgprs[0] = 0x100u;
-        state.sgprs[1] = 0u;
-        if (uses_buffer_descriptor) {
-          state.sgprs[2] = 0x200u;
-          state.sgprs[3] = 0u;
+        if (!Expect(seed_scalar_atomic_invariance(&state, &memory,
+                                                  uses_buffer_descriptor),
+                    "expected scalar atomic x2 invariance seed writes")) {
+          std::cerr << mode << '\n';
+          return false;
         }
 
         std::vector<DecodedInstruction> program;
@@ -12861,6 +12921,11 @@ int main() {
             return false;
           }
         }
+        if (!validate_scalar_atomic_invariance(state, memory,
+                                               uses_buffer_descriptor, mode)) {
+          std::cerr << mode << '\n';
+          return false;
+        }
         return true;
       };
 
@@ -12872,11 +12937,11 @@ int main() {
           const char* mode) {
         WaveExecutionState state{};
         LinearExecutionMemory memory(0x400, 0);
-        state.sgprs[0] = 0x100u;
-        state.sgprs[1] = 0u;
-        if (uses_buffer_descriptor) {
-          state.sgprs[2] = 0x200u;
-          state.sgprs[3] = 0u;
+        if (!Expect(seed_scalar_atomic_invariance(&state, &memory,
+                                                  uses_buffer_descriptor),
+                    "expected scalar atomic cmpswap invariance seed writes")) {
+          std::cerr << mode << " " << opcode << '\n';
+          return false;
         }
 
         std::vector<DecodedInstruction> program;
@@ -12924,6 +12989,11 @@ int main() {
             return false;
           }
         }
+        if (!validate_scalar_atomic_invariance(state, memory,
+                                               uses_buffer_descriptor, opcode)) {
+          std::cerr << mode << " " << opcode << '\n';
+          return false;
+        }
         return true;
       };
 
@@ -12935,11 +13005,11 @@ int main() {
           const char* mode) {
         WaveExecutionState state{};
         LinearExecutionMemory memory(0x400, 0);
-        state.sgprs[0] = 0x100u;
-        state.sgprs[1] = 0u;
-        if (uses_buffer_descriptor) {
-          state.sgprs[2] = 0x200u;
-          state.sgprs[3] = 0u;
+        if (!Expect(seed_scalar_atomic_invariance(&state, &memory,
+                                                  uses_buffer_descriptor),
+                    "expected scalar atomic cmpswap x2 invariance seed writes")) {
+          std::cerr << mode << " " << opcode << '\n';
+          return false;
         }
 
         std::vector<DecodedInstruction> program;
@@ -12992,6 +13062,11 @@ int main() {
             std::cerr << mode << " " << opcode << '\n';
             return false;
           }
+        }
+        if (!validate_scalar_atomic_invariance(state, memory,
+                                               uses_buffer_descriptor, opcode)) {
+          std::cerr << mode << " " << opcode << '\n';
+          return false;
         }
         return true;
       };
