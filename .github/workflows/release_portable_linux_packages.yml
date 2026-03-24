@@ -193,7 +193,7 @@ jobs:
       SCCACHE_REGION: us-east-2
       SCCACHE_S3_KEY_PREFIX: "linux/${{ matrix.target_bundle.amdgpu_family }}/"
       SCCACHE_S3_USE_SSL: "true"
-      # SCCACHE_ERROR_LOG: ${{ github.workspace }}/output/build/logs/sccache_error.log
+      SCCACHE_ERROR_LOG: ${{ github.workspace }}/output/build/logs/sccache_error.log
       SCCACHE_LOG: debug,sccache::cache=trace
       SCCACHE_DIR: ${{ github.workspace }}/output/sccache_cache
 
@@ -212,11 +212,13 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
-      # Set up ccache with a custom configuration.
-      # - name: Setup ccache
-      #   env:
-      #     CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
-      #   run: |
+      #Set up ccache with a custom configuration.
+      - name: Setup sccache
+        # env:
+          # CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
+        run: |
+          mkdir -p ${{ github.workspace }}/output/build/logs || true
+          touch ${{ github.workspace }}/output/build/logs/sccache_error.log || true
       #     ./build_tools/setup_ccache.py \
       #       --config-preset "github-oss-${{ env.CI_TYPE }}" \
       #       --dir "$(dirname $CCACHE_CONFIGPATH)" \
