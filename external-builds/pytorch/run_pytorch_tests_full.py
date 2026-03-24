@@ -49,6 +49,7 @@ from pathlib import Path
 from skip_tests.create_skip_tests import get_tests
 
 from pytorch_utils import (
+    check_pytorch_source_version,
     detect_pytorch_version,
     set_gpu_execution_policy,
 )
@@ -259,6 +260,13 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         default=False,
         help="Pass --dry-run to run_test.py to list tests without running them.",
     )
+    parser.add_argument(
+        "--allow-version-mismatch",
+        default=False,
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        help="""Allows version mismatches between pytorch test sources and installed packages. Defaults to False, so mismatched versions block running tests""",
+    )
     args = parser.parse_args(argv)
 
     if not args.pytorch_dir.exists():
@@ -326,13 +334,24 @@ def build_run_test_cmd(
 
 def main(argv: list[str]) -> int:
     args, passthrough_args = cmd_arguments(argv)
+    check_pytorch_source_version(
+        pytorch_dir=args.pytorch_dir, allow_mismatch=args.allow_version_mismatch
+    )
 
     # Determine AMDGPU family and set HIP_VISIBLE_DEVICES BEFORE importing
     # torch or running pytest.  Once torch.cuda is initialized, changing
-    # HIP_VISIBLE_DEVICES has no effect.  For unit tests we run on a single
-    # device (policy="single") to avoid multi-GPU contention.
-    ((first_arch, _),) = set_gpu_execution_policy(args.amdgpu_family, policy="single")
-    print(f"Using AMDGPU family: {first_arch}")
+    # HIP_VISIBLE_DEVICES has no effect.  Distributed tests need all GPUs;
+    # other configs use a single device to avoid multi-GPU contention.
+    gpu_policy = "all" if args.test_config == "distributed" else "single"
+    selected = set_gpu_execution_policy(args.amdgpu_family, policy=gpu_policy)
+    first_arch = selected[0][0]
+    unique_archs = sorted(set(arch for arch, _ in selected))
+    device_ids = [str(dev_id) for _, dev_id in selected]
+    print(
+        f"Selected {len(selected)} GPU(s): "
+        f"arch(es)={', '.join(unique_archs)}, "
+        f"device(s)={', '.join(device_ids)}"
+    )
 
     # get_tests amdgpu_family requires list[str]
     first_arch = [first_arch]

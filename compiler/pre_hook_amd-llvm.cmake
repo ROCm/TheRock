@@ -62,8 +62,14 @@ endif()
 
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
 # Only enable BUILD_TESTING if LLVM tests are explicitly enabled
-if(THEROCK_ENABLE_LLVM_TESTS)
+if(THEROCK_BUILD_LLVM_TESTS)
   set(BUILD_TESTING ON CACHE BOOL "Enable building LLVM tests" FORCE)
+else()
+  set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
+endif()
+
+# Enable LLVM tools when tests are enabled (tests need the tools) or when explicitly requested
+if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR THEROCK_BUILD_COMGR_TESTS)
   set(LLVM_BUILD_TOOLS ON CACHE BOOL "Build LLVM tools required for tests" FORCE)
   set(LLVM_INSTALL_UTILS ON CACHE BOOL "Install LLVM utility binaries like FileCheck" FORCE)
 
@@ -97,8 +103,6 @@ exec "${SCRIPT_DIR}/llvm-lit.real" "$@"
     file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit-wrapper\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\")
     file(CHMOD \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
   ")
-else()
-  set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
 endif()
 # we have never enabled benchmarks,
 # disabling more explicitly after a bug fix enabled.
@@ -166,9 +170,9 @@ function(therock_set_implicit_llvm_options type tools_dir required_tool_names)
   endforeach()
 endfunction()
 
-# When LLVM tests are enabled, build all tools (don't selectively disable).
+# When LLVM tests, tools, or Comgr tests are enabled, build all tools (don't selectively disable).
 # Otherwise, only build the minimum required tools for production.
-if(NOT THEROCK_ENABLE_LLVM_TESTS)
+if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS AND NOT THEROCK_BUILD_COMGR_TESTS)
   block()
     # This list contains the minimum tooling that must be enabled to build LLVM.
     # It is empically derived (either configure or ninja invocation will fail

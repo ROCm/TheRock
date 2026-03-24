@@ -180,7 +180,7 @@ jobs:
   build_pytorch_wheels_per_family:
     needs: [build_python_packages]
     name: Build PyTorch | ${{ matrix.family_info.amdgpu_family }}
-    if: ${{ !failure() && !cancelled() && inputs.build_pytorch == false }}
+    if: ${{ !failure() && !cancelled() && inputs.build_pytorch == true }}
     strategy:
       fail-fast: false
       matrix:

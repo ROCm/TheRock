@@ -503,6 +503,7 @@ disable_platforms = ["windows"]
 artifact_group = "hip-runtime"
 type = "target-neutral"
 artifact_deps = ["sysdeps"]
+group_deps = ["third-party-libs"]
 feature_name = "KPACK"
 feature_group = "CORE"
 
@@ -675,8 +676,11 @@ artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-
 disable_platforms = ["windows"]
 
 [artifacts.rocshmem]
+# target-neutral: rocshmem embeds device code via .hip_fatbin ELF sections
+# rather than the __CudaFatBinaryWrapper format (.hipFatBinSegment), so kpack
+# injection is not supported. Built for all targets to make upload races harmless.
 artifact_group = "comm-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
 disable_platforms = ["windows"]
 
