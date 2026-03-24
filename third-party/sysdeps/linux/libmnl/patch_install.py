@@ -137,6 +137,17 @@ if platform.system() == "Linux":
     source = lib_dir / "librocm_sysdeps_mnl.so"
     update_library_links(source, "libmnl.so")
 
+    # Clean up RUNPATH to only contain $ORIGIN
+    target_lib = lib_dir / "libmnl.so"
+    if target_lib.exists():
+        try:
+            subprocess.run(
+                [patchelf_exe, "--set-rpath", "$ORIGIN", str(target_lib)],
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: Failed to set RPATH on {target_lib}: {e}", flush=True)
+
     # Make .pc file relocatable
     libmnl_pc = pkgconfig_dir / "libmnl.pc"
     if libmnl_pc.exists():

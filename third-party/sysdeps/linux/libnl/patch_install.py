@@ -150,6 +150,17 @@ if platform.system() == "Linux":
         if source.exists():
             update_library_links(source, linker_name)
 
+            # Clean up RUNPATH to only contain $ORIGIN
+            target_lib = lib_dir / linker_name
+            if target_lib.exists():
+                try:
+                    subprocess.run(
+                        [patchelf_exe, "--set-rpath", "$ORIGIN", str(target_lib)],
+                        check=True
+                    )
+                except subprocess.CalledProcessError as e:
+                    print(f"Warning: Failed to set RPATH on {target_lib}: {e}", flush=True)
+
     # Make .pc files relocatable
     pc_files = [
         "libnl-3.0.pc",

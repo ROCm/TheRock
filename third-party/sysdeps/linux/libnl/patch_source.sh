@@ -5,6 +5,7 @@
 set -e
 
 SOURCE_DIR="${1:?Source directory must be given}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIBNL_MAKEFILE="$SOURCE_DIR/Makefile.in"
 
 echo "Patching sources..."
@@ -52,10 +53,6 @@ echo "Updating version scripts..."
 for sym_file in "$SOURCE_DIR"/libnl*.sym; do
     if [ -f "$sym_file" ]; then
         echo "Updating $sym_file"
-        cat > "$sym_file" << 'EOF'
-AMDROCM_SYSDEPS_1.0 {
-global: *;
-};
-EOF
+        cp "$SCRIPT_DIR/libnl.sym" "$sym_file"
     fi
 done
