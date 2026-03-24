@@ -16,6 +16,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifact_backend import (
     ArtifactBackend,
+    HTTPBackend,
     LocalDirectoryBackend,
     S3Backend,
     create_backend_from_env,
@@ -625,6 +626,326 @@ class TestS3BackendCredentials(unittest.TestCase):
             os.unlink(creds_path)
 
 
+class TestHTTPBackend(unittest.TestCase):
+    """Tests for HTTPBackend with mocked HTTP requests."""
+
+    def setUp(self):
+        """Set up HTTPBackend with test parameters."""
+        self.backend = HTTPBackend(
+            run_id="test-run-789",
+            base_url="https://example.com/artifacts",
+            gfx_families=["gfx1200", "gfx94X-dcgpu"],
+            platform="linux",
+        )
+
+    def test_base_uri(self):
+        """Test that base_uri returns the correct HTTP URL."""
+        expected = "https://example.com/artifacts/test-run-789-linux"
+        self.assertEqual(self.backend.base_uri, expected)
+
+    @mock.patch("urllib.request.urlopen")
+    def test_list_artifacts_single_family(self, mock_urlopen):
+        """Test listing artifacts from a single GFX family index."""
+        # Mock HTML response for gfx1200
+        mock_response_gfx1200 = mock.MagicMock()
+        mock_response_gfx1200.read.return_value = b"""
+        <html>
+        <body>
+        <a href="../">Parent Directory</a>
+        <a href="index.html">Index</a>
+        <a href="blas_lib_gfx1200.tar.zst">blas_lib_gfx1200.tar.zst</a>
+        <a href="rocfft_lib_gfx1200.tar.xz">rocfft_lib_gfx1200.tar.xz</a>
+        <a href="blas_lib_gfx1200.tar.zst.sha256sum">blas_lib_gfx1200.tar.zst.sha256sum</a>
+        <a href="http://external.link.com">External Link</a>
+        <a href="#anchor">Anchor</a>
+        </body>
+        </html>
+        """
+        mock_response_gfx1200.__enter__ = mock.Mock(return_value=mock_response_gfx1200)
+        mock_response_gfx1200.__exit__ = mock.Mock(return_value=False)
+
+        # Mock empty response for gfx94X-dcgpu (index doesn't exist)
+        def urlopen_side_effect(url):
+            if "gfx1200" in url:
+                return mock_response_gfx1200
+            raise Exception("Index not found")
+
+        mock_urlopen.side_effect = urlopen_side_effect
+
+        artifacts = self.backend.list_artifacts()
+        self.assertEqual(len(artifacts), 2)
+        self.assertIn("blas_lib_gfx1200.tar.zst", artifacts)
+        self.assertIn("rocfft_lib_gfx1200.tar.xz", artifacts)
+        # sha256sum should be filtered out
+        self.assertNotIn("blas_lib_gfx1200.tar.zst.sha256sum", artifacts)
+
+    @mock.patch("urllib.request.urlopen")
+    def test_list_artifacts_multiple_families(self, mock_urlopen):
+        """Test listing artifacts from multiple GFX families."""
+        # Mock responses for both families
+        mock_response_gfx1200 = mock.MagicMock()
+        mock_response_gfx1200.read.return_value = b"""
+        <a href="blas_lib_gfx1200.tar.zst">blas_lib_gfx1200.tar.zst</a>
+        <a href="rocfft_lib_gfx1200.tar.zst">rocfft_lib_gfx1200.tar.zst</a>
+        """
+        mock_response_gfx1200.__enter__ = mock.Mock(return_value=mock_response_gfx1200)
+        mock_response_gfx1200.__exit__ = mock.Mock(return_value=False)
+
+        mock_response_gfx94x = mock.MagicMock()
+        mock_response_gfx94x.read.return_value = b"""
+        <a href="blas_lib_gfx94X-dcgpu.tar.zst">blas_lib_gfx94X-dcgpu.tar.zst</a>
+        <a href="rocfft_lib_gfx94X-dcgpu.tar.xz">rocfft_lib_gfx94X-dcgpu.tar.xz</a>
+        """
+        mock_response_gfx94x.__enter__ = mock.Mock(return_value=mock_response_gfx94x)
+        mock_response_gfx94x.__exit__ = mock.Mock(return_value=False)
+
+        def urlopen_side_effect(url):
+            if "gfx1200" in url:
+                return mock_response_gfx1200
+            elif "gfx94X-dcgpu" in url:
+                return mock_response_gfx94x
+            raise Exception("Index not found")
+
+        mock_urlopen.side_effect = urlopen_side_effect
+
+        artifacts = self.backend.list_artifacts()
+        self.assertEqual(len(artifacts), 4)
+        self.assertIn("blas_lib_gfx1200.tar.zst", artifacts)
+        self.assertIn("rocfft_lib_gfx1200.tar.zst", artifacts)
+        self.assertIn("blas_lib_gfx94X-dcgpu.tar.zst", artifacts)
+        self.assertIn("rocfft_lib_gfx94X-dcgpu.tar.xz", artifacts)
+
+    @mock.patch("urllib.request.urlopen")
+    def test_list_artifacts_with_filter(self, mock_urlopen):
+        """Test filtering artifacts by name prefix."""
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b"""
+        <a href="blas_lib_gfx1200.tar.zst">blas_lib_gfx1200.tar.zst</a>
+        <a href="blas_dev_gfx1200.tar.zst">blas_dev_gfx1200.tar.zst</a>
+        <a href="rocfft_lib_gfx1200.tar.xz">rocfft_lib_gfx1200.tar.xz</a>
+        """
+        mock_response.__enter__ = mock.Mock(return_value=mock_response)
+        mock_response.__exit__ = mock.Mock(return_value=False)
+        mock_urlopen.return_value = mock_response
+
+        artifacts = self.backend.list_artifacts(name_filter="blas")
+        self.assertEqual(len(artifacts), 2)
+        self.assertIn("blas_lib_gfx1200.tar.zst", artifacts)
+        self.assertIn("blas_dev_gfx1200.tar.zst", artifacts)
+        self.assertNotIn("rocfft_lib_gfx1200.tar.xz", artifacts)
+
+    @mock.patch("urllib.request.urlopen")
+    def test_list_artifacts_caching(self, mock_urlopen):
+        """Test that artifact list is cached after first fetch."""
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b"""
+        <a href="blas_lib_gfx1200.tar.zst">blas_lib_gfx1200.tar.zst</a>
+        """
+        mock_response.__enter__ = mock.Mock(return_value=mock_response)
+        mock_response.__exit__ = mock.Mock(return_value=False)
+        mock_urlopen.return_value = mock_response
+
+        # First call should fetch from HTTP
+        artifacts1 = self.backend.list_artifacts()
+        self.assertEqual(len(artifacts1), 1)
+        call_count_after_first = mock_urlopen.call_count
+
+        # Second call should use cache
+        artifacts2 = self.backend.list_artifacts()
+        self.assertEqual(artifacts1, artifacts2)
+        # urlopen should not be called again
+        self.assertEqual(mock_urlopen.call_count, call_count_after_first)
+
+    @mock.patch("urllib.request.urlretrieve")
+    @mock.patch("urllib.request.urlopen")
+    def test_download_artifact_with_checksum(self, mock_urlopen, mock_urlretrieve):
+        """Test downloading an artifact with successful checksum verification."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dest_path = Path(temp_dir) / "downloaded.tar.zst"
+            checksum_path = dest_path.parent / "downloaded.tar.zst.sha256sum"
+
+            # Create a fake artifact file with known content
+            fake_artifact_content = b"test artifact content for checksum"
+
+            def urlretrieve_side_effect(url, dest):
+                if url.endswith(".sha256sum"):
+                    # Write checksum file (SHA256 of fake_artifact_content)
+                    Path(dest).write_text(
+                        "e1b51c534d1be613579d8eb289127b2f840f3e7e16e0631c7db728736e5c311f  downloaded.tar.zst\n"
+                    )
+                else:
+                    # Write artifact file
+                    Path(dest).write_bytes(fake_artifact_content)
+
+            mock_urlretrieve.side_effect = urlretrieve_side_effect
+
+            # Download should succeed
+            self.backend.download_artifact("downloaded.tar.zst", dest_path)
+
+            # Verify files were created
+            self.assertTrue(dest_path.exists())
+            self.assertTrue(checksum_path.exists())
+            self.assertEqual(dest_path.read_bytes(), fake_artifact_content)
+
+            # Verify URLs called
+            self.assertEqual(mock_urlretrieve.call_count, 2)
+            mock_urlretrieve.assert_any_call(
+                "https://example.com/artifacts/test-run-789-linux/downloaded.tar.zst",
+                dest_path,
+            )
+            mock_urlretrieve.assert_any_call(
+                "https://example.com/artifacts/test-run-789-linux/downloaded.tar.zst.sha256sum",
+                checksum_path,
+            )
+
+    @mock.patch("urllib.request.urlretrieve")
+    def test_download_artifact_without_checksum(self, mock_urlretrieve):
+        """Test downloading an artifact when checksum file doesn't exist."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dest_path = Path(temp_dir) / "downloaded.tar.zst"
+
+            def urlretrieve_side_effect(url, dest):
+                if url.endswith(".sha256sum"):
+                    # Checksum doesn't exist
+                    raise FileNotFoundError("Checksum not found")
+                else:
+                    # Write artifact file
+                    Path(dest).write_bytes(b"test content")
+
+            mock_urlretrieve.side_effect = urlretrieve_side_effect
+
+            # Download should succeed even without checksum
+            self.backend.download_artifact("downloaded.tar.zst", dest_path)
+
+            self.assertTrue(dest_path.exists())
+            self.assertEqual(dest_path.read_bytes(), b"test content")
+
+    @mock.patch("urllib.request.urlretrieve")
+    def test_download_artifact_checksum_mismatch(self, mock_urlretrieve):
+        """Test that download fails on checksum mismatch."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dest_path = Path(temp_dir) / "downloaded.tar.zst"
+            checksum_path = dest_path.parent / "downloaded.tar.zst.sha256sum"
+
+            def urlretrieve_side_effect(url, dest):
+                if url.endswith(".sha256sum"):
+                    # Write checksum that won't match
+                    Path(dest).write_text("wrongchecksum123  downloaded.tar.zst\n")
+                else:
+                    # Write artifact file
+                    Path(dest).write_bytes(b"test content")
+
+            mock_urlretrieve.side_effect = urlretrieve_side_effect
+
+            # Download should fail with ValueError
+            with self.assertRaises(ValueError) as ctx:
+                self.backend.download_artifact("downloaded.tar.zst", dest_path)
+
+            self.assertIn("Checksum verification failed", str(ctx.exception))
+            # Files should be cleaned up
+            self.assertFalse(dest_path.exists())
+            self.assertFalse(checksum_path.exists())
+
+    @mock.patch("urllib.request.urlretrieve")
+    def test_download_artifact_not_found(self, mock_urlretrieve):
+        """Test that download fails when artifact doesn't exist."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dest_path = Path(temp_dir) / "nonexistent.tar.zst"
+
+            mock_urlretrieve.side_effect = FileNotFoundError("Artifact not found")
+
+            with self.assertRaises(FileNotFoundError):
+                self.backend.download_artifact("nonexistent.tar.zst", dest_path)
+
+    @mock.patch("urllib.request.urlopen")
+    def test_artifact_exists_with_cache(self, mock_urlopen):
+        """Test artifact_exists using cached artifact list."""
+        # Populate cache
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b"""
+        <a href="exists.tar.zst">exists.tar.zst</a>
+        """
+        mock_response.__enter__ = mock.Mock(return_value=mock_response)
+        mock_response.__exit__ = mock.Mock(return_value=False)
+        mock_urlopen.return_value = mock_response
+
+        # Populate cache by calling list_artifacts
+        self.backend.list_artifacts()
+
+        # artifact_exists should use cache (no HEAD request)
+        self.assertTrue(self.backend.artifact_exists("exists.tar.zst"))
+        self.assertFalse(self.backend.artifact_exists("nonexistent.tar.zst"))
+
+    @mock.patch("urllib.request.urlopen")
+    def test_artifact_exists_with_head_request(self, mock_urlopen):
+        """Test artifact_exists using HTTP HEAD request when cache is empty."""
+        # Don't populate cache - should use HEAD request
+        mock_response = mock.MagicMock()
+
+        def urlopen_side_effect(request):
+            if hasattr(request, "method") and request.method == "HEAD":
+                if "exists.tar.zst" in request.full_url:
+                    return mock_response
+                raise Exception("Not found")
+            raise Exception("Expected HEAD request")
+
+        mock_urlopen.side_effect = urlopen_side_effect
+
+        self.assertTrue(self.backend.artifact_exists("exists.tar.zst"))
+        self.assertFalse(self.backend.artifact_exists("nonexistent.tar.zst"))
+
+    def test_upload_artifact_not_supported(self):
+        """Test that upload_artifact raises NotImplementedError."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "test.tar.zst"
+            source_path.touch()
+
+            with self.assertRaises(NotImplementedError) as ctx:
+                self.backend.upload_artifact(source_path, "test.tar.zst")
+
+            self.assertIn("read-only", str(ctx.exception))
+
+    def test_copy_artifact_not_supported(self):
+        """Test that copy_artifact raises NotImplementedError."""
+        source_backend = mock.MagicMock()
+
+        with self.assertRaises(NotImplementedError) as ctx:
+            self.backend.copy_artifact("test.tar.zst", source_backend)
+
+        self.assertIn("read-only", str(ctx.exception))
+
+    @mock.patch("urllib.request.urlopen")
+    def test_parse_index_html_edge_cases(self, mock_urlopen):
+        """Test parsing index HTML with various edge cases."""
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b"""
+        <html>
+        <body>
+        <!-- Valid artifacts -->
+        <a href="valid1.tar.zst">valid1.tar.zst</a>
+        <a href="valid2.tar.xz">valid2.tar.xz</a>
+
+        <!-- Should be filtered out -->
+        <a href="../parent">Parent</a>
+        <a href="index-gfx1200.html">Index</a>
+        <a href="http://external.com/file.tar.zst">External</a>
+        <a href="#section">Anchor</a>
+        <a href="README.txt">Text file</a>
+        <a href="artifact.tar.gz">Wrong extension</a>
+        <a href="file.tar.zst.sha256sum">Checksum file</a>
+        </body>
+        </html>
+        """
+        mock_response.__enter__ = mock.Mock(return_value=mock_response)
+        mock_response.__exit__ = mock.Mock(return_value=False)
+        mock_urlopen.return_value = mock_response
+
+        artifacts = self.backend.list_artifacts()
+        self.assertEqual(len(artifacts), 2)
+        self.assertIn("valid1.tar.zst", artifacts)
+        self.assertIn("valid2.tar.xz", artifacts)
+
+
 class TestCreateBackendFromEnv(unittest.TestCase):
     """Tests for create_backend_from_env factory function."""
 
@@ -676,6 +997,102 @@ class TestCreateBackendFromEnv(unittest.TestCase):
             self.assertIsInstance(backend, S3Backend)
             self.assertEqual(backend.bucket, "test-bucket")
             self.assertIn("s3-run-id", backend.s3_prefix)
+
+    def test_http_backend_from_env(self):
+        """Test that HTTPBackend is created when THEROCK_HTTP_BASE_URL is set."""
+        with mock.patch.dict(
+            os.environ,
+            {
+                "THEROCK_HTTP_BASE_URL": "https://artifacts.example.com",
+                "THEROCK_RUN_ID": "http-run-123",
+                "THEROCK_PLATFORM": "linux",
+                "THEROCK_AMDGPU_FAMILIES": "gfx1200,gfx94X-dcgpu",
+            },
+            clear=True,
+        ):
+            backend = create_backend_from_env()
+
+            self.assertIsInstance(backend, HTTPBackend)
+            self.assertEqual(backend.run_id, "http-run-123")
+            self.assertEqual(backend.base_url, "https://artifacts.example.com")
+            self.assertEqual(backend.platform, "linux")
+            self.assertEqual(backend.gfx_families, ["gfx1200", "gfx94X-dcgpu"])
+            self.assertIn("http-run-123", backend.base_uri)
+
+    def test_http_backend_with_gfx_families_param(self):
+        """Test HTTPBackend creation with gfx_families parameter overriding env var."""
+        with mock.patch.dict(
+            os.environ,
+            {
+                "THEROCK_HTTP_BASE_URL": "https://artifacts.example.com",
+                "THEROCK_RUN_ID": "http-run-456",
+                "THEROCK_AMDGPU_FAMILIES": "gfx1200",  # This should be overridden
+            },
+            clear=True,
+        ):
+            backend = create_backend_from_env(gfx_families=["gfx94X-dcgpu", "gfx1100"])
+
+            self.assertIsInstance(backend, HTTPBackend)
+            self.assertEqual(backend.gfx_families, ["gfx94X-dcgpu", "gfx1100"])
+
+    def test_http_backend_missing_gfx_families_raises(self):
+        """Test that HTTPBackend creation fails without gfx_families."""
+        with mock.patch.dict(
+            os.environ,
+            {
+                "THEROCK_HTTP_BASE_URL": "https://artifacts.example.com",
+                "THEROCK_RUN_ID": "http-run-789",
+            },
+            clear=True,
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                create_backend_from_env()
+
+            self.assertIn("HTTPBackend requires gfx_families", str(ctx.exception))
+
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_s3_backend_with_credentials_priority(self, mock_retrieve):
+        """Test that S3Backend with credentials takes priority over HTTP backend."""
+        mock_retrieve.return_value = ("", "test-bucket")
+        with mock.patch.dict(
+            os.environ,
+            {
+                "AWS_ACCESS_KEY_ID": "test-key",
+                "AWS_SECRET_ACCESS_KEY": "test-secret",
+                "AWS_SESSION_TOKEN": "test-token",
+                "THEROCK_HTTP_BASE_URL": "https://artifacts.example.com",
+                "THEROCK_AMDGPU_FAMILIES": "gfx1200",
+                "THEROCK_RUN_ID": "priority-test",
+            },
+            clear=True,
+        ):
+            backend = create_backend_from_env()
+
+            # Should create S3Backend because credentials are present
+            self.assertIsInstance(backend, S3Backend)
+
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_backend_priority_local_over_all(self, mock_retrieve):
+        """Test that local backend has highest priority."""
+        mock_retrieve.return_value = ("", "test-bucket")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "THEROCK_LOCAL_STAGING_DIR": temp_dir,
+                    "AWS_ACCESS_KEY_ID": "test-key",
+                    "AWS_SECRET_ACCESS_KEY": "test-secret",
+                    "AWS_SESSION_TOKEN": "test-token",
+                    "THEROCK_HTTP_BASE_URL": "https://artifacts.example.com",
+                    "THEROCK_AMDGPU_FAMILIES": "gfx1200",
+                    "THEROCK_RUN_ID": "priority-test",
+                },
+                clear=True,
+            ):
+                backend = create_backend_from_env()
+
+                # Should create LocalDirectoryBackend despite other options
+                self.assertIsInstance(backend, LocalDirectoryBackend)
 
 
 if __name__ == "__main__":
