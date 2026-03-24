@@ -2,26 +2,29 @@
 # SPDX-License-Identifier: MIT
 
 """
-Compute package-level test dependencies for changed components.
+Compute subproject-level test dependencies for changed components.
 
-This module reads BUILD_TOPOLOGY.toml to extract artifact dependencies and
-determines which packages need testing when a specific package is updated.
+This module reads the CMake-generated subproject_test_manifest.json to determine
+which subprojects need testing when a specific subproject is updated.
 
-By default, we test the changed package plus its direct downstream dependents
-(computed from the reverse artifact_deps graph). Artifacts can optionally specify
-a test_deps field to override this behavior and limit testing to specific consumers.
+By default, we test the changed subproject plus its direct downstream dependents
+(computed from the reverse runtime_deps graph). Subprojects can optionally specify
+test_subprojects to override this behavior and limit testing to specific consumers.
 
 usage: determine_rocm_test_dependencies.py [-h] [--therock-dir THEROCK_DIR]
-                                           [--changed PACKAGE [PACKAGE ...]]
-                                           [--list-packages]
+                                           [--build-dir BUILD_DIR]
+                                           [--changed SUBPROJECT [SUBPROJECT ...]]
+                                           [--list-subprojects]
 
 options:
   -h, --help            show this help message and exit
   --therock-dir THEROCK_DIR
                         Path to TheRock directory (default: current directory)
-  --changed PACKAGE [PACKAGE ...]
-                        Package(s) that have changed (e.g., blas, miopen)
-  --list-packages       List all available packages with their artifact groups
+  --build-dir BUILD_DIR
+                        Path to build directory (default: therock-dir/build)
+  --changed SUBPROJECT [SUBPROJECT ...]
+                        Subproject(s) that have changed (e.g., rocBLAS, MIOpen)
+  --list-subprojects    List all available subprojects
 """
 
 import argparse
@@ -30,120 +33,115 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 
+class SubprojectInfo:
+    """Information about a subproject from the CMake manifest."""
 
-
-
-class ArtifactInfo:
-    """Information about an artifact from BUILD_TOPOLOGY.toml."""
-
-    def __init__(self, name: str, artifact_group: str):
+    def __init__(self, name: str):
         self.name = name
-        self.artifact_group = artifact_group
-        self.artifact_deps: Set[str] = set()
-        self.test_deps: Optional[Set[str]] = None  # If set, overrides reverse deps
+        self.runtime_deps: Set[str] = set()
+        self.test_subprojects: Optional[Set[str]] = None  # If set, overrides reverse deps
 
 
-class ArtifactDependencyAnalyzer:
-    """Analyzes artifact-level test dependencies from BUILD_TOPOLOGY.toml."""
+class SubprojectDependencyAnalyzer:
+    """Analyzes subproject-level test dependencies from CMake manifest."""
 
-    def __init__(self, therock_dir: Path):
-        self.therock_dir = therock_dir
-        self.artifacts: Dict[str, ArtifactInfo] = {}
+    def __init__(self, manifest_path: Path):
+        self.manifest_path = manifest_path
+        self.subprojects: Dict[str, SubprojectInfo] = {}
         self.reverse_deps: Dict[str, Set[str]] = {}
-        self._load_topology()
+        self._load_manifest()
         self._build_reverse_dependency_graph()
 
-    def _load_topology(self):
-        """Load and parse BUILD_TOPOLOGY.toml."""
-        topology_file = self.therock_dir / "BUILD_TOPOLOGY.toml"
-        if not topology_file.exists():
-            raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found: {topology_file}")
+    def _load_manifest(self):
+        """Load and parse the CMake-generated manifest."""
+        if not self.manifest_path.exists():
+            raise FileNotFoundError(
+                f"Subproject test manifest not found: {self.manifest_path}\n"
+                f"Please run CMake configure first to generate the manifest."
+            )
 
-        with open(topology_file, "rb") as f:
-            topology = tomllib.load(f)
+        with open(self.manifest_path, "r") as f:
+            manifest = json.load(f)
 
-        # Extract artifacts
-        artifacts_section = topology.get("artifacts", {})
-        for artifact_name, artifact_data in artifacts_section.items():
-            artifact_group = artifact_data.get("artifact_group", "")
-            info = ArtifactInfo(artifact_name, artifact_group)
+        # Extract subprojects
+        subprojects_section = manifest.get("subprojects", {})
+        for subproject_name, subproject_data in subprojects_section.items():
+            info = SubprojectInfo(subproject_name)
 
-            # Get artifact dependencies
-            deps = artifact_data.get("artifact_deps", [])
-            info.artifact_deps = set(deps)
+            # Get runtime dependencies
+            runtime_deps = subproject_data.get("runtime_deps", [])
+            info.runtime_deps = set(runtime_deps)
 
-            # Get test dependencies (optional override)
-            test_deps = artifact_data.get("test_deps")
-            if test_deps is not None:
-                info.test_deps = set(test_deps)
+            # Get test subprojects override (optional)
+            test_subprojects = subproject_data.get("test_subprojects")
+            if test_subprojects is not None:
+                info.test_subprojects = set(test_subprojects)
 
-            self.artifacts[artifact_name] = info
+            self.subprojects[subproject_name] = info
 
     def _build_reverse_dependency_graph(self):
         """
         Build a reverse dependency graph for fast lookups.
 
-        Maps each artifact to its direct downstream dependents.
+        Maps each subproject to its direct downstream dependents.
 
-        Example: if solver has artifact_deps containing "blas":
-            artifacts["solver"].artifact_deps contains "blas"
-            reverse_deps["blas"] contains "solver"
+        Example: if rocSOLVER has runtime_deps containing "rocBLAS":
+            subprojects["rocSOLVER"].runtime_deps contains "rocBLAS"
+            reverse_deps["rocBLAS"] contains "rocSOLVER"
         """
-        # Initialize empty sets for all artifacts
-        for artifact_name in self.artifacts:
-            self.reverse_deps[artifact_name] = set()
+        # Initialize empty sets for all subprojects
+        for subproject_name in self.subprojects:
+            self.reverse_deps[subproject_name] = set()
 
         # Populate reverse dependencies
-        for artifact_name, artifact_info in self.artifacts.items():
-            for dep_name in artifact_info.artifact_deps:
-                if dep_name in self.artifacts:
-                    self.reverse_deps[dep_name].add(artifact_name)
+        for subproject_name, subproject_info in self.subprojects.items():
+            for dep_name in subproject_info.runtime_deps:
+                if dep_name in self.subprojects:
+                    self.reverse_deps[dep_name].add(subproject_name)
 
-    def get_packages_to_test(self, changed_packages: List[str]) -> Set[str]:
+    def get_subprojects_to_test(self, changed_subprojects: List[str]) -> Set[str]:
         """
-        Get all packages that need testing given a list of changed packages.
+        Get all subprojects that need testing given a list of changed subprojects.
 
-        Returns the changed packages PLUS their downstream dependents.
-        - If an artifact specifies test_deps, only those artifacts are tested
-        - Otherwise, all direct downstream dependents (from reverse artifact_deps) are tested
+        Returns the changed subprojects PLUS their downstream dependents.
+        - If a subproject specifies test_subprojects, only those subprojects are tested
+        - Otherwise, all direct downstream dependents (from reverse runtime_deps) are tested
 
-        Example: blas <- solver <- sparse
-            If blas.test_deps = ["solver"]:
-                get_packages_to_test(["blas"]) -> {blas, solver}
-            If blas has no test_deps:
-                get_packages_to_test(["blas"]) -> {blas, solver, sparse, rocwmma, ...}
+        Example: rocBLAS <- rocSOLVER <- rocSPARSE
+            If rocBLAS.test_subprojects = ["rocSOLVER", "hipBLAS"]:
+                get_subprojects_to_test(["rocBLAS"]) -> {rocBLAS, rocSOLVER, hipBLAS}
+            If rocBLAS has no test_subprojects:
+                get_subprojects_to_test(["rocBLAS"]) -> {rocBLAS, rocSOLVER, hipBLAS, rocSPARSE, ...}
         """
-        packages_to_test = set(changed_packages)
+        subprojects_to_test = set(changed_subprojects)
 
-        for changed in changed_packages:
-            artifact_info = self.artifacts.get(changed)
-            if artifact_info and artifact_info.test_deps is not None:
-                # Use explicit test_deps override
-                packages_to_test.update(artifact_info.test_deps)
+        for changed in changed_subprojects:
+            subproject_info = self.subprojects.get(changed)
+            if subproject_info and subproject_info.test_subprojects is not None:
+                # Use explicit test_subprojects override
+                subprojects_to_test.update(subproject_info.test_subprojects)
             else:
                 # Add all direct dependents from reverse dependency graph
-                packages_to_test.update(self.reverse_deps.get(changed, set()))
+                subprojects_to_test.update(self.reverse_deps.get(changed, set()))
 
-        return packages_to_test
+        return subprojects_to_test
 
 
-def create_analyzer(therock_dir: Optional[Path] = None) -> ArtifactDependencyAnalyzer:
+def create_analyzer(
+    therock_dir: Optional[Path] = None, build_dir: Optional[Path] = None
+) -> SubprojectDependencyAnalyzer:
     """
-    Create an ArtifactDependencyAnalyzer instance.
+    Create a SubprojectDependencyAnalyzer instance.
 
     This is a convenience function for programmatic use.
 
     Example:
         >>> from determine_rocm_test_dependencies import create_analyzer
         >>> analyzer = create_analyzer()
-        >>> packages_to_test = analyzer.get_packages_to_test(["blas"])
-        >>> print(packages_to_test)
-        {'blas', 'solver'}
+        >>> subprojects_to_test = analyzer.get_subprojects_to_test(["rocBLAS"])
+        >>> print(subprojects_to_test)
+        {'rocBLAS', 'hipBLAS', 'rocSOLVER'}
     """
     if therock_dir is None:
         therock_dir = Path.cwd()
@@ -153,12 +151,18 @@ def create_analyzer(therock_dir: Optional[Path] = None) -> ArtifactDependencyAna
     if not therock_dir.exists():
         raise FileNotFoundError(f"TheRock root directory not found: {therock_dir}")
 
-    return ArtifactDependencyAnalyzer(therock_dir)
+    if build_dir is None:
+        build_dir = therock_dir / "build"
+    else:
+        build_dir = Path(build_dir).resolve()
+
+    manifest_path = build_dir / "subproject_test_manifest.json"
+    return SubprojectDependencyAnalyzer(manifest_path)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Compute package-level test dependencies for changed components"
+        description="Compute subproject-level test dependencies for changed components"
     )
     parser.add_argument(
         "--therock-dir",
@@ -167,16 +171,21 @@ def main():
         help="Path to TheRock directory (default: current directory)",
     )
     parser.add_argument(
+        "--build-dir",
+        type=str,
+        help="Path to build directory (default: therock-dir/build)",
+    )
+    parser.add_argument(
         "--changed",
         type=str,
         nargs="+",
-        metavar="PACKAGE",
-        help="Package(s) that have changed (e.g., blas, miopen)",
+        metavar="SUBPROJECT",
+        help="Subproject(s) that have changed (e.g., rocBLAS, MIOpen)",
     )
     parser.add_argument(
-        "--list-packages",
+        "--list-subprojects",
         action="store_true",
-        help="List all available packages with their artifact groups",
+        help="List all available subprojects",
     )
 
     args = parser.parse_args()
@@ -189,55 +198,61 @@ def main():
         )
         sys.exit(1)
 
+    # Find build directory
+    if args.build_dir:
+        build_dir = Path(args.build_dir).resolve()
+    else:
+        build_dir = therock_dir / "build"
+
+    if not build_dir.exists():
+        print(
+            f"Error: Build directory not found: {build_dir}\n"
+            f"Please run CMake configure first.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     # Create the analyzer
     try:
-        analyzer = ArtifactDependencyAnalyzer(therock_dir)
+        analyzer = create_analyzer(therock_dir, build_dir)
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    if not analyzer.artifacts:
+    if not analyzer.subprojects:
         print(
-            "Error: No artifacts found. Check the TheRock root path.", file=sys.stderr
+            "Error: No subprojects found in manifest. Check the build directory.",
+            file=sys.stderr,
         )
         sys.exit(1)
 
-    # Handle --list-packages
-    if args.list_packages:
-        # Group artifacts by artifact_group
-        packages_by_group: Dict[str, List[str]] = {}
-        for artifact_name, artifact_info in analyzer.artifacts.items():
-            group = artifact_info.artifact_group or "unknown"
-            if group not in packages_by_group:
-                packages_by_group[group] = []
-            packages_by_group[group].append(artifact_name)
-
-        # Sort package lists within each group
-        for group in packages_by_group:
-            packages_by_group[group].sort()
-
-        print(json.dumps(packages_by_group, indent=2, sort_keys=True))
+    # Handle --list-subprojects
+    if args.list_subprojects:
+        subproject_list = sorted(analyzer.subprojects.keys())
+        print(json.dumps(subproject_list, indent=2))
         return
 
-    # Require --changed if not listing packages
+    # Require --changed if not listing subprojects
     if not args.changed:
         parser.error("the following arguments are required: --changed")
 
-    # Normalize input package names to lowercase
-    changed_packages = [p.lower() for p in args.changed]
-
-    # Validate package names
-    valid_packages = set(analyzer.artifacts.keys())
-    invalid = [p for p in changed_packages if p not in valid_packages]
+    # Validate subproject names (case-sensitive for CMake targets)
+    valid_subprojects = set(analyzer.subprojects.keys())
+    invalid = [p for p in args.changed if p not in valid_subprojects]
     if invalid:
-        print(f"Error: Unknown package(s): {', '.join(invalid)}", file=sys.stderr)
+        print(f"Error: Unknown subproject(s): {', '.join(invalid)}", file=sys.stderr)
+        print(f"\nAvailable subprojects:", file=sys.stderr)
+        for sp in sorted(valid_subprojects)[:20]:
+            print(f"  {sp}", file=sys.stderr)
+        if len(valid_subprojects) > 20:
+            print(f"  ... and {len(valid_subprojects) - 20} more", file=sys.stderr)
         sys.exit(1)
 
-    # Get packages to test
-    packages_to_test = analyzer.get_packages_to_test(changed_packages)
+    # Get subprojects to test
+    subprojects_to_test = analyzer.get_subprojects_to_test(args.changed)
 
     # Output JSON array
-    print(json.dumps(sorted(packages_to_test)))
+    print(json.dumps(sorted(subprojects_to_test)))
 
 
 if __name__ == "__main__":

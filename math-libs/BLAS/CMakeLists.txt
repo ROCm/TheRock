@@ -210,6 +210,9 @@ therock_cmake_subproject_declare(rocBLAS
     hipBLASLt
     ${rocBLAS_optional_runtime_deps}
     ${optional_profiler_deps}
+  TEST_SUBPROJECTS
+    hipBLAS
+    rocSOLVER
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
 SUBDIRS

@@ -510,3 +510,8 @@ endif()
 # Finalization
 ################################################################################
 therock_subproject_merge_compile_commands()
+
+# Generate subproject test dependency manifest for CI
+therock_emit_subproject_test_manifest(
+  OUTPUT_FILE "${CMAKE_BINARY_DIR}/subproject_test_manifest.json"
+)

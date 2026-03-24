@@ -337,7 +337,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS"
+    "BUILD_DEPS;RUNTIME_DEPS;TEST_SUBPROJECTS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -509,6 +509,8 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_BUILD_DEPS "${ARG_BUILD_DEPS}"
     # Transitive runtime deps.
     THEROCK_RUNTIME_DEPS "${_transitive_runtime_deps}"
+    # Optional override for test dependencies (subproject names to test when this changes).
+    THEROCK_TEST_SUBPROJECTS "${ARG_TEST_SUBPROJECTS}"
     # Include dirs that this project compiles with.
     THEROCK_PRIVATE_INCLUDE_DIRS "${_private_include_dirs}"
     # Include dirs that are advertised to dependents.
@@ -1654,4 +1656,94 @@ function(_therock_subproject_fprint_files out_content files)
     list(APPEND content "${basename}=${fprint}")
   endforeach()
   set("${out_content}" "${content}" PARENT_SCOPE)
+endfunction()
+
+# therock_emit_subproject_test_manifest
+# Generates a JSON manifest file containing test dependency information for all subprojects.
+# The manifest maps subproject names to their test dependencies and runtime dependencies.
+# If a subproject specifies TEST_SUBPROJECTS, those are used as test dependencies.
+# Otherwise, the reverse dependency graph from RUNTIME_DEPS is used (computed at CI time).
+#
+# Usage:
+#   therock_emit_subproject_test_manifest(
+#     OUTPUT_FILE <path>  # Path to output JSON manifest
+#   )
+function(therock_emit_subproject_test_manifest)
+  cmake_parse_arguments(ARG "" "OUTPUT_FILE" "" ${ARGN})
+
+  if(NOT ARG_OUTPUT_FILE)
+    message(FATAL_ERROR "OUTPUT_FILE is required")
+  endif()
+
+  # Collect all subproject targets
+  # We'll iterate through all targets and filter for cmake subprojects
+  get_property(_all_targets DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY BUILDSYSTEM_TARGETS)
+
+  set(json_content "{\n")
+  set(json_content "${json_content}  \"metadata\": {\n")
+  set(json_content "${json_content}    \"generated_at\": \"${CMAKE_CURRENT_LIST_FILE}\",\n")
+  set(json_content "${json_content}    \"description\": \"Subproject test dependency manifest for TheRock\"\n")
+  set(json_content "${json_content}  },\n")
+  set(json_content "${json_content}  \"subprojects\": {\n")
+
+  set(first_entry TRUE)
+  foreach(target ${_all_targets})
+    if(NOT TARGET ${target})
+      continue()
+    endif()
+
+    # Check if this is a cmake subproject (has THEROCK_RUNTIME_DEPS property)
+    get_target_property(_runtime_deps ${target} THEROCK_RUNTIME_DEPS)
+    if(NOT _runtime_deps)
+      continue()
+    endif()
+
+    # Get test subprojects override if specified
+    get_target_property(_test_subprojects ${target} THEROCK_TEST_SUBPROJECTS)
+
+    # Add comma separator for all but first entry
+    if(NOT first_entry)
+      set(json_content "${json_content},\n")
+    endif()
+    set(first_entry FALSE)
+
+    # Write subproject entry
+    set(json_content "${json_content}    \"${target}\": {\n")
+
+    # Runtime deps (always present)
+    set(json_content "${json_content}      \"runtime_deps\": [")
+    if(_runtime_deps AND NOT _runtime_deps STREQUAL "_runtime_deps-NOTFOUND")
+      set(first_dep TRUE)
+      foreach(dep ${_runtime_deps})
+        if(NOT first_dep)
+          set(json_content "${json_content}, ")
+        endif()
+        set(first_dep FALSE)
+        set(json_content "${json_content}\"${dep}\"")
+      endforeach()
+    endif()
+    set(json_content "${json_content}]")
+
+    # Test subprojects override (optional)
+    if(_test_subprojects AND NOT _test_subprojects STREQUAL "_test_subprojects-NOTFOUND")
+      set(json_content "${json_content},\n      \"test_subprojects\": [")
+      set(first_test TRUE)
+      foreach(test_dep ${_test_subprojects})
+        if(NOT first_test)
+          set(json_content "${json_content}, ")
+        endif()
+        set(first_test FALSE)
+        set(json_content "${json_content}\"${test_dep}\"")
+      endforeach()
+      set(json_content "${json_content}]")
+    endif()
+
+    set(json_content "${json_content}\n    }")
+  endforeach()
+
+  set(json_content "${json_content}\n  }\n}\n")
+
+  # Write to file
+  file(WRITE "${ARG_OUTPUT_FILE}" "${json_content}")
+  message(STATUS "Generated subproject test manifest: ${ARG_OUTPUT_FILE}")
 endfunction()

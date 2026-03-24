@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import json
 import os
 import sys
 import tempfile
@@ -10,18 +11,19 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from determine_rocm_test_dependencies import (
-    ArtifactDependencyAnalyzer,
+    SubprojectDependencyAnalyzer,
     create_analyzer,
 )
 
 
-class ArtifactDependencyAnalyzerTest(unittest.TestCase):
-    """Tests for ArtifactDependencyAnalyzer using BUILD_TOPOLOGY.toml."""
+class SubprojectDependencyAnalyzerTest(unittest.TestCase):
+    """Tests for SubprojectDependencyAnalyzer using CMake manifest."""
 
     def setUp(self):
         """Set up test fixtures."""
         self.temp_dir = tempfile.mkdtemp()
-        self.therock_root = Path(self.temp_dir)
+        self.build_dir = Path(self.temp_dir) / "build"
+        self.build_dir.mkdir()
 
     def tearDown(self):
         """Clean up test fixtures."""
@@ -30,124 +32,94 @@ class ArtifactDependencyAnalyzerTest(unittest.TestCase):
         if self.temp_dir and Path(self.temp_dir).exists():
             shutil.rmtree(self.temp_dir)
 
-    def write_topology_file(self, content: str):
-        """Write a BUILD_TOPOLOGY.toml file."""
-        topology_file = self.therock_root / "BUILD_TOPOLOGY.toml"
-        with open(topology_file, "w") as f:
-            f.write(content)
+    def write_manifest(self, manifest_data: dict):
+        """Write a subproject_test_manifest.json file."""
+        manifest_file = self.build_dir / "subproject_test_manifest.json"
+        with open(manifest_file, "w") as f:
+            json.dump(manifest_data, f, indent=2)
 
     def test_basic_parsing(self):
-        """Sanity check: can parse a basic BUILD_TOPOLOGY.toml."""
-        toml_content = """
-[metadata]
-version = "2.0"
+        """Sanity check: can parse a basic manifest."""
+        manifest = {
+            "metadata": {"description": "Test"},
+            "subprojects": {
+                "rocBLAS": {
+                    "runtime_deps": ["hip-clr"],
+                }
+            },
+        }
+        self.write_manifest(manifest)
+        analyzer = SubprojectDependencyAnalyzer(
+            self.build_dir / "subproject_test_manifest.json"
+        )
 
-[artifacts.blas]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["core-hip"]
-"""
-        self.write_topology_file(toml_content)
-        analyzer = ArtifactDependencyAnalyzer(self.therock_root)
+        self.assertIn("rocBLAS", analyzer.subprojects)
+        self.assertEqual(analyzer.subprojects["rocBLAS"].runtime_deps, {"hip-clr"})
 
-        self.assertIn("blas", analyzer.artifacts)
-        self.assertEqual(analyzer.artifacts["blas"].artifact_group, "math-libs")
+    def test_get_subprojects_to_test_with_test_subprojects(self):
+        """Test that test_subprojects field limits testing to specific subprojects."""
+        manifest = {
+            "metadata": {"description": "Test"},
+            "subprojects": {
+                "hip-clr": {"runtime_deps": []},
+                "rocBLAS": {
+                    "runtime_deps": ["hip-clr"],
+                    "test_subprojects": ["rocSOLVER", "hipBLAS"],
+                },
+                "rocSOLVER": {"runtime_deps": ["rocBLAS"]},
+                "hipBLAS": {"runtime_deps": ["rocBLAS"]},
+                "MIOpen": {"runtime_deps": ["rocBLAS"]},
+            },
+        }
+        self.write_manifest(manifest)
+        analyzer = SubprojectDependencyAnalyzer(
+            self.build_dir / "subproject_test_manifest.json"
+        )
 
-    def test_get_packages_to_test_with_test_deps(self):
-        """Test that test_deps field limits testing to specific packages."""
-        toml_content = """
-[metadata]
-version = "2.0"
+        # rocBLAS has test_subprojects = ["rocSOLVER", "hipBLAS"], so only those are tested (not MIOpen)
+        subprojects = analyzer.get_subprojects_to_test(["rocBLAS"])
+        self.assertIn("rocBLAS", subprojects)
+        self.assertIn("rocSOLVER", subprojects)
+        self.assertIn("hipBLAS", subprojects)
+        # MIOpen should NOT be included due to test_subprojects override
+        self.assertNotIn("MIOpen", subprojects)
 
-[artifacts.core-hip]
-artifact_group = "hip-runtime"
-type = "target-neutral"
-artifact_deps = []
+    def test_get_subprojects_to_test_no_test_subprojects(self):
+        """Test that subprojects without test_subprojects include all direct dependents."""
+        manifest = {
+            "metadata": {"description": "Test"},
+            "subprojects": {
+                "hip-clr": {"runtime_deps": []},
+                "rocRAND": {"runtime_deps": ["hip-clr"]},
+                "MIOpen": {"runtime_deps": ["rocRAND"]},
+                "some-other": {"runtime_deps": ["rocRAND"]},
+            },
+        }
+        self.write_manifest(manifest)
+        analyzer = SubprojectDependencyAnalyzer(
+            self.build_dir / "subproject_test_manifest.json"
+        )
 
-[artifacts.blas]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["core-hip"]
-test_deps = ["solver"]
-
-[artifacts.solver]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["blas"]
-
-[artifacts.miopen]
-artifact_group = "ml-libs"
-type = "target-specific"
-artifact_deps = ["blas"]
-"""
-        self.write_topology_file(toml_content)
-        analyzer = ArtifactDependencyAnalyzer(self.therock_root)
-
-        # blas has test_deps = ["solver"], so only solver is tested (not miopen)
-        packages = analyzer.get_packages_to_test(["blas"])
-        self.assertIn("blas", packages)
-        self.assertIn("solver", packages)
-        # miopen should NOT be included due to test_deps override
-        self.assertNotIn("miopen", packages)
-
-    def test_get_packages_to_test_no_test_deps(self):
-        """Test that packages without test_deps include all direct dependents."""
-        toml_content = """
-[metadata]
-version = "2.0"
-
-[artifacts.core-hip]
-artifact_group = "hip-runtime"
-type = "target-neutral"
-artifact_deps = []
-
-[artifacts.rand]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["core-hip"]
-
-[artifacts.miopen]
-artifact_group = "ml-libs"
-type = "target-specific"
-artifact_deps = ["rand"]
-
-[artifacts.some-other]
-artifact_group = "ml-libs"
-type = "target-specific"
-artifact_deps = ["rand"]
-"""
-        self.write_topology_file(toml_content)
-        analyzer = ArtifactDependencyAnalyzer(self.therock_root)
-
-        # rand has no test_deps, so all direct dependents are included
-        packages = analyzer.get_packages_to_test(["rand"])
-        self.assertIn("rand", packages)
-        self.assertIn("miopen", packages)
-        self.assertIn("some-other", packages)
+        # rocRAND has no test_subprojects, so all direct dependents are included
+        subprojects = analyzer.get_subprojects_to_test(["rocRAND"])
+        self.assertIn("rocRAND", subprojects)
+        self.assertIn("MIOpen", subprojects)
+        self.assertIn("some-other", subprojects)
 
     def test_reverse_deps_built_correctly(self):
         """Test that reverse dependency graph is built correctly."""
-        toml_content = """
-[metadata]
-version = "2.0"
-
-[artifacts.a]
-artifact_group = "test"
-type = "target-neutral"
-artifact_deps = []
-
-[artifacts.b]
-artifact_group = "test"
-type = "target-neutral"
-artifact_deps = ["a"]
-
-[artifacts.c]
-artifact_group = "test"
-type = "target-neutral"
-artifact_deps = ["a", "b"]
-"""
-        self.write_topology_file(toml_content)
-        analyzer = ArtifactDependencyAnalyzer(self.therock_root)
+        manifest = {
+            "metadata": {"description": "Test"},
+            "subprojects": {
+                "a": {"runtime_deps": []},
+                "b": {"runtime_deps": ["a"]},
+                "c": {"runtime_deps": ["a", "b"]},
+            },
+        }
+        self.write_manifest(manifest)
+        analyzer = SubprojectDependencyAnalyzer(
+            self.build_dir / "subproject_test_manifest.json"
+        )
 
         # a is depended on by b and c
         self.assertEqual(analyzer.reverse_deps["a"], {"b", "c"})
@@ -158,155 +130,124 @@ artifact_deps = ["a", "b"]
 
     def test_create_analyzer(self):
         """Sanity check: create_analyzer helper works."""
-        toml_content = """
-[metadata]
-version = "2.0"
+        manifest = {
+            "metadata": {"description": "Test"},
+            "subprojects": {
+                "rocBLAS": {"runtime_deps": []},
+            },
+        }
+        self.write_manifest(manifest)
+        analyzer = create_analyzer(Path(self.temp_dir), self.build_dir)
 
-[artifacts.blas]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = []
-"""
-        self.write_topology_file(toml_content)
-        analyzer = create_analyzer(self.therock_root)
+        self.assertIn("rocBLAS", analyzer.subprojects)
 
-        self.assertIn("blas", analyzer.artifacts)
-
-    def test_missing_topology_file(self):
-        """Test error handling when BUILD_TOPOLOGY.toml is missing."""
+    def test_missing_manifest_file(self):
+        """Test error handling when manifest is missing."""
         with self.assertRaises(FileNotFoundError):
-            ArtifactDependencyAnalyzer(self.therock_root)
+            SubprojectDependencyAnalyzer(
+                self.build_dir / "subproject_test_manifest.json"
+            )
 
-
-    def test_empty_test_deps(self):
-        """Test that empty test_deps means only test the package itself."""
-        toml_content = """
-[metadata]
-version = "2.0"
-
-[artifacts.standalone]
-artifact_group = "test"
-type = "target-neutral"
-artifact_deps = []
-test_deps = []
-
-[artifacts.dependent]
-artifact_group = "test"
-type = "target-neutral"
-artifact_deps = ["standalone"]
-"""
-        self.write_topology_file(toml_content)
-        analyzer = ArtifactDependencyAnalyzer(self.therock_root)
-
-        # standalone has test_deps = [], so only itself is tested
-        packages = analyzer.get_packages_to_test(["standalone"])
-        self.assertIn("standalone", packages)
-        self.assertNotIn("dependent", packages)
-
-    def test_test_deps_field_parsed(self):
-        """Test that test_deps field is correctly parsed from TOML."""
-        toml_content = """
-[metadata]
-version = "2.0"
-
-[artifacts.pkg-with-override]
-artifact_group = "test"
-type = "target-neutral"
-artifact_deps = []
-test_deps = ["dep1", "dep2"]
-
-[artifacts.pkg-without-override]
-artifact_group = "test"
-type = "target-neutral"
-artifact_deps = []
-"""
-        self.write_topology_file(toml_content)
-        analyzer = ArtifactDependencyAnalyzer(self.therock_root)
-
-        # Check that test_deps is parsed correctly
-        self.assertIsNotNone(analyzer.artifacts["pkg-with-override"].test_deps)
-        self.assertEqual(
-            analyzer.artifacts["pkg-with-override"].test_deps, {"dep1", "dep2"}
+    def test_empty_test_subprojects(self):
+        """Test that empty test_subprojects means only test the subproject itself."""
+        manifest = {
+            "metadata": {"description": "Test"},
+            "subprojects": {
+                "standalone": {"runtime_deps": [], "test_subprojects": []},
+                "dependent": {"runtime_deps": ["standalone"]},
+            },
+        }
+        self.write_manifest(manifest)
+        analyzer = SubprojectDependencyAnalyzer(
+            self.build_dir / "subproject_test_manifest.json"
         )
 
-        # Check that packages without test_deps have None
-        self.assertIsNone(analyzer.artifacts["pkg-without-override"].test_deps)
+        # standalone has test_subprojects = [], so only itself is tested
+        subprojects = analyzer.get_subprojects_to_test(["standalone"])
+        self.assertIn("standalone", subprojects)
+        self.assertNotIn("dependent", subprojects)
 
-    def test_multiple_changed_packages(self):
-        """Test handling multiple changed packages with mixed override settings."""
-        toml_content = """
-[metadata]
-version = "2.0"
+    def test_test_subprojects_field_parsed(self):
+        """Test that test_subprojects field is correctly parsed from manifest."""
+        manifest = {
+            "metadata": {"description": "Test"},
+            "subprojects": {
+                "pkg-with-override": {
+                    "runtime_deps": [],
+                    "test_subprojects": ["dep1", "dep2"],
+                },
+                "pkg-without-override": {"runtime_deps": []},
+            },
+        }
+        self.write_manifest(manifest)
+        analyzer = SubprojectDependencyAnalyzer(
+            self.build_dir / "subproject_test_manifest.json"
+        )
 
-[artifacts.base]
-artifact_group = "test"
-type = "target-neutral"
-artifact_deps = []
+        # Check that test_subprojects is parsed correctly
+        self.assertIsNotNone(
+            analyzer.subprojects["pkg-with-override"].test_subprojects
+        )
+        self.assertEqual(
+            analyzer.subprojects["pkg-with-override"].test_subprojects,
+            {"dep1", "dep2"},
+        )
 
-[artifacts.pkg-a]
-artifact_group = "test"
-type = "target-neutral"
-artifact_deps = ["base"]
-test_deps = ["specific-dep"]
+        # Check that subprojects without test_subprojects have None
+        self.assertIsNone(
+            analyzer.subprojects["pkg-without-override"].test_subprojects
+        )
 
-[artifacts.pkg-b]
-artifact_group = "test"
-type = "target-neutral"
-artifact_deps = ["base"]
+    def test_multiple_changed_subprojects(self):
+        """Test handling multiple changed subprojects with mixed override settings."""
+        manifest = {
+            "metadata": {"description": "Test"},
+            "subprojects": {
+                "base": {"runtime_deps": []},
+                "pkg-a": {
+                    "runtime_deps": ["base"],
+                    "test_subprojects": ["specific-dep"],
+                },
+                "pkg-b": {"runtime_deps": ["base"]},
+                "specific-dep": {"runtime_deps": ["pkg-a"]},
+                "dep-of-pkg-b": {"runtime_deps": ["pkg-b"]},
+            },
+        }
+        self.write_manifest(manifest)
+        analyzer = SubprojectDependencyAnalyzer(
+            self.build_dir / "subproject_test_manifest.json"
+        )
 
-[artifacts.specific-dep]
-artifact_group = "test"
-type = "target-neutral"
-artifact_deps = ["pkg-a"]
+        # Test both subprojects changed: pkg-a uses test_subprojects, pkg-b uses reverse deps
+        subprojects = analyzer.get_subprojects_to_test(["pkg-a", "pkg-b"])
+        self.assertIn("pkg-a", subprojects)
+        self.assertIn("specific-dep", subprojects)  # From pkg-a's test_subprojects
+        self.assertIn("pkg-b", subprojects)
+        self.assertIn("dep-of-pkg-b", subprojects)  # From pkg-b's reverse deps
 
-[artifacts.dep-of-pkg-b]
-artifact_group = "test"
-type = "target-neutral"
-artifact_deps = ["pkg-b"]
-"""
-        self.write_topology_file(toml_content)
-        analyzer = ArtifactDependencyAnalyzer(self.therock_root)
+    def test_real_world_rocblas_scenario(self):
+        """Test realistic scenario similar to rocBLAS -> hipBLAS, rocSOLVER."""
+        manifest = {
+            "metadata": {"description": "Test"},
+            "subprojects": {
+                "rocBLAS": {
+                    "runtime_deps": [],
+                    "test_subprojects": ["hipBLAS", "rocSOLVER"],
+                },
+                "hipBLAS": {"runtime_deps": ["rocBLAS"]},
+                "rocSOLVER": {"runtime_deps": ["rocBLAS"]},
+                "rocSPARSE": {"runtime_deps": ["rocBLAS"]},
+                "MIOpen": {"runtime_deps": ["rocBLAS"]},
+            },
+        }
+        self.write_manifest(manifest)
+        analyzer = SubprojectDependencyAnalyzer(
+            self.build_dir / "subproject_test_manifest.json"
+        )
 
-        # Test both packages changed: pkg-a uses test_deps, pkg-b uses reverse deps
-        packages = analyzer.get_packages_to_test(["pkg-a", "pkg-b"])
-        self.assertIn("pkg-a", packages)
-        self.assertIn("specific-dep", packages)  # From pkg-a's test_deps
-        self.assertIn("pkg-b", packages)
-        self.assertIn("dep-of-pkg-b", packages)  # From pkg-b's reverse deps
-
-    def test_real_world_blas_scenario(self):
-        """Test realistic scenario similar to blas -> solver."""
-        toml_content = """
-[metadata]
-version = "2.0"
-
-[artifacts.blas]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = []
-test_deps = ["solver"]
-
-[artifacts.solver]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["blas"]
-
-[artifacts.sparse]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["blas"]
-
-[artifacts.miopen]
-artifact_group = "ml-libs"
-type = "target-specific"
-artifact_deps = ["blas"]
-"""
-        self.write_topology_file(toml_content)
-        analyzer = ArtifactDependencyAnalyzer(self.therock_root)
-
-        # When blas changes, only test blas and solver (not sparse or miopen)
-        packages = analyzer.get_packages_to_test(["blas"])
-        self.assertEqual(packages, {"blas", "solver"})
+        # When rocBLAS changes, only test rocBLAS + hipBLAS + rocSOLVER (not rocSPARSE or MIOpen)
+        subprojects = analyzer.get_subprojects_to_test(["rocBLAS"])
+        self.assertEqual(subprojects, {"rocBLAS", "hipBLAS", "rocSOLVER"})
 
 
 if __name__ == "__main__":
