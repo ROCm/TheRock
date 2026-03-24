@@ -43,7 +43,24 @@
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1",
         "CMAKE_CXX_FLAGS": "-g1",
-        "CMAKE_C_FLAGS": "-g1"
+        "CMAKE_C_FLAGS": "-g1",
+        "therock-boost_SANITIZER": "OFF",
+        "therock-catch2_SANITIZER": "OFF",
+        "therock-googletest_SANITIZER": "OFF",
+        "therock-eigen_SANITIZER": "OFF",
+        "therock-fftw3_SANITIZER": "OFF",
+        "therock-flatbuffers_SANITIZER": "OFF",
+        "therock-fmt_SANITIZER": "OFF",
+        "therock-frugally-deep_SANITIZER": "OFF",
+        "therock-FunctionalPlus_SANITIZER": "OFF",
+        "therock-grpc_SANITIZER": "OFF",
+        "therock-host-blas_SANITIZER": "OFF",
+        "therock-libdivide_SANITIZER": "OFF",
+        "therock-msgpack-cxx_SANITIZER": "OFF",
+        "therock-nlohmann-json_SANITIZER": "OFF",
+        "therock-simde_SANITIZER": "OFF",
+        "therock-SuiteSparse_SANITIZER": "OFF",
+        "therock-yaml-cpp_SANITIZER": "OFF"
       }
     },
     {
