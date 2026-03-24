@@ -37,6 +37,7 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 COMPONENT_DIR_MAPPING = {
     "miopen": "MIOpen",
     "rocblas": "rocblas",
+    "tensile": "tensile",
     "rocrand": "rocRAND",
     "hiprand": "hipRAND",
     "rocthrust": "rocthrust",

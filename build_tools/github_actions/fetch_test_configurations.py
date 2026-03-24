@@ -85,6 +85,18 @@ test_matrix = {
             "windows": 6,
         },
     },
+    "tensile": {
+        "job_name": "tensile",
+        # tensile-tests ships with the BLAS test artifact merge today; revisit if split out.
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     "rocroller": {
         "job_name": "rocroller",
         "fetch_artifact_args": "--blas --tests",
