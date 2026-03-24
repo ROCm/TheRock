@@ -13871,6 +13871,10 @@ int main() {
   buffer_subword_state.vgprs[43][0] = 0x24680000u;
   buffer_subword_state.vgprs[43][1] = 0x13570000u;
   buffer_subword_state.vgprs[43][3] = 0xabcd0000u;
+  buffer_subword_state.vgprs[44][0] = 0x01020304u;
+  buffer_subword_state.vgprs[44][1] = 0x11121314u;
+  buffer_subword_state.vgprs[44][2] = 0x21222324u;
+  buffer_subword_state.vgprs[44][3] = 0x31323334u;
   for (std::uint16_t vgpr = 60; vgpr <= 69; ++vgpr) {
     buffer_subword_state.vgprs[vgpr][2] =
         (vgpr & 1u) == 0u ? 0xdeadbeefu : 0xcafebabeu;
@@ -13973,12 +13977,64 @@ int main() {
   const LinearExecutionMemory initial_buffer_subword_memory = buffer_subword_memory;
   const WaveExecutionState initial_buffer_subword_state = buffer_subword_state;
   const auto validate_buffer_subword =
-      [](const WaveExecutionState& state, const LinearExecutionMemory& memory,
-         const char* mode) -> bool {
+      [&](const WaveExecutionState& state,
+          const LinearExecutionMemory& memory,
+          const char* mode) -> bool {
+    const auto expect_sgprs_preserved =
+        [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+          for (std::uint16_t sgpr = begin; sgpr <= end; ++sgpr) {
+            if (state.sgprs[sgpr] != initial_buffer_subword_state.sgprs[sgpr]) {
+              return Expect(false, (std::string(mode) + label).c_str());
+            }
+          }
+          return true;
+        };
+    const auto expect_vgpr_range_preserved =
+        [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+          for (std::uint16_t vgpr = begin; vgpr <= end; ++vgpr) {
+            for (std::size_t lane = 0; lane < 4; ++lane) {
+              if (state.vgprs[vgpr][lane] !=
+                  initial_buffer_subword_state.vgprs[vgpr][lane]) {
+                return Expect(false, (std::string(mode) + label).c_str());
+              }
+            }
+          }
+          return true;
+        };
+    const auto expect_u8_preserved = [&](std::uint64_t address,
+                                         const char* label) {
+      std::uint8_t current = 0;
+      std::uint8_t initial = 0;
+      return Expect(ReadU8(initial_buffer_subword_memory, address, &initial),
+                    (std::string(mode) + " buffer subword source read").c_str()) &&
+             Expect(ReadU8(memory, address, &current),
+                    (std::string(mode) + " buffer subword source read").c_str()) &&
+             Expect(current == initial, (std::string(mode) + label).c_str());
+    };
+    const auto expect_u16_preserved = [&](std::uint64_t address,
+                                          const char* label) {
+      std::uint16_t current = 0;
+      std::uint16_t initial = 0;
+      return Expect(ReadU16(initial_buffer_subword_memory, address, &initial),
+                    (std::string(mode) + " buffer subword source read").c_str()) &&
+             Expect(ReadU16(memory, address, &current),
+                    (std::string(mode) + " buffer subword source read").c_str()) &&
+             Expect(current == initial, (std::string(mode) + label).c_str());
+    };
     std::uint8_t stored_byte = 0;
     std::uint16_t stored_short = 0;
     return Expect(state.halted,
                   (std::string(mode) + " buffer subword program to halt").c_str()) &&
+           Expect(state.exec_mask == 0b1011ULL,
+                  (std::string(mode) + " buffer subword preserves exec").c_str()) &&
+           expect_sgprs_preserved(8u, 11u,
+                                  " buffer subword preserves descriptors") &&
+           expect_vgpr_range_preserved(2u, 2u,
+                                       " buffer subword preserves addresses") &&
+           expect_vgpr_range_preserved(40u, 43u,
+                                       " buffer subword preserves store sources") &&
+           expect_vgpr_range_preserved(44u, 44u,
+                                       " buffer subword preserves unrelated vgprs") &&
            Expect(state.vgprs[60][0] == 0x7au && state.vgprs[60][1] == 0x7au &&
                       state.vgprs[60][3] == 0x7au,
                   (std::string(mode) + " buffer ubyte load result").c_str()) &&
@@ -14124,7 +14180,63 @@ int main() {
            Expect(stored_short == 0u,
                   (std::string(mode) +
                    " inactive buffer short d16 hi store result")
-                      .c_str());
+                      .c_str()) &&
+           expect_u8_preserved(0x100u,
+                               " buffer ubyte source preserved") &&
+           expect_u8_preserved(0x110u,
+                               " buffer sbyte source lane 0 preserved") &&
+           expect_u8_preserved(0x120u,
+                               " buffer sbyte source lane 1 preserved") &&
+           expect_u8_preserved(0x130u,
+                               " buffer sbyte source lane 3 preserved") &&
+           expect_u16_preserved(0x150u,
+                                " buffer ushort source lane 0 preserved") &&
+           expect_u16_preserved(0x160u,
+                                " buffer ushort source lane 1 preserved") &&
+           expect_u16_preserved(0x170u,
+                                " buffer ushort source lane 3 preserved") &&
+           expect_u16_preserved(0x190u,
+                                " buffer sshort source lane 0 preserved") &&
+           expect_u16_preserved(0x1a0u,
+                                " buffer sshort source lane 1 preserved") &&
+           expect_u16_preserved(0x1b0u,
+                                " buffer sshort source lane 3 preserved") &&
+           expect_u8_preserved(0x1d0u,
+                               " buffer ubyte d16 source lane 0 preserved") &&
+           expect_u8_preserved(0x1e0u,
+                               " buffer ubyte d16 source lane 1 preserved") &&
+           expect_u8_preserved(0x1f0u,
+                               " buffer ubyte d16 source lane 3 preserved") &&
+           expect_u8_preserved(0x240u,
+                               " buffer ubyte d16 hi source lane 0 preserved") &&
+           expect_u8_preserved(0x250u,
+                               " buffer ubyte d16 hi source lane 1 preserved") &&
+           expect_u8_preserved(0x260u,
+                               " buffer ubyte d16 hi source lane 3 preserved") &&
+           expect_u8_preserved(0x270u,
+                               " buffer sbyte d16 source lane 0 preserved") &&
+           expect_u8_preserved(0x280u,
+                               " buffer sbyte d16 source lane 1 preserved") &&
+           expect_u8_preserved(0x290u,
+                               " buffer sbyte d16 source lane 3 preserved") &&
+           expect_u8_preserved(0x2b0u,
+                               " buffer sbyte d16 hi source lane 0 preserved") &&
+           expect_u8_preserved(0x2c0u,
+                               " buffer sbyte d16 hi source lane 1 preserved") &&
+           expect_u8_preserved(0x2d0u,
+                               " buffer sbyte d16 hi source lane 3 preserved") &&
+           expect_u16_preserved(0x2f0u,
+                                " buffer short d16 source lane 0 preserved") &&
+           expect_u16_preserved(0x300u,
+                                " buffer short d16 source lane 1 preserved") &&
+           expect_u16_preserved(0x310u,
+                                " buffer short d16 source lane 3 preserved") &&
+           expect_u16_preserved(0x340u,
+                                " buffer short d16 hi source lane 0 preserved") &&
+           expect_u16_preserved(0x350u,
+                                " buffer short d16 hi source lane 1 preserved") &&
+           expect_u16_preserved(0x360u,
+                                " buffer short d16 hi source lane 3 preserved");
   };
   if (!Expect(interpreter.ExecuteProgram(buffer_subword_program,
                                          &buffer_subword_state,
