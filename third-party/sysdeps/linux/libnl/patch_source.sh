@@ -53,6 +53,6 @@ echo "Updating version scripts..."
 for sym_file in "$SOURCE_DIR"/libnl*.sym; do
     if [ -f "$sym_file" ]; then
         echo "Updating $sym_file"
-        cp "$SCRIPT_DIR/libnl.sym" "$sym_file"
+        cp "$SCRIPT_DIR/libnl.map" "$sym_file"
     fi
 done
