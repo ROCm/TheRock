@@ -781,6 +781,22 @@ bool IsUnsupportedSeededInstruction(const DecoderSeedInfo& seed) {
          seed.decode_hint == DecodeSeedHint::kVop3;
 }
 
+DecodeSeedHint AlternateDecodeHintForRoute(StubDecoderRoute route) {
+  switch (route) {
+    case StubDecoderRoute::kVop3p:
+      return DecodeSeedHint::kVop1;
+    case StubDecoderRoute::kMimgTensor:
+      return DecodeSeedHint::kVop3Sdst;
+    case StubDecoderRoute::kVop1:
+      return DecodeSeedHint::kMimgTensor;
+    case StubDecoderRoute::kVop3Sdst:
+      return DecodeSeedHint::kVop3p;
+    case StubDecoderRoute::kUnsupported:
+      break;
+  }
+  return DecodeSeedHint::kVop3;
+}
+
 bool MatchesUnsupportedRouteDecodeForRoutedSeed(
     const StubDecodedInstruction& decoded,
     const StubDecoderRouteInfo& route_info) {
@@ -7627,6 +7643,22 @@ int main() {
             "expected routed route-info decode to ignore invalid caller decode-hint while preserving metadata")) {
       return 1;
     }
+    StubDecoderRouteInfo synthetic_valid_wrong_hint = synthetic;
+    synthetic_valid_wrong_hint.route_name = "kSyntheticRouteValidWrongHint";
+    synthetic_valid_wrong_hint.route_priority =
+        route_info.route_priority + 160u;
+    synthetic_valid_wrong_hint.decode_hint =
+        AlternateDecodeHintForRoute(route_info.route);
+    const StubDecodedInstruction via_valid_wrong_hint =
+        DecodeStubInstruction(synthetic_valid_wrong_hint);
+    if (!Expect(
+            MatchesRouteInfoPayload(via_valid_wrong_hint,
+                                    synthetic_valid_wrong_hint) &&
+                MatchesDecodedInstructionStructure(via_valid_wrong_hint,
+                                                  via_name),
+            "expected routed route-info decode to ignore valid mismatching caller decode-hint while preserving metadata")) {
+      return 1;
+    }
   }
   for (const StubDecoderEntrypointManifest& manifest :
        GetStubDecoderEntrypointManifests()) {
@@ -7684,6 +7716,40 @@ int main() {
                     empty_decoded.operand_slots.binding_count == 0 &&
                     empty_decoded.operand_descriptors.descriptor_count == 0,
                 "expected synthetic routed route-info with empty instruction name to preserve caller metadata while keeping empty unknown structure")) {
+      return 1;
+    }
+    StubDecoderRouteInfo synthetic_empty_valid_wrong_hint = synthetic_empty;
+    synthetic_empty_valid_wrong_hint.route_name =
+        "kSyntheticRouteInfoEmptyValidWrongHint";
+    synthetic_empty_valid_wrong_hint.route_priority =
+        manifest.route_priority + 130u;
+    synthetic_empty_valid_wrong_hint.decode_hint =
+        AlternateDecodeHintForRoute(manifest.route);
+    const StubDecodedInstruction empty_valid_wrong_hint_decoded =
+        DecodeStubInstruction(synthetic_empty_valid_wrong_hint);
+    if (!Expect(
+            empty_valid_wrong_hint_decoded.status ==
+                    StubDecodeStatus::kDecodedStub &&
+                MatchesRouteInfoPayload(empty_valid_wrong_hint_decoded,
+                                        synthetic_empty_valid_wrong_hint) &&
+                empty_valid_wrong_hint_decoded.entrypoint_name ==
+                    manifest.entrypoint_name &&
+                MatchesUnknownHelperSurface(
+                    empty_valid_wrong_hint_decoded) &&
+                MatchesTopLevelFlags(empty_valid_wrong_hint_decoded,
+                                     false,
+                                     false,
+                                     false,
+                                     false) &&
+                MatchesLayout(empty_valid_wrong_hint_decoded,
+                              ExpectedLayout{}) &&
+                empty_valid_wrong_hint_decoded.operand_roles.binding_count ==
+                    0 &&
+                empty_valid_wrong_hint_decoded.operand_slots.binding_count ==
+                    0 &&
+                empty_valid_wrong_hint_decoded.operand_descriptors
+                        .descriptor_count == 0,
+            "expected synthetic routed route-info with empty instruction name to ignore valid mismatching caller decode-hint while keeping empty unknown structure")) {
       return 1;
     }
     StubDecoderRouteInfo synthetic_empty_invalid_hint = synthetic_empty;
@@ -7747,6 +7813,43 @@ int main() {
                 unsupported_seeded_decoded.operand_descriptors
                         .descriptor_count == 0,
             "expected synthetic routed route-info with clean unsupported seeded instruction to preserve caller metadata while keeping empty unknown structure")) {
+      return 1;
+    }
+    StubDecoderRouteInfo synthetic_unsupported_seeded_valid_wrong_hint =
+        synthetic_unsupported_seeded;
+    synthetic_unsupported_seeded_valid_wrong_hint.route_name =
+        "kSyntheticRouteInfoUnsupportedSeededValidWrongHint";
+    synthetic_unsupported_seeded_valid_wrong_hint.route_priority =
+        manifest.route_priority + 180u;
+    synthetic_unsupported_seeded_valid_wrong_hint.decode_hint =
+        AlternateDecodeHintForRoute(manifest.route);
+    const StubDecodedInstruction unsupported_seeded_valid_wrong_hint_decoded =
+        DecodeStubInstruction(synthetic_unsupported_seeded_valid_wrong_hint);
+    if (!Expect(
+            unsupported_seeded_valid_wrong_hint_decoded.status ==
+                    StubDecodeStatus::kDecodedStub &&
+                MatchesRouteInfoPayload(
+                    unsupported_seeded_valid_wrong_hint_decoded,
+                    synthetic_unsupported_seeded_valid_wrong_hint) &&
+                unsupported_seeded_valid_wrong_hint_decoded.entrypoint_name ==
+                    manifest.entrypoint_name &&
+                MatchesUnknownHelperSurface(
+                    unsupported_seeded_valid_wrong_hint_decoded) &&
+                MatchesTopLevelFlags(
+                    unsupported_seeded_valid_wrong_hint_decoded,
+                    false,
+                    false,
+                    false,
+                    false) &&
+                MatchesLayout(unsupported_seeded_valid_wrong_hint_decoded,
+                              ExpectedLayout{}) &&
+                unsupported_seeded_valid_wrong_hint_decoded.operand_roles
+                        .binding_count == 0 &&
+                unsupported_seeded_valid_wrong_hint_decoded.operand_slots
+                        .binding_count == 0 &&
+                unsupported_seeded_valid_wrong_hint_decoded
+                        .operand_descriptors.descriptor_count == 0,
+            "expected synthetic routed route-info with clean unsupported seeded instruction to ignore valid mismatching caller decode-hint while keeping empty unknown structure")) {
       return 1;
     }
     StubDecoderRouteInfo synthetic_unsupported_seeded_invalid_hint =
@@ -7814,6 +7917,41 @@ int main() {
             "expected synthetic routed route-info with invalid caller decode-hint to preserve metadata while keeping empty unknown structure")) {
       return 1;
     }
+    StubDecoderRouteInfo synthetic_unknown_valid_wrong_hint =
+        synthetic_unknown;
+    synthetic_unknown_valid_wrong_hint.route_name =
+        "kSyntheticRouteInfoUnknownValidWrongHint";
+    synthetic_unknown_valid_wrong_hint.route_priority =
+        manifest.route_priority + 145u;
+    synthetic_unknown_valid_wrong_hint.decode_hint =
+        AlternateDecodeHintForRoute(manifest.route);
+    const StubDecodedInstruction unknown_valid_wrong_hint_decoded =
+        DecodeStubInstruction(synthetic_unknown_valid_wrong_hint);
+    if (!Expect(
+            unknown_valid_wrong_hint_decoded.status ==
+                    StubDecodeStatus::kDecodedStub &&
+                MatchesRouteInfoPayload(unknown_valid_wrong_hint_decoded,
+                                        synthetic_unknown_valid_wrong_hint) &&
+                unknown_valid_wrong_hint_decoded.entrypoint_name ==
+                    manifest.entrypoint_name &&
+                MatchesUnknownHelperSurface(
+                    unknown_valid_wrong_hint_decoded) &&
+                MatchesTopLevelFlags(unknown_valid_wrong_hint_decoded,
+                                     false,
+                                     false,
+                                     false,
+                                     false) &&
+                MatchesLayout(unknown_valid_wrong_hint_decoded,
+                              ExpectedLayout{}) &&
+                unknown_valid_wrong_hint_decoded.operand_roles.binding_count ==
+                    0 &&
+                unknown_valid_wrong_hint_decoded.operand_slots.binding_count ==
+                    0 &&
+                unknown_valid_wrong_hint_decoded.operand_descriptors
+                        .descriptor_count == 0,
+            "expected synthetic routed route-info with valid mismatching caller decode-hint to preserve metadata while keeping empty unknown structure")) {
+      return 1;
+    }
     for (std::string_view near_miss_instruction :
          {"v_pk_add_bf16", " V_PK_ADD_BF16"}) {
       const StubDecoderRouteInfo synthetic_near_miss{
@@ -7847,6 +7985,41 @@ int main() {
                       near_miss_decoded.operand_descriptors.descriptor_count ==
                           0,
                   "expected synthetic routed route-info with near-miss known opcode to preserve caller metadata while keeping empty unknown structure")) {
+        return 1;
+      }
+      StubDecoderRouteInfo synthetic_near_miss_valid_wrong_hint =
+          synthetic_near_miss;
+      synthetic_near_miss_valid_wrong_hint.route_name =
+          "kSyntheticRouteInfoNearMissValidWrongHint";
+      synthetic_near_miss_valid_wrong_hint.route_priority =
+          manifest.route_priority + 215u;
+      synthetic_near_miss_valid_wrong_hint.decode_hint =
+          AlternateDecodeHintForRoute(manifest.route);
+      const StubDecodedInstruction near_miss_valid_wrong_hint_decoded =
+          DecodeStubInstruction(synthetic_near_miss_valid_wrong_hint);
+      if (!Expect(
+              near_miss_valid_wrong_hint_decoded.status ==
+                      StubDecodeStatus::kDecodedStub &&
+                  MatchesRouteInfoPayload(near_miss_valid_wrong_hint_decoded,
+                                          synthetic_near_miss_valid_wrong_hint) &&
+                  near_miss_valid_wrong_hint_decoded.entrypoint_name ==
+                      manifest.entrypoint_name &&
+                  MatchesUnknownHelperSurface(
+                      near_miss_valid_wrong_hint_decoded) &&
+                  MatchesTopLevelFlags(near_miss_valid_wrong_hint_decoded,
+                                       false,
+                                       false,
+                                       false,
+                                       false) &&
+                  MatchesLayout(near_miss_valid_wrong_hint_decoded,
+                                ExpectedLayout{}) &&
+                  near_miss_valid_wrong_hint_decoded.operand_roles
+                          .binding_count == 0 &&
+                  near_miss_valid_wrong_hint_decoded.operand_slots
+                          .binding_count == 0 &&
+                  near_miss_valid_wrong_hint_decoded.operand_descriptors
+                          .descriptor_count == 0,
+              "expected synthetic routed route-info with near-miss known opcode to ignore valid mismatching caller decode-hint while keeping empty unknown structure")) {
         return 1;
       }
       StubDecoderRouteInfo synthetic_near_miss_invalid_hint =
