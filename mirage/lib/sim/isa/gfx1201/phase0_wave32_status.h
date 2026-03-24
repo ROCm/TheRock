@@ -68,6 +68,8 @@ FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
 bool HasGfx1201Wave32SafeVdsContinuation();
 std::string_view GetGfx1201Wave32RecommendedNextVdsBucket();
 std::string_view GetGfx1201Wave32FirstUnsafeVdsBucket();
+std::string_view GetGfx1201Wave32FirstUnsafeVdsBlockingDimension();
+std::span<const std::string_view> GetGfx1201Wave32FirstUnsafeVdsInstructions();
 std::string_view GetGfx1201Wave32Phase0RecommendedNextEncoding();
 bool IsGfx1201Wave32Phase0EncodingSaturated(std::string_view encoding_name);
 

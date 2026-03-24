@@ -186,11 +186,17 @@ int main() {
       "multi_address",
       "bvh_stack",
   }};
+  constexpr std::array<const char*, 2> kExpectedFirstUnsafeVdsInstructions{{
+      "DS_APPEND",
+      "DS_CONSUME",
+  }};
 
   const auto next_risk_encodings = GetGfx1201Wave32Phase0NextRiskEncodings();
   const auto frontier_order = GetGfx1201Wave32Phase0FrontierOrder();
   const auto vds_boundary_buckets = GetGfx1201Wave32Phase0VdsBoundaryBuckets();
   const auto vds_boundary_order = GetGfx1201Wave32Phase0VdsBoundaryOrder();
+  const auto first_unsafe_vds_instructions =
+      GetGfx1201Wave32FirstUnsafeVdsInstructions();
   if (!Expect(next_risk_encodings.size() == kExpectedNextRiskEncodings.size(),
               "expected next-risk encoding count") ||
       !Expect(frontier_order.size() == kExpectedFrontierOrder.size(),
@@ -199,12 +205,18 @@ int main() {
               "expected four VDS boundary buckets") ||
       !Expect(vds_boundary_order.size() == kExpectedVdsBoundaryOrder.size(),
               "expected VDS boundary order count") ||
+      !Expect(first_unsafe_vds_instructions.size() ==
+                  kExpectedFirstUnsafeVdsInstructions.size(),
+              "expected first unsafe VDS instruction count") ||
       !Expect(!HasGfx1201Wave32SafeVdsContinuation(),
               "expected no safe VDS continuation under the current boundary") ||
       !Expect(GetGfx1201Wave32RecommendedNextVdsBucket().empty(),
               "expected no recommended VDS bucket under the current boundary") ||
       !Expect(GetGfx1201Wave32FirstUnsafeVdsBucket() == "append_consume",
               "expected append/consume as the first unsafe VDS bucket") ||
+      !Expect(GetGfx1201Wave32FirstUnsafeVdsBlockingDimension() ==
+                  "allocator_or_gds_semantics",
+              "expected append/consume blocking dimension as first unsafe VDS boundary") ||
       !Expect(GetGfx1201Wave32Phase0RecommendedNextEncoding() == "ENC_VDS",
               "expected ENC_VDS as the recommended next frontier")) {
     return 1;
@@ -227,6 +239,14 @@ int main() {
   for (std::size_t i = 0; i < kExpectedVdsBoundaryOrder.size(); ++i) {
     if (!Expect(vds_boundary_order[i] == kExpectedVdsBoundaryOrder[i],
                 "unexpected VDS boundary order")) {
+      return 1;
+    }
+  }
+
+  for (std::size_t i = 0; i < kExpectedFirstUnsafeVdsInstructions.size(); ++i) {
+    if (!Expect(first_unsafe_vds_instructions[i] ==
+                    kExpectedFirstUnsafeVdsInstructions[i],
+                "unexpected first unsafe VDS instruction order")) {
       return 1;
     }
   }

@@ -313,6 +313,26 @@ std::string_view GetGfx1201Wave32FirstUnsafeVdsBucket() {
   return {};
 }
 
+std::string_view GetGfx1201Wave32FirstUnsafeVdsBlockingDimension() {
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
+       GetGfx1201Wave32Phase0VdsBoundaryBuckets()) {
+    if (!bucket.safe_under_current_request) {
+      return bucket.blocking_dimension;
+    }
+  }
+  return {};
+}
+
+std::span<const std::string_view> GetGfx1201Wave32FirstUnsafeVdsInstructions() {
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
+       GetGfx1201Wave32Phase0VdsBoundaryBuckets()) {
+    if (!bucket.safe_under_current_request) {
+      return bucket.instruction_names;
+    }
+  }
+  return {};
+}
+
 std::string_view GetGfx1201Wave32Phase0RecommendedNextEncoding() {
   for (std::string_view encoding_name : kFrontierOrder) {
     if (!IsGfx1201Wave32Phase0EncodingSaturated(encoding_name)) {

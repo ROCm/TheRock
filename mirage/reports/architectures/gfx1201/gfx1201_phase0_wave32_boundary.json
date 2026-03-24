@@ -58,6 +58,11 @@
   "has_safe_vds_continuation": false,
   "recommended_next_vds_bucket": "",
   "first_unsafe_vds_bucket": "append_consume",
+  "first_unsafe_vds_blocking_dimension": "allocator_or_gds_semantics",
+  "first_unsafe_vds_instructions": [
+    "DS_APPEND",
+    "DS_CONSUME"
+  ],
   "remaining_vds_bucket_order": [
     "append_consume",
     "exchange_compare_store",
@@ -224,6 +229,7 @@
     "The remaining ENC_VDS tail is now explicitly bounded by append/consume allocator semantics, exchange and compare-store forms, multi-address LDS forms including stride64, and gfx1201-specific BVH stack instructions, which is the next verification-risk step before ENC_VOP3.",
     "There is no safe ENC_VDS continuation under the current request boundary: every remaining bucket crosses allocator-or-GDS, exchange/compare-store, multi-address, or gfx1201-specific BVH semantics.",
     "The boundary report now carries an exact remaining-VDS instruction-to-bucket map so the unresolved tail can be queried directly by opcode name.",
-    "The exact unsafe-bucket escalation order is append_consume, then exchange_compare_store, then multi_address, then bvh_stack."
+    "The exact unsafe-bucket escalation order is append_consume, then exchange_compare_store, then multi_address, then bvh_stack.",
+    "The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list."
   ]
 }

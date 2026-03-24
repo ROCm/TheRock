@@ -20,6 +20,8 @@ execution path.
 - Safe VDS continuation under the current request: `false`
 - Recommended next VDS bucket under the current request: `""`
 - First unsafe VDS bucket: `append_consume`
+- First unsafe VDS blocking dimension: `allocator_or_gds_semantics`
+- First unsafe VDS instructions: `DS_APPEND`, `DS_CONSUME`
 - Remaining VDS bucket order: `append_consume`, `exchange_compare_store`, `multi_address`, `bvh_stack`
 - All currently seeded ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, and ENC_VGLOBAL instruction/encoding pairs are executable on the local wave32 path.
 - There are no remaining imported ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, or ENC_VGLOBAL instruction/encoding pairs outside the current seed surface.
@@ -30,6 +32,7 @@ execution path.
 - There is no safe ENC_VDS continuation under the current request boundary: every remaining bucket crosses allocator-or-GDS, exchange/compare-store, multi-address, or gfx1201-specific BVH semantics.
 - The boundary report now carries an exact remaining-VDS instruction-to-bucket map so the unresolved tail can be queried directly by opcode name.
 - The exact unsafe-bucket escalation order is `append_consume`, then `exchange_compare_store`, then `multi_address`, then `bvh_stack`.
+- The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.
 
 ## Remaining VDS Boundary
 
