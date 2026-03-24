@@ -118,6 +118,7 @@ jobs:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
       options: --ipc host
         --shm-size=10g
+        --cap-add=SYS_ADMIN
         --group-add video
         --device /dev/kfd
         --device /dev/dri
@@ -201,6 +202,11 @@ jobs:
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
+
+      - name: Install ROCm devel packages
+        run: |
+          pip install "rocm[devel]" \
+            --index-url=${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
 
       # export_test_times.py must run from the PyTorch repo root with
       # PYTHONPATH=. because it imports internal PyTorch modules (e.g.
