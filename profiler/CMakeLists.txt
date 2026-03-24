@@ -144,7 +144,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk/dist/lib/rocprofiler-sdk
     LIB_NAMES
       libgotcha.so
-      #librocprofiler-sdk-tool.so
       librocprofiler-sdk-tool-kokkosp.so
       librocprofv3-list-avail.so
   )
