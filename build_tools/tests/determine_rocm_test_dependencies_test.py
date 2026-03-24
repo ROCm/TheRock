@@ -13,6 +13,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from determine_rocm_test_dependencies import (
     SubprojectDependencyAnalyzer,
     create_analyzer,
+    get_rocm_test_dependencies,
 )
 
 
@@ -248,6 +249,29 @@ class SubprojectDependencyAnalyzerTest(unittest.TestCase):
         # When rocBLAS changes, only test rocBLAS + hipBLAS + rocSOLVER (not rocSPARSE or MIOpen)
         subprojects = analyzer.get_subprojects_to_test(["rocBLAS"])
         self.assertEqual(subprojects, {"rocBLAS", "hipBLAS", "rocSOLVER"})
+
+    def test_get_rocm_test_dependencies_convenience_function(self):
+        """Test the convenience function get_rocm_test_dependencies."""
+        manifest = {
+            "metadata": {"description": "Test"},
+            "subprojects": {
+                "rocBLAS": {
+                    "runtime_deps": [],
+                    "test_subprojects": ["hipBLAS", "rocSOLVER"],
+                },
+                "hipBLAS": {"runtime_deps": ["rocBLAS"]},
+                "rocSOLVER": {"runtime_deps": ["rocBLAS"]},
+            },
+        }
+        self.write_manifest(manifest)
+
+        # Test the convenience function
+        result = get_rocm_test_dependencies(
+            changed_subprojects=["rocBLAS"],
+            therock_dir=Path(self.temp_dir),
+            build_dir=self.build_dir,
+        )
+        self.assertEqual(result, {"rocBLAS", "hipBLAS", "rocSOLVER"})
 
 
 if __name__ == "__main__":

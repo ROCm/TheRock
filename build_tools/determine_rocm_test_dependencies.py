@@ -128,13 +128,41 @@ class SubprojectDependencyAnalyzer:
         return subprojects_to_test
 
 
+def get_rocm_test_dependencies(
+    changed_subprojects: List[str],
+    therock_dir: Optional[Path] = None,
+    build_dir: Optional[Path] = None,
+) -> Set[str]:
+    """
+    Get all subprojects that need testing when specific subprojects change.
+
+    This is the main programmatic API for determining test dependencies.
+
+    Args:
+        changed_subprojects: List of subproject names that changed (e.g., ["rocBLAS"])
+        therock_dir: Path to TheRock repository (defaults to current directory)
+        build_dir: Path to build directory (defaults to therock_dir/build)
+
+    Returns:
+        Set of subproject names to test (includes changed subprojects + their dependents)
+
+    Example:
+        >>> from determine_rocm_test_dependencies import get_rocm_test_dependencies
+        >>> tests_to_run = get_rocm_test_dependencies(["rocBLAS"])
+        >>> print(sorted(tests_to_run))
+        ['hipBLAS', 'rocBLAS', 'rocSOLVER']
+    """
+    analyzer = create_analyzer(therock_dir, build_dir)
+    return analyzer.get_subprojects_to_test(changed_subprojects)
+
+
 def create_analyzer(
     therock_dir: Optional[Path] = None, build_dir: Optional[Path] = None
 ) -> SubprojectDependencyAnalyzer:
     """
     Create a SubprojectDependencyAnalyzer instance.
 
-    This is a convenience function for programmatic use.
+    For most use cases, prefer get_rocm_test_dependencies() instead.
 
     Example:
         >>> from determine_rocm_test_dependencies import create_analyzer
