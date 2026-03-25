@@ -53,7 +53,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from generate_local_index import generate_multiarch_indexes
-from github_actions_utils import (
+from github_actions_api import (
     gha_append_step_summary,
     gha_set_output,
 )

@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import List, Set
 
 from _therock_utils.build_topology import BuildTopology
-from github_actions.github_actions_utils import gha_set_output
+from github_actions.github_actions_api import gha_set_output
 
 
 def log(msg: str):
