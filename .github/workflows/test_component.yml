@@ -37,7 +37,7 @@ jobs:
       (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
       (${{ inputs.amdgpu_families }})
       ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
-    runs-on: ${{ inputs.test_runs_on }}
+    runs-on: [gpu_navi3x, linux]
     continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
     timeout-minutes: 210
     container:
