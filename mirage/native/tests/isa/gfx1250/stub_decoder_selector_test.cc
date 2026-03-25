@@ -237,6 +237,25 @@ bool RouteManifestAccountingAndMetadataAreInternallyConsistent() {
   return true;
 }
 
+bool UnsupportedSeededSliceMatchesExcludedSelectorSurface() {
+  std::uint32_t excluded_count = 0;
+  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
+    if (ExpectedRouteForDecodeHint(seed.decode_hint) !=
+        StubDecoderRoute::kUnsupported) {
+      continue;
+    }
+    if (SelectStubDecoderRoute(seed.instruction_name) !=
+            StubDecoderRoute::kUnsupported ||
+        FindStubDecoderRouteInfo(seed.instruction_name) != nullptr ||
+        ListedInAnyRoute(seed.instruction_name)) {
+      return false;
+    }
+    ++excluded_count;
+  }
+  return excluded_count ==
+         CountSeededInstructionsForRoute(StubDecoderRoute::kUnsupported);
+}
+
 }  // namespace
 
 int main() {
@@ -335,8 +354,20 @@ int main() {
     return 1;
   }
   if (!Expect(
+          manifest_total +
+                  CountSeededInstructionsForRoute(
+                      StubDecoderRoute::kUnsupported) ==
+              GetDecoderSeedInfos().size(),
+          "expected routed manifest totals plus unsupported seeded remainder to partition the seed catalog exactly")) {
+    return 1;
+  }
+  if (!Expect(
           RouteManifestAccountingAndMetadataAreInternallyConsistent(),
           "expected route manifests to keep exact internal count accounting and one-to-one metadata")) {
+    return 1;
+  }
+  if (!Expect(UnsupportedSeededSliceMatchesExcludedSelectorSurface(),
+              "expected unsupported seeded remainder to stay fully excluded from routed selector surfaces")) {
     return 1;
   }
   for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
