@@ -2,6 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+
 """
 Usage:
 generate_s3_index.py [-h]
@@ -9,24 +10,21 @@ generate_s3_index.py [-h]
   [--output-dir OUTPUT_DIR]
   [--dry-run]
 
-Generate index.html files for artifact and log directories after all upload
-jobs have completed.
+Generate index.html for each first-level subdirectory under a CI run prefix.
 
-For each artifact group found under the run prefix:
-  - logs/{artifact_group}/index.html  -- listing of build log files
-  - index-{artifact_group}.html       -- listing of .tar.xz artifact files
+For each subdirectory found under {run_id}-{platform}/:
+  - {subdir}/index.html  -- recursive listing of all files under that subdir
 
-In CI (no --output-dir): artifact groups are discovered by listing S3 objects
+In CI (no --output-dir): subdirectories are discovered by listing S3 objects
 under the run prefix. Index files are uploaded to S3.
 
-In local mode (--output-dir): artifact groups are discovered by scanning the
+In local mode (--output-dir): subdirectories are discovered by scanning the
 local staging directory. Index files are written to the same directory tree.
 
 AWS credentials are resolved through boto3's default credential chain.
 """
 
 import argparse
-import fnmatch
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -39,9 +37,9 @@ PLATFORM = platform.system().lower()
 
 # _therock_utils is a sibling package in the same build_tools/ directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from _therock_utils.storage_location import StorageLocation
+
 
 def log(*args):
     print(*args)
@@ -152,81 +150,45 @@ def _escape_html(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _list_s3_objects(s3_client, bucket: str, prefix: str) -> list[dict]:
-    """List all S3 objects under prefix. Returns list of {key, size, last_modified}."""
-    objects: list[dict] = []
+def _list_files_s3(s3_client, bucket: str, dir_prefix: str) -> list[_FileEntry]:
+    """List immediate files under dir_prefix (non-recursive), excluding index.html."""
+    prefix = f"{dir_prefix}/"
     paginator = s3_client.get_paginator("list_objects_v2")
+    entries = []
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/"):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            filename = key[len(prefix):]
+            # Skip subdirectory entries, empty keys, and index.html itself.
+            if not filename or filename == "index.html" or "/" in filename:
+                continue
+            entries.append(
+                _FileEntry(
+                    name=filename,
+                    href=filename,
+                    size_bytes=obj["Size"],
+                    last_modified=obj["LastModified"],
+                )
+            )
+    entries.sort(key=lambda e: e.name)
+    return entries
+
+
+def _discover_dirs_with_files_s3(s3_client, bucket: str, run_prefix: str) -> list[str]:
+    """Discover all directories under run_prefix that contain files (any depth)."""
+    prefix = f"{run_prefix}/"
+    paginator = s3_client.get_paginator("list_objects_v2")
+    dirs: set[str] = set()
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
-            objects.append(
-                {
-                    "key": obj["Key"],
-                    "size": obj["Size"],
-                    "last_modified": obj["LastModified"],
-                }
-            )
-    return objects
-
-
-def _discover_artifact_groups_s3(s3_client, bucket: str, run_prefix: str) -> list[str]:
-    """Discover artifact groups by listing objects under {run_prefix}/logs/."""
-    logs_prefix = f"{run_prefix}/logs/"
-    objects = _list_s3_objects(s3_client, bucket, logs_prefix)
-    groups: set[str] = set()
-    for obj in objects:
-        # key looks like: {run_prefix}/logs/{group}/filename
-        remainder = obj["key"][len(logs_prefix):]
-        parts = remainder.split("/", 1)
-        if len(parts) >= 1 and parts[0]:
-            groups.add(parts[0])
-    return sorted(groups)
-
-
-def _build_log_entries_s3(s3_client, bucket: str, run_prefix: str, artifact_group: str) -> list[_FileEntry]:
-    """List files under {run_prefix}/logs/{artifact_group}/ for the log index."""
-    dir_prefix = f"{run_prefix}/logs/{artifact_group}/"
-    objects = _list_s3_objects(s3_client, bucket, dir_prefix)
-    entries = []
-    for obj in objects:
-        key = obj["key"]
-        filename = key[len(dir_prefix):]
-        # Skip index.html itself and subdirectory entries (contain "/")
-        if not filename or filename == "index.html" or "/" in filename:
-            continue
-        entries.append(
-            _FileEntry(
-                name=filename,
-                href=filename,
-                size_bytes=obj["size"],
-                last_modified=obj["last_modified"],
-            )
-        )
-    entries.sort(key=lambda e: e.name)
-    return entries
-
-
-def _build_artifact_entries_s3(s3_client, bucket: str, run_prefix: str) -> list[_FileEntry]:
-    """List *.tar.xz* files at the run root for the artifact index."""
-    objects = _list_s3_objects(s3_client, bucket, f"{run_prefix}/")
-    entries = []
-    for obj in objects:
-        key = obj["key"]
-        filename = key[len(f"{run_prefix}/"):]
-        # Only files directly under the run root (no subdirectory) matching *.tar.xz*
-        if "/" in filename:
-            continue
-        if not (fnmatch.fnmatch(filename, "*.tar.xz") or fnmatch.fnmatch(filename, "*.tar.xz.*")):
-            continue
-        entries.append(
-            _FileEntry(
-                name=filename,
-                href=filename,
-                size_bytes=obj["size"],
-                last_modified=obj["last_modified"],
-            )
-        )
-    entries.sort(key=lambda e: e.name)
-    return entries
+            key = obj["Key"]
+            filename = key[len(prefix):]
+            if not filename or filename.endswith("/"):
+                continue
+            # The directory containing this file
+            parent = key.rsplit("/", 1)[0]
+            dirs.add(parent)
+    return sorted(dirs)
 
 
 # ---------------------------------------------------------------------------
@@ -234,21 +196,13 @@ def _build_artifact_entries_s3(s3_client, bucket: str, run_prefix: str) -> list[
 # ---------------------------------------------------------------------------
 
 
-def _discover_artifact_groups_local(staging_dir: Path, run_prefix: str) -> list[str]:
-    """Discover artifact groups by listing subdirectories of {staging_dir}/{prefix}/logs/."""
-    logs_dir = staging_dir / run_prefix / "logs"
-    if not logs_dir.is_dir():
-        return []
-    return sorted(p.name for p in logs_dir.iterdir() if p.is_dir())
-
-
-def _build_log_entries_local(staging_dir: Path, run_prefix: str, artifact_group: str) -> list[_FileEntry]:
-    """List files in {staging_dir}/{prefix}/logs/{artifact_group}/."""
-    log_dir = staging_dir / run_prefix / "logs" / artifact_group
-    if not log_dir.is_dir():
+def _list_files_local(staging_dir: Path, dir_prefix: str) -> list[_FileEntry]:
+    """List immediate files in {staging_dir}/{dir_prefix} (non-recursive), excluding index.html."""
+    root = staging_dir / dir_prefix
+    if not root.is_dir():
         return []
     entries = []
-    for p in sorted(log_dir.iterdir()):
+    for p in sorted(root.iterdir()):
         if p.is_file() and p.name != "index.html":
             stat = p.stat()
             entries.append(
@@ -262,26 +216,17 @@ def _build_log_entries_local(staging_dir: Path, run_prefix: str, artifact_group:
     return entries
 
 
-def _build_artifact_entries_local(staging_dir: Path, run_prefix: str) -> list[_FileEntry]:
-    """List *.tar.xz* files at {staging_dir}/{prefix}/."""
-    root_dir = staging_dir / run_prefix
-    if not root_dir.is_dir():
+def _discover_dirs_with_files_local(staging_dir: Path, run_prefix: str) -> list[str]:
+    """Discover all directories under {staging_dir}/{run_prefix} that contain files."""
+    run_dir = staging_dir / run_prefix
+    if not run_dir.is_dir():
         return []
-    entries = []
-    for p in sorted(root_dir.iterdir()):
-        if not p.is_file():
-            continue
-        if fnmatch.fnmatch(p.name, "*.tar.xz") or fnmatch.fnmatch(p.name, "*.tar.xz.*"):
-            stat = p.stat()
-            entries.append(
-                _FileEntry(
-                    name=p.name,
-                    href=p.name,
-                    size_bytes=stat.st_size,
-                    last_modified=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
-                )
-            )
-    return entries
+    dirs: set[str] = set()
+    for p in run_dir.rglob("*"):
+        if p.is_file() and p.name != "index.html":
+            rel_dir = p.parent.relative_to(staging_dir).as_posix()
+            dirs.add(rel_dir)
+    return sorted(dirs)
 
 
 # ---------------------------------------------------------------------------
@@ -302,58 +247,52 @@ def _upload_html(html: str, dest: StorageLocation, backend: StorageBackend, dry_
         tmp_path.unlink(missing_ok=True)
 
 
-def generate_indexes_for_group(
-    artifact_group: str,
-    output_root: WorkflowOutputRoot,
+def generate_index_for_directory(
+    bucket: str,
+    dir_prefix: str,
     backend: StorageBackend,
     *,
     s3_client=None,
-    staging_dir: Path | None,
-    dry_run: bool,
+    staging_dir: Path | None = None,
+    dry_run: bool = False,
 ) -> None:
-    """Generate and upload log + artifact indexes for one artifact group."""
-    prefix = output_root.prefix
-    bucket = output_root.bucket
+    """Generate and upload index.html listing all files under dir_prefix.
 
-    # --- Log index ---
+    Args:
+        bucket: S3 bucket name.
+        dir_prefix: Path prefix relative to the bucket root (e.g., '12345-linux/logs').
+        backend: Storage backend for uploading the index.
+        s3_client: Boto3 S3 client (required when staging_dir is None).
+        staging_dir: Local staging directory root (used instead of S3 for local testing).
+        dry_run: If True, log what would be uploaded without actually uploading.
+    """
     if staging_dir is not None:
-        log_entries = _build_log_entries_local(staging_dir, prefix, artifact_group)
+        entries = _list_files_local(staging_dir, dir_prefix)
     else:
-        log_entries = _build_log_entries_s3(s3_client, bucket, prefix, artifact_group)
+        entries = _list_files_s3(s3_client, bucket, dir_prefix)
 
-    artifact_index_url = output_root.artifact_index(artifact_group).https_url
-    log_html = _generate_index_html(
-        title=f"logs / {artifact_group}",
-        entries=log_entries,
-        parent_href=artifact_index_url,
+    title = dir_prefix.rsplit("/", 1)[-1]
+    html = _generate_index_html(title=title, entries=entries, parent_href=None)
+    dest = StorageLocation(bucket=bucket, relative_path=f"{dir_prefix}/index.html")
+    log(
+        f"[INFO] Uploading index ({len(entries)} files) → "
+        f"{dest.s3_uri if staging_dir is None else dest.relative_path}"
     )
-    log_index_dest = output_root.log_index(artifact_group)
-    log(f"[INFO] Uploading log index → {log_index_dest.s3_uri if staging_dir is None else log_index_dest.relative_path}")
-    _upload_html(log_html, log_index_dest, backend, dry_run)
-
-    # --- Artifact index ---
-    if staging_dir is not None:
-        artifact_entries = _build_artifact_entries_local(staging_dir, prefix)
-    else:
-        artifact_entries = _build_artifact_entries_s3(s3_client, bucket, prefix)
-
-    artifact_html = _generate_index_html(
-        title=f"artifacts / {artifact_group}",
-        entries=artifact_entries,
-        parent_href=None,
-    )
-    artifact_index_dest = output_root.artifact_index(artifact_group)
-    log(f"[INFO] Uploading artifact index → {artifact_index_dest.s3_uri if staging_dir is None else artifact_index_dest.relative_path}")
-    _upload_html(artifact_html, artifact_index_dest, backend, dry_run)
+    _upload_html(html, dest, backend, dry_run)
 
 
 def run(args) -> None:
+    # WorkflowOutputRoot is only needed in the CLI path (to resolve bucket from GHA env).
+    from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
     output_root = (
         WorkflowOutputRoot.for_local(run_id=args.run_id, platform=PLATFORM)
         if args.output_dir is not None
         else WorkflowOutputRoot.from_workflow_run(run_id=args.run_id, platform=PLATFORM)
     )
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
+    prefix = output_root.prefix
+    bucket = output_root.bucket
 
     staging_dir = args.output_dir
     s3_client = None
@@ -361,24 +300,22 @@ def run(args) -> None:
     if staging_dir is None:
         import boto3
         s3_client = boto3.client("s3")
-        log(f"[INFO] Discovering artifact groups from S3 prefix: {output_root.prefix}/")
-        artifact_groups = _discover_artifact_groups_s3(
-            s3_client, output_root.bucket, output_root.prefix
-        )
+        log(f"[INFO] Discovering directories from S3 prefix: {prefix}/")
+        dirs = _discover_dirs_with_files_s3(s3_client, bucket, prefix)
     else:
-        log(f"[INFO] Discovering artifact groups from local dir: {staging_dir / output_root.prefix}/logs/")
-        artifact_groups = _discover_artifact_groups_local(staging_dir, output_root.prefix)
+        log(f"[INFO] Discovering directories from local dir: {staging_dir / prefix}/")
+        dirs = _discover_dirs_with_files_local(staging_dir, prefix)
 
-    if not artifact_groups:
-        log("[WARN] No artifact groups found. Nothing to index.")
+    if not dirs:
+        log("[WARN] No directories with files found. Nothing to index.")
         return
 
-    log(f"[INFO] Found artifact groups: {artifact_groups}")
-    for group in artifact_groups:
-        log(f"\n[INFO] Generating indexes for artifact group: {group}")
-        generate_indexes_for_group(
-            artifact_group=group,
-            output_root=output_root,
+    log(f"[INFO] Found directories: {dirs}")
+    for dir_prefix in dirs:
+        log(f"\n[INFO] Generating index for: {dir_prefix}")
+        generate_index_for_directory(
+            bucket=bucket,
+            dir_prefix=dir_prefix,
             backend=backend,
             s3_client=s3_client,
             staging_dir=staging_dir,

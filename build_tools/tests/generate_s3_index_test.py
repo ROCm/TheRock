@@ -15,83 +15,45 @@ from pathlib import Path
 # Add build_tools to path so _therock_utils and generate_s3_index are importable.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_backend import LocalStorageBackend
 import generate_s3_index
 
 
-def _make_output_root(run_id="12345", platform="linux"):
-    return WorkflowOutputRoot(
-        bucket="therock-ci-artifacts",
-        external_repo="",
-        run_id=run_id,
-        platform=platform,
-    )
+class TestListFilesLocal(unittest.TestCase):
+    """Tests for _list_files_local()."""
 
-
-class TestDiscoverArtifactGroupsLocal(unittest.TestCase):
-    """Tests for _discover_artifact_groups_local()."""
-
-    def test_finds_groups_from_log_subdirs(self):
+    def test_lists_immediate_files_only(self):
+        """Only files directly in the directory are listed, not subdirectory files."""
         with tempfile.TemporaryDirectory() as staging:
             staging_dir = Path(staging)
-            prefix = "12345-linux"
-            (staging_dir / prefix / "logs" / "gfx94X-dcgpu").mkdir(parents=True)
-            (staging_dir / prefix / "logs" / "gfx110X-all").mkdir(parents=True)
+            root = staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu"
+            root.mkdir(parents=True)
+            (root / "build.log").write_text("log")
+            (root / "ninja_logs.tar.gz").write_bytes(b"gz")
+            subdir = root / "therock-build-prof"
+            subdir.mkdir()
+            (subdir / "comp-summary.html").write_text("<html>")
 
-            groups = generate_s3_index._discover_artifact_groups_local(staging_dir, prefix)
-            self.assertEqual(groups, ["gfx110X-all", "gfx94X-dcgpu"])
-
-    def test_empty_when_no_logs_dir(self):
-        with tempfile.TemporaryDirectory() as staging:
-            groups = generate_s3_index._discover_artifact_groups_local(
-                Path(staging), "12345-linux"
-            )
-            self.assertEqual(groups, [])
-
-    def test_ignores_files_in_logs_dir(self):
-        with tempfile.TemporaryDirectory() as staging:
-            staging_dir = Path(staging)
-            prefix = "12345-linux"
-            logs_dir = staging_dir / prefix / "logs"
-            logs_dir.mkdir(parents=True)
-            (logs_dir / "some_file.txt").write_text("not a group")
-            (logs_dir / "gfx94X-dcgpu").mkdir()
-
-            groups = generate_s3_index._discover_artifact_groups_local(staging_dir, prefix)
-            self.assertEqual(groups, ["gfx94X-dcgpu"])
-
-
-class TestBuildLogEntriesLocal(unittest.TestCase):
-    """Tests for _build_log_entries_local()."""
-
-    def test_lists_log_files(self):
-        with tempfile.TemporaryDirectory() as staging:
-            staging_dir = Path(staging)
-            prefix = "12345-linux"
-            log_dir = staging_dir / prefix / "logs" / "gfx94X-dcgpu"
-            log_dir.mkdir(parents=True)
-            (log_dir / "build.log").write_text("build output")
-            (log_dir / "ninja_logs.tar.gz").write_bytes(b"gz")
-
-            entries = generate_s3_index._build_log_entries_local(
-                staging_dir, prefix, "gfx94X-dcgpu"
+            entries = generate_s3_index._list_files_local(
+                staging_dir, "12345-linux/logs/gfx94X-dcgpu"
             )
             names = [e.name for e in entries]
             self.assertIn("build.log", names)
             self.assertIn("ninja_logs.tar.gz", names)
+            # Subdirectory files are NOT included
+            self.assertNotIn("therock-build-prof/comp-summary.html", names)
+            self.assertNotIn("comp-summary.html", names)
 
     def test_excludes_index_html(self):
         with tempfile.TemporaryDirectory() as staging:
             staging_dir = Path(staging)
-            prefix = "12345-linux"
-            log_dir = staging_dir / prefix / "logs" / "gfx94X-dcgpu"
-            log_dir.mkdir(parents=True)
-            (log_dir / "index.html").write_text("<html></html>")
-            (log_dir / "build.log").write_text("log")
+            root = staging_dir / "12345-linux" / "logs"
+            root.mkdir(parents=True)
+            (root / "index.html").write_text("<html></html>")
+            (root / "build.log").write_text("log")
 
-            entries = generate_s3_index._build_log_entries_local(
-                staging_dir, prefix, "gfx94X-dcgpu"
+            entries = generate_s3_index._list_files_local(
+                staging_dir, "12345-linux/logs"
             )
             names = [e.name for e in entries]
             self.assertNotIn("index.html", names)
@@ -99,48 +61,59 @@ class TestBuildLogEntriesLocal(unittest.TestCase):
 
     def test_returns_empty_for_missing_dir(self):
         with tempfile.TemporaryDirectory() as staging:
-            entries = generate_s3_index._build_log_entries_local(
-                Path(staging), "12345-linux", "gfx94X-dcgpu"
+            entries = generate_s3_index._list_files_local(
+                Path(staging), "12345-linux/logs"
             )
             self.assertEqual(entries, [])
 
-
-class TestBuildArtifactEntriesLocal(unittest.TestCase):
-    """Tests for _build_artifact_entries_local()."""
-
-    def test_lists_tar_xz_files(self):
+    def test_sorted_order(self):
         with tempfile.TemporaryDirectory() as staging:
             staging_dir = Path(staging)
-            prefix = "12345-linux"
-            root_dir = staging_dir / prefix
-            root_dir.mkdir(parents=True)
-            (root_dir / "core_lib_gfx94X.tar.xz").write_bytes(b"data")
-            (root_dir / "core_lib_gfx94X.tar.xz.sha256sum").write_text("abc123")
-            (root_dir / "unrelated.txt").write_text("ignore")
+            root = staging_dir / "12345-linux" / "logs"
+            root.mkdir(parents=True)
+            (root / "z.log").write_text("")
+            (root / "a.log").write_text("")
 
-            entries = generate_s3_index._build_artifact_entries_local(staging_dir, prefix)
+            entries = generate_s3_index._list_files_local(
+                staging_dir, "12345-linux/logs"
+            )
             names = [e.name for e in entries]
-            self.assertIn("core_lib_gfx94X.tar.xz", names)
-            self.assertIn("core_lib_gfx94X.tar.xz.sha256sum", names)
-            self.assertNotIn("unrelated.txt", names)
+            self.assertEqual(names, ["a.log", "z.log"])
 
-    def test_ignores_subdirectory_files(self):
+
+class TestDiscoverDirsWithFilesLocal(unittest.TestCase):
+    """Tests for _discover_dirs_with_files_local()."""
+
+    def test_finds_leaf_dirs_at_any_depth(self):
         with tempfile.TemporaryDirectory() as staging:
             staging_dir = Path(staging)
-            prefix = "12345-linux"
-            subdir = staging_dir / prefix / "logs"
-            subdir.mkdir(parents=True)
-            (subdir / "something.tar.xz").write_bytes(b"data")
+            # Single-arch layout: logs/{group}/
+            (staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu").mkdir(parents=True)
+            (staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu" / "build.log").write_text("log")
+            # Multi-arch layout: logs/{stage}/{family}/
+            (staging_dir / "12345-linux" / "logs" / "math-libs" / "gfx1151").mkdir(parents=True)
+            (staging_dir / "12345-linux" / "logs" / "math-libs" / "gfx1151" / "build.log").write_text("log2")
 
-            entries = generate_s3_index._build_artifact_entries_local(staging_dir, prefix)
-            self.assertEqual(entries, [])
+            dirs = generate_s3_index._discover_dirs_with_files_local(staging_dir, "12345-linux")
+            self.assertIn("12345-linux/logs/gfx94X-dcgpu", dirs)
+            self.assertIn("12345-linux/logs/math-libs/gfx1151", dirs)
 
-    def test_returns_empty_for_missing_dir(self):
+    def test_includes_run_root_when_files_present(self):
         with tempfile.TemporaryDirectory() as staging:
-            entries = generate_s3_index._build_artifact_entries_local(
+            staging_dir = Path(staging)
+            run_dir = staging_dir / "12345-linux"
+            run_dir.mkdir(parents=True)
+            (run_dir / "core_lib.tar.xz").write_bytes(b"data")
+
+            dirs = generate_s3_index._discover_dirs_with_files_local(staging_dir, "12345-linux")
+            self.assertIn("12345-linux", dirs)
+
+    def test_empty_when_no_run_dir(self):
+        with tempfile.TemporaryDirectory() as staging:
+            dirs = generate_s3_index._discover_dirs_with_files_local(
                 Path(staging), "12345-linux"
             )
-            self.assertEqual(entries, [])
+            self.assertEqual(dirs, [])
 
 
 class TestGenerateIndexHtml(unittest.TestCase):
@@ -149,23 +122,25 @@ class TestGenerateIndexHtml(unittest.TestCase):
     def test_contains_file_entries(self):
         entries = [
             generate_s3_index._FileEntry(
-                name="build.log",
-                href="build.log",
+                name="gfx94X-dcgpu/build.log",
+                href="gfx94X-dcgpu/build.log",
                 size_bytes=1024,
                 last_modified=datetime(2026, 3, 1, 12, 0, tzinfo=timezone.utc),
             )
         ]
-        html = generate_s3_index._generate_index_html("test dir", entries, parent_href=None)
-        self.assertIn("build.log", html)
+        html = generate_s3_index._generate_index_html("logs", entries, parent_href=None)
+        self.assertIn("gfx94X-dcgpu/build.log", html)
         self.assertIn("1 KB", html)
 
     def test_parent_link_included_when_provided(self):
-        html = generate_s3_index._generate_index_html("logs/gfx94X", [], parent_href="https://example.com/index.html")
+        html = generate_s3_index._generate_index_html(
+            "logs", [], parent_href="https://example.com/index.html"
+        )
         self.assertIn("https://example.com/index.html", html)
         self.assertIn("..", html)
 
     def test_no_parent_link_when_none(self):
-        html = generate_s3_index._generate_index_html("artifacts", [], parent_href=None)
+        html = generate_s3_index._generate_index_html("logs", [], parent_href=None)
         self.assertNotIn("..", html)
 
     def test_escapes_special_chars(self):
@@ -182,11 +157,11 @@ class TestGenerateIndexHtml(unittest.TestCase):
         self.assertNotIn("file&name", html)
 
 
-class TestGenerateIndexesForGroup(unittest.TestCase):
-    """Integration tests for generate_indexes_for_group() using LocalStorageBackend."""
+class TestGenerateIndexForDirectory(unittest.TestCase):
+    """Integration tests for generate_index_for_directory() using LocalStorageBackend."""
 
-    def test_generates_log_and_artifact_indexes(self):
-        output_root = _make_output_root()
+    def test_single_arch_flat_listing(self):
+        """Single-arch layout: files are flat in logs/{group}/."""
         with (
             tempfile.TemporaryDirectory() as staging,
             tempfile.TemporaryDirectory() as source,
@@ -194,70 +169,75 @@ class TestGenerateIndexesForGroup(unittest.TestCase):
             staging_dir = Path(staging)
             source_dir = Path(source)
 
-            # Set up source staging tree (simulates what upload jobs produced)
-            prefix = output_root.prefix
-            log_dir = source_dir / prefix / "logs" / "gfx94X-dcgpu"
+            log_dir = source_dir / "12345-linux" / "logs" / "gfx94X-dcgpu"
             log_dir.mkdir(parents=True)
             (log_dir / "build.log").write_text("build output")
             (log_dir / "ninja_logs.tar.gz").write_bytes(b"gz")
 
-            art_dir = source_dir / prefix
-            (art_dir / "core_lib_gfx94X.tar.xz").write_bytes(b"data")
-
             backend = LocalStorageBackend(staging_dir)
-            generate_s3_index.generate_indexes_for_group(
-                artifact_group="gfx94X-dcgpu",
-                output_root=output_root,
+            generate_s3_index.generate_index_for_directory(
+                bucket="therock-ci-artifacts",
+                dir_prefix="12345-linux/logs/gfx94X-dcgpu",
                 backend=backend,
-                s3_client=None,
                 staging_dir=source_dir,
                 dry_run=False,
             )
 
-            # Log index should be at logs/gfx94X-dcgpu/index.html
-            log_index = (
-                staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu" / "index.html"
-            )
-            self.assertTrue(log_index.is_file(), f"Expected {log_index}")
-            log_html = log_index.read_text()
-            self.assertIn("build.log", log_html)
-            self.assertIn("ninja_logs.tar.gz", log_html)
+            index = staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu" / "index.html"
+            self.assertTrue(index.is_file(), f"Expected {index}")
+            html = index.read_text()
+            self.assertIn("build.log", html)
+            self.assertIn("ninja_logs.tar.gz", html)
 
-            # Artifact index should be at index-gfx94X-dcgpu.html
-            artifact_index = staging_dir / "12345-linux" / "index-gfx94X-dcgpu.html"
-            self.assertTrue(artifact_index.is_file(), f"Expected {artifact_index}")
-            artifact_html = artifact_index.read_text()
-            self.assertIn("core_lib_gfx94X.tar.xz", artifact_html)
-
-    def test_log_index_links_back_to_artifact_index(self):
-        """Verify that the log index parent link points to the artifact index."""
-        output_root = _make_output_root()
+    def test_multi_arch_per_family_listing(self):
+        """Multi-arch layout: each family gets its own index."""
         with (
             tempfile.TemporaryDirectory() as staging,
             tempfile.TemporaryDirectory() as source,
         ):
             staging_dir = Path(staging)
             source_dir = Path(source)
-            prefix = output_root.prefix
-            log_dir = source_dir / prefix / "logs" / "gfx94X-dcgpu"
-            log_dir.mkdir(parents=True)
+
+            for family in ["gfx94X-dcgpu", "gfx110X-all"]:
+                d = source_dir / "12345-linux" / "logs" / "math-libs" / family
+                d.mkdir(parents=True)
+                (d / "build.log").write_text(f"log for {family}")
 
             backend = LocalStorageBackend(staging_dir)
-            generate_s3_index.generate_indexes_for_group(
-                artifact_group="gfx94X-dcgpu",
-                output_root=output_root,
+            for family in ["gfx94X-dcgpu", "gfx110X-all"]:
+                generate_s3_index.generate_index_for_directory(
+                    bucket="therock-ci-artifacts",
+                    dir_prefix=f"12345-linux/logs/math-libs/{family}",
+                    backend=backend,
+                    staging_dir=source_dir,
+                    dry_run=False,
+                )
+
+            for family in ["gfx94X-dcgpu", "gfx110X-all"]:
+                index = staging_dir / "12345-linux" / "logs" / "math-libs" / family / "index.html"
+                self.assertTrue(index.is_file(), f"Expected {index}")
+                self.assertIn("build.log", index.read_text())
+
+    def test_empty_dir_generates_empty_index(self):
+        with (
+            tempfile.TemporaryDirectory() as staging,
+            tempfile.TemporaryDirectory() as source,
+        ):
+            staging_dir = Path(staging)
+            source_dir = Path(source)
+            (source_dir / "12345-linux" / "logs" / "gfx94X-dcgpu").mkdir(parents=True)
+
+            backend = LocalStorageBackend(staging_dir)
+            generate_s3_index.generate_index_for_directory(
+                bucket="therock-ci-artifacts",
+                dir_prefix="12345-linux/logs/gfx94X-dcgpu",
                 backend=backend,
-                s3_client=None,
                 staging_dir=source_dir,
                 dry_run=False,
             )
 
-            log_index = (
-                staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu" / "index.html"
-            )
-            log_html = log_index.read_text()
-            # Should link back to the artifact index
-            self.assertIn("index-gfx94X-dcgpu.html", log_html)
+            index = staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu" / "index.html"
+            self.assertTrue(index.is_file())
 
 
 if __name__ == "__main__":

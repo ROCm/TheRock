@@ -363,7 +363,7 @@ class TestRetrieveBucketInfo(unittest.TestCase):
     def setUp(self):
         # Patch gha_query_workflow_run_by_id so we never make real API calls.
         self.api_patcher = mock.patch(
-            "_therock_utils.workflow_outputs.gha_query_workflow_run_by_id"
+            "github_actions.github_actions_api.gha_query_workflow_run_by_id"
         )
         self.mock_api = self.api_patcher.start()
 
