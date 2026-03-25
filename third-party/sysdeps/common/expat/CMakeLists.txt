@@ -70,7 +70,7 @@ endif()
 
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
-project(EXPAT_BUILD VERSION "2.7.3")
+project(EXPAT_BUILD VERSION "2.7.5")
 
 # Apply patch source only on Linux
 set(patch_source_commands)
