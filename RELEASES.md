@@ -29,6 +29,10 @@ Table of contents:
   - [Using PyTorch Python packages](#using-pytorch-python-packages)
   - [Installing JAX Python packages](#installing-jax-python-packages)
   - [Using JAX Python packages](#using-jax-python-packages)
+- [Installing from native packages](#installing-from-native-packages)
+  - [Native packages release status](#native-packages-release-status)
+  - [Installing on Debian-based systems](#installing-on-debian-based-systems-ubuntu-debian-etc)
+  - [Installing on RPM-based systems](#installing-on-rpm-based-systems-rhel-sles-almalinux-etc)
 - [Installing from tarballs](#installing-from-tarballs)
   - [Browsing release tarballs](#browsing-release-tarballs)
   - [Manual tarball extraction](#manual-tarball-extraction)
@@ -540,7 +544,7 @@ such as setting environment variables.
 > For most users, we recommend installing via package managers:
 >
 > - [Installing releases using pip](#installing-releases-using-pip)
-> - (TODO) Installing native Linux deb/RPM packages
+> - [Installing from native packages](#installing-from-native-packages)
 
 ### Browsing release tarballs
 
@@ -614,9 +618,107 @@ ls install
 > #     ...
 > ```
 
+## Installing from native packages
+
+In addition to Python wheels and tarballs, ROCm native Linux packages are
+published for Debian-based and RPM-based distributions.
+
+> [!WARNING]
+> These builds are primarily intended for development and testing and are currently **unsigned**.
+
+### Native packages release status
+
+| Platform |                                                                                                                                                                                                                                  Native packages |
+| -------- | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| Linux    | [![Build Native Linux Packages](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml?query=branch%3Amain) |
+| Windows  |                                                                                                                                                                                                                                    (Coming soon) |
+
+### GPU family and package mapping
+
+| Product Name                       | GFX Target | GFX Family | Runtime Package | Development Package      |
+| ---------------------------------- | ---------- | ---------- | --------------- | ------------------------ |
+| MI300A/MI300X                      | gfx942     | gfx94X     | amdrocm-gfx94x  | amdrocm-core-sdk-gfx94x  |
+| MI350X/MI355X                      | gfx950     | gfx950     | amdrocm-gfx950  | amdrocm-core-sdk-gfx950  |
+| AMD RX 7900 XTX                    | gfx1100    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
+| AMD RX 7800 XT                     | gfx1101    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
+| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
+| AMD Strix Point iGPU               | gfx1150    | gfx1150    | amdrocm-gfx1150 | amdrocm-core-sdk-gfx1150 |
+| AMD Strix Halo iGPU                | gfx1151    | gfx1151    | amdrocm-gfx1151 | amdrocm-core-sdk-gfx1151 |
+| AMD Fire Range iGPU                | gfx1152    | gfx1152    | amdrocm-gfx1152 | amdrocm-core-sdk-gfx1152 |
+| AMD Strix Halo XT                  | gfx1153    | gfx1153    | amdrocm-gfx1153 | amdrocm-core-sdk-gfx1153 |
+| AMD RX 9060 / XT                   | gfx1200    | gfx120X    | amdrocm-gfx120x | amdrocm-core-sdk-gfx120x |
+| AMD RX 9070 / XT                   | gfx1201    | gfx120X    | amdrocm-gfx120x | amdrocm-core-sdk-gfx120x |
+| Radeon VII                         | gfx906     | gfx906     | amdrocm-gfx906  | amdrocm-core-sdk-gfx906  |
+| MI100                              | gfx908     | gfx908     | amdrocm-gfx908  | amdrocm-core-sdk-gfx908  |
+| MI200 series                       | gfx90a     | gfx90a     | amdrocm-gfx90a  | amdrocm-core-sdk-gfx90a  |
+| AMD RX 5700 XT                     | gfx1010    | gfx101x    | amdrocm-gfx101x | amdrocm-core-sdk-gfx101x |
+| AMD RX 6900 XT                     | gfx1030    | gfx103x    | amdrocm-gfx103x | amdrocm-core-sdk-gfx103x |
+| AMD RX 6800 XT                     | gfx1031    | gfx103x    | amdrocm-gfx103x | amdrocm-core-sdk-gfx103x |
+
+> [!TIP]
+> To find the latest available release:
+>
+> - **Step 1**: Browse the index pages:
+>   - **Debian packages**: https://rocm.nightlies.amd.com/deb/
+>   - **RPM packages**: https://rocm.nightlies.amd.com/rpm/
+> - **Step 2**: Look for directories in the format `YYYYMMDD-<action-run-id>` (e.g., `20260310-12345678`)
+> - **Step 3**: Use the latest date in the installation commands below
+
+### Installing on Debian-based systems (Ubuntu, Debian, etc.)
+
+```bash
+# Step 1: Find the latest release from https://rocm.nightlies.amd.com/deb/
+#         Look for directories like "20260310-12345678"
+# Step 2: Look at the "GPU family and package mapping" table above to find
+#         the GFX Family for your GPU (e.g., gfx94x, gfx110x, gfx1151)
+# Step 3: Set the variables below
+
+export RELEASE_ID=20260310-12345678  # Replace with actual date-runid
+export GFX_ARCH=gfx110x              # Replace with GFX Family from the mapping table
+
+# Step 4: Add repository and install
+sudo apt update
+sudo apt install -y ca-certificates
+echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/${RELEASE_ID} stable main" \
+  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
+sudo apt update
+sudo apt install amdrocm-core-sdk-${GFX_ARCH}
+# If only runtime is needed, install amdrocm-${GFX_ARCH} instead
+```
+
+### Installing on RPM-based systems (RHEL, SLES, AlmaLinux etc.)
+
+> [!NOTE]
+> The following instructions are for RHEL-based operating systems.
+
+```bash
+# Step 1: Find the latest release from https://rocm.nightlies.amd.com/rpm/
+#         Look for directories like "20260310-12345678"
+# Step 2: Look at the "GPU family and package mapping" table above to find
+#         the GFX Family for your GPU (e.g., gfx94x, gfx110x, gfx1151)
+# Step 3: Set the variables below
+
+export RELEASE_ID=20260310-12345678  # Replace with actual date-runid
+export GFX_ARCH=gfx110x              # Replace with GFX Family from the mapping table
+
+# Step 4: Add repository and install
+sudo dnf install -y ca-certificates
+sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
+[rocm-nightly]
+name=ROCm Nightly Repository
+baseurl=https://rocm.nightlies.amd.com/rpm/${RELEASE_ID}/x86_64
+enabled=1
+gpgcheck=0
+priority=50
+EOF
+sudo dnf install amdrocm-core-sdk-${GFX_ARCH}
+# If only runtime is needed, install amdrocm-${GFX_ARCH} instead
+```
+
 ## Verifying your installation
 
-After installing ROCm via either pip packages or tarballs, you can verify that
+After installing ROCm via either pip packages, tarballs or native packages, you can verify that
 your GPU is properly recognized.
 
 ### Linux

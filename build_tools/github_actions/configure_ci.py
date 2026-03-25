@@ -66,7 +66,7 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
-from github_actions_utils import *
+from github_actions_api import *
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
@@ -394,18 +394,18 @@ def matrix_generator(
                 print(
                     f"    Label '{label}' matched 'test:*' pattern -> test: {test_name}"
                 )
-            # If the "skip-ci" label was added, we skip all builds and tests
+            # If the "ci:skip" label was added, we skip all builds and tests
             # We don't want to check for anymore labels
-            if "skip-ci" == label:
-                print(f"    Label 'skip-ci' detected -> skipping all builds and tests")
+            if "ci:skip" == label:
+                print(f"    Label 'ci:skip' detected -> skipping all builds and tests")
                 selected_target_names = []
                 selected_test_names = []
                 requested_target_names = []
                 requested_test_names = []
                 break
-            if "run-all-archs-ci" == label:
+            if "ci:run-all-archs" == label:
                 print(
-                    f"    Label 'run-all-archs-ci' detected -> enabling all architectures"
+                    f"    Label 'ci:run-all-archs' detected -> enabling all architectures"
                 )
                 selected_target_names = [
                     target
@@ -676,6 +676,21 @@ def main(base_args, linux_families, windows_families):
         # TODO(#199): other behavior changes
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = is_ci_run_required(modified_paths)
+
+        # TODO(#3399): move multi-arch CI configuration to its own script
+        # Multi-arch CI on PRs requires explicit opt-in via label.
+        # This avoids doubling CI load during the transition from ci.yml
+        # to multi_arch_ci.yml. See https://github.com/ROCm/TheRock/issues/3337
+        if (
+            multi_arch
+            and is_pull_request
+            and "ci:run-multi-arch" not in (pr_labels or [])
+        ):
+            print(
+                "Skipping multi-arch CI: 'ci:run-multi-arch' label not found. "
+                "Add the label to opt in."
+            )
+            enable_build_jobs = False
 
         # If the modified path contains any git submodules, we want to run a full test suite.
         # Otherwise, we just run quick tests

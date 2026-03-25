@@ -4,6 +4,10 @@ exclude = [
   "lib/libhipdnn_backend_private.a",
   "lib/test_plugins/**",
 ]
+[components.run."ml-libs/hipDNN/stage"]
+include = [
+  "bin/hipdnn_list_engines*",
+]
 [components.dbg."ml-libs/hipDNN/stage"]
 [components.dev."ml-libs/hipDNN/stage"]
 [components.doc."ml-libs/hipDNN/stage"]

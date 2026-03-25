@@ -1,7 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Utilities for working with GitHub Actions from Python.
+"""GitHub Actions API: workflow commands and REST API client.
+
+This module provides:
+- GitHubAPI class for authenticated GitHub REST API requests
+- Workflow command helpers (gha_set_output, gha_set_env, etc.)
+- Query functions for workflow runs, commits, etc.
 
 See also https://pypi.org/project/github-action-utils/.
 """
@@ -511,6 +516,8 @@ def gha_query_recent_branch_commits(
     return [commit["sha"] for commit in response]
 
 
+# TODO: Consider moving str2bool to a general-purpose utils module. It's useful
+# for GitHub Actions (YAML has fuzzy boolean handling) but is also used broadly.
 def str2bool(value: str | None) -> bool:
     """Convert environment variables to boolean values."""
     if not value:
@@ -552,6 +559,8 @@ def str2bool(value: str | None) -> bool:
     raise ValueError(f"Invalid string value for boolean conversion: {value}")
 
 
+# TODO: Move get_visible_gpu_count and get_first_gpu_architecture to a
+# GPU/rocminfo utils module. They are not specific to GitHub Actions.
 # TODO(#3489): Refactor get_visible_gpu_count and get_first_gpu_architecture to share a
 # common helper that runs rocminfo and returns matching lines; both functions duplicate the first ~12 lines.
 def get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:

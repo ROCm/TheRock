@@ -1,30 +1,18 @@
 #!/usr/bin/env python3
 """
-Generic test runner for multiple components in rocm-libraries/rocm-systems.
+This is a generic test runner that can test multiple components.
+This works on components in rocm-libraries/rocm-systems which use test_categories.yml for test categorization.
 
-Each component is expected to register its tests as ctest entries with labels derived from
-test_categories.yml. The labeling convention is:
+Environment variables used:
+TEST_COMPONENT: Job name of the component to test (e.g., "miopen", "rocrand", "hiprand")
+    This is automatically set by the GitHub Actions workflow from the job_name field.
+    The script maps these job names to actual test directory names (e.g., "miopen" -> "MIOpen")
+    Defaults to "miopen" if not set.
+TEST_TYPE: Test category to run - one of "quick", "standard", "comprehensive", or "full".
+    Defaults to "quick". Invalid values fall back to "quick" with an error message.
+AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
 
-  - Category labels: Each test is labeled with its category (e.g. "quick", "standard").
-    The runner uses `ctest -L <category>` to select tests matching the chosen category.
-
-  - Category exclude labels: A component may optionally label specific tests with
-    `{category}_exclude` (e.g. "quick_exclude"). When such a label is detected via
-    `ctest --print-labels`, the runner adds `ctest -LE {category}_exclude` to skip those
-    tests for that category.
-
-  - GPU suite labels: Tests targeting specific GPU architectures are labeled as
-    `ex_gpu_{gpu_arch}` (e.g. "ex_gpu_gfx110X", "ex_gpu_gfx950"). The runner matches
-    the current GPU against available labels (with wildcard fallback, e.g. gfx115X -> gfx11X)
-    and uses `ctest -L ex_gpu_{matched_arch}` to include the right GPU suite, or
-    `ctest -LE ex_gpu` to exclude all GPU-specific tests when no match is found.
-
-Environment variables:
-  TEST_COMPONENT: Job name of the component to test (e.g., "miopen", "rocrand", "hiprand").
-      Automatically set by the GitHub Actions workflow from the job_name field.
-      The script maps these job names to actual test directory names (e.g., "miopen" -> "MIOpen").
-  TEST_TYPE: "quick" runs tests with "quick" category, otherwise runs "standard" category.
-  AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151").
+The script discovers GPU-specific labels via ctest --print-labels and runs the appropriate tests for the current GPU architecture.
 """
 
 import sys
@@ -39,6 +27,7 @@ from pathlib import Path
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
 TEST_TYPE = os.getenv("TEST_TYPE", "quick")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
@@ -47,6 +36,7 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 # and need to be mapped to the actual directory names in THEROCK_BIN_DIR
 COMPONENT_DIR_MAPPING = {
     "miopen": "MIOpen",
+    "rocblas": "rocblas",
     "rocrand": "rocRAND",
     "hiprand": "hipRAND",
     "rocthrust": "rocthrust",
@@ -261,11 +251,15 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
 
 
 def main():
-    # Use only two categories for now - quick and standard - depending on TEST_TYPE.
-    if TEST_TYPE and TEST_TYPE.lower() == "quick":
+    category = TEST_TYPE.lower() if TEST_TYPE else "quick"
+    if category not in VALID_TEST_CATEGORIES:
+        print(
+            f"ERROR: Invalid TEST_TYPE '{TEST_TYPE}'. "
+            f"Must be one of: {', '.join(sorted(VALID_TEST_CATEGORIES))}. "
+            f"Falling back to 'quick'.",
+            file=sys.stderr,
+        )
         category = "quick"
-    else:
-        category = "standard"
 
     # Use AMDGPU_FAMILIES from environment variable, extract gfx<xxx> part
     gpu_arch = ""
