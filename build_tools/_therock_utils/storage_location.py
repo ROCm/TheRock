@@ -16,6 +16,7 @@ Usage::
     loc.local_path(Path("/tmp/staging"))  # Path("/tmp/staging/some/path/file.tar.xz")
 """
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -46,7 +47,18 @@ class StorageLocation:
 
     @property
     def https_url(self) -> str:
-        """Public HTTPS URL for browser access."""
+        """Public HTTPS URL for browser access.
+
+        Checks for bucket-specific override via environment variable:
+        THEROCK_HTTPS_URL_<bucket> where dashes are replaced with underscores.
+
+        """
+        # Check for bucket-specific env var override
+        env_var_name = f"THEROCK_HTTPS_URL_{self.bucket.replace('-', '_')}"
+        base_url = os.getenv(env_var_name)
+        if base_url:
+            return f"{base_url.rstrip('/')}/{self.relative_path}"
+        # Default: S3 public URL pattern
         return f"https://{self.bucket}.s3.amazonaws.com/{self.relative_path}"
 
     def local_path(self, staging_dir: Path) -> Path:

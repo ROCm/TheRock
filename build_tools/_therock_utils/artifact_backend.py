@@ -13,9 +13,10 @@ modules manage S3 clients and local directory mirroring. ArtifactBackend has
 download/list/exists operations that StorageBackend doesn't have yet.
 
 Environment-based switching:
-- THEROCK_HTTP_RUN_ID set → use HTTPBackend (read-only)
 - THEROCK_LOCAL_STAGING_DIR set → use LocalDirectoryBackend
-- Otherwise → use S3Backend
+- AWS credentials present → use S3Backend
+- THEROCK_AMDGPU_FAMILIES set → use HTTPBackend (read-only via public HTTPS URLs)
+- Otherwise → use S3Backend (unsigned requests for public buckets)
 """
 
 from abc import ABC, abstractmethod
@@ -26,8 +27,10 @@ import hashlib
 import os
 import re
 import shutil
+import urllib.error
 import urllib.request
 
+from .storage_location import StorageLocation
 from .workflow_outputs import WorkflowOutputRoot
 
 
@@ -339,18 +342,20 @@ class S3Backend(ArtifactBackend):
 class HTTPBackend(ArtifactBackend):
     """Read-only backend for HTTP artifact server.
 
-    Accesses artifacts from:
-    {base_url}/{run_id}-{platform}/
+    Uses WorkflowOutputRoot.https_url for all artifact downloads, which automatically
+    constructs public HTTPS URLs for S3 buckets (e.g., https://bucket.s3.amazonaws.com/path).
 
-    Artifacts are organized by gfx target via index-{gfx_family}.html files.
+    Uses WorkflowOutputRoot for path computation, ensuring consistent handling
+    of fork prefixes and bucket selection.
 
     Usage:
         # Create backend for specific run
+        output_root = WorkflowOutputRoot.from_workflow_run(
+            run_id="23309603946", platform="linux"
+        )
         backend = HTTPBackend(
-            run_id="23309603946",
-            platform="linux",
+            output_root=output_root,
             gfx_families=["gfx94X-dcgpu", "gfx1200"],
-            base_url="https://example.com/artifacts"
         )
 
         # List available artifacts (across all specified GFX families)
@@ -359,44 +364,49 @@ class HTTPBackend(ArtifactBackend):
         # Download artifact with checksum verification
         backend.download_artifact("blas_lib_gfx1200.tar.zst", Path("/tmp/blas.tar.zst"))
 
-        # Or use factory function with target families
+        # Or use factory function
         import os
         os.environ["THEROCK_RUN_ID"] = "23309603946"
-        os.environ["THEROCK_HTTP_BASE_URL"] = "https://example.com/artifacts"
+        os.environ["THEROCK_AMDGPU_FAMILIES"] = "gfx94X-dcgpu,gfx1200"
         backend = create_backend_from_env(gfx_families=["gfx94X-dcgpu", "gfx1200"])
 
-    Environment Variables:
+    Environment Variables (when using create_backend_from_env):
         THEROCK_RUN_ID: Workflow run ID (falls back to GITHUB_RUN_ID or "local")
-        THEROCK_HTTP_BASE_URL: Base URL for artifact server (required for HTTP backend)
         THEROCK_AMDGPU_FAMILIES: Comma-separated list of GFX families (e.g., "gfx94X-dcgpu,gfx1200")
         THEROCK_PLATFORM: Platform name (default: "linux")
     """
 
     def __init__(
         self,
-        run_id: str,
-        base_url: str,
+        output_root: WorkflowOutputRoot,
         gfx_families: List[str],
-        platform: str = "linux",
     ):
-        self.run_id = run_id
-        self.base_url = base_url
-        self.platform = platform
+        self.output_root = output_root
         self.gfx_families = gfx_families
         self._artifact_cache: Optional[List[str]] = None  # Lazy-loaded artifact list
 
     @property
     def base_uri(self) -> str:
         """Return the base URI for this backend."""
-        return f"{self.base_url}/{self.run_id}-{self.platform}"
+        return self.output_root.root().https_url
 
     def _download_file(self, url: str, dest: Path) -> None:
-        """Download a file from URL to destination path."""
+        """Download a file from URL to destination path.
+
+        Raises:
+            FileNotFoundError: If the resource does not exist (HTTP 404 or 403)
+            ConnectionError: For network errors (timeouts, DNS failures)
+            urllib.error.HTTPError: For other HTTP errors (500, etc.)
+        """
         dest.parent.mkdir(parents=True, exist_ok=True)
         try:
             urllib.request.urlretrieve(url, dest)
-        except Exception as e:
-            raise FileNotFoundError(f"Failed to download {url}: {e}")
+        except urllib.error.HTTPError as e:
+            if e.code == 404 or e.code == 403:
+                raise FileNotFoundError(f"Not found: {url}") from e
+            raise  # Re-raise 500, 403, etc.
+        except urllib.error.URLError as e:
+            raise ConnectionError(f"Failed to download {url}: {e}") from e
 
     def _parse_index_html(self, html_content: str) -> List[str]:
         """Parse artifact index HTML to extract artifact filenames."""
@@ -417,7 +427,7 @@ class HTTPBackend(ArtifactBackend):
 
     def _fetch_index(self, gfx_family: str) -> List[str]:
         """Fetch artifact list from index-{gfx_family}.html."""
-        index_url = f"{self.base_uri}/index-{gfx_family}.html"
+        index_url = self.output_root.artifact_index(gfx_family).https_url
         try:
             with urllib.request.urlopen(index_url) as response:
                 html_content = response.read().decode("utf-8")
@@ -527,8 +537,8 @@ class HTTPBackend(ArtifactBackend):
             FileNotFoundError: If artifact or checksum not found
             ValueError: If checksum verification fails
         """
-        artifact_url = f"{self.base_uri}/{artifact_key}"
-        checksum_url = f"{artifact_url}.sha256sum"
+        artifact_url = self.output_root.artifact(artifact_key).https_url
+        checksum_url = self.output_root.artifact(f"{artifact_key}.sha256sum").https_url
 
         # Download artifact
         self._download_file(artifact_url, dest_path)
@@ -566,7 +576,7 @@ class HTTPBackend(ArtifactBackend):
             return artifact_key in self._artifact_cache
 
         # Otherwise, try HTTP HEAD request
-        artifact_url = f"{self.base_uri}/{artifact_key}"
+        artifact_url = self.output_root.artifact(artifact_key).https_url
         try:
             req = urllib.request.Request(artifact_url, method="HEAD")
             urllib.request.urlopen(req)
@@ -585,8 +595,7 @@ def create_backend_from_env(
     Backend priority:
     1. Local directory (THEROCK_LOCAL_STAGING_DIR) - highest priority for local dev
     2. S3 with credentials (AWS_* vars present) - CI upload contexts
-    3. HTTP (THEROCK_HTTP_BASE_URL set, no S3 creds) - read-only artifact access
-    4. S3 without credentials - fallback for read-only S3 access
+    3. HTTP (THEROCK_AMDGPU_FAMILIES set, no S3 creds) - read-only via public HTTPS URLs
 
     Args:
         run_id: Override run ID (default: THEROCK_RUN_ID or GITHUB_RUN_ID or "local")
@@ -599,15 +608,15 @@ def create_backend_from_env(
     - THEROCK_RUN_ID: Workflow run ID (default: GITHUB_RUN_ID or "local")
     - THEROCK_PLATFORM: Override platform (default: current platform)
     - THEROCK_LOCAL_STAGING_DIR: If set, use local backend
-    - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN: If all present,
-      prioritize S3 backend for upload capability (CI contexts)
-    - THEROCK_HTTP_BASE_URL: Base URL for HTTP artifact server
-      (if set and no S3 credentials, use HTTP backend for read-only access)
+    - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY: If both present,
+      prioritize S3 backend for upload capability (CI contexts).
+      Note: AWS_SESSION_TOKEN is optional (only for temporary credentials).
     - THEROCK_AMDGPU_FAMILIES: Comma-separated list of GFX families (e.g., "gfx94X-dcgpu,gfx1200")
-      Required for HTTP backend if gfx_families parameter not provided.
+      When set without S3 credentials, use HTTP backend for read-only artifact downloads
+      via public HTTPS URLs (e.g., https://bucket.s3.amazonaws.com/path).
 
-    For S3 backend:
-    - Uses WorkflowOutputRoot.from_workflow_run() for bucket selection
+    For S3 and HTTP backends:
+    - Uses WorkflowOutputRoot.from_workflow_run() for bucket selection and path construction
     """
     import platform as platform_module
 
@@ -628,10 +637,11 @@ def create_backend_from_env(
         )
 
     # Priority 2: S3 backend when AWS credentials are present (CI upload contexts)
-    # Check for all three required AWS credentials
+    # Check for AWS credentials (both long-term IAM and temporary STS credentials)
+    # Note: AWS_SESSION_TOKEN is only present for temporary credentials; long-term
+    # IAM credentials only have AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
     has_s3_credentials = all(
-        os.getenv(var)
-        for var in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"]
+        os.getenv(var) for var in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
     )
     if has_s3_credentials:
         output_root = WorkflowOutputRoot.from_workflow_run(
@@ -639,33 +649,28 @@ def create_backend_from_env(
         )
         return S3Backend(output_root=output_root)
 
-    # Priority 3: HTTP backend for read-only access (no upload capability)
-    # Only use HTTP backend if base URL is explicitly configured
-    http_base_url = os.getenv("THEROCK_HTTP_BASE_URL")
-    if http_base_url:
-        # Get GFX families from parameter or environment variable
-        targets = gfx_families
-        if targets is None:
-            targets_env = os.getenv("THEROCK_AMDGPU_FAMILIES")
-            if targets_env:
-                targets = [t.strip() for t in targets_env.split(",")]
+    # Priority 3: HTTP backend for read-only access via public HTTPS URLs
+    # Only used when THEROCK_AMDGPU_FAMILIES is set (without S3 credentials)
+    # Downloads artifacts from public S3 buckets via https://bucket.s3.amazonaws.com/path
+    targets = gfx_families
+    if targets is None:
+        targets_env = os.getenv("THEROCK_AMDGPU_FAMILIES")
+        if targets_env:
+            targets = [t.strip() for t in targets_env.split(",")]
 
-        if not targets:
-            raise ValueError(
-                "HTTPBackend requires gfx_families. "
-                "Provide via gfx_families parameter or THEROCK_AMDGPU_FAMILIES environment variable "
-                "(comma-separated list, e.g., 'gfx94X-dcgpu,gfx1200')"
-            )
-
-        return HTTPBackend(
-            run_id=run_id,
-            base_url=http_base_url,
-            gfx_families=targets,
-            platform=platform_name,
+    if not targets:
+        raise ValueError(
+            "No backend configuration found. Provide one of:\n"
+            "- THEROCK_LOCAL_STAGING_DIR for local backend\n"
+            "- AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY for S3 backend\n"
+            "- THEROCK_AMDGPU_FAMILIES for HTTP backend (read-only)\n"
+            "or pass gfx_families parameter for HTTP backend"
         )
 
-    # Priority 4: S3 backend without credentials (read-only fallback)
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=run_id, platform=platform_name
     )
-    return S3Backend(output_root=output_root)
+    return HTTPBackend(
+        output_root=output_root,
+        gfx_families=targets
+    )

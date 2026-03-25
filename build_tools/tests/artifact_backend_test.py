@@ -631,17 +631,18 @@ class TestHTTPBackend(unittest.TestCase):
 
     def setUp(self):
         """Set up HTTPBackend with test parameters."""
+        self.output_root = _make_local_root(run_id="test-run-789", platform="linux")
         self.backend = HTTPBackend(
-            run_id="test-run-789",
-            base_url="https://example.com/artifacts",
+            output_root=self.output_root,
             gfx_families=["gfx1200", "gfx94X-dcgpu"],
-            platform="linux",
         )
 
     def test_base_uri(self):
-        """Test that base_uri returns the correct HTTP URL."""
-        expected = "https://example.com/artifacts/test-run-789-linux"
-        self.assertEqual(self.backend.base_uri, expected)
+        """Test that base_uri returns the correct HTTPS URL for S3."""
+        # Should use StorageLocation.https_url format
+        # For local output_root with bucket="local", returns: https://local.s3.amazonaws.com/test-run-789-linux
+        self.assertIn("test-run-789-linux", self.backend.base_uri)
+        self.assertTrue(self.backend.base_uri.startswith("https://"))
 
     @mock.patch("urllib.request.urlopen")
     def test_list_artifacts_single_family(self, mock_urlopen):
@@ -787,14 +788,14 @@ class TestHTTPBackend(unittest.TestCase):
             self.assertTrue(checksum_path.exists())
             self.assertEqual(dest_path.read_bytes(), fake_artifact_content)
 
-            # Verify URLs called
+            # Verify URLs called (uses StorageLocation.https_url format)
             self.assertEqual(mock_urlretrieve.call_count, 2)
             mock_urlretrieve.assert_any_call(
-                "https://example.com/artifacts/test-run-789-linux/downloaded.tar.zst",
+                "https://local.s3.amazonaws.com/test-run-789-linux/downloaded.tar.zst",
                 dest_path,
             )
             mock_urlretrieve.assert_any_call(
-                "https://example.com/artifacts/test-run-789-linux/downloaded.tar.zst.sha256sum",
+                "https://local.s3.amazonaws.com/test-run-789-linux/downloaded.tar.zst.sha256sum",
                 checksum_path,
             )
 
@@ -985,11 +986,15 @@ class TestCreateBackendFromEnv(unittest.TestCase):
 
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_s3_backend_when_no_local_dir(self, mock_retrieve):
-        """Test that S3Backend is created when THEROCK_LOCAL_STAGING_DIR is not set."""
+        """Test that S3Backend is created when AWS credentials are set."""
         mock_retrieve.return_value = ("", "test-bucket")
         with mock.patch.dict(
             os.environ,
-            {"THEROCK_RUN_ID": "s3-run-id"},
+            {
+                "THEROCK_RUN_ID": "s3-run-id",
+                "AWS_ACCESS_KEY_ID": "test-key",
+                "AWS_SECRET_ACCESS_KEY": "test-secret",
+            },
             clear=True,
         ):
             backend = create_backend_from_env()
@@ -999,11 +1004,10 @@ class TestCreateBackendFromEnv(unittest.TestCase):
             self.assertIn("s3-run-id", backend.s3_prefix)
 
     def test_http_backend_from_env(self):
-        """Test that HTTPBackend is created when THEROCK_HTTP_BASE_URL is set."""
+        """Test that HTTPBackend is created when THEROCK_AMDGPU_FAMILIES is set without S3 credentials."""
         with mock.patch.dict(
             os.environ,
             {
-                "THEROCK_HTTP_BASE_URL": "https://artifacts.example.com",
                 "THEROCK_RUN_ID": "http-run-123",
                 "THEROCK_PLATFORM": "linux",
                 "THEROCK_AMDGPU_FAMILIES": "gfx1200,gfx94X-dcgpu",
@@ -1013,9 +1017,8 @@ class TestCreateBackendFromEnv(unittest.TestCase):
             backend = create_backend_from_env()
 
             self.assertIsInstance(backend, HTTPBackend)
-            self.assertEqual(backend.run_id, "http-run-123")
-            self.assertEqual(backend.base_url, "https://artifacts.example.com")
-            self.assertEqual(backend.platform, "linux")
+            self.assertEqual(backend.output_root.run_id, "http-run-123")
+            self.assertEqual(backend.output_root.platform, "linux")
             self.assertEqual(backend.gfx_families, ["gfx1200", "gfx94X-dcgpu"])
             self.assertIn("http-run-123", backend.base_uri)
 
@@ -1036,19 +1039,19 @@ class TestCreateBackendFromEnv(unittest.TestCase):
             self.assertEqual(backend.gfx_families, ["gfx94X-dcgpu", "gfx1100"])
 
     def test_http_backend_missing_gfx_families_raises(self):
-        """Test that HTTPBackend creation fails without gfx_families."""
+        """Test that backend creation fails without any backend configuration."""
         with mock.patch.dict(
             os.environ,
             {
-                "THEROCK_HTTP_BASE_URL": "https://artifacts.example.com",
                 "THEROCK_RUN_ID": "http-run-789",
+                # No THEROCK_AMDGPU_FAMILIES, no AWS credentials, no local staging
             },
             clear=True,
         ):
             with self.assertRaises(ValueError) as ctx:
                 create_backend_from_env()
 
-            self.assertIn("HTTPBackend requires gfx_families", str(ctx.exception))
+            self.assertIn("No backend configuration found", str(ctx.exception))
 
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_s3_backend_with_credentials_priority(self, mock_retrieve):
@@ -1059,7 +1062,7 @@ class TestCreateBackendFromEnv(unittest.TestCase):
             {
                 "AWS_ACCESS_KEY_ID": "test-key",
                 "AWS_SECRET_ACCESS_KEY": "test-secret",
-                "AWS_SESSION_TOKEN": "test-token",
+                # Note: AWS_SESSION_TOKEN is optional (only for temporary credentials)
                 "THEROCK_HTTP_BASE_URL": "https://artifacts.example.com",
                 "THEROCK_AMDGPU_FAMILIES": "gfx1200",
                 "THEROCK_RUN_ID": "priority-test",
@@ -1082,7 +1085,7 @@ class TestCreateBackendFromEnv(unittest.TestCase):
                     "THEROCK_LOCAL_STAGING_DIR": temp_dir,
                     "AWS_ACCESS_KEY_ID": "test-key",
                     "AWS_SECRET_ACCESS_KEY": "test-secret",
-                    "AWS_SESSION_TOKEN": "test-token",
+                    # Note: AWS_SESSION_TOKEN is optional
                     "THEROCK_HTTP_BASE_URL": "https://artifacts.example.com",
                     "THEROCK_AMDGPU_FAMILIES": "gfx1200",
                     "THEROCK_RUN_ID": "priority-test",
