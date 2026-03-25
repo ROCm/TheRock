@@ -93,6 +93,8 @@ add_custom_target(
       "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
+      # Force lib/ to match the hardcoded paths throughout this file.
+      -DCMAKE_INSTALL_LIBDIR=lib
       # Disable writing pc files: we will do so ourselves.
       -DSKIP_INSTALL_FILES=ON
 
