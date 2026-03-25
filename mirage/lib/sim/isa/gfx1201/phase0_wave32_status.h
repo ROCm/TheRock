@@ -47,6 +47,13 @@ struct Gfx1201Wave32Phase0VdsBoundaryBucket {
   std::span<const std::string_view> instruction_names;
 };
 
+struct Gfx1201Wave32Phase0VdsBoundaryInstructionStatus {
+  std::string_view instruction_name;
+  std::string_view bucket_name;
+  std::string_view blocking_dimension;
+  bool safe_under_current_request = false;
+};
+
 std::span<const Gfx1201Wave32Phase0EncodingStatus>
 GetGfx1201Wave32Phase0EncodingStatuses();
 const Gfx1201Wave32Phase0EncodingStatus* FindGfx1201Wave32Phase0EncodingStatus(
@@ -60,10 +67,15 @@ std::span<const std::string_view> GetGfx1201Wave32Phase0FrontierOrder();
 std::span<const Gfx1201Wave32Phase0VdsBoundaryBucket>
 GetGfx1201Wave32Phase0VdsBoundaryBuckets();
 std::span<const std::string_view> GetGfx1201Wave32Phase0VdsBoundaryOrder();
+std::span<const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus>
+GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses();
 const Gfx1201Wave32Phase0VdsBoundaryBucket*
 FindGfx1201Wave32Phase0VdsBoundaryBucket(std::string_view bucket_name);
 const Gfx1201Wave32Phase0VdsBoundaryBucket*
 FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
+    std::string_view instruction_name);
+const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus*
+FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
     std::string_view instruction_name);
 bool HasGfx1201Wave32SafeVdsContinuation();
 std::string_view GetGfx1201Wave32RecommendedNextVdsBucket();

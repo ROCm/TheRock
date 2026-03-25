@@ -22,6 +22,7 @@ execution path.
 - First unsafe VDS bucket: `append_consume`
 - First unsafe VDS blocking dimension: `allocator_or_gds_semantics`
 - First unsafe VDS instructions: `DS_APPEND`, `DS_CONSUME`
+- Remaining VDS instruction statuses: `24`
 - Remaining VDS bucket order: `append_consume`, `exchange_compare_store`, `multi_address`, `bvh_stack`
 - All currently seeded ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, and ENC_VGLOBAL instruction/encoding pairs are executable on the local wave32 path.
 - There are no remaining imported ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, or ENC_VGLOBAL instruction/encoding pairs outside the current seed surface.
@@ -33,6 +34,7 @@ execution path.
 - The boundary report now carries an exact remaining-VDS instruction-to-bucket map so the unresolved tail can be queried directly by opcode name.
 - The exact unsafe-bucket escalation order is `append_consume`, then `exchange_compare_store`, then `multi_address`, then `bvh_stack`.
 - The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.
+- The boundary report now also carries a denormalized per-op remaining-VDS status list with bucket, blocking dimension, and safe flag.
 
 ## Remaining VDS Boundary
 
@@ -67,6 +69,33 @@ execution path.
 - `DS_BVH_STACK_PUSH4_POP1_RTN_B32` -> `bvh_stack`
 - `DS_BVH_STACK_PUSH8_POP1_RTN_B32` -> `bvh_stack`
 - `DS_BVH_STACK_PUSH8_POP2_RTN_B64` -> `bvh_stack`
+
+## Remaining VDS Instruction Statuses
+
+- `DS_APPEND`: bucket `append_consume`, blocking dimension `allocator_or_gds_semantics`, safe under current request `false`
+- `DS_CONSUME`: bucket `append_consume`, blocking dimension `allocator_or_gds_semantics`, safe under current request `false`
+- `DS_CONDXCHG32_RTN_B64`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, safe under current request `false`
+- `DS_CMPSTORE_B32`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, safe under current request `false`
+- `DS_CMPSTORE_B64`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, safe under current request `false`
+- `DS_CMPSTORE_RTN_B32`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, safe under current request `false`
+- `DS_CMPSTORE_RTN_B64`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, safe under current request `false`
+- `DS_STOREXCHG_RTN_B32`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, safe under current request `false`
+- `DS_STOREXCHG_RTN_B64`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, safe under current request `false`
+- `DS_LOAD_2ADDR_B32`: bucket `multi_address`, blocking dimension `multi_address_semantics`, safe under current request `false`
+- `DS_LOAD_2ADDR_B64`: bucket `multi_address`, blocking dimension `multi_address_semantics`, safe under current request `false`
+- `DS_LOAD_2ADDR_STRIDE64_B32`: bucket `multi_address`, blocking dimension `multi_address_semantics`, safe under current request `false`
+- `DS_LOAD_2ADDR_STRIDE64_B64`: bucket `multi_address`, blocking dimension `multi_address_semantics`, safe under current request `false`
+- `DS_STOREXCHG_2ADDR_RTN_B32`: bucket `multi_address`, blocking dimension `multi_address_semantics`, safe under current request `false`
+- `DS_STOREXCHG_2ADDR_RTN_B64`: bucket `multi_address`, blocking dimension `multi_address_semantics`, safe under current request `false`
+- `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32`: bucket `multi_address`, blocking dimension `multi_address_semantics`, safe under current request `false`
+- `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64`: bucket `multi_address`, blocking dimension `multi_address_semantics`, safe under current request `false`
+- `DS_STORE_2ADDR_B32`: bucket `multi_address`, blocking dimension `multi_address_semantics`, safe under current request `false`
+- `DS_STORE_2ADDR_B64`: bucket `multi_address`, blocking dimension `multi_address_semantics`, safe under current request `false`
+- `DS_STORE_2ADDR_STRIDE64_B32`: bucket `multi_address`, blocking dimension `multi_address_semantics`, safe under current request `false`
+- `DS_STORE_2ADDR_STRIDE64_B64`: bucket `multi_address`, blocking dimension `multi_address_semantics`, safe under current request `false`
+- `DS_BVH_STACK_PUSH4_POP1_RTN_B32`: bucket `bvh_stack`, blocking dimension `gfx1201_specific_bvh_semantics`, safe under current request `false`
+- `DS_BVH_STACK_PUSH8_POP1_RTN_B32`: bucket `bvh_stack`, blocking dimension `gfx1201_specific_bvh_semantics`, safe under current request `false`
+- `DS_BVH_STACK_PUSH8_POP2_RTN_B64`: bucket `bvh_stack`, blocking dimension `gfx1201_specific_bvh_semantics`, safe under current request `false`
 
 ## Next-Risk Encodings
 

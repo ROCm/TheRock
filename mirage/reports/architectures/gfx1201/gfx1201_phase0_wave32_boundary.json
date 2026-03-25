@@ -63,6 +63,152 @@
     "DS_APPEND",
     "DS_CONSUME"
   ],
+  "remaining_vds_instruction_statuses": [
+    {
+      "instruction_name": "DS_APPEND",
+      "bucket_name": "append_consume",
+      "blocking_dimension": "allocator_or_gds_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_CONSUME",
+      "bucket_name": "append_consume",
+      "blocking_dimension": "allocator_or_gds_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_CONDXCHG32_RTN_B64",
+      "bucket_name": "exchange_compare_store",
+      "blocking_dimension": "exchange_compare_store_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_CMPSTORE_B32",
+      "bucket_name": "exchange_compare_store",
+      "blocking_dimension": "exchange_compare_store_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_CMPSTORE_B64",
+      "bucket_name": "exchange_compare_store",
+      "blocking_dimension": "exchange_compare_store_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_CMPSTORE_RTN_B32",
+      "bucket_name": "exchange_compare_store",
+      "blocking_dimension": "exchange_compare_store_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_CMPSTORE_RTN_B64",
+      "bucket_name": "exchange_compare_store",
+      "blocking_dimension": "exchange_compare_store_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_STOREXCHG_RTN_B32",
+      "bucket_name": "exchange_compare_store",
+      "blocking_dimension": "exchange_compare_store_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_STOREXCHG_RTN_B64",
+      "bucket_name": "exchange_compare_store",
+      "blocking_dimension": "exchange_compare_store_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_LOAD_2ADDR_B32",
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_LOAD_2ADDR_B64",
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_LOAD_2ADDR_STRIDE64_B32",
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_LOAD_2ADDR_STRIDE64_B64",
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_STOREXCHG_2ADDR_RTN_B32",
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_STOREXCHG_2ADDR_RTN_B64",
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32",
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64",
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_STORE_2ADDR_B32",
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_STORE_2ADDR_B64",
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_STORE_2ADDR_STRIDE64_B32",
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_STORE_2ADDR_STRIDE64_B64",
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
+      "bucket_name": "bvh_stack",
+      "blocking_dimension": "gfx1201_specific_bvh_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_BVH_STACK_PUSH8_POP1_RTN_B32",
+      "bucket_name": "bvh_stack",
+      "blocking_dimension": "gfx1201_specific_bvh_semantics",
+      "safe_under_current_request": false
+    },
+    {
+      "instruction_name": "DS_BVH_STACK_PUSH8_POP2_RTN_B64",
+      "bucket_name": "bvh_stack",
+      "blocking_dimension": "gfx1201_specific_bvh_semantics",
+      "safe_under_current_request": false
+    }
+  ],
   "remaining_vds_bucket_order": [
     "append_consume",
     "exchange_compare_store",
@@ -230,6 +376,7 @@
     "There is no safe ENC_VDS continuation under the current request boundary: every remaining bucket crosses allocator-or-GDS, exchange/compare-store, multi-address, or gfx1201-specific BVH semantics.",
     "The boundary report now carries an exact remaining-VDS instruction-to-bucket map so the unresolved tail can be queried directly by opcode name.",
     "The exact unsafe-bucket escalation order is append_consume, then exchange_compare_store, then multi_address, then bvh_stack.",
-    "The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list."
+    "The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.",
+    "The boundary report now also carries a denormalized per-op remaining-VDS status list with bucket, blocking dimension, and safe flag."
   ]
 }

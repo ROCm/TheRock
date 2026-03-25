@@ -195,8 +195,24 @@ int main() {
   const auto frontier_order = GetGfx1201Wave32Phase0FrontierOrder();
   const auto vds_boundary_buckets = GetGfx1201Wave32Phase0VdsBoundaryBuckets();
   const auto vds_boundary_order = GetGfx1201Wave32Phase0VdsBoundaryOrder();
+  const auto remaining_vds_instruction_statuses =
+      GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses();
   const auto first_unsafe_vds_instructions =
       GetGfx1201Wave32FirstUnsafeVdsInstructions();
+  const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* append_status =
+      FindGfx1201Wave32Phase0RemainingVdsInstructionStatus("DS_APPEND");
+  const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* storexchg_status =
+      FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
+          "DS_STOREXCHG_RTN_B64");
+  const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* stride_status =
+      FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
+          "DS_LOAD_2ADDR_STRIDE64_B64");
+  const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* bvh_status =
+      FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
+          "DS_BVH_STACK_PUSH8_POP2_RTN_B64");
+  const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* missing_vds_status =
+      FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
+          "DS_BPERMUTE_FI_B32");
   if (!Expect(next_risk_encodings.size() == kExpectedNextRiskEncodings.size(),
               "expected next-risk encoding count") ||
       !Expect(frontier_order.size() == kExpectedFrontierOrder.size(),
@@ -205,6 +221,8 @@ int main() {
               "expected four VDS boundary buckets") ||
       !Expect(vds_boundary_order.size() == kExpectedVdsBoundaryOrder.size(),
               "expected VDS boundary order count") ||
+      !Expect(remaining_vds_instruction_statuses.size() == 24u,
+              "expected remaining VDS instruction status count") ||
       !Expect(first_unsafe_vds_instructions.size() ==
                   kExpectedFirstUnsafeVdsInstructions.size(),
               "expected first unsafe VDS instruction count") ||
@@ -217,6 +235,11 @@ int main() {
       !Expect(GetGfx1201Wave32FirstUnsafeVdsBlockingDimension() ==
                   "allocator_or_gds_semantics",
               "expected append/consume blocking dimension as first unsafe VDS boundary") ||
+      !Expect(append_status != nullptr && storexchg_status != nullptr &&
+                  stride_status != nullptr && bvh_status != nullptr,
+              "expected remaining VDS instruction lookups") ||
+      !Expect(missing_vds_status == nullptr,
+              "expected executable VDS op to stay out of remaining-VDS status") ||
       !Expect(GetGfx1201Wave32Phase0RecommendedNextEncoding() == "ENC_VDS",
               "expected ENC_VDS as the recommended next frontier")) {
     return 1;
@@ -249,6 +272,39 @@ int main() {
                 "unexpected first unsafe VDS instruction order")) {
       return 1;
     }
+  }
+
+  if (!Expect(remaining_vds_instruction_statuses.front().instruction_name ==
+                  "DS_APPEND" &&
+                  remaining_vds_instruction_statuses.front().bucket_name ==
+                      "append_consume",
+              "expected first remaining VDS instruction status") ||
+      !Expect(remaining_vds_instruction_statuses.back().instruction_name ==
+                  "DS_BVH_STACK_PUSH8_POP2_RTN_B64" &&
+                  remaining_vds_instruction_statuses.back().bucket_name ==
+                      "bvh_stack",
+              "expected last remaining VDS instruction status") ||
+      !Expect(append_status->bucket_name == "append_consume" &&
+                  append_status->blocking_dimension ==
+                      "allocator_or_gds_semantics" &&
+                  !append_status->safe_under_current_request,
+              "expected append remaining-VDS instruction status") ||
+      !Expect(storexchg_status->bucket_name == "exchange_compare_store" &&
+                  storexchg_status->blocking_dimension ==
+                      "exchange_compare_store_semantics" &&
+                  !storexchg_status->safe_under_current_request,
+              "expected storexchg remaining-VDS instruction status") ||
+      !Expect(stride_status->bucket_name == "multi_address" &&
+                  stride_status->blocking_dimension ==
+                      "multi_address_semantics" &&
+                  !stride_status->safe_under_current_request,
+              "expected multi-address remaining-VDS instruction status") ||
+      !Expect(bvh_status->bucket_name == "bvh_stack" &&
+                  bvh_status->blocking_dimension ==
+                      "gfx1201_specific_bvh_semantics" &&
+                  !bvh_status->safe_under_current_request,
+              "expected BVH remaining-VDS instruction status")) {
+    return 1;
   }
 
   if (!Expect(vds_boundary_buckets[0].bucket_name == "append_consume",

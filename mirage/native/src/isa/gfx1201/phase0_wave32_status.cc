@@ -204,6 +204,23 @@ BuildNextRiskStatuses() {
   return statuses;
 }
 
+std::vector<Gfx1201Wave32Phase0VdsBoundaryInstructionStatus>
+BuildRemainingVdsInstructionStatuses() {
+  std::vector<Gfx1201Wave32Phase0VdsBoundaryInstructionStatus> statuses;
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
+       kVdsBoundaryBuckets) {
+    for (std::string_view instruction_name : bucket.instruction_names) {
+      statuses.push_back(Gfx1201Wave32Phase0VdsBoundaryInstructionStatus{
+          instruction_name,
+          bucket.bucket_name,
+          bucket.blocking_dimension,
+          bucket.safe_under_current_request,
+      });
+    }
+  }
+  return statuses;
+}
+
 }  // namespace
 
 std::span<const Gfx1201Wave32Phase0EncodingStatus>
@@ -258,6 +275,13 @@ std::span<const std::string_view> GetGfx1201Wave32Phase0VdsBoundaryOrder() {
   return kVdsBoundaryOrder;
 }
 
+std::span<const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus>
+GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses() {
+  static const std::vector<Gfx1201Wave32Phase0VdsBoundaryInstructionStatus>
+      kStatuses = BuildRemainingVdsInstructionStatuses();
+  return kStatuses;
+}
+
 const Gfx1201Wave32Phase0VdsBoundaryBucket*
 FindGfx1201Wave32Phase0VdsBoundaryBucket(std::string_view bucket_name) {
   for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
@@ -278,6 +302,18 @@ FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
       if (candidate == instruction_name) {
         return &bucket;
       }
+    }
+  }
+  return nullptr;
+}
+
+const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus*
+FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
+    std::string_view instruction_name) {
+  for (const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus& status :
+       GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses()) {
+    if (status.instruction_name == instruction_name) {
+      return &status;
     }
   }
   return nullptr;
