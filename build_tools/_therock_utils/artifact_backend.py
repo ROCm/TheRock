@@ -30,7 +30,6 @@ import shutil
 import urllib.error
 import urllib.request
 
-from .storage_location import StorageLocation
 from .workflow_outputs import WorkflowOutputRoot
 
 
@@ -589,6 +588,9 @@ def create_backend_from_env(
     run_id: Optional[str] = None,
     platform: Optional[str] = None,
     gfx_families: Optional[List[str]] = None,
+    s3_url_schema: Optional[str] = None,
+    https_url_schema: Optional[str] = None,
+    bucket_schema: Optional[str] = None,
 ) -> ArtifactBackend:
     """Create the appropriate backend based on environment variables.
 
@@ -603,6 +605,9 @@ def create_backend_from_env(
         gfx_families: List of GFX families for HTTP backend (e.g., ["gfx94X-dcgpu", "gfx1200"])
                     If None, reads from THEROCK_AMDGPU_FAMILIES environment variable (comma-separated)
                     Required for HTTP backend.
+        s3_url_schema: Template for S3 URIs. If None, uses default.
+        https_url_schema: Template for HTTPS URLs. If None, uses default.
+        bucket_schema: Template for bucket naming. If None, uses default.
 
     Environment variables:
     - THEROCK_RUN_ID: Workflow run ID (default: GITHUB_RUN_ID or "local")
@@ -629,7 +634,11 @@ def create_backend_from_env(
     local_staging = os.getenv("THEROCK_LOCAL_STAGING_DIR")
     if local_staging:
         output_root = WorkflowOutputRoot.for_local(
-            run_id=run_id, platform=platform_name
+            run_id=run_id,
+            platform=platform_name,
+            s3_url_schema=s3_url_schema,
+            https_url_schema=https_url_schema,
+            # bucket_schema not applicable for local backend
         )
         return LocalDirectoryBackend(
             staging_dir=Path(local_staging),
@@ -645,7 +654,11 @@ def create_backend_from_env(
     )
     if has_s3_credentials:
         output_root = WorkflowOutputRoot.from_workflow_run(
-            run_id=run_id, platform=platform_name
+            run_id=run_id,
+            platform=platform_name,
+            s3_url_schema=s3_url_schema,
+            https_url_schema=https_url_schema,
+            bucket_schema=bucket_schema,
         )
         return S3Backend(output_root=output_root)
 
@@ -668,6 +681,10 @@ def create_backend_from_env(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=run_id, platform=platform_name
+        run_id=run_id,
+        platform=platform_name,
+        s3_url_schema=s3_url_schema,
+        https_url_schema=https_url_schema,
+        bucket_schema=bucket_schema,
     )
     return HTTPBackend(output_root=output_root, gfx_families=targets)

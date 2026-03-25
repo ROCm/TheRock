@@ -292,7 +292,11 @@ def run(args):
         return
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=args.run_id, platform=PLATFORM
+        run_id=args.run_id,
+        platform=PLATFORM,
+        s3_url_schema=args.s3_url_schema,
+        https_url_schema=args.https_url_schema,
+        bucket_schema=args.bucket_schema,
     )
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
 
@@ -357,6 +361,24 @@ if __name__ == "__main__":
         "--dry-run",
         action="store_true",
         help="Print what would be uploaded without actually uploading",
+    )
+    parser.add_argument(
+        "--s3-url-schema",
+        type=str,
+        default=None,
+        help="Template for S3 URIs (default: s3://{bucket}/{path})",
+    )
+    parser.add_argument(
+        "--https-url-schema",
+        type=str,
+        default=None,
+        help="Template for HTTPS URLs (default: https://{bucket}.s3.amazonaws.com/{path})",
+    )
+    parser.add_argument(
+        "--bucket-schema",
+        type=str,
+        default=None,
+        help="Template for bucket naming (default: therock-{release_type}-artifacts)",
     )
     args = parser.parse_args()
 

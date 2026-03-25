@@ -20,6 +20,10 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+# Default URL schemas (single source of truth)
+DEFAULT_S3_URL_SCHEMA = "s3://{bucket}/{path}"
+DEFAULT_HTTPS_URL_SCHEMA = "https://{bucket}.s3.amazonaws.com/{path}"
+
 
 @dataclass(frozen=True)
 class StorageLocation:
@@ -40,10 +44,17 @@ class StorageLocation:
     relative_path: str
     """Relative path from bucket/staging root (e.g., '12345-linux/file.tar.xz')."""
 
+    s3_url_schema: str | None = None
+    """Template for S3 URI. Must contain {bucket} and {path} placeholders. If None, uses default."""
+
+    https_url_schema: str | None = None
+    """Template for HTTPS URL. Must contain {bucket} and {path} placeholders. If None, uses default."""
+
     @property
     def s3_uri(self) -> str:
         """S3 URI (e.g., ``s3://bucket/path/file``)."""
-        return f"s3://{self.bucket}/{self.relative_path}"
+        schema = self.s3_url_schema or DEFAULT_S3_URL_SCHEMA
+        return schema.format(bucket=self.bucket, path=self.relative_path)
 
     @property
     def https_url(self) -> str:
@@ -52,14 +63,16 @@ class StorageLocation:
         Checks for bucket-specific override via environment variable:
         THEROCK_HTTPS_URL_<bucket> where dashes are replaced with underscores.
 
+        If no env var is set, uses the https_url_schema template.
         """
         # Check for bucket-specific env var override
         env_var_name = f"THEROCK_HTTPS_URL_{self.bucket.replace('-', '_')}"
         base_url = os.getenv(env_var_name)
         if base_url:
             return f"{base_url.rstrip('/')}/{self.relative_path}"
-        # Default: S3 public URL pattern
-        return f"https://{self.bucket}.s3.amazonaws.com/{self.relative_path}"
+        # Use template with placeholders
+        schema = self.https_url_schema or DEFAULT_HTTPS_URL_SCHEMA
+        return schema.format(bucket=self.bucket, path=self.relative_path)
 
     def local_path(self, staging_dir: Path) -> Path:
         """Local filesystem path for this location.
