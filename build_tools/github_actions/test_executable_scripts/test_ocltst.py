@@ -67,7 +67,6 @@ def execute_tests(env):
     if not is_windows:
         cmd = [
             "./ocltst",
-            "-J",
             "-m",
             "liboclruntime.so",
             "-A",
@@ -79,7 +78,6 @@ def execute_tests(env):
     else:
         cmd = [
             "ocltst.exe",
-            "-J",
             "-m",
             "oclruntime.dll",
             "-A",
