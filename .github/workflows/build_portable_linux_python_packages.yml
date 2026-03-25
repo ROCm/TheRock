@@ -18,7 +18,7 @@ on:
         description: "artifact_group to build (e.g. 'gfx94X-dcgpu' for single family builds, 'multi-arch-release' for multi-arch builds with 'amdgpu_families' set)"
         type: string
       amdgpu_families:
-        description: "amdgpu_families for multi-arch builds as a semicolon-separated list (e.g. 'gfx94X-dcgpu;gfx120X-all'). Leave empty for single-family builds (those only use artifact_group)."
+        description: "amdgpu_families for multi-arch builds as a semicolon-separated list (e.g. 'gfx94X-dcgpu;gfx120X-all'). Leave empty for single-family builds (those only use artifact_group)"
         type: string
         default: ""
       multiarch_index:
