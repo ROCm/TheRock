@@ -151,6 +151,10 @@ jobs:
               ca-certificates \
               git \
               lsb-release
+            if [ "$TEST_TYPE" = "full" ]; then
+              echo "Extra OS packages for --test-type full (e.g. rdhc): pciutils, kmod, apt-utils"
+              apt install -y pciutils kmod apt-utils
+            fi
           elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
             # SLES prerequisites (uses zypper)
             zypper refresh
@@ -161,6 +165,10 @@ jobs:
               git \
               lsb-release \
               update-alternatives
+            if [ "$TEST_TYPE" = "full" ]; then
+              echo "Extra OS packages for --test-type full on SLES (e.g. rdhc): pciutils, kmod"
+              zypper install -y pciutils kmod
+            fi
           else
             # Use --allowerasing to handle curl-minimal conflict on AlmaLinux 9
             dnf install -y --allowerasing \
@@ -169,6 +177,10 @@ jobs:
               ca-certificates \
               git \
               dnf-plugins-core
+            if [ "$TEST_TYPE" = "full" ]; then
+              echo "Extra OS packages for --test-type full (e.g. rdhc): pciutils, kmod"
+              dnf install -y --allowerasing pciutils kmod
+            fi
           fi
 
       - name: Checkout
@@ -181,7 +193,7 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
-          pip install pyelftools requests prettytable PyYAML
+          pip install -r build_tools/packaging/linux/tests/requirements.txt
 
       - name: Package Installation Test
         id: install-test
