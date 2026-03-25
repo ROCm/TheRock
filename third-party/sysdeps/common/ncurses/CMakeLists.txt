@@ -8,9 +8,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-ncurses-sources
       SOURCE_DIR "${_source_dir}"
-      # Originally mirrored from: https://invisible-island.net/archives/ncurses/ncurses-6.5.tar.gz
-      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/ncurses-6.5.tar.gz"
-      URL_HASH "SHA512=fc5a13409d2a530a1325776dcce3a99127ddc2c03999cfeb0065d0eee2d68456274fb1c7b3cc99c1937bc657d0e7fca97016e147f93c7821b5a4a6837db821e8"
+      # Originally mirrored from: https://invisible-island.net/archives/ncurses/ncurses-6.6.tar.gz
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/ncurses-6.6.tar.gz"
+      URL_HASH "SHA512=02647baae53abc844fbadee5b0a2187ad073125c4e8950df6d1c4feb781cb74ba64fb838cedfee2c246c39932187f6775b1df124f18b99a4233f0d98c72191de"
       TOUCH "${_download_stamp}"
       # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
       # of the extracted sources, otherwise the build system will notice
@@ -98,7 +98,7 @@ endif()
 
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
-project(NCURSES_BUILD VERSION "6.5.0")
+project(NCURSES_BUILD VERSION "6.6.0")
 
 include(ProcessorCount)
 ProcessorCount(PAR_JOBS)
