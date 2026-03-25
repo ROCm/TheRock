@@ -197,7 +197,7 @@ jobs:
       SCCACHE_LOG: debug,sccache::cache=trace
       SCCACHE_DIR: ${{ github.workspace }}/output/sccache_cache
       SCCACHE_CONF: ${{ github.workspace }}/sccache.conf
-
+      SCCACHE_DIRECT: 0
 
     steps:
       - name: "Checking out repository"
