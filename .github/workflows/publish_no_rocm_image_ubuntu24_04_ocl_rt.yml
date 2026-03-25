@@ -1,9 +1,6 @@
-<<<<<<< HEAD
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-=======
->>>>>>> d4f3c748 (create runtime docker images for ocltst (#3658))
 name: Publish no_rocm_image_ubuntu24_04_ocl_rt images
 on:
   workflow_dispatch:
