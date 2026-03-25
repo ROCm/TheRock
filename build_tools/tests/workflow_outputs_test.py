@@ -30,6 +30,48 @@ class TestStorageLocation(unittest.TestCase):
             "https://my-bucket.s3.amazonaws.com/12345-linux/file.tar.xz",
         )
 
+    def test_https_url_with_env_override(self):
+        """Test https_url with bucket-specific environment variable override."""
+        # Set up env var
+        os.environ["THEROCK_HTTPS_URL_my_custom_bucket"] = (
+            "https://custom.example.com/artifacts"
+        )
+        try:
+            loc = StorageLocation("my-custom-bucket", "12345-linux/file.tar.xz")
+            self.assertEqual(
+                loc.https_url,
+                "https://custom.example.com/artifacts/12345-linux/file.tar.xz",
+            )
+        finally:
+            del os.environ["THEROCK_HTTPS_URL_my_custom_bucket"]
+
+    def test_https_url_env_override_trailing_slash(self):
+        """Test that trailing slash in env var is handled correctly."""
+        os.environ["THEROCK_HTTPS_URL_my_bucket"] = "https://example.com/path/"
+        try:
+            loc = StorageLocation("my-bucket", "file.tar.xz")
+            self.assertEqual(
+                loc.https_url,
+                "https://example.com/path/file.tar.xz",
+            )
+        finally:
+            del os.environ["THEROCK_HTTPS_URL_my_bucket"]
+
+    def test_https_url_default_without_env(self):
+        """Test https_url falls back to S3 pattern when no env var set."""
+        # Ensure env var is not set
+        env_var = "THEROCK_HTTPS_URL_therock_ci_artifacts"
+        old_value = os.environ.pop(env_var, None)
+        try:
+            loc = StorageLocation("therock-ci-artifacts", "12345-linux/file.tar.xz")
+            self.assertEqual(
+                loc.https_url,
+                "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/file.tar.xz",
+            )
+        finally:
+            if old_value is not None:
+                os.environ[env_var] = old_value
+
     def test_local_path(self):
         loc = StorageLocation("my-bucket", "12345-linux/logs/group/build.log")
         result = loc.local_path(Path("/tmp/staging"))
