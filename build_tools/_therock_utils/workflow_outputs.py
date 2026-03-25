@@ -46,7 +46,14 @@ import platform as platform_module
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.storage_location import StorageLocation
-from github_actions.github_actions_api import gha_query_workflow_run_by_id
+
+# Imported at module level so mock.patch("...workflow_outputs.gha_query_workflow_run_by_id")
+# works in tests. The try/except allows this module to load without github_actions_api
+# (e.g. in a Lambda deployment package), as long as lookup_workflow_run is never True.
+try:
+    from github_actions.github_actions_api import gha_query_workflow_run_by_id
+except ImportError:
+    gha_query_workflow_run_by_id = None  # type: ignore[assignment]
 
 
 def _log(*args, **kwargs):
@@ -316,6 +323,10 @@ def _retrieve_bucket_info(
 
     # Fetch workflow_run from API if not provided but workflow_run_id is set
     if workflow_run is None and workflow_run_id is not None:
+        if gha_query_workflow_run_by_id is None:
+            raise ImportError(
+                "github_actions_api is not available; cannot look up workflow run"
+            )
         workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
 
     # Extract metadata from workflow_run if available

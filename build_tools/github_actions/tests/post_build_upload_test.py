@@ -52,7 +52,6 @@ class TestUploadArtifacts(unittest.TestCase):
             (artifacts / "core_lib_gfx94X.tar.xz.sha256sum").write_text("abc")
             (artifacts / "some_dir").mkdir()
             (artifacts / "some_dir" / "file.txt").write_text("ignore")
-            (artifacts / "index.html").write_text("<html></html>")
 
             backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_artifacts(
@@ -68,9 +67,9 @@ class TestUploadArtifacts(unittest.TestCase):
                     staging_dir / "12345-linux" / "core_lib_gfx94X.tar.xz.sha256sum"
                 ).is_file()
             )
-            # index.html goes to the artifact index path
-            self.assertTrue(
-                (staging_dir / "12345-linux" / "index-gfx94X-dcgpu.html").is_file()
+            # index.html is generated server-side — not uploaded from upload_artifacts
+            self.assertFalse(
+                (staging_dir / "12345-linux" / "index-gfx94X-dcgpu.html").exists()
             )
             # Non-matching files should NOT be uploaded
             self.assertFalse(
@@ -89,7 +88,6 @@ class TestUploadArtifacts(unittest.TestCase):
             artifacts = build_dir / "artifacts"
             artifacts.mkdir()
             (artifacts / "lib.tar.xz").write_bytes(b"data")
-            (artifacts / "index.html").write_text("<html></html>")
 
             backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_artifacts(
