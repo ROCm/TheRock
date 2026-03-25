@@ -144,6 +144,17 @@ class StorageBackend(ABC):
             )
             for f in sorted_files
         ]
+        logger.info(
+            "upload_directory: %s -> %s/%s (%d files)",
+            source_dir,
+            dest.bucket,
+            dest.relative_path,
+            len(file_list),
+        )
+        for f, loc in file_list[:100]:
+            logger.info("  %s", f.relative_to(source_dir).as_posix())
+        if len(file_list) > 100:
+            logger.info("  ... and %d more", len(file_list) - 100)
         return self.upload_files(file_list)
 
 
@@ -267,6 +278,7 @@ class S3StorageBackend(StorageBackend):
             logger.info("[DRY RUN] %s -> %s (%s)", source, dest.s3_uri, content_type)
             return
 
+        logger.debug("upload %s -> %s (%s)", source, dest.s3_uri, content_type)
         _s3_retry(
             "upload",
             dest.s3_uri,
