@@ -95,6 +95,9 @@ add_custom_target(
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
       # Force lib/ to match the hardcoded paths throughout this file.
       -DCMAKE_INSTALL_LIBDIR=lib
+      # On Windows we only use the static library; skip the shared build
+      # to avoid having to track the DLL alongside the static artifact.
+      "$<$<BOOL:${WIN32}>:-DZLIB_BUILD_SHARED=OFF>"
       # Disable writing pc files: we will do so ourselves.
       -DSKIP_INSTALL_FILES=ON
 
@@ -117,7 +120,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(ZLIB_IMPORTED_LOCATION "lib/librocm_sysdeps_z.so.1")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(ZLIB_TYPE "STATIC")
-  set(ZLIB_IMPORTED_LOCATION "lib/zlibstatic.lib")
+  # zlib 1.3.2 appends suffix "s" to the static lib name on Windows.
+  set(ZLIB_IMPORTED_LOCATION "lib/zs.lib")
 else()
   message(FATAL_ERROR "Unrecognized system type")
 endif()
