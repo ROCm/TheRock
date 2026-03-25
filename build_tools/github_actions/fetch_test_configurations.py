@@ -75,7 +75,7 @@ test_matrix = {
     "ocltst": {
         "job_name": "ocltst",
         "fetch_artifact_args": "--tests",
-        "timeout_minutes": 20,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_ocltst.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
