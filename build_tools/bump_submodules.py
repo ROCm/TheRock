@@ -30,19 +30,14 @@ from datetime import datetime
 import shlex
 import subprocess
 import sys
+from _therock_utils.logger import TheRockLogger
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 
-
-def log(*args, **kwargs):
-    print(*args, **kwargs)
-    sys.stdout.flush()
-
-
 def run_command(args: list[str | Path], cwd: Path):
     args = [str(arg) for arg in args]
-    log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+    TheRockLogger.log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
@@ -106,9 +101,9 @@ def parse_components(components: list[str]) -> list[list]:
     else:
         arguments.append("--no-include-math-libraries")
 
-    log(f"++ Arguments: {shlex.join(arguments)}")
+    TheRockLogger.log(f"++ Arguments: {shlex.join(arguments)}")
     if system_projects:
-        log(f"++ System projects: {shlex.join(system_projects)}")
+        TheRockLogger.log(f"++ System projects: {shlex.join(system_projects)}")
 
     return [arguments, system_projects]
 
@@ -150,7 +145,7 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
             cwd=THEROCK_DIR,
         )
     except subprocess.CalledProcessError as patching_error:
-        log("Failed to apply patches")
+        TheRockLogger.log("Failed to apply patches")
         sys.exit(1)
 
     if args.push_branch:
