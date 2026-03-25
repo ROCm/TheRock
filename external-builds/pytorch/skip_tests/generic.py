@@ -49,9 +49,6 @@ skip_tests = {
             # AttributeError: 'Model' object has no attribute '__annotations__'
             # https://github.com/ROCm/TheRock/issues/2985
             "test_autocast_cat_jit",
-            # Python 3.14: floating-point precision issue causing UnboundLocalError during cleanup
-            # https://github.com/ROCm/TheRock/issues/2985
-            "test_max_split_expandable",
             # ----------------
             # maybe failing
             # ----------------
