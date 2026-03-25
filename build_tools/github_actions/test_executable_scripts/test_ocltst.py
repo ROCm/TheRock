@@ -21,7 +21,7 @@ is_windows = platform.system() == "Windows"
 
 
 # copies the dlls to local ocltst path.
-# to overwrite the registry entries   
+# to overwrite the registry entries
 def copy_dlls_exe_path(ocltst_path):
     if platform.system() == "Windows":
         # hip and comgr dlls need to be copied to the same folder as exectuable
