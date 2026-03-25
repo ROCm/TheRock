@@ -207,6 +207,10 @@ jobs:
           pip install "rocm[devel]" \
             --index-url=${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
 
+      - name: Initialize ROCm SDK
+        run: |
+          rocm-sdk init
+
       # export_test_times.py must run from the PyTorch repo root with
       # PYTHONPATH=. because it imports internal PyTorch modules (e.g.
       # tools.stats.*) that expect the repo root on sys.path.
