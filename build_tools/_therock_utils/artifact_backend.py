@@ -671,7 +671,4 @@ def create_backend_from_env(
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=run_id, platform=platform_name, github_repository=github_repository
     )
-    return HTTPBackend(
-        output_root=output_root,
-        gfx_families=targets
-    )
+    return HTTPBackend(output_root=output_root, gfx_families=targets)
