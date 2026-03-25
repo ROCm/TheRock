@@ -351,4 +351,3 @@ jobs:
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
               "ref": "${{ inputs.ref || '' }}"
             }
-
