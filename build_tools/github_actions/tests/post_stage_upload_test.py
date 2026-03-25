@@ -182,9 +182,7 @@ class TestMainCli(unittest.TestCase):
         os.environ.pop("GITHUB_RUN_ID", None)
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(SystemExit):
-                post_stage_upload.main(
-                    ["--build-dir", tmp, "--stage-name", "foundation"]
-                )
+                post_stage_upload.main(["--build-dir", tmp, "--stage", "foundation"])
 
     def test_missing_build_dir_exits_cleanly(self):
         """Verify clean exit when build directory doesn't exist."""
@@ -193,7 +191,7 @@ class TestMainCli(unittest.TestCase):
             [
                 "--build-dir",
                 "/nonexistent/path",
-                "--stage-name",
+                "--stage",
                 "foundation",
                 "--run-id",
                 "12345",

@@ -96,7 +96,7 @@ def upload_stage_logs(
 
 
 def run(args: argparse.Namespace):
-    log(f"Creating ninja log archive for stage '{args.stage_name}'")
+    log(f"Creating ninja log archive for stage '{args.stage}'")
     create_ninja_log_archive(args.build_dir)
 
     output_root = WorkflowOutputRoot.from_workflow_run(
@@ -109,7 +109,7 @@ def run(args: argparse.Namespace):
         build_dir=args.build_dir,
         output_root=output_root,
         backend=backend,
-        stage_name=args.stage_name,
+        stage_name=args.stage,
         amdgpu_family=args.amdgpu_family,
     )
 
@@ -117,16 +117,22 @@ def run(args: argparse.Namespace):
 def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="Post build stage upload steps")
     parser.add_argument(
+        "--run-id",
+        type=str,
+        default=os.environ.get("GITHUB_RUN_ID"),
+        help="GitHub Actions run ID (default: $GITHUB_RUN_ID)",
+    )
+    parser.add_argument(
+        "--stage",
+        type=str,
+        required=True,
+        help="Build stage name (e.g., 'foundation', 'math-libs')",
+    )
+    parser.add_argument(
         "--build-dir",
         type=Path,
         default=Path(os.environ.get("BUILD_DIR", "build")),
         help="Build directory containing logs, etc. (default: $BUILD_DIR or 'build')",
-    )
-    parser.add_argument(
-        "--stage-name",
-        type=str,
-        required=True,
-        help="Stage name (e.g., 'foundation', 'math-libs')",
     )
     parser.add_argument(
         "--amdgpu-family",
@@ -134,12 +140,6 @@ def main(argv: list[str] | None = None):
         default="",
         help="GPU family for per-arch stages (e.g., 'gfx1151'). "
         "Empty for generic stages.",
-    )
-    parser.add_argument(
-        "--run-id",
-        type=str,
-        default=os.environ.get("GITHUB_RUN_ID"),
-        help="GitHub Actions run ID (default: $GITHUB_RUN_ID)",
     )
     parser.add_argument(
         "--output-dir",
