@@ -1,5 +1,8 @@
 # ocl-clr
 [components.lib."core/ocl-clr/stage"]
+include = [
+  "etc/**",
+]
 [components.run."core/ocl-clr/stage"]
 include = [
   "bin/**",
