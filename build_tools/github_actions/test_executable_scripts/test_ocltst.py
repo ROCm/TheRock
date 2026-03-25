@@ -19,6 +19,7 @@ THEROCK_DIR = Path(THEROCK_BIN_DIR).parent
 env = os.environ.copy()
 is_windows = platform.system() == "Windows"
 
+
 # copies the dlls to local ocltst path.
 # to overwrite the registry entries   
 def copy_dlls_exe_path(ocltst_path):
@@ -34,6 +35,7 @@ def copy_dlls_exe_path(ocltst_path):
                 logging.info(f"++ Copied: {dll} to {ocltst_path}")
             except Exception as e:
                 logging.info(f"++ Error copying {dll}: {e}")
+
 
 # returns ocltst path
 def setup_env(env):
@@ -54,13 +56,14 @@ def setup_env(env):
         )
         env["OCL_ICD_VENDORS"] = f"{OCL_ICD_VENDORS}/"
     else:
-        
+
         OCLTST_PATH = Path(THEROCK_DIR) / "tests" / "ocltst"
         copy_dlls_exe_path(OCLTST_PATH)
         OCL_DLL_FILE = Path(OCLTST_PATH) / "amdocl64.dll"
         OCL_ICD_DLL = Path(THEROCK_BIN_DIR) / "OpenCL.dll"
         env["OCL_ICD_FILENAMES"] = str(OCL_DLL_FILE)
     return OCLTST_PATH
+
 
 def execute_tests(env):
     OCLTST_PATH = setup_env(env)
