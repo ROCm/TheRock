@@ -218,6 +218,25 @@ bool RouteInfoSequenceMatchesSeedCatalogOrder() {
   return true;
 }
 
+bool RouteManifestAccountingAndMetadataAreInternallyConsistent() {
+  const auto manifests = GetStubDecoderRouteManifests();
+  for (std::size_t i = 0; i < manifests.size(); ++i) {
+    if (manifests[i].instruction_count == 0 ||
+        manifests[i].instruction_count !=
+            manifests[i].xml_backed_count + manifests[i].llvm_only_count ||
+        manifests[i].target_specific_count > manifests[i].instruction_count) {
+      return false;
+    }
+    for (std::size_t j = i + 1; j < manifests.size(); ++j) {
+      if (manifests[i].route_name == manifests[j].route_name ||
+          manifests[i].route_priority == manifests[j].route_priority) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 int main() {
@@ -313,6 +332,11 @@ int main() {
   }
   if (!Expect(manifest_total == GetStubDecoderRouteInfos().size(),
               "expected manifest counts to match route info table size")) {
+    return 1;
+  }
+  if (!Expect(
+          RouteManifestAccountingAndMetadataAreInternallyConsistent(),
+          "expected route manifests to keep exact internal count accounting and one-to-one metadata")) {
     return 1;
   }
   for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
