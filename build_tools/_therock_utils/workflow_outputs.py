@@ -159,7 +159,7 @@ class WorkflowOutputRoot:
 
         Multi-arch CI uploads logs per stage (and optionally per GPU family)
         rather than per artifact_group. Generic stages get a single directory;
-        per-arch stages (math-libs, comm-libs) get a subdirectory per family.
+        per-arch stages (e.g., math-libs) get a subdirectory per family.
 
         Args:
             stage_name: Build stage (e.g., 'foundation', 'math-libs')

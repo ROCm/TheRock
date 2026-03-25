@@ -21,10 +21,10 @@ single-stage (monolithic) CI builds. Key differences:
 
 Usage:
     python post_stage_upload.py \\
+        --run-id ${{ github.run_id }} \\
+        --stage math-libs \\
         --build-dir build \\
-        --stage-name math-libs \\
-        --amdgpu-family gfx1151 \\
-        --run-id ${{ github.run_id }}
+        --amdgpu-family gfx1151
 """
 
 import argparse
