@@ -59,6 +59,7 @@
   "recommended_next_vds_bucket": "",
   "first_unsafe_vds_bucket": "append_consume",
   "first_unsafe_vds_blocking_dimension": "allocator_or_gds_semantics",
+  "first_unsafe_vds_risk_rank": 0,
   "first_unsafe_vds_instructions": [
     "DS_APPEND",
     "DS_CONSUME"
@@ -68,144 +69,168 @@
       "instruction_name": "DS_APPEND",
       "bucket_name": "append_consume",
       "blocking_dimension": "allocator_or_gds_semantics",
+      "bucket_risk_rank": 0,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_CONSUME",
       "bucket_name": "append_consume",
       "blocking_dimension": "allocator_or_gds_semantics",
+      "bucket_risk_rank": 0,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_CONDXCHG32_RTN_B64",
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
+      "bucket_risk_rank": 1,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_CMPSTORE_B32",
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
+      "bucket_risk_rank": 1,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_CMPSTORE_B64",
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
+      "bucket_risk_rank": 1,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_CMPSTORE_RTN_B32",
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
+      "bucket_risk_rank": 1,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_CMPSTORE_RTN_B64",
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
+      "bucket_risk_rank": 1,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_STOREXCHG_RTN_B32",
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
+      "bucket_risk_rank": 1,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_STOREXCHG_RTN_B64",
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
+      "bucket_risk_rank": 1,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_LOAD_2ADDR_B32",
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
+      "bucket_risk_rank": 2,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_LOAD_2ADDR_B64",
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
+      "bucket_risk_rank": 2,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_LOAD_2ADDR_STRIDE64_B32",
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
+      "bucket_risk_rank": 2,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_LOAD_2ADDR_STRIDE64_B64",
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
+      "bucket_risk_rank": 2,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_STOREXCHG_2ADDR_RTN_B32",
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
+      "bucket_risk_rank": 2,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_STOREXCHG_2ADDR_RTN_B64",
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
+      "bucket_risk_rank": 2,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32",
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
+      "bucket_risk_rank": 2,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64",
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
+      "bucket_risk_rank": 2,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_STORE_2ADDR_B32",
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
+      "bucket_risk_rank": 2,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_STORE_2ADDR_B64",
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
+      "bucket_risk_rank": 2,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_STORE_2ADDR_STRIDE64_B32",
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
+      "bucket_risk_rank": 2,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_STORE_2ADDR_STRIDE64_B64",
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
+      "bucket_risk_rank": 2,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
       "bucket_name": "bvh_stack",
       "blocking_dimension": "gfx1201_specific_bvh_semantics",
+      "bucket_risk_rank": 3,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_BVH_STACK_PUSH8_POP1_RTN_B32",
       "bucket_name": "bvh_stack",
       "blocking_dimension": "gfx1201_specific_bvh_semantics",
+      "bucket_risk_rank": 3,
       "safe_under_current_request": false
     },
     {
       "instruction_name": "DS_BVH_STACK_PUSH8_POP2_RTN_B64",
       "bucket_name": "bvh_stack",
       "blocking_dimension": "gfx1201_specific_bvh_semantics",
+      "bucket_risk_rank": 3,
       "safe_under_current_request": false
     }
   ],
@@ -246,6 +271,7 @@
       "bucket_name": "append_consume",
       "example_instruction": "DS_APPEND",
       "blocking_dimension": "allocator_or_gds_semantics",
+      "risk_rank": 0,
       "instruction_count": 2,
       "safe_under_current_request": false,
       "rationale": "Append/consume allocator semantics are the first remaining non-local LDS tail.",
@@ -258,6 +284,7 @@
       "bucket_name": "exchange_compare_store",
       "example_instruction": "DS_CONDXCHG32_RTN_B64",
       "blocking_dimension": "exchange_compare_store_semantics",
+      "risk_rank": 1,
       "instruction_count": 7,
       "safe_under_current_request": false,
       "rationale": "Exchange and compare-store forms are the next semantic-risk step on the VDS path.",
@@ -275,6 +302,7 @@
       "bucket_name": "multi_address",
       "example_instruction": "DS_LOAD_2ADDR_B32",
       "blocking_dimension": "multi_address_semantics",
+      "risk_rank": 2,
       "instruction_count": 12,
       "safe_under_current_request": false,
       "rationale": "Remaining two-address and stride64 LDS forms would widen the current one-address execution model.",
@@ -297,6 +325,7 @@
       "bucket_name": "bvh_stack",
       "example_instruction": "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
       "blocking_dimension": "gfx1201_specific_bvh_semantics",
+      "risk_rank": 3,
       "instruction_count": 3,
       "safe_under_current_request": false,
       "rationale": "BVH stack instructions are gfx1201-specific and sit outside the current LDS utility model.",
@@ -377,6 +406,6 @@
     "The boundary report now carries an exact remaining-VDS instruction-to-bucket map so the unresolved tail can be queried directly by opcode name.",
     "The exact unsafe-bucket escalation order is append_consume, then exchange_compare_store, then multi_address, then bvh_stack.",
     "The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.",
-    "The boundary report now also carries a denormalized per-op remaining-VDS status list with bucket, blocking dimension, and safe flag."
+    "The boundary report now also carries a denormalized per-op remaining-VDS status list with bucket, blocking dimension, bucket risk rank, and safe flag."
   ]
 }

@@ -42,6 +42,7 @@ struct Gfx1201Wave32Phase0VdsBoundaryBucket {
   std::string_view example_instruction;
   std::string_view rationale;
   std::string_view blocking_dimension;
+  std::uint32_t risk_rank = 0;
   std::uint32_t instruction_count = 0;
   bool safe_under_current_request = false;
   std::span<const std::string_view> instruction_names;
@@ -51,6 +52,7 @@ struct Gfx1201Wave32Phase0VdsBoundaryInstructionStatus {
   std::string_view instruction_name;
   std::string_view bucket_name;
   std::string_view blocking_dimension;
+  std::uint32_t bucket_risk_rank = 0;
   bool safe_under_current_request = false;
 };
 
