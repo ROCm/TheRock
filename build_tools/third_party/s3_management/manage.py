@@ -6,6 +6,16 @@
 #
 # Forked from https://github.com/pytorch/test-infra/blob/6105c6f94a6055fffdbbb7319f8fb10a45dae644/s3_management/manage.py
 
+"""
+This script supports both:
+- Static prefix updates (default behavior)
+- Explicit prefix override via CLI
+- Optional auto-detection of prefixes from S3 (guarded by flag)
+
+Auto-detection is not enabled by default to preserve backward compatibility
+with existing CI workflows.
+"""
+
 import argparse
 import base64
 import concurrent.futures
@@ -26,9 +36,18 @@ import botocore
 S3 = boto3.resource('s3')
 CLIENT = boto3.client('s3')
 
-# bucket for TheRock
-# We also manage `therock-nightly-python` (not the default to make the script safer to test)
+# Bucket configuration is resolved via initialize_bucket().
+# Must be provided via --bucket (CLI) or S3_BUCKET_PY (env).
 
+# Bucket globals configured via initialize_bucket()
+BUCKET_NAME: Optional[str] = None
+BUCKET = None
+INDEX_BUCKETS: Set = set()
+
+# NOTE:
+# initialize_bucket() is required for both CLI and Lambda usage.
+# Do not move bucket initialization exclusively into main(), as the
+# Lambda wrapper imports and calls update_pep503_index() directly.
 def initialize_bucket(bucket_name: Optional[str]) -> None:
     # Resolve and configure the S3 bucket used for index updates.
     # CLI --bucket takes precedence over S3_BUCKET_PY; fails if neither is set.
@@ -59,6 +78,7 @@ PREFIXES = [
     "v2/gfx94X-dcgpu",
     "v2/gfx950-dcgpu",
 ]
+
 CUSTOM_PREFIX = getenv('CUSTOM_PREFIX')
 if CUSTOM_PREFIX:
     PREFIXES.append(CUSTOM_PREFIX)
@@ -194,7 +214,7 @@ class S3Index:
         # should dynamically grab subdirectories like whl/test/cu101
         # so we don't need to add them manually anymore
         self.subdirs = {
-            path.dirname(obj.key) for obj in objects if path.dirname != prefix
+            path.dirname(obj.key) for obj in objects if path.dirname(obj.key) != prefix
         }
 
     def nightly_packages_to_show(self: S3IndexType) -> List[S3Object]:
@@ -466,15 +486,22 @@ class S3Index:
             rc.fetch_metadata()
             rc.fetch_pep658()
         return rc
-
+"""
+NOTE:
+This function is used both by the CLI (via main()) and by the AWS Lambda
+wrapper (lambda_function.py). It must remain callable without relying on
+CLI argument parsing or main() initialization.
+"""
 def update_pep503_index(prefix: str, compute_sha256: bool = False, upload: bool = True):
-    # Regenerates the PEP 503 simple index for a given S3 prefix.
-    # Fetches valid artifacts, applies allow-list filtering, optionally updates
-    # checksums, and uploads (or saves) the generated index.html files.
+    """
+    Regenerates the PEP 503 simple index for a given S3 prefix.
+    Fetches valid artifacts, applies allow-list filtering, optionally updates
+    checksums, and uploads (or saves) the generated index.html files.
+    """
     print(f"Processing prefix: {prefix}")
     stime = time.time()
 
-    idx = S3Index.from_S3(prefix=prefix, with_metadata=compute_sha256)
+    idx = S3Index.from_S3(prefix=prefix, with_metadata=True)
 
     etime = time.time()
     print(f"Fetched {len(idx.objects)} objects for '{prefix}' in {etime-stime:.2f}s")
@@ -500,12 +527,18 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--auto-detect-prefixes",
         action="store_true",
-        help="Automatically detect all architecture prefixes from the bucket"
+        help=(
+        "Automatically detect architecture prefixes under the given base "
+        "path using S3 CommonPrefixes. Disabled by default."
+    )
     )
     parser.add_argument(
         "--starting-from",
         type=str,
-        help="Base prefix for auto-detection (e.g. v2/ or v2-staging/)"
+        help=(
+        "Base prefix for auto-detection (e.g. v2/, v2-staging/, v3/whl/). "
+        "Required when using --auto-detect-prefixes."
+    )
     )
     parser.add_argument("--do-not-upload", action="store_true")
     parser.add_argument("--compute-sha256", action="store_true")
@@ -520,6 +553,9 @@ def resolve_prefixes(args) -> List[str]:
     2. Auto-detection (if enabled)
     3. Static PREFIXES list (+ CUSTOM_PREFIX)
     """
+    # Backward compatibility: support old "all" behavior
+    if args.prefix == "all":
+        return PREFIXES
 
     # Explicit CLI prefix wins
     if args.prefix:
