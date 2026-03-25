@@ -10,7 +10,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: "https://sqlite.org/2026/sqlite-amalgamation-3510300.zip"
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/sqlite-amalgamation-3510300.zip"
-      URL_HASH "SHA256=ced02ff9738970f338c9c8e269897b554bcda73f6cf1029d49459e1324dbeaea"
+      URL_HASH "SHA256=acb1e6f5d832484bf6d32b681e858c38add8b2acdfd42ac5df24b8afb46552b4"
       TOUCH "${_download_stamp}"
     )
 
