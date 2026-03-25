@@ -92,6 +92,7 @@ import os
 import subprocess
 import sys
 import traceback
+from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from typing import Optional, Union
 
@@ -826,8 +827,9 @@ gpgcheck=0
         print("TESTING RDHC.PY")
         print("=" * 80)
 
-        install_path = Path(self.install_prefix)
+        install_path = Path(self.install_prefix).resolve()
         rdhc_script = (install_path / RDHC_REL_PATH).resolve()
+        rocm_install_prefix_arg = str(install_path)
 
         # Check if script exists
         if not rdhc_script.exists():
@@ -844,8 +846,10 @@ gpgcheck=0
             cmd = [sys.executable, str(rdhc_script)]
 
         # Set RDHC arguments for full test
-        test_args = ["--rocm-install-prefix", "/opt/rocm/core", "--all"]
-        print(f"\nRun rdhc.py with --rocm-install-prefix /opt/rocm/core --all...")
+        test_args = ["--rocm-install-prefix", rocm_install_prefix_arg, "--all"]
+        print(
+            f"\nRun rdhc.py with --rocm-install-prefix {rocm_install_prefix_arg} --all..."
+        )
         print(f"Command: {' '.join(cmd + test_args)}")
 
         try:
@@ -878,9 +882,7 @@ gpgcheck=0
             return False
 
 
-def main():
-    """Main entry point: runs simulate test (if --test-type simulate) or repo-based installation test (sanity/full)."""
-    epilog = """
+_CLI_EXAMPLES_EPILOG = """
 Examples:
  # Nightly DEB (Ubuntu 24.04) - run inside matching container/VM
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
@@ -919,24 +921,23 @@ Examples:
  python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
 """
 
-    parser = argparse.ArgumentParser(
+
+def _build_argument_parser() -> ArgumentParser:
+    parser = ArgumentParser(
         description="Full installation and simulate-install test for ROCm native packages",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=epilog,
+        epilog=_CLI_EXAMPLES_EPILOG,
     )
-
     parser.add_argument(
         "--os-profile",
         type=str,
         help="OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3). Required for sanity/full; for simulate, used only to derive pkg-type if --pkg-type is omitted.",
     )
-
     parser.add_argument(
         "--repo-url",
         type=str,
         help="Full repository URL (constructed in YAML workflow). Required for sanity/full; not used for simulate.",
     )
-
     parser.add_argument(
         "--gfx-arch",
         type=str,
@@ -944,26 +945,22 @@ Examples:
         metavar="ARCH",
         help="GPU architecture(s) as a list. Only the first is used for now. Required for sanity/full; not used for simulate. Examples: gfx94x, gfx110x gfx1151",
     )
-
     parser.add_argument(
         "--release-type",
         type=str,
         choices=["nightly", "prerelease"],
         help="Type of release: 'nightly' or 'prerelease'",
     )
-
     parser.add_argument(
         "--install-prefix",
         type=str,
         help="Installation prefix (e.g. /opt/rocm/core)",
     )
-
     parser.add_argument(
         "--gpg-key-url",
         type=str,
         help="GPG key URL",
     )
-
     parser.add_argument(
         "--test-type",
         type=str,
@@ -971,24 +968,22 @@ Examples:
         default="sanity",
         help="Test type: 'sanity' = basic test only; 'full' = basic + full test; 'simulate' = simulated install only (requires --packages-dir).",
     )
-
     parser.add_argument(
         "--packages-dir",
         type=str,
         metavar="DIR",
         help="Directory containing .deb or .rpm files. Required when --test-type is 'simulate'.",
     )
-
     parser.add_argument(
         "--pkg-type",
         type=str,
         choices=["deb", "rpm"],
         help="Package type (deb or rpm). For --test-type simulate only; if omitted, derived from --os-profile.",
     )
+    return parser
 
-    args = parser.parse_args()
 
-    # Validate required inputs based on test-type
+def _validate_cli_args(parser: ArgumentParser, args: Namespace) -> None:
     if args.test_type == "simulate":
         if not args.packages_dir:
             parser.error("--packages-dir is required when --test-type is 'simulate'")
@@ -1001,22 +996,25 @@ Examples:
                 NativeLinuxPackageInstallTest._derive_package_type(args.os_profile)
             except ValueError as e:
                 parser.error(str(e))
-    else:
-        # sanity or full
-        if not args.os_profile:
-            parser.error(
-                "--os-profile is required when --test-type is 'sanity' or 'full'"
-            )
-        if not args.repo_url:
-            parser.error(
-                "--repo-url is required when --test-type is 'sanity' or 'full'"
-            )
-        if not args.gfx_arch:
-            parser.error(
-                "--gfx-arch is required when --test-type is 'sanity' or 'full'"
-            )
+        return
+    if not args.os_profile:
+        parser.error("--os-profile is required when --test-type is 'sanity' or 'full'")
+    if not args.repo_url:
+        parser.error("--repo-url is required when --test-type is 'sanity' or 'full'")
+    if not args.gfx_arch:
+        parser.error("--gfx-arch is required when --test-type is 'sanity' or 'full'")
 
-    # Simulate path: dry-run only; exit after run_simulate_install_test (no repo setup or install)
+
+def parse_cli_arguments(argv: list[str] | None = None) -> Namespace:
+    """Build parser, parse argv, validate; may call parser.error (exits process)."""
+    parser = _build_argument_parser()
+    args = parser.parse_args(argv)
+    _validate_cli_args(parser, args)
+    return args
+
+
+def run_tests(args: Namespace) -> int:
+    """Run simulate or repo-based install test from parsed CLI args. Returns exit code (0 success)."""
     if args.test_type == "simulate":
         pkg_type = args.pkg_type or NativeLinuxPackageInstallTest._derive_package_type(
             args.os_profile
@@ -1025,17 +1023,16 @@ Examples:
         print("SIMULATED INSTALL TEST")
         print("=" * 80)
         ok = run_simulate_install_test(pkg_type, args.packages_dir)
-        sys.exit(0 if ok else 1)
+        return 0 if ok else 1
 
-    # Derive package type from OS profile
     try:
         derived_package_type = NativeLinuxPackageInstallTest._derive_package_type(
             args.os_profile
         )
     except ValueError as e:
-        parser.error(str(e))
+        print(f"Error: {e}", file=sys.stderr)
+        return 2
 
-    # Print configuration
     print("\n" + "=" * 80)
     print("CONFIGURATION")
     print("=" * 80)
@@ -1050,7 +1047,6 @@ Examples:
         print(f"GPG Key URL: {args.gpg_key_url}")
     print("=" * 80)
 
-    # Create test runner and run repo-based steps (1–3); simulate path exits earlier in main
     test_runner = NativeLinuxPackageInstallTest(
         os_profile=args.os_profile,
         repo_url=args.repo_url,
@@ -1069,22 +1065,16 @@ Examples:
     print("=" * 80)
 
     try:
-        # Step 1: Repo setup and install (both sanity and full)
         if not test_runner.run_repo_setup_and_install():
             print("\n[FAIL] Step 1 (repo setup and install) failed.")
-            sys.exit(1)
-
-        # Step 2: Basic test — prefix, components, packages, rocminfo (both sanity and full)
+            return 1
         if not test_runner.run_basic_verification():
             print("\n[FAIL] Step 2 (basic verification) failed.")
-            sys.exit(1)
-
-        # Step 3: Full test — rdhc.py (full only)
+            return 1
         if args.test_type == "full":
             if not test_runner.run_full_verification():
                 print("\n[FAIL] Step 3 (full verification) failed.")
-                sys.exit(1)
-
+                return 1
         print("\n" + "=" * 80)
         print("[PASS] INSTALLATION TEST PASSED")
         if args.test_type == "sanity":
@@ -1092,11 +1082,17 @@ Examples:
         else:
             print("ROCm has been successfully installed from repository and verified!")
         print("=" * 80 + "\n")
-        sys.exit(0)
+        return 0
     except Exception as e:
         print(f"\n[FAIL] Error during installation test: {e}")
         traceback.print_exc()
-        sys.exit(1)
+        return 1
+
+
+def main() -> None:
+    """Entry point: parse/validate CLI, then run tests."""
+    args = parse_cli_arguments()
+    sys.exit(run_tests(args))
 
 
 if __name__ == "__main__":
