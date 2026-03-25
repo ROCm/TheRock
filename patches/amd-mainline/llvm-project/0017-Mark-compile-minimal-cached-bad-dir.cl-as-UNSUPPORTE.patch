@@ -1,0 +1,27 @@
+From 9cefe344f8ed8281816fcc45c09b0c9751d875b8 Mon Sep 17 00:00:00 2001
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
+Date: Wed, 25 Mar 2026 01:36:43 -0400
+Subject: [PATCH] Mark compile-minimal-cached-bad-dir.cl as UNSUPPORTED on
+ Windows
+
+The test checks OS-specific error message text when the cache
+directory is invalid. Windows produces a different error message
+("Can't get a temporary file") than Linux ("Not a directory"),
+causing the FileCheck to fail. The cache behavior itself is correct
+on both platforms.
+---
+ amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl b/amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl
+index aff955b02f98..ef4e2c707e73 100644
+--- a/amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl
++++ b/amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl
+@@ -1,3 +1,4 @@
++// UNSUPPORTED: system-windows
+ // RUN: export AMD_COMGR_CACHE=1
+ //
+ // COM: fail to create the cache, but still produce something valid
+-- 
+2.34.1
+
