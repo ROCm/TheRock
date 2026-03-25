@@ -84,7 +84,9 @@ class ROCmDevelTest(unittest.TestCase):
             .strip()
         )
         rocmpath = Path(rocmpath_output)
-        self.assertTrue(root_path.is_dir(), msg=f"Expected root path {root_path} to exist")
+        self.assertTrue(
+            root_path.is_dir(), msg=f"Expected root path {root_path} to exist"
+        )
         self.assertTrue(
             rocmpath.is_dir(),
             msg=f"Expected `hipconfig --rocmpath` directory {rocmpath} to exist",
