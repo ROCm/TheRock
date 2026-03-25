@@ -1,0 +1,41 @@
+From de3e7a9b05b6ead2514ca8362870619c3acd6e10 Mon Sep 17 00:00:00 2001
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
+Date: Tue, 24 Mar 2026 19:56:14 -0400
+Subject: [PATCH] Add comgr library directory to PATH for DLL loading on
+ Windows
+
+The comgr test binaries link against amd_comgr (shared library).
+On Windows, amd_comgr.dll must be on PATH for the executables to
+start. The DLL lives in the comgr build directory (parent of
+test-lit/), which was not previously included in PATH, causing
+all tests to fail with exit code 127.
+---
+ amd/comgr/test-lit/lit.site.cfg.py.in | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/amd/comgr/test-lit/lit.site.cfg.py.in b/amd/comgr/test-lit/lit.site.cfg.py.in
+index 4277fb33e17f..cb9bebba7d7e 100644
+--- a/amd/comgr/test-lit/lit.site.cfg.py.in
++++ b/amd/comgr/test-lit/lit.site.cfg.py.in
+@@ -11,12 +11,17 @@ config.comgr_disable_spirv = @COMGR_DISABLE_SPIRV@
+ 
+ config.llvm_tools_dir = _fwd(r'@LLVM_TOOLS_BINARY_DIR@')
+ config.comgr_obj_dir = config.my_obj_root
++config.comgr_lib_dir = _fwd(os.path.dirname(config.my_obj_root))
+ 
+ # Needed for clang, llvm-dis, etc.
+ config.environment['PATH'] = os.pathsep.join([config.llvm_tools_dir,
+                                               config.environment['PATH']])
+ 
+-# Needed for Comgr binaries
++# Needed for amd_comgr shared library (DLL on Windows)
++config.environment['PATH'] = os.pathsep.join([config.comgr_lib_dir,
++                                              config.environment['PATH']])
++
++# Needed for Comgr test binaries
+ config.environment['PATH'] = os.pathsep.join([config.comgr_obj_dir,
+                                               config.environment['PATH']])
+ 
+-- 
+2.34.1
+
