@@ -214,7 +214,7 @@ class S3Index:
         # should dynamically grab subdirectories like whl/test/cu101
         # so we don't need to add them manually anymore
         self.subdirs = {
-            path.dirname(obj.key) for obj in objects if path.dirname(obj.key) != prefix
+            path.dirname(obj.key) for obj in objects if path.dirname != prefix
         }
 
     def nightly_packages_to_show(self: S3IndexType) -> List[S3Object]:
