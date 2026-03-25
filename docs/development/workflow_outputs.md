@@ -10,11 +10,11 @@ Every CI workflow run produces a set of outputs (build artifacts, logs,
 manifests, python packages) that are uploaded to S3. Three modules in
 `_therock_utils` handle the path computation and I/O:
 
-| Module             | Role                         | Key types                                                            |
-| ------------------ | ---------------------------- | -------------------------------------------------------------------- |
-| `storage_location` | Backend-agnostic location    | `StorageLocation`                                                    |
-| `workflow_outputs` | CI path computation (no I/O) | `WorkflowOutputRoot`                                                 |
-| `storage_backend`  | Upload I/O (write)           | `StorageBackend`, `S3StorageBackend`, `LocalStorageBackend`          |
+| Module             | Role                         | Key types                                                              |
+| ------------------ | ---------------------------- | ---------------------------------------------------------------------- |
+| `storage_location` | Backend-agnostic location    | `StorageLocation`                                                      |
+| `workflow_outputs` | CI path computation (no I/O) | `WorkflowOutputRoot`                                                   |
+| `storage_backend`  | Upload I/O (write)           | `StorageBackend`, `S3StorageBackend`, `LocalStorageBackend`            |
 | `artifact_backend` | Download I/O (read)          | `ArtifactBackend`, `S3Backend`, `LocalDirectoryBackend`, `HTTPBackend` |
 
 `StorageLocation` is the bridge between path computation and I/O.
@@ -227,6 +227,7 @@ backend.download_artifact("blas_lib_gfx94X.tar.zst", Path("/tmp/blas.tar.zst"))
 ```
 
 The HTTPBackend downloads artifacts via public HTTPS URLs using `StorageLocation.https_url`:
+
 - Example: `https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/blas_lib_gfx94X.tar.zst`
 - Fork prefixes, bucket selection, and all path logic handled automatically via `WorkflowOutputRoot`
 
@@ -251,9 +252,9 @@ To add a new output type:
 
 ### Download scripts
 
-| File                                                                        | Uses                                                                                  |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| [`fetch_artifacts.py`](/build_tools/fetch_artifacts.py)                     | `WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True)` + `S3Backend`        |
-| [`find_artifacts_for_commit.py`](/build_tools/find_artifacts_for_commit.py) | `WorkflowOutputRoot.from_workflow_run(workflow_run=...)` for bucket/prefix            |
-| [`artifact_backend.py`](/build_tools/_therock_utils/artifact_backend.py)    | `WorkflowOutputRoot` for `S3Backend`/`HTTPBackend` construction                       |
-| [`artifact_manager.py`](/build_tools/artifact_manager.py)                   | Via `create_backend_from_env()` (supports S3, Local, and HTTP backends)               |
+| File                                                                        | Uses                                                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| [`fetch_artifacts.py`](/build_tools/fetch_artifacts.py)                     | `WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True)` + `S3Backend` |
+| [`find_artifacts_for_commit.py`](/build_tools/find_artifacts_for_commit.py) | `WorkflowOutputRoot.from_workflow_run(workflow_run=...)` for bucket/prefix     |
+| [`artifact_backend.py`](/build_tools/_therock_utils/artifact_backend.py)    | `WorkflowOutputRoot` for `S3Backend`/`HTTPBackend` construction                |
+| [`artifact_manager.py`](/build_tools/artifact_manager.py)                   | Via `create_backend_from_env()` (supports S3, Local, and HTTP backends)        |
