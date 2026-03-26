@@ -1,0 +1,144 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Dispatches CI events to the Quartz repository for ingestion into DB
+#
+# Triggers:
+#   - workflow_run completed  → forwards the workflow_run object
+#   - pull_request events     → forwards the PR object + action
+#   - push to main            → forwards push metadata
+#
+# Prerequisites:
+#   - A fine-grained PAT (or GitHub App token) stored as QUARTZ_DISPATCH_TOKEN
+#     with `contents: write` permission on the Quartz repo (needed to create
+#     repository_dispatch events).
+#   - Update QUARTZ_REPO below to point at your Quartz repository.
+
+name: Notify Quartz
+
+on:
+  workflow_run:
+    types: [requested, completed]
+  pull_request:
+    types: [opened, closed, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      quartz_repo:
+        description: "Target Quartz repository (owner/repo)"
+        type: string
+        default: "ROCm/Quartz"
+
+permissions:
+  contents: read
+
+env:
+  QUARTZ_REPO: ${{ inputs.quartz_repo || 'ROCm/Quartz' }}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Dispatch event to Quartz
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          github-token: ${{ secrets.QUARTZ_DISPATCH_TOKEN }}
+          script: |
+            const [owner, repo] = process.env.QUARTZ_REPO.split('/');
+            const eventName = context.eventName;
+            const fullRepo = `${context.repo.owner}/${context.repo.repo}`;
+            let eventType, clientPayload;
+
+            if (eventName === 'workflow_run') {
+              const wr = context.payload.workflow_run;
+              const action = context.payload.action; // "requested" or "completed"
+              eventType = `workflow_run_${action}`;
+              clientPayload = {
+                event_type: eventType,
+                repository: fullRepo,
+                workflow_run: {
+                  id: wr.id,
+                  name: wr.name,
+                  workflow_id: wr.workflow_id,
+                  status: wr.status,
+                  conclusion: wr.conclusion,
+                  event: wr.event,
+                  head_branch: wr.head_branch,
+                  head_sha: wr.head_sha,
+                  run_number: wr.run_number,
+                  run_attempt: wr.run_attempt,
+                  html_url: wr.html_url,
+                  created_at: wr.created_at,
+                  updated_at: wr.updated_at,
+                  run_started_at: wr.run_started_at,
+                  actor: wr.actor ? { login: wr.actor.login, id: wr.actor.id } : null,
+                  triggering_actor: wr.triggering_actor
+                    ? { login: wr.triggering_actor.login, id: wr.triggering_actor.id }
+                    : null,
+                },
+              };
+
+            } else if (eventName === 'pull_request') {
+              const pr = context.payload.pull_request;
+              eventType = 'pull_request_event';
+              clientPayload = {
+                event_type: eventType,
+                repository: fullRepo,
+                action: context.payload.action,
+                pull_request: {
+                  id: pr.id,
+                  number: pr.number,
+                  state: pr.state,
+                  title: pr.title,
+                  draft: pr.draft,
+                  merged: pr.merged,
+                  merge_commit_sha: pr.merge_commit_sha,
+                  head: { ref: pr.head.ref, sha: pr.head.sha },
+                  base: { ref: pr.base.ref, sha: pr.base.sha },
+                  user: pr.user ? { login: pr.user.login } : null,
+                  created_at: pr.created_at,
+                  updated_at: pr.updated_at,
+                  closed_at: pr.closed_at,
+                  merged_at: pr.merged_at,
+                  additions: pr.additions,
+                  deletions: pr.deletions,
+                  changed_files: pr.changed_files,
+                  commits: pr.commits,
+                },
+              };
+
+            } else if (eventName === 'push') {
+              const p = context.payload;
+              eventType = 'push_event';
+              clientPayload = {
+                event_type: eventType,
+                repository: fullRepo,
+                ref: p.ref,
+                before: p.before,
+                after: p.after,
+                forced: p.forced || false,
+                pusher: p.pusher || {},
+                head_commit: p.head_commit
+                  ? { timestamp: p.head_commit.timestamp }
+                  : null,
+                commits: (p.commits || []).map(c => ({
+                  id: c.id,
+                  timestamp: c.timestamp,
+                })),
+              };
+
+            } else {
+              core.info(`Unhandled event: ${eventName}, skipping dispatch.`);
+              return;
+            }
+
+            await github.rest.repos.createDispatchEvent({
+              owner,
+              repo,
+              event_type: eventType,
+              client_payload: clientPayload,
+            });
+
+            core.info(`Dispatched ${eventType} to ${process.env.QUARTZ_REPO}`);
