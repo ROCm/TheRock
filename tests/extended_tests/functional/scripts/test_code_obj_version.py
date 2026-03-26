@@ -81,30 +81,22 @@ class CovBackwardCompatibilityTest(FunctionalBase):
         env["HIP_PLATFORM"] = "amd"
         return env
 
-    _ROCM_SYSTEMS_REPO = "https://github.com/ROCm/rocm-systems.git"
-
     def _ensure_sources_ready(self) -> None:
         is_empty = not self.rocm_systems_dir.exists() or not any(
             self.rocm_systems_dir.iterdir()
         )
         if is_empty:
             log.info(
-                "rocm-systems not found or empty at %s, cloning with --depth 1",
+                "rocm-systems submodule not initialized at %s, running git submodule update --init",
                 self.rocm_systems_dir,
             )
             rc, output = self._execute_command_with_output(
-                [
-                    "git",
-                    "clone",
-                    "--depth",
-                    "1",
-                    self._ROCM_SYSTEMS_REPO,
-                    str(self.rocm_systems_dir),
-                ],
+                ["git", "submodule", "update", "--init", "rocm-systems"],
+                cwd=self.therock_dir,
             )
             if rc != 0:
                 raise TestExecutionError(
-                    f"Failed to clone rocm-systems (exit {rc}): {output}"
+                    f"Failed to initialize rocm-systems submodule (exit code {rc}):\n{output}"
                 )
 
         if not self.include_dir.exists():
