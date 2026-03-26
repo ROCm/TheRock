@@ -84,6 +84,8 @@ constexpr std::array<Gfx1201Wave32Phase0VdsBoundaryBucket, 4>
             "Append/consume allocator semantics are the first remaining non-local LDS tail.",
             "allocator_or_gds_semantics",
             0,
+            0,
+            1,
             2,
             false,
             std::span<const std::string_view>(kAppendConsumeVdsInstructions),
@@ -94,6 +96,8 @@ constexpr std::array<Gfx1201Wave32Phase0VdsBoundaryBucket, 4>
             "Exchange and compare-store forms are the next semantic-risk step on the VDS path.",
             "exchange_compare_store_semantics",
             1,
+            2,
+            8,
             7,
             false,
             std::span<const std::string_view>(kExchangeCompareStoreVdsInstructions),
@@ -104,6 +108,8 @@ constexpr std::array<Gfx1201Wave32Phase0VdsBoundaryBucket, 4>
             "Remaining two-address and stride64 LDS forms would widen the current one-address execution model.",
             "multi_address_semantics",
             2,
+            9,
+            20,
             12,
             false,
             std::span<const std::string_view>(kMultiAddressVdsInstructions),
@@ -114,6 +120,8 @@ constexpr std::array<Gfx1201Wave32Phase0VdsBoundaryBucket, 4>
             "BVH stack instructions are gfx1201-specific and sit outside the current LDS utility model.",
             "gfx1201_specific_bvh_semantics",
             3,
+            21,
+            23,
             3,
             false,
             std::span<const std::string_view>(kBvhStackVdsInstructions),
@@ -211,16 +219,22 @@ BuildNextRiskStatuses() {
 std::vector<Gfx1201Wave32Phase0VdsBoundaryInstructionStatus>
 BuildRemainingVdsInstructionStatuses() {
   std::vector<Gfx1201Wave32Phase0VdsBoundaryInstructionStatus> statuses;
+  std::uint32_t tail_ordinal = 0;
   for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
        kVdsBoundaryBuckets) {
+    std::uint32_t bucket_ordinal = 0;
     for (std::string_view instruction_name : bucket.instruction_names) {
       statuses.push_back(Gfx1201Wave32Phase0VdsBoundaryInstructionStatus{
           instruction_name,
           bucket.bucket_name,
           bucket.blocking_dimension,
           bucket.risk_rank,
+          tail_ordinal,
+          bucket_ordinal,
           bucket.safe_under_current_request,
       });
+      ++tail_ordinal;
+      ++bucket_ordinal;
     }
   }
   return statuses;

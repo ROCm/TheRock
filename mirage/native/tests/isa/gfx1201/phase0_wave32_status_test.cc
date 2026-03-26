@@ -279,6 +279,9 @@ int main() {
                   remaining_vds_instruction_statuses.front().bucket_name ==
                       "append_consume" &&
                   remaining_vds_instruction_statuses.front().bucket_risk_rank ==
+                      0u &&
+                  remaining_vds_instruction_statuses.front().tail_ordinal == 0u &&
+                  remaining_vds_instruction_statuses.front().bucket_ordinal ==
                       0u,
               "expected first remaining VDS instruction status") ||
       !Expect(remaining_vds_instruction_statuses.back().instruction_name ==
@@ -286,30 +289,42 @@ int main() {
                   remaining_vds_instruction_statuses.back().bucket_name ==
                       "bvh_stack" &&
                   remaining_vds_instruction_statuses.back().bucket_risk_rank ==
-                      3u,
+                      3u &&
+                  remaining_vds_instruction_statuses.back().tail_ordinal ==
+                      23u &&
+                  remaining_vds_instruction_statuses.back().bucket_ordinal ==
+                      2u,
               "expected last remaining VDS instruction status") ||
       !Expect(append_status->bucket_name == "append_consume" &&
                   append_status->blocking_dimension ==
                       "allocator_or_gds_semantics" &&
                   append_status->bucket_risk_rank == 0u &&
+                  append_status->tail_ordinal == 0u &&
+                  append_status->bucket_ordinal == 0u &&
                   !append_status->safe_under_current_request,
               "expected append remaining-VDS instruction status") ||
       !Expect(storexchg_status->bucket_name == "exchange_compare_store" &&
                   storexchg_status->blocking_dimension ==
                       "exchange_compare_store_semantics" &&
                   storexchg_status->bucket_risk_rank == 1u &&
+                  storexchg_status->tail_ordinal == 8u &&
+                  storexchg_status->bucket_ordinal == 6u &&
                   !storexchg_status->safe_under_current_request,
               "expected storexchg remaining-VDS instruction status") ||
       !Expect(stride_status->bucket_name == "multi_address" &&
                   stride_status->blocking_dimension ==
                       "multi_address_semantics" &&
                   stride_status->bucket_risk_rank == 2u &&
+                  stride_status->tail_ordinal == 12u &&
+                  stride_status->bucket_ordinal == 3u &&
                   !stride_status->safe_under_current_request,
               "expected multi-address remaining-VDS instruction status") ||
       !Expect(bvh_status->bucket_name == "bvh_stack" &&
                   bvh_status->blocking_dimension ==
                       "gfx1201_specific_bvh_semantics" &&
                   bvh_status->bucket_risk_rank == 3u &&
+                  bvh_status->tail_ordinal == 23u &&
+                  bvh_status->bucket_ordinal == 2u &&
                   !bvh_status->safe_under_current_request,
               "expected BVH remaining-VDS instruction status")) {
     return 1;
@@ -324,6 +339,9 @@ int main() {
               "expected append/consume blocking dimension") ||
       !Expect(vds_boundary_buckets[0].risk_rank == 0u,
               "expected append/consume risk rank") ||
+      !Expect(vds_boundary_buckets[0].starting_instruction_ordinal == 0u &&
+                  vds_boundary_buckets[0].ending_instruction_ordinal == 1u,
+              "expected append/consume ordinal range") ||
       !Expect(!vds_boundary_buckets[0].safe_under_current_request,
               "expected append/consume to stay outside the safe boundary") ||
       !Expect(vds_boundary_buckets[0].instruction_count == 2u,
@@ -343,6 +361,9 @@ int main() {
               "expected exchange/compare-store blocking dimension") ||
       !Expect(vds_boundary_buckets[1].risk_rank == 1u,
               "expected exchange/compare-store risk rank") ||
+      !Expect(vds_boundary_buckets[1].starting_instruction_ordinal == 2u &&
+                  vds_boundary_buckets[1].ending_instruction_ordinal == 8u,
+              "expected exchange/compare-store ordinal range") ||
       !Expect(!vds_boundary_buckets[1].safe_under_current_request,
               "expected exchange/compare-store to stay outside the safe boundary") ||
       !Expect(vds_boundary_buckets[1].instruction_count == 7u,
@@ -364,6 +385,9 @@ int main() {
               "expected multi-address blocking dimension") ||
       !Expect(vds_boundary_buckets[2].risk_rank == 2u,
               "expected multi-address risk rank") ||
+      !Expect(vds_boundary_buckets[2].starting_instruction_ordinal == 9u &&
+                  vds_boundary_buckets[2].ending_instruction_ordinal == 20u,
+              "expected multi-address ordinal range") ||
       !Expect(!vds_boundary_buckets[2].safe_under_current_request,
               "expected multi-address to stay outside the safe boundary") ||
       !Expect(vds_boundary_buckets[2].instruction_count == 12u,
@@ -385,6 +409,9 @@ int main() {
               "expected BVH-stack blocking dimension") ||
       !Expect(vds_boundary_buckets[3].risk_rank == 3u,
               "expected BVH-stack risk rank") ||
+      !Expect(vds_boundary_buckets[3].starting_instruction_ordinal == 21u &&
+                  vds_boundary_buckets[3].ending_instruction_ordinal == 23u,
+              "expected BVH-stack ordinal range") ||
       !Expect(!vds_boundary_buckets[3].safe_under_current_request,
               "expected BVH-stack to stay outside the safe boundary") ||
       !Expect(vds_boundary_buckets[3].instruction_count == 3u,

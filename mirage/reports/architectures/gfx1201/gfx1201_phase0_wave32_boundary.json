@@ -60,6 +60,8 @@
   "first_unsafe_vds_bucket": "append_consume",
   "first_unsafe_vds_blocking_dimension": "allocator_or_gds_semantics",
   "first_unsafe_vds_risk_rank": 0,
+  "first_unsafe_vds_starting_instruction_ordinal": 0,
+  "first_unsafe_vds_ending_instruction_ordinal": 1,
   "first_unsafe_vds_instructions": [
     "DS_APPEND",
     "DS_CONSUME"
@@ -70,6 +72,8 @@
       "bucket_name": "append_consume",
       "blocking_dimension": "allocator_or_gds_semantics",
       "bucket_risk_rank": 0,
+      "tail_ordinal": 0,
+      "bucket_ordinal": 0,
       "safe_under_current_request": false
     },
     {
@@ -77,6 +81,8 @@
       "bucket_name": "append_consume",
       "blocking_dimension": "allocator_or_gds_semantics",
       "bucket_risk_rank": 0,
+      "tail_ordinal": 1,
+      "bucket_ordinal": 1,
       "safe_under_current_request": false
     },
     {
@@ -84,6 +90,8 @@
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
       "bucket_risk_rank": 1,
+      "tail_ordinal": 2,
+      "bucket_ordinal": 0,
       "safe_under_current_request": false
     },
     {
@@ -91,6 +99,8 @@
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
       "bucket_risk_rank": 1,
+      "tail_ordinal": 3,
+      "bucket_ordinal": 1,
       "safe_under_current_request": false
     },
     {
@@ -98,6 +108,8 @@
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
       "bucket_risk_rank": 1,
+      "tail_ordinal": 4,
+      "bucket_ordinal": 2,
       "safe_under_current_request": false
     },
     {
@@ -105,6 +117,8 @@
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
       "bucket_risk_rank": 1,
+      "tail_ordinal": 5,
+      "bucket_ordinal": 3,
       "safe_under_current_request": false
     },
     {
@@ -112,6 +126,8 @@
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
       "bucket_risk_rank": 1,
+      "tail_ordinal": 6,
+      "bucket_ordinal": 4,
       "safe_under_current_request": false
     },
     {
@@ -119,6 +135,8 @@
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
       "bucket_risk_rank": 1,
+      "tail_ordinal": 7,
+      "bucket_ordinal": 5,
       "safe_under_current_request": false
     },
     {
@@ -126,6 +144,8 @@
       "bucket_name": "exchange_compare_store",
       "blocking_dimension": "exchange_compare_store_semantics",
       "bucket_risk_rank": 1,
+      "tail_ordinal": 8,
+      "bucket_ordinal": 6,
       "safe_under_current_request": false
     },
     {
@@ -133,6 +153,8 @@
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
       "bucket_risk_rank": 2,
+      "tail_ordinal": 9,
+      "bucket_ordinal": 0,
       "safe_under_current_request": false
     },
     {
@@ -140,6 +162,8 @@
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
       "bucket_risk_rank": 2,
+      "tail_ordinal": 10,
+      "bucket_ordinal": 1,
       "safe_under_current_request": false
     },
     {
@@ -147,6 +171,8 @@
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
       "bucket_risk_rank": 2,
+      "tail_ordinal": 11,
+      "bucket_ordinal": 2,
       "safe_under_current_request": false
     },
     {
@@ -154,6 +180,8 @@
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
       "bucket_risk_rank": 2,
+      "tail_ordinal": 12,
+      "bucket_ordinal": 3,
       "safe_under_current_request": false
     },
     {
@@ -161,6 +189,8 @@
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
       "bucket_risk_rank": 2,
+      "tail_ordinal": 13,
+      "bucket_ordinal": 4,
       "safe_under_current_request": false
     },
     {
@@ -168,6 +198,8 @@
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
       "bucket_risk_rank": 2,
+      "tail_ordinal": 14,
+      "bucket_ordinal": 5,
       "safe_under_current_request": false
     },
     {
@@ -175,6 +207,8 @@
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
       "bucket_risk_rank": 2,
+      "tail_ordinal": 15,
+      "bucket_ordinal": 6,
       "safe_under_current_request": false
     },
     {
@@ -182,6 +216,8 @@
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
       "bucket_risk_rank": 2,
+      "tail_ordinal": 16,
+      "bucket_ordinal": 7,
       "safe_under_current_request": false
     },
     {
@@ -189,6 +225,8 @@
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
       "bucket_risk_rank": 2,
+      "tail_ordinal": 17,
+      "bucket_ordinal": 8,
       "safe_under_current_request": false
     },
     {
@@ -196,6 +234,8 @@
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
       "bucket_risk_rank": 2,
+      "tail_ordinal": 18,
+      "bucket_ordinal": 9,
       "safe_under_current_request": false
     },
     {
@@ -203,6 +243,8 @@
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
       "bucket_risk_rank": 2,
+      "tail_ordinal": 19,
+      "bucket_ordinal": 10,
       "safe_under_current_request": false
     },
     {
@@ -210,6 +252,8 @@
       "bucket_name": "multi_address",
       "blocking_dimension": "multi_address_semantics",
       "bucket_risk_rank": 2,
+      "tail_ordinal": 20,
+      "bucket_ordinal": 11,
       "safe_under_current_request": false
     },
     {
@@ -217,6 +261,8 @@
       "bucket_name": "bvh_stack",
       "blocking_dimension": "gfx1201_specific_bvh_semantics",
       "bucket_risk_rank": 3,
+      "tail_ordinal": 21,
+      "bucket_ordinal": 0,
       "safe_under_current_request": false
     },
     {
@@ -224,6 +270,8 @@
       "bucket_name": "bvh_stack",
       "blocking_dimension": "gfx1201_specific_bvh_semantics",
       "bucket_risk_rank": 3,
+      "tail_ordinal": 22,
+      "bucket_ordinal": 1,
       "safe_under_current_request": false
     },
     {
@@ -231,6 +279,8 @@
       "bucket_name": "bvh_stack",
       "blocking_dimension": "gfx1201_specific_bvh_semantics",
       "bucket_risk_rank": 3,
+      "tail_ordinal": 23,
+      "bucket_ordinal": 2,
       "safe_under_current_request": false
     }
   ],
@@ -272,6 +322,8 @@
       "example_instruction": "DS_APPEND",
       "blocking_dimension": "allocator_or_gds_semantics",
       "risk_rank": 0,
+      "starting_instruction_ordinal": 0,
+      "ending_instruction_ordinal": 1,
       "instruction_count": 2,
       "safe_under_current_request": false,
       "rationale": "Append/consume allocator semantics are the first remaining non-local LDS tail.",
@@ -285,6 +337,8 @@
       "example_instruction": "DS_CONDXCHG32_RTN_B64",
       "blocking_dimension": "exchange_compare_store_semantics",
       "risk_rank": 1,
+      "starting_instruction_ordinal": 2,
+      "ending_instruction_ordinal": 8,
       "instruction_count": 7,
       "safe_under_current_request": false,
       "rationale": "Exchange and compare-store forms are the next semantic-risk step on the VDS path.",
@@ -303,6 +357,8 @@
       "example_instruction": "DS_LOAD_2ADDR_B32",
       "blocking_dimension": "multi_address_semantics",
       "risk_rank": 2,
+      "starting_instruction_ordinal": 9,
+      "ending_instruction_ordinal": 20,
       "instruction_count": 12,
       "safe_under_current_request": false,
       "rationale": "Remaining two-address and stride64 LDS forms would widen the current one-address execution model.",
@@ -326,6 +382,8 @@
       "example_instruction": "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
       "blocking_dimension": "gfx1201_specific_bvh_semantics",
       "risk_rank": 3,
+      "starting_instruction_ordinal": 21,
+      "ending_instruction_ordinal": 23,
       "instruction_count": 3,
       "safe_under_current_request": false,
       "rationale": "BVH stack instructions are gfx1201-specific and sit outside the current LDS utility model.",
@@ -406,6 +464,6 @@
     "The boundary report now carries an exact remaining-VDS instruction-to-bucket map so the unresolved tail can be queried directly by opcode name.",
     "The exact unsafe-bucket escalation order is append_consume, then exchange_compare_store, then multi_address, then bvh_stack.",
     "The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.",
-    "The boundary report now also carries a denormalized per-op remaining-VDS status list with bucket, blocking dimension, bucket risk rank, and safe flag."
+    "The boundary report now also carries a denormalized per-op remaining-VDS status list with bucket, blocking dimension, bucket risk rank, tail ordinal, bucket ordinal, and safe flag."
   ]
 }
