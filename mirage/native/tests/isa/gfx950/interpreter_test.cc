@@ -13705,6 +13705,230 @@ int main() {
   }
 
   {
+  const std::vector<DecodedInstruction> scalar_side_effect_program = {
+      DecodedInstruction::TwoOperand("S_DCACHE_DISCARD",
+                                     InstructionOperand::Sgpr(0),
+                                     InstructionOperand::Imm32(0x40)),
+      DecodedInstruction::TwoOperand("S_DCACHE_DISCARD_X2",
+                                     InstructionOperand::Sgpr(8),
+                                     InstructionOperand::Sgpr(20)),
+      DecodedInstruction::ThreeOperand("S_ATC_PROBE",
+                                       InstructionOperand::Imm32(0x2a),
+                                       InstructionOperand::Sgpr(12),
+                                       InstructionOperand::Imm32(0x24)),
+      DecodedInstruction::ThreeOperand("S_ATC_PROBE_BUFFER",
+                                       InstructionOperand::Imm32(0x55),
+                                       InstructionOperand::Sgpr(16),
+                                       InstructionOperand::Sgpr(24)),
+      DecodedInstruction::OneOperand("S_MEMTIME", InstructionOperand::Sgpr(30)),
+      DecodedInstruction::OneOperand("S_MEMREALTIME", InstructionOperand::Sgpr(34)),
+      DecodedInstruction::OneOperand("S_MEMTIME", InstructionOperand::Sgpr(38)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  const auto make_scalar_side_effect_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x180u;
+    state.sgprs[1] = 0u;
+    state.sgprs[8] = 0x200u;
+    state.sgprs[9] = 0u;
+    state.sgprs[12] = 0x240u;
+    state.sgprs[13] = 0u;
+    state.sgprs[16] = 0x280u;
+    state.sgprs[17] = 0u;
+    state.sgprs[18] = 0x80u;
+    state.sgprs[19] = 0u;
+    state.sgprs[20] = 0x10u;
+    state.sgprs[24] = 0x18u;
+    state.sgprs[29] = 0x11111111u;
+    state.sgprs[30] = 0xaaaabbbbu;
+    state.sgprs[31] = 0xccccddddu;
+    state.sgprs[32] = 0x22222222u;
+    state.sgprs[33] = 0x33333333u;
+    state.sgprs[34] = 0x12345678u;
+    state.sgprs[35] = 0x9abcdef0u;
+    state.sgprs[36] = 0x44444444u;
+    state.sgprs[37] = 0x55555555u;
+    state.sgprs[38] = 0x0badc0deu;
+    state.sgprs[39] = 0xfeedfaceu;
+    state.sgprs[40] = 0x66666666u;
+    state.sgprs[41] = 0x77777777u;
+    state.sgprs[60] = 0x89abcdefu;
+    state.sgprs[61] = 0x13572468u;
+    state.vgprs[22][0] = 0x01020304u;
+    state.vgprs[22][1] = 0x11121314u;
+    state.vgprs[22][2] = 0x21222324u;
+    state.vgprs[22][3] = 0x31323334u;
+    return state;
+  };
+  const auto make_scalar_side_effect_memory = []() {
+    LinearExecutionMemory memory(0x400, 0);
+    memory.WriteU32(0x20u, 0x11223344u);
+    memory.WriteU32(0x180u, 0x55667788u);
+    memory.WriteU32(0x1c0u, 0x99aabbccu);
+    memory.WriteU32(0x210u, 0xddeeff00u);
+    memory.WriteU32(0x240u, 0x0badc0deu);
+    memory.WriteU32(0x264u, 0x12345678u);
+    memory.WriteU32(0x280u, 0x89abcdefu);
+    memory.WriteU32(0x298u, 0xfedcba98u);
+    memory.WriteU32(0x2f0u, 0x2468ace0u);
+    return memory;
+  };
+  const auto validate_scalar_side_effect_state =
+      [&](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+          const char* mode) {
+        const auto expect_timestamp_pair_written =
+            [&](std::uint16_t dest_reg,
+                std::uint32_t initial_lo,
+                std::uint32_t initial_hi,
+                const char* description) {
+              const std::uint32_t written_lo = state.sgprs[dest_reg];
+              const std::uint32_t written_hi = state.sgprs[dest_reg + 1u];
+              return Expect(written_lo != initial_lo || written_hi != initial_hi,
+                            (std::string(mode) + " " + description +
+                             " to clobber only its destination pair")
+                                .c_str()) &&
+                     Expect(written_lo != 0u || written_hi != 0u,
+                            (std::string(mode) + " " + description +
+                             " to produce a non-zero timestamp")
+                                .c_str());
+            };
+        std::uint32_t value = 0;
+        return Expect(state.halted,
+                      (std::string(mode) + " scalar side-effect program to halt")
+                          .c_str()) &&
+               Expect(state.exec_mask == 0b1011ULL,
+                      (std::string(mode) + " scalar side-effect to preserve exec")
+                          .c_str()) &&
+               Expect(state.sgprs[0] == 0x180u && state.sgprs[1] == 0u &&
+                          state.sgprs[8] == 0x200u && state.sgprs[9] == 0u &&
+                          state.sgprs[12] == 0x240u && state.sgprs[13] == 0u &&
+                          state.sgprs[16] == 0x280u && state.sgprs[17] == 0u &&
+                          state.sgprs[18] == 0x80u && state.sgprs[19] == 0u &&
+                          state.sgprs[20] == 0x10u &&
+                          state.sgprs[24] == 0x18u,
+                      (std::string(mode) +
+                       " scalar side-effect to preserve control sgprs")
+                          .c_str()) &&
+               Expect(state.sgprs[29] == 0x11111111u &&
+                          state.sgprs[32] == 0x22222222u &&
+                          state.sgprs[33] == 0x33333333u &&
+                          state.sgprs[36] == 0x44444444u &&
+                          state.sgprs[37] == 0x55555555u &&
+                          state.sgprs[40] == 0x66666666u &&
+                          state.sgprs[41] == 0x77777777u &&
+                          state.sgprs[60] == 0x89abcdefu &&
+                          state.sgprs[61] == 0x13572468u,
+                      (std::string(mode) +
+                       " scalar side-effect to preserve timestamp-adjacent sgprs")
+                          .c_str()) &&
+               expect_timestamp_pair_written(30u, 0xaaaabbbbu, 0xccccddddu,
+                                             "s_memtime") &&
+               expect_timestamp_pair_written(34u, 0x12345678u, 0x9abcdef0u,
+                                             "s_memrealtime") &&
+               expect_timestamp_pair_written(38u, 0x0badc0deu, 0xfeedfaceu,
+                                             "second s_memtime") &&
+               Expect(state.vgprs[22][0] == 0x01020304u &&
+                          state.vgprs[22][1] == 0x11121314u &&
+                          state.vgprs[22][2] == 0x21222324u &&
+                          state.vgprs[22][3] == 0x31323334u,
+                      (std::string(mode) + " scalar side-effect to preserve vgprs")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x20u, &value),
+                      (std::string(mode) + " scalar side-effect memory read")
+                          .c_str()) &&
+               Expect(value == 0x11223344u,
+                      (std::string(mode) + " scalar side-effect memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x180u, &value),
+                      (std::string(mode) + " scalar side-effect memory read")
+                          .c_str()) &&
+               Expect(value == 0x55667788u,
+                      (std::string(mode) + " scalar discard base preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x1c0u, &value),
+                      (std::string(mode) + " scalar side-effect memory read")
+                          .c_str()) &&
+               Expect(value == 0x99aabbccu,
+                      (std::string(mode) + " scalar discard target preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x210u, &value),
+                      (std::string(mode) + " scalar side-effect memory read")
+                          .c_str()) &&
+               Expect(value == 0xddeeff00u,
+                      (std::string(mode) + " scalar discard x2 target preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x240u, &value),
+                      (std::string(mode) + " scalar side-effect memory read")
+                          .c_str()) &&
+               Expect(value == 0x0badc0deu,
+                      (std::string(mode) + " scalar probe base preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x264u, &value),
+                      (std::string(mode) + " scalar side-effect memory read")
+                          .c_str()) &&
+               Expect(value == 0x12345678u,
+                      (std::string(mode) + " scalar probe target preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x280u, &value),
+                      (std::string(mode) + " scalar side-effect memory read")
+                          .c_str()) &&
+               Expect(value == 0x89abcdefu,
+                      (std::string(mode) + " scalar probe buffer base preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x298u, &value),
+                      (std::string(mode) + " scalar side-effect memory read")
+                          .c_str()) &&
+               Expect(value == 0xfedcba98u,
+                      (std::string(mode) + " scalar probe buffer target preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x2f0u, &value),
+                      (std::string(mode) + " scalar side-effect memory read")
+                          .c_str()) &&
+               Expect(value == 0x2468ace0u,
+                      (std::string(mode) + " unrelated scalar memory preserved")
+                          .c_str());
+      };
+
+  LinearExecutionMemory decoded_scalar_side_effect_memory =
+      make_scalar_side_effect_memory();
+  WaveExecutionState decoded_scalar_side_effect_state =
+      make_scalar_side_effect_state();
+  if (!Expect(interpreter.ExecuteProgram(scalar_side_effect_program,
+                                         &decoded_scalar_side_effect_state,
+                                         &decoded_scalar_side_effect_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_scalar_side_effect_state(decoded_scalar_side_effect_state,
+                                         decoded_scalar_side_effect_memory,
+                                         "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_scalar_side_effect_program;
+  if (!Expect(interpreter.CompileProgram(scalar_side_effect_program,
+                                         &compiled_scalar_side_effect_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_scalar_side_effect_memory =
+      make_scalar_side_effect_memory();
+  WaveExecutionState compiled_scalar_side_effect_state =
+      make_scalar_side_effect_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_scalar_side_effect_program,
+                                         &compiled_scalar_side_effect_state,
+                                         &compiled_scalar_side_effect_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_scalar_side_effect_state(compiled_scalar_side_effect_state,
+                                         compiled_scalar_side_effect_memory,
+                                         "compiled")) {
+    return 1;
+  }
+  }
+
+  {
   const std::vector<DecodedInstruction> buffer_maintenance_program = {
       DecodedInstruction::Nullary("BUFFER_WBL2"),
       DecodedInstruction::Nullary("BUFFER_INV"),
