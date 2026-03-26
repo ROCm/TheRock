@@ -63,8 +63,9 @@ def create_ninja_log_archive(build_dir: Path):
     archive_path = log_dir / "ninja_logs.tar.gz"
     with tarfile.open(archive_path, "w:gz") as tar:
         for file_path in found_files:
-            tar.add(file_path)
-            log(f"[+] Archived: {file_path}")
+            arcname = file_path.relative_to(build_dir)
+            tar.add(file_path, arcname=arcname)
+            log(f"[+] Archived: {arcname}")
 
     log(f"[INFO] Created ninja log archive: {archive_path} ({len(found_files)} files)")
     return archive_path

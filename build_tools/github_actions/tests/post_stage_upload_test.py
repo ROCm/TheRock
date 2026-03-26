@@ -60,6 +60,24 @@ class TestCreateNinjaLogArchive(unittest.TestCase):
                 names = tar.getnames()
             self.assertEqual(len(names), 2)
 
+    def test_archive_uses_relative_paths(self):
+        """Verify archive members use paths relative to build_dir, not absolute."""
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            sub = build_dir / "compiler" / "llvm" / "build"
+            sub.mkdir(parents=True)
+            (sub / ".ninja_log").write_text("# ninja log\n")
+
+            post_stage_upload.create_ninja_log_archive(build_dir)
+
+            archive = build_dir / "logs" / "ninja_logs.tar.gz"
+            with tarfile.open(archive, "r:gz") as tar:
+                names = tar.getnames()
+            self.assertEqual(len(names), 1)
+            # Must be relative to build_dir, not absolute.
+            self.assertEqual(names[0], "compiler/llvm/build/.ninja_log")
+            self.assertFalse(names[0].startswith("/"))
+
     def test_no_ninja_logs_skips(self):
         """Verify no archive or logs/ directory created when no .ninja_log files exist."""
         with tempfile.TemporaryDirectory() as tmp:
