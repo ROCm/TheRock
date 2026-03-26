@@ -26,6 +26,7 @@ if(THEROCK_ENABLE_RDC)
       -DHIP_PLATFORM=amd
       -DCMAKE_CXX_STANDARD=17
       -DGRPC_ROOT=${_grpc_stage}
+      -DGRPC_DESIRED_VERSION=${THEROCK_GRPC_VERSION}
 
     BUILD_DEPS
       therock-grpc
