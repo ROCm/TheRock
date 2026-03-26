@@ -41,6 +41,7 @@ _ALLOWED_CPYTHON_TAGS: frozenset[str] = frozenset(
         "cp311",
         "cp312",
         "cp313",
+        "cp314",
     }
 )
 
