@@ -110,6 +110,7 @@ jobs:
             --stage="${STAGE_NAME}" \
             --amdgpu-families="${{ inputs.amdgpu_family }}" \
             --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
+            --manylinux \
             --gha-output
 
       - name: Install stage python deps

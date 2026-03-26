@@ -37,6 +37,10 @@ from typing import List, Set
 
 from _therock_utils.build_topology import BuildTopology
 from github_actions.github_actions_api import gha_set_output
+from github_actions.manylinux_config import (
+    DIST_PYTHON_EXECUTABLES,
+    SHARED_PYTHON_EXECUTABLES,
+)
 
 
 def log(msg: str):
@@ -100,6 +104,7 @@ def generate_cmake_args(
     topology: BuildTopology,
     include_comments: bool = False,
     platform_name: str = platform_module.system().lower(),
+    manylinux: bool = False,
 ) -> List[str]:
     """Generate CMake arguments for building a specific stage.
 
@@ -111,6 +116,8 @@ def generate_cmake_args(
         include_comments: Include comment lines explaining each flag
         platform_name: Platform name for platform-specific args (e.g., "windows",
             "linux"). Defaults to the current platform.
+        manylinux: Add manylinux Python executable cmake args (for use inside
+            the manylinux build container).
 
     Returns:
         List of CMake argument strings
@@ -129,6 +136,14 @@ def generate_cmake_args(
     # Quote the value since it contains semicolons (CMake list separator)
     if dist_amdgpu_families:
         args.append(f'-DTHEROCK_DIST_AMDGPU_FAMILIES="{dist_amdgpu_families}"')
+
+    # Manylinux Python executables for per-Python-version builds
+    # Quote values since they contain semicolons (CMake list separator)
+    if manylinux:
+        args.append(f'-DTHEROCK_DIST_PYTHON_EXECUTABLES="{DIST_PYTHON_EXECUTABLES}"')
+        args.append(
+            f'-DTHEROCK_SHARED_PYTHON_EXECUTABLES="{SHARED_PYTHON_EXECUTABLES}"'
+        )
 
     # Disable all features by default, then enable only what we need
     if include_comments:
@@ -210,6 +225,12 @@ def main(argv: List[str] = None):
         default=platform_module.system().lower(),
         help=f"Platform for platform-specific CMake args (default: {platform_module.system().lower()})",
     )
+    parser.add_argument(
+        "--manylinux",
+        action="store_true",
+        help="Add manylinux Python executable cmake args (for use inside "
+        "the manylinux build container)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -238,6 +259,7 @@ def main(argv: List[str] = None):
         topology=topology,
         include_comments=args.comments and not args.oneline,
         platform_name=args.platform,
+        manylinux=args.manylinux,
     )
 
     # Filter out comments if not requested

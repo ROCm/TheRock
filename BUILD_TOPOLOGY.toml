@@ -492,10 +492,18 @@ artifact_deps = ["core-runtime", "amd-llvm", "core-kpack"]
 feature_name = "HIP_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
 
-[artifacts.core-ocl]
+[artifacts.core-ocl-icd]
 artifact_group = "opencl-runtime"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "amd-llvm"]
+feature_name = "OCL_ICD"
+feature_group = "CORE"  # Part of core, enabled by default
+
+
+[artifacts.core-ocl]
+artifact_group = "opencl-runtime"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "amd-llvm", "core-ocl-icd"]
 feature_name = "OCL_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
 
