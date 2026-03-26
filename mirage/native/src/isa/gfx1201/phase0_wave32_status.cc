@@ -133,6 +133,21 @@ struct ExecutableInstructionSummary {
   std::string_view first_executable_instruction;
 };
 
+const Gfx1201DecoderSeedEntry* FindVdsSeedEntry(std::string_view instruction_name) {
+  const Gfx1201DecoderSeedEncoding* vds_seed =
+      FindGfx1201Phase0ComputeDecoderSeed("ENC_VDS");
+  if (vds_seed == nullptr) {
+    return nullptr;
+  }
+  for (const Gfx1201DecoderSeedEntry& entry :
+       GetGfx1201Phase0ComputeDecoderSeedEntries(*vds_seed)) {
+    if (entry.instruction_name == instruction_name && entry.is_default_encoding) {
+      return &entry;
+    }
+  }
+  return nullptr;
+}
+
 ExecutableInstructionSummary SummarizeExecutableInstructions(
     const Gfx1201DecoderSeedEncoding& encoding, const Gfx1201BinaryDecoder& decoder) {
   std::vector<std::string_view> seen_instruction_names;
@@ -224,6 +239,7 @@ BuildRemainingVdsInstructionStatuses() {
        kVdsBoundaryBuckets) {
     std::uint32_t bucket_ordinal = 0;
     for (std::string_view instruction_name : bucket.instruction_names) {
+      const Gfx1201DecoderSeedEntry* seed_entry = FindVdsSeedEntry(instruction_name);
       statuses.push_back(Gfx1201Wave32Phase0VdsBoundaryInstructionStatus{
           instruction_name,
           bucket.bucket_name,
@@ -231,6 +247,11 @@ BuildRemainingVdsInstructionStatuses() {
           bucket.risk_rank,
           tail_ordinal,
           bucket_ordinal,
+          seed_entry == nullptr ? 0u : seed_entry->opcode,
+          static_cast<std::uint16_t>(seed_entry == nullptr ? 0u
+                                                           : seed_entry->operand_count),
+          seed_entry == nullptr ? std::string_view{} : ToString(seed_entry->rollup),
+          seed_entry == nullptr ? std::string_view{} : ToString(seed_entry->state),
           bucket.safe_under_current_request,
       });
       ++tail_ordinal;
@@ -384,6 +405,18 @@ FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
   for (const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus& status :
        GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses()) {
     if (status.instruction_name == instruction_name) {
+      return &status;
+    }
+  }
+  return nullptr;
+}
+
+const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus*
+FindGfx1201Wave32Phase0RemainingVdsInstructionStatusByOpcode(
+    std::uint32_t opcode) {
+  for (const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus& status :
+       GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses()) {
+    if (status.opcode == opcode) {
       return &status;
     }
   }

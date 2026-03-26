@@ -57,6 +57,10 @@ struct Gfx1201Wave32Phase0VdsBoundaryInstructionStatus {
   std::uint32_t bucket_risk_rank = 0;
   std::uint32_t tail_ordinal = 0;
   std::uint32_t bucket_ordinal = 0;
+  std::uint32_t opcode = 0;
+  std::uint16_t operand_count = 0;
+  std::string_view support_rollup;
+  std::string_view support_state;
   bool safe_under_current_request = false;
 };
 
@@ -99,6 +103,9 @@ FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
 const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus*
 FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
     std::string_view instruction_name);
+const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus*
+FindGfx1201Wave32Phase0RemainingVdsInstructionStatusByOpcode(
+    std::uint32_t opcode);
 const Gfx1201Wave32Phase0VdsNextRiskStep*
 FindGfx1201Wave32Phase0VdsNextRiskStep(std::string_view bucket_name);
 bool HasGfx1201Wave32SafeVdsContinuation();

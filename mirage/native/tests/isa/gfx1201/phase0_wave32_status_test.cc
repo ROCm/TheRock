@@ -202,18 +202,31 @@ int main() {
       GetGfx1201Wave32FirstUnsafeVdsInstructions();
   const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* append_status =
       FindGfx1201Wave32Phase0RemainingVdsInstructionStatus("DS_APPEND");
+  const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* consume_opcode_status =
+      FindGfx1201Wave32Phase0RemainingVdsInstructionStatusByOpcode(61u);
+  const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus*
+      condxchg_opcode_status =
+          FindGfx1201Wave32Phase0RemainingVdsInstructionStatusByOpcode(126u);
   const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* storexchg_status =
       FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
           "DS_STOREXCHG_RTN_B64");
   const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* stride_status =
       FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
           "DS_LOAD_2ADDR_STRIDE64_B64");
+  const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus*
+      stride_opcode_status =
+          FindGfx1201Wave32Phase0RemainingVdsInstructionStatusByOpcode(120u);
   const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* bvh_status =
       FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
           "DS_BVH_STACK_PUSH8_POP2_RTN_B64");
+  const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* bvh_opcode_status =
+      FindGfx1201Wave32Phase0RemainingVdsInstructionStatusByOpcode(226u);
   const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* missing_vds_status =
       FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
           "DS_BPERMUTE_FI_B32");
+  const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus*
+      missing_vds_opcode_status =
+          FindGfx1201Wave32Phase0RemainingVdsInstructionStatusByOpcode(53u);
   const Gfx1201Wave32Phase0VdsNextRiskStep* append_step =
       FindGfx1201Wave32Phase0VdsNextRiskStep("append_consume");
   const Gfx1201Wave32Phase0VdsNextRiskStep* exchange_step =
@@ -248,14 +261,19 @@ int main() {
       !Expect(GetGfx1201Wave32FirstUnsafeVdsBlockingDimension() ==
                   "allocator_or_gds_semantics",
               "expected append/consume blocking dimension as first unsafe VDS boundary") ||
-      !Expect(append_status != nullptr && storexchg_status != nullptr &&
-                  stride_status != nullptr && bvh_status != nullptr,
+      !Expect(append_status != nullptr && consume_opcode_status != nullptr &&
+                  condxchg_opcode_status != nullptr &&
+                  storexchg_status != nullptr && stride_status != nullptr &&
+                  stride_opcode_status != nullptr && bvh_status != nullptr &&
+                  bvh_opcode_status != nullptr,
               "expected remaining VDS instruction lookups") ||
       !Expect(append_step != nullptr && exchange_step != nullptr &&
                   multi_address_step != nullptr && bvh_step != nullptr,
               "expected remaining VDS next-risk step lookups") ||
       !Expect(missing_vds_status == nullptr,
               "expected executable VDS op to stay out of remaining-VDS status") ||
+      !Expect(missing_vds_opcode_status == nullptr,
+              "expected executable VDS opcode to stay out of remaining-VDS status") ||
       !Expect(missing_vds_step == nullptr,
               "expected missing VDS next-risk step lookup to fail") ||
       !Expect(GetGfx1201Wave32Phase0RecommendedNextEncoding() == "ENC_VDS",
@@ -300,7 +318,14 @@ int main() {
                       0u &&
                   remaining_vds_instruction_statuses.front().tail_ordinal == 0u &&
                   remaining_vds_instruction_statuses.front().bucket_ordinal ==
-                      0u,
+                      0u &&
+                  remaining_vds_instruction_statuses.front().opcode == 62u &&
+                  remaining_vds_instruction_statuses.front().operand_count ==
+                      3u &&
+                  remaining_vds_instruction_statuses.front().support_rollup ==
+                      "transferable_with_decoder_work" &&
+                  remaining_vds_instruction_statuses.front().support_state ==
+                      "transferable_with_decoder_and_semantic_work",
               "expected first remaining VDS instruction status") ||
       !Expect(remaining_vds_instruction_statuses.back().instruction_name ==
                   "DS_BVH_STACK_PUSH8_POP2_RTN_B64" &&
@@ -311,7 +336,14 @@ int main() {
                   remaining_vds_instruction_statuses.back().tail_ordinal ==
                       23u &&
                   remaining_vds_instruction_statuses.back().bucket_ordinal ==
-                      2u,
+                      2u &&
+                  remaining_vds_instruction_statuses.back().opcode == 226u &&
+                  remaining_vds_instruction_statuses.back().operand_count ==
+                      4u &&
+                  remaining_vds_instruction_statuses.back().support_rollup ==
+                      "gfx1201_specific" &&
+                  remaining_vds_instruction_statuses.back().support_state ==
+                      "gfx1201_specific",
               "expected last remaining VDS instruction status") ||
       !Expect(append_status->bucket_name == "append_consume" &&
                   append_status->blocking_dimension ==
@@ -319,14 +351,49 @@ int main() {
                   append_status->bucket_risk_rank == 0u &&
                   append_status->tail_ordinal == 0u &&
                   append_status->bucket_ordinal == 0u &&
+                  append_status->opcode == 62u &&
+                  append_status->operand_count == 3u &&
+                  append_status->support_rollup ==
+                      "transferable_with_decoder_work" &&
+                  append_status->support_state ==
+                      "transferable_with_decoder_and_semantic_work" &&
                   !append_status->safe_under_current_request,
               "expected append remaining-VDS instruction status") ||
+      !Expect(consume_opcode_status->instruction_name == "DS_CONSUME" &&
+                  consume_opcode_status->bucket_name == "append_consume" &&
+                  consume_opcode_status->tail_ordinal == 1u &&
+                  consume_opcode_status->bucket_ordinal == 1u &&
+                  consume_opcode_status->opcode == 61u &&
+                  consume_opcode_status->operand_count == 3u &&
+                  consume_opcode_status->support_rollup ==
+                      "transferable_with_decoder_work" &&
+                  consume_opcode_status->support_state ==
+                      "transferable_with_decoder_and_semantic_work",
+              "expected append/consume opcode lookup status") ||
+      !Expect(condxchg_opcode_status->instruction_name ==
+                      "DS_CONDXCHG32_RTN_B64" &&
+                  condxchg_opcode_status->bucket_name ==
+                      "exchange_compare_store" &&
+                  condxchg_opcode_status->bucket_risk_rank == 1u &&
+                  condxchg_opcode_status->tail_ordinal == 2u &&
+                  condxchg_opcode_status->bucket_ordinal == 0u &&
+                  condxchg_opcode_status->opcode == 126u &&
+                  condxchg_opcode_status->operand_count == 5u &&
+                  condxchg_opcode_status->support_rollup ==
+                      "transferable_with_decoder_work" &&
+                  condxchg_opcode_status->support_state ==
+                      "transferable_with_decoder_and_semantic_work",
+              "expected exchange/compare-store opcode lookup status") ||
       !Expect(storexchg_status->bucket_name == "exchange_compare_store" &&
                   storexchg_status->blocking_dimension ==
                       "exchange_compare_store_semantics" &&
                   storexchg_status->bucket_risk_rank == 1u &&
                   storexchg_status->tail_ordinal == 8u &&
                   storexchg_status->bucket_ordinal == 6u &&
+                  storexchg_status->opcode == 109u &&
+                  storexchg_status->operand_count == 5u &&
+                  storexchg_status->support_rollup == "gfx1201_specific" &&
+                  storexchg_status->support_state == "gfx1201_specific" &&
                   !storexchg_status->safe_under_current_request,
               "expected storexchg remaining-VDS instruction status") ||
       !Expect(stride_status->bucket_name == "multi_address" &&
@@ -335,16 +402,45 @@ int main() {
                   stride_status->bucket_risk_rank == 2u &&
                   stride_status->tail_ordinal == 12u &&
                   stride_status->bucket_ordinal == 3u &&
+                  stride_status->opcode == 120u &&
+                  stride_status->operand_count == 3u &&
+                  stride_status->support_rollup == "gfx1201_specific" &&
+                  stride_status->support_state == "gfx1201_specific" &&
                   !stride_status->safe_under_current_request,
               "expected multi-address remaining-VDS instruction status") ||
+      !Expect(stride_opcode_status->instruction_name ==
+                      "DS_LOAD_2ADDR_STRIDE64_B64" &&
+                  stride_opcode_status->bucket_name == "multi_address" &&
+                  stride_opcode_status->tail_ordinal == 12u &&
+                  stride_opcode_status->bucket_ordinal == 3u &&
+                  stride_opcode_status->opcode == 120u &&
+                  stride_opcode_status->operand_count == 3u &&
+                  stride_opcode_status->support_rollup ==
+                      "gfx1201_specific" &&
+                  stride_opcode_status->support_state == "gfx1201_specific",
+              "expected multi-address opcode lookup status") ||
       !Expect(bvh_status->bucket_name == "bvh_stack" &&
                   bvh_status->blocking_dimension ==
                       "gfx1201_specific_bvh_semantics" &&
                   bvh_status->bucket_risk_rank == 3u &&
                   bvh_status->tail_ordinal == 23u &&
                   bvh_status->bucket_ordinal == 2u &&
+                  bvh_status->opcode == 226u &&
+                  bvh_status->operand_count == 4u &&
+                  bvh_status->support_rollup == "gfx1201_specific" &&
+                  bvh_status->support_state == "gfx1201_specific" &&
                   !bvh_status->safe_under_current_request,
-              "expected BVH remaining-VDS instruction status")) {
+              "expected BVH remaining-VDS instruction status") ||
+      !Expect(bvh_opcode_status->instruction_name ==
+                      "DS_BVH_STACK_PUSH8_POP2_RTN_B64" &&
+                  bvh_opcode_status->bucket_name == "bvh_stack" &&
+                  bvh_opcode_status->tail_ordinal == 23u &&
+                  bvh_opcode_status->bucket_ordinal == 2u &&
+                  bvh_opcode_status->opcode == 226u &&
+                  bvh_opcode_status->operand_count == 4u &&
+                  bvh_opcode_status->support_rollup == "gfx1201_specific" &&
+                  bvh_opcode_status->support_state == "gfx1201_specific",
+              "expected BVH opcode lookup status")) {
     return 1;
   }
 

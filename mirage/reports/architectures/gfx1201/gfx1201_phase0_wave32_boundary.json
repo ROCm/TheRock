@@ -74,7 +74,11 @@
       "bucket_risk_rank": 0,
       "tail_ordinal": 0,
       "bucket_ordinal": 0,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 62,
+      "operand_count": 3,
+      "support_rollup": "transferable_with_decoder_work",
+      "support_state": "transferable_with_decoder_and_semantic_work"
     },
     {
       "instruction_name": "DS_CONSUME",
@@ -83,7 +87,11 @@
       "bucket_risk_rank": 0,
       "tail_ordinal": 1,
       "bucket_ordinal": 1,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 61,
+      "operand_count": 3,
+      "support_rollup": "transferable_with_decoder_work",
+      "support_state": "transferable_with_decoder_and_semantic_work"
     },
     {
       "instruction_name": "DS_CONDXCHG32_RTN_B64",
@@ -92,7 +100,11 @@
       "bucket_risk_rank": 1,
       "tail_ordinal": 2,
       "bucket_ordinal": 0,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 126,
+      "operand_count": 5,
+      "support_rollup": "transferable_with_decoder_work",
+      "support_state": "transferable_with_decoder_and_semantic_work"
     },
     {
       "instruction_name": "DS_CMPSTORE_B32",
@@ -101,7 +113,11 @@
       "bucket_risk_rank": 1,
       "tail_ordinal": 3,
       "bucket_ordinal": 1,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 16,
+      "operand_count": 5,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_CMPSTORE_B64",
@@ -110,7 +126,11 @@
       "bucket_risk_rank": 1,
       "tail_ordinal": 4,
       "bucket_ordinal": 2,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 80,
+      "operand_count": 5,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_CMPSTORE_RTN_B32",
@@ -119,7 +139,11 @@
       "bucket_risk_rank": 1,
       "tail_ordinal": 5,
       "bucket_ordinal": 3,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 48,
+      "operand_count": 6,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_CMPSTORE_RTN_B64",
@@ -128,7 +152,11 @@
       "bucket_risk_rank": 1,
       "tail_ordinal": 6,
       "bucket_ordinal": 4,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 112,
+      "operand_count": 6,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_STOREXCHG_RTN_B32",
@@ -137,7 +165,11 @@
       "bucket_risk_rank": 1,
       "tail_ordinal": 7,
       "bucket_ordinal": 5,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 45,
+      "operand_count": 5,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_STOREXCHG_RTN_B64",
@@ -146,7 +178,11 @@
       "bucket_risk_rank": 1,
       "tail_ordinal": 8,
       "bucket_ordinal": 6,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 109,
+      "operand_count": 5,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_LOAD_2ADDR_B32",
@@ -155,7 +191,11 @@
       "bucket_risk_rank": 2,
       "tail_ordinal": 9,
       "bucket_ordinal": 0,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 55,
+      "operand_count": 3,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_LOAD_2ADDR_B64",
@@ -164,7 +204,11 @@
       "bucket_risk_rank": 2,
       "tail_ordinal": 10,
       "bucket_ordinal": 1,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 119,
+      "operand_count": 3,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_LOAD_2ADDR_STRIDE64_B32",
@@ -173,7 +217,11 @@
       "bucket_risk_rank": 2,
       "tail_ordinal": 11,
       "bucket_ordinal": 2,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 56,
+      "operand_count": 3,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_LOAD_2ADDR_STRIDE64_B64",
@@ -182,7 +230,11 @@
       "bucket_risk_rank": 2,
       "tail_ordinal": 12,
       "bucket_ordinal": 3,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 120,
+      "operand_count": 3,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_STOREXCHG_2ADDR_RTN_B32",
@@ -191,7 +243,11 @@
       "bucket_risk_rank": 2,
       "tail_ordinal": 13,
       "bucket_ordinal": 4,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 46,
+      "operand_count": 6,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_STOREXCHG_2ADDR_RTN_B64",
@@ -200,7 +256,11 @@
       "bucket_risk_rank": 2,
       "tail_ordinal": 14,
       "bucket_ordinal": 5,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 110,
+      "operand_count": 6,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32",
@@ -209,7 +269,11 @@
       "bucket_risk_rank": 2,
       "tail_ordinal": 15,
       "bucket_ordinal": 6,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 47,
+      "operand_count": 6,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64",
@@ -218,7 +282,11 @@
       "bucket_risk_rank": 2,
       "tail_ordinal": 16,
       "bucket_ordinal": 7,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 111,
+      "operand_count": 6,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_STORE_2ADDR_B32",
@@ -227,7 +295,11 @@
       "bucket_risk_rank": 2,
       "tail_ordinal": 17,
       "bucket_ordinal": 8,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 14,
+      "operand_count": 4,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_STORE_2ADDR_B64",
@@ -236,7 +308,11 @@
       "bucket_risk_rank": 2,
       "tail_ordinal": 18,
       "bucket_ordinal": 9,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 78,
+      "operand_count": 4,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_STORE_2ADDR_STRIDE64_B32",
@@ -245,7 +321,11 @@
       "bucket_risk_rank": 2,
       "tail_ordinal": 19,
       "bucket_ordinal": 10,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 15,
+      "operand_count": 4,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_STORE_2ADDR_STRIDE64_B64",
@@ -254,7 +334,11 @@
       "bucket_risk_rank": 2,
       "tail_ordinal": 20,
       "bucket_ordinal": 11,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 79,
+      "operand_count": 4,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
@@ -263,7 +347,11 @@
       "bucket_risk_rank": 3,
       "tail_ordinal": 21,
       "bucket_ordinal": 0,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 224,
+      "operand_count": 4,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_BVH_STACK_PUSH8_POP1_RTN_B32",
@@ -272,7 +360,11 @@
       "bucket_risk_rank": 3,
       "tail_ordinal": 22,
       "bucket_ordinal": 1,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 225,
+      "operand_count": 4,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     },
     {
       "instruction_name": "DS_BVH_STACK_PUSH8_POP2_RTN_B64",
@@ -281,7 +373,11 @@
       "bucket_risk_rank": 3,
       "tail_ordinal": 23,
       "bucket_ordinal": 2,
-      "safe_under_current_request": false
+      "safe_under_current_request": false,
+      "opcode": 226,
+      "operand_count": 4,
+      "support_rollup": "gfx1201_specific",
+      "support_state": "gfx1201_specific"
     }
   ],
   "remaining_vds_bucket_order": [
@@ -369,6 +465,32 @@
     "DS_BVH_STACK_PUSH4_POP1_RTN_B32": "bvh_stack",
     "DS_BVH_STACK_PUSH8_POP1_RTN_B32": "bvh_stack",
     "DS_BVH_STACK_PUSH8_POP2_RTN_B64": "bvh_stack"
+  },
+  "remaining_vds_opcode_to_bucket": {
+    "62": "append_consume",
+    "61": "append_consume",
+    "126": "exchange_compare_store",
+    "16": "exchange_compare_store",
+    "80": "exchange_compare_store",
+    "48": "exchange_compare_store",
+    "112": "exchange_compare_store",
+    "45": "exchange_compare_store",
+    "109": "exchange_compare_store",
+    "55": "multi_address",
+    "119": "multi_address",
+    "56": "multi_address",
+    "120": "multi_address",
+    "46": "multi_address",
+    "110": "multi_address",
+    "47": "multi_address",
+    "111": "multi_address",
+    "14": "multi_address",
+    "78": "multi_address",
+    "15": "multi_address",
+    "79": "multi_address",
+    "224": "bvh_stack",
+    "225": "bvh_stack",
+    "226": "bvh_stack"
   },
   "remaining_vds_boundary_buckets": [
     {
@@ -515,7 +637,8 @@
     "ENC_VDS now has architecture-local executable footholds through DS_NOP, the one-address non-return 32-bit LDS update slice DS_ADD_F32, DS_ADD_U32, DS_SUB_U32, DS_RSUB_U32, DS_INC_U32, DS_DEC_U32, DS_COND_SUB_U32, DS_SUB_CLAMP_U32, DS_PK_ADD_F16, DS_PK_ADD_BF16, DS_MIN_NUM_F32, DS_MAX_NUM_F32, DS_MIN_NUM_F64, DS_MAX_NUM_F64, DS_MIN_I32, DS_MIN_U32, DS_MAX_I32, DS_MAX_U32, DS_AND_B32, DS_OR_B32, DS_XOR_B32, and DS_MSKOR_B32, the matching one-address return-value 32-bit slice DS_ADD_RTN_F32, DS_ADD_RTN_U32, DS_SUB_RTN_U32, DS_RSUB_RTN_U32, DS_INC_RTN_U32, DS_DEC_RTN_U32, DS_COND_SUB_RTN_U32, DS_SUB_CLAMP_RTN_U32, DS_PK_ADD_RTN_F16, DS_PK_ADD_RTN_BF16, DS_MIN_NUM_RTN_F32, DS_MAX_NUM_RTN_F32, DS_MIN_NUM_RTN_F64, DS_MAX_NUM_RTN_F64, DS_MIN_RTN_I32, DS_MIN_RTN_U32, DS_MAX_RTN_I32, DS_MAX_RTN_U32, DS_AND_RTN_B32, DS_OR_RTN_B32, DS_XOR_RTN_B32, and DS_MSKOR_RTN_B32, the matching one-address return-value 64-bit integer LDS update slice DS_ADD_RTN_U64, DS_SUB_RTN_U64, DS_RSUB_RTN_U64, DS_INC_RTN_U64, DS_DEC_RTN_U64, DS_MIN_RTN_I64, DS_MIN_RTN_U64, DS_MAX_RTN_I64, DS_MAX_RTN_U64, DS_AND_RTN_B64, DS_OR_RTN_B64, DS_XOR_RTN_B64, and DS_MSKOR_RTN_B64, the one-address non-return 64-bit integer LDS update slice DS_ADD_U64, DS_SUB_U64, DS_RSUB_U64, DS_INC_U64, DS_DEC_U64, DS_MIN_I64, DS_MIN_U64, DS_MAX_I64, DS_MAX_U64, DS_AND_B64, DS_OR_B64, DS_XOR_B64, and DS_MSKOR_B64, the simple one-address LDS load slice DS_LOAD_B32, DS_LOAD_ADDTID_B32, DS_LOAD_B64, DS_LOAD_B96, DS_LOAD_B128, DS_LOAD_I8, DS_LOAD_U8, DS_LOAD_I16, DS_LOAD_U16, DS_LOAD_U8_D16, DS_LOAD_U8_D16_HI, DS_LOAD_I8_D16, DS_LOAD_I8_D16_HI, DS_LOAD_U16_D16, and DS_LOAD_U16_D16_HI, the matching simple one-address LDS store slice DS_STORE_B8, DS_STORE_B16, DS_STORE_B32, DS_STORE_ADDTID_B32, DS_STORE_B64, DS_STORE_B96, DS_STORE_B128, DS_STORE_B8_D16_HI, and DS_STORE_B16_D16_HI, and the single-address lane-routing utility slice DS_SWIZZLE_B32, DS_PERMUTE_B32, DS_BPERMUTE_B32, and DS_BPERMUTE_FI_B32.",
     "The remaining ENC_VDS tail is now explicitly bounded by append/consume allocator semantics, exchange and compare-store forms, multi-address LDS forms including stride64, and gfx1201-specific BVH stack instructions, which is the next verification-risk step before ENC_VOP3.",
     "There is no safe ENC_VDS continuation under the current request boundary: every remaining bucket crosses allocator-or-GDS, exchange/compare-store, multi-address, or gfx1201-specific BVH semantics.",
-    "The boundary report now carries an exact remaining-VDS instruction-to-bucket map so the unresolved tail can be queried directly by opcode name.",
+    "The boundary report now carries exact remaining-VDS instruction-name and numeric-opcode maps so the unresolved tail can be queried directly by either key.",
+    "The denormalized remaining-VDS status list now also carries exact opcode, operand-count, support-rollup, and support-state metadata for each unsafe instruction.",
     "The exact unsafe-bucket escalation order is append_consume, then exchange_compare_store, then multi_address, then bvh_stack.",
     "The boundary report now also carries an exact next-risk step chain with first and last instruction names, cumulative remaining counts, and explicit next-bucket handoff metadata for the unresolved VDS tail.",
     "The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.",

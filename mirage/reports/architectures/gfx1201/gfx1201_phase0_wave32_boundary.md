@@ -33,7 +33,8 @@ execution path.
 - ENC_VDS now has architecture-local executable footholds through DS_NOP, the one-address non-return 32-bit LDS update slice DS_ADD_F32, DS_ADD_U32, DS_SUB_U32, DS_RSUB_U32, DS_INC_U32, DS_DEC_U32, DS_COND_SUB_U32, DS_SUB_CLAMP_U32, DS_PK_ADD_F16, DS_PK_ADD_BF16, DS_MIN_NUM_F32, DS_MAX_NUM_F32, DS_MIN_NUM_F64, DS_MAX_NUM_F64, DS_MIN_I32, DS_MIN_U32, DS_MAX_I32, DS_MAX_U32, DS_AND_B32, DS_OR_B32, DS_XOR_B32, and DS_MSKOR_B32, the matching one-address return-value 32-bit slice DS_ADD_RTN_F32, DS_ADD_RTN_U32, DS_SUB_RTN_U32, DS_RSUB_RTN_U32, DS_INC_RTN_U32, DS_DEC_RTN_U32, DS_COND_SUB_RTN_U32, DS_SUB_CLAMP_RTN_U32, DS_PK_ADD_RTN_F16, DS_PK_ADD_RTN_BF16, DS_MIN_NUM_RTN_F32, DS_MAX_NUM_RTN_F32, DS_MIN_NUM_RTN_F64, DS_MAX_NUM_RTN_F64, DS_MIN_RTN_I32, DS_MIN_RTN_U32, DS_MAX_RTN_I32, DS_MAX_RTN_U32, DS_AND_RTN_B32, DS_OR_RTN_B32, DS_XOR_RTN_B32, and DS_MSKOR_RTN_B32, the matching one-address return-value 64-bit integer LDS update slice DS_ADD_RTN_U64, DS_SUB_RTN_U64, DS_RSUB_RTN_U64, DS_INC_RTN_U64, DS_DEC_RTN_U64, DS_MIN_RTN_I64, DS_MIN_RTN_U64, DS_MAX_RTN_I64, DS_MAX_RTN_U64, DS_AND_RTN_B64, DS_OR_RTN_B64, DS_XOR_RTN_B64, and DS_MSKOR_RTN_B64, the one-address non-return 64-bit integer LDS update slice DS_ADD_U64, DS_SUB_U64, DS_RSUB_U64, DS_INC_U64, DS_DEC_U64, DS_MIN_I64, DS_MIN_U64, DS_MAX_I64, DS_MAX_U64, DS_AND_B64, DS_OR_B64, DS_XOR_B64, and DS_MSKOR_B64, the simple one-address LDS load slice DS_LOAD_B32, DS_LOAD_ADDTID_B32, DS_LOAD_B64, DS_LOAD_B96, DS_LOAD_B128, DS_LOAD_I8, DS_LOAD_U8, DS_LOAD_I16, DS_LOAD_U16, DS_LOAD_U8_D16, DS_LOAD_U8_D16_HI, DS_LOAD_I8_D16, DS_LOAD_I8_D16_HI, DS_LOAD_U16_D16, and DS_LOAD_U16_D16_HI, the matching simple one-address LDS store slice DS_STORE_B8, DS_STORE_B16, DS_STORE_B32, DS_STORE_ADDTID_B32, DS_STORE_B64, DS_STORE_B96, DS_STORE_B128, DS_STORE_B8_D16_HI, and DS_STORE_B16_D16_HI, and the single-address lane-routing utility slice DS_SWIZZLE_B32, DS_PERMUTE_B32, DS_BPERMUTE_B32, and DS_BPERMUTE_FI_B32.
 - The remaining ENC_VDS tail is now explicitly bounded by append/consume allocator semantics, exchange and compare-store forms, multi-address LDS forms including stride64, and gfx1201-specific BVH stack instructions, which is the next verification-risk step before ENC_VOP3.
 - There is no safe ENC_VDS continuation under the current request boundary: every remaining bucket crosses allocator-or-GDS, exchange/compare-store, multi-address, or gfx1201-specific BVH semantics.
-- The boundary report now carries an exact remaining-VDS instruction-to-bucket map so the unresolved tail can be queried directly by opcode name.
+- The boundary report now carries exact remaining-VDS instruction-name and numeric-opcode maps so the unresolved tail can be queried directly by either key.
+- The denormalized remaining-VDS status list now also carries exact opcode, operand-count, support-rollup, and support-state metadata for each unsafe instruction.
 - The exact unsafe-bucket escalation order is `append_consume`, then `exchange_compare_store`, then `multi_address`, then `bvh_stack`.
 - The boundary report now also carries an exact next-risk step chain with first and last instruction names, cumulative remaining counts, and explicit next-bucket handoff metadata for the unresolved VDS tail.
 - The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.
@@ -80,32 +81,59 @@ execution path.
 - `DS_BVH_STACK_PUSH8_POP1_RTN_B32` -> `bvh_stack`
 - `DS_BVH_STACK_PUSH8_POP2_RTN_B64` -> `bvh_stack`
 
+## Remaining VDS Opcode Map
+
+- `61` -> `DS_CONSUME` -> `append_consume`
+- `62` -> `DS_APPEND` -> `append_consume`
+- `16` -> `DS_CMPSTORE_B32` -> `exchange_compare_store`
+- `45` -> `DS_STOREXCHG_RTN_B32` -> `exchange_compare_store`
+- `48` -> `DS_CMPSTORE_RTN_B32` -> `exchange_compare_store`
+- `80` -> `DS_CMPSTORE_B64` -> `exchange_compare_store`
+- `109` -> `DS_STOREXCHG_RTN_B64` -> `exchange_compare_store`
+- `112` -> `DS_CMPSTORE_RTN_B64` -> `exchange_compare_store`
+- `126` -> `DS_CONDXCHG32_RTN_B64` -> `exchange_compare_store`
+- `14` -> `DS_STORE_2ADDR_B32` -> `multi_address`
+- `15` -> `DS_STORE_2ADDR_STRIDE64_B32` -> `multi_address`
+- `46` -> `DS_STOREXCHG_2ADDR_RTN_B32` -> `multi_address`
+- `47` -> `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32` -> `multi_address`
+- `55` -> `DS_LOAD_2ADDR_B32` -> `multi_address`
+- `56` -> `DS_LOAD_2ADDR_STRIDE64_B32` -> `multi_address`
+- `78` -> `DS_STORE_2ADDR_B64` -> `multi_address`
+- `79` -> `DS_STORE_2ADDR_STRIDE64_B64` -> `multi_address`
+- `110` -> `DS_STOREXCHG_2ADDR_RTN_B64` -> `multi_address`
+- `111` -> `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64` -> `multi_address`
+- `119` -> `DS_LOAD_2ADDR_B64` -> `multi_address`
+- `120` -> `DS_LOAD_2ADDR_STRIDE64_B64` -> `multi_address`
+- `224` -> `DS_BVH_STACK_PUSH4_POP1_RTN_B32` -> `bvh_stack`
+- `225` -> `DS_BVH_STACK_PUSH8_POP1_RTN_B32` -> `bvh_stack`
+- `226` -> `DS_BVH_STACK_PUSH8_POP2_RTN_B64` -> `bvh_stack`
+
 ## Remaining VDS Instruction Statuses
 
-- `DS_APPEND`: bucket `append_consume`, blocking dimension `allocator_or_gds_semantics`, bucket risk rank `0`, tail ordinal `0`, bucket ordinal `0`, safe under current request `false`
-- `DS_CONSUME`: bucket `append_consume`, blocking dimension `allocator_or_gds_semantics`, bucket risk rank `0`, tail ordinal `1`, bucket ordinal `1`, safe under current request `false`
-- `DS_CONDXCHG32_RTN_B64`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `2`, bucket ordinal `0`, safe under current request `false`
-- `DS_CMPSTORE_B32`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `3`, bucket ordinal `1`, safe under current request `false`
-- `DS_CMPSTORE_B64`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `4`, bucket ordinal `2`, safe under current request `false`
-- `DS_CMPSTORE_RTN_B32`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `5`, bucket ordinal `3`, safe under current request `false`
-- `DS_CMPSTORE_RTN_B64`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `6`, bucket ordinal `4`, safe under current request `false`
-- `DS_STOREXCHG_RTN_B32`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `7`, bucket ordinal `5`, safe under current request `false`
-- `DS_STOREXCHG_RTN_B64`: bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `8`, bucket ordinal `6`, safe under current request `false`
-- `DS_LOAD_2ADDR_B32`: bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `9`, bucket ordinal `0`, safe under current request `false`
-- `DS_LOAD_2ADDR_B64`: bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `10`, bucket ordinal `1`, safe under current request `false`
-- `DS_LOAD_2ADDR_STRIDE64_B32`: bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `11`, bucket ordinal `2`, safe under current request `false`
-- `DS_LOAD_2ADDR_STRIDE64_B64`: bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `12`, bucket ordinal `3`, safe under current request `false`
-- `DS_STOREXCHG_2ADDR_RTN_B32`: bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `13`, bucket ordinal `4`, safe under current request `false`
-- `DS_STOREXCHG_2ADDR_RTN_B64`: bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `14`, bucket ordinal `5`, safe under current request `false`
-- `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32`: bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `15`, bucket ordinal `6`, safe under current request `false`
-- `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64`: bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `16`, bucket ordinal `7`, safe under current request `false`
-- `DS_STORE_2ADDR_B32`: bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `17`, bucket ordinal `8`, safe under current request `false`
-- `DS_STORE_2ADDR_B64`: bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `18`, bucket ordinal `9`, safe under current request `false`
-- `DS_STORE_2ADDR_STRIDE64_B32`: bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `19`, bucket ordinal `10`, safe under current request `false`
-- `DS_STORE_2ADDR_STRIDE64_B64`: bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `20`, bucket ordinal `11`, safe under current request `false`
-- `DS_BVH_STACK_PUSH4_POP1_RTN_B32`: bucket `bvh_stack`, blocking dimension `gfx1201_specific_bvh_semantics`, bucket risk rank `3`, tail ordinal `21`, bucket ordinal `0`, safe under current request `false`
-- `DS_BVH_STACK_PUSH8_POP1_RTN_B32`: bucket `bvh_stack`, blocking dimension `gfx1201_specific_bvh_semantics`, bucket risk rank `3`, tail ordinal `22`, bucket ordinal `1`, safe under current request `false`
-- `DS_BVH_STACK_PUSH8_POP2_RTN_B64`: bucket `bvh_stack`, blocking dimension `gfx1201_specific_bvh_semantics`, bucket risk rank `3`, tail ordinal `23`, bucket ordinal `2`, safe under current request `false`
+- `DS_APPEND`: opcode `62`, operand count `3`, support rollup `transferable_with_decoder_work`, support state `transferable_with_decoder_and_semantic_work`, bucket `append_consume`, blocking dimension `allocator_or_gds_semantics`, bucket risk rank `0`, tail ordinal `0`, bucket ordinal `0`, safe under current request `false`
+- `DS_CONSUME`: opcode `61`, operand count `3`, support rollup `transferable_with_decoder_work`, support state `transferable_with_decoder_and_semantic_work`, bucket `append_consume`, blocking dimension `allocator_or_gds_semantics`, bucket risk rank `0`, tail ordinal `1`, bucket ordinal `1`, safe under current request `false`
+- `DS_CONDXCHG32_RTN_B64`: opcode `126`, operand count `5`, support rollup `transferable_with_decoder_work`, support state `transferable_with_decoder_and_semantic_work`, bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `2`, bucket ordinal `0`, safe under current request `false`
+- `DS_CMPSTORE_B32`: opcode `16`, operand count `5`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `3`, bucket ordinal `1`, safe under current request `false`
+- `DS_CMPSTORE_B64`: opcode `80`, operand count `5`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `4`, bucket ordinal `2`, safe under current request `false`
+- `DS_CMPSTORE_RTN_B32`: opcode `48`, operand count `6`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `5`, bucket ordinal `3`, safe under current request `false`
+- `DS_CMPSTORE_RTN_B64`: opcode `112`, operand count `6`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `6`, bucket ordinal `4`, safe under current request `false`
+- `DS_STOREXCHG_RTN_B32`: opcode `45`, operand count `5`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `7`, bucket ordinal `5`, safe under current request `false`
+- `DS_STOREXCHG_RTN_B64`: opcode `109`, operand count `5`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `exchange_compare_store`, blocking dimension `exchange_compare_store_semantics`, bucket risk rank `1`, tail ordinal `8`, bucket ordinal `6`, safe under current request `false`
+- `DS_LOAD_2ADDR_B32`: opcode `55`, operand count `3`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `9`, bucket ordinal `0`, safe under current request `false`
+- `DS_LOAD_2ADDR_B64`: opcode `119`, operand count `3`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `10`, bucket ordinal `1`, safe under current request `false`
+- `DS_LOAD_2ADDR_STRIDE64_B32`: opcode `56`, operand count `3`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `11`, bucket ordinal `2`, safe under current request `false`
+- `DS_LOAD_2ADDR_STRIDE64_B64`: opcode `120`, operand count `3`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `12`, bucket ordinal `3`, safe under current request `false`
+- `DS_STOREXCHG_2ADDR_RTN_B32`: opcode `46`, operand count `6`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `13`, bucket ordinal `4`, safe under current request `false`
+- `DS_STOREXCHG_2ADDR_RTN_B64`: opcode `110`, operand count `6`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `14`, bucket ordinal `5`, safe under current request `false`
+- `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32`: opcode `47`, operand count `6`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `15`, bucket ordinal `6`, safe under current request `false`
+- `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64`: opcode `111`, operand count `6`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `16`, bucket ordinal `7`, safe under current request `false`
+- `DS_STORE_2ADDR_B32`: opcode `14`, operand count `4`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `17`, bucket ordinal `8`, safe under current request `false`
+- `DS_STORE_2ADDR_B64`: opcode `78`, operand count `4`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `18`, bucket ordinal `9`, safe under current request `false`
+- `DS_STORE_2ADDR_STRIDE64_B32`: opcode `15`, operand count `4`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `19`, bucket ordinal `10`, safe under current request `false`
+- `DS_STORE_2ADDR_STRIDE64_B64`: opcode `79`, operand count `4`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `multi_address`, blocking dimension `multi_address_semantics`, bucket risk rank `2`, tail ordinal `20`, bucket ordinal `11`, safe under current request `false`
+- `DS_BVH_STACK_PUSH4_POP1_RTN_B32`: opcode `224`, operand count `4`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `bvh_stack`, blocking dimension `gfx1201_specific_bvh_semantics`, bucket risk rank `3`, tail ordinal `21`, bucket ordinal `0`, safe under current request `false`
+- `DS_BVH_STACK_PUSH8_POP1_RTN_B32`: opcode `225`, operand count `4`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `bvh_stack`, blocking dimension `gfx1201_specific_bvh_semantics`, bucket risk rank `3`, tail ordinal `22`, bucket ordinal `1`, safe under current request `false`
+- `DS_BVH_STACK_PUSH8_POP2_RTN_B64`: opcode `226`, operand count `4`, support rollup `gfx1201_specific`, support state `gfx1201_specific`, bucket `bvh_stack`, blocking dimension `gfx1201_specific_bvh_semantics`, bucket risk rank `3`, tail ordinal `23`, bucket ordinal `2`, safe under current request `false`
 
 ## Next-Risk Encodings
 
