@@ -59,7 +59,7 @@ def create_deb_package(pkg_name, config: PackageConfig):
     # Non-versioned packages are not required for RPATH packages
     # In multi-arch mode, only create non-versioned packages for generic architecture
     if not config.enable_rpath:
-        if not config.enable_multi_arch or config.gfx_arch == GFX_GENERIC:
+        if not config.enable_kpack or config.gfx_arch == GFX_GENERIC:
             create_nonversioned_deb_package(pkg_name, config)
 
     create_versioned_deb_package(pkg_name, config)
@@ -135,13 +135,13 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
 
     sourcedir_list = []
     dir_list = filter_components_fromartifactory(
-        pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_multi_arch
+        pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_kpack
     )
     sourcedir_list.extend(dir_list)
 
     print(f"sourcedir_list:\n  {sourcedir_list}")
     if not sourcedir_list and not is_meta:
-        if config.enable_multi_arch:
+        if config.enable_kpack:
             print(
                 f"ERROR: {pkg_name}: Empty sourcedir_list and not a meta package, skipping"
             )
@@ -279,7 +279,7 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     # unconventional layouts (e.g., program headers at end of file).
     # This causes "program header goes past the end of the file" errors.
     # See: https://github.com/ROCm/TheRock/issues/4047
-    if config.enable_multi_arch:
+    if config.enable_kpack:
         disable_dh_strip = True
 
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
@@ -485,7 +485,7 @@ def create_rpm_package(pkg_name, config: PackageConfig):
     # Non-versioned packages are not required for RPATH packages
     # In multi-arch mode, only create non-versioned packages for generic architecture
     if not config.enable_rpath:
-        if not config.enable_multi_arch or config.gfx_arch == GFX_GENERIC:
+        if not config.enable_kpack or config.gfx_arch == GFX_GENERIC:
             create_nonversioned_rpm_package(pkg_name, config)
 
     create_versioned_rpm_package(pkg_name, config)
@@ -576,7 +576,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         )
 
         dir_list = filter_components_fromartifactory(
-            pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_multi_arch
+            pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_kpack
         )
         sourcedir_list.extend(dir_list)
 
@@ -585,7 +585,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
         # Warn if we have no artifacts for non-meta packages
         if not sourcedir_list and not is_meta:
-            if config.enable_multi_arch:
+            if config.enable_kpack:
                 print(
                     f"WARNING: {pkg_name}: Empty sourcedir_list and not a meta package, creating empty RPM"
                 )
@@ -780,7 +780,7 @@ def run(args: argparse.Namespace):
     normalized_targets = normalize_target_list(args.target)
 
     # Configure architecture based on multi-arch mode
-    if args.enable_multi_arch:
+    if args.enable_kpack:
         # Multi-arch mode: use generic default, targets for gfxarch packages
         default_gfx_arch = GFX_GENERIC
         gfxarch_list = normalized_targets
@@ -817,7 +817,7 @@ def run(args: argparse.Namespace):
         install_prefix=prefix,
         gfx_arch=default_gfx_arch,
         enable_rpath=args.rpath_pkg,
-        enable_multi_arch=args.enable_multi_arch,
+        enable_kpack=args.enable_kpack,
         gfxarch_list=gfxarch_list,
     )
 
@@ -846,7 +846,7 @@ def run(args: argparse.Namespace):
             pkg_info = get_package_info(pkg_name)
             # Check the package is marked as gfxarch package OR meta package
             if is_gfxarch_package(
-                pkg_info, config.enable_multi_arch
+                pkg_info, config.enable_kpack
             ) or is_meta_package(pkg_info):
                 # Use all gfxarch values
                 loop_list = gfxarch_list + [default_gfx_arch]
@@ -965,7 +965,7 @@ def main(argv: list[str]):
     )
 
     p.add_argument(
-        "--enable-multi-arch",
+        "--enable-kpack",
         action="store_true",
         help="Enable multi-architecture package generation",
     )
