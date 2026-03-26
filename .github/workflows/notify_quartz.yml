@@ -2,14 +2,6 @@
 # SPDX-License-Identifier: MIT
 #
 # Dispatches CI events to the Quartz repository for ingestion into DB
-<<<<<<< HEAD
-#
-# Triggers:
-#   - workflow_run completed  → forwards the workflow_run object
-#   - pull_request events     → forwards the PR object + action
-#   - push to main            → forwards push metadata
-=======
->>>>>>> 40fe36b2 (try to get sumarry and matrix jobs)
 
 name: Notify Quartz
 
