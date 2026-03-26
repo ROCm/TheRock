@@ -7385,6 +7385,18 @@ int main() {
                       "V_PK_ADD_BF16 ",
                       StubDecodeStatus::kUnknownInstruction) &&
                   MatchesSelectorDecodeStatusParity(
+                      "X_V_PK_ADD_BF16",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "X_TENSOR_LOAD_TO_LDS",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "X_V_CVT_F16_FP8",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "X_V_DIV_SCALE_F64",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
                       "", StubDecodeStatus::kUnknownInstruction),
               "expected selector and decode surfaces to agree on unknown-name status")) {
     return 1;
@@ -7436,6 +7448,31 @@ int main() {
       if (!Expect(MatchesUnknownDecode(via_entrypoint, padded_instruction) &&
                       MatchesUnknownHelperSurface(via_entrypoint),
                   "expected whitespace-padded known opcode to keep exact route-keyed unknown parity")) {
+        return 1;
+      }
+    }
+  }
+  for (std::string_view near_miss_instruction :
+       {"X_V_PK_ADD_BF16",
+        "X_TENSOR_LOAD_TO_LDS",
+        "X_V_CVT_F16_FP8",
+        "X_V_DIV_SCALE_F64"}) {
+    const StubDecodedInstruction near_miss_decode =
+        DecodeStubInstruction(near_miss_instruction);
+    if (!Expect(MatchesUnknownDecode(near_miss_decode, near_miss_instruction) &&
+                    MatchesUnknownHelperSurface(near_miss_decode),
+                "expected prefixed known opcode near-misses to keep exact unknown decode parity")) {
+      return 1;
+    }
+    for (const StubDecoderRouteManifest& manifest :
+         GetStubDecoderRouteManifests()) {
+      const StubDecodedInstruction via_entrypoint =
+          DecodeViaExplicitRouteEntrypoint(manifest.route,
+                                          near_miss_instruction);
+      if (!Expect(MatchesUnknownDecode(via_entrypoint,
+                                       near_miss_instruction) &&
+                      MatchesUnknownHelperSurface(via_entrypoint),
+                  "expected prefixed known opcode near-misses to keep exact route-keyed unknown parity")) {
         return 1;
       }
     }
@@ -8030,7 +8067,12 @@ int main() {
       return 1;
     }
     for (std::string_view near_miss_instruction :
-         {"v_pk_add_bf16", " V_PK_ADD_BF16"}) {
+         {"v_pk_add_bf16",
+          " V_PK_ADD_BF16",
+          "X_V_PK_ADD_BF16",
+          "X_TENSOR_LOAD_TO_LDS",
+          "X_V_CVT_F16_FP8",
+          "X_V_DIV_SCALE_F64"}) {
       const StubDecoderRouteInfo synthetic_near_miss{
           near_miss_instruction,
           manifest.route,
