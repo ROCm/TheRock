@@ -140,6 +140,36 @@ std::uint32_t CountTargetSpecificSeededInstructionsForRoute(
   return count;
 }
 
+std::uint32_t CountTotalXmlBackedSeededInstructions() {
+  std::uint32_t count = 0;
+  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
+    if (seed.appears_in_rdna4_xml) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountTotalLlvmOnlySeededInstructions() {
+  std::uint32_t count = 0;
+  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
+    if (!seed.appears_in_rdna4_xml) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountTotalTargetSpecificSeededInstructions() {
+  std::uint32_t count = 0;
+  for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
+    if (seed.is_target_specific) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 bool MatchesSeedCatalogParity(const StubDecoderRouteInfo& route_info,
                               const DecoderSeedInfo& seed) {
   const StubDecoderRoute expected_route =
@@ -346,8 +376,14 @@ int main() {
   }
 
   std::size_t manifest_total = 0;
+  std::size_t manifest_xml_backed_total = 0;
+  std::size_t manifest_llvm_only_total = 0;
+  std::size_t manifest_target_specific_total = 0;
   for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
     manifest_total += manifest.instruction_count;
+    manifest_xml_backed_total += manifest.xml_backed_count;
+    manifest_llvm_only_total += manifest.llvm_only_count;
+    manifest_target_specific_total += manifest.target_specific_count;
   }
   if (!Expect(manifest_total == GetStubDecoderRouteInfos().size(),
               "expected manifest counts to match route info table size")) {
@@ -359,6 +395,22 @@ int main() {
                       StubDecoderRoute::kUnsupported) ==
               GetDecoderSeedInfos().size(),
           "expected routed manifest totals plus unsupported seeded remainder to partition the seed catalog exactly")) {
+    return 1;
+  }
+  if (!Expect(
+          manifest_xml_backed_total +
+                      CountXmlBackedSeededInstructionsForRoute(
+                          StubDecoderRoute::kUnsupported) ==
+                  CountTotalXmlBackedSeededInstructions() &&
+              manifest_llvm_only_total +
+                      CountLlvmOnlySeededInstructionsForRoute(
+                          StubDecoderRoute::kUnsupported) ==
+                  CountTotalLlvmOnlySeededInstructions() &&
+              manifest_target_specific_total +
+                      CountTargetSpecificSeededInstructionsForRoute(
+                          StubDecoderRoute::kUnsupported) ==
+                  CountTotalTargetSpecificSeededInstructions(),
+          "expected routed manifest provenance totals plus unsupported seeded remainder to partition seed-catalog provenance counts exactly")) {
     return 1;
   }
   if (!Expect(
