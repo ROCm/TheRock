@@ -4,12 +4,14 @@
 
 """AWS Lambda handler for S3-triggered index generation.
 
-Triggered by S3 PutObject events. For each uploaded object, determines the
-first-level subdirectory under the run prefix and regenerates its index.html
-by calling generate_s3_index.generate_index_for_directory().
+Triggered by S3 PutObject events via an SQS queue with a batch window.
+Batching allows multiple uploads to the same directory to be deduplicated
+within one invocation, avoiding redundant S3 list+put calls.
 
-Expected trigger: S3 event notification on PutObject for all keys under the
-therock-ci-artifacts and therock-ci-artifacts-external buckets.
+Expected trigger: SQS queue fed by S3 event notifications on PutObject for
+all keys under the therock-ci-artifacts and therock-ci-artifacts-external
+buckets. The handler also accepts direct S3 event payloads (useful for local
+testing without SQS infrastructure).
 
 S3 key structure:
 
@@ -19,42 +21,19 @@ S3 key structure:
   {run_prefix}/...             -- any other subdirectory
 
 where run_prefix is: [{external_repo}/]{run_id}-{platform}
-  e.g. "12345678901-linux" or "Fork-TheRock/12345678901-linux"
+  e.g. "12345678901-linux" or "ROCm-TheRock/12345678901-linux"
 
-For each uploaded object at {run_prefix}/{subdir}/..., this handler
-regenerates {run_prefix}/{subdir}/index.html with a recursive file listing.
-Objects uploaded directly at the run root regenerate {run_prefix}/index.html.
+For each uploaded object the handler regenerates index.html for its
+directory and all ancestor directories up to (but not including) the run
+prefix. Across a batch, each unique directory is indexed exactly once.
 
-Handler entry point: s3_index_handler.handler
+Handler entry point: s3_index_handler.lambda_handler
 Runtime:            Python 3.12+
-Required IAM:       s3:GetObject, s3:PutObject, s3:ListBucket on target buckets
 
--------------------------------------------------------------------------------
-DEPLOYMENT PACKAGE
--------------------------------------------------------------------------------
-The Lambda deployment package must be a flat zip containing this file and the
-following files copied manually from the TheRock repository:
-
-  File in deployment package            Source path in TheRock repo
-  ------------------------------------  ----------------------------------------
-  generate_s3_index.py                  build_tools/generate_s3_index.py
-  _therock_utils/storage_backend.py     build_tools/_therock_utils/storage_backend.py
-  _therock_utils/storage_location.py   build_tools/_therock_utils/storage_location.py
-
-Resulting zip layout:
-
-  s3_index_handler.py
-  generate_s3_index.py
-  _therock_utils/
-      storage_backend.py
-      storage_location.py
-
-Third-party dependencies (install into the package root before zipping):
-
-  pip install boto3
--------------------------------------------------------------------------------
+See README.md in this directory for deployment and IAM instructions.
 """
 
+import json
 import logging
 import sys
 from pathlib import Path
@@ -118,67 +97,135 @@ def _get_dir_prefix(key: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Per-bucket configuration
+# ---------------------------------------------------------------------------
+
+# Number of path segments in the run prefix for each bucket. The ancestor
+# walk stops at this depth so the run root is not re-indexed from deep
+# uploads (it is already indexed by its own direct file upload events).
+# Default is 1 (e.g. "12345-linux"). External buckets add one org-level
+# segment (e.g. "ROCm-TheRock/12345-linux").
+_RUN_PREFIX_DEPTH: dict[str, int] = {
+    "therock-ci-artifacts-external": 2,
+}
+_DEFAULT_RUN_PREFIX_DEPTH = 1
+
+
+# ---------------------------------------------------------------------------
+# Event parsing and directory collection
+# ---------------------------------------------------------------------------
+
+
+def _extract_s3_records(event: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract S3 event records from a direct S3 trigger or SQS-wrapped S3 events.
+
+    When triggered directly by S3, event["Records"] contains S3 records with
+    an "s3" key. When triggered via SQS, event["Records"] contains SQS records
+    whose "body" is a JSON-encoded S3 event.
+    """
+    raw_records = event.get("Records", [])
+    if not raw_records:
+        return []
+    if "body" in raw_records[0]:
+        # SQS trigger: unwrap each message body as an S3 event.
+        s3_records = []
+        for sqs_record in raw_records:
+            s3_event = json.loads(sqs_record["body"])
+            s3_records.extend(s3_event.get("Records", []))
+        return s3_records
+    return raw_records
+
+
+def _collect_dirs_to_index(
+    s3_records: list[dict[str, Any]],
+) -> dict[str, set[str]]:
+    """Collect unique directories to index from a batch of S3 event records.
+
+    For each record, adds the leaf directory and all ancestors up to (but not
+    including) the run prefix. Deduplicates across records so each directory
+    is indexed at most once per batch regardless of how many files landed there.
+
+    Returns:
+        Dict mapping bucket name to a set of dir_prefixes to index.
+    """
+    dirs: dict[str, set[str]] = {}
+    for record in s3_records:
+        s3_info = record["s3"]
+        bucket = s3_info["bucket"]["name"]
+        key = unquote_plus(s3_info["object"]["key"])
+        logger.info("Processing S3 event: s3://%s/%s", bucket, key)
+        dir_prefix = _get_dir_prefix(key)
+        if dir_prefix is None:
+            logger.info("Skipping key (index file or bucket root): %s", key)
+            continue
+        bucket_dirs = dirs.setdefault(bucket, set())
+        bucket_dirs.add(dir_prefix)
+        run_prefix_depth = _RUN_PREFIX_DEPTH.get(bucket, _DEFAULT_RUN_PREFIX_DEPTH)
+        parts = dir_prefix.split("/")
+        for i in range(len(parts) - 1, run_prefix_depth, -1):
+            bucket_dirs.add("/".join(parts[:i]))
+    return dirs
+
+
+# ---------------------------------------------------------------------------
 # Handler
 # ---------------------------------------------------------------------------
 
 
-def _process_record(record: dict[str, Any]) -> None:
-    """Process a single S3 event record."""
-    s3_info = record["s3"]
-    bucket = s3_info["bucket"]["name"]
-    # S3 event keys are URL-encoded.
-    key = unquote_plus(s3_info["object"]["key"])
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
+    """Lambda entry point.
 
-    logger.info("Processing S3 event: s3://%s/%s", bucket, key)
+    Args:
+        event: SQS event (preferred) or direct S3 event payload.
+        context: Lambda context object (unused).
 
-    dir_prefix = _get_dir_prefix(key)
-    if dir_prefix is None:
-        logger.info("Skipping key (index file or unrecognized structure): %s", key)
-        return
+    Returns:
+        Dict with statusCode 200 and the number of directories indexed.
+
+    Raises:
+        RuntimeError: After logging if any directory fails to index, so the
+            SQS message is not deleted and can be retried or sent to the DLQ.
+    """
+    s3_records = _extract_s3_records(event)
+    logger.info("Received %d S3 event record(s)", len(s3_records))
+
+    dirs_to_index = _collect_dirs_to_index(s3_records)
+    total_dirs = sum(len(d) for d in dirs_to_index.values())
+    logger.info(
+        "Indexing %d unique director%s (deduplicated from %d record(s))",
+        total_dirs,
+        "y" if total_dirs == 1 else "ies",
+        len(s3_records),
+    )
 
     import boto3
     s3_client = boto3.client("s3")
     backend = create_storage_backend()
 
-    logger.info("Generating index for: %s/%s", bucket, dir_prefix)
-    generate_s3_index.generate_index_for_directory(
-        bucket=bucket,
-        dir_prefix=dir_prefix,
-        backend=backend,
-        s3_client=s3_client,
-    )
-
-
-def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
-    """Lambda entry point.
-
-    Args:
-        event: S3 event payload containing a list of Records.
-        context: Lambda context object (unused).
-
-    Returns:
-        Dict with statusCode 200 on success.
-
-    Raises:
-        RuntimeError: After logging if any record fails, so Lambda can retry
-            via its configured retry policy.
-    """
-    records = event.get("Records", [])
-    logger.info("Received %d S3 event record(s)", len(records))
-
-    errors: list[tuple[str, Exception]] = []
-    for record in records:
-        key = record.get("s3", {}).get("object", {}).get("key", "<unknown>")
-        try:
-            _process_record(record)
-        except Exception as exc:
-            logger.exception("Failed to process record for key %s: %s", key, exc)
-            errors.append((key, exc))
+    errors: list[tuple[str, str, Exception]] = []
+    indexed = 0
+    for bucket, dir_prefixes in dirs_to_index.items():
+        # Index deeper paths first so ancestor indexes reflect children.
+        for dir_prefix in sorted(dir_prefixes, key=lambda p: p.count("/"), reverse=True):
+            try:
+                logger.info("Generating index for: %s/%s", bucket, dir_prefix)
+                generate_s3_index.generate_index_for_directory(
+                    bucket=bucket,
+                    dir_prefix=dir_prefix,
+                    backend=backend,
+                    s3_client=s3_client,
+                )
+                indexed += 1
+            except Exception as exc:
+                logger.exception(
+                    "Failed to generate index for %s/%s: %s", bucket, dir_prefix, exc
+                )
+                errors.append((bucket, dir_prefix, exc))
 
     if errors:
-        keys = ", ".join(k for k, _ in errors)
+        details = ", ".join(f"{b}/{p}" for b, p, _ in errors)
         raise RuntimeError(
-            f"Failed to process {len(errors)}/{len(records)} record(s): {keys}"
+            f"Failed to index {len(errors)}/{total_dirs} director(ies): {details}"
         )
 
-    return {"statusCode": 200, "processed": len(records)}
+    return {"statusCode": 200, "indexed": indexed}
