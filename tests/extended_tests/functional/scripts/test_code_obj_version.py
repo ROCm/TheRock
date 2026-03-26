@@ -84,16 +84,23 @@ class CovBackwardCompatibilityTest(FunctionalBase):
     _ROCM_SYSTEMS_REPO = "https://github.com/ROCm/rocm-systems.git"
 
     def _ensure_sources_ready(self) -> None:
-        is_empty = (
-            not self.rocm_systems_dir.exists()
-            or not any(self.rocm_systems_dir.iterdir())
+        is_empty = not self.rocm_systems_dir.exists() or not any(
+            self.rocm_systems_dir.iterdir()
         )
         if is_empty:
-            log.info("rocm-systems not found or empty at %s, cloning with --depth 1",
-                     self.rocm_systems_dir)
+            log.info(
+                "rocm-systems not found or empty at %s, cloning with --depth 1",
+                self.rocm_systems_dir,
+            )
             rc, output = self._execute_command_with_output(
-                ["git", "clone", "--depth", "1", self._ROCM_SYSTEMS_REPO,
-                 str(self.rocm_systems_dir)],
+                [
+                    "git",
+                    "clone",
+                    "--depth",
+                    "1",
+                    self._ROCM_SYSTEMS_REPO,
+                    str(self.rocm_systems_dir),
+                ],
             )
             if rc != 0:
                 raise TestExecutionError(
@@ -111,7 +118,10 @@ class CovBackwardCompatibilityTest(FunctionalBase):
 
     def _compile_sample(self, output_binary: Path, code_obj_version: int = None) -> int:
         hipcc = self._resolve_tool(
-            [self.rocm_path / "bin" / "hipcc", self.rocm_path / "hip" / "bin" / "hipcc"],
+            [
+                self.rocm_path / "bin" / "hipcc",
+                self.rocm_path / "hip" / "bin" / "hipcc",
+            ],
             "hipcc",
         )
         cmd = [hipcc, self.source_file, "-I", str(self.include_dir)]
@@ -172,7 +182,9 @@ class CovBackwardCompatibilityTest(FunctionalBase):
             )
             return code_object_version
 
-        offloading_reason = "offloading bundle inspection did not produce an ABI Version"
+        offloading_reason = (
+            "offloading bundle inspection did not produce an ABI Version"
+        )
         with tempfile.TemporaryDirectory(prefix="targetid_bit_extract_") as tmpdir:
             tmpdir_path = Path(tmpdir)
             rc, offloading_out = self._execute_command_with_output(
@@ -220,7 +232,9 @@ class CovBackwardCompatibilityTest(FunctionalBase):
                         match = re.search(r"ABI Version:\s*(\d+)", elf_header)
                         if match:
                             abi_version = int(match.group(1))
-                            return abi_to_code_object_version(abi_version, str(bundle_path))
+                            return abi_to_code_object_version(
+                                abi_version, str(bundle_path)
+                            )
                         bundle_errors.append(
                             f"`llvm-readelf -h {bundle_name}` did not contain ABI Version"
                         )
@@ -406,7 +420,6 @@ class CovBackwardCompatibilityTest(FunctionalBase):
                     detected_version=detected,
                 )
 
-
     def parse_results(self) -> List[Dict[str, Any]]:
         log.info(f"Parsing {self.display_name} Results")
         if not self.test_results:
@@ -429,6 +442,7 @@ class CovBackwardCompatibilityTest(FunctionalBase):
             )
 
         return parsed_results
+
 
 if __name__ == "__main__":
     run_functional_main(CovBackwardCompatibilityTest())
