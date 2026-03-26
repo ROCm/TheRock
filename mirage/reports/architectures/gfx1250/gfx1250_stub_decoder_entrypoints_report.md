@@ -55,6 +55,7 @@
   - exact routed-instruction-name uniqueness and route-info/list bijection validation across the current routed family set
   - exact route-selector-to-seed-catalog parity validation across the current routed family set
   - exact route-selector ordering parity against the sorted routed seed-catalog slice
+  - exact route-manifest block-boundary validation across the current routed family set
   - exact selector-to-decode status parity validation across routed, unsupported-seeded, unknown, and empty-name inputs
   - exact negative-path parity validation across routed wrong-entrypoint decodes and unsupported seeded ops
   - exact decode-hint-to-route/name/priority parity validation independent of selector implementation
@@ -75,6 +76,7 @@
   - exact routed-instruction-name uniqueness plus one-to-one coverage checks between `GetStubDecoderRouteInfos()` and `GetStubDecoderRouteInstructions()` across `kVop3p`, `kMimgTensor`, `kVop1`, and `kVop3Sdst`
   - exact routed-seed-catalog parity checks now pin route manifests, per-seed route-info fields, routed instruction-list membership, unsupported-seed exclusion, route-manifest internal accounting (`instruction_count == xml_backed_count + llvm_only_count`, `target_specific_count <= instruction_count`), exact routed-vs-unsupported seed-catalog partitioning, and exact XML-backed / LLVM-only / target-specific provenance partitioning directly against `GetDecoderSeedInfos()` across `kVop3p`, `kMimgTensor`, `kVop1`, and `kVop3Sdst`
   - exact routed-seed ordering checks now pin `GetStubDecoderRouteInstructions()` and the full `GetStubDecoderRouteInfos()` sequence directly against the sorted routed subset of `GetDecoderSeedInfos()`
+  - exact route-manifest block-boundary checks now pin `GetStubDecoderRouteManifests()` to stay in supported-route priority order and pin each manifest to a contiguous `GetStubDecoderRouteInfos()` / `GetStubDecoderRouteInstructions()` block with exact first-entry and last-entry lookup parity through `FindStubDecoderRouteInfo()`
   - exact decode-hint mapping checks now pin `DecodeSeedHint -> StubDecoderRoute`, route names, and route priorities through hardcoded expectations rather than selector-derived expectations
   - exact selector-to-decode parity checks now pin `SelectStubDecoderRoute(name)` / `FindStubDecoderRouteInfo(name)` against `DecodeStubInstruction(name)` status for routed seeds, unsupported seeded ops, unknown names, empty instruction names, lowercased known opcodes, and whitespace-padded known opcodes
   - exact selector negative-path checks now pin `SelectStubDecoderRoute(invalid_hint)`, `GetStubDecoderRouteName(invalid_route)`, `GetStubDecoderRouteInstructions(unsupported_or_invalid_route)`, `FindStubDecoderRouteManifest(unsupported_or_invalid_route)`, plus unknown-instruction, empty-instruction, lowercased-known-opcode, and whitespace-padded-known-opcode lookup exclusion

@@ -267,6 +267,72 @@ bool RouteManifestAccountingAndMetadataAreInternallyConsistent() {
   return true;
 }
 
+bool RouteManifestSequenceMatchesSupportedRouteOrder() {
+  static constexpr struct {
+    StubDecoderRoute route;
+    std::string_view route_name;
+    std::uint32_t route_priority;
+  } kExpectedRoutes[] = {
+      {StubDecoderRoute::kVop3p, "kVop3p", 1},
+      {StubDecoderRoute::kMimgTensor, "kMimgTensor", 2},
+      {StubDecoderRoute::kVop1, "kVop1", 3},
+      {StubDecoderRoute::kVop3Sdst, "kVop3Sdst", 4},
+  };
+
+  const auto manifests = GetStubDecoderRouteManifests();
+  if (manifests.size() !=
+      sizeof(kExpectedRoutes) / sizeof(kExpectedRoutes[0])) {
+    return false;
+  }
+
+  for (std::size_t i = 0; i < manifests.size(); ++i) {
+    if (manifests[i].route != kExpectedRoutes[i].route ||
+        manifests[i].route_name != kExpectedRoutes[i].route_name ||
+        manifests[i].route_priority != kExpectedRoutes[i].route_priority ||
+        FindStubDecoderRouteManifest(manifests[i].route) != &manifests[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool RouteManifestBoundariesMatchSelectorSurfaces() {
+  const auto manifests = GetStubDecoderRouteManifests();
+  const auto route_infos = GetStubDecoderRouteInfos();
+
+  std::size_t route_info_offset = 0;
+  for (const StubDecoderRouteManifest& manifest : manifests) {
+    const auto routed_instructions =
+        GetStubDecoderRouteInstructions(manifest.route);
+    if (manifest.instruction_count == 0 ||
+        routed_instructions.size() != manifest.instruction_count ||
+        route_info_offset + manifest.instruction_count > route_infos.size()) {
+      return false;
+    }
+
+    if (FindStubDecoderRouteInfo(routed_instructions.front()) !=
+            &route_infos[route_info_offset] ||
+        FindStubDecoderRouteInfo(routed_instructions.back()) !=
+            &route_infos[route_info_offset + manifest.instruction_count - 1]) {
+      return false;
+    }
+
+    for (std::size_t i = 0; i < routed_instructions.size(); ++i) {
+      const StubDecoderRouteInfo& route_info = route_infos[route_info_offset + i];
+      if (route_info.route != manifest.route ||
+          route_info.route_name != manifest.route_name ||
+          route_info.route_priority != manifest.route_priority ||
+          route_info.instruction_name != routed_instructions[i]) {
+        return false;
+      }
+    }
+
+    route_info_offset += manifest.instruction_count;
+  }
+
+  return route_info_offset == route_infos.size();
+}
+
 bool UnsupportedSeededSliceMatchesExcludedSelectorSurface() {
   std::uint32_t excluded_count = 0;
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
@@ -295,6 +361,14 @@ int main() {
   }
   if (!Expect(GetStubDecoderRouteManifests().size() == 4,
               "expected four prioritized stub decoder routes")) {
+    return 1;
+  }
+  if (!Expect(RouteManifestSequenceMatchesSupportedRouteOrder(),
+              "expected route manifests to stay in exact supported-route priority order with sequence-stable lookup parity")) {
+    return 1;
+  }
+  if (!Expect(RouteManifestBoundariesMatchSelectorSurfaces(),
+              "expected route manifests to partition routed selector surfaces into exact contiguous per-route blocks")) {
     return 1;
   }
 
