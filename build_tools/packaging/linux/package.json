@@ -248,12 +248,6 @@
               "run",
               "doc"
             ]
-          },
-          {
-            "Name": "amd-comgr-stub",
-            "Components": [
-              "lib"
-            ]
           }
         ]
       }
