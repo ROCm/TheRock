@@ -7,12 +7,6 @@
 #   - workflow_run completed  → forwards the workflow_run object
 #   - pull_request events     → forwards the PR object + action
 #   - push to main            → forwards push metadata
-#
-# Prerequisites:
-#   - A fine-grained PAT (or GitHub App token) stored as QUARTZ_DISPATCH_TOKEN
-#     with `contents: write` permission on the Quartz repo (needed to create
-#     repository_dispatch events).
-#   - Update QUARTZ_REPO below to point at your Quartz repository.
 
 name: Notify Quartz
 
@@ -61,6 +55,7 @@ jobs:
                 workflow_run: {
                   id: wr.id,
                   name: wr.name,
+                  display_title: wr.display_title,
                   workflow_id: wr.workflow_id,
                   status: wr.status,
                   conclusion: wr.conclusion,
