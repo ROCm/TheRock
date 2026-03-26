@@ -273,13 +273,10 @@ jobs:
             --log-cli-level=INFO \
             -v
 
-      - name: Disable pytest reruns
-        run: |
-          sed -i "s/rerun_options = \[\"-x\", \"--reruns=2\"\]/rerun_options = [\"-x\", \"--reruns=0\"]/" \
-            external-builds/pytorch/pytorch/test/run_test.py
-
       - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
+        env:
+          PYTORCH_NUM_PYTEST_RERUNS: "0"
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py -- \
             --continue-on-collection-errors \
