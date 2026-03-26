@@ -71,6 +71,46 @@ def create_ninja_log_archive(build_dir: Path):
     return archive_path
 
 
+_CCACHE_LOG_PATTERNS = [
+    "ccache.log",
+    "ccache_stats.log",
+    "ccache_compiler_check_cache.log",
+]
+
+
+def create_ccache_log_archive(build_dir: Path):
+    """Archive ccache log files and remove the originals.
+
+    ccache.log can be hundreds of MB (verbose per-invocation trace) but
+    compresses ~12:1. Archiving keeps the data available for debugging
+    without bloating the upload.
+    """
+    log_dir = build_dir / "logs"
+    if not log_dir.is_dir():
+        return
+
+    found_files = [
+        log_dir / name for name in _CCACHE_LOG_PATTERNS if (log_dir / name).is_file()
+    ]
+    if not found_files:
+        return
+
+    archive_path = log_dir / "ccache_logs.tar.gz"
+    with tarfile.open(archive_path, "w:gz") as tar:
+        for file_path in found_files:
+            tar.add(file_path, arcname=file_path.name)
+            log(f"[+] Archived ccache log: {file_path.name}")
+
+    archive_size = archive_path.stat().st_size
+    log(
+        f"[INFO] Created {archive_path.name} ({archive_size // 1024 // 1024}MB from {len(found_files)} files)"
+    )
+
+    # Remove originals so they aren't uploaded uncompressed.
+    for file_path in found_files:
+        file_path.unlink()
+
+
 def upload_stage_logs(
     build_dir: Path,
     output_root: WorkflowOutputRoot,
@@ -97,8 +137,9 @@ def upload_stage_logs(
 
 
 def run(args: argparse.Namespace):
-    log(f"Creating ninja log archive for stage '{args.stage}'")
+    log(f"Creating log archives for stage '{args.stage}'")
     create_ninja_log_archive(args.build_dir)
+    create_ccache_log_archive(args.build_dir)
 
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id,

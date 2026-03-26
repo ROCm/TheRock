@@ -86,6 +86,77 @@ class TestCreateNinjaLogArchive(unittest.TestCase):
             self.assertFalse((build_dir / "logs").exists())
 
 
+class TestCreateCcacheLogArchive(unittest.TestCase):
+    """Tests for create_ccache_log_archive()."""
+
+    def test_archives_and_removes_ccache_logs(self):
+        """Verify ccache log files are archived and originals removed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            log_dir = build_dir / "logs"
+            log_dir.mkdir()
+            (log_dir / "ccache.log").write_text("x" * 10000)
+            (log_dir / "ccache_stats.log").write_text("stats")
+            (log_dir / "ccache_compiler_check_cache.log").write_text("check")
+
+            post_stage_upload.create_ccache_log_archive(build_dir)
+
+            archive = log_dir / "ccache_logs.tar.gz"
+            self.assertTrue(archive.exists())
+
+            with tarfile.open(archive, "r:gz") as tar:
+                names = sorted(tar.getnames())
+            self.assertEqual(
+                names,
+                [
+                    "ccache.log",
+                    "ccache_compiler_check_cache.log",
+                    "ccache_stats.log",
+                ],
+            )
+
+            # Originals should be removed.
+            self.assertFalse((log_dir / "ccache.log").exists())
+            self.assertFalse((log_dir / "ccache_stats.log").exists())
+            self.assertFalse((log_dir / "ccache_compiler_check_cache.log").exists())
+
+    def test_partial_ccache_logs(self):
+        """Verify works when only some ccache log files exist."""
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            log_dir = build_dir / "logs"
+            log_dir.mkdir()
+            (log_dir / "ccache.log").write_text("big log")
+
+            post_stage_upload.create_ccache_log_archive(build_dir)
+
+            archive = log_dir / "ccache_logs.tar.gz"
+            self.assertTrue(archive.exists())
+            with tarfile.open(archive, "r:gz") as tar:
+                self.assertEqual(tar.getnames(), ["ccache.log"])
+            self.assertFalse((log_dir / "ccache.log").exists())
+
+    def test_no_ccache_logs_skips(self):
+        """Verify no archive created when no ccache log files exist."""
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            log_dir = build_dir / "logs"
+            log_dir.mkdir()
+            (log_dir / "rocBLAS_build.log").write_text("build output")
+
+            post_stage_upload.create_ccache_log_archive(build_dir)
+
+            self.assertFalse((log_dir / "ccache_logs.tar.gz").exists())
+            # Other logs untouched.
+            self.assertTrue((log_dir / "rocBLAS_build.log").exists())
+
+    def test_no_log_dir_skips(self):
+        """Verify no error when logs/ doesn't exist."""
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            post_stage_upload.create_ccache_log_archive(build_dir)
+
+
 class TestUploadStageLogs(unittest.TestCase):
     """Tests for upload_stage_logs()."""
 
