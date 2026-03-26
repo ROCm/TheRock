@@ -71,31 +71,22 @@ def create_ninja_log_archive(build_dir: Path):
     return archive_path
 
 
-_CCACHE_LOG_PATTERNS = [
-    "ccache.log",
-    "ccache_stats.log",
-    "ccache_compiler_check_cache.log",
-]
-
-
 def create_ccache_log_archive(build_dir: Path):
-    """Archive ccache log files and remove the originals.
+    """Archive the ccache log subdirectory into a compressed tarball.
 
     ccache.log can be hundreds of MB (verbose per-invocation trace) but
-    compresses ~12:1. Archiving keeps the data available for debugging
-    without bloating the upload.
+    compresses ~12:1. The raw logs in logs/ccache/ are excluded from upload
+    (see upload_stage_logs); this archive provides the compressed version.
     """
-    log_dir = build_dir / "logs"
-    if not log_dir.is_dir():
+    ccache_dir = build_dir / "logs" / "ccache"
+    if not ccache_dir.is_dir():
         return
 
-    found_files = [
-        log_dir / name for name in _CCACHE_LOG_PATTERNS if (log_dir / name).is_file()
-    ]
+    found_files = sorted(f for f in ccache_dir.iterdir() if f.is_file())
     if not found_files:
         return
 
-    archive_path = log_dir / "ccache_logs.tar.gz"
+    archive_path = build_dir / "logs" / "ccache_logs.tar.gz"
     with tarfile.open(archive_path, "w:gz") as tar:
         for file_path in found_files:
             tar.add(file_path, arcname=file_path.name)
@@ -103,12 +94,9 @@ def create_ccache_log_archive(build_dir: Path):
 
     archive_size = archive_path.stat().st_size
     log(
-        f"[INFO] Created {archive_path.name} ({archive_size // 1024 // 1024}MB from {len(found_files)} files)"
+        f"[INFO] Created {archive_path.name} "
+        f"({archive_size // 1024 // 1024}MB from {len(found_files)} files)"
     )
-
-    # Remove originals so they aren't uploaded uncompressed.
-    for file_path in found_files:
-        file_path.unlink()
 
 
 def upload_stage_logs(
@@ -133,7 +121,8 @@ def upload_stage_logs(
         return
 
     dest = output_root.stage_log_dir(stage_name, amdgpu_family)
-    backend.upload_directory(log_dir, dest)
+    # Exclude raw ccache logs — they're uploaded compressed as ccache_logs.tar.gz.
+    backend.upload_directory(log_dir, dest, exclude=["ccache/*"])
 
 
 def run(args: argparse.Namespace):
