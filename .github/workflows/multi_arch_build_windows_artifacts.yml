@@ -165,3 +165,12 @@ jobs:
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}"
+
+      - name: Upload stage logs
+        if: ${{ !cancelled() }}
+        run: |
+          python build_tools/github_actions/post_stage_upload.py \
+            --run-id=${{ github.run_id }} \
+            --stage="${STAGE_NAME}" \
+            --build-dir="${BUILD_DIR}" \
+            --amdgpu-family="${AMDGPU_FAMILIES}"
