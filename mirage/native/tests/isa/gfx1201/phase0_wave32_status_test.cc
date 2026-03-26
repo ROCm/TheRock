@@ -197,6 +197,7 @@ int main() {
   const auto vds_boundary_order = GetGfx1201Wave32Phase0VdsBoundaryOrder();
   const auto remaining_vds_instruction_statuses =
       GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses();
+  const auto vds_next_risk_steps = GetGfx1201Wave32Phase0VdsNextRiskSteps();
   const auto first_unsafe_vds_instructions =
       GetGfx1201Wave32FirstUnsafeVdsInstructions();
   const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* append_status =
@@ -213,6 +214,16 @@ int main() {
   const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* missing_vds_status =
       FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
           "DS_BPERMUTE_FI_B32");
+  const Gfx1201Wave32Phase0VdsNextRiskStep* append_step =
+      FindGfx1201Wave32Phase0VdsNextRiskStep("append_consume");
+  const Gfx1201Wave32Phase0VdsNextRiskStep* exchange_step =
+      FindGfx1201Wave32Phase0VdsNextRiskStep("exchange_compare_store");
+  const Gfx1201Wave32Phase0VdsNextRiskStep* multi_address_step =
+      FindGfx1201Wave32Phase0VdsNextRiskStep("multi_address");
+  const Gfx1201Wave32Phase0VdsNextRiskStep* bvh_step =
+      FindGfx1201Wave32Phase0VdsNextRiskStep("bvh_stack");
+  const Gfx1201Wave32Phase0VdsNextRiskStep* missing_vds_step =
+      FindGfx1201Wave32Phase0VdsNextRiskStep("not_a_bucket");
   if (!Expect(next_risk_encodings.size() == kExpectedNextRiskEncodings.size(),
               "expected next-risk encoding count") ||
       !Expect(frontier_order.size() == kExpectedFrontierOrder.size(),
@@ -223,6 +234,8 @@ int main() {
               "expected VDS boundary order count") ||
       !Expect(remaining_vds_instruction_statuses.size() == 24u,
               "expected remaining VDS instruction status count") ||
+      !Expect(vds_next_risk_steps.size() == 4u,
+              "expected remaining VDS next-risk step count") ||
       !Expect(first_unsafe_vds_instructions.size() ==
                   kExpectedFirstUnsafeVdsInstructions.size(),
               "expected first unsafe VDS instruction count") ||
@@ -238,8 +251,13 @@ int main() {
       !Expect(append_status != nullptr && storexchg_status != nullptr &&
                   stride_status != nullptr && bvh_status != nullptr,
               "expected remaining VDS instruction lookups") ||
+      !Expect(append_step != nullptr && exchange_step != nullptr &&
+                  multi_address_step != nullptr && bvh_step != nullptr,
+              "expected remaining VDS next-risk step lookups") ||
       !Expect(missing_vds_status == nullptr,
               "expected executable VDS op to stay out of remaining-VDS status") ||
+      !Expect(missing_vds_step == nullptr,
+              "expected missing VDS next-risk step lookup to fail") ||
       !Expect(GetGfx1201Wave32Phase0RecommendedNextEncoding() == "ENC_VDS",
               "expected ENC_VDS as the recommended next frontier")) {
     return 1;
@@ -327,6 +345,89 @@ int main() {
                   bvh_status->bucket_ordinal == 2u &&
                   !bvh_status->safe_under_current_request,
               "expected BVH remaining-VDS instruction status")) {
+    return 1;
+  }
+
+  if (!Expect(vds_next_risk_steps.front().bucket_name == "append_consume" &&
+                  vds_next_risk_steps.front().first_instruction_name ==
+                      "DS_APPEND" &&
+                  vds_next_risk_steps.front().last_instruction_name ==
+                      "DS_CONSUME" &&
+                  vds_next_risk_steps.front()
+                          .remaining_instruction_count_including_bucket ==
+                      24u &&
+                  vds_next_risk_steps.front()
+                          .remaining_instruction_count_after_bucket == 22u &&
+                  vds_next_risk_steps.front().next_bucket_name ==
+                      "exchange_compare_store" &&
+                  vds_next_risk_steps.front().next_bucket_blocking_dimension ==
+                      "exchange_compare_store_semantics" &&
+                  vds_next_risk_steps.front().next_instruction_name ==
+                      "DS_CONDXCHG32_RTN_B64",
+              "expected first VDS next-risk step") ||
+      !Expect(vds_next_risk_steps.back().bucket_name == "bvh_stack" &&
+                  vds_next_risk_steps.back().first_instruction_name ==
+                      "DS_BVH_STACK_PUSH4_POP1_RTN_B32" &&
+                  vds_next_risk_steps.back().last_instruction_name ==
+                      "DS_BVH_STACK_PUSH8_POP2_RTN_B64" &&
+                  vds_next_risk_steps.back()
+                          .remaining_instruction_count_including_bucket ==
+                      3u &&
+                  vds_next_risk_steps.back()
+                          .remaining_instruction_count_after_bucket == 0u &&
+                  vds_next_risk_steps.back().next_bucket_name.empty() &&
+                  vds_next_risk_steps.back()
+                      .next_bucket_blocking_dimension.empty() &&
+                  vds_next_risk_steps.back().next_instruction_name.empty(),
+              "expected last VDS next-risk step") ||
+      !Expect(append_step->bucket_name == "append_consume" &&
+                  append_step->blocking_dimension ==
+                      "allocator_or_gds_semantics" &&
+                  append_step->risk_rank == 0u &&
+                  append_step->instruction_count == 2u &&
+                  append_step->remaining_instruction_count_including_bucket ==
+                      24u &&
+                  append_step->remaining_instruction_count_after_bucket == 22u &&
+                  append_step->next_bucket_name ==
+                      "exchange_compare_store" &&
+                  append_step->next_instruction_name ==
+                      "DS_CONDXCHG32_RTN_B64",
+              "expected append VDS next-risk step") ||
+      !Expect(exchange_step->bucket_name == "exchange_compare_store" &&
+                  exchange_step->risk_rank == 1u &&
+                  exchange_step->instruction_count == 7u &&
+                  exchange_step->remaining_instruction_count_including_bucket ==
+                      22u &&
+                  exchange_step->remaining_instruction_count_after_bucket ==
+                      15u &&
+                  exchange_step->next_bucket_name == "multi_address" &&
+                  exchange_step->next_bucket_blocking_dimension ==
+                      "multi_address_semantics" &&
+                  exchange_step->next_instruction_name ==
+                      "DS_LOAD_2ADDR_B32",
+              "expected exchange/compare-store VDS next-risk step") ||
+      !Expect(multi_address_step->bucket_name == "multi_address" &&
+                  multi_address_step->risk_rank == 2u &&
+                  multi_address_step->instruction_count == 12u &&
+                  multi_address_step
+                          ->remaining_instruction_count_including_bucket ==
+                      15u &&
+                  multi_address_step->remaining_instruction_count_after_bucket ==
+                      3u &&
+                  multi_address_step->next_bucket_name == "bvh_stack" &&
+                  multi_address_step->next_bucket_blocking_dimension ==
+                      "gfx1201_specific_bvh_semantics" &&
+                  multi_address_step->next_instruction_name ==
+                      "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
+              "expected multi-address VDS next-risk step") ||
+      !Expect(bvh_step->bucket_name == "bvh_stack" &&
+                  bvh_step->risk_rank == 3u &&
+                  bvh_step->instruction_count == 3u &&
+                  bvh_step->remaining_instruction_count_including_bucket == 3u &&
+                  bvh_step->remaining_instruction_count_after_bucket == 0u &&
+                  bvh_step->next_bucket_name.empty() &&
+                  bvh_step->next_instruction_name.empty(),
+              "expected BVH VDS next-risk step")) {
     return 1;
   }
 

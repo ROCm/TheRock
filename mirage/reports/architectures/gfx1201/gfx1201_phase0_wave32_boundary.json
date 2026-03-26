@@ -290,6 +290,60 @@
     "multi_address",
     "bvh_stack"
   ],
+  "remaining_vds_next_risk_steps": [
+    {
+      "bucket_name": "append_consume",
+      "blocking_dimension": "allocator_or_gds_semantics",
+      "risk_rank": 0,
+      "first_instruction_name": "DS_APPEND",
+      "last_instruction_name": "DS_CONSUME",
+      "instruction_count": 2,
+      "remaining_instruction_count_including_bucket": 24,
+      "remaining_instruction_count_after_bucket": 22,
+      "next_bucket_name": "exchange_compare_store",
+      "next_bucket_blocking_dimension": "exchange_compare_store_semantics",
+      "next_instruction_name": "DS_CONDXCHG32_RTN_B64"
+    },
+    {
+      "bucket_name": "exchange_compare_store",
+      "blocking_dimension": "exchange_compare_store_semantics",
+      "risk_rank": 1,
+      "first_instruction_name": "DS_CONDXCHG32_RTN_B64",
+      "last_instruction_name": "DS_STOREXCHG_RTN_B64",
+      "instruction_count": 7,
+      "remaining_instruction_count_including_bucket": 22,
+      "remaining_instruction_count_after_bucket": 15,
+      "next_bucket_name": "multi_address",
+      "next_bucket_blocking_dimension": "multi_address_semantics",
+      "next_instruction_name": "DS_LOAD_2ADDR_B32"
+    },
+    {
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "risk_rank": 2,
+      "first_instruction_name": "DS_LOAD_2ADDR_B32",
+      "last_instruction_name": "DS_STORE_2ADDR_STRIDE64_B64",
+      "instruction_count": 12,
+      "remaining_instruction_count_including_bucket": 15,
+      "remaining_instruction_count_after_bucket": 3,
+      "next_bucket_name": "bvh_stack",
+      "next_bucket_blocking_dimension": "gfx1201_specific_bvh_semantics",
+      "next_instruction_name": "DS_BVH_STACK_PUSH4_POP1_RTN_B32"
+    },
+    {
+      "bucket_name": "bvh_stack",
+      "blocking_dimension": "gfx1201_specific_bvh_semantics",
+      "risk_rank": 3,
+      "first_instruction_name": "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
+      "last_instruction_name": "DS_BVH_STACK_PUSH8_POP2_RTN_B64",
+      "instruction_count": 3,
+      "remaining_instruction_count_including_bucket": 3,
+      "remaining_instruction_count_after_bucket": 0,
+      "next_bucket_name": "",
+      "next_bucket_blocking_dimension": "",
+      "next_instruction_name": ""
+    }
+  ],
   "remaining_vds_instruction_to_bucket": {
     "DS_APPEND": "append_consume",
     "DS_CONSUME": "append_consume",
@@ -463,6 +517,7 @@
     "There is no safe ENC_VDS continuation under the current request boundary: every remaining bucket crosses allocator-or-GDS, exchange/compare-store, multi-address, or gfx1201-specific BVH semantics.",
     "The boundary report now carries an exact remaining-VDS instruction-to-bucket map so the unresolved tail can be queried directly by opcode name.",
     "The exact unsafe-bucket escalation order is append_consume, then exchange_compare_store, then multi_address, then bvh_stack.",
+    "The boundary report now also carries an exact next-risk step chain with first and last instruction names, cumulative remaining counts, and explicit next-bucket handoff metadata for the unresolved VDS tail.",
     "The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.",
     "The boundary report now also carries a denormalized per-op remaining-VDS status list with bucket, blocking dimension, bucket risk rank, tail ordinal, bucket ordinal, and safe flag."
   ]

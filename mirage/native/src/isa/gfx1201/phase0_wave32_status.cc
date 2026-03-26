@@ -240,6 +240,51 @@ BuildRemainingVdsInstructionStatuses() {
   return statuses;
 }
 
+std::vector<Gfx1201Wave32Phase0VdsNextRiskStep> BuildVdsNextRiskSteps() {
+  std::vector<Gfx1201Wave32Phase0VdsNextRiskStep> steps;
+  steps.reserve(kVdsBoundaryBuckets.size());
+
+  std::uint32_t total_remaining_instruction_count = 0;
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket : kVdsBoundaryBuckets) {
+    total_remaining_instruction_count += bucket.instruction_count;
+  }
+
+  for (std::size_t i = 0; i < kVdsBoundaryBuckets.size(); ++i) {
+    const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket = kVdsBoundaryBuckets[i];
+    const bool has_next_bucket = i + 1 < kVdsBoundaryBuckets.size();
+    const Gfx1201Wave32Phase0VdsBoundaryBucket* next_bucket =
+        has_next_bucket ? &kVdsBoundaryBuckets[i + 1] : nullptr;
+
+    const std::uint32_t consumed_instruction_count =
+        bucket.ending_instruction_ordinal + 1u;
+    const std::uint32_t remaining_instruction_count_after_bucket =
+        total_remaining_instruction_count > consumed_instruction_count
+            ? total_remaining_instruction_count - consumed_instruction_count
+            : 0u;
+
+    steps.push_back(Gfx1201Wave32Phase0VdsNextRiskStep{
+        bucket.bucket_name,
+        bucket.blocking_dimension,
+        bucket.risk_rank,
+        bucket.instruction_names.empty() ? std::string_view{}
+                                         : bucket.instruction_names.front(),
+        bucket.instruction_names.empty() ? std::string_view{}
+                                         : bucket.instruction_names.back(),
+        bucket.instruction_count,
+        total_remaining_instruction_count - bucket.starting_instruction_ordinal,
+        remaining_instruction_count_after_bucket,
+        next_bucket == nullptr ? std::string_view{} : next_bucket->bucket_name,
+        next_bucket == nullptr ? std::string_view{}
+                               : next_bucket->blocking_dimension,
+        next_bucket == nullptr || next_bucket->instruction_names.empty()
+            ? std::string_view{}
+            : next_bucket->instruction_names.front(),
+    });
+  }
+
+  return steps;
+}
+
 }  // namespace
 
 std::span<const Gfx1201Wave32Phase0EncodingStatus>
@@ -301,6 +346,13 @@ GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses() {
   return kStatuses;
 }
 
+std::span<const Gfx1201Wave32Phase0VdsNextRiskStep>
+GetGfx1201Wave32Phase0VdsNextRiskSteps() {
+  static const std::vector<Gfx1201Wave32Phase0VdsNextRiskStep> kSteps =
+      BuildVdsNextRiskSteps();
+  return kSteps;
+}
+
 const Gfx1201Wave32Phase0VdsBoundaryBucket*
 FindGfx1201Wave32Phase0VdsBoundaryBucket(std::string_view bucket_name) {
   for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket :
@@ -333,6 +385,17 @@ FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
        GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses()) {
     if (status.instruction_name == instruction_name) {
       return &status;
+    }
+  }
+  return nullptr;
+}
+
+const Gfx1201Wave32Phase0VdsNextRiskStep*
+FindGfx1201Wave32Phase0VdsNextRiskStep(std::string_view bucket_name) {
+  for (const Gfx1201Wave32Phase0VdsNextRiskStep& step :
+       GetGfx1201Wave32Phase0VdsNextRiskSteps()) {
+    if (step.bucket_name == bucket_name) {
+      return &step;
     }
   }
   return nullptr;
