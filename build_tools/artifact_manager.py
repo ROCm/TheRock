@@ -344,6 +344,9 @@ def do_fetch(args: argparse.Namespace):
         run_id=args.run_id,
         platform=args.platform,
         gfx_families=target_families,
+        s3_url_schema=args.s3_url_schema,
+        https_url_schema=args.https_url_schema,
+        bucket_schema=args.bucket_schema,
     )
     log(f"Using backend: {backend.base_uri}")
 
@@ -590,6 +593,9 @@ def do_push(args: argparse.Namespace):
     backend = create_backend_from_env(
         run_id=args.run_id,
         platform=args.platform,
+        s3_url_schema=args.s3_url_schema,
+        https_url_schema=args.https_url_schema,
+        bucket_schema=args.bucket_schema,
     )
     log(f"Using backend: {backend.base_uri}")
 
@@ -755,7 +761,12 @@ def copy_single_artifact(request: CopyRequest) -> bool:
 
 
 def _create_source_backend(
-    source_run_id: str, platform: str, local_staging_dir: Optional[Path] = None
+    source_run_id: str,
+    platform: str,
+    local_staging_dir: Optional[Path] = None,
+    s3_url_schema: Optional[str] = None,
+    https_url_schema: Optional[str] = None,
+    bucket_schema: Optional[str] = None,
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
@@ -767,7 +778,11 @@ def _create_source_backend(
     if local_staging_dir or os.getenv("THEROCK_LOCAL_STAGING_DIR"):
         staging = local_staging_dir or Path(os.environ["THEROCK_LOCAL_STAGING_DIR"])
         output_root = WorkflowOutputRoot.for_local(
-            run_id=source_run_id, platform=platform
+            run_id=source_run_id,
+            platform=platform,
+            s3_url_schema=s3_url_schema,
+            https_url_schema=https_url_schema,
+            # bucket_schema not applicable for local backend
         )
         return LocalDirectoryBackend(
             staging_dir=staging,
@@ -775,7 +790,12 @@ def _create_source_backend(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=source_run_id, platform=platform, lookup_workflow_run=True
+        run_id=source_run_id,
+        platform=platform,
+        lookup_workflow_run=True,
+        s3_url_schema=s3_url_schema,
+        https_url_schema=https_url_schema,
+        bucket_schema=bucket_schema,
     )
     return S3Backend(output_root=output_root)
 
@@ -815,11 +835,17 @@ def do_copy(args: argparse.Namespace):
         source_run_id=args.source_run_id,
         platform=args.platform,
         local_staging_dir=args.local_staging_dir,
+        s3_url_schema=args.s3_url_schema,
+        https_url_schema=args.https_url_schema,
+        bucket_schema=args.bucket_schema,
     )
     dest_backend = create_backend_from_env(
         run_id=args.run_id,
         platform=args.platform,
         gfx_families=target_families,
+        s3_url_schema=args.s3_url_schema,
+        https_url_schema=args.https_url_schema,
+        bucket_schema=args.bucket_schema,
     )
 
     log(f"Source: {source_backend.base_uri}")
@@ -991,6 +1017,24 @@ def _add_backend_args(parser: argparse.ArgumentParser):
         type=Path,
         default=os.getenv("THEROCK_LOCAL_STAGING_DIR"),
         help="Local staging directory (sets THEROCK_LOCAL_STAGING_DIR)",
+    )
+    parser.add_argument(
+        "--s3-url-schema",
+        type=str,
+        default=None,
+        help="Template for S3 URIs (default: s3://{bucket}/{path})",
+    )
+    parser.add_argument(
+        "--https-url-schema",
+        type=str,
+        default=None,
+        help="Template for HTTPS URLs (default: https://{bucket}.s3.amazonaws.com/{path})",
+    )
+    parser.add_argument(
+        "--bucket-schema",
+        type=str,
+        default=None,
+        help="Template for bucket naming (default: therock-{release_type}-artifacts)",
     )
 
 

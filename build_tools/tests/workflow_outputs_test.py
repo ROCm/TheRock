@@ -23,6 +23,16 @@ class TestStorageLocation(unittest.TestCase):
         loc = StorageLocation("my-bucket", "12345-linux/file.tar.xz")
         self.assertEqual(loc.s3_uri, "s3://my-bucket/12345-linux/file.tar.xz")
 
+    def test_s3_uri_custom_schema(self):
+        loc = StorageLocation(
+            "my-bucket",
+            "12345-linux/file.tar.xz",
+            s3_url_schema="custom://{bucket}/prefix/{path}",
+        )
+        self.assertEqual(
+            loc.s3_uri, "custom://my-bucket/prefix/12345-linux/file.tar.xz"
+        )
+
     def test_https_url(self):
         loc = StorageLocation("my-bucket", "12345-linux/file.tar.xz")
         self.assertEqual(
@@ -30,53 +40,44 @@ class TestStorageLocation(unittest.TestCase):
             "https://my-bucket.s3.amazonaws.com/12345-linux/file.tar.xz",
         )
 
-    def test_https_url_with_env_override(self):
-        """Test https_url with bucket-specific environment variable override."""
-        # Set up env var
-        os.environ["THEROCK_HTTPS_URL_my_custom_bucket"] = (
-            "https://custom.example.com/artifacts"
+    def test_https_url_custom_schema(self):
+        loc = StorageLocation(
+            "my-bucket",
+            "12345-linux/file.tar.xz",
+            https_url_schema="https://cdn.example.com/{bucket}/{path}",
         )
-        try:
-            loc = StorageLocation("my-custom-bucket", "12345-linux/file.tar.xz")
-            self.assertEqual(
-                loc.https_url,
-                "https://custom.example.com/artifacts/12345-linux/file.tar.xz",
-            )
-        finally:
-            del os.environ["THEROCK_HTTPS_URL_my_custom_bucket"]
+        self.assertEqual(
+            loc.https_url, "https://cdn.example.com/my-bucket/12345-linux/file.tar.xz"
+        )
 
-    def test_https_url_env_override_trailing_slash(self):
-        """Test that trailing slash in env var is handled correctly."""
-        os.environ["THEROCK_HTTPS_URL_my_bucket"] = "https://example.com/path/"
-        try:
-            loc = StorageLocation("my-bucket", "file.tar.xz")
-            self.assertEqual(
-                loc.https_url,
-                "https://example.com/path/file.tar.xz",
-            )
-        finally:
-            del os.environ["THEROCK_HTTPS_URL_my_bucket"]
-
-    def test_https_url_default_without_env(self):
-        """Test https_url falls back to S3 pattern when no env var set."""
-        # Ensure env var is not set
-        env_var = "THEROCK_HTTPS_URL_therock_ci_artifacts"
-        old_value = os.environ.pop(env_var, None)
-        try:
-            loc = StorageLocation("therock-ci-artifacts", "12345-linux/file.tar.xz")
-            self.assertEqual(
-                loc.https_url,
-                "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/file.tar.xz",
-            )
-        finally:
-            if old_value is not None:
-                os.environ[env_var] = old_value
+    def test_https_url_default_schema(self):
+        """Test https_url uses default S3 pattern when no custom schema provided."""
+        loc = StorageLocation("therock-ci-artifacts", "12345-linux/file.tar.xz")
+        self.assertEqual(
+            loc.https_url,
+            "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/file.tar.xz",
+        )
 
     def test_local_path(self):
         loc = StorageLocation("my-bucket", "12345-linux/logs/group/build.log")
         result = loc.local_path(Path("/tmp/staging"))
         expected = Path("/tmp/staging/12345-linux/logs/group/build.log")
         self.assertEqual(result, expected)
+
+    def test_s3_uri_and_https_url_with_both_schemas(self):
+        """Test that both custom schemas work together."""
+        loc = StorageLocation(
+            "my-bucket",
+            "12345-linux/file.tar.xz",
+            s3_url_schema="custom-s3://{bucket}/prefix/{path}",
+            https_url_schema="https://cdn.example.com/{bucket}/{path}",
+        )
+        self.assertEqual(
+            loc.s3_uri, "custom-s3://my-bucket/prefix/12345-linux/file.tar.xz"
+        )
+        self.assertEqual(
+            loc.https_url, "https://cdn.example.com/my-bucket/12345-linux/file.tar.xz"
+        )
 
     def test_frozen(self):
         loc = StorageLocation("bucket", "path")
@@ -284,6 +285,75 @@ class TestStorageLocationEndToEnd(unittest.TestCase):
         )
 
 
+class TestWorkflowOutputRootCustomSchemas(unittest.TestCase):
+    """Test that custom URL schemas propagate through to StorageLocation."""
+
+    def test_custom_s3_schema_propagates(self):
+        root = WorkflowOutputRoot(
+            bucket="my-bucket",
+            external_repo="",
+            run_id="12345",
+            platform="linux",
+            s3_url_schema="custom-s3://{bucket}/prefix/{path}",
+        )
+        loc = root.artifact("test.tar.xz")
+        self.assertEqual(
+            loc.s3_uri, "custom-s3://my-bucket/prefix/12345-linux/test.tar.xz"
+        )
+
+    def test_custom_https_schema_propagates(self):
+        root = WorkflowOutputRoot(
+            bucket="my-bucket",
+            external_repo="",
+            run_id="12345",
+            platform="linux",
+            https_url_schema="https://cdn.example.com/{bucket}/{path}",
+        )
+        loc = root.artifact("test.tar.xz")
+        self.assertEqual(
+            loc.https_url, "https://cdn.example.com/my-bucket/12345-linux/test.tar.xz"
+        )
+
+    def test_both_schemas_propagate(self):
+        root = WorkflowOutputRoot(
+            bucket="my-bucket",
+            external_repo="",
+            run_id="12345",
+            platform="linux",
+            s3_url_schema="custom-s3://{bucket}/data/{path}",
+            https_url_schema="https://custom.example.com/{bucket}/{path}",
+        )
+        loc = root.log_file("gfx94X-dcgpu", "build.log")
+        self.assertEqual(
+            loc.s3_uri,
+            "custom-s3://my-bucket/data/12345-linux/logs/gfx94X-dcgpu/build.log",
+        )
+        self.assertEqual(
+            loc.https_url,
+            "https://custom.example.com/my-bucket/12345-linux/logs/gfx94X-dcgpu/build.log",
+        )
+
+    def test_default_schemas_when_none(self):
+        """When schemas are None, StorageLocation should use defaults."""
+        root = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id="12345",
+            platform="linux",
+            s3_url_schema=None,
+            https_url_schema=None,
+        )
+        loc = root.artifact("test.tar.xz")
+        # StorageLocation should apply default schemas
+        self.assertEqual(
+            loc.s3_uri, "s3://therock-ci-artifacts/12345-linux/test.tar.xz"
+        )
+        self.assertEqual(
+            loc.https_url,
+            "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/test.tar.xz",
+        )
+
+
 # ---------------------------------------------------------------------------
 # WorkflowOutputRoot — factory methods
 # ---------------------------------------------------------------------------
@@ -297,6 +367,9 @@ class TestWorkflowOutputRootForLocal(unittest.TestCase):
         self.assertEqual(root.run_id, "local")
         # Platform depends on system, just check it's set
         self.assertIn(root.platform, ("linux", "windows", "darwin"))
+        # Schema fields should be None by default
+        self.assertIsNone(root.s3_url_schema)
+        self.assertIsNone(root.https_url_schema)
 
     def test_custom_values(self):
         root = WorkflowOutputRoot.for_local(
@@ -306,6 +379,16 @@ class TestWorkflowOutputRootForLocal(unittest.TestCase):
         self.assertEqual(root.platform, "linux")
         self.assertEqual(root.bucket, "test-bucket")
         self.assertEqual(root.prefix, "test-42-linux")
+
+    def test_custom_schemas(self):
+        root = WorkflowOutputRoot.for_local(
+            https_url_schema="https://custom.example.com/{bucket}/{path}"
+        )
+        loc = root.artifact("test.tar.xz")
+        self.assertEqual(
+            loc.https_url,
+            f"https://custom.example.com/local/local-{root.platform}/test.tar.xz",
+        )
 
 
 class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
@@ -320,10 +403,32 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
         self.assertEqual(root.external_repo, "")
         self.assertEqual(root.run_id, "12345")
         self.assertEqual(root.platform, "linux")
+        # Schema fields should be None by default
+        self.assertIsNone(root.s3_url_schema)
+        self.assertIsNone(root.https_url_schema)
         mock_retrieve.assert_called_once_with(
             github_repository=None,
             workflow_run_id=None,
             workflow_run=None,
+            bucket_schema=None,
+        )
+
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_custom_schemas(self, mock_retrieve):
+        """Schema parameters are passed through to WorkflowOutputRoot."""
+        mock_retrieve.return_value = ("", "therock-ci-artifacts")
+        root = WorkflowOutputRoot.from_workflow_run(
+            run_id="12345",
+            platform="linux",
+            https_url_schema="https://cdn.example.com/{bucket}/{path}",
+        )
+        self.assertEqual(
+            root.https_url_schema, "https://cdn.example.com/{bucket}/{path}"
+        )
+        loc = root.artifact("test.tar.xz")
+        self.assertEqual(
+            loc.https_url,
+            "https://cdn.example.com/therock-ci-artifacts/12345-linux/test.tar.xz",
         )
 
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
@@ -342,6 +447,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             github_repository="SomeUser/TheRock",
             workflow_run_id="99999",
             workflow_run=None,
+            bucket_schema=None,
         )
 
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
@@ -358,6 +464,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             github_repository=None,
             workflow_run_id=None,
             workflow_run=fake_run,
+            bucket_schema=None,
         )
 
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
@@ -377,6 +484,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             github_repository=None,
             workflow_run_id=None,
             workflow_run=fake_run,
+            bucket_schema=None,
         )
 
 
@@ -529,6 +637,29 @@ class TestRetrieveBucketInfo(unittest.TestCase):
             workflow_run_id="12345",
         )
         self.mock_api.assert_called_once_with("ROCm/TheRock", "12345")
+        self.assertEqual(bucket, "therock-ci-artifacts")
+
+    @mock.patch.dict(
+        os.environ,
+        {"GITHUB_REPOSITORY": "ROCm/TheRock", "RELEASE_TYPE": "dev"},
+        clear=False,
+    )
+    def test_custom_bucket_schema(self):
+        """Custom bucket schema should be used when provided."""
+        external_repo, bucket = self._call(bucket_schema="custom-{release_type}-bucket")
+        self.assertEqual(external_repo, "")
+        self.assertEqual(bucket, "custom-dev-bucket")
+
+    @mock.patch.dict(
+        os.environ,
+        {"GITHUB_REPOSITORY": "ROCm/TheRock"},
+        clear=False,
+    )
+    def test_bucket_schema_ignored_without_release_type(self):
+        """Custom bucket schema is ignored when RELEASE_TYPE is not set."""
+        external_repo, bucket = self._call(bucket_schema="custom-{release_type}-bucket")
+        self.assertEqual(external_repo, "")
+        # Should use default logic, not custom schema
         self.assertEqual(bucket, "therock-ci-artifacts")
 
 

@@ -123,29 +123,34 @@ loc.https_url  # "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/file
 loc.local_path(Path("/tmp/staging"))  # Path("/tmp/staging/12345-linux/file.tar.xz")
 ```
 
-#### HTTPS URL Override
+#### Custom URL Schemas
 
-To use a custom HTTPS URL pattern for a specific bucket, set an environment
-variable with the bucket name (dashes replaced with underscores):
-
-```bash
-THEROCK_HTTPS_URL_<bucket_name>=<base_url>
-```
-
-Example for rocm-npi-dev:
-
-```bash
-export THEROCK_HTTPS_URL_therock_dev_tarball=https://different_domain_altogether.com/tarball
-export THEROCK_HTTPS_URL_therock_dev_artifacts=https://different_domain_altogether.com/artifacts
-export THEROCK_HTTPS_URL_therock_dev_python=https://different_domain_altogether.com/whl
-```
-
-The `relative_path` is appended to the base URL:
+StorageLocation supports custom URL schemas for both S3 URIs and HTTPS URLs.
+Schemas use Python string formatting with `{bucket}` and `{path}` placeholders:
 
 ```python
-loc = StorageLocation("therock-dev-tarball", "12345-linux/file.tar.xz")
-loc.https_url  # → "https://different_domain_altogether.com/tarball/12345-linux/file.tar.xz"
+# Custom S3 schema
+loc = StorageLocation(
+    bucket="my-bucket",
+    relative_path="12345-linux/file.tar.xz",
+    s3_url_schema="custom-s3://{bucket}/prefix/{path}",
+)
+loc.s3_uri  # "custom-s3://my-bucket/prefix/12345-linux/file.tar.xz"
+
+# Custom HTTPS schema
+loc = StorageLocation(
+    bucket="my-bucket",
+    relative_path="12345-linux/file.tar.xz",
+    https_url_schema="https://cdn.example.com/{bucket}/{path}",
+)
+loc.https_url  # "https://cdn.example.com/my-bucket/12345-linux/file.tar.xz"
 ```
+
+When `s3_url_schema` or `https_url_schema` are `None` (the default), the following
+defaults are used:
+
+- S3 URI: `s3://{bucket}/{path}`
+- HTTPS URL: `https://{bucket}.s3.amazonaws.com/{path}`
 
 ### WorkflowOutputRoot
 
@@ -165,7 +170,7 @@ root = WorkflowOutputRoot.from_workflow_run(
 # For local development (no API calls, no env vars needed)
 root = WorkflowOutputRoot.for_local(run_id="local", platform="linux")
 
-# Location methods — each returns an StorageLocation
+# Location methods — each returns a StorageLocation
 root.root()
 root.artifact(filename="blas_lib_gfx94X.tar.xz")
 root.artifact_index(artifact_group="gfx94X-dcgpu")
@@ -184,6 +189,51 @@ cutover dating). Most callers running inside their own CI workflow do not need
 this — environment variables (`GITHUB_REPOSITORY`, `IS_PR_FROM_FORK`) suffice.
 Set `lookup_workflow_run=True` when looking up another repository's workflow
 run, e.g. when fetching artifacts.
+
+#### Custom URL Schemas
+
+WorkflowOutputRoot accepts optional schema parameters that are propagated to all
+`StorageLocation` instances it creates:
+
+```python
+# Custom HTTPS schema (e.g., for CDN)
+root = WorkflowOutputRoot.from_workflow_run(
+    run_id="12345",
+    platform="linux",
+    https_url_schema="https://cdn.example.com/{bucket}/{path}",
+)
+root.artifact("test.tar.xz").https_url
+# → "https://cdn.example.com/therock-ci-artifacts/12345-linux/test.tar.xz"
+
+# Custom S3 schema (e.g., for S3-compatible storage)
+root = WorkflowOutputRoot.from_workflow_run(
+    run_id="12345", platform="linux", s3_url_schema="s3-custom://{bucket}/prefix/{path}"
+)
+root.artifact("test.tar.xz").s3_uri
+# → "s3-custom://therock-ci-artifacts/prefix/12345-linux/test.tar.xz"
+
+# Custom bucket naming (e.g., for different environments)
+root = WorkflowOutputRoot.from_workflow_run(
+    run_id="12345", platform="linux", bucket_schema="mycompany-{release_type}-builds"
+)
+# When RELEASE_TYPE=dev, bucket will be "mycompany-dev-builds"
+```
+
+All three schemas can be passed to `artifact_manager.py` and `post_build_upload.py`
+via command line arguments:
+
+```bash
+# Using custom HTTPS URL for CDN
+python build_tools/artifact_manager.py fetch \
+    --https-url-schema "https://cdn.example.com/{bucket}/{path}" \
+    --stage math-libs
+
+# Using custom S3 and bucket schemas
+python build_tools/github_actions/post_build_upload.py \
+    --s3-url-schema "s3-custom://{bucket}/data/{path}" \
+    --bucket-schema "mycompany-{release_type}-artifacts" \
+    --artifact-group gfx94X-dcgpu
+```
 
 ### StorageBackend
 
