@@ -207,9 +207,42 @@ jobs:
           pip install "rocm[devel]" \
             --index-url=${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
 
-      - name: Initialize ROCm SDK
+      - name: Initialize ROCm SDK and configure environment
         run: |
           rocm-sdk init
+
+          ROCM_HOME="$(rocm-sdk path --root)"
+          ROCM_BIN="$(rocm-sdk path --bin)"
+          ROCM_CMAKE_PREFIX="$(rocm-sdk path --cmake)"
+
+          echo "ROCM_HOME=${ROCM_HOME}"
+          echo "ROCM_BIN=${ROCM_BIN}"
+          echo "ROCM_CMAKE_PREFIX=${ROCM_CMAKE_PREFIX}"
+
+          ROCM_SYSDEPS="${ROCM_HOME}/lib/rocm_sysdeps"
+          ROCM_SYSDEPS_INCLUDE="${ROCM_SYSDEPS}/include"
+          ROCM_SYSDEPS_PKGCONFIG="${ROCM_SYSDEPS}/lib/pkgconfig"
+
+          # Add ROCm bin to PATH for all subsequent steps
+          echo "${ROCM_BIN}" >> "${GITHUB_PATH}"
+
+          # Persist ROCm env vars across workflow steps (mirrors install_rocm.sh)
+          echo "ROCM_PATH=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "ROCM_HOME=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "ROCM_SOURCE_DIR=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "ROCM_BIN=${ROCM_BIN}" >> "${GITHUB_ENV}"
+          echo "ROCM_CMAKE=${ROCM_CMAKE_PREFIX}" >> "${GITHUB_ENV}"
+          echo "CMAKE_PREFIX_PATH=${ROCM_CMAKE_PREFIX}:${CMAKE_PREFIX_PATH:-}" >> "${GITHUB_ENV}"
+          echo "HIP_DEVICE_LIB_PATH=${ROCM_HOME}/lib/llvm/amdgcn/bitcode" >> "${GITHUB_ENV}"
+          echo "ROCM_DEVICE_LIB_PATH=${ROCM_HOME}/lib/llvm/amdgcn/bitcode" >> "${GITHUB_ENV}"
+          echo "ROCM_SYSDEPS_INCLUDE=${ROCM_SYSDEPS_INCLUDE}" >> "${GITHUB_ENV}"
+          echo "CPLUS_INCLUDE_PATH=${ROCM_SYSDEPS_INCLUDE}:${CPLUS_INCLUDE_PATH:-}" >> "${GITHUB_ENV}"
+          echo "C_INCLUDE_PATH=${ROCM_SYSDEPS_INCLUDE}:${C_INCLUDE_PATH:-}" >> "${GITHUB_ENV}"
+          echo "PKG_CONFIG_PATH=${ROCM_SYSDEPS_PKGCONFIG}:${PKG_CONFIG_PATH:-}" >> "${GITHUB_ENV}"
+          echo "LD_LIBRARY_PATH=${ROCM_SYSDEPS}/lib:${LD_LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
+          echo "LIBRARY_PATH=${ROCM_SYSDEPS}/lib:${LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
+          echo "MAGMA_HOME=${ROCM_HOME}/magma" >> "${GITHUB_ENV}"
+          echo "USE_MSLK=0" >> "${GITHUB_ENV}"
 
       # export_test_times.py must run from the PyTorch repo root with
       # PYTHONPATH=. because it imports internal PyTorch modules (e.g.
