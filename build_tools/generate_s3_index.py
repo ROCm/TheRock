@@ -151,11 +151,20 @@ def _escape_html(text: str) -> str:
 
 
 def _list_files_s3(s3_client, bucket: str, dir_prefix: str) -> list[_FileEntry]:
-    """List immediate files under dir_prefix (non-recursive), excluding index.html."""
+    """List immediate contents under dir_prefix (non-recursive).
+
+    Returns subdirectories (from CommonPrefixes) and files (from Contents),
+    excluding index.html itself.
+    """
     prefix = f"{dir_prefix}/"
     paginator = s3_client.get_paginator("list_objects_v2")
     entries = []
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/"):
+        for cp in page.get("CommonPrefixes", []):
+            name = cp["Prefix"][len(prefix):]  # e.g. "gfx94X/"
+            entries.append(
+                _FileEntry(name=name, href=name, size_bytes=-1, last_modified=None)
+            )
         for obj in page.get("Contents", []):
             key = obj["Key"]
             filename = key[len(prefix):]
@@ -197,13 +206,20 @@ def _discover_dirs_with_files_s3(s3_client, bucket: str, run_prefix: str) -> lis
 
 
 def _list_files_local(staging_dir: Path, dir_prefix: str) -> list[_FileEntry]:
-    """List immediate files in {staging_dir}/{dir_prefix} (non-recursive), excluding index.html."""
+    """List immediate contents in {staging_dir}/{dir_prefix} (non-recursive).
+
+    Returns subdirectories and files, excluding index.html itself.
+    """
     root = staging_dir / dir_prefix
     if not root.is_dir():
         return []
     entries = []
     for p in sorted(root.iterdir()):
-        if p.is_file() and p.name != "index.html":
+        if p.is_dir():
+            entries.append(
+                _FileEntry(name=p.name + "/", href=p.name + "/", size_bytes=-1, last_modified=None)
+            )
+        elif p.is_file() and p.name != "index.html":
             stat = p.stat()
             entries.append(
                 _FileEntry(
@@ -272,7 +288,7 @@ def generate_index_for_directory(
         entries = _list_files_s3(s3_client, bucket, dir_prefix)
 
     title = dir_prefix.rsplit("/", 1)[-1]
-    html = _generate_index_html(title=title, entries=entries, parent_href=None)
+    html = _generate_index_html(title=title, entries=entries, parent_href="../")
     dest = StorageLocation(bucket=bucket, relative_path=f"{dir_prefix}/index.html")
     log(
         f"[INFO] Uploading index ({len(entries)} files) → "
