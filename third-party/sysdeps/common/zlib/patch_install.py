@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import platform
+import shutil
 import sys
 
 PREFIX = sys.argv[1]
@@ -18,3 +19,10 @@ if platform.system() == "Linux":
         namelink.unlink()
     # We don't want the static lib on Linux.
     (lib_dir / "librocm_sysdeps_z.a").unlink()
+
+# Remove zlib's auto-generated cmake config; TheRock provides its own in
+# lib/cmake/ZLIB/. On Windows the case-insensitive filesystem makes
+# lib/cmake/zlib the same directory, causing conflicts if both exist.
+cmake_dir = Path(PREFIX) / "lib" / "cmake" / "zlib"
+if cmake_dir.is_dir():
+    shutil.rmtree(cmake_dir)
