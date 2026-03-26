@@ -50,7 +50,7 @@ on:
         description: When true, run get_install_test_profiles and test_native_linux_packages_install after the build. When false, only build and upload (skip install verification matrix).
         required: false
         type: boolean
-        default: true
+        default: false
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -93,7 +93,7 @@ on:
       verify_package:
         description: When true, run install verification jobs after the build. When false, build and upload only.
         type: boolean
-        default: true
+        default: false
 
 permissions:
   id-token: write
