@@ -12382,17 +12382,28 @@ int main() {
     return 1;
   }
 
-  LinearExecutionMemory memory(0x400, 0);
-  if (!Expect(memory.WriteU32(0x100, 0x11223344u), "expected memory seed write") ||
-      !Expect(memory.WriteU32(0x104, 0x55667788u), "expected memory seed write") ||
-      !Expect(memory.WriteU32(0x108, 0x99aabbccu), "expected memory seed write")) {
-    return 1;
-  }
-
-  WaveExecutionState memory_state;
-  memory_state.sgprs[0] = 0x100;
-  memory_state.sgprs[1] = 0x0;
-  memory_state.sgprs[2] = 0x10;
+  const auto seed_scalar_memory = [](LinearExecutionMemory* memory) {
+    return memory != nullptr &&
+           memory->WriteU32(0x0f0u, 0x0badc0deu) &&
+           memory->WriteU32(0x100u, 0x11223344u) &&
+           memory->WriteU32(0x104u, 0x55667788u) &&
+           memory->WriteU32(0x108u, 0x99aabbccu) &&
+           memory->WriteU32(0x120u, 0xfeedfaceu);
+  };
+  const auto make_scalar_memory_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x100u;
+    state.sgprs[1] = 0u;
+    state.sgprs[2] = 0x10u;
+    state.sgprs[12] = 0x13579bdfu;
+    state.sgprs[13] = 0x2468ace0u;
+    state.vgprs[20][0] = 0x01020304u;
+    state.vgprs[20][1] = 0x11121314u;
+    state.vgprs[20][2] = 0x21222324u;
+    state.vgprs[20][3] = 0x31323334u;
+    return state;
+  };
   const std::vector<DecodedInstruction> memory_program = {
       DecodedInstruction::ThreeOperand("S_LOAD_DWORD", InstructionOperand::Sgpr(4),
                                        InstructionOperand::Sgpr(0),
@@ -12405,21 +12416,111 @@ int main() {
                                        InstructionOperand::Sgpr(2)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
-  if (!Expect(interpreter.ExecuteProgram(memory_program, &memory_state, &memory,
+  const auto validate_scalar_memory_state =
+      [](const WaveExecutionState& state,
+         const LinearExecutionMemory& memory,
+         const char* mode) {
+        std::uint32_t value = 0;
+        return Expect(state.halted,
+                      (std::string(mode) + " scalar memory program to halt")
+                          .c_str()) &&
+               Expect(state.exec_mask == 0b1011ULL,
+                      (std::string(mode) + " scalar memory preserves exec")
+                          .c_str()) &&
+               Expect(state.sgprs[0] == 0x100u && state.sgprs[1] == 0u &&
+                          state.sgprs[2] == 0x10u,
+                      (std::string(mode) + " scalar memory preserves controls")
+                          .c_str()) &&
+               Expect(state.sgprs[4] == 0x11223344u,
+                      (std::string(mode) + " s_load_dword result").c_str()) &&
+               Expect(state.sgprs[6] == 0x55667788u,
+                      (std::string(mode) + " s_load_dwordx2 low result")
+                          .c_str()) &&
+               Expect(state.sgprs[7] == 0x99aabbccu,
+                      (std::string(mode) + " s_load_dwordx2 high result")
+                          .c_str()) &&
+               Expect(state.sgprs[12] == 0x13579bdfu &&
+                          state.sgprs[13] == 0x2468ace0u,
+                      (std::string(mode) + " scalar memory preserves unrelated sgprs")
+                          .c_str()) &&
+               Expect(state.vgprs[20][0] == 0x01020304u &&
+                          state.vgprs[20][1] == 0x11121314u &&
+                          state.vgprs[20][2] == 0x21222324u &&
+                          state.vgprs[20][3] == 0x31323334u,
+                      (std::string(mode) + " scalar memory preserves vgprs")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x100u, &value),
+                      (std::string(mode) + " scalar memory source read")
+                          .c_str()) &&
+               Expect(value == 0x11223344u,
+                      (std::string(mode) + " scalar memory source preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x104u, &value),
+                      (std::string(mode) + " scalar memory source read")
+                          .c_str()) &&
+               Expect(value == 0x55667788u,
+                      (std::string(mode) + " scalar memory x2 low source preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x108u, &value),
+                      (std::string(mode) + " scalar memory source read")
+                          .c_str()) &&
+               Expect(value == 0x99aabbccu,
+                      (std::string(mode) + " scalar memory x2 high source preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x110u, &value),
+                      (std::string(mode) + " stored value read").c_str()) &&
+               Expect(value == 0x11223344u,
+                      (std::string(mode) + " s_store_dword result").c_str()) &&
+               Expect(memory.ReadU32(0x0f0u, &value),
+                      (std::string(mode) + " unrelated scalar memory read")
+                          .c_str()) &&
+               Expect(value == 0x0badc0deu,
+                      (std::string(mode) + " unrelated scalar memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x120u, &value),
+                      (std::string(mode) + " unrelated scalar memory read")
+                          .c_str()) &&
+               Expect(value == 0xfeedfaceu,
+                      (std::string(mode) + " trailing scalar memory preserved")
+                          .c_str());
+      };
+
+  LinearExecutionMemory decoded_scalar_memory(0x400, 0);
+  if (!Expect(seed_scalar_memory(&decoded_scalar_memory),
+              "expected decoded scalar memory seed writes")) {
+    return 1;
+  }
+  WaveExecutionState decoded_scalar_memory_state = make_scalar_memory_state();
+  if (!Expect(interpreter.ExecuteProgram(memory_program,
+                                         &decoded_scalar_memory_state,
+                                         &decoded_scalar_memory,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(memory_state.halted, "expected memory program to halt") ||
-      !Expect(memory_state.sgprs[4] == 0x11223344u, "expected s_load_dword result") ||
-      !Expect(memory_state.sgprs[6] == 0x55667788u,
-              "expected s_load_dwordx2 low result") ||
-      !Expect(memory_state.sgprs[7] == 0x99aabbccu,
-              "expected s_load_dwordx2 high result")) {
+      !validate_scalar_memory_state(decoded_scalar_memory_state,
+                                    decoded_scalar_memory, "decoded")) {
     return 1;
   }
 
-  std::uint32_t stored_value = 0;
-  if (!Expect(memory.ReadU32(0x110, &stored_value), "expected stored value read") ||
-      !Expect(stored_value == 0x11223344u, "expected s_store_dword result")) {
+  std::vector<CompiledInstruction> compiled_scalar_memory_program;
+  if (!Expect(interpreter.CompileProgram(memory_program,
+                                         &compiled_scalar_memory_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_scalar_memory(0x400, 0);
+  if (!Expect(seed_scalar_memory(&compiled_scalar_memory),
+              "expected compiled scalar memory seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_scalar_memory_state = make_scalar_memory_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_scalar_memory_program,
+                                         &compiled_scalar_memory_state,
+                                         &compiled_scalar_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_scalar_memory_state(compiled_scalar_memory_state,
+                                    compiled_scalar_memory, "compiled")) {
     return 1;
   }
 
@@ -12443,21 +12544,45 @@ int main() {
         return false;
       }
     }
-    return true;
+    return memory->WriteU32(0x2f0u, 0x89abcdefu);
   };
   const auto make_wide_scalar_memory_state = []() {
     WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
     state.sgprs[0] = 0x100u;
     state.sgprs[1] = 0u;
     state.sgprs[2] = 0x140u;
     state.sgprs[3] = 0x160u;
+    state.sgprs[96] = 0x13572468u;
+    state.sgprs[97] = 0x24681357u;
+    state.vgprs[18][0] = 0x10203040u;
+    state.vgprs[18][1] = 0x50607080u;
+    state.vgprs[18][2] = 0x90a0b0c0u;
+    state.vgprs[18][3] = 0xd0e0f000u;
     return state;
   };
   const auto validate_wide_scalar_memory_state =
       [](const WaveExecutionState& state,
          const LinearExecutionMemory& memory,
          const char* mode) {
+        std::uint32_t value = 0;
         if (!Expect(state.halted, "expected wide scalar memory program to halt")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        if (!Expect(state.exec_mask == 0b1011ULL,
+                    "expected wide scalar memory to preserve exec") ||
+            !Expect(state.sgprs[0] == 0x100u && state.sgprs[1] == 0u &&
+                        state.sgprs[2] == 0x140u && state.sgprs[3] == 0x160u,
+                    "expected wide scalar memory to preserve controls") ||
+            !Expect(state.sgprs[96] == 0x13572468u &&
+                        state.sgprs[97] == 0x24681357u,
+                    "expected wide scalar memory to preserve unrelated sgprs") ||
+            !Expect(state.vgprs[18][0] == 0x10203040u &&
+                        state.vgprs[18][1] == 0x50607080u &&
+                        state.vgprs[18][2] == 0x90a0b0c0u &&
+                        state.vgprs[18][3] == 0xd0e0f000u,
+                    "expected wide scalar memory to preserve vgprs")) {
           std::cerr << mode << '\n';
           return false;
         }
@@ -12501,6 +12626,25 @@ int main() {
             std::cerr << mode << " index=" << index << '\n';
             return false;
           }
+        }
+        if (!Expect(memory.ReadU32(0x120u, &value),
+                    "expected wide scalar memory source read") ||
+            !Expect(value == 0x100u,
+                    "expected wide scalar memory first source preserved") ||
+            !Expect(memory.ReadU32(0x15cu, &value),
+                    "expected wide scalar memory source read") ||
+            !Expect(value == 0x200u + 7u,
+                    "expected wide scalar memory x8 tail source preserved") ||
+            !Expect(memory.ReadU32(0x1bcu, &value),
+                    "expected wide scalar memory source read") ||
+            !Expect(value == 0x300u + 15u,
+                    "expected wide scalar memory x16 tail source preserved") ||
+            !Expect(memory.ReadU32(0x2f0u, &value),
+                    "expected wide scalar memory unrelated read") ||
+            !Expect(value == 0x89abcdefu,
+                    "expected wide scalar memory unrelated memory preserved")) {
+          std::cerr << mode << '\n';
+          return false;
         }
         return true;
       };
@@ -12600,11 +12744,18 @@ int main() {
   };
   const auto make_scalar_buffer_state = []() {
     WaveExecutionState state{};
+    state.exec_mask = 0b0101ULL;
     state.sgprs[0] = 0x100u;
     state.sgprs[1] = 0u;
     state.sgprs[2] = 0x400u;
     state.sgprs[3] = 0u;
     state.sgprs[72] = 0x220u;
+    state.sgprs[96] = 0x11223344u;
+    state.sgprs[97] = 0x55667788u;
+    state.vgprs[18][0] = 0x01010101u;
+    state.vgprs[18][1] = 0x02020202u;
+    state.vgprs[18][2] = 0x03030303u;
+    state.vgprs[18][3] = 0x04040404u;
     return state;
   };
   const auto validate_scalar_buffer_state =
@@ -12613,6 +12764,23 @@ int main() {
          const char* mode) {
         if (!Expect(state.halted,
                     "expected scalar buffer memory program to halt")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        if (!Expect(state.exec_mask == 0b0101ULL,
+                    "expected scalar buffer memory to preserve exec") ||
+            !Expect(state.sgprs[0] == 0x100u && state.sgprs[1] == 0u &&
+                        state.sgprs[2] == 0x400u && state.sgprs[3] == 0u &&
+                        state.sgprs[72] == 0x220u,
+                    "expected scalar buffer memory to preserve descriptors") ||
+            !Expect(state.sgprs[96] == 0x11223344u &&
+                        state.sgprs[97] == 0x55667788u,
+                    "expected scalar buffer memory to preserve unrelated sgprs") ||
+            !Expect(state.vgprs[18][0] == 0x01010101u &&
+                        state.vgprs[18][1] == 0x02020202u &&
+                        state.vgprs[18][2] == 0x03030303u &&
+                        state.vgprs[18][3] == 0x04040404u,
+                    "expected scalar buffer memory to preserve vgprs")) {
           std::cerr << mode << '\n';
           return false;
         }
@@ -12674,6 +12842,29 @@ int main() {
             std::cerr << mode << " index=" << index << '\n';
             return false;
           }
+        }
+        if (!Expect(memory.ReadU32(0x100u, &value),
+                    "expected scalar buffer source read") ||
+            !Expect(value == 0x11110000u,
+                    "expected scalar buffer first source preserved") ||
+            !Expect(memory.ReadU32(0x114u, &value),
+                    "expected scalar buffer source read") ||
+            !Expect(value == 0x22220001u,
+                    "expected scalar buffer x2 tail source preserved") ||
+            !Expect(memory.ReadU32(0x12cu, &value),
+                    "expected scalar buffer source read") ||
+            !Expect(value == 0x33330003u,
+                    "expected scalar buffer x4 tail source preserved") ||
+            !Expect(memory.ReadU32(0x15cu, &value),
+                    "expected scalar buffer source read") ||
+            !Expect(value == 0x44440007u,
+                    "expected scalar buffer x8 tail source preserved") ||
+            !Expect(memory.ReadU32(0x1bcu, &value),
+                    "expected scalar buffer source read") ||
+            !Expect(value == 0x5555000fu,
+                    "expected scalar buffer x16 tail source preserved")) {
+          std::cerr << mode << '\n';
+          return false;
         }
         return true;
       };
