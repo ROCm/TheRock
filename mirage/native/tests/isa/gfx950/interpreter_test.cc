@@ -18214,9 +18214,12 @@ int main() {
     std::uint32_t flat_store_lane0 = 0;
     std::uint32_t flat_store_lane1 = 0;
     std::uint32_t flat_store_lane3 = 0;
+    std::uint32_t flat_inactive_store = 0;
     std::uint32_t global_store_lane0 = 0;
     std::uint32_t global_store_lane1 = 0;
     std::uint32_t global_store_lane3 = 0;
+    std::uint32_t global_inactive_store = 0;
+    std::uint32_t preserved_source = 0;
     return Expect(state.vgprs[10][0] == 0x11111111u,
                   (std::string(mode) + " lane 0 flat load result").c_str()) &&
            Expect(state.vgprs[10][1] == 0x22222222u,
@@ -18237,6 +18240,39 @@ int main() {
                       .c_str()) &&
            Expect(state.vgprs[11][3] == 0x12345678u,
                   (std::string(mode) + " lane 3 global load result").c_str()) &&
+           Expect(state.halted,
+                  (std::string(mode) + " flat/global vector program to halt")
+                      .c_str()) &&
+           Expect(state.exec_mask == 0b1011ULL,
+                  (std::string(mode) + " flat/global vector exec preservation")
+                      .c_str()) &&
+           Expect(state.sgprs[0] == 0x200u && state.sgprs[1] == 0u,
+                  (std::string(mode) + " flat/global vector sgpr preservation")
+                      .c_str()) &&
+           Expect(state.vgprs[0][0] == 0x180u && state.vgprs[0][1] == 0x184u &&
+                      state.vgprs[0][3] == 0x18cu && state.vgprs[1][0] == 0u &&
+                      state.vgprs[1][1] == 0u && state.vgprs[1][3] == 0u,
+                  (std::string(mode) +
+                   " flat/global vector flat address preservation")
+                      .c_str()) &&
+           Expect(state.vgprs[2][0] == 0xdead0001u &&
+                      state.vgprs[2][1] == 0xdead0002u &&
+                      state.vgprs[2][3] == 0xdead0004u,
+                  (std::string(mode) +
+                   " flat/global vector flat store source preservation")
+                      .c_str()) &&
+           Expect(state.vgprs[3][0] == 0xbeef0011u &&
+                      state.vgprs[3][1] == 0xbeef0022u &&
+                      state.vgprs[3][3] == 0xbeef0044u,
+                  (std::string(mode) +
+                   " flat/global vector global store source preservation")
+                      .c_str()) &&
+           Expect(state.vgprs[4][0] == 0x24u && state.vgprs[4][1] == 0x28u &&
+                      state.vgprs[4][3] == 0x30u && state.vgprs[5][0] == 0u &&
+                      state.vgprs[5][1] == 0u && state.vgprs[5][3] == 0u,
+                  (std::string(mode) +
+                   " flat/global vector global address preservation")
+                      .c_str()) &&
            Expect(memory.ReadU32(0x180, &flat_store_lane0),
                   (std::string(mode) + " flat store lane 0 read").c_str()) &&
            Expect(memory.ReadU32(0x184, &flat_store_lane1),
@@ -18249,6 +18285,11 @@ int main() {
                   (std::string(mode) + " lane 1 flat store result").c_str()) &&
            Expect(flat_store_lane3 == 0xdead0004u,
                   (std::string(mode) + " lane 3 flat store result").c_str()) &&
+           Expect(memory.ReadU32(0x0, &flat_inactive_store),
+                  (std::string(mode) + " inactive flat store read").c_str()) &&
+           Expect(flat_inactive_store == 0u,
+                  (std::string(mode) + " inactive flat store suppression")
+                      .c_str()) &&
            Expect(memory.ReadU32(0x228, &global_store_lane0),
                   (std::string(mode) + " global store lane 0 read").c_str()) &&
            Expect(memory.ReadU32(0x22c, &global_store_lane1),
@@ -18263,6 +18304,36 @@ int main() {
                       .c_str()) &&
            Expect(global_store_lane3 == 0xbeef0044u,
                   (std::string(mode) + " lane 3 global store result")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x204, &global_inactive_store),
+                  (std::string(mode) + " inactive global store read")
+                      .c_str()) &&
+           Expect(global_inactive_store == 0u,
+                  (std::string(mode) + " inactive global store suppression")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x188, &preserved_source),
+                  (std::string(mode) + " flat source preservation read")
+                      .c_str()) &&
+           Expect(preserved_source == 0x22222222u,
+                  (std::string(mode) + " flat source preservation")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x190, &preserved_source),
+                  (std::string(mode) + " flat lane 3 source preservation read")
+                      .c_str()) &&
+           Expect(preserved_source == 0x33333333u,
+                  (std::string(mode) + " flat lane 3 source preservation")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x220, &preserved_source),
+                  (std::string(mode) + " global source preservation read")
+                      .c_str()) &&
+           Expect(preserved_source == 0xaaaabbbbu,
+                  (std::string(mode) + " global source preservation")
+                      .c_str()) &&
+           Expect(memory.ReadU32(0x224, &preserved_source),
+                  (std::string(mode) + " global lane 1 source preservation read")
+                      .c_str()) &&
+           Expect(preserved_source == 0xccccddddu,
+                  (std::string(mode) + " global lane 1 source preservation")
                       .c_str());
   };
   LinearExecutionMemory vector_memory(0x800, 0);
