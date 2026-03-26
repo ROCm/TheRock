@@ -94,7 +94,6 @@ import sys
 import traceback
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
-from typing import Optional, Union
 
 
 def _env(key: str, default: str) -> str:
@@ -252,9 +251,9 @@ class NativeLinuxPackageInstallTest:
         repo_url: str,
         os_profile: str,
         release_type: str = "nightly",
-        install_prefix: Optional[str] = None,
-        gfx_arch: Optional[Union[str, list[str]]] = None,
-        gpg_key_url: Optional[str] = None,
+        install_prefix: str | None = None,
+        gfx_arch: str | list[str] | None = None,
+        gpg_key_url: str | None = None,
     ):
         """Initialize the native Linux package install test runner.
 
@@ -307,14 +306,14 @@ class NativeLinuxPackageInstallTest:
 
         if self.package_type == "deb":
             # For DEB, import GPG key using pipeline approach
-            keyring_dir = APT_KEYRING_DIR
-            keyring_file = f"{keyring_dir}/rocm.gpg"
+            keyring_dir = Path(APT_KEYRING_DIR)
+            keyring_file = keyring_dir / "rocm.gpg"
 
             try:
                 # Create keyring directory
                 print(f"\nCreating keyring directory: {keyring_dir}...")
-                result = subprocess.run(
-                    ["mkdir", "--parents", "--mode=0755", keyring_dir],
+                subprocess.run(
+                    ["mkdir", "--parents", "--mode=0755", str(keyring_dir)],
                     check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -331,7 +330,7 @@ class NativeLinuxPackageInstallTest:
                     f"tee {keyring_file} > /dev/null"
                 )
 
-                result = subprocess.run(
+                subprocess.run(
                     pipeline_cmd,
                     shell=True,
                     check=True,
@@ -341,7 +340,7 @@ class NativeLinuxPackageInstallTest:
                 )
 
                 # Set proper permissions on the keyring file
-                os.chmod(keyring_file, 0o644)
+                keyring_file.chmod(0o644)
                 print(f"[PASS] GPG key imported to {keyring_file}")
                 return True
 
@@ -379,19 +378,18 @@ class NativeLinuxPackageInstallTest:
 
         # Add repository to sources list
         print("\nAdding ROCm repository...")
-        sources_list = APT_SOURCES_LIST
+        sources_list = Path(APT_SOURCES_LIST)
 
         if self.gpg_key_url:
             # Use GPG key verification
-            keyring_file = APT_KEYRING_FILE
-            repo_entry = f"deb [arch=amd64 signed-by={keyring_file}] {self.repo_url} stable main\n"
+            apt_keyring = Path(APT_KEYRING_FILE)
+            repo_entry = f"deb [arch=amd64 signed-by={apt_keyring}] {self.repo_url} stable main\n"
         else:
             # No GPG check (trusted=yes)
             repo_entry = f"deb [arch=amd64 trusted=yes] {self.repo_url} stable main\n"
 
         try:
-            with open(sources_list, "w") as f:
-                f.write(repo_entry)
+            sources_list.write_text(repo_entry, encoding="utf-8")
             print(f"[PASS] Repository added to {sources_list}")
             print(f" {repo_entry.strip()}")
         except OSError as e:
@@ -454,10 +452,9 @@ gpgcheck=0
 """
 
         try:
-            with open(repo_file, "w") as f:
-                f.write(repo_content)
+            repo_file.write_text(repo_content, encoding="utf-8")
             print(f"[PASS] Repository file created: {repo_file}")
-            print(f"\nRepository configuration:")
+            print("\nRepository configuration:")
             print(repo_content)
         except OSError as e:
             print(f"[FAIL] Failed to create repository file: {e}")
@@ -480,7 +477,7 @@ gpgcheck=0
                     f"[WARN] zypper clean returned {result.returncode} (may not be critical)"
                 )
         except subprocess.TimeoutExpired:
-            print(f"[WARN] zypper clean timed out (may not be critical)")
+            print("[WARN] zypper clean timed out (may not be critical)")
         except (subprocess.CalledProcessError, OSError) as e:
             print(f"[WARN] zypper clean failed: {e} (may not be critical)")
 
@@ -523,7 +520,7 @@ gpgcheck=0
 
         if self.gpg_key_url:
             # Use GPG key verification
-            repo_content = f"""[rocm_name]
+            repo_content = f"""[{repo_name}]
 name=ROCm Repository
 baseurl={self.repo_url}
 enabled=1
@@ -532,7 +529,7 @@ gpgkey={self.gpg_key_url}
 """
         else:
             # No GPG check
-            repo_content = f"""[rocm_name]
+            repo_content = f"""[{repo_name}]
 name=Native Linux Package Test Repository
 baseurl={self.repo_url}
 enabled=1
@@ -540,10 +537,9 @@ gpgcheck=0
 """
 
         try:
-            with open(repo_file, "w") as f:
-                f.write(repo_content)
+            repo_file.write_text(repo_content, encoding="utf-8")
             print(f"[PASS] Repository file created: {repo_file}")
-            print(f"\nRepository configuration:")
+            print("\nRepository configuration:")
             print(repo_content)
         except OSError as e:
             print(f"[FAIL] Failed to create repository file: {e}")
@@ -552,7 +548,7 @@ gpgcheck=0
         # Clean dnf cache
         print("\nCleaning dnf cache...")
         try:
-            result = subprocess.run(
+            subprocess.run(
                 ["dnf", "clean", "all"],
                 check=True,
                 stdout=subprocess.PIPE,
@@ -562,10 +558,10 @@ gpgcheck=0
             )
             print("[PASS] dnf cache cleaned")
         except subprocess.CalledProcessError as e:
-            print(f"[WARN] Failed to clean dnf cache (may not be critical)")
+            print("[WARN] Failed to clean dnf cache (may not be critical)")
             print(f"Error: {e.stdout}")
         except subprocess.TimeoutExpired:
-            print(f"[WARN] dnf clean timed out (may not be critical)")
+            print("[WARN] dnf clean timed out (may not be critical)")
 
         print("\n[PASS] DNF repository setup complete")
         return True
