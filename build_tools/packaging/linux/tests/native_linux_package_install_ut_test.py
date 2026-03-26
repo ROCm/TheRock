@@ -303,9 +303,7 @@ class RunSimulateInstallTestTest(unittest.TestCase):
             path = f.name
         try:
             self.assertFalse(
-                native_linux_package_install_test.run_simulate_install_test(
-                    "deb", path
-                )
+                native_linux_package_install_test.run_simulate_install_test("deb", path)
             )
         finally:
             os.unlink(path)
