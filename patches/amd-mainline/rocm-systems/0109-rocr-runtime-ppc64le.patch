@@ -1,7 +1,7 @@
-From 7bb2c09d4d79e2b8887af1dc65e7394bd8942144 Mon Sep 17 00:00:00 2001
-From: bluedragan <calvins@us.ibm.com>
-Date: Fri, 6 Mar 2026 19:51:50 +0000
-Subject: [PATCH] rocr: ppc64le
+From 067b03fb94082918b52782d668ea8fc805de553e Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 26 Mar 2026 19:38:17 +0000
+Subject: [PATCH] rocr-runtime ppc64le
 
 ---
  projects/rocr-runtime/libhsakmt/src/queues.c  |  28 ++++++++++++++----
@@ -148,10 +148,10 @@ index 2610ecdd06..6705eba1c4 100755
  
  }  // namespace rocrtst
 diff --git a/projects/rocr-runtime/rocrtst/suites/test_common/CMakeLists.txt b/projects/rocr-runtime/rocrtst/suites/test_common/CMakeLists.txt
-index 880ef2b6fc..279eb9262a 100644
+index a3ec052804..0e3e5454db 100644
 --- a/projects/rocr-runtime/rocrtst/suites/test_common/CMakeLists.txt
 +++ b/projects/rocr-runtime/rocrtst/suites/test_common/CMakeLists.txt
-@@ -601,6 +601,7 @@ endif()
+@@ -603,6 +603,7 @@ endif()
  set(HAVE_HWLOC FALSE)
  set(HWLOC_TARGET "")
  
@@ -11021,10 +11021,10 @@ index ccc20b8d19..64c49f2322 100644
      if (!agent_->LargeBarEnabled()) {
        throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_QUEUE_CREATION,
 diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_gpu_agent.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_gpu_agent.cpp
-index 09459ac3e7..f8d24e3f89 100644
+index 4cff385f25..75384e5afb 100644
 --- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_gpu_agent.cpp
 +++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_gpu_agent.cpp
-@@ -2116,7 +2116,9 @@ void GpuAgent::AcquireQueueMainScratch(ScratchInfo& scratch) {
+@@ -2197,7 +2197,9 @@ void GpuAgent::AcquireQueueMainScratch(ScratchInfo& scratch) {
    if (large) scratch.main_size = scratch.dispatch_size;
  
    // Ensure mapping will be in whole pages.
@@ -11035,7 +11035,7 @@ index 09459ac3e7..f8d24e3f89 100644
  
    /*
    Sequence of attempts is:
-@@ -2258,7 +2260,9 @@ void GpuAgent::AcquireQueueAltScratch(ScratchInfo& scratch) {
+@@ -2339,7 +2341,9 @@ void GpuAgent::AcquireQueueAltScratch(ScratchInfo& scratch) {
    std::lock_guard<std::mutex> lock(scratch_lock_);
  
    // Ensure mapping will be in whole pages.
@@ -11046,7 +11046,7 @@ index 09459ac3e7..f8d24e3f89 100644
  
    /*
    Sequence of attempts is:
-@@ -2720,7 +2724,7 @@ void GpuAgent::InitAllocators() {
+@@ -2801,7 +2805,7 @@ void GpuAgent::InitAllocators() {
        const core::MemoryRegion* pool_ptr = pool.get();
        system_allocator_ = [pool_ptr](size_t size, size_t alignment,
                                   MemoryRegion::AllocateFlags alloc_flags) -> void* {
@@ -11056,7 +11056,7 @@ index 09459ac3e7..f8d24e3f89 100644
          return (HSA_STATUS_SUCCESS ==
                  core::Runtime::runtime_singleton_->AllocateMemory(pool_ptr, size, alloc_flags, &ptr))
 diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
-index b6de00c299..f3c4c4e6a7 100644
+index bd5c0e2871..c7d60bf41e 100644
 --- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
 +++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
 @@ -205,7 +205,7 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
@@ -11068,7 +11068,7 @@ index b6de00c299..f3c4c4e6a7 100644
              void* ptr = NULL;
              return (HSA_STATUS_SUCCESS ==
                      core::Runtime::runtime_singleton_->AllocateMemory(pool.get(), size, alloc_flags,
-@@ -2236,6 +2236,7 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
+@@ -2235,6 +2235,7 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
        } else if (fault.Failure.ErrorType == 3) {
          reason += "Generic hang recovery";
        } else {
@@ -11076,7 +11076,7 @@ index b6de00c299..f3c4c4e6a7 100644
          reason += "Unknown";
        }
  
-@@ -3076,8 +3077,9 @@ hsa_status_t Runtime::SetSvmAttrib(void* ptr, size_t size,
+@@ -3095,8 +3096,9 @@ hsa_status_t Runtime::SetSvmAttrib(void* ptr, size_t size,
    if (clear_flags) attribs.push_back(kmtPair(HSA_SVM_ATTR_CLR_FLAGS, clear_flags));
    if (set_flags) attribs.push_back(kmtPair(HSA_SVM_ATTR_SET_FLAGS, set_flags));
  
@@ -11116,5 +11116,5 @@ index 96e9e476e0..9aa3f93cc1 100644
  
  #define __forceinline __inline__ __attribute__((always_inline))
 -- 
-2.50.1 (Apple Git-155)
+2.47.3
 

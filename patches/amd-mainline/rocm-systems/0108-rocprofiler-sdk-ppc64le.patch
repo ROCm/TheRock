@@ -1,14 +1,65 @@
-From cf593a464879773070ed9ebe909fa3a61a9e23a3 Mon Sep 17 00:00:00 2001
+From cf4c84fe55ba9a88d4949bf7d410efb78942bdc3 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Tue, 17 Mar 2026 13:56:01 -0400
-Subject: [PATCH] Update rocprofiler-sdk CPU detection to work with POWER
+Date: Thu, 26 Mar 2026 19:38:17 +0000
+Subject: [PATCH] rocprofiler-sdk ppc64le
 
 ---
+ projects/rocprofiler-sdk/CMakeLists.txt       |  3 ++
+ projects/rocprofiler-sdk/external/elfio       |  2 +-
+ projects/rocprofiler-sdk/external/yaml-cpp    |  2 +-
+ .../rocprofiler-sdk/source/lib/CMakeLists.txt |  7 ++--
  .../source/lib/rocprofiler-sdk/agent.cpp      | 33 +++++++++++++++++--
- 1 file changed, 30 insertions(+), 3 deletions(-)
+ 5 files changed, 40 insertions(+), 7 deletions(-)
 
+diff --git a/projects/rocprofiler-sdk/CMakeLists.txt b/projects/rocprofiler-sdk/CMakeLists.txt
+index 25f335afb3..32f3f1bf9f 100644
+--- a/projects/rocprofiler-sdk/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/CMakeLists.txt
+@@ -121,7 +121,10 @@ add_subdirectory(source)
+ include(rocprofiler_config_install)
+ include(rocprofiler_config_install_roctx)
+ include(rocprofiler_config_install_rocpd)
++# rocattach is only supported on x86_64 for now
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+ include(rocprofiler_config_install_rocattach)
++endif()
+ include(rocprofiler_config_install_tests)
+ 
+ # ROCPROFILER_BUILD_INTEGRATION_TESTS is not a standard option. If not defined, set it as
+diff --git a/projects/rocprofiler-sdk/external/elfio b/projects/rocprofiler-sdk/external/elfio
+index 8ae6cec5d6..7d30a22fc5 160000
+--- a/projects/rocprofiler-sdk/external/elfio
++++ b/projects/rocprofiler-sdk/external/elfio
+@@ -1 +1 @@
+-Subproject commit 8ae6cec5d60495822ecd57d736f66149da9b1830
++Subproject commit 7d30a22fc5aac06adfe7887ae57f3701b6b5f913
+diff --git a/projects/rocprofiler-sdk/external/yaml-cpp b/projects/rocprofiler-sdk/external/yaml-cpp
+index 1d8ca1f35e..97d150e98b 160000
+--- a/projects/rocprofiler-sdk/external/yaml-cpp
++++ b/projects/rocprofiler-sdk/external/yaml-cpp
+@@ -1 +1 @@
+-Subproject commit 1d8ca1f35eb3a9c9142462b28282a848e5d29a91
++Subproject commit 97d150e98b77faefa8f1d08f678a2121cfb4f08d
+diff --git a/projects/rocprofiler-sdk/source/lib/CMakeLists.txt b/projects/rocprofiler-sdk/source/lib/CMakeLists.txt
+index 952a65266f..ef179106bc 100644
+--- a/projects/rocprofiler-sdk/source/lib/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/source/lib/CMakeLists.txt
+@@ -15,8 +15,11 @@ add_subdirectory(rocprofiler-sdk-roctx)
+ set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "rocpd")
+ add_subdirectory(rocprofiler-sdk-rocpd)
+ 
+-set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "rocattach")
+-add_subdirectory(rocprofiler-sdk-rocattach)
++# rocattach is only supported on x86_64 for now
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
++  set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "rocattach")
++  add_subdirectory(rocprofiler-sdk-rocattach)
++endif()
+ 
+ set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "tools")
+ add_subdirectory(att-tool)
 diff --git a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/agent.cpp b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/agent.cpp
-index 70f9bb5ff2..15ba2df297 100644
+index b1afc9d658..f531868948 100644
 --- a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/agent.cpp
 +++ b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/agent.cpp
 @@ -89,8 +89,14 @@ struct cpu_info
@@ -82,5 +133,5 @@ index 70f9bb5ff2..15ba2df297 100644
              processor_info.emplace_back(info_v);
          else
 -- 
-2.50.1 (Apple Git-155)
+2.47.3
 

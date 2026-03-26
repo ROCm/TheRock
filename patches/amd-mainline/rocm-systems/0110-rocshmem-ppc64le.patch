@@ -1,7 +1,7 @@
-From 7a3e99e5b20677668f146c43bfb497e79b06ec7a Mon Sep 17 00:00:00 2001
+From ec18683e870650c35101ac8f94b0e96d7493a2f8 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 12 Mar 2026 16:54:00 +0000
-Subject: [PATCH] rocshmem: ppc64le
+Date: Thu, 26 Mar 2026 19:38:17 +0000
+Subject: [PATCH] rocshmem ppc64le
 
 ---
  projects/rocshmem/src/reverse_offload/backend_ro.cpp | 5 +++--
@@ -9,7 +9,7 @@ Subject: [PATCH] rocshmem: ppc64le
  2 files changed, 10 insertions(+), 3 deletions(-)
 
 diff --git a/projects/rocshmem/src/reverse_offload/backend_ro.cpp b/projects/rocshmem/src/reverse_offload/backend_ro.cpp
-index aecb42d9ed..b776512eca 100644
+index 3386da626d..0250cb397b 100644
 --- a/projects/rocshmem/src/reverse_offload/backend_ro.cpp
 +++ b/projects/rocshmem/src/reverse_offload/backend_ro.cpp
 @@ -24,8 +24,9 @@

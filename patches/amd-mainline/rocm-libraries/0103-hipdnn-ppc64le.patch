@@ -1,18 +1,18 @@
-From cfc2871b4790f960c5fb5ac14ae023a10b1ea607 Mon Sep 17 00:00:00 2001
-From: bluedragan <calvins@us.ibm.com>
-Date: Thu, 5 Mar 2026 05:33:22 +0000
-Subject: [PATCH] hipdnn: ppc64le
+From 475ff52d8b356ec26a19cd0de08059a483575515 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 26 Mar 2026 19:38:27 +0000
+Subject: [PATCH] hipdnn ppc64le
 
 ---
  projects/hipdnn/CMakeLists.txt                      |  8 ++++++++
- projects/hipdnn/samples/CMakeLists.txt              |  6 ++++++
+ projects/hipdnn/samples/CMakeLists.txt              |  5 +++++
  .../utilities/CpuFpReferenceValidation.hpp          | 13 +++++++++++++
  .../utilities/pointwise/CpuDeviceExecutor.hpp       |  4 ++++
  .../tests/utilities/TestCpuReferencePointwise.cpp   |  6 +++++-
- 5 files changed, 36 insertions(+), 1 deletion(-)
+ 5 files changed, 35 insertions(+), 1 deletion(-)
 
 diff --git a/projects/hipdnn/CMakeLists.txt b/projects/hipdnn/CMakeLists.txt
-index e75cd9b618..d4d2a5d216 100644
+index 9cfbe679b1..195b8acd96 100644
 --- a/projects/hipdnn/CMakeLists.txt
 +++ b/projects/hipdnn/CMakeLists.txt
 @@ -73,6 +73,11 @@ else()
@@ -38,17 +38,16 @@ index e75cd9b618..d4d2a5d216 100644
  add_compile_options(${EXTRA_COMPILE_OPTIONS})
  add_link_options(${EXTRA_LINK_OPTIONS})
 diff --git a/projects/hipdnn/samples/CMakeLists.txt b/projects/hipdnn/samples/CMakeLists.txt
-index 9f4445c6fe..878688da36 100644
+index 1003ef6dac..4ef2347675 100644
 --- a/projects/hipdnn/samples/CMakeLists.txt
 +++ b/projects/hipdnn/samples/CMakeLists.txt
-@@ -9,6 +9,12 @@ cmake_minimum_required(VERSION 3.25.2)
+@@ -9,6 +9,11 @@ cmake_minimum_required(VERSION 3.25.2)
  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
  
  project(hipdnn_samples VERSION 0.1.0 LANGUAGES CXX)
 +
 +if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
 +    add_definitions(-D_Float16=float)
-+    add_compile_options(-include "/home/rocm/src/TheRock/rocm-libraries/hip_ppc64le_fix.hpp")
 +endif()
 +
  include(GNUInstallDirs)
@@ -102,10 +101,10 @@ index 7d8756aa2e..d8093a1ae3 100644
          };
  
 diff --git a/projects/hipdnn/test_sdk/tests/utilities/TestCpuReferencePointwise.cpp b/projects/hipdnn/test_sdk/tests/utilities/TestCpuReferencePointwise.cpp
-index 8a31411f97..bbbfc86e7d 100644
+index 054708e008..c5e9dc75c5 100644
 --- a/projects/hipdnn/test_sdk/tests/utilities/TestCpuReferencePointwise.cpp
 +++ b/projects/hipdnn/test_sdk/tests/utilities/TestCpuReferencePointwise.cpp
-@@ -1109,7 +1109,11 @@ protected:
+@@ -1111,7 +1111,11 @@ protected:
                          auto xCompute = static_cast<ComputeType>(inputVal);
                          auto dyCompute = static_cast<ComputeType>(upstreamGradVal);
                          auto tanhVal = std::tanh(xCompute);
@@ -119,5 +118,5 @@ index 8a31411f97..bbbfc86e7d 100644
                          expected.setHostValue(static_cast<OutputType>(downstreamGrad), n, c, h, w);
                      }
 -- 
-2.50.1 (Apple Git-155)
+2.47.3
 

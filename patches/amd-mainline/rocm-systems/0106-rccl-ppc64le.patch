@@ -1,14 +1,14 @@
-From 8c6dbc4ce560ab2c2a0ab22fa8063102db5dcf90 Mon Sep 17 00:00:00 2001
-From: berichar <ben.richard@amd.com>
-Date: Mon, 16 Mar 2026 12:05:38 -0400
-Subject: [PATCH] rccl: ppc64le
+From 0118504739f3ddc93858a1f1d949fe88f2a1f9e2 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 26 Mar 2026 19:38:17 +0000
+Subject: [PATCH] rccl ppc64le
 
 ---
  projects/rccl/src/init.cc | 8 +++++++-
  1 file changed, 7 insertions(+), 1 deletion(-)
 
 diff --git a/projects/rccl/src/init.cc b/projects/rccl/src/init.cc
-index e4f70d0d34..7a79255157 100644
+index 174eec546a..cc49380702 100644
 --- a/projects/rccl/src/init.cc
 +++ b/projects/rccl/src/init.cc
 @@ -75,7 +75,9 @@
@@ -36,5 +36,5 @@ index e4f70d0d34..7a79255157 100644
        // Check BIOS string and hypervisor presence on ecx bit 31
        if (strncmp("Hyper-V UEFI Release", strValue, 20) != 0 && (ecx & (1u << 31)) == 0) {
 -- 
-2.50.1 (Apple Git-155)
+2.47.3
 

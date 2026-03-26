@@ -1,7 +1,7 @@
-From d5b85a386f515ad465a2411e3187c83f7b3cf95b Mon Sep 17 00:00:00 2001
-From: berichar <ben.richard@amd.com>
-Date: Wed, 11 Mar 2026 11:27:56 -0400
-Subject: [PATCH] hip-tests: ppc64le
+From 5c1693f6e9f6be606fae301de4bdaf7da15640cc Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 26 Mar 2026 19:38:17 +0000
+Subject: [PATCH] hip-tests ppc64le
 
 ---
  projects/hip-tests/catch/CMakeLists.txt      | 3 +++
@@ -9,7 +9,7 @@ Subject: [PATCH] hip-tests: ppc64le
  2 files changed, 8 insertions(+), 3 deletions(-)
 
 diff --git a/projects/hip-tests/catch/CMakeLists.txt b/projects/hip-tests/catch/CMakeLists.txt
-index 7af116978d..25968188f3 100644
+index b4d99d593a..1b86ae8ff0 100644
 --- a/projects/hip-tests/catch/CMakeLists.txt
 +++ b/projects/hip-tests/catch/CMakeLists.txt
 @@ -252,6 +252,9 @@ if(HIP_PLATFORM STREQUAL "amd")
@@ -42,5 +42,5 @@ index 49a3863124..2737ea9da3 100644
  endif()
  if(HIP_PLATFORM STREQUAL "amd")
 -- 
-2.50.1 (Apple Git-155)
+2.47.3
 

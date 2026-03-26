@@ -1,7 +1,7 @@
-From cfc2871b4790f960c5fb5ac14ae023a10b1ea607 Mon Sep 17 00:00:00 2001
-From: bluedragan <calvins@us.ibm.com>
-Date: Thu, 5 Mar 2026 05:33:22 +0000
-Subject: [PATCH] rocblas: ppc64le
+From 9abae93ca5e7746b030b5a8adc6db44e375ed5af Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 26 Mar 2026 19:38:27 +0000
+Subject: [PATCH] rocblas ppc64le
 
 ---
  projects/rocblas/CMakeLists.txt                   | 15 +++++++++++++++
@@ -9,7 +9,7 @@ Subject: [PATCH] rocblas: ppc64le
  2 files changed, 20 insertions(+)
 
 diff --git a/projects/rocblas/CMakeLists.txt b/projects/rocblas/CMakeLists.txt
-index 1651536f19..f2e158b88b 100644
+index 016b9fe9c7..8aea65094b 100644
 --- a/projects/rocblas/CMakeLists.txt
 +++ b/projects/rocblas/CMakeLists.txt
 @@ -33,6 +33,21 @@ unset(ENV{ROCM_BUILD_ID})
@@ -52,5 +52,5 @@ index ef31c58668..9c7d4e46fa 100644
          }
      }
 -- 
-2.50.1 (Apple Git-155)
+2.47.3
 

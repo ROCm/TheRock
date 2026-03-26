@@ -1,14 +1,14 @@
-From cfc2871b4790f960c5fb5ac14ae023a10b1ea607 Mon Sep 17 00:00:00 2001
-From: bluedragan <calvins@us.ibm.com>
-Date: Thu, 5 Mar 2026 05:33:22 +0000
-Subject: [PATCH] rocwmma: ppc64le
+From cf6ba37a258ca31e4c59b33f7036cb63f7b55a8e Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 26 Mar 2026 19:38:28 +0000
+Subject: [PATCH] rocwmma ppc64le
 
 ---
  projects/rocwmma/CMakeLists.txt | 5 +++++
  1 file changed, 5 insertions(+)
 
 diff --git a/projects/rocwmma/CMakeLists.txt b/projects/rocwmma/CMakeLists.txt
-index 568c6817b2..8a025c55c9 100644
+index 567406b8e5..3ebe322d82 100644
 --- a/projects/rocwmma/CMakeLists.txt
 +++ b/projects/rocwmma/CMakeLists.txt
 @@ -65,6 +65,11 @@ if( CMAKE_PROJECT_NAME STREQUAL "rocwmma" )
@@ -24,5 +24,5 @@ index 568c6817b2..8a025c55c9 100644
    set( CMAKE_INSTALL_PREFIX "/opt/rocm" CACHE PATH "Install path prefix, prepended onto install directories" FORCE )
  endif()
 -- 
-2.50.1 (Apple Git-155)
+2.47.3
 

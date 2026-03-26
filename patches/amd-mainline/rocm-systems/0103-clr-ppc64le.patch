@@ -1,23 +1,21 @@
-From c07434cf2a2098282baaaff1b949891be7365d7b Mon Sep 17 00:00:00 2001
-From: berichar <ben.richard@amd.com>
-Date: Sun, 15 Mar 2026 20:25:30 -0400
-Subject: [PATCH] bf16 support for ppc64le
+From c55ddd795b3cde8d6497ab73ef7bd3a4c7cc80c9 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 26 Mar 2026 19:38:17 +0000
+Subject: [PATCH] clr ppc64le
 
 ---
  .../include/hip/amd_detail/amd_hip_fp8.h      |    4 +
  .../hip/amd_detail/amd_hip_ocp_types.h        |   19 +
  .../hip/amd_detail/amd_ppc64le_hip_bf16.h     | 2199 +++++++++++++++++
  .../module/perf/OCLPerfKernelThroughput.h     |    4 +
- projects/hip/VERSION                          |    4 +-
- projects/hip/include/hip/hip_bf16.h           |    4 +
- 6 files changed, 2232 insertions(+), 2 deletions(-)
+ 4 files changed, 2226 insertions(+)
  create mode 100644 projects/clr/hipamd/include/hip/amd_detail/amd_ppc64le_hip_bf16.h
 
 diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h
-index fb4a97ca99..33f2fe89a4 100644
+index 9de195179f..01c11cae07 100644
 --- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h
 +++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h
-@@ -64,7 +64,11 @@
+@@ -46,7 +46,11 @@
  #endif
  
  // Include it explicitly for HIPRTC
@@ -30,10 +28,10 @@ index fb4a97ca99..33f2fe89a4 100644
  
  #if !defined(__HIPCC_RTC__)
 diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_types.h b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_types.h
-index 73773fee13..b9f0a2bd1b 100644
+index 18c616c17a..c25b3c76b6 100644
 --- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_types.h
 +++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_types.h
-@@ -36,7 +36,10 @@ static_assert(sizeof(unsigned short) == 2, "");
+@@ -18,7 +18,10 @@ static_assert(sizeof(unsigned short) == 2, "");
  
  #if (defined(__clang__) && (__clang_major__ > 17) && defined(__HIP__)) ||                          \
      (defined(__GNUC__) && (__GNUC__ > 13))
@@ -44,7 +42,7 @@ index 73773fee13..b9f0a2bd1b 100644
  static_assert(sizeof(_Float16) == 2, "");
  #endif
  
-@@ -48,16 +51,26 @@ typedef uint8_t __amd_fp8_storage_t;
+@@ -30,16 +33,26 @@ typedef uint8_t __amd_fp8_storage_t;
  typedef uint16_t __amd_fp8x2_storage_t;
  typedef uint8_t __amd_fp4x2_storage_t;
  typedef uint32_t __amd_fp4x8_storage_t;
@@ -71,7 +69,7 @@ index 73773fee13..b9f0a2bd1b 100644
  typedef float __attribute__((ext_vector_type(2))) __amd_floatx2_storage_t;
  typedef float __attribute__((ext_vector_type(8))) __amd_floatx8_storage_t;
  typedef float __attribute__((ext_vector_type(16))) __amd_floatx16_storage_t;
-@@ -71,9 +84,15 @@ typedef short __attribute__((ext_vector_type(2))) __amd_shortx2_storage_t;
+@@ -53,9 +66,15 @@ typedef short __attribute__((ext_vector_type(2))) __amd_shortx2_storage_t;
  /* GCC expects vector size in bytes */
  typedef unsigned int __attribute__((vector_size(8))) __amd_uintx2_storage_t;
  typedef uint8_t __attribute__((vector_size(8))) __amd_fp8x8_storage_t;
@@ -2293,10 +2291,10 @@ index 0000000000..3e2a92a691
 +#pragma pop_macro("MAYBE_UNDEF")
 +#endif
 diff --git a/projects/clr/opencl/tests/ocltst/module/perf/OCLPerfKernelThroughput.h b/projects/clr/opencl/tests/ocltst/module/perf/OCLPerfKernelThroughput.h
-index 0cc55f8045..01c5717afa 100644
+index b23ada56fb..85d55a9999 100644
 --- a/projects/clr/opencl/tests/ocltst/module/perf/OCLPerfKernelThroughput.h
 +++ b/projects/clr/opencl/tests/ocltst/module/perf/OCLPerfKernelThroughput.h
-@@ -45,7 +45,11 @@
+@@ -31,7 +31,11 @@
  #define UNSIGNED_LARGE_INT unsigned long long
  #define MAX_LOOP_ITER 10
  typedef cl_float4 float4;
@@ -2308,35 +2306,6 @@ index 0cc55f8045..01c5717afa 100644
  
  class OCLPerfKernelThroughput : public OCLTestImp {
   public:
-diff --git a/projects/hip/VERSION b/projects/hip/VERSION
-index d93710f395..c7e6920e59 100644
---- a/projects/hip/VERSION
-+++ b/projects/hip/VERSION
-@@ -1,6 +1,6 @@
- #HIP_VERSION_MAJOR
- 7
- #HIP_VERSION_MINOR
--2
-+12
- #HIP_VERSION_PATCH
--0
-+60490
-diff --git a/projects/hip/include/hip/hip_bf16.h b/projects/hip/include/hip/hip_bf16.h
-index 17839460be..ee8053770f 100644
---- a/projects/hip/include/hip/hip_bf16.h
-+++ b/projects/hip/include/hip/hip_bf16.h
-@@ -26,7 +26,11 @@ THE SOFTWARE.
- #include <hip/hip_common.h>
- 
- #if defined(__HIP_PLATFORM_AMD__) && !defined(__HIP_PLATFORM_NVIDIA__)
-+#if defined(__powerpc64__) || defined(__PPC64__)
-+#include <hip/amd_detail/amd_ppc64le_hip_bf16.h>
-+#else
- #include <hip/amd_detail/amd_hip_bf16.h>
-+#endif
- #elif !defined(__HIP_PLATFORM_AMD__) && defined(__HIP_PLATFORM_NVIDIA__)
- #include <hip/nvidia_detail/nvidia_hip_bf16.h>
- #else
 -- 
-2.50.1 (Apple Git-155)
+2.47.3
 

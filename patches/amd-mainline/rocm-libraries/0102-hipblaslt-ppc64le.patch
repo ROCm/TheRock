@@ -1,7 +1,7 @@
-From cfc2871b4790f960c5fb5ac14ae023a10b1ea607 Mon Sep 17 00:00:00 2001
-From: bluedragan <calvins@us.ibm.com>
-Date: Thu, 5 Mar 2026 05:33:22 +0000
-Subject: [PATCH] hipblaslt: ppc64le
+From c7a4c0b074d66f81e3470c01c7e476d8f142523e Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 26 Mar 2026 19:38:27 +0000
+Subject: [PATCH] hipblaslt ppc64le
 
 ---
  projects/hipblaslt/CMakeLists.txt                           | 4 ++++
@@ -9,7 +9,7 @@ Subject: [PATCH] hipblaslt: ppc64le
  2 files changed, 10 insertions(+)
 
 diff --git a/projects/hipblaslt/CMakeLists.txt b/projects/hipblaslt/CMakeLists.txt
-index 166ce3c025..99042b2e66 100644
+index b3885574b1..1ce61b5f4e 100644
 --- a/projects/hipblaslt/CMakeLists.txt
 +++ b/projects/hipblaslt/CMakeLists.txt
 @@ -13,6 +13,10 @@ else()
@@ -24,7 +24,7 @@ index 166ce3c025..99042b2e66 100644
  
  include(hipblaslt_shim)
 diff --git a/projects/hipblaslt/clients/common/include/hipblaslt_math.hpp b/projects/hipblaslt/clients/common/include/hipblaslt_math.hpp
-index f2866fd448..37490a27f3 100644
+index 02339c00c7..ea1264a134 100644
 --- a/projects/hipblaslt/clients/common/include/hipblaslt_math.hpp
 +++ b/projects/hipblaslt/clients/common/include/hipblaslt_math.hpp
 @@ -30,7 +30,13 @@
@@ -42,5 +42,5 @@ index f2866fd448..37490a27f3 100644
  
  /* ============================================================================================ */
 -- 
-2.50.1 (Apple Git-155)
+2.47.3
 

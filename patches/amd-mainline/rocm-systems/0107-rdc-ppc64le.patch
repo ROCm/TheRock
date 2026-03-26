@@ -1,17 +1,17 @@
-From 7bb2c09d4d79e2b8887af1dc65e7394bd8942144 Mon Sep 17 00:00:00 2001
-From: bluedragan <calvins@us.ibm.com>
-Date: Fri, 6 Mar 2026 19:51:50 +0000
-Subject: [PATCH] RDC: ppc64le
+From ba050ce80dcdf712416d37d21e49352d3480bd1b Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 26 Mar 2026 19:38:17 +0000
+Subject: [PATCH] rdc ppc64le
 
 ---
- projects/rdc/CMakeLists.txt                   | 11 ++++++--
- projects/rdc/example/CMakeLists.txt           |  6 +++-
+ projects/rdc/CMakeLists.txt                   | 10 +++++--
+ projects/rdc/example/CMakeLists.txt           |  5 +++-
  projects/rdc/rdc_libs/rdc/src/RdcPerfTimer.cc | 28 ++++++++++++++-----
- projects/rdc/tests/example/CMakeLists.txt     |  6 +++-
- 4 files changed, 40 insertions(+), 11 deletions(-)
+ projects/rdc/tests/example/CMakeLists.txt     |  5 +++-
+ 4 files changed, 37 insertions(+), 11 deletions(-)
 
 diff --git a/projects/rdc/CMakeLists.txt b/projects/rdc/CMakeLists.txt
-index a63240e058..c3710234c8 100755
+index 30ee51ec0e..4890201d44 100755
 --- a/projects/rdc/CMakeLists.txt
 +++ b/projects/rdc/CMakeLists.txt
 @@ -59,9 +59,8 @@ set_property(
@@ -25,34 +25,32 @@ index a63240e058..c3710234c8 100755
      "${CMAKE_CXX_FLAGS_DEBUG} -O0 -ggdb -DDEBUG"
      CACHE STRING
      "Flags for Debug builds"
-@@ -155,6 +154,14 @@ set(CMAKE_INSTALL_MESSAGE LAZY)
+@@ -155,6 +154,13 @@ set(CMAKE_INSTALL_MESSAGE LAZY)
  # this must go after some CMAKE_* variables
  project(${RDC} VERSION "${VERSION_STRING}" HOMEPAGE_URL "https://github.com/RadeonOpenCompute/rdc")
  
 +
 +# Set compile flags
-+if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
-+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64")
-+else()
-+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64 -msse -msse2")
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64")
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse2")
 +endif()
 +
  # Include CMAKE_INSTALL_* variables
  # this must go after project()
  include(GNUInstallDirs)
 diff --git a/projects/rdc/example/CMakeLists.txt b/projects/rdc/example/CMakeLists.txt
-index 378a200581..a2766ce158 100755
+index 378a200581..49b0a23e02 100755
 --- a/projects/rdc/example/CMakeLists.txt
 +++ b/projects/rdc/example/CMakeLists.txt
-@@ -32,7 +32,11 @@ option(CMAKE_VERBOSE_MAKEFILE "Enable verbose output" ON)
+@@ -32,7 +32,10 @@ option(CMAKE_VERBOSE_MAKEFILE "Enable verbose output" ON)
  option(CMAKE_EXPORT_COMPILE_COMMANDS "Export compile commands for linters and autocompleters" ON)
  
  # Set compile flags
 -set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64 -msse -msse2")
-+if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
-+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64")
-+else()
-+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64 -msse -msse2")
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64")
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse2")
 +endif()
  set(CMAKE_CXX_FLAGS_DEBUG
      "${CMAKE_CXX_FLAGS_DEBUG} -O0 -ggdb -DDEBUG"
@@ -115,22 +113,21 @@ index 47277bcc56..7a1fc0818a 100644
  
  }  // namespace rdc
 diff --git a/projects/rdc/tests/example/CMakeLists.txt b/projects/rdc/tests/example/CMakeLists.txt
-index d5614f387b..c799c1aa35 100755
+index d5614f387b..c3b30df79a 100755
 --- a/projects/rdc/tests/example/CMakeLists.txt
 +++ b/projects/rdc/tests/example/CMakeLists.txt
-@@ -23,7 +23,11 @@ message("                       Cmake Example Lib                           ")
+@@ -23,7 +23,10 @@ message("                       Cmake Example Lib                           ")
  message("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
  
  # Set compile flags
 -set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64 -msse -msse2")
-+if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
-+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64")
-+else()
-+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64 -msse -msse2")
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -m64")
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse2")
 +endif()
  set(CMAKE_CXX_FLAGS_DEBUG
      "${CMAKE_CXX_FLAGS_DEBUG} -O0 -ggdb -DDEBUG"
      CACHE STRING
 -- 
-2.50.1 (Apple Git-155)
+2.47.3
 
