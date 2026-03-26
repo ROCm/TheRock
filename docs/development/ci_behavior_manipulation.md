@@ -1,45 +1,70 @@
 # CI Behavior Manipulation
 
-TheRock CI is controlled by [`configure_ci.py`](../../build_tools/github_actions/configure_ci.py), where it controls push, pull request, workflow dispatch and schedule CI behavior.
+TheRock has two CI pipelines:
 
-## CI (non-multi-arch)
+- **CI** ([`ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/ci.yml)): single-arch builds, configured by [`configure_ci.py`](../../build_tools/github_actions/configure_ci.py)
+- **Multi-Arch CI** ([`multi_arch_ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)): multi-arch builds, configured by [`configure_ci.py`](../../build_tools/github_actions/configure_ci.py)
 
-<!-- TODO: restructure this once multi-arch CI is further along
+<!-- TODO(#3399): link to configure_multi_arch_ci.py when it lands -->
 
-* Selection of which GPUs to build for on each platform
-* Selection of which GPUs to test for on each platform
-* Selection of which tests to run
-* Variants (ASan, etc.)
-* Cache behavior, opt-in builds/tests like PyTorch
--->
+Both read GPU family definitions from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py).
 
-### Push behavior
+> [!IMPORTANT]
+> "Multi-arch CI" is set to replace "CI". See these issues for details:
+>
+> - [[Multi-arch] Extend and improve multi-arch CI (#3336)](https://github.com/ROCm/TheRock/issues/3336)
+> - [[Multi-arch] Enable multi-arch CI on pre-submit (#3337)](https://github.com/ROCm/TheRock/issues/3337)
+> - [[Multi-arch] Remove single stage (non-multi-arch) CI (#3340)](https://github.com/ROCm/TheRock/issues/3340)
 
-For `push`, TheRock CI only runs builds and tests when pushed to the `main` branch. From [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py), TheRock CI collects the AMD GPU families from `amdgpu_family_info_matrix_presubmit` and `amdgpu_family_info_matrix_postsubmit` dictionaries, then runs builds and tests.
+## Trigger behavior
 
-### Pull request behavior
+The CI pipelines test a growing set of GPU targets depending on trigger type/frequency:
 
-For `pull_request`, TheRock CI collects the `amdgpu_family_info_matrix_presubmit` dictionary from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py) and runs build/tests.
+| Trigger type   | Included family groups                                                                                                                             | Notes                                           |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `pull_request` | <ul><li>`amdgpu_family_info_matrix_presubmit`</li></ul>                                                                                            | Common targets with the most test runners       |
+| `push`         | <ul><li>`amdgpu_family_info_matrix_presubmit`</li><li>`amdgpu_family_info_matrix_postsubmit`</li></ul>                                             | High priority targets with limited test runners |
+| `schedule`     | <ul><li>`amdgpu_family_info_matrix_presubmit`</li><li>`amdgpu_family_info_matrix_postsubmit`</li><li>`amdgpu_family_info_matrix_nightly`</li></ul> | All targets, even those that fail to build      |
 
-However, if additional options are wanted, you can add a label to manipulate the behavior. The labels we provide are:
+### Pull request
 
-- `ci:skip`: Skip all builds and tests
-- `ci:run-all-archs`: Build and test all possible architectures
-- `ci:run-multi-arch`: Opt in to running [Multi-Arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml) on this PR. Without this label, multi-arch CI is skipped on PRs to avoid doubling CI load during the transition. See [issue #3337](https://github.com/ROCm/TheRock/issues/3337).
-- `gfx...`: Add a build and test (if a test machine is available) for the specified gfx family (e.g. `gfx120X`, `gfx950`)
-- `test:...`: Run full tests only for the specified label and other labeled projects (e.g. `test:rocthrust`, `test:hipblaslt`)
-- `test_runner:...`: Run tests on only custom test machines (e.g. `test_runner:oem`)
-- `test_filter:...`: Run tests based on the specified filter (e.g. `test_filter:comprehensive`). See [test_filtering.md](./test_filtering.md) for allowed test filters.
+CI runs on pull requests if modified files pass the filters in
+[`configure_ci_path_filters.py`](../../build_tools/github_actions/configure_ci_path_filters.py).
 
-### Workflow dispatch behavior
+The following labels may be added to a pull request to modify CI behavior:
 
-For `workflow_dispatch`, you are able to trigger CI in [GitHub's ci.yml workflow page](https://github.com/ROCm/TheRock/actions/workflows/ci.yml). To trigger a workflow dispatch, click "Run workflow" and fill in the fields accordingly:
+| Label or group      | Description                                                                                                                               |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci:skip`           | Skip all builds and tests                                                                                                                 |
+| `ci:run-all-archs`  | Build and test all possible architectures                                                                                                 |
+| `ci:run-multi-arch` | Opt in to running Multi-Arch CI on this PR                                                                                                |
+| `gfx...`            | Opt-in to building and testing the specified gfx family (e.g. `gfx120X`, `gfx950`)                                                        |
+| `test:...`          | Run full tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`)                                                  |
+| `test_runner:...`   | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                     |
+| `test_filter:...`   | Set the test filter explicitly (e.g. `test_filter:comprehensive`). See [test_filtering.md](./test_filtering.md) for allowed test filters. |
 
-<img src="./assets/ci_workflow_dispatch.png" />
+### Push
 
-### Schedule behavior
+CI runs on pushes to `main` if modified files pass the filters in
+[`configure_ci_path_filters.py`](../../build_tools/github_actions/configure_ci_path_filters.py).
 
-For `schedule` runs, the `CI Nightly` runs everyday at 2AM UTC. This collects all families from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py), running all builds and tests.
+### Schedule
+
+The
+[`CI Nightly`](https://github.com/ROCm/TheRock/blob/main/.github/workflows/ci_nightly.yml)
+workflow runs once a day. It selects _all_ families (even those which may fail
+to build) and runs comprehensive tests.
+
+### Workflow dispatch
+
+The CI and Multi-Arch CI pipelines can be triggered manually from their GitHub
+Actions workflow pages:
+
+- [CI workflow dispatch](https://github.com/ROCm/TheRock/actions/workflows/ci.yml) — click "Run workflow" and fill in the fields:
+
+  <img src="./assets/ci_workflow_dispatch.png" />
+
+- [Multi-Arch CI workflow dispatch](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml) — inputs allow per-platform family selection, test label filtering, and prebuilt stage configuration.
 
 ## Prebuilt stages (Multi-Arch CI)
 
@@ -82,9 +107,9 @@ be computed based on dependencies and a special "all" option may be available.
 
 <!-- TODO: The workflows currently use `contains(prebuilt_stages, 'name')` for
      substring matching, which would break if a stage name is a prefix of
-     another. When configure_ci.py generates the stage list automatically,
-     switch to a JSON array and use `fromJSON()` + `contains()` for exact
-     matching. -->
+     another. When configure_multi_arch_ci.py generates the stage list
+     automatically, switch to a JSON array and use `fromJSON()` + `contains()`
+     for exact matching. -->
 
 For now, these are the common configurations used for testing:
 
