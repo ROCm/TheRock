@@ -116,8 +116,7 @@ artifacts, or any S3 path.
 from _therock_utils.storage_location import StorageLocation
 
 loc = StorageLocation(
-    bucket="therock-ci-artifacts",
-    relative_path="12345-linux/file.tar.xz"
+    bucket="therock-ci-artifacts", relative_path="12345-linux/file.tar.xz"
 )
 loc.s3_uri  # "s3://therock-ci-artifacts/12345-linux/file.tar.xz"
 loc.https_url  # "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/file.tar.xz"
@@ -134,7 +133,7 @@ Schemas use Python string formatting with `{bucket}` and `{path}` placeholders:
 loc = StorageLocation(
     bucket="my-bucket",
     relative_path="12345-linux/file.tar.xz",
-    s3_url_schema="custom-s3://{bucket}/prefix/{path}"
+    s3_url_schema="custom-s3://{bucket}/prefix/{path}",
 )
 loc.s3_uri  # "custom-s3://my-bucket/prefix/12345-linux/file.tar.xz"
 
@@ -142,7 +141,7 @@ loc.s3_uri  # "custom-s3://my-bucket/prefix/12345-linux/file.tar.xz"
 loc = StorageLocation(
     bucket="my-bucket",
     relative_path="12345-linux/file.tar.xz",
-    https_url_schema="https://cdn.example.com/{bucket}/{path}"
+    https_url_schema="https://cdn.example.com/{bucket}/{path}",
 )
 loc.https_url  # "https://cdn.example.com/my-bucket/12345-linux/file.tar.xz"
 ```
@@ -201,25 +200,21 @@ WorkflowOutputRoot accepts optional schema parameters that are propagated to all
 root = WorkflowOutputRoot.from_workflow_run(
     run_id="12345",
     platform="linux",
-    https_url_schema="https://cdn.example.com/{bucket}/{path}"
+    https_url_schema="https://cdn.example.com/{bucket}/{path}",
 )
 root.artifact("test.tar.xz").https_url
 # → "https://cdn.example.com/therock-ci-artifacts/12345-linux/test.tar.xz"
 
 # Custom S3 schema (e.g., for S3-compatible storage)
 root = WorkflowOutputRoot.from_workflow_run(
-    run_id="12345",
-    platform="linux",
-    s3_url_schema="s3-custom://{bucket}/prefix/{path}"
+    run_id="12345", platform="linux", s3_url_schema="s3-custom://{bucket}/prefix/{path}"
 )
 root.artifact("test.tar.xz").s3_uri
 # → "s3-custom://therock-ci-artifacts/prefix/12345-linux/test.tar.xz"
 
 # Custom bucket naming (e.g., for different environments)
 root = WorkflowOutputRoot.from_workflow_run(
-    run_id="12345",
-    platform="linux",
-    bucket_schema="mycompany-{release_type}-builds"
+    run_id="12345", platform="linux", bucket_schema="mycompany-{release_type}-builds"
 )
 # When RELEASE_TYPE=dev, bucket will be "mycompany-dev-builds"
 ```

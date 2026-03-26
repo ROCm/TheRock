@@ -60,16 +60,8 @@ class StorageLocation:
     def https_url(self) -> str:
         """Public HTTPS URL for browser access.
 
-        Checks for bucket-specific override via environment variable:
-        THEROCK_HTTPS_URL_<bucket> where dashes are replaced with underscores.
-
         If no env var is set, uses the https_url_schema template.
         """
-        # Check for bucket-specific env var override
-        env_var_name = f"THEROCK_HTTPS_URL_{self.bucket.replace('-', '_')}"
-        base_url = os.getenv(env_var_name)
-        if base_url:
-            return f"{base_url.rstrip('/')}/{self.relative_path}"
         # Use template with placeholders
         schema = self.https_url_schema or DEFAULT_HTTPS_URL_SCHEMA
         return schema.format(bucket=self.bucket, path=self.relative_path)

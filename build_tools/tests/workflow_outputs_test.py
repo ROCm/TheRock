@@ -386,7 +386,8 @@ class TestWorkflowOutputRootForLocal(unittest.TestCase):
         )
         loc = root.artifact("test.tar.xz")
         self.assertEqual(
-            loc.https_url, "https://custom.example.com/local/local-linux/test.tar.xz"
+            loc.https_url,
+            f"https://custom.example.com/local/local-{root.platform}/test.tar.xz",
         )
 
 
