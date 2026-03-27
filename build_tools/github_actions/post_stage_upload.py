@@ -137,8 +137,8 @@ def upload_stage_logs(
         return
 
     dest = output_root.stage_log_dir(stage_name, amdgpu_family)
-    # Exclude raw ccache logs — they're uploaded compressed as ccache_logs.tar.gz.
-    backend.upload_directory(log_dir, dest, exclude=["ccache/*"])
+    # Exclude raw ccache logs — they're uploaded compressed as ccache_logs.tar.zst.
+    backend.upload_directory(log_dir, dest, exclude=["ccache/**/*"])
 
 
 def run(args: argparse.Namespace):
