@@ -6,6 +6,12 @@ should use this module to compute paths.
 
 See docs/development/workflow_outputs.md for the full layout reference.
 
+Note: this file is NOT bundled into the Lambda deployment package (only
+storage_backend.py and storage_location.py are). Top-level imports here
+do not need to be Lambda-safe, but keep optional dependencies deferred
+(imported inside the function that needs them) so this module remains
+importable in environments where those packages are not installed.
+
 A "workflow output" is anything produced by a CI workflow run:
 - Build artifacts (.tar.xz, .tar.zst archives)
 - Logs (.log files, ninja_logs.tar.gz)
@@ -46,7 +52,6 @@ import platform as platform_module
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.storage_location import StorageLocation
-from github_actions.github_actions_api import gha_query_workflow_run_by_id
 
 
 def _log(*args, **kwargs):
@@ -314,8 +319,12 @@ def _retrieve_bucket_info(
         github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
         _log(f"  (implicit) github_repository: {github_repository}")
 
-    # Fetch workflow_run from API if not provided but workflow_run_id is set
+    # Fetch workflow_run from API if not provided but workflow_run_id is set.
+    # Deferred import: github_actions is an optional dependency not available in
+    # all environments (e.g. local dev without the GHA support package installed).
     if workflow_run is None and workflow_run_id is not None:
+        from github_actions.github_actions_api import gha_query_workflow_run_by_id
+
         workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
 
     # Extract metadata from workflow_run if available
