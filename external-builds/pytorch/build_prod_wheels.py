@@ -717,11 +717,16 @@ def do_build(args: argparse.Namespace):
             print(f"ccache --show-stats output:\n{ccache_stats_output}")
 
 
-def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
+def build_triton_windows(
+    args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
+) -> str:
     """Build triton wheel for Windows using triton-windows repository."""
     print("Building Triton for Windows (using triton-windows repository)")
 
     llvm_build_dir = download_llvm_for_triton_windows(triton_dir)
+
+    version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
+    version_suffix += str(args.version_suffix)
 
     # Prepare environment for triton-windows build.
     # Note: MSVC environment (vcvars64.bat) must already be set up.
@@ -735,10 +740,14 @@ def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
             "LLVM_SYSPATH": str(llvm_build_dir),
             "TRITON_BUILD_PROTON": "OFF",
             "TRITON_APPEND_CMAKE_ARGS": "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE",
-            # Override package name to "triton" for consistency with Linux
-            "TRITON_WHEEL_NAME": "triton",
+            "TRITON_WHEEL_VERSION_SUFFIX": version_suffix,
         }
     )
+
+    # Enable build caching
+    for launcher_var in ["CMAKE_C_COMPILER_LAUNCHER", "CMAKE_CXX_COMPILER_LAUNCHER"]:
+        if launcher_var in env:
+            windows_env[launcher_var] = env[launcher_var]
 
     print("+++ Installing build dependencies:")
     run_command(
@@ -757,13 +766,13 @@ def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
         env=windows_env,
     )
 
-    # Build produces wheel named "triton" (overridden via TRITON_WHEEL_NAME)
-    built_wheel = find_built_wheel(triton_dir / "dist", "triton")
+    # triton-windows produces wheels named "triton_windows"
+    built_wheel = find_built_wheel(triton_dir / "dist", "triton_windows")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
 
     wheel_version = built_wheel.stem.split("-")[1]
-    return f"triton=={wheel_version}"
+    return f"triton_windows=={wheel_version}"
 
 
 def build_triton_linux(
@@ -854,7 +863,7 @@ def do_build_triton(
 ) -> str:
     """Build triton wheel. Dispatches to platform-specific build functions."""
     if is_windows:
-        return build_triton_windows(args, triton_dir)
+        return build_triton_windows(args, triton_dir, env)
     else:
         return build_triton_linux(args, triton_dir, env)
 

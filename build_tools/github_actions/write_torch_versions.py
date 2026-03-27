@@ -6,7 +6,7 @@
 Fails if any wheels that were expected for the platform were not set.
 
 Currently,
-* Windows expects torch, torchaudio, and torchvision
+* Windows expects torch, torchaudio, torchvision, and triton_windows
 * Linux expects torch, torchaudio, torchvision, triton, and apex
 """
 
@@ -61,7 +61,8 @@ def get_all_wheel_versions(
     torch_version = get_wheel_version(package_dist_dir, "torch")
     torchaudio_version = get_wheel_version(package_dist_dir, "torchaudio")
     torchvision_version = get_wheel_version(package_dist_dir, "torchvision")
-    triton_version = get_wheel_version(package_dist_dir, "triton")
+    triton_wheel_name = "triton_windows" if os.lower() == "windows" else "triton"
+    triton_version = get_wheel_version(package_dist_dir, triton_wheel_name)
     apex_version = get_wheel_version(package_dist_dir, "apex")
     _log("")
 
@@ -82,8 +83,6 @@ def get_all_wheel_versions(
 
     if triton_version:
         all_versions = all_versions | {"triton_version": triton_version}
-    elif os.lower() == "windows":
-        _log("Did not find triton (that's okay, is not currently built on Windows)")
     else:
         raise FileNotFoundError("Did not find triton wheel")
 
