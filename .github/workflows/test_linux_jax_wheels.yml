@@ -214,7 +214,7 @@ jobs:
             --artifact-group "${{ inputs.amdgpu_family }}" \
             --output-dir "${DEST}"
           # Temporary CI workaround.
-          # TODO(#<issue-number>): Remove this /opt/rocm symlink once JAX wheel
+          # TODO(#4201): Remove this /opt/rocm symlink once JAX wheel
           # packaging/RUNPATH fixes are validated and CI no longer depends on
           # /opt/rocm -> /opt/rocm-<version> path translation.
           ln -sfn "${DEST}" /opt/rocm
