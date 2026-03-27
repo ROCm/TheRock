@@ -4,6 +4,7 @@
 name: Bump Submodule automation
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 */12 * * *" # Runs every 12 hrs at 12AM and 12PM
   push:
@@ -50,7 +51,7 @@ jobs:
           pip install requests
 
       - name: Run scheduled bump automation
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "schedule" \
