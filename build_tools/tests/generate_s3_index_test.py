@@ -22,14 +22,15 @@ import generate_s3_index
 class TestListFilesLocal(unittest.TestCase):
     """Tests for _list_files_local()."""
 
-    def test_lists_immediate_files_only(self):
-        """Only files directly in the directory are listed, not subdirectory files."""
+    def test_lists_immediate_contents(self):
+        """Direct files and subdirs are listed; index.html and subdir files are excluded."""
         with tempfile.TemporaryDirectory() as staging:
             staging_dir = Path(staging)
             root = staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu"
             root.mkdir(parents=True)
             (root / "build.log").write_text("log")
             (root / "ninja_logs.tar.gz").write_bytes(b"gz")
+            (root / "index.html").write_text("<html></html>")
             subdir = root / "therock-build-prof"
             subdir.mkdir()
             (subdir / "comp-summary.html").write_text("<html>")
@@ -38,26 +39,18 @@ class TestListFilesLocal(unittest.TestCase):
                 staging_dir, "12345-linux/logs/gfx94X-dcgpu"
             )
             names = [e.name for e in entries]
+            hrefs = [e.href for e in entries]
+            # Direct files are included
             self.assertIn("build.log", names)
             self.assertIn("ninja_logs.tar.gz", names)
-            # Subdirectory files are NOT included
+            # index.html is excluded
+            self.assertNotIn("index.html", names)
+            # Subdirectory appears as an entry linking to its index
+            self.assertIn("therock-build-prof/", names)
+            self.assertIn("therock-build-prof/index.html", hrefs)
+            # Subdirectory files are NOT included directly
             self.assertNotIn("therock-build-prof/comp-summary.html", names)
             self.assertNotIn("comp-summary.html", names)
-
-    def test_excludes_index_html(self):
-        with tempfile.TemporaryDirectory() as staging:
-            staging_dir = Path(staging)
-            root = staging_dir / "12345-linux" / "logs"
-            root.mkdir(parents=True)
-            (root / "index.html").write_text("<html></html>")
-            (root / "build.log").write_text("log")
-
-            entries = generate_s3_index._list_files_local(
-                staging_dir, "12345-linux/logs"
-            )
-            names = [e.name for e in entries]
-            self.assertNotIn("index.html", names)
-            self.assertIn("build.log", names)
 
     def test_returns_empty_for_missing_dir(self):
         with tempfile.TemporaryDirectory() as staging:

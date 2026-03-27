@@ -25,7 +25,9 @@ AWS credentials are resolved through boto3's default credential chain.
 """
 
 import argparse
+import html
 import os
+from urllib.parse import quote
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -110,7 +112,7 @@ def _generate_index_html(title: str, entries: list[_FileEntry], parent_href: str
     lines = [
         _HTML_STYLE,
         "<body>",
-        f"<header><h1>{_escape_html(title)}</h1></header>",
+        f"<header><h1>{html.escape(title)}</h1></header>",
         "<main><table>",
         "<thead><tr><th>Name</th><th>Size</th><th>Modified</th></tr></thead>",
         "<tbody>",
@@ -125,24 +127,16 @@ def _generate_index_html(title: str, entries: list[_FileEntry], parent_href: str
         if entry.last_modified:
             mod_iso = entry.last_modified.isoformat()
             mod_str = entry.last_modified.strftime("%Y-%m-%d %H:%M UTC")
-            mod_cell = f'<time datetime="{_escape_html(mod_iso)}">{mod_str}</time>'
+            mod_cell = f'<time datetime="{html.escape(mod_iso)}">{mod_str}</time>'
         else:
             mod_cell = "&mdash;"
         lines.append(
-            f'<tr><td><a href="{_escape_html(entry.href)}">{_escape_html(entry.name)}</a></td>'
+            f'<tr><td><a href="{quote(entry.href)}">{html.escape(entry.name)}</a></td>'
             f"<td>{size_str}</td><td>{mod_cell}</td></tr>"
         )
     lines += ["</tbody></table></main>", "</body></html>"]
     return "\n".join(lines)
 
-
-def _escape_html(text: str) -> str:
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +246,8 @@ def _discover_dirs_with_files_local(staging_dir: Path, run_prefix: str) -> list[
 
 def _upload_html(html: str, dest: StorageLocation, backend: StorageBackend, dry_run: bool) -> None:
     """Write html to a temp file and upload it to dest."""
+    if dry_run:
+        return
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".html", encoding="utf-8", delete=False
     ) as tmp:
