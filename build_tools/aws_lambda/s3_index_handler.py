@@ -214,14 +214,21 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     indexed = 0
     for bucket, dir_prefixes in dirs_to_index.items():
         # Index deeper paths first so ancestor indexes reflect children.
+        run_prefix_depth = _RUN_PREFIX_DEPTH.get(bucket, _DEFAULT_RUN_PREFIX_DEPTH)
         for dir_prefix in sorted(dir_prefixes, key=lambda p: p.count("/"), reverse=True):
             try:
                 logger.info("Generating index for: %s/%s", bucket, dir_prefix)
+                parent_href = (
+                    None
+                    if dir_prefix.count("/") < run_prefix_depth
+                    else "../index.html"
+                )
                 generate_s3_index.generate_index_for_directory(
                     bucket=bucket,
                     dir_prefix=dir_prefix,
                     backend=backend,
                     s3_client=s3_client,
+                    parent_href=parent_href,
                 )
                 indexed += 1
             except Exception as exc:
