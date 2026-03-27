@@ -429,12 +429,15 @@ class HTTPBackend(ArtifactBackend):
         """Fetch artifact list from index-{gfx_family}.html."""
         index_url = self.output_root.artifact_index(gfx_family).https_url
         try:
-            with urllib.request.urlopen(index_url) as response:
+            with urllib.request.urlopen(index_url, timeout=30) as response:
                 html_content = response.read().decode("utf-8")
             return self._parse_index_html(html_content)
-        except Exception:
-            # Index doesn't exist for this target
-            return []
+        except urllib.error.HTTPError as e:
+            if e.code in (403, 404):
+                return []  # Index doesn't exist for this target
+            raise  # Re-raise server errors (500, etc.)
+        except urllib.error.URLError:
+            return []  # Network error - treat as unavailable
 
     def _discover_gfx_families_from_master_index(self) -> List[str]:
         """Discover available GFX families from master index.
