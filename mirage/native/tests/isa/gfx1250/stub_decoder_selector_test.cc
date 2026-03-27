@@ -617,6 +617,20 @@ int main() {
       return 1;
     }
   }
+  for (std::string_view near_miss_instruction :
+       {"V_PK_ADD_BF16_X",
+        "TENSOR_LOAD_TO_LDS_X",
+        "V_CVT_F16_FP8_X",
+        "V_DIV_SCALE_F64_X"}) {
+    if (!Expect(SelectStubDecoderRoute(near_miss_instruction) ==
+                        StubDecoderRoute::kUnsupported &&
+                    FindStubDecoderRouteInfo(near_miss_instruction) ==
+                        nullptr &&
+                    !ListedInAnyRoute(near_miss_instruction),
+                "expected suffixed known opcode near-misses to stay excluded from all routed selector surfaces")) {
+      return 1;
+    }
+  }
 
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
     const StubDecoderRoute expected_route =

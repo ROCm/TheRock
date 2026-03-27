@@ -7397,6 +7397,18 @@ int main() {
                       "X_V_DIV_SCALE_F64",
                       StubDecodeStatus::kUnknownInstruction) &&
                   MatchesSelectorDecodeStatusParity(
+                      "V_PK_ADD_BF16_X",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "TENSOR_LOAD_TO_LDS_X",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "V_CVT_F16_FP8_X",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "V_DIV_SCALE_F64_X",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
                       "", StubDecodeStatus::kUnknownInstruction),
               "expected selector and decode surfaces to agree on unknown-name status")) {
     return 1;
@@ -7456,12 +7468,16 @@ int main() {
        {"X_V_PK_ADD_BF16",
         "X_TENSOR_LOAD_TO_LDS",
         "X_V_CVT_F16_FP8",
-        "X_V_DIV_SCALE_F64"}) {
+        "X_V_DIV_SCALE_F64",
+        "V_PK_ADD_BF16_X",
+        "TENSOR_LOAD_TO_LDS_X",
+        "V_CVT_F16_FP8_X",
+        "V_DIV_SCALE_F64_X"}) {
     const StubDecodedInstruction near_miss_decode =
         DecodeStubInstruction(near_miss_instruction);
     if (!Expect(MatchesUnknownDecode(near_miss_decode, near_miss_instruction) &&
                     MatchesUnknownHelperSurface(near_miss_decode),
-                "expected prefixed known opcode near-misses to keep exact unknown decode parity")) {
+                "expected known opcode near-misses to keep exact unknown decode parity")) {
       return 1;
     }
     for (const StubDecoderRouteManifest& manifest :
@@ -7472,7 +7488,7 @@ int main() {
       if (!Expect(MatchesUnknownDecode(via_entrypoint,
                                        near_miss_instruction) &&
                       MatchesUnknownHelperSurface(via_entrypoint),
-                  "expected prefixed known opcode near-misses to keep exact route-keyed unknown parity")) {
+                  "expected known opcode near-misses to keep exact route-keyed unknown parity")) {
         return 1;
       }
     }
