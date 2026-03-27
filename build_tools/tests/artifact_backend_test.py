@@ -666,10 +666,10 @@ class TestHTTPBackend(unittest.TestCase):
         mock_response_gfx1200.__exit__ = mock.Mock(return_value=False)
 
         # Mock empty response for gfx94X-dcgpu (index doesn't exist)
-        def urlopen_side_effect(url):
+        def urlopen_side_effect(url, **kwargs):
             if "gfx1200" in url:
                 return mock_response_gfx1200
-            raise Exception("Index not found")
+            raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
 
         mock_urlopen.side_effect = urlopen_side_effect
 
@@ -700,12 +700,12 @@ class TestHTTPBackend(unittest.TestCase):
         mock_response_gfx94x.__enter__ = mock.Mock(return_value=mock_response_gfx94x)
         mock_response_gfx94x.__exit__ = mock.Mock(return_value=False)
 
-        def urlopen_side_effect(url):
+        def urlopen_side_effect(url, **kwargs):
             if "gfx1200" in url:
                 return mock_response_gfx1200
             elif "gfx94X-dcgpu" in url:
                 return mock_response_gfx94x
-            raise Exception("Index not found")
+            raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
 
         mock_urlopen.side_effect = urlopen_side_effect
 
