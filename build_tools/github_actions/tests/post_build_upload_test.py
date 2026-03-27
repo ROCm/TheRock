@@ -126,7 +126,7 @@ class TestUploadLogs(unittest.TestCase):
             log_dir.mkdir()
             (log_dir / "build.log").write_text("build output")
             (log_dir / "ninja_logs.tar.gz").write_bytes(b"gzip")
-            (log_dir / "ccache_logs.tar.gz").write_bytes(b"compressed")
+            (log_dir / "ccache_logs.tar.zst").write_bytes(b"compressed")
             ccache_dir = log_dir / "ccache"
             ccache_dir.mkdir()
             (ccache_dir / "ccache.log").write_text("verbose trace")
@@ -139,7 +139,7 @@ class TestUploadLogs(unittest.TestCase):
             base = staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu"
             self.assertTrue((base / "build.log").is_file())
             self.assertTrue((base / "ninja_logs.tar.gz").is_file())
-            self.assertTrue((base / "ccache_logs.tar.gz").is_file())
+            self.assertTrue((base / "ccache_logs.tar.zst").is_file())
             self.assertFalse((base / "ccache" / "ccache.log").exists())
 
     def test_build_observability_uploaded(self):

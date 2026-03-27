@@ -100,11 +100,14 @@ class TestCreateCcacheLogArchive(unittest.TestCase):
 
             post_stage_upload.create_ccache_log_archive(build_dir)
 
-            archive = build_dir / "logs" / "ccache_logs.tar.gz"
+            archive = build_dir / "logs" / "ccache_logs.tar.zst"
             self.assertTrue(archive.exists())
 
-            with tarfile.open(archive, "r:gz") as tar:
-                names = sorted(tar.getnames())
+            import pyzstd
+
+            with pyzstd.ZstdFile(archive, "rb") as zst:
+                with tarfile.open(mode="r|", fileobj=zst) as tar:
+                    names = sorted(m.name for m in tar)
             self.assertEqual(names, ["ccache.log", "ccache_stats.log"])
 
             # Originals are preserved (idempotent — re-running produces same result).
@@ -121,7 +124,7 @@ class TestCreateCcacheLogArchive(unittest.TestCase):
 
             post_stage_upload.create_ccache_log_archive(build_dir)
 
-            self.assertFalse((log_dir / "ccache_logs.tar.gz").exists())
+            self.assertFalse((log_dir / "ccache_logs.tar.zst").exists())
 
     def test_no_log_dir_skips(self):
         """Verify no error when logs/ doesn't exist."""
@@ -158,7 +161,7 @@ class TestUploadStageLogs(unittest.TestCase):
             self.assertFalse((base / "generic").exists())
 
     def test_ccache_subdir_excluded_but_archive_uploaded(self):
-        """Verify raw ccache/ logs are excluded but ccache_logs.tar.gz is uploaded."""
+        """Verify raw ccache/ logs are excluded but ccache_logs.tar.zst is uploaded."""
         output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
@@ -167,7 +170,7 @@ class TestUploadStageLogs(unittest.TestCase):
             ccache_dir = log_dir / "ccache"
             ccache_dir.mkdir(parents=True)
             (log_dir / "build.log").write_text("build output")
-            (log_dir / "ccache_logs.tar.gz").write_bytes(b"compressed")
+            (log_dir / "ccache_logs.tar.zst").write_bytes(b"compressed")
             (ccache_dir / "ccache.log").write_text("verbose trace")
 
             backend = LocalStorageBackend(staging_dir)
@@ -182,7 +185,7 @@ class TestUploadStageLogs(unittest.TestCase):
             base = staging_dir / "12345-linux" / "logs" / "foundation"
             # Regular logs and archive uploaded.
             self.assertTrue((base / "build.log").is_file())
-            self.assertTrue((base / "ccache_logs.tar.gz").is_file())
+            self.assertTrue((base / "ccache_logs.tar.zst").is_file())
             # Raw ccache logs excluded.
             self.assertFalse((base / "ccache" / "ccache.log").exists())
 

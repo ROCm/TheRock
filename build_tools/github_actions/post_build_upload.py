@@ -120,12 +120,25 @@ def create_ninja_log_archive(build_dir: Path):
     log(f"[*] Files Added: {added_count}")
 
 
+def _get_pyzstd():
+    """Lazy import pyzstd with helpful error message."""
+    try:
+        import pyzstd
+
+        return pyzstd
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError(
+            "pyzstd is required for zstd compression. "
+            "Install it with: pip install pyzstd"
+        )
+
+
 def create_ccache_log_archive(build_dir: Path):
-    """Archive the ccache log subdirectory into a compressed tarball.
+    """Archive the ccache log subdirectory into a zstd-compressed tarball.
 
     ccache.log can be hundreds of MB (verbose per-invocation trace) but
-    compresses ~12:1. The raw logs in logs/ccache/ are excluded from upload
-    (see upload_logs); this archive provides the compressed version.
+    compresses ~13x with zstd. The raw logs in logs/ccache/ are excluded from
+    upload (see upload_logs); this archive provides the compressed version.
     """
     ccache_dir = build_dir / "logs" / "ccache"
     if not ccache_dir.is_dir():
@@ -135,11 +148,13 @@ def create_ccache_log_archive(build_dir: Path):
     if not found_files:
         return
 
-    archive_path = build_dir / "logs" / "ccache_logs.tar.gz"
-    with tarfile.open(archive_path, "w:gz") as tar:
-        for file_path in found_files:
-            tar.add(file_path, arcname=file_path.name)
-            log(f"[+] Archived ccache log: {file_path.name}")
+    pyzstd = _get_pyzstd()
+    archive_path = build_dir / "logs" / "ccache_logs.tar.zst"
+    with pyzstd.ZstdFile(archive_path, mode="wb") as zst:
+        with tarfile.open(mode="w|", fileobj=zst) as tar:
+            for file_path in found_files:
+                tar.add(file_path, arcname=file_path.name)
+                log(f"[+] Archived ccache log: {file_path.name}")
 
     archive_size = archive_path.stat().st_size
     log(
