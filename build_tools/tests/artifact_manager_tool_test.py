@@ -600,6 +600,56 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
             f"Should fetch target archive, got: {fetched_keys}",
         )
 
+    def test_fetch_with_semicolon_separated_families(self):
+        """Test that --amdgpu-families accepts semicolon-separated values."""
+        import artifact_manager
+
+        # Stage artifacts for two families plus generic
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "lib", "gfx94X-dcgpu")
+        self._create_staged_artifact("test-artifact", "lib", "gfx110X-all")
+
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "downstream-stage",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--amdgpu-families",
+                "gfx94X-dcgpu;gfx110X-all",
+            ]
+
+            artifact_manager.main(argv)
+
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertTrue(
+            any("generic" in k for k in fetched_keys),
+            f"Should fetch generic, got: {fetched_keys}",
+        )
+        self.assertTrue(
+            any("gfx94X-dcgpu" in k for k in fetched_keys),
+            f"Should fetch gfx94X-dcgpu, got: {fetched_keys}",
+        )
+        self.assertTrue(
+            any("gfx110X-all" in k for k in fetched_keys),
+            f"Should fetch gfx110X-all, got: {fetched_keys}",
+        )
+
 
 class TestFetchFlatten(ArtifactManagerTestBase):
     """Tests that fetch command correctly flattens artifacts."""

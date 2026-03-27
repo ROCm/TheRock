@@ -42,12 +42,22 @@ s3://{bucket}/{external_repo}{run_id}-{platform}/
 
 ### Directory structure
 
+There are two CI pipeline architectures with different log layouts:
+
+- **Single-stage CI** (`ci.yml`) — one monolithic build per artifact group.
+  Logs from all subprojects land in a single flat directory.
+- **Multi-arch CI** (`multi_arch_ci.yml`) — the build is split into stages
+  (foundation, compiler-runtime, math-libs, etc.). Each stage runs as a
+  separate job and uploads its own logs, organized by stage name and GPU family.
+
 `artifact_group` is the CI matrix variant, composed of a target family plus an
 optional variant suffix (e.g., `gfx94X-dcgpu`, `gfx94X-dcgpu-asan`). It is
 used as the subdirectory key for logs, manifests, and packages. Artifact
 filenames contain the `target_family` (e.g., `gfx94X`); see
 [#3381](https://github.com/ROCm/TheRock/issues/3381) for ongoing work to
 propagate artifact group naming consistently.
+
+#### Single-stage CI layout
 
 ```
 {prefix}/
@@ -56,7 +66,9 @@ propagate artifact group naming consistently.
     index-{artifact_group}.html
 
     logs/{artifact_group}/
-        build.log
+        {subproject}_build.log
+        {subproject}_configure.log
+        {subproject}_install.log
         ninja_logs.tar.gz
         build_observability.html          (when generated)
         index.html
@@ -78,6 +90,70 @@ propagate artifact group naming consistently.
 The `comp-summary.*` files appear both in the `therock-build-prof/` subdirectory
 (uploaded as part of the recursive directory upload) and at the log root
 (uploaded explicitly for direct linking).
+
+#### Multi-arch CI layout
+
+Logs are organized by stage, with a subdirectory per GPU family for per-arch
+stages. Generic stages (foundation, compiler-runtime) have no family
+subdirectory. Per-arch stages (e.g., math-libs) fan out across GPU
+families in parallel, producing identically-named log files (e.g.,
+`rocBLAS_build.log`) that are kept separate by the family subdirectory.
+
+```
+{prefix}/
+    {artifact_name}_{component}_{target_family}.tar.zst
+    {artifact_name}_{component}_{target_family}.tar.zst.sha256sum
+
+    logs/{stage_name}/                          (generic stages)
+        {subproject}_build.log
+        {subproject}_configure.log
+        {subproject}_install.log
+        ninja_logs.tar.gz
+
+    logs/{stage_name}/{amdgpu_family}/          (per-arch stages)
+        {subproject}_build.log
+        {subproject}_configure.log
+        {subproject}_install.log
+        ninja_logs.tar.gz
+
+    python/
+        *.whl                                   (generic wheels, e.g., rocm_sdk_core)
+        {amdgpu_family}/
+            *.whl                               (per-family wheels, e.g., rocm_sdk_devel)
+            *.tar.gz                            (sdist)
+            index.html
+```
+
+Example for a run with foundation + math-libs stages:
+
+```
+12345-linux/
+    logs/foundation/
+        rocm-cmake_build.log
+        rocm-cmake_configure.log
+        rocm-cmake_install.log
+        ninja_logs.tar.gz
+
+    logs/compiler-runtime/
+        amd-llvm_build.log
+        amd-llvm_configure.log
+        amd-llvm_install.log
+        ninja_logs.tar.gz
+
+    logs/math-libs/gfx1151/
+        rocBLAS_build.log
+        MIOpen_build.log
+        ninja_logs.tar.gz
+
+    logs/math-libs/gfx110X-all/
+        rocBLAS_build.log
+        MIOpen_build.log
+        ninja_logs.tar.gz
+```
+
+Artifacts in multi-arch CI use `.tar.zst` compression (vs `.tar.xz` in
+single-stage CI) and are managed by `artifact_manager.py`, not
+`post_build_upload.py`. Index pages for logs are generated server-side.
 
 ### Bucket selection
 
@@ -149,6 +225,8 @@ root.log_dir(artifact_group="gfx94X-dcgpu")
 root.log_file(artifact_group="gfx94X-dcgpu", filename="build.log")
 root.log_index(artifact_group="gfx94X-dcgpu")
 root.build_observability(artifact_group="gfx94X-dcgpu")
+root.stage_log_dir(stage_name="math-libs", amdgpu_family="gfx1151")
+root.stage_log_dir(stage_name="foundation")  # generic stage, no family
 root.manifest_dir(artifact_group="gfx94X-dcgpu")
 root.manifest(artifact_group="gfx94X-dcgpu")
 root.python_packages(artifact_group="gfx110X-all")
@@ -194,6 +272,7 @@ To add a new output type:
 | File                                                                                       | Uses                                                                      |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
 | [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for artifacts, logs, manifests    |
+| [`post_stage_upload.py`](/build_tools/github_actions/post_stage_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for multi-arch stage logs         |
 | [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `WorkflowOutputRoot` + `StorageBackend` for Python wheels and index       |
 | [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `WorkflowOutputRoot` + `StorageBackend` for PyTorch manifests             |
 | [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py) | `WorkflowOutputRoot` for S3 base URI (upload not yet migrated to backend) |

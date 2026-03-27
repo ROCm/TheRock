@@ -102,6 +102,112 @@ def run_tests(build_dir: Path):
     subprocess.run(test_cmd, check=True, cwd=THEROCK_DIR, env=environ_vars)
 
 
+def run_list_engines_test():
+    """Test hipdnn_list_engines utility produces expected output.
+
+    This verifies the installed utility can enumerate available hipDNN engines.
+    Unlike the CMake-based tests above, this doesn't compile anything - it just
+    runs the pre-built utility and validates its output.
+
+    The test runs the utility twice:
+    1. With explicit --plugin-dir argument
+    2. Without --plugin-dir (using internal default path)
+
+    If the miopen_plugin is present, both runs must contain the expected
+    engine strings. If the plugin is not present, only the return code is verified.
+    """
+    artifacts_path = Path(OUTPUT_ARTIFACTS_DIR).resolve()
+    is_windows = platform.system() == "Windows"
+
+    exe_suffix = ".exe" if is_windows else ""
+    list_engines = artifacts_path / "bin" / f"hipdnn_list_engines{exe_suffix}"
+
+    if not list_engines.exists():
+        raise FileNotFoundError(f"hipdnn_list_engines not found at: {list_engines}")
+
+    # Plugin directory location differs by platform
+    if is_windows:
+        plugin_dir = artifacts_path / "bin" / "hipdnn_plugins" / "engines"
+        miopen_plugin_name = "miopen_plugin.dll"
+    else:
+        plugin_dir = artifacts_path / "lib" / "hipdnn_plugins" / "engines"
+        miopen_plugin_name = "libmiopen_plugin.so"
+
+    # Check if miopen_plugin exists
+    miopen_plugin_path = plugin_dir / miopen_plugin_name
+    has_miopen_plugin = miopen_plugin_path.exists()
+
+    if not has_miopen_plugin:
+        logging.info(
+            f"{miopen_plugin_name} not found in {plugin_dir}, "
+            "skipping engine output validation (will only verify return code)"
+        )
+
+    # Expected engines that must be present in the output (only checked if plugin exists)
+    expected_engines = [
+        "MIOPEN_ENGINE (0x15B46865C717A122)",
+        "MIOPEN_ENGINE_DETERMINISTIC (0xA258541A6DAA1DE3)",
+    ]
+
+    def run_and_validate(cmd: list, description: str) -> None:
+        """Run hipdnn_list_engines and validate output."""
+        logging.info(f"++ Running ({description}): {shlex.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            logging.error(
+                f"hipdnn_list_engines failed with return code {result.returncode}"
+            )
+            logging.error(f"stdout: {result.stdout}")
+            logging.error(f"stderr: {result.stderr}")
+            raise RuntimeError(
+                f"hipdnn_list_engines ({description}) exited with code {result.returncode}"
+            )
+
+        logging.info(f"hipdnn_list_engines ({description}) output:\n{result.stdout}")
+
+        # Only validate output content if miopen_plugin is present
+        if not has_miopen_plugin:
+            logging.info(
+                f"Skipping output validation ({description}) - {miopen_plugin_name} not present"
+            )
+            return
+
+        if "Loaded engines:" not in result.stdout:
+            logging.error(
+                f"Unexpected output from hipdnn_list_engines:\n{result.stdout}"
+            )
+            raise RuntimeError(
+                f"hipdnn_list_engines ({description}) output missing 'Loaded engines:'"
+            )
+
+        for engine in expected_engines:
+            if engine not in result.stdout:
+                logging.error(
+                    f"Unexpected output from hipdnn_list_engines:\n{result.stdout}"
+                )
+                raise RuntimeError(
+                    f"hipdnn_list_engines ({description}) output missing expected engine: {engine}"
+                )
+
+    # Run 1: Test with explicit --plugin-dir argument
+    cmd_explicit = [str(list_engines), "--plugin-dir", str(plugin_dir)]
+    run_and_validate(cmd_explicit, "explicit plugin-dir")
+
+    # Run 2: Test without --plugin-dir (use internal default path)
+    cmd_default = [str(list_engines)]
+    run_and_validate(cmd_default, "default plugin-dir")
+
+    if has_miopen_plugin:
+        logging.info(
+            "hipdnn_list_engines test passed (both explicit and default plugin-dir)"
+        )
+    else:
+        logging.info(
+            f"hipdnn_list_engines test passed (return code only - {miopen_plugin_name} not present)"
+        )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Test hipDNN package installation and consumption"
@@ -129,5 +235,7 @@ if __name__ == "__main__":
         logging.info("Using temporary build directory (auto-cleanup)")
         with tempfile.TemporaryDirectory() as temp_dir:
             run_tests(Path(temp_dir))
+
+    run_list_engines_test()
 
     logging.info("All hipDNN install tests passed!")

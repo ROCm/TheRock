@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, IO, List, Optional
 
-# Add build_tools/github_actions to path for github_actions_utils
+# Add build_tools/github_actions to path for github_actions_api
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[3] / "build_tools" / "github_actions")
 )
@@ -24,7 +24,7 @@ from .logger import log
 from .exceptions import TestExecutionError
 from .extended_test_client import ExtendedTestClient
 
-from github_actions_utils import (
+from github_actions_api import (
     gha_append_step_summary,
 )
 

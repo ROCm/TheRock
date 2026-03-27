@@ -39,7 +39,6 @@ all_build_variants = {
             "build_variant_label": "tsan",
             "build_variant_suffix": "tsan",
             "build_variant_cmake_preset": "linux-release-tsan",
-            "expect_failure": True,
         },
     },
     "windows": {
@@ -69,12 +68,12 @@ amdgpu_family_info_matrix dictionary fields:
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "linux-mi325-8gpu-ossci-rocm-sandbox",
-            "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
+            "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
+            "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
+            "benchmark-runs-on": "",
             "family": "gfx94X-dcgpu",
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
@@ -120,13 +119,15 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx1151",
             "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
-            # TODO(#3299): Re-enable smoke tests once capacity is available for Windows gfx1151
+            # TODO(#3299): Re-enable quick tests once capacity is available for Windows gfx1151
             "run-full-tests-only": True,
         },
     },
     "gfx120x": {
         "linux": {
-            "test-runs-on": "linux-gfx120X-gpu-rocm",
+            # TODO(#2683): Re-enable label once stable
+            # Label is linux-gfx120X-gpu-rocm
+            "test-runs-on": "",
             "family": "gfx120X-all",
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
@@ -215,7 +216,9 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx90a": {
         "linux": {
-            "test-runs-on": "linux-gfx90a-gpu-rocm",
+            # Label is linux-gfx90a-gpu-rocm
+            # Downtime in 3/17/26 - 3/18/26 for maintenance
+            "test-runs-on": "",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "sanity_check_only_for_family": True,
@@ -230,13 +233,11 @@ amdgpu_family_info_matrix_nightly = {
         },
     },
     "gfx101x": {
-        # TODO(#1926): Resolve bgemm kernel hip file generation error to enable PyTorch builds
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
         "windows": {
             "test-runs-on": "",
