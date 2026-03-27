@@ -14073,6 +14073,159 @@ int main() {
   }
 
   {
+  const std::vector<DecodedInstruction> mixed_maintenance_program = {
+      DecodedInstruction::Nullary("S_ICACHE_INV"),
+      DecodedInstruction::Nullary("S_DCACHE_INV"),
+      DecodedInstruction::Nullary("BUFFER_WBL2"),
+      DecodedInstruction::Nullary("S_DCACHE_WB_VOL"),
+      DecodedInstruction::Nullary("BUFFER_INV"),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  const auto make_mixed_maintenance_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1101ULL;
+    state.sgprs[0] = 0x10203040u;
+    state.sgprs[1] = 0x50607080u;
+    state.sgprs[2] = 0x90a0b0c0u;
+    state.sgprs[3] = 0xd0e0f000u;
+    state.sgprs[12] = 0x13572468u;
+    state.sgprs[13] = 0x24681357u;
+    state.sgprs[40] = 0x89abcdefu;
+    state.sgprs[41] = 0x01234567u;
+    state.vgprs[6][0] = 0x11111111u;
+    state.vgprs[6][1] = 0x22222222u;
+    state.vgprs[6][2] = 0x33333333u;
+    state.vgprs[6][3] = 0x44444444u;
+    state.vgprs[9][0] = 0xaaaa0001u;
+    state.vgprs[9][1] = 0xbbbb0002u;
+    state.vgprs[9][2] = 0xcccc0003u;
+    state.vgprs[9][3] = 0xdddd0004u;
+    return state;
+  };
+  const auto make_mixed_maintenance_memory = []() {
+    LinearExecutionMemory memory(0x180, 0);
+    memory.WriteU32(0x00u, 0xdeadbeefu);
+    memory.WriteU32(0x20u, 0x11223344u);
+    memory.WriteU32(0x80u, 0x55667788u);
+    memory.WriteU32(0x100u, 0x99aabbccu);
+    memory.WriteU32(0x140u, 0xddeeff00u);
+    return memory;
+  };
+  const auto validate_mixed_maintenance_state =
+      [&](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+          const char* mode) {
+        std::uint32_t value = 0;
+        return Expect(state.halted,
+                      (std::string(mode) +
+                       " mixed maintenance program to halt")
+                          .c_str()) &&
+               Expect(state.exec_mask == 0b1101ULL,
+                      (std::string(mode) +
+                       " mixed maintenance to preserve exec")
+                          .c_str()) &&
+               Expect(state.sgprs[0] == 0x10203040u &&
+                          state.sgprs[1] == 0x50607080u &&
+                          state.sgprs[2] == 0x90a0b0c0u &&
+                          state.sgprs[3] == 0xd0e0f000u &&
+                          state.sgprs[12] == 0x13572468u &&
+                          state.sgprs[13] == 0x24681357u &&
+                          state.sgprs[40] == 0x89abcdefu &&
+                          state.sgprs[41] == 0x01234567u,
+                      (std::string(mode) +
+                       " mixed maintenance to preserve sgprs")
+                          .c_str()) &&
+               Expect(state.vgprs[6][0] == 0x11111111u &&
+                          state.vgprs[6][1] == 0x22222222u &&
+                          state.vgprs[6][2] == 0x33333333u &&
+                          state.vgprs[6][3] == 0x44444444u &&
+                          state.vgprs[9][0] == 0xaaaa0001u &&
+                          state.vgprs[9][1] == 0xbbbb0002u &&
+                          state.vgprs[9][2] == 0xcccc0003u &&
+                          state.vgprs[9][3] == 0xdddd0004u,
+                      (std::string(mode) +
+                       " mixed maintenance to preserve vgprs")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x00u, &value),
+                      (std::string(mode) +
+                       " mixed maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0xdeadbeefu,
+                      (std::string(mode) +
+                       " mixed maintenance memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x20u, &value),
+                      (std::string(mode) +
+                       " mixed maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x11223344u,
+                      (std::string(mode) +
+                       " mixed maintenance memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x80u, &value),
+                      (std::string(mode) +
+                       " mixed maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x55667788u,
+                      (std::string(mode) +
+                       " mixed maintenance memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x100u, &value),
+                      (std::string(mode) +
+                       " mixed maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x99aabbccu,
+                      (std::string(mode) +
+                       " mixed maintenance memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x140u, &value),
+                      (std::string(mode) +
+                       " mixed maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0xddeeff00u,
+                      (std::string(mode) +
+                       " mixed maintenance memory preserved")
+                          .c_str());
+      };
+
+  LinearExecutionMemory decoded_mixed_maintenance_memory =
+      make_mixed_maintenance_memory();
+  WaveExecutionState decoded_mixed_maintenance_state =
+      make_mixed_maintenance_state();
+  if (!Expect(interpreter.ExecuteProgram(mixed_maintenance_program,
+                                         &decoded_mixed_maintenance_state,
+                                         &decoded_mixed_maintenance_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_mixed_maintenance_state(decoded_mixed_maintenance_state,
+                                        decoded_mixed_maintenance_memory,
+                                        "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_mixed_maintenance_program;
+  if (!Expect(interpreter.CompileProgram(mixed_maintenance_program,
+                                         &compiled_mixed_maintenance_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_mixed_maintenance_memory =
+      make_mixed_maintenance_memory();
+  WaveExecutionState compiled_mixed_maintenance_state =
+      make_mixed_maintenance_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_mixed_maintenance_program,
+                                         &compiled_mixed_maintenance_state,
+                                         &compiled_mixed_maintenance_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_mixed_maintenance_state(compiled_mixed_maintenance_state,
+                                        compiled_mixed_maintenance_memory,
+                                        "compiled")) {
+    return 1;
+  }
+  }
+
+  {
   const std::vector<DecodedInstruction> buffer_maintenance_program = {
       DecodedInstruction::Nullary("BUFFER_WBL2"),
       DecodedInstruction::Nullary("BUFFER_INV"),
