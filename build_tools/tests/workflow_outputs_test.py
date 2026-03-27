@@ -361,7 +361,9 @@ class TestRetrieveBucketInfo(unittest.TestCase):
     """Test _retrieve_bucket_info with mocked environment."""
 
     def setUp(self):
-        # Patch gha_query_workflow_run_by_id so we never make real API calls.
+        # Patch where the name is defined, not where it's imported. The import
+        # in workflow_outputs.py is deferred (inside _retrieve_bucket_info), so
+        # patching the definition site is both correct and necessary here.
         self.api_patcher = mock.patch(
             "github_actions.github_actions_api.gha_query_workflow_run_by_id"
         )
