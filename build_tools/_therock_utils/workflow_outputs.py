@@ -152,6 +152,25 @@ class WorkflowOutputRoot:
             self.bucket, f"{self.prefix}/logs/{artifact_group}/index.html"
         )
 
+    def stage_log_dir(
+        self, stage_name: str, amdgpu_family: str = ""
+    ) -> StorageLocation:
+        """Location for a multi-arch stage log directory.
+
+        Multi-arch CI uploads logs per stage (and optionally per GPU family)
+        rather than per artifact_group. Generic stages get a single directory;
+        per-arch stages (e.g., math-libs) get a subdirectory per family.
+
+        Args:
+            stage_name: Build stage (e.g., 'foundation', 'math-libs')
+            amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
+        """
+        if amdgpu_family:
+            return StorageLocation(
+                self.bucket, f"{self.prefix}/logs/{stage_name}/{amdgpu_family}"
+            )
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/{stage_name}")
+
     def build_observability(self, artifact_group: str) -> StorageLocation:
         """Location for build observability HTML (within log_dir())."""
         return StorageLocation(
