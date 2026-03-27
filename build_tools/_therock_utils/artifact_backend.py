@@ -439,47 +439,6 @@ class HTTPBackend(ArtifactBackend):
         except urllib.error.URLError:
             return []  # Network error - treat as unavailable
 
-    def _discover_gfx_families_from_master_index(self) -> List[str]:
-        """Discover available GFX families from master index.
-
-        TODO: Future enhancement - Master index discovery
-        ==================================================
-        This stub will be implemented to fetch and parse the master index at:
-        {base_url}/{workflow_id}-linux/index.html
-
-        The master index should contain links to all available index files:
-          <a href="../{run_id}-{platform}/index-gfx94X-dcgpu.html">...</a>
-          <a href="../{run_id}-{platform}/index-gfx120X-all.html">...</a>
-
-        Implementation plan:
-        1. Fetch {base_url}/{workflow_id}-linux/index.html
-        2. Parse HTML for links matching pattern: index-{gfx_family}.html
-        3. Extract gfx_family from each link
-        4. Return list of discovered targets
-
-        This will replace the hardcoded common_targets list and enable
-        automatic discovery of all available GFX families.
-
-        Returns:
-            List of discovered GFX families (e.g., ["gfx94X-dcgpu", "gfx120X-all", "gfx908"])
-        """
-        # TODO: Implement master index parsing
-        # master_index_url = f"{self.base_url}/{workflow_id}-linux/index.html"
-        # try:
-        #     with urllib.request.urlopen(master_index_url) as response:
-        #         html_content = response.read().decode("utf-8")
-        #
-        #     # Parse for links like: href="../{run_id}-{platform}/index-{gfx_family}.html"
-        #     pattern = rf'href="[^"]*/{self.run_id}-{self.platform}/index-([^"]+)\.html"'
-        #     matches = re.findall(pattern, html_content)
-        #     return matches
-        # except Exception:
-        #     # Fall back to hardcoded targets if master index unavailable
-        #     return []
-
-        # For now, return empty list to indicate not implemented
-        return []
-
     def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
         """List available artifact filenames across all specified GFX families.
 
