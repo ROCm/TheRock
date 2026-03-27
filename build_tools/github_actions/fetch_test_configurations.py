@@ -74,7 +74,7 @@ test_matrix = {
     # ocltest
     "ocltst": {
         "job_name": "ocltst",
-        "fetch_artifact_args": "--tests",
+        "fetch_artifact_args": "--ocltst --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_ocltst.py')}",
         "platform": ["linux", "windows"],

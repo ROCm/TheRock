@@ -38,6 +38,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocrtst | --no-rocrtst]
+    [--ocltst | --no-ocltst]
     [--rocwmma | --no-rocwmma]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
@@ -360,6 +361,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_sdk,
             args.rocprofiler_systems,
             args.rocrtst,
+            args.ocltst,
             args.rocwmma,
             args.libhipcxx,
         ]
@@ -443,6 +445,10 @@ def retrieve_artifacts_by_run_id(args):
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
             extra_artifacts.append("sysdeps-hwloc")
             extra_artifacts.append("sysdeps-libpciaccess")
+        if args.ocltst:
+            # ocltst binaries ship in the core-ocl test artifact (base already includes _lib/_dev).
+            if args.tests:
+                argv.append("core-ocl_test")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
@@ -778,6 +784,13 @@ def main(argv):
         "--rocrtst",
         default=False,
         help="Include 'rocrtst' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--ocltst",
+        default=False,
+        help="Include ocltst from core-ocl",
         action=argparse.BooleanOptionalAction,
     )
 
