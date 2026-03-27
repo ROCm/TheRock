@@ -5,6 +5,7 @@
 """Unit tests for artifact_backend.py."""
 
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -16,8 +17,11 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifact_backend import (
     ArtifactBackend,
+    ArtifactConflictError,
     LocalDirectoryBackend,
     S3Backend,
+    _parse_sha256sum_content,
+    _read_local_sha256sum,
     create_backend_from_env,
 )
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
@@ -124,8 +128,10 @@ class TestLocalDirectoryBackend(unittest.TestCase):
         sha_file = source_dir / "test_artifact.tar.xz.sha256sum"
         sha_file.write_text("abc123  test_artifact.tar.xz\n")
 
-        # Upload
-        self.backend.upload_artifact(source_file, "test_artifact.tar.xz")
+        # Upload with sha256sum_path
+        self.backend.upload_artifact(
+            source_file, "test_artifact.tar.xz", sha256sum_path=sha_file
+        )
 
         # Verify it exists in the backend
         self.assertTrue(self.backend.artifact_exists("test_artifact.tar.xz"))
@@ -158,8 +164,10 @@ class TestLocalDirectoryBackend(unittest.TestCase):
         sha_file = source_dir / "test_artifact.tar.zst.sha256sum"
         sha_file.write_text("def456  test_artifact.tar.zst\n")
 
-        # Upload
-        self.backend.upload_artifact(source_file, "test_artifact.tar.zst")
+        # Upload with sha256sum_path
+        self.backend.upload_artifact(
+            source_file, "test_artifact.tar.zst", sha256sum_path=sha_file
+        )
 
         # Verify it exists in the backend
         self.assertTrue(self.backend.artifact_exists("test_artifact.tar.zst"))
@@ -378,6 +386,8 @@ class TestS3Backend(unittest.TestCase):
         """Test uploading a .tar.xz artifact to S3."""
         mock_client = mock.MagicMock()
         mock_client_prop.return_value = mock_client
+        # Artifact does not exist
+        mock_client.head_object.side_effect = Exception("Not found")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             source_path = Path(temp_dir) / "test.tar.xz"
@@ -396,6 +406,8 @@ class TestS3Backend(unittest.TestCase):
         """Test uploading a .tar.zst artifact to S3."""
         mock_client = mock.MagicMock()
         mock_client_prop.return_value = mock_client
+        # Artifact does not exist
+        mock_client.head_object.side_effect = Exception("Not found")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             source_path = Path(temp_dir) / "test.tar.zst"
@@ -676,6 +688,418 @@ class TestCreateBackendFromEnv(unittest.TestCase):
             self.assertIsInstance(backend, S3Backend)
             self.assertEqual(backend.bucket, "test-bucket")
             self.assertIn("s3-run-id", backend.s3_prefix)
+
+
+# ---------------------------------------------------------------------------
+# Artifact conflict detection helpers
+# ---------------------------------------------------------------------------
+
+
+class TestParseSha256sumContent(unittest.TestCase):
+    """Tests for _parse_sha256sum_content helper function."""
+
+    def test_standard_format(self):
+        """Test parsing standard sha256sum format."""
+        content = "abc123def456  filename.tar.zst\n"
+        self.assertEqual(_parse_sha256sum_content(content), "abc123def456")
+
+    def test_no_trailing_newline(self):
+        """Test parsing without trailing newline."""
+        content = "abc123def456  filename.tar.zst"
+        self.assertEqual(_parse_sha256sum_content(content), "abc123def456")
+
+    def test_full_sha256_hash(self):
+        """Test parsing a full 64-character SHA256 hash."""
+        sha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        content = f"{sha}  empty_file.tar.xz\n"
+        self.assertEqual(_parse_sha256sum_content(content), sha)
+
+    def test_empty_content_raises(self):
+        """Test that empty content raises ValueError."""
+        with self.assertRaises(ValueError):
+            _parse_sha256sum_content("")
+
+    def test_whitespace_only_raises(self):
+        """Test that whitespace-only content raises ValueError."""
+        with self.assertRaises(ValueError):
+            _parse_sha256sum_content("   \n  ")
+
+
+class TestReadLocalSha256sum(unittest.TestCase):
+    """Tests for _read_local_sha256sum helper function."""
+
+    def test_reads_existing_sha256sum(self):
+        """Test reading an existing sha256sum file."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            artifact_path = Path(temp_dir) / "test.tar.zst"
+            artifact_path.touch()
+            sha_path = Path(temp_dir) / "test.tar.zst.sha256sum"
+            sha_path.write_text("deadbeef12345678  test.tar.zst\n")
+
+            result = _read_local_sha256sum(artifact_path)
+            self.assertEqual(result, "deadbeef12345678")
+
+    def test_returns_none_if_no_sha256sum(self):
+        """Test that None is returned if sha256sum file doesn't exist."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            artifact_path = Path(temp_dir) / "test.tar.zst"
+            artifact_path.touch()
+
+            result = _read_local_sha256sum(artifact_path)
+            self.assertIsNone(result)
+
+
+# ---------------------------------------------------------------------------
+# LocalDirectoryBackend conflict detection tests
+# ---------------------------------------------------------------------------
+
+
+class TestLocalDirectoryBackendConflict(unittest.TestCase):
+    """Tests for artifact conflict detection in LocalDirectoryBackend."""
+
+    def setUp(self):
+        """Create a temporary directory for testing."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.output_root = _make_local_root()
+        self.backend = LocalDirectoryBackend(
+            staging_dir=Path(self.temp_dir),
+            output_root=self.output_root,
+        )
+
+    def tearDown(self):
+        """Clean up temporary directory."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_artifact_matching_sha_skips_upload(self):
+        """Test that artifact with matching SHA skips upload."""
+        # Create existing artifact with sha256sum
+        artifact_key = "test_lib_generic.tar.zst"
+        sha_hash = "abc123def456"
+        (self.backend.base_path / artifact_key).write_bytes(b"existing content")
+        (self.backend.base_path / f"{artifact_key}.sha256sum").write_text(
+            f"{sha_hash}  {artifact_key}\n"
+        )
+
+        # Create source with same SHA
+        source_dir = Path(self.temp_dir) / "source"
+        source_dir.mkdir()
+        source_file = source_dir / artifact_key
+        source_file.write_bytes(b"new content")  # Content doesn't matter for test
+        (source_dir / f"{artifact_key}.sha256sum").write_text(
+            f"{sha_hash}  {artifact_key}\n"
+        )
+
+        # Upload should skip (not overwrite)
+        original_content = (self.backend.base_path / artifact_key).read_bytes()
+        self.backend.upload_artifact(source_file, artifact_key)
+
+        # Content should be unchanged (skipped)
+        self.assertEqual(
+            (self.backend.base_path / artifact_key).read_bytes(), original_content
+        )
+
+    def test_artifact_differing_sha_raises_error(self):
+        """Test that artifact with differing SHA raises error."""
+        # Create existing artifact with sha256sum
+        artifact_key = "test_lib_generic.tar.zst"
+        (self.backend.base_path / artifact_key).write_bytes(b"existing content")
+        (self.backend.base_path / f"{artifact_key}.sha256sum").write_text(
+            f"existing_sha_123  {artifact_key}\n"
+        )
+
+        # Create source with different SHA
+        source_dir = Path(self.temp_dir) / "source"
+        source_dir.mkdir()
+        source_file = source_dir / artifact_key
+        source_file.write_bytes(b"new content")
+        (source_dir / f"{artifact_key}.sha256sum").write_text(
+            f"different_sha_456  {artifact_key}\n"
+        )
+
+        # Upload should raise error
+        with self.assertRaises(ArtifactConflictError) as ctx:
+            self.backend.upload_artifact(source_file, artifact_key)
+
+        error_msg = str(ctx.exception)
+        self.assertIn("existing_sha_123", error_msg)
+        self.assertIn("different_sha_456", error_msg)
+        self.assertIn("build system problem", error_msg)
+
+    def test_artifact_no_existing_uploads_normally(self):
+        """Test that artifact uploads normally if it doesn't exist."""
+        artifact_key = "test_lib_generic.tar.zst"
+
+        source_dir = Path(self.temp_dir) / "source"
+        source_dir.mkdir()
+        source_file = source_dir / artifact_key
+        source_file.write_bytes(b"new content")
+        (source_dir / f"{artifact_key}.sha256sum").write_text(
+            f"sha123  {artifact_key}\n"
+        )
+
+        self.backend.upload_artifact(source_file, artifact_key)
+
+        self.assertTrue(self.backend.artifact_exists(artifact_key))
+        self.assertEqual(
+            (self.backend.base_path / artifact_key).read_bytes(), b"new content"
+        )
+
+    def test_artifact_no_existing_sha256sum_computes_from_file(self):
+        """Test that artifact computes SHA from file if no sha256sum exists."""
+        artifact_key = "test_lib_generic.tar.zst"
+        (self.backend.base_path / artifact_key).write_bytes(b"existing content")
+        # No sha256sum file - will compute hash from file contents
+
+        source_dir = Path(self.temp_dir) / "source"
+        source_dir.mkdir()
+        source_file = source_dir / artifact_key
+        source_file.write_bytes(b"new content")
+        (source_dir / f"{artifact_key}.sha256sum").write_text(
+            f"sha123  {artifact_key}\n"
+        )
+
+        # Should raise error because file contents differ
+        with self.assertRaises(ArtifactConflictError) as ctx:
+            self.backend.upload_artifact(source_file, artifact_key)
+
+        error_msg = str(ctx.exception)
+        self.assertIn("build system problem", error_msg)
+
+    def test_artifact_no_existing_sha256sum_identical_skips(self):
+        """Test that identical artifact is skipped even without sha256sum file."""
+        artifact_key = "test_lib_generic.tar.zst"
+        content = b"identical content"
+        (self.backend.base_path / artifact_key).write_bytes(content)
+        # No sha256sum file - will compute hash from file contents
+
+        source_dir = Path(self.temp_dir) / "source"
+        source_dir.mkdir()
+        source_file = source_dir / artifact_key
+        source_file.write_bytes(content)  # Same content
+
+        # Should skip (no error, no overwrite)
+        self.backend.upload_artifact(source_file, artifact_key)
+
+        self.assertEqual((self.backend.base_path / artifact_key).read_bytes(), content)
+
+    def test_non_generic_artifact_also_gets_conflict_detection(self):
+        """Test that non-generic artifacts also get conflict detection."""
+        artifact_key = "test_lib_gfx94X.tar.zst"
+        (self.backend.base_path / artifact_key).write_bytes(b"existing content")
+        (self.backend.base_path / f"{artifact_key}.sha256sum").write_text(
+            f"existing_sha_123  {artifact_key}\n"
+        )
+
+        source_dir = Path(self.temp_dir) / "source"
+        source_dir.mkdir()
+        source_file = source_dir / artifact_key
+        source_file.write_bytes(b"new content")
+        (source_dir / f"{artifact_key}.sha256sum").write_text(
+            f"different_sha_456  {artifact_key}\n"
+        )
+
+        # Should raise error - conflict detection applies to ALL artifacts
+        with self.assertRaises(ArtifactConflictError) as ctx:
+            self.backend.upload_artifact(source_file, artifact_key)
+
+        error_msg = str(ctx.exception)
+        self.assertIn("existing_sha_123", error_msg)
+        self.assertIn("different_sha_456", error_msg)
+
+    def test_backwards_compat_alias(self):
+        """Test that ArtifactConflictError is an alias for ArtifactConflictError."""
+        self.assertIs(ArtifactConflictError, ArtifactConflictError)
+
+
+# ---------------------------------------------------------------------------
+# S3Backend conflict detection tests
+# ---------------------------------------------------------------------------
+
+
+class TestS3BackendConflict(unittest.TestCase):
+    """Tests for artifact conflict detection in S3Backend."""
+
+    def setUp(self):
+        """Set up S3Backend with mocked client."""
+        self.output_root = _make_s3_root()
+        self.backend = S3Backend(output_root=self.output_root)
+
+    @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
+    def test_artifact_matching_sha_skips_upload(self, mock_client_prop):
+        """Test that artifact with matching SHA skips upload."""
+        mock_client = mock.MagicMock()
+        mock_client_prop.return_value = mock_client
+
+        # Mock artifact exists
+        mock_client.head_object.return_value = {}  # exists
+
+        # Mock sha256sum download
+        import io
+
+        sha_hash = "abc123def456"
+
+        def download_fileobj_side_effect(bucket, key, buffer):
+            buffer.write(f"{sha_hash}  test_lib_generic.tar.zst\n".encode())
+
+        mock_client.download_fileobj.side_effect = download_fileobj_side_effect
+
+        # Create source file with matching SHA
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "test_lib_generic.tar.zst"
+            source_path.touch()
+            (Path(temp_dir) / "test_lib_generic.tar.zst.sha256sum").write_text(
+                f"{sha_hash}  test_lib_generic.tar.zst\n"
+            )
+
+            self.backend.upload_artifact(source_path, "test_lib_generic.tar.zst")
+
+        # upload_file should NOT be called (skipped)
+        mock_client.upload_file.assert_not_called()
+
+    @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
+    def test_artifact_differing_sha_raises_error(self, mock_client_prop):
+        """Test that artifact with differing SHA raises error."""
+        mock_client = mock.MagicMock()
+        mock_client_prop.return_value = mock_client
+
+        # Mock artifact exists
+        mock_client.head_object.return_value = {}
+
+        # Mock sha256sum download
+        def download_fileobj_side_effect(bucket, key, buffer):
+            buffer.write(b"existing_sha_123  test_lib_generic.tar.zst\n")
+
+        mock_client.download_fileobj.side_effect = download_fileobj_side_effect
+
+        # Create source file with different SHA
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "test_lib_generic.tar.zst"
+            source_path.touch()
+            (Path(temp_dir) / "test_lib_generic.tar.zst.sha256sum").write_text(
+                "different_sha_456  test_lib_generic.tar.zst\n"
+            )
+
+            with self.assertRaises(ArtifactConflictError) as ctx:
+                self.backend.upload_artifact(source_path, "test_lib_generic.tar.zst")
+
+            error_msg = str(ctx.exception)
+            self.assertIn("existing_sha_123", error_msg)
+            self.assertIn("different_sha_456", error_msg)
+            self.assertIn("build system problem", error_msg)
+
+        mock_client.upload_file.assert_not_called()
+
+    @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
+    def test_artifact_no_existing_uploads_normally(self, mock_client_prop):
+        """Test that artifact uploads normally if it doesn't exist."""
+        mock_client = mock.MagicMock()
+        mock_client_prop.return_value = mock_client
+
+        # Mock artifact doesn't exist
+        mock_client.head_object.side_effect = Exception("Not found")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "test_lib_generic.tar.zst"
+            source_path.touch()
+
+            self.backend.upload_artifact(source_path, "test_lib_generic.tar.zst")
+
+        mock_client.upload_file.assert_called_once()
+
+    @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
+    def test_artifact_no_sha256sum_computes_from_file(self, mock_client_prop):
+        """Test that artifact computes SHA from S3 file if no sha256sum exists."""
+        mock_client = mock.MagicMock()
+        mock_client_prop.return_value = mock_client
+
+        # Artifact exists, sha256sum doesn't
+        def head_object_side_effect(Bucket, Key):
+            if Key.endswith(".sha256sum"):
+                raise Exception("Not found")
+            return {}
+
+        mock_client.head_object.side_effect = head_object_side_effect
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "test_lib_generic.tar.zst"
+            source_path.write_bytes(b"local content")
+
+            # Mock downloading the S3 artifact (different content)
+            def download_file_side_effect(bucket, key, path):
+                Path(path).write_bytes(b"s3 content")
+
+            mock_client.download_file.side_effect = download_file_side_effect
+
+            # Should raise error because file contents differ
+            with self.assertRaises(ArtifactConflictError) as ctx:
+                self.backend.upload_artifact(source_path, "test_lib_generic.tar.zst")
+
+            error_msg = str(ctx.exception)
+            self.assertIn("build system problem", error_msg)
+
+        mock_client.upload_file.assert_not_called()
+
+    @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
+    def test_artifact_no_sha256sum_identical_skips(self, mock_client_prop):
+        """Test that identical artifact is skipped even without sha256sum file."""
+        mock_client = mock.MagicMock()
+        mock_client_prop.return_value = mock_client
+
+        # Artifact exists, sha256sum doesn't
+        def head_object_side_effect(Bucket, Key):
+            if Key.endswith(".sha256sum"):
+                raise Exception("Not found")
+            return {}
+
+        mock_client.head_object.side_effect = head_object_side_effect
+
+        content = b"identical content"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "test_lib_generic.tar.zst"
+            source_path.write_bytes(content)
+
+            # Mock downloading the S3 artifact (same content)
+            def download_file_side_effect(bucket, key, path):
+                Path(path).write_bytes(content)
+
+            mock_client.download_file.side_effect = download_file_side_effect
+
+            # Should skip (no error, no upload)
+            self.backend.upload_artifact(source_path, "test_lib_generic.tar.zst")
+
+        mock_client.upload_file.assert_not_called()
+
+    @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
+    def test_non_generic_artifact_also_gets_conflict_detection(self, mock_client_prop):
+        """Test that non-generic artifacts also get conflict detection."""
+        mock_client = mock.MagicMock()
+        mock_client_prop.return_value = mock_client
+
+        # Mock artifact exists
+        mock_client.head_object.return_value = {}
+
+        # Mock sha256sum download
+        def download_fileobj_side_effect(bucket, key, buffer):
+            buffer.write(b"existing_sha_123  test_lib_gfx94X.tar.zst\n")
+
+        mock_client.download_fileobj.side_effect = download_fileobj_side_effect
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "test_lib_gfx94X.tar.zst"
+            source_path.touch()
+            (Path(temp_dir) / "test_lib_gfx94X.tar.zst.sha256sum").write_text(
+                "different_sha_456  test_lib_gfx94X.tar.zst\n"
+            )
+
+            # Should raise error - conflict detection applies to ALL artifacts
+            with self.assertRaises(ArtifactConflictError) as ctx:
+                self.backend.upload_artifact(source_path, "test_lib_gfx94X.tar.zst")
+
+            error_msg = str(ctx.exception)
+            self.assertIn("existing_sha_123", error_msg)
+            self.assertIn("different_sha_456", error_msg)
+
+        mock_client.upload_file.assert_not_called()
 
 
 if __name__ == "__main__":

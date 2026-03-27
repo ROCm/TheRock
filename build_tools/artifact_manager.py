@@ -537,20 +537,21 @@ def upload_artifact(request: UploadRequest) -> bool:
     MAX_RETRIES = 3
     BASE_DELAY_SECONDS = 2
 
+    # Check for sha256sum file once before retry loop
+    sha_path = request.source_path.with_suffix(
+        request.source_path.suffix + ".sha256sum"
+    )
+    sha_path_if_exists = sha_path if sha_path.exists() else None
+
     for attempt in range(MAX_RETRIES):
         try:
             log(f"  ++ Uploading {request.artifact_key}")
-            request.backend.upload_artifact(request.source_path, request.artifact_key)
-
-            # Also upload sha256sum if it exists
-            sha_path = request.source_path.with_suffix(
-                request.source_path.suffix + ".sha256sum"
+            # upload_artifact handles both artifact and sha256sum file
+            request.backend.upload_artifact(
+                request.source_path,
+                request.artifact_key,
+                sha256sum_path=sha_path_if_exists,
             )
-            if sha_path.exists():
-                request.backend.upload_artifact(
-                    sha_path, f"{request.artifact_key}.sha256sum"
-                )
-
             return True
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
