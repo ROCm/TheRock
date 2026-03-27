@@ -81,11 +81,11 @@ def execute_tests(env):
     # command to execute ocltst tests
     cmd = [
         f"./ocltst{ext}",
-        "-m",       # module to test
+        "-m",  # module to test
         f"{module}",
-        "-s",       # threads to spawn/use
+        "-s",  # threads to spawn/use
         f"16",
-        "-A",       # exclude tests in the file
+        "-A",  # exclude tests in the file
         "oclruntime.exclude",  # perf related tests skipped
     ]
     logging.info(f"++ Exec [{OCLTST_PATH}]$ {shlex.join(cmd)}")
