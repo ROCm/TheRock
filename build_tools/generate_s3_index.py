@@ -107,7 +107,9 @@ _HTML_STYLE = """\
 </head>"""
 
 
-def _generate_index_html(title: str, entries: list[_FileEntry], parent_href: str | None) -> str:
+def _generate_index_html(
+    title: str, entries: list[_FileEntry], parent_href: str | None
+) -> str:
     """Generate an HTML index page for a list of file entries."""
     lines = [
         _HTML_STYLE,
@@ -138,7 +140,6 @@ def _generate_index_html(title: str, entries: list[_FileEntry], parent_href: str
     return "\n".join(lines)
 
 
-
 # ---------------------------------------------------------------------------
 # S3 listing helpers
 # ---------------------------------------------------------------------------
@@ -155,13 +156,18 @@ def _list_files_s3(s3_client, bucket: str, dir_prefix: str) -> list[_FileEntry]:
     entries = []
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/"):
         for cp in page.get("CommonPrefixes", []):
-            name = cp["Prefix"][len(prefix):]  # e.g. "gfx94X/"
+            name = cp["Prefix"][len(prefix) :]  # e.g. "gfx94X/"
             entries.append(
-                _FileEntry(name=name, href=name + "index.html", size_bytes=-1, last_modified=None)
+                _FileEntry(
+                    name=name,
+                    href=name + "index.html",
+                    size_bytes=-1,
+                    last_modified=None,
+                )
             )
         for obj in page.get("Contents", []):
             key = obj["Key"]
-            filename = key[len(prefix):]
+            filename = key[len(prefix) :]
             # Skip subdirectory entries, empty keys, and index.html itself.
             if not filename or filename == "index.html" or "/" in filename:
                 continue
@@ -185,7 +191,7 @@ def _discover_dirs_with_files_s3(s3_client, bucket: str, run_prefix: str) -> lis
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
             key = obj["Key"]
-            filename = key[len(prefix):]
+            filename = key[len(prefix) :]
             if not filename or filename.endswith("/"):
                 continue
             # The directory containing this file
@@ -211,7 +217,12 @@ def _list_files_local(staging_dir: Path, dir_prefix: str) -> list[_FileEntry]:
     for p in sorted(root.iterdir()):
         if p.is_dir():
             entries.append(
-                _FileEntry(name=p.name + "/", href=p.name + "/index.html", size_bytes=-1, last_modified=None)
+                _FileEntry(
+                    name=p.name + "/",
+                    href=p.name + "/index.html",
+                    size_bytes=-1,
+                    last_modified=None,
+                )
             )
         elif p.is_file() and p.name != "index.html":
             stat = p.stat()
@@ -220,7 +231,9 @@ def _list_files_local(staging_dir: Path, dir_prefix: str) -> list[_FileEntry]:
                     name=p.name,
                     href=p.name,
                     size_bytes=stat.st_size,
-                    last_modified=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
+                    last_modified=datetime.fromtimestamp(
+                        stat.st_mtime, tz=timezone.utc
+                    ),
                 )
             )
     return entries
@@ -244,7 +257,9 @@ def _discover_dirs_with_files_local(staging_dir: Path, run_prefix: str) -> list[
 # ---------------------------------------------------------------------------
 
 
-def _upload_html(html_content: str, dest: StorageLocation, backend: StorageBackend, dry_run: bool) -> None:
+def _upload_html(
+    html_content: str, dest: StorageLocation, backend: StorageBackend, dry_run: bool
+) -> None:
     """Write html to a temp file and upload it to dest."""
     if dry_run:
         return
@@ -287,7 +302,9 @@ def generate_index_for_directory(
         entries = _list_files_s3(s3_client, bucket, dir_prefix)
 
     title = dir_prefix.rsplit("/", 1)[-1]
-    html_content = _generate_index_html(title=title, entries=entries, parent_href=parent_href)
+    html_content = _generate_index_html(
+        title=title, entries=entries, parent_href=parent_href
+    )
     dest = StorageLocation(bucket=bucket, relative_path=f"{dir_prefix}/index.html")
     log(
         f"[INFO] Uploading index ({len(entries)} files) → "
@@ -314,6 +331,7 @@ def run(args) -> None:
 
     if staging_dir is None:
         import boto3
+
         s3_client = boto3.client("s3")
         log(f"[INFO] Discovering directories from S3 prefix: {prefix}/")
         dirs = _discover_dirs_with_files_s3(s3_client, bucket, prefix)
@@ -342,7 +360,9 @@ def run(args) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate S3 index files after uploads")
+    parser = argparse.ArgumentParser(
+        description="Generate S3 index files after uploads"
+    )
     parser.add_argument(
         "--run-id",
         type=str,

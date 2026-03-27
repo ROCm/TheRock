@@ -82,12 +82,25 @@ class TestDiscoverDirsWithFilesLocal(unittest.TestCase):
             staging_dir = Path(staging)
             # Single-arch layout: logs/{group}/
             (staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu").mkdir(parents=True)
-            (staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu" / "build.log").write_text("log")
+            (
+                staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu" / "build.log"
+            ).write_text("log")
             # Multi-arch layout: logs/{stage}/{family}/
-            (staging_dir / "12345-linux" / "logs" / "math-libs" / "gfx1151").mkdir(parents=True)
-            (staging_dir / "12345-linux" / "logs" / "math-libs" / "gfx1151" / "build.log").write_text("log2")
+            (staging_dir / "12345-linux" / "logs" / "math-libs" / "gfx1151").mkdir(
+                parents=True
+            )
+            (
+                staging_dir
+                / "12345-linux"
+                / "logs"
+                / "math-libs"
+                / "gfx1151"
+                / "build.log"
+            ).write_text("log2")
 
-            dirs = generate_s3_index._discover_dirs_with_files_local(staging_dir, "12345-linux")
+            dirs = generate_s3_index._discover_dirs_with_files_local(
+                staging_dir, "12345-linux"
+            )
             self.assertIn("12345-linux/logs/gfx94X-dcgpu", dirs)
             self.assertIn("12345-linux/logs/math-libs/gfx1151", dirs)
 
@@ -98,7 +111,9 @@ class TestDiscoverDirsWithFilesLocal(unittest.TestCase):
             run_dir.mkdir(parents=True)
             (run_dir / "core_lib.tar.xz").write_bytes(b"data")
 
-            dirs = generate_s3_index._discover_dirs_with_files_local(staging_dir, "12345-linux")
+            dirs = generate_s3_index._discover_dirs_with_files_local(
+                staging_dir, "12345-linux"
+            )
             self.assertIn("12345-linux", dirs)
 
     def test_empty_when_no_run_dir(self):
@@ -207,7 +222,14 @@ class TestGenerateIndexForDirectory(unittest.TestCase):
                 )
 
             for family in ["gfx94X-dcgpu", "gfx110X-all"]:
-                index = staging_dir / "12345-linux" / "logs" / "math-libs" / family / "index.html"
+                index = (
+                    staging_dir
+                    / "12345-linux"
+                    / "logs"
+                    / "math-libs"
+                    / family
+                    / "index.html"
+                )
                 self.assertTrue(index.is_file(), f"Expected {index}")
                 self.assertIn("build.log", index.read_text())
 
