@@ -308,7 +308,7 @@ def run(args) -> None:
     )
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
     prefix = output_root.prefix
-    bucket = output_root.bucket
+    bucket = args.bucket if args.bucket else output_root.bucket
 
     staging_dir = args.output_dir
     s3_client = None
@@ -354,6 +354,12 @@ if __name__ == "__main__":
         type=Path,
         default=None,
         help="Local staging directory instead of S3 (for testing)",
+    )
+    parser.add_argument(
+        "--bucket",
+        type=str,
+        default=None,
+        help="Override the S3 bucket (default: resolved from GHA environment)",
     )
     parser.add_argument(
         "--dry-run",
