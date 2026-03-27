@@ -45,7 +45,10 @@ import platform as platform_module
 # Add build_tools to path for sibling package imports.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.storage_location import StorageLocation
+from _therock_utils.storage_location import (
+    StorageConfig,
+    StorageLocation,
+)
 from github_actions.github_actions_api import gha_query_workflow_run_by_id
 
 
@@ -83,6 +86,9 @@ class WorkflowOutputRoot:
     platform: str
     """Platform name ('linux' or 'windows')."""
 
+    storage_config: StorageConfig = StorageConfig()
+    """Storage configuration for URL schemas."""
+
     # -- Root -------------------------------------------------------------------
 
     @property
@@ -95,7 +101,11 @@ class WorkflowOutputRoot:
 
     def root(self) -> StorageLocation:
         """Location for the run output root (where build artifacts live)."""
-        return StorageLocation(self.bucket, self.prefix)
+        return StorageLocation(
+            self.bucket,
+            self.prefix,
+            self.storage_config,
+        )
 
     # -- Build artifacts --------------------------------------------------------
 
@@ -105,7 +115,11 @@ class WorkflowOutputRoot:
         Args:
             filename: Artifact filename (e.g., 'blas_lib_gfx94X.tar.xz')
         """
-        return StorageLocation(self.bucket, f"{self.prefix}/{filename}")
+        return StorageLocation(
+            self.bucket,
+            f"{self.prefix}/{filename}",
+            self.storage_config,
+        )
 
     def artifact_index(self, artifact_group: str) -> StorageLocation:
         """Location for the per-group artifact index HTML.
@@ -114,7 +128,9 @@ class WorkflowOutputRoot:
             artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
         """
         return StorageLocation(
-            self.bucket, f"{self.prefix}/index-{artifact_group}.html"
+            self.bucket,
+            f"{self.prefix}/index-{artifact_group}.html",
+            self.storage_config,
         )
 
     # -- Logs -------------------------------------------------------------------
@@ -133,7 +149,11 @@ class WorkflowOutputRoot:
         Args:
             artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
         """
-        return StorageLocation(self.bucket, f"{self.prefix}/logs/{artifact_group}")
+        return StorageLocation(
+            self.bucket,
+            f"{self.prefix}/logs/{artifact_group}",
+            self.storage_config,
+        )
 
     def log_file(self, artifact_group: str, filename: str) -> StorageLocation:
         """Location for a specific file within the log_dir() subtree.
@@ -143,13 +163,17 @@ class WorkflowOutputRoot:
             filename: Log filename (e.g., 'build.log', 'ninja_logs.tar.gz')
         """
         return StorageLocation(
-            self.bucket, f"{self.prefix}/logs/{artifact_group}/{filename}"
+            self.bucket,
+            f"{self.prefix}/logs/{artifact_group}/{filename}",
+            self.storage_config,
         )
 
     def log_index(self, artifact_group: str) -> StorageLocation:
         """Location for the log directory index HTML (within log_dir())."""
         return StorageLocation(
-            self.bucket, f"{self.prefix}/logs/{artifact_group}/index.html"
+            self.bucket,
+            f"{self.prefix}/logs/{artifact_group}/index.html",
+            self.storage_config,
         )
 
     def build_observability(self, artifact_group: str) -> StorageLocation:
@@ -157,6 +181,7 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             f"{self.prefix}/logs/{artifact_group}/build_observability.html",
+            self.storage_config,
         )
 
     # -- Manifests --------------------------------------------------------------
@@ -167,7 +192,11 @@ class WorkflowOutputRoot:
         Args:
             artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
         """
-        return StorageLocation(self.bucket, f"{self.prefix}/manifests/{artifact_group}")
+        return StorageLocation(
+            self.bucket,
+            f"{self.prefix}/manifests/{artifact_group}",
+            self.storage_config,
+        )
 
     def manifest(self, artifact_group: str) -> StorageLocation:
         """Location for therock_manifest.json.
@@ -178,6 +207,7 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             f"{self.prefix}/manifests/{artifact_group}/therock_manifest.json",
+            self.storage_config,
         )
 
     # -- Python packages --------------------------------------------------------
@@ -192,7 +222,11 @@ class WorkflowOutputRoot:
                 the build).
         """
         suffix = f"/{artifact_group}" if artifact_group else ""
-        return StorageLocation(self.bucket, f"{self.prefix}/python{suffix}")
+        return StorageLocation(
+            self.bucket,
+            f"{self.prefix}/python{suffix}",
+            self.storage_config,
+        )
 
     # -- Factories --------------------------------------------------------------
 
@@ -204,6 +238,7 @@ class WorkflowOutputRoot:
         github_repository: str | None = None,
         workflow_run: dict | None = None,
         lookup_workflow_run: bool = False,
+        storage_config: StorageConfig | None = None,
     ) -> "WorkflowOutputRoot":
         """Create from CI workflow context.
 
@@ -223,7 +258,11 @@ class WorkflowOutputRoot:
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
+            storage_config: Storage configuration for URL schemas. If None,
+                uses default StorageConfig.
         """
+        if storage_config is None:
+            storage_config = StorageConfig()
         workflow_run_id = (
             run_id if lookup_workflow_run and workflow_run is None else None
         )
@@ -231,12 +270,14 @@ class WorkflowOutputRoot:
             github_repository=github_repository,
             workflow_run_id=workflow_run_id,
             workflow_run=workflow_run,
+            storage_config=storage_config,
         )
         return cls(
             bucket=bucket,
             external_repo=external_repo,
             run_id=run_id,
             platform=platform,
+            storage_config=storage_config,
         )
 
     @classmethod
@@ -245,6 +286,7 @@ class WorkflowOutputRoot:
         run_id: str = "local",
         platform: str | None = None,
         bucket: str = "local",
+        storage_config: StorageConfig | None = None,
     ) -> "WorkflowOutputRoot":
         """Create for local development/testing.
 
@@ -252,7 +294,11 @@ class WorkflowOutputRoot:
             run_id: Run identifier (default: 'local').
             platform: Platform name. If None, detects from current system.
             bucket: Bucket name placeholder (default: 'local').
+            storage_config: Storage configuration for URL schemas. If None,
+                uses default StorageConfig.
         """
+        if storage_config is None:
+            storage_config = StorageConfig()
         if platform is None:
             platform = platform_module.system().lower()
         return cls(
@@ -260,6 +306,7 @@ class WorkflowOutputRoot:
             external_repo="",
             run_id=run_id,
             platform=platform,
+            storage_config=storage_config,
         )
 
 
@@ -276,11 +323,19 @@ def _retrieve_bucket_info(
     github_repository: str | None = None,
     workflow_run_id: str | None = None,
     workflow_run: dict | None = None,
+    *,
+    storage_config: StorageConfig,
 ) -> tuple[str, str]:
     """Determine S3 bucket and external_repo prefix for a workflow run.
 
     This is an internal implementation detail — use
     `WorkflowOutputRoot.from_workflow_run` instead.
+
+    Args:
+        github_repository: Repository in 'owner/repo' format.
+        workflow_run_id: Workflow run ID for API lookup.
+        workflow_run: Pre-fetched workflow run data.
+        storage_config: Storage configuration containing bucket_schema.
 
     Returns:
         Tuple of ``(external_repo, bucket)`` where:
@@ -332,7 +387,7 @@ def _retrieve_bucket_info(
                 f"expected one of {sorted(_VALID_RELEASE_TYPES)}"
             )
         _log(f"  (implicit) RELEASE_TYPE: {release_type}")
-        bucket = f"therock-{release_type}-artifacts"
+        bucket = storage_config.bucket_schema.format(release_type=release_type)
     else:
         if external_repo == "":
             bucket = "therock-ci-artifacts"

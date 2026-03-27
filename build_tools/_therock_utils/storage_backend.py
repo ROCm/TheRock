@@ -140,6 +140,7 @@ class StorageBackend(ABC):
                 StorageLocation(
                     dest.bucket,
                     f"{dest.relative_path}/{f.relative_to(source_dir).as_posix()}",
+                    dest.storage_config,
                 ),
             )
             for f in sorted_files

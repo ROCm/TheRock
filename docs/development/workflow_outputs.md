@@ -12,7 +12,7 @@ manifests, python packages) that are uploaded to S3. Three modules in
 
 | Module             | Role                         | Key types                                                              |
 | ------------------ | ---------------------------- | ---------------------------------------------------------------------- |
-| `storage_location` | Backend-agnostic location    | `StorageLocation`                                                      |
+| `storage_location` | Backend-agnostic location    | `StorageLocation`, `StorageConfig`                                     |
 | `workflow_outputs` | CI path computation (no I/O) | `WorkflowOutputRoot`                                                   |
 | `storage_backend`  | Upload I/O (write)           | `StorageBackend`, `S3StorageBackend`, `LocalStorageBackend`            |
 | `artifact_backend` | Download I/O (read)          | `ArtifactBackend`, `S3Backend`, `LocalDirectoryBackend`, `HTTPBackend` |
@@ -123,29 +123,75 @@ loc.https_url  # "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/file
 loc.local_path(Path("/tmp/staging"))  # Path("/tmp/staging/12345-linux/file.tar.xz")
 ```
 
-#### HTTPS URL Override
+#### Custom URL Schemas via StorageConfig
 
-To use a custom HTTPS URL pattern for a specific bucket, set an environment
-variable with the bucket name (dashes replaced with underscores):
-
-```bash
-THEROCK_HTTPS_URL_<bucket_name>=<base_url>
-```
-
-Example for rocm-npi-dev:
-
-```bash
-export THEROCK_HTTPS_URL_therock_dev_tarball=https://different_domain_altogether.com/tarball
-export THEROCK_HTTPS_URL_therock_dev_artifacts=https://different_domain_altogether.com/artifacts
-export THEROCK_HTTPS_URL_therock_dev_python=https://different_domain_altogether.com/whl
-```
-
-The `relative_path` is appended to the base URL:
+StorageLocation supports custom URL schemas via the `StorageConfig` dataclass.
+Schemas use Python string formatting with `{bucket}` and `{path}` placeholders:
 
 ```python
-loc = StorageLocation("therock-dev-tarball", "12345-linux/file.tar.xz")
-loc.https_url  # → "https://different_domain_altogether.com/tarball/12345-linux/file.tar.xz"
+from _therock_utils.storage_location import StorageLocation, StorageConfig
+
+# Custom HTTPS schema (e.g., for CDN)
+config = StorageConfig(https_url_schema="https://cdn.example.com/{bucket}/{path}")
+loc = StorageLocation(
+    bucket="my-bucket",
+    relative_path="12345-linux/file.tar.xz",
+    storage_config=config,
+)
+loc.https_url  # "https://cdn.example.com/my-bucket/12345-linux/file.tar.xz"
+
+# Custom S3 schema
+config = StorageConfig(s3_url_schema="custom-s3://{bucket}/prefix/{path}")
+loc = StorageLocation(
+    bucket="my-bucket",
+    relative_path="12345-linux/file.tar.xz",
+    storage_config=config,
+)
+loc.s3_uri  # "custom-s3://my-bucket/prefix/12345-linux/file.tar.xz"
 ```
+
+When `storage_config` is `None` (the default), the following defaults are used:
+
+- S3 URI: `s3://{bucket}/{path}`
+- HTTPS URL: `https://{bucket}.s3.amazonaws.com/{path}`
+
+### StorageConfig
+
+A frozen dataclass that consolidates all URL schema configurations into a single
+object with validation and sensible defaults.
+
+```python
+from _therock_utils.storage_location import StorageConfig
+
+# Use all defaults
+config = StorageConfig()
+
+# Custom CDN URL (omits {bucket})
+config = StorageConfig(https_url_schema="https://cdn.example.com/{path}")
+
+# Multiple custom schemas
+config = StorageConfig(
+    s3_url_schema="s3-custom://{bucket}/prefix/{path}",
+    https_url_schema="https://cdn.example.com/{path}",
+    bucket_schema="mycompany-{release_type}-builds",
+)
+
+# Parse from JSON (for CLI arguments)
+config = StorageConfig.from_json(
+    '{"https_url_schema": "https://cdn.example.com/{path}"}'
+)
+```
+
+#### Schema placeholders
+
+| Schema             | Default                                    | Allowed Placeholders |
+| ------------------ | ------------------------------------------ | -------------------- |
+| `s3_url_schema`    | `s3://{bucket}/{path}`                     | `{bucket}`, `{path}` |
+| `https_url_schema` | `https://{bucket}.s3.amazonaws.com/{path}` | `{bucket}`, `{path}` |
+| `bucket_schema`    | `therock-{release_type}-artifacts`         | `{release_type}`     |
+
+Schemas may omit placeholders (e.g., CDN URLs that ignore `{bucket}`).
+Using an unknown placeholder raises `ValueError` at construction time.
 
 ### WorkflowOutputRoot
 
@@ -165,7 +211,7 @@ root = WorkflowOutputRoot.from_workflow_run(
 # For local development (no API calls, no env vars needed)
 root = WorkflowOutputRoot.for_local(run_id="local", platform="linux")
 
-# Location methods — each returns an StorageLocation
+# Location methods — each returns a StorageLocation
 root.root()
 root.artifact(filename="blas_lib_gfx94X.tar.xz")
 root.artifact_index(artifact_group="gfx94X-dcgpu")
@@ -184,6 +230,56 @@ cutover dating). Most callers running inside their own CI workflow do not need
 this — environment variables (`GITHUB_REPOSITORY`, `IS_PR_FROM_FORK`) suffice.
 Set `lookup_workflow_run=True` when looking up another repository's workflow
 run, e.g. when fetching artifacts.
+
+#### Custom URL Schemas via StorageConfig
+
+WorkflowOutputRoot accepts an optional `storage_config` parameter that is
+propagated to all `StorageLocation` instances it creates:
+
+```python
+from _therock_utils.storage_location import StorageConfig
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
+# Custom HTTPS schema (e.g., for CDN)
+config = StorageConfig(https_url_schema="https://cdn.example.com/{bucket}/{path}")
+root = WorkflowOutputRoot.from_workflow_run(
+    run_id="12345",
+    platform="linux",
+    storage_config=config,
+)
+root.artifact("test.tar.xz").https_url
+# → "https://cdn.example.com/therock-ci-artifacts/12345-linux/test.tar.xz"
+
+# Custom S3 schema (e.g., for S3-compatible storage)
+config = StorageConfig(s3_url_schema="s3-custom://{bucket}/prefix/{path}")
+root = WorkflowOutputRoot.from_workflow_run(
+    run_id="12345", platform="linux", storage_config=config
+)
+root.artifact("test.tar.xz").s3_uri
+# → "s3-custom://therock-ci-artifacts/prefix/12345-linux/test.tar.xz"
+
+# Custom bucket naming (e.g., for different environments)
+config = StorageConfig(bucket_schema="mycompany-{release_type}-builds")
+root = WorkflowOutputRoot.from_workflow_run(
+    run_id="12345", platform="linux", storage_config=config
+)
+# When RELEASE_TYPE=dev, bucket will be "mycompany-dev-builds"
+```
+
+Storage configuration can be passed to `artifact_manager.py` and `post_build_upload.py`
+via a single `--storage-config` JSON argument:
+
+```bash
+# Using custom HTTPS URL for CDN
+python build_tools/artifact_manager.py fetch \
+    --storage-config '{"https_url_schema": "https://cdn.example.com/{bucket}/{path}"}' \
+    --stage math-libs
+
+# Using custom S3 and bucket schemas
+python build_tools/github_actions/post_build_upload.py \
+    --storage-config '{"s3_url_schema": "s3-custom://{bucket}/data/{path}", "bucket_schema": "mycompany-{release_type}-artifacts"}' \
+    --artifact-group gfx94X-dcgpu
+```
 
 ### StorageBackend
 

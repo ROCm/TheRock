@@ -30,7 +30,7 @@ import shutil
 import urllib.error
 import urllib.request
 
-from .storage_location import StorageLocation
+from .storage_location import StorageConfig
 from .workflow_outputs import WorkflowOutputRoot
 
 
@@ -429,53 +429,15 @@ class HTTPBackend(ArtifactBackend):
         """Fetch artifact list from index-{gfx_family}.html."""
         index_url = self.output_root.artifact_index(gfx_family).https_url
         try:
-            with urllib.request.urlopen(index_url) as response:
+            with urllib.request.urlopen(index_url, timeout=30) as response:
                 html_content = response.read().decode("utf-8")
             return self._parse_index_html(html_content)
-        except Exception:
-            # Index doesn't exist for this target
-            return []
-
-    def _discover_gfx_families_from_master_index(self) -> List[str]:
-        """Discover available GFX families from master index.
-
-        TODO: Future enhancement - Master index discovery
-        ==================================================
-        This stub will be implemented to fetch and parse the master index at:
-        {base_url}/{workflow_id}-linux/index.html
-
-        The master index should contain links to all available index files:
-          <a href="../{run_id}-{platform}/index-gfx94X-dcgpu.html">...</a>
-          <a href="../{run_id}-{platform}/index-gfx120X-all.html">...</a>
-
-        Implementation plan:
-        1. Fetch {base_url}/{workflow_id}-linux/index.html
-        2. Parse HTML for links matching pattern: index-{gfx_family}.html
-        3. Extract gfx_family from each link
-        4. Return list of discovered targets
-
-        This will replace the hardcoded common_targets list and enable
-        automatic discovery of all available GFX families.
-
-        Returns:
-            List of discovered GFX families (e.g., ["gfx94X-dcgpu", "gfx120X-all", "gfx908"])
-        """
-        # TODO: Implement master index parsing
-        # master_index_url = f"{self.base_url}/{workflow_id}-linux/index.html"
-        # try:
-        #     with urllib.request.urlopen(master_index_url) as response:
-        #         html_content = response.read().decode("utf-8")
-        #
-        #     # Parse for links like: href="../{run_id}-{platform}/index-{gfx_family}.html"
-        #     pattern = rf'href="[^"]*/{self.run_id}-{self.platform}/index-([^"]+)\.html"'
-        #     matches = re.findall(pattern, html_content)
-        #     return matches
-        # except Exception:
-        #     # Fall back to hardcoded targets if master index unavailable
-        #     return []
-
-        # For now, return empty list to indicate not implemented
-        return []
+        except urllib.error.HTTPError as e:
+            if e.code in (403, 404):
+                return []  # Index doesn't exist for this target
+            raise  # Re-raise server errors (500, etc.)
+        except urllib.error.URLError:
+            return []  # Network error - treat as unavailable
 
     def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
         """List available artifact filenames across all specified GFX families.
@@ -589,6 +551,7 @@ def create_backend_from_env(
     run_id: Optional[str] = None,
     platform: Optional[str] = None,
     gfx_families: Optional[List[str]] = None,
+    storage_config: Optional[StorageConfig] = None,
 ) -> ArtifactBackend:
     """Create the appropriate backend based on environment variables.
 
@@ -603,6 +566,8 @@ def create_backend_from_env(
         gfx_families: List of GFX families for HTTP backend (e.g., ["gfx94X-dcgpu", "gfx1200"])
                     If None, reads from THEROCK_AMDGPU_FAMILIES environment variable (comma-separated)
                     Required for HTTP backend.
+        storage_config: Storage configuration for URL schemas and bucket naming.
+            If None, uses defaults.
 
     Environment variables:
     - THEROCK_RUN_ID: Workflow run ID (default: GITHUB_RUN_ID or "local")
@@ -629,7 +594,9 @@ def create_backend_from_env(
     local_staging = os.getenv("THEROCK_LOCAL_STAGING_DIR")
     if local_staging:
         output_root = WorkflowOutputRoot.for_local(
-            run_id=run_id, platform=platform_name
+            run_id=run_id,
+            platform=platform_name,
+            storage_config=storage_config,
         )
         return LocalDirectoryBackend(
             staging_dir=Path(local_staging),
@@ -645,7 +612,9 @@ def create_backend_from_env(
     )
     if has_s3_credentials:
         output_root = WorkflowOutputRoot.from_workflow_run(
-            run_id=run_id, platform=platform_name
+            run_id=run_id,
+            platform=platform_name,
+            storage_config=storage_config,
         )
         return S3Backend(output_root=output_root)
 
@@ -668,6 +637,8 @@ def create_backend_from_env(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=run_id, platform=platform_name
+        run_id=run_id,
+        platform=platform_name,
+        storage_config=storage_config,
     )
     return HTTPBackend(output_root=output_root, gfx_families=targets)
