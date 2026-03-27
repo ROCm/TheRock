@@ -152,8 +152,24 @@ jobs:
                 }
               }
 
-              // Best-effort parent workflow detection via shared check suite
-              // (workflow_call reusable workflows share a check suite with caller)
+              // Extract structured metrics from THEROCK_METRICS HTML comments
+              // embedded in job summaries by emit_build_metrics.py.
+              const metricsRe = /<!--\s*THEROCK_METRICS\s+(\{.*?\})\s*-->/g;
+              for (const job of jobs) {
+                if (!job.summary) continue;
+                const allMetrics = {};
+                let m;
+                while ((m = metricsRe.exec(job.summary)) !== null) {
+                  try { Object.assign(allMetrics, JSON.parse(m[1])); }
+                  catch (_) {}
+                }
+                metricsRe.lastIndex = 0;
+                if (Object.keys(allMetrics).length > 0) {
+                  job.metrics = allMetrics;
+                }
+              }
+
+              // Lucky solution to detect parent workflow via shared check suite.
               let parentWorkflow = null;
               if (checkSuiteId) {
                 try {

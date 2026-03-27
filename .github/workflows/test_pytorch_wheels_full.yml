@@ -262,3 +262,9 @@ jobs:
             echo "No run_pytorch_tests_exit_code.txt found"
             exit 1
           fi
+
+      - name: Emit Test Metrics
+        if: ${{ !cancelled() }}
+        run: |
+          python build_tools/github_actions/emit_build_metrics.py \
+            --test-shard "${{ matrix.shard }}" "${{ matrix.num_shards }}"
