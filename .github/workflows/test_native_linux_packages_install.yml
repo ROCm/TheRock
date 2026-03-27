@@ -123,7 +123,7 @@ jobs:
     needs: [compute_repo_url]
     strategy:
       fail-fast: false
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-mi325-1gpu-ossci-rocm' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-gfx942-1gpu-ossci-rocm' || 'ubuntu-24.04' }}
     container:
       # Use container matching the OS profile (SLES / Ubuntu|Debian / AlmaLinux)
       image: ${{ startsWith(inputs.os_profile, 'sles') && 'registry.suse.com/bci/bci-base:16.0' || ((startsWith(inputs.os_profile, 'ubuntu') || startsWith(inputs.os_profile, 'debian')) && 'ubuntu:24.04') || 'almalinux:9' }}
