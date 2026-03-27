@@ -56,6 +56,15 @@ do_update_alternatives(){
     update-alternatives --install "/opt/rocm/core" "core" "$PKG_INSTALL_PREFIX" "$altscore"
     update-alternatives --install "/opt/rocm/core-{{ version_major }}" "core-{{ version_major }}" "$PKG_INSTALL_PREFIX" "$altscore"
 
+    # Install /opt/rocm/bin, /opt/rocm/lib, and /opt/rocm/include soft links
+    update-alternatives --install "/opt/rocm/bin" "rocm-bin" "$PKG_INSTALL_PREFIX/bin" "$altscore"
+    update-alternatives --install "/opt/rocm/lib" "rocm-lib" "$PKG_INSTALL_PREFIX/lib" "$altscore"
+    update-alternatives --install "/opt/rocm/include" "rocm-include" "$PKG_INSTALL_PREFIX/include" "$altscore"
+
+    # Install /opt/rocm/llvm, /opt/rocm/amdgcn, and /opt/rocm/libexec soft links
+    update-alternatives --install "/opt/rocm/llvm" "rocm-llvm" "$PKG_INSTALL_PREFIX/llvm" "$altscore"
+    update-alternatives --install "/opt/rocm/amdgcn" "rocm-amdgcn" "$PKG_INSTALL_PREFIX/amdgcn" "$altscore"
+    update-alternatives --install "/opt/rocm/libexec" "rocm-libexec" "$PKG_INSTALL_PREFIX/libexec" "$altscore"
 
     for i in "${binaries[@]}"
     do

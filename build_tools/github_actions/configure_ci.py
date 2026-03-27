@@ -677,17 +677,18 @@ def main(base_args, linux_families, windows_families):
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = is_ci_run_required(modified_paths)
 
-        # TODO(#3399): move multi-arch CI configuration to its own script
-        # Multi-arch CI on PRs requires explicit opt-in via label.
+        # multi_arch_ci.yml is now the default, so the "non-multi-arch" ci.yml
+        # now requires an opt-in to run on pull requests.
         # This avoids doubling CI load during the transition from ci.yml
         # to multi_arch_ci.yml. See https://github.com/ROCm/TheRock/issues/3337
+        # TODO(#3399): move multi-arch CI configuration to its own script
         if (
-            multi_arch
+            not multi_arch
             and is_pull_request
-            and "ci:run-multi-arch" not in (pr_labels or [])
+            and "ci:run-non-multi-arch" not in (pr_labels or [])
         ):
             print(
-                "Skipping multi-arch CI: 'ci:run-multi-arch' label not found. "
+                "Skipping non-multi-arch CI: 'ci:run-non-multi-arch' label not found. "
                 "Add the label to opt in."
             )
             enable_build_jobs = False

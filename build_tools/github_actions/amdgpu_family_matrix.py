@@ -79,8 +79,6 @@ amdgpu_family_info_matrix_presubmit = {
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
             "build_variants": ["release", "asan", "tsan"],
-            # Due to the limited count of mi325 machines, we only run this on non-quick tests
-            "run-full-tests-only": True,
         }
     },
     "gfx110x": {
@@ -235,13 +233,11 @@ amdgpu_family_info_matrix_nightly = {
         },
     },
     "gfx101x": {
-        # TODO(#1926): Resolve bgemm kernel hip file generation error to enable PyTorch builds
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
         "windows": {
             "test-runs-on": "",
