@@ -220,12 +220,9 @@ jobs:
         # env:
           # CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
         run: |
-          echo ${{ github.workspace }} || true
-          ls -lartR ${{ github.workspace }} || true
-          mkdir -p ${{ github.workspace }}/output/build/logs || echo "log folder creation failed."
-          touch ${{ github.workspace }}/output/build/logs/sccache_error.log || echo "log file creation failed."
-          touch ${{ github.workspace }}/sccache.conf || echo "sccache.conf creation failed" || \
-            mkdir ${{ github.workspace }} && touch ${{ github.workspace }}/sccache.conf || true
+          echo ${{ github.workspace }}
+          ls -lartR ${{ github.workspace }}
+          pwd
           sccache --start-server || echo "server start failed" && exit 3
 
       - name: Install the AWS tool
