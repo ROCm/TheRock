@@ -137,6 +137,20 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
             loc, "99999-linux/logs/gfx94X-dcgpu/build_observability.html"
         )
 
+    # -- Stage logs (multi-arch CI) --
+
+    def test_stage_log_dir_per_arch(self):
+        loc = self.root.stage_log_dir("math-libs", "gfx1151")
+        self._assert_relative_path(loc, "99999-linux/logs/math-libs/gfx1151")
+
+    def test_stage_log_dir_generic(self):
+        loc = self.root.stage_log_dir("foundation")
+        self._assert_relative_path(loc, "99999-linux/logs/foundation")
+
+    def test_stage_log_dir_generic_empty_string(self):
+        loc = self.root.stage_log_dir("compiler-runtime", "")
+        self._assert_relative_path(loc, "99999-linux/logs/compiler-runtime")
+
     # -- Manifests --
 
     def test_manifest_dir(self):

@@ -151,10 +151,8 @@ class StorageBackend(ABC):
             dest.relative_path,
             len(file_list),
         )
-        for f, loc in file_list[:100]:
+        for f, loc in file_list:
             logger.info("  %s", f.relative_to(source_dir).as_posix())
-        if len(file_list) > 100:
-            logger.info("  ... and %d more", len(file_list) - 100)
         return self.upload_files(file_list)
 
 
