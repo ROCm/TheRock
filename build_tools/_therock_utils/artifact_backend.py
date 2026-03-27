@@ -468,9 +468,15 @@ class S3Backend(ArtifactBackend):
         import tempfile
 
         loc = self.output_root.artifact(artifact_key)
-        with tempfile.NamedTemporaryFile(delete=True) as tmp:
+        # Use delete=False to allow S3 client to write to the file on Windows
+        # (NamedTemporaryFile with delete=True keeps the file open exclusively)
+        tmp = tempfile.NamedTemporaryFile(delete=False)
+        try:
+            tmp.close()  # Close so S3 client can write to it
             self.s3_client.download_file(self.bucket, loc.relative_path, tmp.name)
             return _compute_file_sha256(Path(tmp.name))
+        finally:
+            os.unlink(tmp.name)
 
     def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
         """List S3 artifacts."""
