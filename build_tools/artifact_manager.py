@@ -64,6 +64,7 @@ from _therock_utils.artifact_backend import (
     create_backend_from_env,
 )
 from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
+from _therock_utils.storage_location import StorageConfig
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Component types that artifacts are split into
@@ -339,14 +340,17 @@ def do_fetch(args: argparse.Namespace):
 
     target_families = parse_target_families(args)
 
+    # Parse storage config from JSON if provided
+    storage_config = None
+    if args.storage_config:
+        storage_config = StorageConfig.from_json(args.storage_config)
+
     # Create backend
     backend = create_backend_from_env(
         run_id=args.run_id,
         platform=args.platform,
         gfx_families=target_families,
-        s3_url_schema=args.s3_url_schema,
-        https_url_schema=args.https_url_schema,
-        bucket_schema=args.bucket_schema,
+        storage_config=storage_config,
     )
     log(f"Using backend: {backend.base_uri}")
 
@@ -589,13 +593,16 @@ def do_push(args: argparse.Namespace):
         f"Stage '{args.stage}' produces {len(produced)} artifacts: {', '.join(sorted(produced))}"
     )
 
+    # Parse storage config from JSON if provided
+    storage_config = None
+    if args.storage_config:
+        storage_config = StorageConfig.from_json(args.storage_config)
+
     # Create backend
     backend = create_backend_from_env(
         run_id=args.run_id,
         platform=args.platform,
-        s3_url_schema=args.s3_url_schema,
-        https_url_schema=args.https_url_schema,
-        bucket_schema=args.bucket_schema,
+        storage_config=storage_config,
     )
     log(f"Using backend: {backend.base_uri}")
 
@@ -764,9 +771,7 @@ def _create_source_backend(
     source_run_id: str,
     platform: str,
     local_staging_dir: Optional[Path] = None,
-    s3_url_schema: Optional[str] = None,
-    https_url_schema: Optional[str] = None,
-    bucket_schema: Optional[str] = None,
+    storage_config: Optional[StorageConfig] = None,
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
@@ -780,9 +785,7 @@ def _create_source_backend(
         output_root = WorkflowOutputRoot.for_local(
             run_id=source_run_id,
             platform=platform,
-            s3_url_schema=s3_url_schema,
-            https_url_schema=https_url_schema,
-            # bucket_schema not applicable for local backend
+            storage_config=storage_config,
         )
         return LocalDirectoryBackend(
             staging_dir=staging,
@@ -793,9 +796,7 @@ def _create_source_backend(
         run_id=source_run_id,
         platform=platform,
         lookup_workflow_run=True,
-        s3_url_schema=s3_url_schema,
-        https_url_schema=https_url_schema,
-        bucket_schema=bucket_schema,
+        storage_config=storage_config,
     )
     return S3Backend(output_root=output_root)
 
@@ -830,22 +831,23 @@ def do_copy(args: argparse.Namespace):
 
     target_families = parse_target_families(args)
 
+    # Parse storage config from JSON if provided
+    storage_config = None
+    if args.storage_config:
+        storage_config = StorageConfig.from_json(args.storage_config)
+
     # Create source and dest backends
     source_backend = _create_source_backend(
         source_run_id=args.source_run_id,
         platform=args.platform,
         local_staging_dir=args.local_staging_dir,
-        s3_url_schema=args.s3_url_schema,
-        https_url_schema=args.https_url_schema,
-        bucket_schema=args.bucket_schema,
+        storage_config=storage_config,
     )
     dest_backend = create_backend_from_env(
         run_id=args.run_id,
         platform=args.platform,
         gfx_families=target_families,
-        s3_url_schema=args.s3_url_schema,
-        https_url_schema=args.https_url_schema,
-        bucket_schema=args.bucket_schema,
+        storage_config=storage_config,
     )
 
     log(f"Source: {source_backend.base_uri}")
@@ -1019,22 +1021,16 @@ def _add_backend_args(parser: argparse.ArgumentParser):
         help="Local staging directory (sets THEROCK_LOCAL_STAGING_DIR)",
     )
     parser.add_argument(
-        "--s3-url-schema",
+        "--storage-config",
         type=str,
         default=None,
-        help="Template for S3 URIs (default: s3://{bucket}/{path})",
-    )
-    parser.add_argument(
-        "--https-url-schema",
-        type=str,
-        default=None,
-        help="Template for HTTPS URLs (default: https://{bucket}.s3.amazonaws.com/{path})",
-    )
-    parser.add_argument(
-        "--bucket-schema",
-        type=str,
-        default=None,
-        help="Template for bucket naming (default: therock-{release_type}-artifacts)",
+        help=(
+            "JSON object with URL schema configuration. Keys: "
+            "s3_url_schema (default: s3://{bucket}/{path}), "
+            "https_url_schema (default: https://{bucket}.s3.amazonaws.com/{path}), "
+            "bucket_schema (default: therock-{release_type}-artifacts). "
+            'Example: \'{"https_url_schema": "https://cdn.example.com/{path}"}\''
+        ),
     )
 
 

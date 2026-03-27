@@ -140,8 +140,7 @@ class StorageBackend(ABC):
                 StorageLocation(
                     dest.bucket,
                     f"{dest.relative_path}/{f.relative_to(source_dir).as_posix()}",
-                    dest.s3_url_schema,
-                    dest.https_url_schema,
+                    dest.storage_config,
                 ),
             )
             for f in sorted_files

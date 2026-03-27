@@ -42,6 +42,7 @@ PLATFORM = platform.system().lower()
 
 # Add build_tools to path for _therock_utils imports.
 sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
+from _therock_utils.storage_location import StorageConfig
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 
@@ -291,12 +292,15 @@ def run(args):
     if not args.upload:
         return
 
+    # Parse storage config from JSON if provided
+    storage_config = None
+    if args.storage_config:
+        storage_config = StorageConfig.from_json(args.storage_config)
+
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id,
         platform=PLATFORM,
-        s3_url_schema=args.s3_url_schema,
-        https_url_schema=args.https_url_schema,
-        bucket_schema=args.bucket_schema,
+        storage_config=storage_config,
     )
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
 
@@ -363,22 +367,16 @@ if __name__ == "__main__":
         help="Print what would be uploaded without actually uploading",
     )
     parser.add_argument(
-        "--s3-url-schema",
+        "--storage-config",
         type=str,
         default=None,
-        help="Template for S3 URIs (default: s3://{bucket}/{path})",
-    )
-    parser.add_argument(
-        "--https-url-schema",
-        type=str,
-        default=None,
-        help="Template for HTTPS URLs (default: https://{bucket}.s3.amazonaws.com/{path})",
-    )
-    parser.add_argument(
-        "--bucket-schema",
-        type=str,
-        default=None,
-        help="Template for bucket naming (default: therock-{release_type}-artifacts)",
+        help=(
+            "JSON object with URL schema configuration. Keys: "
+            "s3_url_schema (default: s3://{bucket}/{path}), "
+            "https_url_schema (default: https://{bucket}.s3.amazonaws.com/{path}), "
+            "bucket_schema (default: therock-{release_type}-artifacts). "
+            'Example: \'{"https_url_schema": "https://cdn.example.com/{path}"}\''
+        ),
     )
     args = parser.parse_args()
 

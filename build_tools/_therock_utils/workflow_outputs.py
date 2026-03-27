@@ -45,11 +45,11 @@ import platform as platform_module
 # Add build_tools to path for sibling package imports.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.storage_location import StorageLocation
+from _therock_utils.storage_location import (
+    StorageConfig,
+    StorageLocation,
+)
 from github_actions.github_actions_api import gha_query_workflow_run_by_id
-
-# Default bucket naming schema
-DEFAULT_BUCKET_SCHEMA = "therock-{release_type}-artifacts"
 
 
 def _log(*args, **kwargs):
@@ -86,11 +86,8 @@ class WorkflowOutputRoot:
     platform: str
     """Platform name ('linux' or 'windows')."""
 
-    s3_url_schema: str | None = None
-    """Template for S3 URI. Must contain {bucket} and {path} placeholders. If None, uses default."""
-
-    https_url_schema: str | None = None
-    """Template for HTTPS URL. Must contain {bucket} and {path} placeholders. If None, uses default."""
+    storage_config: StorageConfig | None = None
+    """Storage configuration for URL schemas. If None, uses defaults."""
 
     # -- Root -------------------------------------------------------------------
 
@@ -107,8 +104,7 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             self.prefix,
-            self.s3_url_schema,
-            self.https_url_schema,
+            self.storage_config,
         )
 
     # -- Build artifacts --------------------------------------------------------
@@ -122,8 +118,7 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             f"{self.prefix}/{filename}",
-            self.s3_url_schema,
-            self.https_url_schema,
+            self.storage_config,
         )
 
     def artifact_index(self, artifact_group: str) -> StorageLocation:
@@ -135,8 +130,7 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             f"{self.prefix}/index-{artifact_group}.html",
-            self.s3_url_schema,
-            self.https_url_schema,
+            self.storage_config,
         )
 
     # -- Logs -------------------------------------------------------------------
@@ -158,8 +152,7 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             f"{self.prefix}/logs/{artifact_group}",
-            self.s3_url_schema,
-            self.https_url_schema,
+            self.storage_config,
         )
 
     def log_file(self, artifact_group: str, filename: str) -> StorageLocation:
@@ -172,8 +165,7 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             f"{self.prefix}/logs/{artifact_group}/{filename}",
-            self.s3_url_schema,
-            self.https_url_schema,
+            self.storage_config,
         )
 
     def log_index(self, artifact_group: str) -> StorageLocation:
@@ -181,8 +173,7 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             f"{self.prefix}/logs/{artifact_group}/index.html",
-            self.s3_url_schema,
-            self.https_url_schema,
+            self.storage_config,
         )
 
     def build_observability(self, artifact_group: str) -> StorageLocation:
@@ -190,8 +181,7 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             f"{self.prefix}/logs/{artifact_group}/build_observability.html",
-            self.s3_url_schema,
-            self.https_url_schema,
+            self.storage_config,
         )
 
     # -- Manifests --------------------------------------------------------------
@@ -205,8 +195,7 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             f"{self.prefix}/manifests/{artifact_group}",
-            self.s3_url_schema,
-            self.https_url_schema,
+            self.storage_config,
         )
 
     def manifest(self, artifact_group: str) -> StorageLocation:
@@ -218,8 +207,7 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             f"{self.prefix}/manifests/{artifact_group}/therock_manifest.json",
-            self.s3_url_schema,
-            self.https_url_schema,
+            self.storage_config,
         )
 
     # -- Python packages --------------------------------------------------------
@@ -237,8 +225,7 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             f"{self.prefix}/python{suffix}",
-            self.s3_url_schema,
-            self.https_url_schema,
+            self.storage_config,
         )
 
     # -- Factories --------------------------------------------------------------
@@ -251,9 +238,7 @@ class WorkflowOutputRoot:
         github_repository: str | None = None,
         workflow_run: dict | None = None,
         lookup_workflow_run: bool = False,
-        s3_url_schema: str | None = None,
-        https_url_schema: str | None = None,
-        bucket_schema: str | None = None,
+        storage_config: StorageConfig | None = None,
     ) -> "WorkflowOutputRoot":
         """Create from CI workflow context.
 
@@ -273,9 +258,8 @@ class WorkflowOutputRoot:
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
-            s3_url_schema: Template for S3 URIs. If None, uses default.
-            https_url_schema: Template for HTTPS URLs. If None, uses default.
-            bucket_schema: Template for bucket naming. If None, uses default.
+            storage_config: Storage configuration for URL schemas. If None,
+                uses defaults.
         """
         workflow_run_id = (
             run_id if lookup_workflow_run and workflow_run is None else None
@@ -284,15 +268,14 @@ class WorkflowOutputRoot:
             github_repository=github_repository,
             workflow_run_id=workflow_run_id,
             workflow_run=workflow_run,
-            bucket_schema=bucket_schema,
+            storage_config=storage_config,
         )
         return cls(
             bucket=bucket,
             external_repo=external_repo,
             run_id=run_id,
             platform=platform,
-            s3_url_schema=s3_url_schema,
-            https_url_schema=https_url_schema,
+            storage_config=storage_config,
         )
 
     @classmethod
@@ -301,8 +284,7 @@ class WorkflowOutputRoot:
         run_id: str = "local",
         platform: str | None = None,
         bucket: str = "local",
-        s3_url_schema: str | None = None,
-        https_url_schema: str | None = None,
+        storage_config: StorageConfig | None = None,
     ) -> "WorkflowOutputRoot":
         """Create for local development/testing.
 
@@ -310,8 +292,8 @@ class WorkflowOutputRoot:
             run_id: Run identifier (default: 'local').
             platform: Platform name. If None, detects from current system.
             bucket: Bucket name placeholder (default: 'local').
-            s3_url_schema: Template for S3 URIs. If None, uses default.
-            https_url_schema: Template for HTTPS URLs. If None, uses default.
+            storage_config: Storage configuration for URL schemas. If None,
+                uses defaults.
         """
         if platform is None:
             platform = platform_module.system().lower()
@@ -320,8 +302,7 @@ class WorkflowOutputRoot:
             external_repo="",
             run_id=run_id,
             platform=platform,
-            s3_url_schema=s3_url_schema,
-            https_url_schema=https_url_schema,
+            storage_config=storage_config,
         )
 
 
@@ -338,7 +319,7 @@ def _retrieve_bucket_info(
     github_repository: str | None = None,
     workflow_run_id: str | None = None,
     workflow_run: dict | None = None,
-    bucket_schema: str | None = None,
+    storage_config: StorageConfig | None = None,
 ) -> tuple[str, str]:
     """Determine S3 bucket and external_repo prefix for a workflow run.
 
@@ -349,16 +330,18 @@ def _retrieve_bucket_info(
         github_repository: Repository in 'owner/repo' format.
         workflow_run_id: Workflow run ID for API lookup.
         workflow_run: Pre-fetched workflow run data.
-        bucket_schema: Template for bucket naming (default: 'therock-{release_type}-artifacts').
-            Must contain {release_type} placeholder.
+        storage_config: Storage configuration containing bucket_schema.
+            If None, uses default bucket schema.
 
     Returns:
         Tuple of ``(external_repo, bucket)`` where:
         - external_repo: ``''`` for ROCm/TheRock, or ``'{owner}-{repo}/'``
         - bucket: S3 bucket name
     """
-    if bucket_schema is None:
-        bucket_schema = DEFAULT_BUCKET_SCHEMA
+    if storage_config is not None:
+        bucket_schema = storage_config.bucket_schema
+    else:
+        bucket_schema = "therock-{release_type}-artifacts"
     _log("Retrieving bucket info...")
 
     if github_repository:
