@@ -226,7 +226,6 @@ jobs:
           touch ${{ github.workspace }}/output/build/logs/sccache_error.log || echo "log file creation failed."
           touch ${{ github.workspace }}/sccache.conf || echo "sccache.conf creation failed" || \
             mkdir ${{ github.workspace }} && touch ${{ github.workspace }}/sccache.conf || true
-          sccache --stop-server || echo "server stop failed." && exit 3
           sccache --start-server || echo "server start failed" && exit 3
 
       - name: Install the AWS tool
