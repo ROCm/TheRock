@@ -26,13 +26,17 @@ Typical usage for the current shell (will set the CCACHE_CONFIGPATH var):
 
 import argparse
 from pathlib import Path
+import platform
 import sys
 import subprocess
 
 THIS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent
+IS_WINDOWS = platform.system() == "Windows"
 POSIX_CCACHE_COMPILER_CHECK_PATH = THIS_DIR / "posix_ccache_compiler_check.py"
-POSIX_COMPILER_CHECK_SCRIPT = POSIX_CCACHE_COMPILER_CHECK_PATH.read_text()
+POSIX_COMPILER_CHECK_SCRIPT = (
+    POSIX_CCACHE_COMPILER_CHECK_PATH.read_text() if not IS_WINDOWS else None
+)
 CACHE_SRV_DEV = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
 CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
 
@@ -87,11 +91,14 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
         local_path.mkdir(parents=True, exist_ok=True)
         lines.append(f"cache_dir = {local_path}")
 
-    # Compiler check.
-    lines.append(
-        f"compiler_check = {sys.executable} {compiler_check_file} "
-        f"{dir / 'compiler_check_cache'} %compiler%"
-    )
+    # Compiler check: on POSIX we use a custom script that fingerprints the
+    # compiler binary and its shared libraries via ldd + sha256sum. On Windows
+    # (MSVC) those tools don't exist; ccache's default mtime check works well.
+    if not IS_WINDOWS:
+        lines.append(
+            f"compiler_check = {sys.executable} {compiler_check_file} "
+            f"{dir / 'compiler_check_cache'} %compiler%"
+        )
 
     # Slop settings.
     # Creating a hard link to a file increasing the link count, which triggers
@@ -115,12 +122,12 @@ def run(args: argparse.Namespace):
     compiler_check_file = dir / "compiler_check.py"
 
     config_contents = gen_config(dir, compiler_check_file, args)
-    compiler_check_script = POSIX_COMPILER_CHECK_SCRIPT
     if args.init or not config_file.exists():
         print(f"Initializing ccache dir: {dir}", file=sys.stderr)
         dir.mkdir(parents=True, exist_ok=True)
         config_file.write_text(config_contents)
-        compiler_check_file.write_text(compiler_check_script)
+        if not IS_WINDOWS:
+            compiler_check_file.write_text(POSIX_COMPILER_CHECK_SCRIPT)
 
     else:
         # Check to see if updated.
@@ -129,9 +136,9 @@ def run(args: argparse.Namespace):
                 f"NOTE: {config_file} does not match expected. Run with --init to regenerate",
                 file=sys.stderr,
             )
-        if (
+        if not IS_WINDOWS and (
             not compiler_check_file.exists()
-            or compiler_check_file.read_text() != compiler_check_script
+            or compiler_check_file.read_text() != POSIX_COMPILER_CHECK_SCRIPT
         ):
             print(
                 f"NOTE: {compiler_check_file} does not match expected. Run with --init to regenerate it",
@@ -153,7 +160,10 @@ def run(args: argparse.Namespace):
                 file=sys.stderr,
             )
     # Output options.
-    print(f"export CCACHE_CONFIGPATH={config_file}")
+    if IS_WINDOWS:
+        print(f"set CCACHE_CONFIGPATH={config_file}")
+    else:
+        print(f"export CCACHE_CONFIGPATH={config_file}")
 
 
 def main(argv: list[str]):

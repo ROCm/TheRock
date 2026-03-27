@@ -8,9 +8,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-zlib-sources
       SOURCE_DIR "${_source_dir}"
-      # Originally mirrored from: "https://www.zlib.net/zlib-1.3.1.tar.gz"
-      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/zlib-1.3.1.tar.gz"
-      URL_HASH "SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+      # Originally mirrored from: "https://www.zlib.net/zlib-1.3.2.tar.gz"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/zlib-1.3.2.tar.gz"
+      URL_HASH "SHA256=bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
       TOUCH "${_download_stamp}"
     )
 
@@ -53,7 +53,7 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(
   ZLIB_BUILD
-  VERSION 1.3.1
+  VERSION 1.3.2
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
@@ -93,6 +93,11 @@ add_custom_target(
       "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
+      # Force lib/ to match the hardcoded paths throughout this file.
+      -DCMAKE_INSTALL_LIBDIR=lib
+      # On Windows we only use the static library; skip the shared build
+      # to avoid having to track the DLL alongside the static artifact.
+      "$<$<BOOL:${WIN32}>:-DZLIB_BUILD_SHARED=OFF>"
       # Disable writing pc files: we will do so ourselves.
       -DSKIP_INSTALL_FILES=ON
 
@@ -115,7 +120,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(ZLIB_IMPORTED_LOCATION "lib/librocm_sysdeps_z.so.1")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(ZLIB_TYPE "STATIC")
-  set(ZLIB_IMPORTED_LOCATION "lib/zlibstatic.lib")
+  # zlib 1.3.2 appends suffix "s" to the static lib name on Windows.
+  set(ZLIB_IMPORTED_LOCATION "lib/zs.lib")
 else()
   message(FATAL_ERROR "Unrecognized system type")
 endif()
