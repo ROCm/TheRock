@@ -212,14 +212,6 @@ jobs:
         run: |
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
-
-      #Set up ccache with a custom configuration.
-      - name: Setup sccache
-        run: |
-          echo ${{ github.workspace }}
-          pwd || true
-          sccache --start-server || echo "server start failed" && exit 3
-
       - name: Install the AWS tool
         run: ./dockerfiles/install_awscli.sh
 
@@ -229,6 +221,13 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
+
+      #Set up ccache with a custom configuration.
+      - name: Setup sccache
+        run: |
+          echo ${{ github.workspace }}
+          pwd || true
+          sccache --start-server || echo "server start failed" && exit 3
       - name: Runner health status
         run: |
           ./build_tools/health_status.py
