@@ -91,6 +91,18 @@ class TestGetDirPrefix(unittest.TestCase):
         )
         self.assertIsNone(result)
 
+    def test_therock_build_prof_returns_none(self):
+        result = s3_index_handler._get_dir_prefix(
+            "12345678901-linux/logs/gfx120X-all/therock-build-prof/profile.json"
+        )
+        self.assertIsNone(result)
+
+    def test_therock_build_prof_external_returns_none(self):
+        result = s3_index_handler._get_dir_prefix(
+            "ROCm-TheRock/12345678901-linux/logs/gfx120X-all/therock-build-prof/profile.json"
+        )
+        self.assertIsNone(result)
+
     def test_deeply_nested_file_indexes_immediate_parent(self):
         """A deeply nested file indexes its own directory, not a higher level."""
         result = s3_index_handler._get_dir_prefix(

@@ -106,7 +106,9 @@ def _get_dir_prefix(key: str) -> str | None:
 
 # Subdirectory names (directly under the run prefix) that should never be
 # indexed. These directories are excluded regardless of bucket.
-_EXCLUDED_SUBDIRS: frozenset[str] = frozenset({"python"})
+# - python: wheel files; too many to list usefully
+# - therock-build-prof: profiling data; 65k+ files per run, unusable as index
+_EXCLUDED_SUBDIRS: frozenset[str] = frozenset({"python", "therock-build-prof"})
 
 # Number of path segments in the run prefix for each bucket. The ancestor
 # walk stops at this depth so the run root is not re-indexed from deep
