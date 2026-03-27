@@ -71,8 +71,7 @@ jobs:
     env:
       BUILD_DIR: B:\build
       CACHE_DIR: "${{github.workspace}}/.cache"
-      CCACHE_DIR: "${{github.workspace}}/.cache/ccache"
-      CCACHE_MAXSIZE: "4000M"
+      CCACHE_CONFIGPATH: "${{github.workspace}}/.ccache/ccache.conf"
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
@@ -113,18 +112,14 @@ jobs:
 
       - name: Runner health status
         run: |
-          ccache --zero-stats
           python ./build_tools/health_status.py
 
-      # TODO: We shouldn't be using a cache on actual release branches, but it
-      # really helps for iteration time.
-      - name: Enable cache
-        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-build-packages-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
-          restore-keys: |
-            windows-build-packages-v4-${{ inputs.amdgpu_families }}-
+      - name: Setup ccache
+        run: |
+          python ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-presubmit" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
 
       - name: Fetch sources
         timeout-minutes: 30
@@ -141,8 +136,6 @@ jobs:
           package_version: ${{ inputs.package_version }}
           extra_cmake_options: ${{ inputs.extra_cmake_options }}
         run: |
-          # clear cache before build and after download
-          ccache -z
           python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-archives and therock-dist
@@ -166,7 +159,7 @@ jobs:
             du -h -d 1 "${{ env.BUILD_DIR }}"/artifacts
             echo "CCache Stats:"
             echo "-------------"
-            ccache -s
+            ccache -s -v
           else
             echo "[ERROR] Build directory ${{ env.BUILD_DIR }} does not exist. Skipping report!"
             echo "        This should only happen if the CI is cancelled before the build step."
@@ -200,10 +193,3 @@ jobs:
             --artifact-group ${{ inputs.artifact_group }} \
             --build-dir ${{ env.BUILD_DIR }} \
             --upload
-
-      - name: Save cache
-        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        if: ${{ !cancelled() }}
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-build-packages-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}

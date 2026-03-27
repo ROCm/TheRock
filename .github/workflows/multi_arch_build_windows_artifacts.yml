@@ -61,6 +61,8 @@ jobs:
       STAGE_NAME: ${{ inputs.stage_name }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
       BUILD_DIR: B:\build
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      CACHE_DIR: ${{ github.workspace }}/.cache
       TEATIME_FORCE_INTERACTIVE: 0
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
@@ -79,6 +81,7 @@ jobs:
         run: |
           choco source disable -n=chocolatey
           choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
+          choco install --no-progress -y ccache
           # ninja pinned due to a bug in the 1.13.0 release:
           # https://github.com/ninja-build/ninja/issues/2616
           choco install --no-progress -y ninja --version 1.12.1
@@ -103,6 +106,13 @@ jobs:
       - name: Runner health status
         run: |
           python build_tools/health_status.py
+
+      - name: Setup ccache
+        run: |
+          python ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-presubmit" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
 
       # Note: no AWS credentials should be needed here since our CI buckets
       # all currently have public read access.
@@ -137,6 +147,8 @@ jobs:
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             --preset=${{ inputs.build_variant_cmake_preset }} \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
@@ -147,6 +159,8 @@ jobs:
       - name: Report
         if: ${{ !cancelled() }}
         run: |
+          echo "CCache Stats:"
+          ccache -s -v
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
