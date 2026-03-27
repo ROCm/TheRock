@@ -163,7 +163,7 @@ def _list_files_s3(s3_client, bucket: str, dir_prefix: str) -> list[_FileEntry]:
         for cp in page.get("CommonPrefixes", []):
             name = cp["Prefix"][len(prefix):]  # e.g. "gfx94X/"
             entries.append(
-                _FileEntry(name=name, href=name, size_bytes=-1, last_modified=None)
+                _FileEntry(name=name, href=name + "index.html", size_bytes=-1, last_modified=None)
             )
         for obj in page.get("Contents", []):
             key = obj["Key"]
@@ -217,7 +217,7 @@ def _list_files_local(staging_dir: Path, dir_prefix: str) -> list[_FileEntry]:
     for p in sorted(root.iterdir()):
         if p.is_dir():
             entries.append(
-                _FileEntry(name=p.name + "/", href=p.name + "/", size_bytes=-1, last_modified=None)
+                _FileEntry(name=p.name + "/", href=p.name + "/index.html", size_bytes=-1, last_modified=None)
             )
         elif p.is_file() and p.name != "index.html":
             stat = p.stat()
@@ -288,7 +288,7 @@ def generate_index_for_directory(
         entries = _list_files_s3(s3_client, bucket, dir_prefix)
 
     title = dir_prefix.rsplit("/", 1)[-1]
-    html = _generate_index_html(title=title, entries=entries, parent_href="../")
+    html = _generate_index_html(title=title, entries=entries, parent_href="../index.html")
     dest = StorageLocation(bucket=bucket, relative_path=f"{dir_prefix}/index.html")
     log(
         f"[INFO] Uploading index ({len(entries)} files) → "
