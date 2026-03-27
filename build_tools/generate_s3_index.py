@@ -244,14 +244,14 @@ def _discover_dirs_with_files_local(staging_dir: Path, run_prefix: str) -> list[
 # ---------------------------------------------------------------------------
 
 
-def _upload_html(html: str, dest: StorageLocation, backend: StorageBackend, dry_run: bool) -> None:
+def _upload_html(html_content: str, dest: StorageLocation, backend: StorageBackend, dry_run: bool) -> None:
     """Write html to a temp file and upload it to dest."""
     if dry_run:
         return
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".html", encoding="utf-8", delete=False
     ) as tmp:
-        tmp.write(html)
+        tmp.write(html_content)
         tmp_path = Path(tmp.name)
     try:
         backend.upload_file(tmp_path, dest)
@@ -267,6 +267,7 @@ def generate_index_for_directory(
     s3_client=None,
     staging_dir: Path | None = None,
     dry_run: bool = False,
+    parent_href: str | None = "../index.html",
 ) -> None:
     """Generate and upload index.html listing all files under dir_prefix.
 
@@ -277,6 +278,8 @@ def generate_index_for_directory(
         s3_client: Boto3 S3 client (required when staging_dir is None).
         staging_dir: Local staging directory root (used instead of S3 for local testing).
         dry_run: If True, log what would be uploaded without actually uploading.
+        parent_href: href for the parent directory link, or None to omit it (e.g.
+            when dir_prefix is the run root and has no indexed parent).
     """
     if staging_dir is not None:
         entries = _list_files_local(staging_dir, dir_prefix)
@@ -284,13 +287,13 @@ def generate_index_for_directory(
         entries = _list_files_s3(s3_client, bucket, dir_prefix)
 
     title = dir_prefix.rsplit("/", 1)[-1]
-    html = _generate_index_html(title=title, entries=entries, parent_href="../index.html")
+    html_content = _generate_index_html(title=title, entries=entries, parent_href=parent_href)
     dest = StorageLocation(bucket=bucket, relative_path=f"{dir_prefix}/index.html")
     log(
         f"[INFO] Uploading index ({len(entries)} files) → "
         f"{dest.s3_uri if staging_dir is None else dest.relative_path}"
     )
-    _upload_html(html, dest, backend, dry_run)
+    _upload_html(html_content, dest, backend, dry_run)
 
 
 def run(args) -> None:
@@ -332,6 +335,7 @@ def run(args) -> None:
             s3_client=s3_client,
             staging_dir=staging_dir,
             dry_run=args.dry_run,
+            parent_href=None if dir_prefix == prefix else "../index.html",
         )
 
     log("\n[INFO] Done.")
