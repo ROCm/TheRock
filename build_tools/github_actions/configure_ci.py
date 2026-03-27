@@ -782,7 +782,12 @@ def main(base_args, linux_families, windows_families):
 
         run_id = os.environ.get("GITHUB_RUN_ID", "")
         if run_id:
-            summary_lines = ["## Build outputs"]
+            summary_lines = [
+                "## Build outputs",
+                "",
+                "Platform | 📋 Logs | 📦 Artifacts",
+                "-- | -- | --",
+            ]
             for platform_name in ["linux", "windows"]:
                 root = WorkflowOutputRoot.from_workflow_run(
                     run_id=run_id, platform=platform_name
@@ -790,8 +795,7 @@ def main(base_args, linux_families, windows_families):
                 log_url = root.root_log_index().https_url
                 artifact_url = root.root_index().https_url
                 summary_lines.append(
-                    f"* {platform_name.capitalize()}: "
-                    f"[Logs]({log_url}) · [Artifacts]({artifact_url})"
+                    f"{platform_name.capitalize()} | {log_url} | {artifact_url}"
                 )
             gha_append_step_summary("\n".join(summary_lines))
 
