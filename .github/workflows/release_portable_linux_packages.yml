@@ -221,8 +221,7 @@ jobs:
           # CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
         run: |
           echo ${{ github.workspace }}
-          ls -lartR ${{ github.workspace }}
-          pwd
+          pwd || true
           sccache --start-server || echo "server start failed" && exit 3
 
       - name: Install the AWS tool
