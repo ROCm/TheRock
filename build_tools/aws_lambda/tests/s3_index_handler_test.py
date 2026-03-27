@@ -79,6 +79,18 @@ class TestGetDirPrefix(unittest.TestCase):
         result = s3_index_handler._get_dir_prefix("standalone_file.txt")
         self.assertIsNone(result)
 
+    def test_python_dir_returns_none(self):
+        result = s3_index_handler._get_dir_prefix(
+            "12345678901-linux/python/foo-1.0-py3-none-any.whl"
+        )
+        self.assertIsNone(result)
+
+    def test_python_subdir_returns_none(self):
+        result = s3_index_handler._get_dir_prefix(
+            "ROCm-TheRock/12345678901-linux/python/subdir/foo.whl"
+        )
+        self.assertIsNone(result)
+
     def test_deeply_nested_file_indexes_immediate_parent(self):
         """A deeply nested file indexes its own directory, not a higher level."""
         result = s3_index_handler._get_dir_prefix(

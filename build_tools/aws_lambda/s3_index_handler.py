@@ -88,17 +88,25 @@ def _get_dir_prefix(key: str) -> str | None:
         "12345-linux/core_lib.tar.xz"               -> "12345-linux"
         "Fork/12345-linux/logs/gfx94X/build.log"   -> "Fork/12345-linux/logs/gfx94X"
         "12345-linux/logs/gfx94X/index.html"        -> None (skip)
+        "12345-linux/python/foo.whl"                -> None (skip)
     """
     if key.rsplit("/", 1)[-1] == "index.html":
         return None
     if "/" not in key:
         return None  # file at bucket root, nothing meaningful to index
-    return key.rsplit("/", 1)[0]
+    dir_prefix = key.rsplit("/", 1)[0]
+    if _EXCLUDED_SUBDIRS.intersection(dir_prefix.split("/")):
+        return None
+    return dir_prefix
 
 
 # ---------------------------------------------------------------------------
 # Per-bucket configuration
 # ---------------------------------------------------------------------------
+
+# Subdirectory names (directly under the run prefix) that should never be
+# indexed. These directories are excluded regardless of bucket.
+_EXCLUDED_SUBDIRS: frozenset[str] = frozenset({"python"})
 
 # Number of path segments in the run prefix for each bucket. The ancestor
 # walk stops at this depth so the run root is not re-indexed from deep
