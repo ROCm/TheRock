@@ -777,7 +777,9 @@ def main(base_args, linux_families, windows_families):
     # These are posted early (before builds complete) so they appear at the top
     # of the job summary. The server-side Lambda generates the index pages as
     # logs and artifacts flow in.
+    # TODO(#3399): move multi-arch CI configuration to its own script
     if multi_arch and enable_build_jobs:
+        # Lazy import since multi-arch CI configuration will move soon
         from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
         run_id = os.environ.get("GITHUB_RUN_ID", "")
