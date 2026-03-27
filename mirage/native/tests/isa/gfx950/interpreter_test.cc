@@ -13929,6 +13929,150 @@ int main() {
   }
 
   {
+  const std::vector<DecodedInstruction> scalar_cache_maintenance_program = {
+      DecodedInstruction::Nullary("S_ICACHE_INV"),
+      DecodedInstruction::Nullary("S_DCACHE_INV"),
+      DecodedInstruction::Nullary("S_DCACHE_WB"),
+      DecodedInstruction::Nullary("S_DCACHE_INV_VOL"),
+      DecodedInstruction::Nullary("S_DCACHE_WB_VOL"),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  const auto make_scalar_cache_maintenance_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b0101ULL;
+    state.sgprs[0] = 0x13572468u;
+    state.sgprs[1] = 0x89abcdefu;
+    state.sgprs[2] = 0x2468ace0u;
+    state.sgprs[3] = 0x0badc0deu;
+    state.sgprs[8] = 0x11111111u;
+    state.sgprs[9] = 0x22222222u;
+    state.sgprs[20] = 0x33333333u;
+    state.sgprs[21] = 0x44444444u;
+    state.vgprs[12][0] = 0x01020304u;
+    state.vgprs[12][1] = 0x11121314u;
+    state.vgprs[12][2] = 0x21222324u;
+    state.vgprs[12][3] = 0x31323334u;
+    state.vgprs[18][0] = 0xaaaa0001u;
+    state.vgprs[18][1] = 0xbbbb0002u;
+    state.vgprs[18][2] = 0xcccc0003u;
+    state.vgprs[18][3] = 0xdddd0004u;
+    return state;
+  };
+  const auto make_scalar_cache_maintenance_memory = []() {
+    LinearExecutionMemory memory(0x140, 0);
+    memory.WriteU32(0x00u, 0xdeadbeefu);
+    memory.WriteU32(0x20u, 0x11223344u);
+    memory.WriteU32(0x80u, 0x55667788u);
+    memory.WriteU32(0x100u, 0x99aabbccu);
+    return memory;
+  };
+  const auto validate_scalar_cache_maintenance_state =
+      [&](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+          const char* mode) {
+        std::uint32_t value = 0;
+        return Expect(state.halted,
+                      (std::string(mode) +
+                       " scalar cache maintenance program to halt")
+                          .c_str()) &&
+               Expect(state.exec_mask == 0b0101ULL,
+                      (std::string(mode) +
+                       " scalar cache maintenance to preserve exec")
+                          .c_str()) &&
+               Expect(state.sgprs[0] == 0x13572468u &&
+                          state.sgprs[1] == 0x89abcdefu &&
+                          state.sgprs[2] == 0x2468ace0u &&
+                          state.sgprs[3] == 0x0badc0deu &&
+                          state.sgprs[8] == 0x11111111u &&
+                          state.sgprs[9] == 0x22222222u &&
+                          state.sgprs[20] == 0x33333333u &&
+                          state.sgprs[21] == 0x44444444u,
+                      (std::string(mode) +
+                       " scalar cache maintenance to preserve sgprs")
+                          .c_str()) &&
+               Expect(state.vgprs[12][0] == 0x01020304u &&
+                          state.vgprs[12][1] == 0x11121314u &&
+                          state.vgprs[12][2] == 0x21222324u &&
+                          state.vgprs[12][3] == 0x31323334u &&
+                          state.vgprs[18][0] == 0xaaaa0001u &&
+                          state.vgprs[18][1] == 0xbbbb0002u &&
+                          state.vgprs[18][2] == 0xcccc0003u &&
+                          state.vgprs[18][3] == 0xdddd0004u,
+                      (std::string(mode) +
+                       " scalar cache maintenance to preserve vgprs")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x00u, &value),
+                      (std::string(mode) +
+                       " scalar cache maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0xdeadbeefu,
+                      (std::string(mode) +
+                       " scalar cache maintenance memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x20u, &value),
+                      (std::string(mode) +
+                       " scalar cache maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x11223344u,
+                      (std::string(mode) +
+                       " scalar cache maintenance memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x80u, &value),
+                      (std::string(mode) +
+                       " scalar cache maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x55667788u,
+                      (std::string(mode) +
+                       " scalar cache maintenance memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x100u, &value),
+                      (std::string(mode) +
+                       " scalar cache maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x99aabbccu,
+                      (std::string(mode) +
+                       " scalar cache maintenance memory preserved")
+                          .c_str());
+      };
+
+  LinearExecutionMemory decoded_scalar_cache_maintenance_memory =
+      make_scalar_cache_maintenance_memory();
+  WaveExecutionState decoded_scalar_cache_maintenance_state =
+      make_scalar_cache_maintenance_state();
+  if (!Expect(interpreter.ExecuteProgram(scalar_cache_maintenance_program,
+                                         &decoded_scalar_cache_maintenance_state,
+                                         &decoded_scalar_cache_maintenance_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_scalar_cache_maintenance_state(
+          decoded_scalar_cache_maintenance_state,
+          decoded_scalar_cache_maintenance_memory, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_scalar_cache_maintenance_program;
+  if (!Expect(interpreter.CompileProgram(scalar_cache_maintenance_program,
+                                         &compiled_scalar_cache_maintenance_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_scalar_cache_maintenance_memory =
+      make_scalar_cache_maintenance_memory();
+  WaveExecutionState compiled_scalar_cache_maintenance_state =
+      make_scalar_cache_maintenance_state();
+  if (!Expect(interpreter.ExecuteProgram(
+                   compiled_scalar_cache_maintenance_program,
+                   &compiled_scalar_cache_maintenance_state,
+                   &compiled_scalar_cache_maintenance_memory, &error_message),
+              error_message.c_str()) ||
+      !validate_scalar_cache_maintenance_state(
+          compiled_scalar_cache_maintenance_state,
+          compiled_scalar_cache_maintenance_memory, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
   const std::vector<DecodedInstruction> buffer_maintenance_program = {
       DecodedInstruction::Nullary("BUFFER_WBL2"),
       DecodedInstruction::Nullary("BUFFER_INV"),
