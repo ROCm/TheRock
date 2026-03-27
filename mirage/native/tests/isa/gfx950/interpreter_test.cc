@@ -14226,6 +14226,163 @@ int main() {
   }
 
   {
+  const std::vector<DecodedInstruction> maintenance_sweep_program = {
+      DecodedInstruction::Nullary("S_DCACHE_WB"),
+      DecodedInstruction::Nullary("BUFFER_WBL2"),
+      DecodedInstruction::Nullary("S_ICACHE_INV"),
+      DecodedInstruction::Nullary("BUFFER_INV"),
+      DecodedInstruction::Nullary("S_DCACHE_INV_VOL"),
+      DecodedInstruction::Nullary("S_DCACHE_WB_VOL"),
+      DecodedInstruction::Nullary("S_DCACHE_INV"),
+      DecodedInstruction::Nullary("BUFFER_WBL2"),
+      DecodedInstruction::Nullary("BUFFER_INV"),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  const auto make_maintenance_sweep_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b0111ULL;
+    state.sgprs[0] = 0x00112233u;
+    state.sgprs[1] = 0x44556677u;
+    state.sgprs[2] = 0x8899aabbu;
+    state.sgprs[3] = 0xccddeeffu;
+    state.sgprs[14] = 0x13572468u;
+    state.sgprs[15] = 0x24681357u;
+    state.sgprs[30] = 0x89abcdefu;
+    state.sgprs[31] = 0xfedcba98u;
+    state.vgprs[4][0] = 0x11110000u;
+    state.vgprs[4][1] = 0x22220000u;
+    state.vgprs[4][2] = 0x33330000u;
+    state.vgprs[4][3] = 0x44440000u;
+    state.vgprs[15][0] = 0xabcdef01u;
+    state.vgprs[15][1] = 0xbcdef012u;
+    state.vgprs[15][2] = 0xcdef0123u;
+    state.vgprs[15][3] = 0xdef01234u;
+    return state;
+  };
+  const auto make_maintenance_sweep_memory = []() {
+    LinearExecutionMemory memory(0x1c0, 0);
+    memory.WriteU32(0x00u, 0xdeadbeefu);
+    memory.WriteU32(0x40u, 0x10203040u);
+    memory.WriteU32(0x80u, 0x55667788u);
+    memory.WriteU32(0xc0u, 0x99aabbccu);
+    memory.WriteU32(0x100u, 0xddeeff00u);
+    memory.WriteU32(0x140u, 0x12345678u);
+    memory.WriteU32(0x180u, 0x89abcdefu);
+    return memory;
+  };
+  const auto validate_maintenance_sweep_state =
+      [&](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+          const char* mode) {
+        std::uint32_t value = 0;
+        return Expect(state.halted,
+                      (std::string(mode) + " maintenance sweep program to halt")
+                          .c_str()) &&
+               Expect(state.exec_mask == 0b0111ULL,
+                      (std::string(mode) + " maintenance sweep to preserve exec")
+                          .c_str()) &&
+               Expect(state.sgprs[0] == 0x00112233u &&
+                          state.sgprs[1] == 0x44556677u &&
+                          state.sgprs[2] == 0x8899aabbu &&
+                          state.sgprs[3] == 0xccddeeffu &&
+                          state.sgprs[14] == 0x13572468u &&
+                          state.sgprs[15] == 0x24681357u &&
+                          state.sgprs[30] == 0x89abcdefu &&
+                          state.sgprs[31] == 0xfedcba98u,
+                      (std::string(mode) + " maintenance sweep to preserve sgprs")
+                          .c_str()) &&
+               Expect(state.vgprs[4][0] == 0x11110000u &&
+                          state.vgprs[4][1] == 0x22220000u &&
+                          state.vgprs[4][2] == 0x33330000u &&
+                          state.vgprs[4][3] == 0x44440000u &&
+                          state.vgprs[15][0] == 0xabcdef01u &&
+                          state.vgprs[15][1] == 0xbcdef012u &&
+                          state.vgprs[15][2] == 0xcdef0123u &&
+                          state.vgprs[15][3] == 0xdef01234u,
+                      (std::string(mode) + " maintenance sweep to preserve vgprs")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x00u, &value),
+                      (std::string(mode) + " maintenance sweep memory read")
+                          .c_str()) &&
+               Expect(value == 0xdeadbeefu,
+                      (std::string(mode) + " maintenance sweep memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x40u, &value),
+                      (std::string(mode) + " maintenance sweep memory read")
+                          .c_str()) &&
+               Expect(value == 0x10203040u,
+                      (std::string(mode) + " maintenance sweep memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x80u, &value),
+                      (std::string(mode) + " maintenance sweep memory read")
+                          .c_str()) &&
+               Expect(value == 0x55667788u,
+                      (std::string(mode) + " maintenance sweep memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0xc0u, &value),
+                      (std::string(mode) + " maintenance sweep memory read")
+                          .c_str()) &&
+               Expect(value == 0x99aabbccu,
+                      (std::string(mode) + " maintenance sweep memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x100u, &value),
+                      (std::string(mode) + " maintenance sweep memory read")
+                          .c_str()) &&
+               Expect(value == 0xddeeff00u,
+                      (std::string(mode) + " maintenance sweep memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x140u, &value),
+                      (std::string(mode) + " maintenance sweep memory read")
+                          .c_str()) &&
+               Expect(value == 0x12345678u,
+                      (std::string(mode) + " maintenance sweep memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x180u, &value),
+                      (std::string(mode) + " maintenance sweep memory read")
+                          .c_str()) &&
+               Expect(value == 0x89abcdefu,
+                      (std::string(mode) + " maintenance sweep memory preserved")
+                          .c_str());
+      };
+
+  LinearExecutionMemory decoded_maintenance_sweep_memory =
+      make_maintenance_sweep_memory();
+  WaveExecutionState decoded_maintenance_sweep_state =
+      make_maintenance_sweep_state();
+  if (!Expect(interpreter.ExecuteProgram(maintenance_sweep_program,
+                                         &decoded_maintenance_sweep_state,
+                                         &decoded_maintenance_sweep_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_maintenance_sweep_state(decoded_maintenance_sweep_state,
+                                        decoded_maintenance_sweep_memory,
+                                        "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_maintenance_sweep_program;
+  if (!Expect(interpreter.CompileProgram(maintenance_sweep_program,
+                                         &compiled_maintenance_sweep_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_maintenance_sweep_memory =
+      make_maintenance_sweep_memory();
+  WaveExecutionState compiled_maintenance_sweep_state =
+      make_maintenance_sweep_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_maintenance_sweep_program,
+                                         &compiled_maintenance_sweep_state,
+                                         &compiled_maintenance_sweep_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_maintenance_sweep_state(compiled_maintenance_sweep_state,
+                                        compiled_maintenance_sweep_memory,
+                                        "compiled")) {
+    return 1;
+  }
+  }
+
+  {
   const std::vector<DecodedInstruction> buffer_maintenance_program = {
       DecodedInstruction::Nullary("BUFFER_WBL2"),
       DecodedInstruction::Nullary("BUFFER_INV"),
