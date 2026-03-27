@@ -194,12 +194,24 @@ int main() {
   const auto next_risk_encodings = GetGfx1201Wave32Phase0NextRiskEncodings();
   const auto frontier_order = GetGfx1201Wave32Phase0FrontierOrder();
   const auto vds_boundary_buckets = GetGfx1201Wave32Phase0VdsBoundaryBuckets();
+  const auto vds_boundary_bucket_statuses =
+      GetGfx1201Wave32Phase0VdsBoundaryBucketStatuses();
   const auto vds_boundary_order = GetGfx1201Wave32Phase0VdsBoundaryOrder();
   const auto remaining_vds_instruction_statuses =
       GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses();
   const auto vds_next_risk_steps = GetGfx1201Wave32Phase0VdsNextRiskSteps();
   const auto first_unsafe_vds_instructions =
       GetGfx1201Wave32FirstUnsafeVdsInstructions();
+  const Gfx1201Wave32Phase0VdsBoundaryBucketStatus* append_bucket_status =
+      FindGfx1201Wave32Phase0VdsBoundaryBucketStatus("append_consume");
+  const Gfx1201Wave32Phase0VdsBoundaryBucketStatus* exchange_bucket_status =
+      FindGfx1201Wave32Phase0VdsBoundaryBucketStatus("exchange_compare_store");
+  const Gfx1201Wave32Phase0VdsBoundaryBucketStatus* multi_bucket_status =
+      FindGfx1201Wave32Phase0VdsBoundaryBucketStatus("multi_address");
+  const Gfx1201Wave32Phase0VdsBoundaryBucketStatus* bvh_bucket_status =
+      FindGfx1201Wave32Phase0VdsBoundaryBucketStatus("bvh_stack");
+  const Gfx1201Wave32Phase0VdsBoundaryBucketStatus* missing_bucket_status =
+      FindGfx1201Wave32Phase0VdsBoundaryBucketStatus("not_a_bucket");
   const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* append_status =
       FindGfx1201Wave32Phase0RemainingVdsInstructionStatus("DS_APPEND");
   const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus* consume_opcode_status =
@@ -243,6 +255,8 @@ int main() {
               "expected frontier order count") ||
       !Expect(vds_boundary_buckets.size() == 4u,
               "expected four VDS boundary buckets") ||
+      !Expect(vds_boundary_bucket_statuses.size() == 4u,
+              "expected four VDS boundary bucket statuses") ||
       !Expect(vds_boundary_order.size() == kExpectedVdsBoundaryOrder.size(),
               "expected VDS boundary order count") ||
       !Expect(remaining_vds_instruction_statuses.size() == 24u,
@@ -261,6 +275,11 @@ int main() {
       !Expect(GetGfx1201Wave32FirstUnsafeVdsBlockingDimension() ==
                   "allocator_or_gds_semantics",
               "expected append/consume blocking dimension as first unsafe VDS boundary") ||
+      !Expect(append_bucket_status != nullptr && exchange_bucket_status != nullptr &&
+                  multi_bucket_status != nullptr && bvh_bucket_status != nullptr,
+              "expected VDS bucket status lookups") ||
+      !Expect(missing_bucket_status == nullptr,
+              "expected missing VDS bucket status lookup to fail") ||
       !Expect(append_status != nullptr && consume_opcode_status != nullptr &&
                   condxchg_opcode_status != nullptr &&
                   storexchg_status != nullptr && stride_status != nullptr &&
@@ -308,6 +327,99 @@ int main() {
                 "unexpected first unsafe VDS instruction order")) {
       return 1;
     }
+  }
+
+  if (!Expect(vds_boundary_bucket_statuses.front().bucket_name ==
+                  "append_consume" &&
+                  vds_boundary_bucket_statuses.front().instruction_count == 2u &&
+                  vds_boundary_bucket_statuses.front().first_opcode == 61u &&
+                  vds_boundary_bucket_statuses.front().last_opcode == 62u &&
+                  vds_boundary_bucket_statuses.front().min_operand_count == 3u &&
+                  vds_boundary_bucket_statuses.front().max_operand_count == 3u &&
+                  vds_boundary_bucket_statuses.front()
+                          .transferable_with_decoder_work_count == 2u &&
+                  vds_boundary_bucket_statuses.front()
+                          .transferable_with_decoder_and_semantic_work_count ==
+                      2u &&
+                  vds_boundary_bucket_statuses.front().gfx1201_specific_count ==
+                      0u,
+              "expected first VDS bucket status") ||
+      !Expect(vds_boundary_bucket_statuses.back().bucket_name == "bvh_stack" &&
+                  vds_boundary_bucket_statuses.back().instruction_count == 3u &&
+                  vds_boundary_bucket_statuses.back().first_opcode == 224u &&
+                  vds_boundary_bucket_statuses.back().last_opcode == 226u &&
+                  vds_boundary_bucket_statuses.back().min_operand_count == 4u &&
+                  vds_boundary_bucket_statuses.back().max_operand_count == 4u &&
+                  vds_boundary_bucket_statuses.back()
+                          .transferable_with_decoder_work_count == 0u &&
+                  vds_boundary_bucket_statuses.back()
+                          .transferable_with_decoder_and_semantic_work_count ==
+                      0u &&
+                  vds_boundary_bucket_statuses.back().gfx1201_specific_count ==
+                      3u,
+              "expected last VDS bucket status") ||
+      !Expect(append_bucket_status->blocking_dimension ==
+                      "allocator_or_gds_semantics" &&
+                  append_bucket_status->risk_rank == 0u &&
+                  append_bucket_status->instruction_count == 2u &&
+                  append_bucket_status->first_opcode == 61u &&
+                  append_bucket_status->last_opcode == 62u &&
+                  append_bucket_status->min_operand_count == 3u &&
+                  append_bucket_status->max_operand_count == 3u &&
+                  append_bucket_status->transferable_with_decoder_work_count ==
+                      2u &&
+                  append_bucket_status
+                          ->transferable_with_decoder_and_semantic_work_count ==
+                      2u &&
+                  append_bucket_status->gfx1201_specific_count == 0u &&
+                  !append_bucket_status->safe_under_current_request,
+              "expected append bucket summary status") ||
+      !Expect(exchange_bucket_status->blocking_dimension ==
+                      "exchange_compare_store_semantics" &&
+                  exchange_bucket_status->risk_rank == 1u &&
+                  exchange_bucket_status->instruction_count == 7u &&
+                  exchange_bucket_status->first_opcode == 16u &&
+                  exchange_bucket_status->last_opcode == 126u &&
+                  exchange_bucket_status->min_operand_count == 5u &&
+                  exchange_bucket_status->max_operand_count == 6u &&
+                  exchange_bucket_status
+                          ->transferable_with_decoder_work_count == 1u &&
+                  exchange_bucket_status
+                          ->transferable_with_decoder_and_semantic_work_count ==
+                      1u &&
+                  exchange_bucket_status->gfx1201_specific_count == 6u,
+              "expected exchange bucket summary status") ||
+      !Expect(multi_bucket_status->blocking_dimension ==
+                      "multi_address_semantics" &&
+                  multi_bucket_status->risk_rank == 2u &&
+                  multi_bucket_status->instruction_count == 12u &&
+                  multi_bucket_status->first_opcode == 14u &&
+                  multi_bucket_status->last_opcode == 120u &&
+                  multi_bucket_status->min_operand_count == 3u &&
+                  multi_bucket_status->max_operand_count == 6u &&
+                  multi_bucket_status->transferable_with_decoder_work_count ==
+                      0u &&
+                  multi_bucket_status
+                          ->transferable_with_decoder_and_semantic_work_count ==
+                      0u &&
+                  multi_bucket_status->gfx1201_specific_count == 12u,
+              "expected multi-address bucket summary status") ||
+      !Expect(bvh_bucket_status->blocking_dimension ==
+                      "gfx1201_specific_bvh_semantics" &&
+                  bvh_bucket_status->risk_rank == 3u &&
+                  bvh_bucket_status->instruction_count == 3u &&
+                  bvh_bucket_status->first_opcode == 224u &&
+                  bvh_bucket_status->last_opcode == 226u &&
+                  bvh_bucket_status->min_operand_count == 4u &&
+                  bvh_bucket_status->max_operand_count == 4u &&
+                  bvh_bucket_status->transferable_with_decoder_work_count ==
+                      0u &&
+                  bvh_bucket_status
+                          ->transferable_with_decoder_and_semantic_work_count ==
+                      0u &&
+                  bvh_bucket_status->gfx1201_specific_count == 3u,
+              "expected BVH bucket summary status")) {
+    return 1;
   }
 
   if (!Expect(remaining_vds_instruction_statuses.front().instruction_name ==

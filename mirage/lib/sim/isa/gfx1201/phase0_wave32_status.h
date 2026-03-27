@@ -64,6 +64,21 @@ struct Gfx1201Wave32Phase0VdsBoundaryInstructionStatus {
   bool safe_under_current_request = false;
 };
 
+struct Gfx1201Wave32Phase0VdsBoundaryBucketStatus {
+  std::string_view bucket_name;
+  std::string_view blocking_dimension;
+  std::uint32_t risk_rank = 0;
+  std::uint32_t instruction_count = 0;
+  std::uint32_t first_opcode = 0;
+  std::uint32_t last_opcode = 0;
+  std::uint16_t min_operand_count = 0;
+  std::uint16_t max_operand_count = 0;
+  std::uint32_t transferable_with_decoder_work_count = 0;
+  std::uint32_t transferable_with_decoder_and_semantic_work_count = 0;
+  std::uint32_t gfx1201_specific_count = 0;
+  bool safe_under_current_request = false;
+};
+
 struct Gfx1201Wave32Phase0VdsNextRiskStep {
   std::string_view bucket_name;
   std::string_view blocking_dimension;
@@ -90,6 +105,8 @@ std::span<const std::string_view> GetGfx1201Wave32Phase0NextRiskEncodings();
 std::span<const std::string_view> GetGfx1201Wave32Phase0FrontierOrder();
 std::span<const Gfx1201Wave32Phase0VdsBoundaryBucket>
 GetGfx1201Wave32Phase0VdsBoundaryBuckets();
+std::span<const Gfx1201Wave32Phase0VdsBoundaryBucketStatus>
+GetGfx1201Wave32Phase0VdsBoundaryBucketStatuses();
 std::span<const std::string_view> GetGfx1201Wave32Phase0VdsBoundaryOrder();
 std::span<const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus>
 GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses();
@@ -97,6 +114,8 @@ std::span<const Gfx1201Wave32Phase0VdsNextRiskStep>
 GetGfx1201Wave32Phase0VdsNextRiskSteps();
 const Gfx1201Wave32Phase0VdsBoundaryBucket*
 FindGfx1201Wave32Phase0VdsBoundaryBucket(std::string_view bucket_name);
+const Gfx1201Wave32Phase0VdsBoundaryBucketStatus*
+FindGfx1201Wave32Phase0VdsBoundaryBucketStatus(std::string_view bucket_name);
 const Gfx1201Wave32Phase0VdsBoundaryBucket*
 FindGfx1201Wave32Phase0VdsBoundaryBucketForInstruction(
     std::string_view instruction_name);

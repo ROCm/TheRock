@@ -261,6 +261,76 @@ BuildRemainingVdsInstructionStatuses() {
   return statuses;
 }
 
+std::vector<Gfx1201Wave32Phase0VdsBoundaryBucketStatus>
+BuildVdsBoundaryBucketStatuses() {
+  std::vector<Gfx1201Wave32Phase0VdsBoundaryBucketStatus> statuses;
+  statuses.reserve(kVdsBoundaryBuckets.size());
+
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket : kVdsBoundaryBuckets) {
+    Gfx1201Wave32Phase0VdsBoundaryBucketStatus status{
+        bucket.bucket_name,
+        bucket.blocking_dimension,
+        bucket.risk_rank,
+        bucket.instruction_count,
+        0u,
+        0u,
+        0u,
+        0u,
+        0u,
+        0u,
+        0u,
+        bucket.safe_under_current_request,
+    };
+    bool saw_seed_entry = false;
+
+    for (std::string_view instruction_name : bucket.instruction_names) {
+      const Gfx1201DecoderSeedEntry* seed_entry = FindVdsSeedEntry(instruction_name);
+      if (seed_entry == nullptr) {
+        continue;
+      }
+
+      if (!saw_seed_entry) {
+        status.first_opcode = seed_entry->opcode;
+        status.last_opcode = seed_entry->opcode;
+        status.min_operand_count =
+            static_cast<std::uint16_t>(seed_entry->operand_count);
+        status.max_operand_count =
+            static_cast<std::uint16_t>(seed_entry->operand_count);
+        saw_seed_entry = true;
+      } else {
+        status.first_opcode = std::min(status.first_opcode, seed_entry->opcode);
+        status.last_opcode = std::max(status.last_opcode, seed_entry->opcode);
+        status.min_operand_count = std::min(
+            status.min_operand_count,
+            static_cast<std::uint16_t>(seed_entry->operand_count));
+        status.max_operand_count = std::max(
+            status.max_operand_count,
+            static_cast<std::uint16_t>(seed_entry->operand_count));
+      }
+
+      switch (seed_entry->rollup) {
+        case Gfx1201SupportRollup::kTransferableWithDecoderWork:
+          ++status.transferable_with_decoder_work_count;
+          break;
+        case Gfx1201SupportRollup::kGfx1201Specific:
+          ++status.gfx1201_specific_count;
+          break;
+        default:
+          break;
+      }
+
+      if (seed_entry->state ==
+          Gfx1201SupportState::kTransferableWithDecoderAndSemanticWork) {
+        ++status.transferable_with_decoder_and_semantic_work_count;
+      }
+    }
+
+    statuses.push_back(status);
+  }
+
+  return statuses;
+}
+
 std::vector<Gfx1201Wave32Phase0VdsNextRiskStep> BuildVdsNextRiskSteps() {
   std::vector<Gfx1201Wave32Phase0VdsNextRiskStep> steps;
   steps.reserve(kVdsBoundaryBuckets.size());
@@ -356,6 +426,13 @@ GetGfx1201Wave32Phase0VdsBoundaryBuckets() {
   return kVdsBoundaryBuckets;
 }
 
+std::span<const Gfx1201Wave32Phase0VdsBoundaryBucketStatus>
+GetGfx1201Wave32Phase0VdsBoundaryBucketStatuses() {
+  static const std::vector<Gfx1201Wave32Phase0VdsBoundaryBucketStatus>
+      kStatuses = BuildVdsBoundaryBucketStatuses();
+  return kStatuses;
+}
+
 std::span<const std::string_view> GetGfx1201Wave32Phase0VdsBoundaryOrder() {
   return kVdsBoundaryOrder;
 }
@@ -380,6 +457,17 @@ FindGfx1201Wave32Phase0VdsBoundaryBucket(std::string_view bucket_name) {
        GetGfx1201Wave32Phase0VdsBoundaryBuckets()) {
     if (bucket.bucket_name == bucket_name) {
       return &bucket;
+    }
+  }
+  return nullptr;
+}
+
+const Gfx1201Wave32Phase0VdsBoundaryBucketStatus*
+FindGfx1201Wave32Phase0VdsBoundaryBucketStatus(std::string_view bucket_name) {
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucketStatus& status :
+       GetGfx1201Wave32Phase0VdsBoundaryBucketStatuses()) {
+    if (status.bucket_name == bucket_name) {
+      return &status;
     }
   }
   return nullptr;

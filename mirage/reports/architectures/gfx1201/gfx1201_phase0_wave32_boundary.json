@@ -66,6 +66,64 @@
     "DS_APPEND",
     "DS_CONSUME"
   ],
+  "remaining_vds_bucket_statuses": [
+    {
+      "bucket_name": "append_consume",
+      "blocking_dimension": "allocator_or_gds_semantics",
+      "risk_rank": 0,
+      "instruction_count": 2,
+      "first_opcode": 61,
+      "last_opcode": 62,
+      "min_operand_count": 3,
+      "max_operand_count": 3,
+      "transferable_with_decoder_work_count": 2,
+      "transferable_with_decoder_and_semantic_work_count": 2,
+      "gfx1201_specific_count": 0,
+      "safe_under_current_request": false
+    },
+    {
+      "bucket_name": "exchange_compare_store",
+      "blocking_dimension": "exchange_compare_store_semantics",
+      "risk_rank": 1,
+      "instruction_count": 7,
+      "first_opcode": 16,
+      "last_opcode": 126,
+      "min_operand_count": 5,
+      "max_operand_count": 6,
+      "transferable_with_decoder_work_count": 1,
+      "transferable_with_decoder_and_semantic_work_count": 1,
+      "gfx1201_specific_count": 6,
+      "safe_under_current_request": false
+    },
+    {
+      "bucket_name": "multi_address",
+      "blocking_dimension": "multi_address_semantics",
+      "risk_rank": 2,
+      "instruction_count": 12,
+      "first_opcode": 14,
+      "last_opcode": 120,
+      "min_operand_count": 3,
+      "max_operand_count": 6,
+      "transferable_with_decoder_work_count": 0,
+      "transferable_with_decoder_and_semantic_work_count": 0,
+      "gfx1201_specific_count": 12,
+      "safe_under_current_request": false
+    },
+    {
+      "bucket_name": "bvh_stack",
+      "blocking_dimension": "gfx1201_specific_bvh_semantics",
+      "risk_rank": 3,
+      "instruction_count": 3,
+      "first_opcode": 224,
+      "last_opcode": 226,
+      "min_operand_count": 4,
+      "max_operand_count": 4,
+      "transferable_with_decoder_work_count": 0,
+      "transferable_with_decoder_and_semantic_work_count": 0,
+      "gfx1201_specific_count": 3,
+      "safe_under_current_request": false
+    }
+  ],
   "remaining_vds_instruction_statuses": [
     {
       "instruction_name": "DS_APPEND",

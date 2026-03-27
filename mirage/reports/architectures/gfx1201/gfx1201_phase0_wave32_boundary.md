@@ -35,6 +35,7 @@ execution path.
 - There is no safe ENC_VDS continuation under the current request boundary: every remaining bucket crosses allocator-or-GDS, exchange/compare-store, multi-address, or gfx1201-specific BVH semantics.
 - The boundary report now carries exact remaining-VDS instruction-name and numeric-opcode maps so the unresolved tail can be queried directly by either key.
 - The denormalized remaining-VDS status list now also carries exact opcode, operand-count, support-rollup, and support-state metadata for each unsafe instruction.
+- The boundary report now also carries exact per-bucket opcode spans, operand-count spans, and support-rollup composition counts for the unresolved VDS tail.
 - The exact unsafe-bucket escalation order is `append_consume`, then `exchange_compare_store`, then `multi_address`, then `bvh_stack`.
 - The boundary report now also carries an exact next-risk step chain with first and last instruction names, cumulative remaining counts, and explicit next-bucket handoff metadata for the unresolved VDS tail.
 - The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.
@@ -46,6 +47,13 @@ execution path.
 - `exchange_compare_store`: risk rank `1`, ordinal range `2..8`, `7` instructions, example `DS_CONDXCHG32_RTN_B64`, blocking dimension `exchange_compare_store_semantics`, safe under current request `false`, covering `DS_CONDXCHG32_RTN_B64`, `DS_CMPSTORE_B32`, `DS_CMPSTORE_B64`, `DS_CMPSTORE_RTN_B32`, `DS_CMPSTORE_RTN_B64`, `DS_STOREXCHG_RTN_B32`, and `DS_STOREXCHG_RTN_B64`.
 - `multi_address`: risk rank `2`, ordinal range `9..20`, `12` instructions, example `DS_LOAD_2ADDR_B32`, blocking dimension `multi_address_semantics`, safe under current request `false`, covering `DS_LOAD_2ADDR_B32`, `DS_LOAD_2ADDR_B64`, `DS_LOAD_2ADDR_STRIDE64_B32`, `DS_LOAD_2ADDR_STRIDE64_B64`, `DS_STOREXCHG_2ADDR_RTN_B32`, `DS_STOREXCHG_2ADDR_RTN_B64`, `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32`, `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64`, `DS_STORE_2ADDR_B32`, `DS_STORE_2ADDR_B64`, `DS_STORE_2ADDR_STRIDE64_B32`, and `DS_STORE_2ADDR_STRIDE64_B64`.
 - `bvh_stack`: risk rank `3`, ordinal range `21..23`, `3` instructions, example `DS_BVH_STACK_PUSH4_POP1_RTN_B32`, blocking dimension `gfx1201_specific_bvh_semantics`, safe under current request `false`, covering `DS_BVH_STACK_PUSH4_POP1_RTN_B32`, `DS_BVH_STACK_PUSH8_POP1_RTN_B32`, and `DS_BVH_STACK_PUSH8_POP2_RTN_B64`.
+
+## Remaining VDS Bucket Statuses
+
+- `append_consume`: opcode span `61..62`, operand-count span `3..3`, decoder-rollup `2`, decoder+semantic state `2`, gfx1201-specific `0`
+- `exchange_compare_store`: opcode span `16..126`, operand-count span `5..6`, decoder-rollup `1`, decoder+semantic state `1`, gfx1201-specific `6`
+- `multi_address`: opcode span `14..120`, operand-count span `3..6`, decoder-rollup `0`, decoder+semantic rollup `0`, gfx1201-specific `12`
+- `bvh_stack`: opcode span `224..226`, operand-count span `4..4`, decoder-rollup `0`, decoder+semantic rollup `0`, gfx1201-specific `3`
 
 ## Remaining VDS Next-Risk Chain
 
