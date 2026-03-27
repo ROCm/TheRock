@@ -845,9 +845,9 @@ def run(args: argparse.Namespace):
 
             pkg_info = get_package_info(pkg_name)
             # Check the package is marked as gfxarch package OR meta package
-            if is_gfxarch_package(
-                pkg_info, config.enable_kpack
-            ) or is_meta_package(pkg_info):
+            if is_gfxarch_package(pkg_info, config.enable_kpack) or is_meta_package(
+                pkg_info
+            ):
                 # Use all gfxarch values
                 loop_list = gfxarch_list + [default_gfx_arch]
             else:

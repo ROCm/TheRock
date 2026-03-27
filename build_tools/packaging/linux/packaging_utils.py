@@ -651,10 +651,7 @@ def filter_components_fromartifactory(
     if enable_kpack:
         dir_suffix = (
             gfx_arch
-            if (
-                is_gfxarch_package(pkg_info, enable_kpack)
-                and gfx_arch != GFX_GENERIC
-            )
+            if (is_gfxarch_package(pkg_info, enable_kpack) and gfx_arch != GFX_GENERIC)
             else "generic"
         )
     else:
@@ -880,9 +877,7 @@ def get_dependency_list_for_multiarch(pkg_info, dep_key, config: PackageConfig):
         return [
             dep
             for dep in dep_list
-            if not is_gfxarch_package(
-                get_package_info(dep) or {}, config.enable_kpack
-            )
+            if not is_gfxarch_package(get_package_info(dep) or {}, config.enable_kpack)
         ]
     elif config.enable_kpack and config.gfx_arch != GFX_GENERIC:
         # Gfx-specific package in multi-arch mode:

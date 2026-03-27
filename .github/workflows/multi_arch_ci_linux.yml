@@ -83,8 +83,8 @@ jobs:
             --source-run-id=${{ inputs.baseline_run_id }} \
             --stage="${{ inputs.prebuilt_stages }}" \
             --amdgpu-families="${{ inputs.dist_amdgpu_families }}"
-  
-   build_multi_arch_stages:
+
+  build_multi_arch_stages:
     name: Build Multi-Arch Stages
     needs: copy_prebuilt_stages
     if: ${{ !cancelled() && !failure() }}
