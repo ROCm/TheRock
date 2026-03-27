@@ -782,6 +782,7 @@ def main(base_args, linux_families, windows_families):
     # TODO(#3399): move multi-arch CI configuration to its own script
     if multi_arch and enable_build_jobs:
         # Lazy import since multi-arch CI configuration will move soon
+        sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
         from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
         if github_run_id:
