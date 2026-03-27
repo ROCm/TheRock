@@ -324,6 +324,7 @@ def _retrieve_bucket_info(
     # all environments (e.g. local dev without the GHA support package installed).
     if workflow_run is None and workflow_run_id is not None:
         from github_actions.github_actions_api import gha_query_workflow_run_by_id
+
         workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
 
     # Extract metadata from workflow_run if available

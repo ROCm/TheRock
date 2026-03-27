@@ -48,7 +48,6 @@ def log(*args):
     sys.stdout.flush()
 
 
-
 # This method will output logs of the Windows Time Service and is meant
 # to help debug spurious AWS auth issues caused by time differences when
 # uploading with the AWS CLI tool. For context, see this issue and PR:
