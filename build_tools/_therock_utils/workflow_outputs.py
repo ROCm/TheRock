@@ -86,8 +86,8 @@ class WorkflowOutputRoot:
     platform: str
     """Platform name ('linux' or 'windows')."""
 
-    storage_config: StorageConfig | None = None
-    """Storage configuration for URL schemas. If None, uses defaults."""
+    storage_config: StorageConfig = StorageConfig()
+    """Storage configuration for URL schemas."""
 
     # -- Root -------------------------------------------------------------------
 
@@ -259,8 +259,10 @@ class WorkflowOutputRoot:
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
             storage_config: Storage configuration for URL schemas. If None,
-                uses defaults.
+                uses default StorageConfig.
         """
+        if storage_config is None:
+            storage_config = StorageConfig()
         workflow_run_id = (
             run_id if lookup_workflow_run and workflow_run is None else None
         )
@@ -293,8 +295,10 @@ class WorkflowOutputRoot:
             platform: Platform name. If None, detects from current system.
             bucket: Bucket name placeholder (default: 'local').
             storage_config: Storage configuration for URL schemas. If None,
-                uses defaults.
+                uses default StorageConfig.
         """
+        if storage_config is None:
+            storage_config = StorageConfig()
         if platform is None:
             platform = platform_module.system().lower()
         return cls(
@@ -319,7 +323,8 @@ def _retrieve_bucket_info(
     github_repository: str | None = None,
     workflow_run_id: str | None = None,
     workflow_run: dict | None = None,
-    storage_config: StorageConfig | None = None,
+    *,
+    storage_config: StorageConfig,
 ) -> tuple[str, str]:
     """Determine S3 bucket and external_repo prefix for a workflow run.
 
@@ -331,17 +336,12 @@ def _retrieve_bucket_info(
         workflow_run_id: Workflow run ID for API lookup.
         workflow_run: Pre-fetched workflow run data.
         storage_config: Storage configuration containing bucket_schema.
-            If None, uses default bucket schema.
 
     Returns:
         Tuple of ``(external_repo, bucket)`` where:
         - external_repo: ``''`` for ROCm/TheRock, or ``'{owner}-{repo}/'``
         - bucket: S3 bucket name
     """
-    if storage_config is not None:
-        bucket_schema = storage_config.bucket_schema
-    else:
-        bucket_schema = "therock-{release_type}-artifacts"
     _log("Retrieving bucket info...")
 
     if github_repository:
@@ -387,7 +387,7 @@ def _retrieve_bucket_info(
                 f"expected one of {sorted(_VALID_RELEASE_TYPES)}"
             )
         _log(f"  (implicit) RELEASE_TYPE: {release_type}")
-        bucket = bucket_schema.format(release_type=release_type)
+        bucket = storage_config.bucket_schema.format(release_type=release_type)
     else:
         if external_repo == "":
             bucket = "therock-ci-artifacts"

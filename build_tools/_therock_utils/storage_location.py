@@ -26,7 +26,6 @@ import json
 import string
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 # Allowed placeholders for each schema type
 URL_SCHEMA_PLACEHOLDERS = frozenset({"bucket", "path"})
@@ -51,7 +50,7 @@ def _extract_placeholders(schema: str) -> set[str]:
     return {field for _, field, _, _ in formatter.parse(schema) if field}
 
 
-def _validate_schema(schema: Optional[str], allowed: frozenset[str], name: str) -> None:
+def _validate_schema(schema: str | None, allowed: frozenset[str], name: str) -> None:
     """Validate that schema only uses allowed placeholders.
 
     Args:
@@ -173,26 +172,22 @@ class StorageLocation:
     relative_path: str
     """Relative path from bucket/staging root (e.g., '12345-linux/file.tar.xz')."""
 
-    storage_config: Optional[StorageConfig] = None
-    """Storage configuration for URL schemas. If None, uses defaults."""
+    storage_config: StorageConfig = StorageConfig()
+    """Storage configuration for URL schemas."""
 
     @property
     def s3_uri(self) -> str:
         """S3 URI (e.g., ``s3://bucket/path/file``)."""
-        if self.storage_config:
-            schema = self.storage_config.s3_url_schema
-        else:
-            schema = "s3://{bucket}/{path}"
-        return schema.format(bucket=self.bucket, path=self.relative_path)
+        return self.storage_config.s3_url_schema.format(
+            bucket=self.bucket, path=self.relative_path
+        )
 
     @property
     def https_url(self) -> str:
         """Public HTTPS URL for browser access."""
-        if self.storage_config:
-            schema = self.storage_config.https_url_schema
-        else:
-            schema = "https://{bucket}.s3.amazonaws.com/{path}"
-        return schema.format(bucket=self.bucket, path=self.relative_path)
+        return self.storage_config.https_url_schema.format(
+            bucket=self.bucket, path=self.relative_path
+        )
 
     def local_path(self, staging_dir: Path) -> Path:
         """Local filesystem path for this location.

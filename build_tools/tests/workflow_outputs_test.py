@@ -442,13 +442,13 @@ class TestWorkflowOutputRootCustomSchemas(unittest.TestCase):
         )
 
     def test_default_schemas_when_no_config(self):
-        """When storage_config is None, StorageLocation should use defaults."""
+        """When storage_config uses defaults, StorageLocation should use defaults."""
         root = WorkflowOutputRoot(
             bucket="therock-ci-artifacts",
             external_repo="",
             run_id="12345",
             platform="linux",
-            storage_config=None,
+            # storage_config omitted - uses default StorageConfig()
         )
         loc = root.artifact("test.tar.xz")
         # StorageLocation should apply default schemas
@@ -474,8 +474,8 @@ class TestWorkflowOutputRootForLocal(unittest.TestCase):
         self.assertEqual(root.run_id, "local")
         # Platform depends on system, just check it's set
         self.assertIn(root.platform, ("linux", "windows", "darwin"))
-        # storage_config should be None by default
-        self.assertIsNone(root.storage_config)
+        # storage_config should use defaults
+        self.assertEqual(root.storage_config, StorageConfig())
 
     def test_custom_values(self):
         root = WorkflowOutputRoot.for_local(
@@ -510,13 +510,13 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
         self.assertEqual(root.external_repo, "")
         self.assertEqual(root.run_id, "12345")
         self.assertEqual(root.platform, "linux")
-        # storage_config should be None by default
-        self.assertIsNone(root.storage_config)
+        # storage_config should use defaults
+        self.assertEqual(root.storage_config, StorageConfig())
         mock_retrieve.assert_called_once_with(
             github_repository=None,
             workflow_run_id=None,
             workflow_run=None,
-            storage_config=None,
+            storage_config=StorageConfig(),
         )
 
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
@@ -557,7 +557,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             github_repository="SomeUser/TheRock",
             workflow_run_id="99999",
             workflow_run=None,
-            storage_config=None,
+            storage_config=StorageConfig(),
         )
 
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
@@ -574,7 +574,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             github_repository=None,
             workflow_run_id=None,
             workflow_run=fake_run,
-            storage_config=None,
+            storage_config=StorageConfig(),
         )
 
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
@@ -594,7 +594,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             github_repository=None,
             workflow_run_id=None,
             workflow_run=fake_run,
-            storage_config=None,
+            storage_config=StorageConfig(),
         )
 
 
@@ -629,6 +629,9 @@ class TestRetrieveBucketInfo(unittest.TestCase):
     def _call(self, **kwargs):
         from _therock_utils.workflow_outputs import _retrieve_bucket_info
 
+        # Provide default storage_config if not specified
+        if "storage_config" not in kwargs:
+            kwargs["storage_config"] = StorageConfig()
         return _retrieve_bucket_info(**kwargs)
 
     def test_no_env_defaults_to_rocm_therock(self):
