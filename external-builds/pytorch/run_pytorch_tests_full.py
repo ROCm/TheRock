@@ -313,6 +313,8 @@ def build_run_test_cmd(
         cmd.append("--exclude-jit-executor")
     if args.exclude_distributed and args.test_config != "distributed":
         cmd.append("--exclude-distributed-tests")
+    if args.test_config == "distributed":
+        cmd.append("--distributed-tests")
     if args.exclude_quantization:
         cmd.append("--exclude-quantization-tests")
 
