@@ -773,6 +773,28 @@ def main(base_args, linux_families, windows_families):
     """
     )
 
+    # Multi-arch build summary: add links to logs and artifacts index pages.
+    # These are posted early (before builds complete) so they appear at the top
+    # of the job summary. The server-side Lambda generates the index pages as
+    # logs and artifacts flow in.
+    if multi_arch and enable_build_jobs:
+        from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
+        run_id = os.environ.get("GITHUB_RUN_ID", "")
+        if run_id:
+            summary_lines = ["## Build outputs"]
+            for platform_name in ["linux", "windows"]:
+                root = WorkflowOutputRoot.from_workflow_run(
+                    run_id=run_id, platform=platform_name
+                )
+                log_url = root.root_log_index().https_url
+                artifact_url = root.root_index().https_url
+                summary_lines.append(
+                    f"* {platform_name.capitalize()}: "
+                    f"[Logs]({log_url}) · [Artifacts]({artifact_url})"
+                )
+            gha_append_step_summary("\n".join(summary_lines))
+
     output = {
         "linux_variants": json.dumps(linux_variants_output),
         "linux_test_labels": json.dumps(linux_test_output),
