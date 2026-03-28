@@ -14383,6 +14383,182 @@ int main() {
   }
 
   {
+  const std::vector<DecodedInstruction> side_effect_maintenance_program = {
+      DecodedInstruction::Nullary("S_DCACHE_INV"),
+      DecodedInstruction::OneOperand("S_MEMTIME", InstructionOperand::Sgpr(44)),
+      DecodedInstruction::Nullary("BUFFER_WBL2"),
+      DecodedInstruction::Nullary("BUFFER_INV"),
+      DecodedInstruction::Nullary("S_ICACHE_INV"),
+      DecodedInstruction::OneOperand("S_MEMREALTIME",
+                                     InstructionOperand::Sgpr(48)),
+      DecodedInstruction::Nullary("S_DCACHE_WB_VOL"),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  const auto make_side_effect_maintenance_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x11111111u;
+    state.sgprs[1] = 0x22222222u;
+    state.sgprs[2] = 0x13572468u;
+    state.sgprs[3] = 0x24681357u;
+    state.sgprs[43] = 0x33333333u;
+    state.sgprs[44] = 0xaaaabbbbu;
+    state.sgprs[45] = 0xccccddddu;
+    state.sgprs[46] = 0x44444444u;
+    state.sgprs[47] = 0x55555555u;
+    state.sgprs[48] = 0x12345678u;
+    state.sgprs[49] = 0x9abcdef0u;
+    state.sgprs[50] = 0x66666666u;
+    state.sgprs[51] = 0x77777777u;
+    state.vgprs[5][0] = 0x01020304u;
+    state.vgprs[5][1] = 0x11121314u;
+    state.vgprs[5][2] = 0x21222324u;
+    state.vgprs[5][3] = 0x31323334u;
+    state.vgprs[18][0] = 0xaaaa0001u;
+    state.vgprs[18][1] = 0xbbbb0002u;
+    state.vgprs[18][2] = 0xcccc0003u;
+    state.vgprs[18][3] = 0xdddd0004u;
+    return state;
+  };
+  const auto make_side_effect_maintenance_memory = []() {
+    LinearExecutionMemory memory(0x240, 0);
+    memory.WriteU32(0x20u, 0x11223344u);
+    memory.WriteU32(0x180u, 0x55667788u);
+    memory.WriteU32(0x1a0u, 0x99aabbccu);
+    memory.WriteU32(0x200u, 0x2468ace0u);
+    return memory;
+  };
+  const auto validate_side_effect_maintenance_state =
+      [&](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+          const char* mode) {
+        const auto expect_timestamp_pair_written =
+            [&](std::uint16_t dest_reg,
+                std::uint32_t initial_lo,
+                std::uint32_t initial_hi,
+                const char* description) {
+              const std::uint32_t written_lo = state.sgprs[dest_reg];
+              const std::uint32_t written_hi = state.sgprs[dest_reg + 1u];
+              return Expect(written_lo != initial_lo || written_hi != initial_hi,
+                            (std::string(mode) + " " + description +
+                             " to clobber only its destination pair")
+                                .c_str()) &&
+                     Expect(written_lo != 0u || written_hi != 0u,
+                            (std::string(mode) + " " + description +
+                             " to produce a non-zero timestamp")
+                                .c_str());
+            };
+        std::uint32_t value = 0;
+        return Expect(state.halted,
+                      (std::string(mode) +
+                       " side-effect maintenance program to halt")
+                          .c_str()) &&
+               Expect(state.exec_mask == 0b1011ULL,
+                      (std::string(mode) +
+                       " side-effect maintenance to preserve exec")
+                          .c_str()) &&
+               Expect(state.sgprs[0] == 0x11111111u &&
+                          state.sgprs[1] == 0x22222222u &&
+                          state.sgprs[2] == 0x13572468u &&
+                          state.sgprs[3] == 0x24681357u,
+                      (std::string(mode) +
+                       " side-effect maintenance to preserve sgprs")
+                          .c_str()) &&
+               Expect(state.sgprs[43] == 0x33333333u &&
+                          state.sgprs[46] == 0x44444444u &&
+                          state.sgprs[47] == 0x55555555u &&
+                          state.sgprs[50] == 0x66666666u &&
+                          state.sgprs[51] == 0x77777777u,
+                      (std::string(mode) +
+                       " side-effect maintenance to preserve adjacent sgprs")
+                          .c_str()) &&
+               expect_timestamp_pair_written(44u, 0xaaaabbbbu, 0xccccddddu,
+                                             "s_memtime") &&
+               expect_timestamp_pair_written(48u, 0x12345678u, 0x9abcdef0u,
+                                             "s_memrealtime") &&
+               Expect(state.vgprs[5][0] == 0x01020304u &&
+                          state.vgprs[5][1] == 0x11121314u &&
+                          state.vgprs[5][2] == 0x21222324u &&
+                          state.vgprs[5][3] == 0x31323334u &&
+                          state.vgprs[18][0] == 0xaaaa0001u &&
+                          state.vgprs[18][1] == 0xbbbb0002u &&
+                          state.vgprs[18][2] == 0xcccc0003u &&
+                          state.vgprs[18][3] == 0xdddd0004u,
+                      (std::string(mode) +
+                       " side-effect maintenance to preserve vgprs")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x20u, &value),
+                      (std::string(mode) +
+                       " side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x11223344u,
+                      (std::string(mode) +
+                       " side-effect maintenance memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x180u, &value),
+                      (std::string(mode) +
+                       " side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x55667788u,
+                      (std::string(mode) +
+                       " side-effect maintenance memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x1a0u, &value),
+                      (std::string(mode) +
+                       " side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x99aabbccu,
+                      (std::string(mode) +
+                       " side-effect maintenance memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x200u, &value),
+                      (std::string(mode) +
+                       " side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x2468ace0u,
+                      (std::string(mode) +
+                       " side-effect maintenance memory preserved")
+                          .c_str());
+      };
+
+  LinearExecutionMemory decoded_side_effect_maintenance_memory =
+      make_side_effect_maintenance_memory();
+  WaveExecutionState decoded_side_effect_maintenance_state =
+      make_side_effect_maintenance_state();
+  if (!Expect(interpreter.ExecuteProgram(side_effect_maintenance_program,
+                                         &decoded_side_effect_maintenance_state,
+                                         &decoded_side_effect_maintenance_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_side_effect_maintenance_state(
+          decoded_side_effect_maintenance_state,
+          decoded_side_effect_maintenance_memory, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_side_effect_maintenance_program;
+  if (!Expect(interpreter.CompileProgram(
+                   side_effect_maintenance_program,
+                   &compiled_side_effect_maintenance_program, &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_side_effect_maintenance_memory =
+      make_side_effect_maintenance_memory();
+  WaveExecutionState compiled_side_effect_maintenance_state =
+      make_side_effect_maintenance_state();
+  if (!Expect(interpreter.ExecuteProgram(
+                   compiled_side_effect_maintenance_program,
+                   &compiled_side_effect_maintenance_state,
+                   &compiled_side_effect_maintenance_memory, &error_message),
+              error_message.c_str()) ||
+      !validate_side_effect_maintenance_state(
+          compiled_side_effect_maintenance_state,
+          compiled_side_effect_maintenance_memory, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
   const std::vector<DecodedInstruction> buffer_maintenance_program = {
       DecodedInstruction::Nullary("BUFFER_WBL2"),
       DecodedInstruction::Nullary("BUFFER_INV"),
