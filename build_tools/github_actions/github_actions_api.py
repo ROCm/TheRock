@@ -1,7 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Utilities for working with GitHub Actions from Python.
+"""GitHub Actions API: workflow commands and REST API client.
+
+This module provides:
+- GitHubAPI class for authenticated GitHub REST API requests
+- Workflow command helpers (gha_set_output, gha_set_env, etc.)
+- Query functions for workflow runs, commits, etc.
 
 See also https://pypi.org/project/github-action-utils/.
 """
@@ -511,6 +516,8 @@ def gha_query_recent_branch_commits(
     return [commit["sha"] for commit in response]
 
 
+# TODO: Consider moving str2bool to a general-purpose utils module. It's useful
+# for GitHub Actions (YAML has fuzzy boolean handling) but is also used broadly.
 def str2bool(value: str | None) -> bool:
     """Convert environment variables to boolean values."""
     if not value:
@@ -552,6 +559,8 @@ def str2bool(value: str | None) -> bool:
     raise ValueError(f"Invalid string value for boolean conversion: {value}")
 
 
+# TODO: Move get_visible_gpu_count and get_first_gpu_architecture to a
+# GPU/rocminfo utils module. They are not specific to GitHub Actions.
 # TODO(#3489): Refactor get_visible_gpu_count and get_first_gpu_architecture to share a
 # common helper that runs rocminfo and returns matching lines; both functions duplicate the first ~12 lines.
 def get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
@@ -594,40 +603,6 @@ def get_first_gpu_architecture(env=None, therock_bin_dir: str | None = None) -> 
             logging.info(f"Detected GPU architecture: {gpu_arch}")
             return gpu_arch
     raise RuntimeError("No GPU architecture found in rocminfo output")
-
-
-def find_matching_gpu_arch(gpu_arch: str, available_gpu_archs: set[str]) -> str | None:
-    """
-    Find the most specific GPU architecture in the set that matches the given GPU.
-
-    Tries in order from most specific to least specific:
-    # Example:
-    # find_matching_gpu_arch('gfx1151', {'gfx1151', 'gfx115X', 'gfx11X'}) gives 'gfx1151'
-    # find_matching_gpu_arch('gfx1151', {'gfx1150', 'gfx94X', 'gfx11X'}) gives 'gfx11X'
-    - Wildcard matches (gfx115X, gfx11X, etc.)
-
-    Returns the matching architecture string or None if no match found.
-    """
-    # First, try exact match
-    if gpu_arch in available_gpu_archs:
-        return gpu_arch
-
-    # Generate possible wildcard patterns from most specific to least specific
-    # For gfx1151: try gfx115X, gfx11X
-    possible_patterns = []
-    arch_str = gpu_arch
-
-    # Generate patterns by replacing characters with X from right to left
-    for i in range(len(arch_str) - 1, 1, -1):
-        pattern = arch_str[:i] + "X"
-        possible_patterns.append(pattern)
-
-    # Try each pattern
-    for pattern in possible_patterns:
-        if pattern in available_gpu_archs:
-            return pattern
-
-    return None
 
 
 def is_asan():

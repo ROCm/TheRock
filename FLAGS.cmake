@@ -19,10 +19,6 @@ therock_declare_flag(
   NAME KPACK_SPLIT_ARTIFACTS
   DEFAULT_VALUE OFF
   DESCRIPTION "Split target-specific artifacts into generic and arch-specific components"
-  CMAKE_VARS
-    ROCM_KPACK_ENABLED=ON
-  SUB_PROJECTS
-    hip-clr
 )
 
 ###############################################################################

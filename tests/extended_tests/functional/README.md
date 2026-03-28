@@ -103,7 +103,7 @@ class YourTest(FunctionalBase):
         log.info(f"Running {self.display_name}")
 
         # Optional: Get GPU architecture for GPU-specific behavior
-        from github_actions_utils import get_first_gpu_architecture
+        from github_actions_api import get_first_gpu_architecture
 
         gfx_id = get_first_gpu_architecture(therock_bin_dir=self.therock_bin_dir)
 
