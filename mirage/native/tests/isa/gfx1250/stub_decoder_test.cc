@@ -8087,8 +8087,10 @@ int main() {
           " V_PK_ADD_BF16",
           "X_V_PK_ADD_BF16",
           "X_TENSOR_LOAD_TO_LDS",
+          "TENSOR_LOAD_TO_LDS_X",
           "X_V_CVT_F16_FP8",
-          "X_V_DIV_SCALE_F64"}) {
+          "X_V_DIV_SCALE_F64",
+          "V_DIV_SCALE_F64_X"}) {
       const StubDecoderRouteInfo synthetic_near_miss{
           near_miss_instruction,
           manifest.route,
