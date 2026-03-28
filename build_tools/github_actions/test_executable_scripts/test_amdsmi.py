@@ -27,16 +27,52 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
-import sys
 
 logging.basicConfig(level=logging.INFO)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-AMDSMITST_BIN = (
-    THEROCK_DIR / "build" / "share" / "amd_smi" / "tests" / "amdsmitst"
-).resolve()
+TESTS_DIR = (THEROCK_DIR / "build" / "share" / "amd_smi" / "tests").resolve()
+AMDSMITST_BIN = TESTS_DIR / "amdsmitst"
+
+
+def get_asic_exclude_filter(test_dir):
+    """Source amdsmitst.exclude and detect_asic_filter.sh, return GTEST_EXCLUDE."""
+    exclude_script = test_dir / "amdsmitst.exclude"
+    detect_script = test_dir / "detect_asic_filter.sh"
+
+    if not exclude_script.exists():
+        logging.warning(f"amdsmitst.exclude not found in {test_dir}")
+        return ""
+    if not detect_script.exists():
+        logging.warning(f"detect_asic_filter.sh not found in {test_dir}")
+        return ""
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{exclude_script}" && source "{detect_script}" && echo "$GTEST_EXCLUDE"',
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(test_dir),
+    )
+
+    if result.returncode != 0:
+        logging.warning(
+            f"ASIC detection failed (rc={result.returncode}): {result.stderr.strip()}"
+        )
+        return ""
+
+    gtest_exclude = result.stdout.strip()
+    if gtest_exclude:
+        logging.info(f"ASIC exclude filter: {gtest_exclude}")
+    else:
+        logging.info("ASIC detection returned no exclusions")
+    return gtest_exclude
+
 
 # -----------------------------
 # GTest sharding
@@ -56,36 +92,42 @@ env["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 test_type = os.getenv("TEST_TYPE", "full")
 
 if test_type == "quick":
-    logging.info("Running quick tests only for amdsmitst")
-    test_filter = ["--gtest_filter=AmdSmiDynamicMetricTest.*"]
-else:
-    # Full test mode: run whitelist and explicitly exclude known failing tests
-    logging.info("Running full amdsmitst test suite (include + exclude filter)")
-
     include_tests = [
-        "amdsmitstReadOnly.*",
-        "amdsmitstReadWrite.FanReadWrite",
-        "amdsmitstReadWrite.TestOverdriveReadWrite",
-        "amdsmitstReadWrite.TestPciReadWrite",
-        "amdsmitstReadWrite.TestPowerReadWrite",
-        "amdsmitstReadWrite.TestPerfCntrReadWrite",
-        "amdsmitstReadWrite.TestEvtNotifReadWrite",
         "AmdSmiDynamicMetricTest.*",
     ]
+    include_filter = ":".join(include_tests)
+    gtest_filter_arg = [f"--gtest_filter={include_filter}"]
+    logging.info(f"Quick mode: include filter = {include_filter}")
+else:
+    # Full test mode: negative-only filter matching upstream CI pattern
+    # (./amdsmitst --gtest_filter="-${GTEST_EXCLUDE}")
 
+    # Manual exclusions — always applied regardless of ASIC
     exclude_tests = [
         "amdsmitstReadOnly.TempRead",
         "amdsmitstReadOnly.TestFrequenciesRead",
         "amdsmitstReadWrite.TestPowerReadWrite",
     ]
 
-    gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
-    test_filter = [f"--gtest_filter={gtest_filter}"]
+    # Merge ASIC-specific exclusions from detect_asic_filter.sh
+    asic_exclude = get_asic_exclude_filter(TESTS_DIR)
+    if asic_exclude:
+        asic_tests = [t for t in asic_exclude.split(":") if t]
+        for test in asic_tests:
+            if test not in exclude_tests:
+                exclude_tests.append(test)
+        logging.info(
+            f"Combined exclude list ({len(exclude_tests)} entries): {exclude_tests}"
+        )
+
+    exclude_filter = f"-{':'.join(exclude_tests)}"
+    gtest_filter_arg = [f"--gtest_filter={exclude_filter}"]
+    logging.info(f"Full mode: exclude filter = {exclude_filter}")
 
 # -----------------------------
 # Build command
 # -----------------------------
-cmd = [str(AMDSMITST_BIN)] + test_filter
+cmd = [str(AMDSMITST_BIN)] + gtest_filter_arg
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
