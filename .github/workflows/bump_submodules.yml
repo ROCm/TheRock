@@ -4,6 +4,7 @@
 name: Bump Submodule automation
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 */12 * * *" # Runs every 12 hrs at 12AM and 12PM
   push:
@@ -34,7 +35,7 @@ jobs:
           app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
           private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
           owner: "ROCm"
-          repositories: "rocm-systems"
+          repositories: "rocm-systems,TheRock"
 
       - name: Generate GitHub App token rocm-libraries
         uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
@@ -43,14 +44,14 @@ jobs:
           app-id: ${{ secrets.ROCM_LIBRARIES_APP_ID }}
           private-key: ${{ secrets.ROCM_LIBRARIES_APP_PRIVATE_KEY }}
           owner: "ROCm"
-          repositories: "rocm-libraries"
+          repositories: "rocm-libraries,TheRock"
 
       - name: Install prerequisites
         run: |
           pip install requests
 
       - name: Run scheduled bump automation
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "schedule" \

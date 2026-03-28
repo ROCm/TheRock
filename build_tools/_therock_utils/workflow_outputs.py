@@ -122,6 +122,10 @@ class WorkflowOutputRoot:
             self.bucket, f"{self.prefix}/index-{artifact_group}.html"
         )
 
+    def root_index(self) -> StorageLocation:
+        """Location for the root artifact index HTML (server-side generated)."""
+        return StorageLocation(self.bucket, f"{self.prefix}/index.html")
+
     # -- Logs -------------------------------------------------------------------
     #
     # The log directory contains all build logs, reports, and profiling data
@@ -156,6 +160,10 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket, f"{self.prefix}/logs/{artifact_group}/index.html"
         )
+
+    def root_log_index(self) -> StorageLocation:
+        """Location for the root log index HTML (server-side generated)."""
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/index.html")
 
     def stage_log_dir(
         self, stage_name: str, amdgpu_family: str = ""
