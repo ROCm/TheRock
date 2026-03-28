@@ -111,6 +111,7 @@ class StorageBackend(ABC):
         source_dir: Path,
         dest: StorageLocation,
         include: list[str] | None = None,
+        exclude: list[str] | None = None,
     ) -> int:
         """Upload files from *source_dir* to *dest*, preserving relative paths.
 
@@ -119,6 +120,9 @@ class StorageBackend(ABC):
             dest: Destination location (the directory root in the backend).
             include: Optional glob patterns to filter files (e.g.
                 ``["*.tar.xz*"]``). If ``None``, all files are uploaded.
+            exclude: Optional glob patterns to reject files (e.g.
+                ``["ccache/*"]``). Applied after *include*. Matched against
+                the file's path relative to *source_dir*.
 
         Returns:
             Number of files uploaded.
@@ -132,6 +136,13 @@ class StorageBackend(ABC):
         files: set[Path] = set()
         for pattern in patterns:
             files.update(source_dir.rglob(pattern))
+
+        if exclude:
+            excluded: set[Path] = set()
+            for pattern in exclude:
+                excluded.update(source_dir.rglob(pattern))
+            files -= excluded
+
         sorted_files = sorted(f for f in files if f.is_file() and not f.is_symlink())
 
         file_list = [
@@ -144,6 +155,15 @@ class StorageBackend(ABC):
             )
             for f in sorted_files
         ]
+        logger.info(
+            "upload_directory: %s -> %s/%s (%d files)",
+            source_dir,
+            dest.bucket,
+            dest.relative_path,
+            len(file_list),
+        )
+        for f, loc in file_list:
+            logger.info("  %s", f.relative_to(source_dir).as_posix())
         return self.upload_files(file_list)
 
 
@@ -267,6 +287,7 @@ class S3StorageBackend(StorageBackend):
             logger.info("[DRY RUN] %s -> %s (%s)", source, dest.s3_uri, content_type)
             return
 
+        logger.debug("upload %s -> %s (%s)", source, dest.s3_uri, content_type)
         _s3_retry(
             "upload",
             dest.s3_uri,

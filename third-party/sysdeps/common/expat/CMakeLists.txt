@@ -8,9 +8,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-expat-sources
       SOURCE_DIR "${_source_dir}"
-      # Originally mirrored from: https://github.com/libexpat/libexpat/releases/download/R_2_7_3/expat-2.7.3.tar.xz
-      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/expat-2.7.3.tar.xz"
-      URL_HASH "SHA512=d2e495a9a2b902d38d838ec514da67ff56b76cdefcf89d0c320e2f319a35e439bd697880334d0ee70ca79b4515ac94c0c9b9ff97f899bcaa89308f1c8efaee0d"
+      # Originally mirrored from: https://github.com/libexpat/libexpat/releases/download/R_2_7_5/expat-2.7.5.tar.xz
+      URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/expat-2.7.5.tar.xz
+      URL_HASH SHA256=1032dfef4ff17f70464827daa28369b20f6584d108bc36f17ab1676e1edd2f91
       TOUCH "${_download_stamp}"
       # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
       # of the extracted sources, otherwise the build system will notice
@@ -70,7 +70,7 @@ endif()
 
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
-project(EXPAT_BUILD VERSION "2.7.3")
+project(EXPAT_BUILD VERSION "2.7.5")
 
 # Apply patch source only on Linux
 set(patch_source_commands)

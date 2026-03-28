@@ -213,6 +213,11 @@ jobs:
             --release "${{ inputs.rocm_version }}" \
             --artifact-group "${{ inputs.amdgpu_family }}" \
             --output-dir "${DEST}"
+          # Temporary CI workaround.
+          # TODO(#4201): Remove this /opt/rocm symlink once JAX wheel
+          # packaging/RUNPATH fixes are validated and CI no longer depends on
+          # /opt/rocm -> /opt/rocm-<version> path translation.
+          ln -sfn "${DEST}" /opt/rocm
 
       - name: Determine JAX package versions
         run: |
@@ -248,6 +253,8 @@ jobs:
           pip install jax==${JAX_VERSION}
 
       - name: Run JAX tests
+        env:
+          JAX_PLATFORMS: rocm
         run: |
           pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
           pytest jax/tests/core_test.py -q --log-cli-level=INFO
