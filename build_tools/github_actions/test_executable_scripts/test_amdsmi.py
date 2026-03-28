@@ -102,27 +102,19 @@ else:
     # Full test mode: negative-only filter matching upstream CI pattern
     # (./amdsmitst --gtest_filter="-${GTEST_EXCLUDE}")
 
-    # Manual exclusions — always applied regardless of ASIC
-    exclude_tests = [
-        "amdsmitstReadOnly.TempRead",
-        "amdsmitstReadOnly.TestFrequenciesRead",
-        "amdsmitstReadWrite.TestPowerReadWrite",
-    ]
-
-    # Merge ASIC-specific exclusions from detect_asic_filter.sh
+    # Manual exclusions are done in the amdsmitst.exclude file in rocm-systems
+    # ASIC-specific exclusions from detect_asic_filter.sh
     asic_exclude = get_asic_exclude_filter(TESTS_DIR)
-    if asic_exclude:
-        asic_tests = [t for t in asic_exclude.split(":") if t]
-        for test in asic_tests:
-            if test not in exclude_tests:
-                exclude_tests.append(test)
-        logging.info(
-            f"Combined exclude list ({len(exclude_tests)} entries): {exclude_tests}"
-        )
+    exclude_tests = [t for t in asic_exclude.split(":") if t]
 
-    exclude_filter = f"-{':'.join(exclude_tests)}"
-    gtest_filter_arg = [f"--gtest_filter={exclude_filter}"]
-    logging.info(f"Full mode: exclude filter = {exclude_filter}")
+    if exclude_tests:
+        exclude_filter = f"-{':'.join(exclude_tests)}"
+        gtest_filter_arg = [f"--gtest_filter={exclude_filter}"]
+        logging.info(f"Full mode: exclude filter = {exclude_filter}")
+    else:
+        gtest_filter_arg = []
+        logging.info("Full mode: no exclusions")
+
 
 # -----------------------------
 # Build command
