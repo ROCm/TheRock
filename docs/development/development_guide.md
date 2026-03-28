@@ -192,6 +192,15 @@ For example, this will build the "hipBLASLt" subproject in `RelWithDebInfo` and 
 > See the [Tips for using VSCode](#tips-for-using-vscode) section below for an
 > example of how to debug programs built in this way.
 
+- `{project}_CMAKE_ARGS`
+
+This variable will append to a subproject's default CMAKE arguments. It is a semicolon separated list.
+For example, this will add options to set tensilelite build parallel and keep build tmp in the "hipBLASLt" subproject:
+
+```bash
+  -DhipBLASLt_CMAKE_ARGS="-DTENSILELITE_BUILD_PARALLEL_LEVEL=32;-DTENSILELITE_KEEP_BUILD_TMP=ON"
+```
+
 ### Additional CMake developer ergonomic flags
 
 We add developer ergonomic flags as needed in order to support project-wide development activities. This currently includes:

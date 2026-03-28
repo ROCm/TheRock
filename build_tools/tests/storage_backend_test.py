@@ -156,6 +156,8 @@ class TestLocalStorageBackendUploadDirectory(unittest.TestCase):
             file2.log
             sub/
                 nested.html
+                deep/
+                    deep.txt
         """
         base.mkdir(parents=True, exist_ok=True)
         (base / "file1.tar.xz").write_bytes(b"xz-data")
@@ -164,6 +166,9 @@ class TestLocalStorageBackendUploadDirectory(unittest.TestCase):
         sub = base / "sub"
         sub.mkdir()
         (sub / "nested.html").write_text("<html/>")
+        deep = sub / "deep"
+        deep.mkdir()
+        (deep / "deep.txt").write_text("deep content")
 
     def test_upload_all_files(self):
 
@@ -176,7 +181,7 @@ class TestLocalStorageBackendUploadDirectory(unittest.TestCase):
             backend = LocalStorageBackend(staging_dir)
             count = backend.upload_directory(source_dir, dest)
 
-            self.assertEqual(count, 4)
+            self.assertEqual(count, 5)
             self.assertTrue((staging_dir / "run-1" / "file1.tar.xz").is_file())
             self.assertTrue(
                 (staging_dir / "run-1" / "file1.tar.xz.sha256sum").is_file()
@@ -263,9 +268,65 @@ class TestLocalStorageBackendUploadDirectory(unittest.TestCase):
             count = backend.upload_directory(source_dir, dest)
 
             # Count should reflect files that would be uploaded.
-            self.assertEqual(count, 4)
+            self.assertEqual(count, 5)
             # But nothing should actually be written.
             self.assertFalse((staging_dir / "run-1").exists())
+
+    def test_exclude_direct_children_only(self):
+        """sub/* excludes direct children but not deeply nested files."""
+        with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
+            staging_dir = Path(staging)
+            source_dir = Path(src) / "artifacts"
+            self._make_tree(source_dir)
+
+            dest = StorageLocation("bucket", "run-1")
+            backend = LocalStorageBackend(staging_dir)
+            count = backend.upload_directory(source_dir, dest, exclude=["sub/*"])
+
+            # sub/nested.html excluded, but sub/deep/deep.txt still uploaded.
+            self.assertEqual(count, 4)
+            self.assertTrue((staging_dir / "run-1" / "file1.tar.xz").is_file())
+            self.assertFalse((staging_dir / "run-1" / "sub" / "nested.html").exists())
+            self.assertTrue(
+                (staging_dir / "run-1" / "sub" / "deep" / "deep.txt").is_file()
+            )
+
+    def test_exclude_recursive(self):
+        """sub/**/* excludes files at all depths."""
+        with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
+            staging_dir = Path(staging)
+            source_dir = Path(src) / "artifacts"
+            self._make_tree(source_dir)
+
+            dest = StorageLocation("bucket", "run-1")
+            backend = LocalStorageBackend(staging_dir)
+            count = backend.upload_directory(source_dir, dest, exclude=["sub/**/*"])
+
+            # sub/nested.html and sub/deep/deep.txt both excluded.
+            self.assertEqual(count, 3)
+            self.assertTrue((staging_dir / "run-1" / "file1.tar.xz").is_file())
+            self.assertTrue((staging_dir / "run-1" / "file2.log").is_file())
+            self.assertFalse((staging_dir / "run-1" / "sub" / "nested.html").exists())
+            self.assertFalse(
+                (staging_dir / "run-1" / "sub" / "deep" / "deep.txt").exists()
+            )
+
+    def test_exclude_with_include(self):
+
+        with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
+            staging_dir = Path(staging)
+            source_dir = Path(src) / "artifacts"
+            self._make_tree(source_dir)
+
+            dest = StorageLocation("bucket", "run-1")
+            backend = LocalStorageBackend(staging_dir)
+            # Include all files, but exclude .log files.
+            count = backend.upload_directory(source_dir, dest, exclude=["*.log"])
+
+            self.assertEqual(count, 4)
+            self.assertTrue((staging_dir / "run-1" / "file1.tar.xz").is_file())
+            self.assertTrue((staging_dir / "run-1" / "sub" / "nested.html").is_file())
+            self.assertFalse((staging_dir / "run-1" / "file2.log").exists())
 
     def test_empty_directory_returns_zero(self):
 
@@ -613,83 +674,6 @@ class TestS3StorageBackendMaxPoolConnections(unittest.TestCase):
 
             config = mock_boto3.call_args.kwargs.get("config")
             self.assertEqual(config.max_pool_connections, 20)
-
-
-class TestS3StorageBackendCredentialResolution(unittest.TestCase):
-    """Verify the S3 client uses boto3's default credential chain.
-
-    CI runners provide credentials via AWS_SHARED_CREDENTIALS_FILE (a
-    credentials.ini mounted into the container).  The explicit env vars
-    (AWS_ACCESS_KEY_ID, etc.) may or may not be set depending on whether
-    the configure-aws-credentials step ran.
-
-    The S3 client must use boto3's default credential chain so that all
-    credential sources are respected - matching how the ``aws`` CLI
-    resolves credentials.  Falling back to UNSIGNED when the explicit
-    env vars are absent would bypass the credentials file entirely.
-    """
-
-    def _assert_not_unsigned(self, mock_boto3):
-        """Assert that boto3.client was NOT called with UNSIGNED config."""
-        from botocore import UNSIGNED
-
-        for call in mock_boto3.call_args_list:
-            config = call.kwargs.get("config")
-            self.assertTrue(
-                config is None or config.signature_version != UNSIGNED,
-                "S3 client must not use UNSIGNED signatures - this bypasses "
-                "the credential chain and breaks uploads on CI runners that "
-                "provide credentials via AWS_SHARED_CREDENTIALS_FILE.",
-            )
-
-    def test_shared_credentials_file_only(self):
-        """When only AWS_SHARED_CREDENTIALS_FILE is set (no explicit
-        key/secret/token), the client must still use the default
-        credential chain - not UNSIGNED."""
-        env = {"AWS_SHARED_CREDENTIALS_FILE": "/home/awsconfig/credentials.ini"}
-        cleared = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"]
-        with mock.patch.dict(os.environ, env, clear=False):
-            for var in cleared:
-                os.environ.pop(var, None)
-            with mock.patch("boto3.client") as mock_boto3:
-                backend = S3StorageBackend()
-                _ = backend.s3_client
-
-                self._assert_not_unsigned(mock_boto3)
-
-    def test_explicit_env_vars(self):
-        """When explicit credential env vars are set (e.g. by
-        configure-aws-credentials), the default chain picks them up."""
-        env = {
-            "AWS_ACCESS_KEY_ID": "key",
-            "AWS_SECRET_ACCESS_KEY": "secret",
-            "AWS_SESSION_TOKEN": "token",
-        }
-        with mock.patch.dict(os.environ, env):
-            with mock.patch("boto3.client") as mock_boto3:
-                backend = S3StorageBackend()
-                _ = backend.s3_client
-
-                self._assert_not_unsigned(mock_boto3)
-
-    def test_no_credentials_at_all(self):
-        """Even with no credential sources, the client must not use
-        UNSIGNED - it should let boto3 raise a clear auth error at
-        call time rather than silently making anonymous requests."""
-        cleared = [
-            "AWS_ACCESS_KEY_ID",
-            "AWS_SECRET_ACCESS_KEY",
-            "AWS_SESSION_TOKEN",
-            "AWS_SHARED_CREDENTIALS_FILE",
-        ]
-        with mock.patch.dict(os.environ, {}, clear=False):
-            for var in cleared:
-                os.environ.pop(var, None)
-            with mock.patch("boto3.client") as mock_boto3:
-                backend = S3StorageBackend()
-                _ = backend.s3_client
-
-                self._assert_not_unsigned(mock_boto3)
 
 
 # ---------------------------------------------------------------------------

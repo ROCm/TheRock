@@ -1,0 +1,37 @@
+From cb5b241d5de5a86471da5599ec06a6d6d15ce443 Mon Sep 17 00:00:00 2001
+From: Jacob Lambert <jacob.lambert@amd.com>
+Date: Fri, 13 Mar 2026 08:43:55 -0700
+Subject: [PATCH] [Comgr] Fix memory leak when assigning anonymous bitcode
+ names (#1742)
+
+Use setName() instead of manually managing memory with malloc/free. The
+previous code leaked the original empty name buffer when overwriting
+Input->Name directly.
+
+Co-authored-by: Claude <noreply@anthropic.com>
+---
+ amd/comgr/src/comgr-compiler.cpp | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/amd/comgr/src/comgr-compiler.cpp b/amd/comgr/src/comgr-compiler.cpp
+index 51b03ab36b0c..da1590b9aa29 100644
+--- a/amd/comgr/src/comgr-compiler.cpp
++++ b/amd/comgr/src/comgr-compiler.cpp
+@@ -1644,11 +1644,9 @@ amd_comgr_status_t AMDGPUCompiler::linkBitcodeToBitcode() {
+       // string to assign. This string is used when the DataObject is written
+       // to the file system via SAVE_TEMPS, or if the object is a bundle which
+       // also needs a file system write for unpacking
+-      const size_t BufSize = sizeof(char) * 30;
+-      char *Buf = (char *)malloc(BufSize);
+-      snprintf(Buf, BufSize, "comgr-anon-bitcode-%d.bc", std::rand() % 10000);
+-
+-      Input->Name = Buf;
++      std::string Name =
++          "comgr-anon-bitcode-" + std::to_string(std::rand() % 10000) + ".bc";
++      Input->setName(Name);
+     }
+ 
+     if (env::shouldSaveTemps()) {
+-- 
+2.51.0
+
