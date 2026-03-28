@@ -103,14 +103,8 @@ jobs:
         run: |
           python build_tools/health_status.py
 
-      - name: Configure AWS Credentials
-        if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
-          special-characters-workaround: true
-
+      # Note: no AWS credentials should be needed here since our CI buckets
+      # all currently have public read access.
       - name: Fetch inbound artifacts
         run: |
           python build_tools/artifact_manager.py fetch \
@@ -154,8 +148,10 @@ jobs:
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
-      - name: Configure AWS Credentials (refresh for push)
-        if: ${{ !github.event.pull_request.head.repo.fork }}
+      # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
+      # fall back to runner base credentials (therock-ci-artifacts-external).
+      - name: Configure AWS Credentials
+        if: ${{ github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2

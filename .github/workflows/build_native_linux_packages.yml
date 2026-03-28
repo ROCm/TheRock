@@ -138,7 +138,7 @@ jobs:
       - name: Install AWS CLI
         run: bash ./dockerfiles/install_awscli.sh
 
-      - name: Configure AWS Credentials for non-forked repos
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
