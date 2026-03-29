@@ -84,6 +84,7 @@
   - exact negative-path helper checks now pin `kUnknown` opcode-shape / execution-domain / operand-layout helper surfaces across unsupported and unknown decodes, and pin direct invalid-enum helper fallbacks to `kUnknown`
   - exact route-info negative-path checks now pin supported synthetic `StubDecoderRouteInfo` inputs with both invalid and valid-mismatching caller decode hints across routed, empty-name, synthetic-unknown, clean unsupported-seeded (`V_CVT_SCALEF32_PK8_FP8_F32`), and lowercased / leading-whitespace / prefixed / non-family-matched suffixed near-miss known-opcode cases, all while preserving caller route metadata and returning either routed structural parity or an empty `kUnknown` structural decode through the route-specific entrypoint name
   - exact route-info family-matched suffixed-near-miss checks now pin the current partial structural classification behavior for `V_PK_ADD_BF16_X` on `kVop3p` and `V_CVT_F16_FP8_X` on `kVop1`: caller route metadata stays intact, opcode-shape / execution-domain / paired-flag surfaces follow the matching family, and operand-layout / role / slot / descriptor surfaces stay empty-unknown
+  - exact split-surface checks now pin those same family-matched suffixed near misses to remain empty-unknown on both direct name-based decode and explicit route-keyed entrypoint decode, while only the synthetic `StubDecoderRouteInfo` path preserves the current partial family-level classification
 
 - `VOP3P` packed BF16 slice:
   - `V_PK_ADD_BF16`

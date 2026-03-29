@@ -8225,6 +8225,23 @@ int main() {
       if (manifest.route != expectation.route) {
         continue;
       }
+      const StubDecodedInstruction family_matched_suffix_name_decoded =
+          DecodeStubInstruction(expectation.instruction_name);
+      const StubDecodedInstruction family_matched_suffix_via_entrypoint =
+          DecodeViaExplicitRouteEntrypoint(manifest.route,
+                                          expectation.instruction_name);
+      if (!Expect(
+              MatchesUnknownDecode(family_matched_suffix_name_decoded,
+                                   expectation.instruction_name) &&
+                  MatchesUnknownHelperSurface(
+                      family_matched_suffix_name_decoded) &&
+                  MatchesUnknownDecode(family_matched_suffix_via_entrypoint,
+                                       expectation.instruction_name) &&
+                  MatchesUnknownHelperSurface(
+                      family_matched_suffix_via_entrypoint),
+              "expected family-matched suffixed near-miss names to stay exact unknown on both direct and explicit route-keyed decode surfaces")) {
+        return 1;
+      }
       const StubDecoderRouteInfo synthetic_family_matched_suffix{
           expectation.instruction_name,
           manifest.route,
