@@ -8222,9 +8222,6 @@ int main() {
               "kFp8ConvertToF16",
               "kConversion",
           }}) {
-      if (manifest.route != expectation.route) {
-        continue;
-      }
       const StubDecodedInstruction family_matched_suffix_name_decoded =
           DecodeStubInstruction(expectation.instruction_name);
       const StubDecodedInstruction family_matched_suffix_via_entrypoint =
@@ -8256,37 +8253,65 @@ int main() {
       };
       const StubDecodedInstruction family_matched_suffix_decoded =
           DecodeStubInstruction(synthetic_family_matched_suffix);
-      if (!Expect(
-              family_matched_suffix_decoded.status ==
-                      StubDecodeStatus::kDecodedStub &&
-                  MatchesRouteInfoPayload(family_matched_suffix_decoded,
-                                          synthetic_family_matched_suffix) &&
-                  family_matched_suffix_decoded.entrypoint_name ==
-                      manifest.entrypoint_name &&
-                  std::string_view(GetStubOpcodeShapeName(
-                      family_matched_suffix_decoded.opcode_shape)) ==
-                      expectation.opcode_shape_name &&
-                  std::string_view(GetStubExecutionDomainName(
-                      family_matched_suffix_decoded.execution_domain)) ==
-                      expectation.execution_domain_name &&
-                  std::string_view(GetStubOperandLayoutName(
-                      family_matched_suffix_decoded.operand_layout.layout_kind)) ==
-                      "kUnknown" &&
-                  MatchesTopLevelFlags(family_matched_suffix_decoded,
-                                       expectation.uses_accumulator,
-                                       expectation.uses_tensor_memory,
-                                       expectation.uses_scale_path,
-                                       expectation.uses_paired_operands) &&
-                  MatchesLayout(family_matched_suffix_decoded,
-                                ExpectedLayout{}) &&
-                  family_matched_suffix_decoded.operand_roles.binding_count ==
-                      0 &&
-                  family_matched_suffix_decoded.operand_slots.binding_count ==
-                      0 &&
-                  family_matched_suffix_decoded.operand_descriptors
-                          .descriptor_count == 0,
-              "expected synthetic routed route-info with family-matched suffixed near-miss to preserve caller metadata while pinning current partial structural classification")) {
-        return 1;
+      if (manifest.route == expectation.route) {
+        if (!Expect(
+                family_matched_suffix_decoded.status ==
+                        StubDecodeStatus::kDecodedStub &&
+                    MatchesRouteInfoPayload(family_matched_suffix_decoded,
+                                            synthetic_family_matched_suffix) &&
+                    family_matched_suffix_decoded.entrypoint_name ==
+                        manifest.entrypoint_name &&
+                    std::string_view(GetStubOpcodeShapeName(
+                        family_matched_suffix_decoded.opcode_shape)) ==
+                        expectation.opcode_shape_name &&
+                    std::string_view(GetStubExecutionDomainName(
+                        family_matched_suffix_decoded.execution_domain)) ==
+                        expectation.execution_domain_name &&
+                    std::string_view(GetStubOperandLayoutName(
+                        family_matched_suffix_decoded.operand_layout.layout_kind)) ==
+                        "kUnknown" &&
+                    MatchesTopLevelFlags(family_matched_suffix_decoded,
+                                         expectation.uses_accumulator,
+                                         expectation.uses_tensor_memory,
+                                         expectation.uses_scale_path,
+                                         expectation.uses_paired_operands) &&
+                    MatchesLayout(family_matched_suffix_decoded,
+                                  ExpectedLayout{}) &&
+                    family_matched_suffix_decoded.operand_roles.binding_count ==
+                        0 &&
+                    family_matched_suffix_decoded.operand_slots.binding_count ==
+                        0 &&
+                    family_matched_suffix_decoded.operand_descriptors
+                            .descriptor_count == 0,
+                "expected synthetic routed route-info with family-matched suffixed near-miss to preserve caller metadata while pinning current partial structural classification")) {
+          return 1;
+        }
+      } else {
+        if (!Expect(
+                family_matched_suffix_decoded.status ==
+                        StubDecodeStatus::kDecodedStub &&
+                    MatchesRouteInfoPayload(family_matched_suffix_decoded,
+                                            synthetic_family_matched_suffix) &&
+                    family_matched_suffix_decoded.entrypoint_name ==
+                        manifest.entrypoint_name &&
+                    MatchesUnknownHelperSurface(
+                        family_matched_suffix_decoded) &&
+                    MatchesTopLevelFlags(family_matched_suffix_decoded,
+                                         false,
+                                         false,
+                                         false,
+                                         false) &&
+                    MatchesLayout(family_matched_suffix_decoded,
+                                  ExpectedLayout{}) &&
+                    family_matched_suffix_decoded.operand_roles.binding_count ==
+                        0 &&
+                    family_matched_suffix_decoded.operand_slots.binding_count ==
+                        0 &&
+                    family_matched_suffix_decoded.operand_descriptors
+                            .descriptor_count == 0,
+                "expected synthetic routed route-info with family-matched suffixed near-miss to stay empty-unknown on non-matching routes")) {
+          return 1;
+        }
       }
       StubDecoderRouteInfo synthetic_family_matched_suffix_valid_wrong_hint =
           synthetic_family_matched_suffix;
@@ -8300,41 +8325,72 @@ int main() {
           family_matched_suffix_valid_wrong_hint_decoded =
               DecodeStubInstruction(
                   synthetic_family_matched_suffix_valid_wrong_hint);
-      if (!Expect(
-              family_matched_suffix_valid_wrong_hint_decoded.status ==
-                      StubDecodeStatus::kDecodedStub &&
-                  MatchesRouteInfoPayload(
-                      family_matched_suffix_valid_wrong_hint_decoded,
-                      synthetic_family_matched_suffix_valid_wrong_hint) &&
-                  family_matched_suffix_valid_wrong_hint_decoded.entrypoint_name ==
-                      manifest.entrypoint_name &&
-                  std::string_view(GetStubOpcodeShapeName(
-                      family_matched_suffix_valid_wrong_hint_decoded
-                          .opcode_shape)) == expectation.opcode_shape_name &&
-                  std::string_view(GetStubExecutionDomainName(
-                      family_matched_suffix_valid_wrong_hint_decoded
-                          .execution_domain)) ==
-                      expectation.execution_domain_name &&
-                  std::string_view(GetStubOperandLayoutName(
-                      family_matched_suffix_valid_wrong_hint_decoded
-                          .operand_layout.layout_kind)) == "kUnknown" &&
-                  MatchesTopLevelFlags(
-                      family_matched_suffix_valid_wrong_hint_decoded,
-                      expectation.uses_accumulator,
-                      expectation.uses_tensor_memory,
-                      expectation.uses_scale_path,
-                      expectation.uses_paired_operands) &&
-                  MatchesLayout(
-                      family_matched_suffix_valid_wrong_hint_decoded,
-                      ExpectedLayout{}) &&
-                  family_matched_suffix_valid_wrong_hint_decoded.operand_roles
-                          .binding_count == 0 &&
-                  family_matched_suffix_valid_wrong_hint_decoded.operand_slots
-                          .binding_count == 0 &&
-                  family_matched_suffix_valid_wrong_hint_decoded
-                          .operand_descriptors.descriptor_count == 0,
-              "expected synthetic routed route-info with family-matched suffixed near-miss to ignore valid mismatching caller decode-hint while pinning current partial structural classification")) {
-        return 1;
+      if (manifest.route == expectation.route) {
+        if (!Expect(
+                family_matched_suffix_valid_wrong_hint_decoded.status ==
+                        StubDecodeStatus::kDecodedStub &&
+                    MatchesRouteInfoPayload(
+                        family_matched_suffix_valid_wrong_hint_decoded,
+                        synthetic_family_matched_suffix_valid_wrong_hint) &&
+                    family_matched_suffix_valid_wrong_hint_decoded.entrypoint_name ==
+                        manifest.entrypoint_name &&
+                    std::string_view(GetStubOpcodeShapeName(
+                        family_matched_suffix_valid_wrong_hint_decoded
+                            .opcode_shape)) == expectation.opcode_shape_name &&
+                    std::string_view(GetStubExecutionDomainName(
+                        family_matched_suffix_valid_wrong_hint_decoded
+                            .execution_domain)) ==
+                        expectation.execution_domain_name &&
+                    std::string_view(GetStubOperandLayoutName(
+                        family_matched_suffix_valid_wrong_hint_decoded
+                            .operand_layout.layout_kind)) == "kUnknown" &&
+                    MatchesTopLevelFlags(
+                        family_matched_suffix_valid_wrong_hint_decoded,
+                        expectation.uses_accumulator,
+                        expectation.uses_tensor_memory,
+                        expectation.uses_scale_path,
+                        expectation.uses_paired_operands) &&
+                    MatchesLayout(
+                        family_matched_suffix_valid_wrong_hint_decoded,
+                        ExpectedLayout{}) &&
+                    family_matched_suffix_valid_wrong_hint_decoded.operand_roles
+                            .binding_count == 0 &&
+                    family_matched_suffix_valid_wrong_hint_decoded.operand_slots
+                            .binding_count == 0 &&
+                    family_matched_suffix_valid_wrong_hint_decoded
+                            .operand_descriptors.descriptor_count == 0,
+                "expected synthetic routed route-info with family-matched suffixed near-miss to ignore valid mismatching caller decode-hint while pinning current partial structural classification")) {
+          return 1;
+        }
+      } else {
+        if (!Expect(
+                family_matched_suffix_valid_wrong_hint_decoded.status ==
+                        StubDecodeStatus::kDecodedStub &&
+                    MatchesRouteInfoPayload(
+                        family_matched_suffix_valid_wrong_hint_decoded,
+                        synthetic_family_matched_suffix_valid_wrong_hint) &&
+                    family_matched_suffix_valid_wrong_hint_decoded.entrypoint_name ==
+                        manifest.entrypoint_name &&
+                    MatchesUnknownHelperSurface(
+                        family_matched_suffix_valid_wrong_hint_decoded) &&
+                    MatchesTopLevelFlags(
+                        family_matched_suffix_valid_wrong_hint_decoded,
+                        false,
+                        false,
+                        false,
+                        false) &&
+                    MatchesLayout(
+                        family_matched_suffix_valid_wrong_hint_decoded,
+                        ExpectedLayout{}) &&
+                    family_matched_suffix_valid_wrong_hint_decoded.operand_roles
+                            .binding_count == 0 &&
+                    family_matched_suffix_valid_wrong_hint_decoded.operand_slots
+                            .binding_count == 0 &&
+                    family_matched_suffix_valid_wrong_hint_decoded
+                            .operand_descriptors.descriptor_count == 0,
+                "expected synthetic routed route-info with family-matched suffixed near-miss to ignore valid mismatching caller decode-hint while staying empty-unknown on non-matching routes")) {
+          return 1;
+        }
       }
       StubDecoderRouteInfo synthetic_family_matched_suffix_invalid_hint =
           synthetic_family_matched_suffix;
@@ -8346,40 +8402,70 @@ int main() {
           static_cast<DecodeSeedHint>(99);
       const StubDecodedInstruction family_matched_suffix_invalid_hint_decoded =
           DecodeStubInstruction(synthetic_family_matched_suffix_invalid_hint);
-      if (!Expect(
-              family_matched_suffix_invalid_hint_decoded.status ==
-                      StubDecodeStatus::kDecodedStub &&
-                  MatchesRouteInfoPayload(
-                      family_matched_suffix_invalid_hint_decoded,
-                      synthetic_family_matched_suffix_invalid_hint) &&
-                  family_matched_suffix_invalid_hint_decoded.entrypoint_name ==
-                      manifest.entrypoint_name &&
-                  std::string_view(GetStubOpcodeShapeName(
-                      family_matched_suffix_invalid_hint_decoded
-                          .opcode_shape)) == expectation.opcode_shape_name &&
-                  std::string_view(GetStubExecutionDomainName(
-                      family_matched_suffix_invalid_hint_decoded
-                          .execution_domain)) ==
-                      expectation.execution_domain_name &&
-                  std::string_view(GetStubOperandLayoutName(
-                      family_matched_suffix_invalid_hint_decoded
-                          .operand_layout.layout_kind)) == "kUnknown" &&
-                  MatchesTopLevelFlags(
-                      family_matched_suffix_invalid_hint_decoded,
-                      expectation.uses_accumulator,
-                      expectation.uses_tensor_memory,
-                      expectation.uses_scale_path,
-                      expectation.uses_paired_operands) &&
-                  MatchesLayout(family_matched_suffix_invalid_hint_decoded,
-                                ExpectedLayout{}) &&
-                  family_matched_suffix_invalid_hint_decoded.operand_roles
-                          .binding_count == 0 &&
-                  family_matched_suffix_invalid_hint_decoded.operand_slots
-                          .binding_count == 0 &&
-                  family_matched_suffix_invalid_hint_decoded.operand_descriptors
-                          .descriptor_count == 0,
-              "expected synthetic routed route-info with family-matched suffixed near-miss to ignore invalid caller decode-hint while pinning current partial structural classification")) {
-        return 1;
+      if (manifest.route == expectation.route) {
+        if (!Expect(
+                family_matched_suffix_invalid_hint_decoded.status ==
+                        StubDecodeStatus::kDecodedStub &&
+                    MatchesRouteInfoPayload(
+                        family_matched_suffix_invalid_hint_decoded,
+                        synthetic_family_matched_suffix_invalid_hint) &&
+                    family_matched_suffix_invalid_hint_decoded.entrypoint_name ==
+                        manifest.entrypoint_name &&
+                    std::string_view(GetStubOpcodeShapeName(
+                        family_matched_suffix_invalid_hint_decoded
+                            .opcode_shape)) == expectation.opcode_shape_name &&
+                    std::string_view(GetStubExecutionDomainName(
+                        family_matched_suffix_invalid_hint_decoded
+                            .execution_domain)) ==
+                        expectation.execution_domain_name &&
+                    std::string_view(GetStubOperandLayoutName(
+                        family_matched_suffix_invalid_hint_decoded
+                            .operand_layout.layout_kind)) == "kUnknown" &&
+                    MatchesTopLevelFlags(
+                        family_matched_suffix_invalid_hint_decoded,
+                        expectation.uses_accumulator,
+                        expectation.uses_tensor_memory,
+                        expectation.uses_scale_path,
+                        expectation.uses_paired_operands) &&
+                    MatchesLayout(family_matched_suffix_invalid_hint_decoded,
+                                  ExpectedLayout{}) &&
+                    family_matched_suffix_invalid_hint_decoded.operand_roles
+                            .binding_count == 0 &&
+                    family_matched_suffix_invalid_hint_decoded.operand_slots
+                            .binding_count == 0 &&
+                    family_matched_suffix_invalid_hint_decoded.operand_descriptors
+                            .descriptor_count == 0,
+                "expected synthetic routed route-info with family-matched suffixed near-miss to ignore invalid caller decode-hint while pinning current partial structural classification")) {
+          return 1;
+        }
+      } else {
+        if (!Expect(
+                family_matched_suffix_invalid_hint_decoded.status ==
+                        StubDecodeStatus::kDecodedStub &&
+                    MatchesRouteInfoPayload(
+                        family_matched_suffix_invalid_hint_decoded,
+                        synthetic_family_matched_suffix_invalid_hint) &&
+                    family_matched_suffix_invalid_hint_decoded.entrypoint_name ==
+                        manifest.entrypoint_name &&
+                    MatchesUnknownHelperSurface(
+                        family_matched_suffix_invalid_hint_decoded) &&
+                    MatchesTopLevelFlags(
+                        family_matched_suffix_invalid_hint_decoded,
+                        false,
+                        false,
+                        false,
+                        false) &&
+                    MatchesLayout(family_matched_suffix_invalid_hint_decoded,
+                                  ExpectedLayout{}) &&
+                    family_matched_suffix_invalid_hint_decoded.operand_roles
+                            .binding_count == 0 &&
+                    family_matched_suffix_invalid_hint_decoded.operand_slots
+                            .binding_count == 0 &&
+                    family_matched_suffix_invalid_hint_decoded.operand_descriptors
+                            .descriptor_count == 0,
+                "expected synthetic routed route-info with family-matched suffixed near-miss to ignore invalid caller decode-hint while staying empty-unknown on non-matching routes")) {
+          return 1;
+        }
       }
     }
   }
