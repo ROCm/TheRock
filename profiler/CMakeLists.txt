@@ -90,9 +90,21 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DROCPROFILER_BUILD_CI=ON
+      -DROCPROFILER_BUILD_DEVELOPER=OFF
+      -DROCPROFILER_BUILD_TESTS=${THEROCK_BUILD_TESTING}
+      -DROCPROFILER_BUILD_INTEGRATION_TESTS=OFF
+      -DROCPROFILER_BUILD_SAMPLES=OFF
+      -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
+      -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
+    IGNORE_PACKAGES
+      rocprofiler-sdk
+      rocprofiler-sdk-roctx
+      rocprofiler-sdk-rocpd
+      rocprofiler-sdk-tests
     COMPILER_TOOLCHAIN
       amd-hip
     RUNTIME_DEPS
@@ -119,6 +131,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-roctx lib/cmake/rocprofiler-sdk-roctx)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-rocpd lib/cmake/rocprofiler-sdk-rocpd)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-rocattach lib/cmake/rocprofiler-sdk-rocattach)
+  therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-tests lib/cmake/rocprofiler-sdk-tests)
   therock_cmake_subproject_activate(rocprofiler-sdk)
 
   therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk/dist/lib
@@ -131,7 +144,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk/dist/lib/rocprofiler-sdk
     LIB_NAMES
       libgotcha.so
-      librocprofiler-sdk-tool.so
       librocprofiler-sdk-tool-kokkosp.so
       librocprofv3-list-avail.so
   )
