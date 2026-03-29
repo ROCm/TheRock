@@ -67,20 +67,17 @@ def setup_env(env):
 
 def execute_tests(env):
     OCLTST_PATH = setup_env(env)
+    OCLTST = Path(OCLTST_PATH) / "ocltst"
     if not is_windows:
         module = "liboclruntime.so"
-        ext = ""
-        shell_var = False
         logging.info(f"++ Setting LD_LIBRARY_PATH={env['LD_LIBRARY_PATH']}")
         logging.info(f"++ Setting OCL_ICD_VENDORS={env['OCL_ICD_VENDORS']}")
     else:
         module = "oclruntime.dll"
-        ext = ".exe"
-        shell_var = True
         logging.info(f"++ Setting OCL_ICD_FILENAMES={env['OCL_ICD_FILENAMES']}")
     # command to execute ocltst tests
     cmd = [
-        f"./ocltst{ext}",
+        f"{OCLTST}",
         "-m",  # module to test
         f"{module}",
         "-s",  # threads to spawn/use
@@ -89,7 +86,7 @@ def execute_tests(env):
         "oclruntime.exclude",  # perf related tests skipped
     ]
     logging.info(f"++ Exec [{OCLTST_PATH}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, cwd=OCLTST_PATH, check=True, env=env, shell=shell_var)
+    subprocess.run(cmd, cwd=OCLTST_PATH, check=True, env=env, shell=False)
 
 
 if __name__ == "__main__":
