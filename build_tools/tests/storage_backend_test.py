@@ -156,6 +156,8 @@ class TestLocalStorageBackendUploadDirectory(unittest.TestCase):
             file2.log
             sub/
                 nested.html
+                deep/
+                    deep.txt
         """
         base.mkdir(parents=True, exist_ok=True)
         (base / "file1.tar.xz").write_bytes(b"xz-data")
@@ -164,6 +166,9 @@ class TestLocalStorageBackendUploadDirectory(unittest.TestCase):
         sub = base / "sub"
         sub.mkdir()
         (sub / "nested.html").write_text("<html/>")
+        deep = sub / "deep"
+        deep.mkdir()
+        (deep / "deep.txt").write_text("deep content")
 
     def test_upload_all_files(self):
 
@@ -176,7 +181,7 @@ class TestLocalStorageBackendUploadDirectory(unittest.TestCase):
             backend = LocalStorageBackend(staging_dir)
             count = backend.upload_directory(source_dir, dest)
 
-            self.assertEqual(count, 4)
+            self.assertEqual(count, 5)
             self.assertTrue((staging_dir / "run-1" / "file1.tar.xz").is_file())
             self.assertTrue(
                 (staging_dir / "run-1" / "file1.tar.xz.sha256sum").is_file()
@@ -263,9 +268,65 @@ class TestLocalStorageBackendUploadDirectory(unittest.TestCase):
             count = backend.upload_directory(source_dir, dest)
 
             # Count should reflect files that would be uploaded.
-            self.assertEqual(count, 4)
+            self.assertEqual(count, 5)
             # But nothing should actually be written.
             self.assertFalse((staging_dir / "run-1").exists())
+
+    def test_exclude_direct_children_only(self):
+        """sub/* excludes direct children but not deeply nested files."""
+        with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
+            staging_dir = Path(staging)
+            source_dir = Path(src) / "artifacts"
+            self._make_tree(source_dir)
+
+            dest = StorageLocation("bucket", "run-1")
+            backend = LocalStorageBackend(staging_dir)
+            count = backend.upload_directory(source_dir, dest, exclude=["sub/*"])
+
+            # sub/nested.html excluded, but sub/deep/deep.txt still uploaded.
+            self.assertEqual(count, 4)
+            self.assertTrue((staging_dir / "run-1" / "file1.tar.xz").is_file())
+            self.assertFalse((staging_dir / "run-1" / "sub" / "nested.html").exists())
+            self.assertTrue(
+                (staging_dir / "run-1" / "sub" / "deep" / "deep.txt").is_file()
+            )
+
+    def test_exclude_recursive(self):
+        """sub/**/* excludes files at all depths."""
+        with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
+            staging_dir = Path(staging)
+            source_dir = Path(src) / "artifacts"
+            self._make_tree(source_dir)
+
+            dest = StorageLocation("bucket", "run-1")
+            backend = LocalStorageBackend(staging_dir)
+            count = backend.upload_directory(source_dir, dest, exclude=["sub/**/*"])
+
+            # sub/nested.html and sub/deep/deep.txt both excluded.
+            self.assertEqual(count, 3)
+            self.assertTrue((staging_dir / "run-1" / "file1.tar.xz").is_file())
+            self.assertTrue((staging_dir / "run-1" / "file2.log").is_file())
+            self.assertFalse((staging_dir / "run-1" / "sub" / "nested.html").exists())
+            self.assertFalse(
+                (staging_dir / "run-1" / "sub" / "deep" / "deep.txt").exists()
+            )
+
+    def test_exclude_with_include(self):
+
+        with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
+            staging_dir = Path(staging)
+            source_dir = Path(src) / "artifacts"
+            self._make_tree(source_dir)
+
+            dest = StorageLocation("bucket", "run-1")
+            backend = LocalStorageBackend(staging_dir)
+            # Include all files, but exclude .log files.
+            count = backend.upload_directory(source_dir, dest, exclude=["*.log"])
+
+            self.assertEqual(count, 4)
+            self.assertTrue((staging_dir / "run-1" / "file1.tar.xz").is_file())
+            self.assertTrue((staging_dir / "run-1" / "sub" / "nested.html").is_file())
+            self.assertFalse((staging_dir / "run-1" / "file2.log").exists())
 
     def test_empty_directory_returns_zero(self):
 
