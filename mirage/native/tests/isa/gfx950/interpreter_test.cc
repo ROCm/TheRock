@@ -14814,6 +14814,267 @@ int main() {
   }
 
   {
+  const std::vector<DecodedInstruction>
+      interleaved_side_effect_maintenance_program = {
+          DecodedInstruction::TwoOperand("S_DCACHE_DISCARD",
+                                         InstructionOperand::Sgpr(0),
+                                         InstructionOperand::Imm32(0x40)),
+          DecodedInstruction::OneOperand("S_MEMTIME",
+                                         InstructionOperand::Sgpr(30)),
+          DecodedInstruction::Nullary("BUFFER_WBL2"),
+          DecodedInstruction::Nullary("S_DCACHE_INV"),
+          DecodedInstruction::ThreeOperand("S_ATC_PROBE",
+                                           InstructionOperand::Imm32(0x2a),
+                                           InstructionOperand::Sgpr(12),
+                                           InstructionOperand::Imm32(0x24)),
+          DecodedInstruction::Nullary("BUFFER_INV"),
+          DecodedInstruction::OneOperand("S_MEMREALTIME",
+                                         InstructionOperand::Sgpr(34)),
+          DecodedInstruction::Nullary("S_ICACHE_INV"),
+          DecodedInstruction::ThreeOperand("S_ATC_PROBE_BUFFER",
+                                           InstructionOperand::Imm32(0x55),
+                                           InstructionOperand::Sgpr(16),
+                                           InstructionOperand::Sgpr(24)),
+          DecodedInstruction::Nullary("S_DCACHE_WB_VOL"),
+          DecodedInstruction::TwoOperand("S_DCACHE_DISCARD_X2",
+                                         InstructionOperand::Sgpr(8),
+                                         InstructionOperand::Sgpr(20)),
+          DecodedInstruction::Nullary("S_ENDPGM"),
+      };
+  const auto make_interleaved_side_effect_maintenance_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x180u;
+    state.sgprs[1] = 0u;
+    state.sgprs[8] = 0x200u;
+    state.sgprs[9] = 0u;
+    state.sgprs[12] = 0x240u;
+    state.sgprs[13] = 0u;
+    state.sgprs[16] = 0x280u;
+    state.sgprs[17] = 0u;
+    state.sgprs[18] = 0x80u;
+    state.sgprs[19] = 0u;
+    state.sgprs[20] = 0x10u;
+    state.sgprs[24] = 0x18u;
+    state.sgprs[29] = 0x11111111u;
+    state.sgprs[30] = 0xaaaabbbbu;
+    state.sgprs[31] = 0xccccddddu;
+    state.sgprs[32] = 0x22222222u;
+    state.sgprs[33] = 0x33333333u;
+    state.sgprs[34] = 0x12345678u;
+    state.sgprs[35] = 0x9abcdef0u;
+    state.sgprs[36] = 0x44444444u;
+    state.sgprs[37] = 0x55555555u;
+    state.sgprs[40] = 0x66666666u;
+    state.sgprs[41] = 0x77777777u;
+    state.sgprs[60] = 0x89abcdefu;
+    state.sgprs[61] = 0x13572468u;
+    state.vgprs[22][0] = 0x01020304u;
+    state.vgprs[22][1] = 0x11121314u;
+    state.vgprs[22][2] = 0x21222324u;
+    state.vgprs[22][3] = 0x31323334u;
+    state.vgprs[31][0] = 0xaaaa0001u;
+    state.vgprs[31][1] = 0xbbbb0002u;
+    state.vgprs[31][2] = 0xcccc0003u;
+    state.vgprs[31][3] = 0xdddd0004u;
+    return state;
+  };
+  const auto make_interleaved_side_effect_maintenance_memory = []() {
+    LinearExecutionMemory memory(0x400, 0);
+    memory.WriteU32(0x20u, 0x11223344u);
+    memory.WriteU32(0x180u, 0x55667788u);
+    memory.WriteU32(0x1c0u, 0x99aabbccu);
+    memory.WriteU32(0x210u, 0xddeeff00u);
+    memory.WriteU32(0x240u, 0x0badc0deu);
+    memory.WriteU32(0x264u, 0x12345678u);
+    memory.WriteU32(0x280u, 0x89abcdefu);
+    memory.WriteU32(0x298u, 0xfedcba98u);
+    memory.WriteU32(0x2f0u, 0x2468ace0u);
+    return memory;
+  };
+  const auto validate_interleaved_side_effect_maintenance_state =
+      [&](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+          const char* mode) {
+        const auto expect_timestamp_pair_written =
+            [&](std::uint16_t dest_reg,
+                std::uint32_t initial_lo,
+                std::uint32_t initial_hi,
+                const char* description) {
+              const std::uint32_t written_lo = state.sgprs[dest_reg];
+              const std::uint32_t written_hi = state.sgprs[dest_reg + 1u];
+              return Expect(written_lo != initial_lo || written_hi != initial_hi,
+                            (std::string(mode) + " " + description +
+                             " to clobber only its destination pair")
+                                .c_str()) &&
+                     Expect(written_lo != 0u || written_hi != 0u,
+                            (std::string(mode) + " " + description +
+                             " to produce a non-zero timestamp")
+                                .c_str());
+            };
+        std::uint32_t value = 0;
+        return Expect(
+                   state.halted,
+                   (std::string(mode) +
+                    " interleaved side-effect maintenance program to halt")
+                       .c_str()) &&
+               Expect(state.exec_mask == 0b1011ULL,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance to preserve exec")
+                          .c_str()) &&
+               Expect(state.sgprs[0] == 0x180u && state.sgprs[1] == 0u &&
+                          state.sgprs[8] == 0x200u && state.sgprs[9] == 0u &&
+                          state.sgprs[12] == 0x240u && state.sgprs[13] == 0u &&
+                          state.sgprs[16] == 0x280u && state.sgprs[17] == 0u &&
+                          state.sgprs[18] == 0x80u && state.sgprs[19] == 0u &&
+                          state.sgprs[20] == 0x10u &&
+                          state.sgprs[24] == 0x18u,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance to preserve control sgprs")
+                          .c_str()) &&
+               Expect(state.sgprs[29] == 0x11111111u &&
+                          state.sgprs[32] == 0x22222222u &&
+                          state.sgprs[33] == 0x33333333u &&
+                          state.sgprs[36] == 0x44444444u &&
+                          state.sgprs[37] == 0x55555555u &&
+                          state.sgprs[40] == 0x66666666u &&
+                          state.sgprs[41] == 0x77777777u &&
+                          state.sgprs[60] == 0x89abcdefu &&
+                          state.sgprs[61] == 0x13572468u,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance to preserve adjacent sgprs")
+                          .c_str()) &&
+               expect_timestamp_pair_written(30u, 0xaaaabbbbu, 0xccccddddu,
+                                             "s_memtime") &&
+               expect_timestamp_pair_written(34u, 0x12345678u, 0x9abcdef0u,
+                                             "s_memrealtime") &&
+               Expect(state.vgprs[22][0] == 0x01020304u &&
+                          state.vgprs[22][1] == 0x11121314u &&
+                          state.vgprs[22][2] == 0x21222324u &&
+                          state.vgprs[22][3] == 0x31323334u &&
+                          state.vgprs[31][0] == 0xaaaa0001u &&
+                          state.vgprs[31][1] == 0xbbbb0002u &&
+                          state.vgprs[31][2] == 0xcccc0003u &&
+                          state.vgprs[31][3] == 0xdddd0004u,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance to preserve vgprs")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x20u, &value),
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x11223344u,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x180u, &value),
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x55667788u,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance discard base preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x1c0u, &value),
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x99aabbccu,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance discard target preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x210u, &value),
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0xddeeff00u,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance discard x2 target preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x240u, &value),
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x0badc0deu,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance probe base preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x264u, &value),
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x12345678u,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance probe target preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x280u, &value),
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x89abcdefu,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance probe buffer base preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x298u, &value),
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0xfedcba98u,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance probe buffer target preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x2f0u, &value),
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance memory read")
+                          .c_str()) &&
+               Expect(value == 0x2468ace0u,
+                      (std::string(mode) +
+                       " interleaved side-effect maintenance unrelated memory preserved")
+                          .c_str());
+      };
+
+  LinearExecutionMemory decoded_interleaved_side_effect_maintenance_memory =
+      make_interleaved_side_effect_maintenance_memory();
+  WaveExecutionState decoded_interleaved_side_effect_maintenance_state =
+      make_interleaved_side_effect_maintenance_state();
+  if (!Expect(interpreter.ExecuteProgram(
+                   interleaved_side_effect_maintenance_program,
+                   &decoded_interleaved_side_effect_maintenance_state,
+                   &decoded_interleaved_side_effect_maintenance_memory,
+                   &error_message),
+              error_message.c_str()) ||
+      !validate_interleaved_side_effect_maintenance_state(
+          decoded_interleaved_side_effect_maintenance_state,
+          decoded_interleaved_side_effect_maintenance_memory, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction>
+      compiled_interleaved_side_effect_maintenance_program;
+  if (!Expect(interpreter.CompileProgram(
+                   interleaved_side_effect_maintenance_program,
+                   &compiled_interleaved_side_effect_maintenance_program,
+                   &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_interleaved_side_effect_maintenance_memory =
+      make_interleaved_side_effect_maintenance_memory();
+  WaveExecutionState compiled_interleaved_side_effect_maintenance_state =
+      make_interleaved_side_effect_maintenance_state();
+  if (!Expect(interpreter.ExecuteProgram(
+                   compiled_interleaved_side_effect_maintenance_program,
+                   &compiled_interleaved_side_effect_maintenance_state,
+                   &compiled_interleaved_side_effect_maintenance_memory,
+                   &error_message),
+              error_message.c_str()) ||
+      !validate_interleaved_side_effect_maintenance_state(
+          compiled_interleaved_side_effect_maintenance_state,
+          compiled_interleaved_side_effect_maintenance_memory, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
   const std::vector<DecodedInstruction> buffer_maintenance_program = {
       DecodedInstruction::Nullary("BUFFER_WBL2"),
       DecodedInstruction::Nullary("BUFFER_INV"),
