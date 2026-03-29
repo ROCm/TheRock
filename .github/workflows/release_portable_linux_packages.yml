@@ -227,7 +227,7 @@ jobs:
         run: |
           echo ${{ github.workspace }}
           pwd || true
-          sccache --start-server || echo "server start failed" && exit 3
+          sccache --start-server
       - name: Runner health status
         run: |
           ./build_tools/health_status.py
