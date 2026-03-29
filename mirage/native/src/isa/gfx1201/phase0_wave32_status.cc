@@ -283,6 +283,11 @@ BuildVdsBoundaryBucketStatuses() {
         0u,
         0u,
         0u,
+        0u,
+        0u,
+        0u,
+        0u,
+        0u,
         bucket.safe_under_current_request,
     };
     bool saw_seed_entry = false;
@@ -343,6 +348,24 @@ BuildVdsBoundaryBucketStatuses() {
       if (seed_entry->state ==
           Gfx1201SupportState::kTransferableWithDecoderAndSemanticWork) {
         ++status.transferable_with_decoder_and_semantic_work_count;
+      }
+
+      switch (seed_entry->state) {
+        case Gfx1201SupportState::kTransferableAsIs:
+          ++status.transferable_as_is_state_count;
+          break;
+        case Gfx1201SupportState::kTransferableWithDecoderWork:
+          ++status.transferable_with_decoder_work_state_count;
+          break;
+        case Gfx1201SupportState::kTransferableWithSemanticWork:
+          ++status.transferable_with_semantic_work_state_count;
+          break;
+        case Gfx1201SupportState::kTransferableWithDecoderAndSemanticWork:
+          ++status.transferable_with_decoder_and_semantic_work_state_count;
+          break;
+        case Gfx1201SupportState::kGfx1201Specific:
+          ++status.gfx1201_specific_state_count;
+          break;
       }
     }
 

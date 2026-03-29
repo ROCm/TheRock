@@ -80,6 +80,11 @@ struct Gfx1201Wave32Phase0VdsBoundaryBucketStatus {
   std::uint32_t transferable_with_decoder_work_count = 0;
   std::uint32_t transferable_with_decoder_and_semantic_work_count = 0;
   std::uint32_t gfx1201_specific_count = 0;
+  std::uint32_t transferable_as_is_state_count = 0;
+  std::uint32_t transferable_with_decoder_work_state_count = 0;
+  std::uint32_t transferable_with_semantic_work_state_count = 0;
+  std::uint32_t transferable_with_decoder_and_semantic_work_state_count = 0;
+  std::uint32_t gfx1201_specific_state_count = 0;
   bool safe_under_current_request = false;
 };
 

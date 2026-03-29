@@ -83,6 +83,11 @@
       "transferable_with_decoder_work_count": 2,
       "transferable_with_decoder_and_semantic_work_count": 2,
       "gfx1201_specific_count": 0,
+      "transferable_as_is_state_count": 0,
+      "transferable_with_decoder_work_state_count": 0,
+      "transferable_with_semantic_work_state_count": 0,
+      "transferable_with_decoder_and_semantic_work_state_count": 2,
+      "gfx1201_specific_state_count": 0,
       "safe_under_current_request": false
     },
     {
@@ -101,6 +106,11 @@
       "transferable_with_decoder_work_count": 1,
       "transferable_with_decoder_and_semantic_work_count": 1,
       "gfx1201_specific_count": 6,
+      "transferable_as_is_state_count": 0,
+      "transferable_with_decoder_work_state_count": 0,
+      "transferable_with_semantic_work_state_count": 0,
+      "transferable_with_decoder_and_semantic_work_state_count": 1,
+      "gfx1201_specific_state_count": 6,
       "safe_under_current_request": false
     },
     {
@@ -119,6 +129,11 @@
       "transferable_with_decoder_work_count": 0,
       "transferable_with_decoder_and_semantic_work_count": 0,
       "gfx1201_specific_count": 12,
+      "transferable_as_is_state_count": 0,
+      "transferable_with_decoder_work_state_count": 0,
+      "transferable_with_semantic_work_state_count": 0,
+      "transferable_with_decoder_and_semantic_work_state_count": 0,
+      "gfx1201_specific_state_count": 12,
       "safe_under_current_request": false
     },
     {
@@ -137,6 +152,11 @@
       "transferable_with_decoder_work_count": 0,
       "transferable_with_decoder_and_semantic_work_count": 0,
       "gfx1201_specific_count": 3,
+      "transferable_as_is_state_count": 0,
+      "transferable_with_decoder_work_state_count": 0,
+      "transferable_with_semantic_work_state_count": 0,
+      "transferable_with_decoder_and_semantic_work_state_count": 0,
+      "gfx1201_specific_state_count": 3,
       "safe_under_current_request": false
     }
   ],

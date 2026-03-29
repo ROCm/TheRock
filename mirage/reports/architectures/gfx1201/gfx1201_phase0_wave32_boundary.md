@@ -35,7 +35,7 @@ execution path.
 - There is no safe ENC_VDS continuation under the current request boundary: every remaining bucket crosses allocator-or-GDS, exchange/compare-store, multi-address, or gfx1201-specific BVH semantics.
 - The boundary report now carries exact remaining-VDS instruction-name and numeric-opcode maps so the unresolved tail can be queried directly by either key.
 - The denormalized remaining-VDS status list now also carries exact opcode, operand-count, support-rollup, and support-state metadata for each unsafe instruction.
-- The boundary report now also carries exact per-bucket opcode spans, operand-count spans, operand-count compositions, and support-rollup composition counts for the unresolved VDS tail.
+- The boundary report now also carries exact per-bucket opcode spans, operand-count spans, operand-count compositions, support-rollup composition counts, and support-state composition counts for the unresolved VDS tail.
 - The exact unsafe-bucket escalation order is `append_consume`, then `exchange_compare_store`, then `multi_address`, then `bvh_stack`.
 - The boundary report now also carries an exact next-risk step chain with first and last instruction names, cumulative remaining counts, and explicit next-bucket handoff metadata for the unresolved VDS tail.
 - The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.
@@ -50,10 +50,10 @@ execution path.
 
 ## Remaining VDS Bucket Statuses
 
-- `append_consume`: opcode span `61..62`, operand-count span `3..3`, operand-count composition `3->2, 4->0, 5->0, 6->0`, decoder-rollup `2`, decoder+semantic state `2`, gfx1201-specific `0`
-- `exchange_compare_store`: opcode span `16..126`, operand-count span `5..6`, operand-count composition `3->0, 4->0, 5->5, 6->2`, decoder-rollup `1`, decoder+semantic state `1`, gfx1201-specific `6`
-- `multi_address`: opcode span `14..120`, operand-count span `3..6`, operand-count composition `3->4, 4->4, 5->0, 6->4`, decoder-rollup `0`, decoder+semantic rollup `0`, gfx1201-specific `12`
-- `bvh_stack`: opcode span `224..226`, operand-count span `4..4`, operand-count composition `3->0, 4->3, 5->0, 6->0`, decoder-rollup `0`, decoder+semantic rollup `0`, gfx1201-specific `3`
+- `append_consume`: opcode span `61..62`, operand-count span `3..3`, operand-count composition `3->2, 4->0, 5->0, 6->0`, rollup composition `decoder->2, decoder+semantic-state->2, gfx1201-specific->0`, state composition `as-is->0, decoder->0, semantic->0, decoder+semantic->2, gfx1201-specific->0`
+- `exchange_compare_store`: opcode span `16..126`, operand-count span `5..6`, operand-count composition `3->0, 4->0, 5->5, 6->2`, rollup composition `decoder->1, decoder+semantic-state->1, gfx1201-specific->6`, state composition `as-is->0, decoder->0, semantic->0, decoder+semantic->1, gfx1201-specific->6`
+- `multi_address`: opcode span `14..120`, operand-count span `3..6`, operand-count composition `3->4, 4->4, 5->0, 6->4`, rollup composition `decoder->0, decoder+semantic-state->0, gfx1201-specific->12`, state composition `as-is->0, decoder->0, semantic->0, decoder+semantic->0, gfx1201-specific->12`
+- `bvh_stack`: opcode span `224..226`, operand-count span `4..4`, operand-count composition `3->0, 4->3, 5->0, 6->0`, rollup composition `decoder->0, decoder+semantic-state->0, gfx1201-specific->3`, state composition `as-is->0, decoder->0, semantic->0, decoder+semantic->0, gfx1201-specific->3`
 
 ## Remaining VDS Next-Risk Chain
 
