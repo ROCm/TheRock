@@ -55,6 +55,8 @@ def setup_env(env):
             f"{ROCK_LIB_PATH}:{OCL_LIB}:{LLVM_LIB}:{ROCM_SYSDEPS_LIB}:{LD_LIBRARY_PATH}:{OCLTST_PATH}"
         )
         env["OCL_ICD_VENDORS"] = f"{OCL_ICD_VENDORS}/"
+        logging.info(f"++ Setting LD_LIBRARY_PATH={env['LD_LIBRARY_PATH']}")
+        logging.info(f"++ Setting OCL_ICD_VENDORS={env['OCL_ICD_VENDORS']}")
     else:
 
         OCLTST_PATH = Path(THEROCK_DIR) / "tests" / "ocltst"
@@ -62,19 +64,14 @@ def setup_env(env):
         OCL_DLL_FILE = Path(OCLTST_PATH) / "amdocl64.dll"
         OCL_ICD_DLL = Path(THEROCK_BIN_DIR) / "OpenCL.dll"
         env["OCL_ICD_FILENAMES"] = str(OCL_DLL_FILE)
+        logging.info(f"++ Setting OCL_ICD_FILENAMES={env['OCL_ICD_FILENAMES']}")
     return OCLTST_PATH
 
 
 def execute_tests(env):
     OCLTST_PATH = setup_env(env)
     OCLTST = Path(OCLTST_PATH) / "ocltst"
-    if not is_windows:
-        module = "liboclruntime.so"
-        logging.info(f"++ Setting LD_LIBRARY_PATH={env['LD_LIBRARY_PATH']}")
-        logging.info(f"++ Setting OCL_ICD_VENDORS={env['OCL_ICD_VENDORS']}")
-    else:
-        module = "oclruntime.dll"
-        logging.info(f"++ Setting OCL_ICD_FILENAMES={env['OCL_ICD_FILENAMES']}")
+    module = "liboclruntime.so" if not is_windows else "oclruntime.dll"
     # command to execute ocltst tests
     cmd = [
         f"{OCLTST}",
