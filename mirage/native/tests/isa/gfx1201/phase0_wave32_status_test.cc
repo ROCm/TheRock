@@ -336,6 +336,14 @@ int main() {
                   vds_boundary_bucket_statuses.front().last_opcode == 62u &&
                   vds_boundary_bucket_statuses.front().min_operand_count == 3u &&
                   vds_boundary_bucket_statuses.front().max_operand_count == 3u &&
+                  vds_boundary_bucket_statuses.front().operand_count_3_count ==
+                      2u &&
+                  vds_boundary_bucket_statuses.front().operand_count_4_count ==
+                      0u &&
+                  vds_boundary_bucket_statuses.front().operand_count_5_count ==
+                      0u &&
+                  vds_boundary_bucket_statuses.front().operand_count_6_count ==
+                      0u &&
                   vds_boundary_bucket_statuses.front()
                           .transferable_with_decoder_work_count == 2u &&
                   vds_boundary_bucket_statuses.front()
@@ -350,6 +358,14 @@ int main() {
                   vds_boundary_bucket_statuses.back().last_opcode == 226u &&
                   vds_boundary_bucket_statuses.back().min_operand_count == 4u &&
                   vds_boundary_bucket_statuses.back().max_operand_count == 4u &&
+                  vds_boundary_bucket_statuses.back().operand_count_3_count ==
+                      0u &&
+                  vds_boundary_bucket_statuses.back().operand_count_4_count ==
+                      3u &&
+                  vds_boundary_bucket_statuses.back().operand_count_5_count ==
+                      0u &&
+                  vds_boundary_bucket_statuses.back().operand_count_6_count ==
+                      0u &&
                   vds_boundary_bucket_statuses.back()
                           .transferable_with_decoder_work_count == 0u &&
                   vds_boundary_bucket_statuses.back()
@@ -366,6 +382,10 @@ int main() {
                   append_bucket_status->last_opcode == 62u &&
                   append_bucket_status->min_operand_count == 3u &&
                   append_bucket_status->max_operand_count == 3u &&
+                  append_bucket_status->operand_count_3_count == 2u &&
+                  append_bucket_status->operand_count_4_count == 0u &&
+                  append_bucket_status->operand_count_5_count == 0u &&
+                  append_bucket_status->operand_count_6_count == 0u &&
                   append_bucket_status->transferable_with_decoder_work_count ==
                       2u &&
                   append_bucket_status
@@ -382,6 +402,10 @@ int main() {
                   exchange_bucket_status->last_opcode == 126u &&
                   exchange_bucket_status->min_operand_count == 5u &&
                   exchange_bucket_status->max_operand_count == 6u &&
+                  exchange_bucket_status->operand_count_3_count == 0u &&
+                  exchange_bucket_status->operand_count_4_count == 0u &&
+                  exchange_bucket_status->operand_count_5_count == 5u &&
+                  exchange_bucket_status->operand_count_6_count == 2u &&
                   exchange_bucket_status
                           ->transferable_with_decoder_work_count == 1u &&
                   exchange_bucket_status
@@ -397,6 +421,10 @@ int main() {
                   multi_bucket_status->last_opcode == 120u &&
                   multi_bucket_status->min_operand_count == 3u &&
                   multi_bucket_status->max_operand_count == 6u &&
+                  multi_bucket_status->operand_count_3_count == 4u &&
+                  multi_bucket_status->operand_count_4_count == 4u &&
+                  multi_bucket_status->operand_count_5_count == 0u &&
+                  multi_bucket_status->operand_count_6_count == 4u &&
                   multi_bucket_status->transferable_with_decoder_work_count ==
                       0u &&
                   multi_bucket_status
@@ -412,6 +440,10 @@ int main() {
                   bvh_bucket_status->last_opcode == 226u &&
                   bvh_bucket_status->min_operand_count == 4u &&
                   bvh_bucket_status->max_operand_count == 4u &&
+                  bvh_bucket_status->operand_count_3_count == 0u &&
+                  bvh_bucket_status->operand_count_4_count == 3u &&
+                  bvh_bucket_status->operand_count_5_count == 0u &&
+                  bvh_bucket_status->operand_count_6_count == 0u &&
                   bvh_bucket_status->transferable_with_decoder_work_count ==
                       0u &&
                   bvh_bucket_status

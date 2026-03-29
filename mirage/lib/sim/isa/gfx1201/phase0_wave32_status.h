@@ -73,6 +73,10 @@ struct Gfx1201Wave32Phase0VdsBoundaryBucketStatus {
   std::uint32_t last_opcode = 0;
   std::uint16_t min_operand_count = 0;
   std::uint16_t max_operand_count = 0;
+  std::uint32_t operand_count_3_count = 0;
+  std::uint32_t operand_count_4_count = 0;
+  std::uint32_t operand_count_5_count = 0;
+  std::uint32_t operand_count_6_count = 0;
   std::uint32_t transferable_with_decoder_work_count = 0;
   std::uint32_t transferable_with_decoder_and_semantic_work_count = 0;
   std::uint32_t gfx1201_specific_count = 0;

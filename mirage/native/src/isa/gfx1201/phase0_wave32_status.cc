@@ -279,6 +279,10 @@ BuildVdsBoundaryBucketStatuses() {
         0u,
         0u,
         0u,
+        0u,
+        0u,
+        0u,
+        0u,
         bucket.safe_under_current_request,
     };
     bool saw_seed_entry = false;
@@ -306,6 +310,23 @@ BuildVdsBoundaryBucketStatuses() {
         status.max_operand_count = std::max(
             status.max_operand_count,
             static_cast<std::uint16_t>(seed_entry->operand_count));
+      }
+
+      switch (seed_entry->operand_count) {
+        case 3:
+          ++status.operand_count_3_count;
+          break;
+        case 4:
+          ++status.operand_count_4_count;
+          break;
+        case 5:
+          ++status.operand_count_5_count;
+          break;
+        case 6:
+          ++status.operand_count_6_count;
+          break;
+        default:
+          break;
       }
 
       switch (seed_entry->rollup) {
