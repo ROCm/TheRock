@@ -46,7 +46,7 @@ jobs:
   setup_host_asan:
     uses: ./.github/workflows/setup.yml
     # testing
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     with:
       build_variant: "host-asan"
 
