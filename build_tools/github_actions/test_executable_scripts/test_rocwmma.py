@@ -13,6 +13,17 @@ platform = os.getenv("RUNNER_OS").lower()
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
+import sys
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_api import is_host_asan
+
+if is_host_asan():
+    print(
+        "SKIP: host-ASAN build (THEROCK_SANITIZER=HOST_ASAN) does not produce "
+        "GPU math library test binaries. Run with linux-release-asan for device tests."
+    )
+    sys.exit(0)
+
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)

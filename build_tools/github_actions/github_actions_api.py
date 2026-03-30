@@ -609,3 +609,20 @@ def is_asan():
     """Using artifact_group, determines if this is an asan build"""
     ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP", "")
     return "asan" in ARTIFACT_GROUP
+
+
+def is_host_asan() -> bool:
+    """Returns True when the build uses host-only ASAN.
+
+    Host-ASAN builds instrument CPU-side code only and do not compile GPU math
+    library test binaries (hipblas-test, rocblas-test, etc.).  Use this to skip
+    those tests cleanly instead of failing with a missing-binary error.
+
+    Detection order:
+    1. THEROCK_SANITIZER=HOST_ASAN (set explicitly in the test environment)
+    2. ARTIFACT_GROUP containing "host-asan" (e.g. "gfx94X-dcgpu-host-asan"),
+       following the same convention as is_asan() using ARTIFACT_GROUP.
+    """
+    if os.getenv("THEROCK_SANITIZER", "") == "HOST_ASAN":
+        return True
+    return "host-asan" in os.getenv("ARTIFACT_GROUP", "")

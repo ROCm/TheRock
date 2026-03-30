@@ -146,6 +146,23 @@ jobs:
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
+          # Generate an LSAN suppression file to filter known non-ROCm leak noise.
+          #
+          # 1. /usr/bin/date: shell test scripts invoke `date` as a subprocess; LD_PRELOAD
+          #    is inherited, causing spurious 128-byte direct leaks from the date binary.
+          # 2. python3.x: the Python interpreter does not free all allocations on exit
+          #    (by design). The exact minor version is detected from the runner environment
+          #    so the suppression is always current without manual updates.
+          PYTHON_BIN=$(python3 -c "import sys; print(f'python{sys.version_info.major}.{sys.version_info.minor}')")
+          LSAN_SUP="${{ github.workspace }}/lsan_suppressions.txt"
+          cat > "${LSAN_SUP}" << EOF
+# /usr/bin/date leaks: LD_PRELOAD inherited by child shell processes in test scripts
+leak:/usr/bin/date
+# Python interpreter exit-time allocations (not freed during interpreter shutdown)
+leak:${PYTHON_BIN}
+EOF
+          echo "LSAN_OPTIONS=suppressions=${LSAN_SUP}" >> $GITHUB_ENV
+
       - name: Test
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
