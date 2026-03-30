@@ -6,18 +6,19 @@ targeting older code object versions, ensuring backward compatibility
 across the AMDGPU runtime.
 
 Test procedure:
-  1. Initialize the rocm-systems git submodule (if needed) to obtain the
-     HIP bit_extract sample source.
-  2. Compile bit_extract.cpp with hipcc using default compiler settings
-     (no explicit -mcode-object-version flag).
-  3. Detect the code object version (n) of the resulting binary.
-  4. Recompile with -mcode-object-version=n-1 and n-2 to produce binaries
+  1. Compile a self-contained HIP program (sources/cov_vecadd.hip) with
+     hipcc using default compiler settings (no explicit
+     -mcode-object-version flag).
+  2. Detect the code object version (n) of the resulting binary.
+  3. Recompile with -mcode-object-version=n-1 and n-2 to produce binaries
      targeting the two prior code object versions.
-  5. For each variant, verify:
+  4. For each variant, verify:
      - The detected code object version in the binary matches the requested
        version.
      - The binary executes successfully (exit code 0).
 
+The HIP source lives in the test tree (sources/cov_vecadd.hip) so the test
+does not depend on the rocm-systems submodule being initialised.
 """
 
 import re
@@ -35,7 +36,7 @@ from utils.logger import log
 
 
 class CovBackwardCompatibilityTest(FunctionalBase):
-    """Validate bit_extract code object backward compatibility."""
+    """Validate code-object-version backward compatibility."""
 
     def __init__(self):
         super().__init__(
@@ -44,35 +45,14 @@ class CovBackwardCompatibilityTest(FunctionalBase):
         )
         self.test_results: List[Dict[str, Any]] = []
 
-        self.sample_relative_path = "projects/hip-tests/samples/0_Intro/bit_extract"
-        self.include_relative_path = "projects/hip-tests/samples/common"
-        self.source_file = "bit_extract.cpp"
-        self.binary_prefix = "bit_extract"
+        self.source_file = "cov_vecadd.hip"
+        self.binary_prefix = "cov_vecadd"
 
-        self.rocm_systems_dir = self.therock_dir / "rocm-systems"
-        self.sample_dir = self.rocm_systems_dir / self.sample_relative_path
-        self.include_dir = self.rocm_systems_dir / self.include_relative_path
+        # Source lives alongside the test scripts in the repo, under sources/.
+        self.sources_dir = Path(__file__).resolve().parents[1] / "sources"
 
-    def _ensure_sources_ready(self) -> None:
-        is_empty = not self.rocm_systems_dir.exists() or not any(
-            self.rocm_systems_dir.iterdir()
-        )
-        if is_empty:
-            log.info(
-                "rocm-systems submodule not initialized at %s, running git submodule update --init",
-                self.rocm_systems_dir,
-            )
-            rc, output = self.execute_command_with_output(
-                ["git", "submodule", "update", "--init", "rocm-systems"],
-                cwd=self.therock_dir,
-            )
-            if rc != 0:
-                raise TestExecutionError(
-                    f"Failed to initialize rocm-systems submodule (exit code {rc}):\n{output}"
-                )
-
-        if not self.include_dir.exists():
-            raise TestExecutionError(f"Include path not found: {self.include_dir}")
+        # Build directory for compiled binaries (created/cleaned in run_tests).
+        self.build_dir = Path(__file__).resolve().parents[1] / "build" / "cov"
 
     def _resolve_tool(self, candidates: List[Path], default_tool: str) -> str:
         for candidate in candidates:
@@ -88,13 +68,14 @@ class CovBackwardCompatibilityTest(FunctionalBase):
             ],
             "hipcc",
         )
-        cmd = [hipcc, self.source_file, "-I", str(self.include_dir)]
+        source_path = str(self.sources_dir / self.source_file)
+        cmd = [hipcc, source_path]
         if code_obj_version is not None:
             cmd.append(f"-mcode-object-version={code_obj_version}")
         cmd += ["-o", str(output_binary)]
 
         env = self.get_rocm_env_with_path()
-        rc, _ = self.execute_command_with_output(cmd, cwd=self.sample_dir, env=env)
+        rc, _ = self.execute_command_with_output(cmd, cwd=self.build_dir, env=env)
         return rc
 
     def _extract_code_object_version(self, binary_path: Path) -> int:
@@ -142,7 +123,7 @@ class CovBackwardCompatibilityTest(FunctionalBase):
             )
             return code_object_version
 
-        with tempfile.TemporaryDirectory(prefix="targetid_bit_extract_") as tmpdir:
+        with tempfile.TemporaryDirectory(prefix="cov_backward_compat_") as tmpdir:
             tmpdir_path = Path(tmpdir)
             rc, offloading_out = self.execute_command_with_output(
                 [llvm_objdump, "--offloading", str(binary_path)],
@@ -218,7 +199,7 @@ class CovBackwardCompatibilityTest(FunctionalBase):
         """
         env = self.get_rocm_env_with_path()
         rc, output = self.execute_command_with_output(
-            [str(binary_path)], cwd=self.sample_dir, env=env
+            [str(binary_path)], cwd=self.build_dir, env=env
         )
         if rc != 0:
             return rc, output, f"Binary execution failed with return code {rc}"
@@ -234,7 +215,7 @@ class CovBackwardCompatibilityTest(FunctionalBase):
         error: str = None,
     ) -> None:
         result: Dict[str, Any] = {
-            "test_suite": "targetid_bit_extract",
+            "test_suite": "cov_backward_compat",
             "test_case": variant,
             "command": command,
             "return_code": return_code,
@@ -313,14 +294,25 @@ class CovBackwardCompatibilityTest(FunctionalBase):
 
     def run_tests(self) -> None:
         log.info(f"Running {self.display_name} Tests")
-        self._ensure_sources_ready()
+
+        source_path = self.sources_dir / self.source_file
+        if not source_path.exists():
+            raise TestExecutionError(
+                f"Source file not found: {source_path}\n"
+                f"Expected in test sources directory: {self.sources_dir}"
+            )
+
+        # Prepare a clean build directory for compiled binaries.
+        if self.build_dir.exists():
+            shutil.rmtree(self.build_dir)
+        self.build_dir.mkdir(parents=True)
 
         # 1) Build with default compiler behavior (no explicit code object version),
         #    then detect current code object version n from the produced binary.
         base_version = self._test_variant(
             "default_build_detect_n",
-            f"hipcc {self.source_file} -I {self.include_dir}",
-            self.sample_dir / f"{self.binary_prefix}_default",
+            f"hipcc {self.source_file}",
+            self.build_dir / f"{self.binary_prefix}_default",
         )
         if base_version is None:
             return
@@ -330,7 +322,7 @@ class CovBackwardCompatibilityTest(FunctionalBase):
             target = base_version - offset
             variant = f"backward_compat_{label}"
             compile_cmd = (
-                f"hipcc {self.source_file} -I {self.include_dir} "
+                f"hipcc {self.source_file} "
                 f"-mcode-object-version={target}"
             )
 
@@ -347,7 +339,7 @@ class CovBackwardCompatibilityTest(FunctionalBase):
             self._test_variant(
                 variant,
                 compile_cmd,
-                self.sample_dir / f"{self.binary_prefix}_cov{target}",
+                self.build_dir / f"{self.binary_prefix}_cov{target}",
                 code_obj_version=target,
                 expected_version=target,
             )
