@@ -33,15 +33,16 @@ CI runs on pull requests if modified files pass the filters in
 
 The following labels may be added to a pull request to modify CI behavior:
 
-| Label or group      | Description                                                                                                                               |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci:skip`           | Skip all builds and tests                                                                                                                 |
-| `ci:run-all-archs`  | Build and test all possible architectures                                                                                                 |
-| `ci:run-multi-arch` | Opt in to running Multi-Arch CI on this PR                                                                                                |
-| `gfx...`            | Opt-in to building and testing the specified gfx family (e.g. `gfx120X`, `gfx950`)                                                        |
-| `test:...`          | Run full tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`)                                                  |
-| `test_runner:...`   | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                     |
-| `test_filter:...`   | Set the test filter explicitly (e.g. `test_filter:comprehensive`). See [test_filtering.md](./test_filtering.md) for allowed test filters. |
+| Label or group          | Description                                                                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci:skip`               | Skip all builds and tests                                                                                                                 |
+| `ci:run-all-archs`      | Build and test all possible architectures                                                                                                 |
+| `ci:run-multi-arch`     | (DEPRECATED) Opt in to running multi-arch CI on this PR                                                                                   |
+| `ci:run-non-multi-arch` | Opt in to running non-multi-arch CI on this PR                                                                                            |
+| `gfx...`                | Opt-in to building and testing the specified gfx family (e.g. `gfx120X`, `gfx950`)                                                        |
+| `test:...`              | Run full tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`)                                                  |
+| `test_runner:...`       | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                     |
+| `test_filter:...`       | Set the test filter explicitly (e.g. `test_filter:comprehensive`). See [test_filtering.md](./test_filtering.md) for allowed test filters. |
 
 ### Push
 

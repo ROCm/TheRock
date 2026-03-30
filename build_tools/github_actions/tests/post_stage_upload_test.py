@@ -86,6 +86,53 @@ class TestCreateNinjaLogArchive(unittest.TestCase):
             self.assertFalse((build_dir / "logs").exists())
 
 
+class TestCreateCcacheLogArchive(unittest.TestCase):
+    """Tests for create_ccache_log_archive()."""
+
+    def test_archives_ccache_subdirectory(self):
+        """Verify ccache log files are archived; originals kept on disk."""
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            ccache_dir = build_dir / "logs" / "ccache"
+            ccache_dir.mkdir(parents=True)
+            (ccache_dir / "ccache.log").write_text("x" * 10000)
+            (ccache_dir / "ccache_stats.log").write_text("stats")
+
+            post_stage_upload.create_ccache_log_archive(build_dir)
+
+            archive = build_dir / "logs" / "ccache_logs.tar.zst"
+            self.assertTrue(archive.exists())
+
+            import pyzstd
+
+            with pyzstd.ZstdFile(archive, "rb") as zst:
+                with tarfile.open(mode="r|", fileobj=zst) as tar:
+                    names = sorted(m.name for m in tar)
+            self.assertEqual(names, ["ccache.log", "ccache_stats.log"])
+
+            # Originals are preserved (idempotent — re-running produces same result).
+            self.assertTrue((ccache_dir / "ccache.log").exists())
+            self.assertTrue((ccache_dir / "ccache_stats.log").exists())
+
+    def test_no_ccache_dir_skips(self):
+        """Verify no archive created when ccache/ subdirectory doesn't exist."""
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            log_dir = build_dir / "logs"
+            log_dir.mkdir()
+            (log_dir / "rocBLAS_build.log").write_text("build output")
+
+            post_stage_upload.create_ccache_log_archive(build_dir)
+
+            self.assertFalse((log_dir / "ccache_logs.tar.zst").exists())
+
+    def test_no_log_dir_skips(self):
+        """Verify no error when logs/ doesn't exist."""
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            post_stage_upload.create_ccache_log_archive(build_dir)
+
+
 class TestUploadStageLogs(unittest.TestCase):
     """Tests for upload_stage_logs()."""
 
@@ -112,6 +159,35 @@ class TestUploadStageLogs(unittest.TestCase):
             self.assertTrue((base / "amd-llvm_build.log").is_file())
             # Ensure no extra nesting.
             self.assertFalse((base / "generic").exists())
+
+    def test_ccache_subdir_excluded_but_archive_uploaded(self):
+        """Verify raw ccache/ logs are excluded but ccache_logs.tar.zst is uploaded."""
+        output_root = _make_output_root()
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
+            build_dir = Path(tmp)
+            staging_dir = Path(staging)
+            log_dir = build_dir / "logs"
+            ccache_dir = log_dir / "ccache"
+            ccache_dir.mkdir(parents=True)
+            (log_dir / "build.log").write_text("build output")
+            (log_dir / "ccache_logs.tar.zst").write_bytes(b"compressed")
+            (ccache_dir / "ccache.log").write_text("verbose trace")
+
+            backend = LocalStorageBackend(staging_dir)
+            post_stage_upload.upload_stage_logs(
+                build_dir=build_dir,
+                output_root=output_root,
+                backend=backend,
+                stage_name="foundation",
+                amdgpu_family="",
+            )
+
+            base = staging_dir / "12345-linux" / "logs" / "foundation"
+            # Regular logs and archive uploaded.
+            self.assertTrue((base / "build.log").is_file())
+            self.assertTrue((base / "ccache_logs.tar.zst").is_file())
+            # Raw ccache logs excluded.
+            self.assertFalse((base / "ccache" / "ccache.log").exists())
 
     def test_per_arch_stage_upload_path(self):
         """Verify per-arch stages upload to logs/{stage}/{family}/."""

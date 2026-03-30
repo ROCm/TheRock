@@ -71,6 +71,50 @@ def create_ninja_log_archive(build_dir: Path):
     return archive_path
 
 
+def _get_pyzstd():
+    """Lazy import pyzstd with helpful error message."""
+    try:
+        import pyzstd
+
+        return pyzstd
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError(
+            "pyzstd is required for zstd compression. "
+            "Install it with: pip install pyzstd"
+        )
+
+
+def create_ccache_log_archive(build_dir: Path, compression_level: int | None = None):
+    """Archive the ccache log subdirectory into a zstd-compressed tarball.
+
+    ccache.log can be hundreds of MB (verbose per-invocation trace) but
+    compresses ~13x with zstd. The raw logs in logs/ccache/ are excluded from
+    upload (see upload_stage_logs); this archive provides the compressed version.
+    """
+    ccache_dir = build_dir / "logs" / "ccache"
+    if not ccache_dir.is_dir():
+        return
+
+    found_files = sorted(f for f in ccache_dir.iterdir() if f.is_file())
+    if not found_files:
+        return
+
+    pyzstd = _get_pyzstd()
+    level = compression_level if compression_level is not None else 3
+    archive_path = build_dir / "logs" / "ccache_logs.tar.zst"
+    with pyzstd.ZstdFile(archive_path, mode="wb", level_or_option=level) as zst:
+        with tarfile.open(mode="w|", fileobj=zst) as tar:
+            for file_path in found_files:
+                tar.add(file_path, arcname=file_path.name)
+                log(f"[+] Archived ccache log: {file_path.name}")
+
+    archive_size = archive_path.stat().st_size
+    log(
+        f"[INFO] Created {archive_path.name} "
+        f"({archive_size // 1024 // 1024}MB from {len(found_files)} files)"
+    )
+
+
 def upload_stage_logs(
     build_dir: Path,
     output_root: WorkflowOutputRoot,
@@ -93,12 +137,14 @@ def upload_stage_logs(
         return
 
     dest = output_root.stage_log_dir(stage_name, amdgpu_family)
-    backend.upload_directory(log_dir, dest)
+    # Exclude raw ccache logs — they're uploaded compressed as ccache_logs.tar.zst.
+    backend.upload_directory(log_dir, dest, exclude=["ccache/**/*"])
 
 
 def run(args: argparse.Namespace):
-    log(f"Creating ninja log archive for stage '{args.stage}'")
+    log(f"Creating log archives for stage '{args.stage}'")
     create_ninja_log_archive(args.build_dir)
+    create_ccache_log_archive(args.build_dir, compression_level=args.compression_level)
 
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id,
@@ -141,6 +187,12 @@ def main(argv: list[str] | None = None):
         default="",
         help="GPU family for per-arch stages (e.g., 'gfx1151'). "
         "Empty for generic stages.",
+    )
+    parser.add_argument(
+        "--compression-level",
+        type=int,
+        default=None,
+        help="Compression level for zstd archives (default: 3)",
     )
     parser.add_argument(
         "--output-dir",
