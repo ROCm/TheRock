@@ -187,7 +187,7 @@ def matrix_generator(
         if is_long_lived_branch:
             active_trigger_types.extend(["presubmit", "postsubmit"])
         else:
-            # Non-long-lived branch pushes (e.g., multi_arch/bringup1) use presubmit defaults
+            # Non-long-lived branch pushes use presubmit defaults
             active_trigger_types.append("presubmit")
     if is_schedule:
         active_trigger_types.extend(["presubmit", "postsubmit", "nightly"])
@@ -475,7 +475,6 @@ def main(base_args, linux_families, windows_families):
     print(f"  branch_name: {branch_name}")
     print(f"  base_ref: {base_ref}")
     print(f"  build_variant: {build_variant}")
-    print(f"  multi_arch: {multi_arch}")
     print(f"  linux_use_prebuilt_artifacts: {linux_use_prebuilt_artifacts}")
     print(f"  windows_use_prebuilt_artifacts: {windows_use_prebuilt_artifacts}")
     pr_labels = None

@@ -372,7 +372,6 @@ class ConfigureCITest(unittest.TestCase):
 
     def test_linux_branch_push_matrix_generator(self):
         # Push to non-main branches uses presubmit defaults
-        # This supports multi_arch_ci.yml which triggers on multi_arch/** branches
         base_args = {"branch_name": "test_branch", "build_variant": "release"}
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(
             is_pull_request=False,

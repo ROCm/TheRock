@@ -33,7 +33,7 @@ def _run_from_environ(
     event_name: str,
     event_payload: dict,
     *,
-    branch_name: str = "main",
+    commit_ref: str = "main",
     build_variant: str = "release",
 ) -> cm.CIInputs:
     """Call CIInputs.from_environ() with a synthetic event payload.
@@ -53,7 +53,7 @@ def _run_from_environ(
             "GITHUB_RUN_ID": "12345",
             "GITHUB_EVENT_NAME": event_name,
             "GITHUB_EVENT_PATH": event_path,
-            "GITHUB_REF_NAME": branch_name,
+            "GITHUB_REF_NAME": commit_ref,
             "BUILD_VARIANT": build_variant,
         }
         with patch.dict(os.environ, env, clear=False):
@@ -75,7 +75,7 @@ class TestCIInputs(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
-            branch_name="feature",
+            commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
         )
@@ -89,7 +89,7 @@ class TestCIInputs(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="push",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
         )
@@ -142,7 +142,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                     ]
                 }
             },
-            branch_name="feature-branch",
+            commit_ref="feature-branch",
         )
         self.assertEqual(inputs.pr_labels, ["gfx950", "test:rocprim"])
         self.assertEqual(inputs.base_ref, "HEAD^")
@@ -173,7 +173,7 @@ class TestShouldSkipCI(unittest.TestCase):
         defaults = dict(
             run_id="12345",
             event_name="pull_request",
-            branch_name="feature",
+            commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
         )
@@ -228,7 +228,7 @@ class TestDecideJobs(unittest.TestCase):
         defaults = dict(
             run_id="12345",
             event_name="pull_request",
-            branch_name="feature",
+            commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
         )
@@ -373,7 +373,7 @@ class TestSelectTargets(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="push",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
         )
@@ -386,7 +386,7 @@ class TestSelectTargets(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="schedule",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
         )
@@ -395,7 +395,7 @@ class TestSelectTargets(unittest.TestCase):
         push_inputs = cm.CIInputs(
             run_id="12345",
             event_name="push",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
         )
@@ -407,7 +407,7 @@ class TestSelectTargets(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
-            branch_name="feature",
+            commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
         )
@@ -421,14 +421,14 @@ class TestSelectTargets(unittest.TestCase):
         inputs_without = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
-            branch_name="feature",
+            commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
         )
         inputs_with = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
-            branch_name="feature",
+            commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
             # gfx906 is nightly-only, not in presubmit+postsubmit defaults
@@ -444,7 +444,7 @@ class TestSelectTargets(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
-            branch_name="feature",
+            commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
             pr_labels=["ci:run-all-archs"],
@@ -458,7 +458,7 @@ class TestSelectTargets(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
-            branch_name="feature",
+            commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
             pr_labels=["gfx9999"],
@@ -471,7 +471,7 @@ class TestSelectTargets(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="workflow_dispatch",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
             linux_amdgpu_families=["gfx94x", "gfx110x"],
@@ -489,7 +489,7 @@ class TestSelectTargets(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="workflow_dispatch",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
         )
@@ -502,7 +502,7 @@ class TestSelectTargets(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="workflow_dispatch",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
             linux_amdgpu_families=["gfx_bogus"],
@@ -518,7 +518,7 @@ class TestSelectTargets(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="workflow_dispatch",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
             # gfx950 has no windows entry — this should be an error, not silently dropped
@@ -532,7 +532,7 @@ class TestSelectTargets(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="repository_dispatch",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
         )
@@ -544,7 +544,7 @@ class TestSelectTargets(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="push",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
         )
@@ -620,7 +620,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="push",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
         )
@@ -721,7 +721,7 @@ class TestFormatSummary(unittest.TestCase):
         defaults = dict(
             run_id="12345",
             event_name="push",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
         )
@@ -774,7 +774,7 @@ class TestConfigurePipeline(unittest.TestCase):
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="workflow_dispatch",
-            branch_name="main",
+            commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
         )
