@@ -172,6 +172,8 @@ The following table shows the meta packages that will be available:
 | amdrocm-openmp          |                                                                      | Components needed to build OpenMP                                             |
 | amdrocm-core-sdk        |                                                                      | Everything                                                                    |
 
+Note: ROCm Core includes libraries spanning math & compute, communication, media, storage, and support libraries.
+
 ## Package Granularity
 
 Package granularity will be increased with ROCm 8.0. Development packages contain all the code required to build the libraries, including headers, Cmake files, and static libraries. Source packages for all of rocm-libraries provide all the files to build the libraries from source in addition to the rocm-rock source package.
