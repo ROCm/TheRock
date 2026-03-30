@@ -1,7 +1,0 @@
-cd compiler/
-git submodule init amd-llvm
-git submodule update amd-llvm
-cd amd-llvm/
-git checkout amd-compiler-ww-2026-11
-cd ../..
-git add .
