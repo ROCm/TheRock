@@ -27,7 +27,11 @@ def format_summary(
     outputs: CIOutputs,
 ) -> str:
     """Generate the full step summary markdown."""
-    lines = ["## Multi-Arch CI Configuration", ""]
+    lines = []
+    lines.append(
+        "## Multi-Arch CI Configuration (tips: [ci_behavior_manipulation.md](https://github.com/ROCm/TheRock/blob/main/docs/development/ci_behavior_manipulation.md))"
+    )
+    lines.append("")
 
     if not outputs.is_ci_enabled:
         return _format_skipped_ci(lines, ci_inputs)

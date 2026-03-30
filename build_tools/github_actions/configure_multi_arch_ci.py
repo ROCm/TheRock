@@ -487,28 +487,17 @@ def _determine_test_type(
 ) -> tuple[str, str]:
     """Determine test_type and reason based on trigger, labels, and changed files.
 
-    Test types from least to most testing:
+    This code implements the policies from docs/development/test_filtering.md
+    and docs/development/ci_behavior_manipulation.md:
 
-    - "quick": Fast sanity checks. Default for PRs and push where only
-      build infra or non-submodule files changed. Keeps CI fast for
-      routine changes that are unlikely to break GPU-specific behavior.
-    - "standard": More thorough than quick, but not full nightly coverage.
-      Only available via explicit test_filter:standard PR label.
-    - "comprehensive": Full nightly test suite. Used for scheduled runs
-      to catch regressions across all components without requiring a
-      submodule change to trigger it.
-    - "full": Everything, including tests for specific components named
-      by test:* labels. Triggered when a submodule changes (the actual
-      GPU libraries changed, so we need thorough validation) or when
-      test labels explicitly request specific component tests.
+    * Available filter types: ["quick", "standard", "comprehensive", "full"]
+    * Workflow runs choose a filter type automatically but PRs can override
+      with labels like `test_filter:comprehensive`
 
-    The test_filter: PR label can override any of the above, giving
-    developers manual control (e.g. test_filter:comprehensive on a PR
-    to get nightly-level coverage before merge).
-
-    Returns (test_type, reason). Checked in priority order — highest
-    priority overrides win and return early.
+    Returns (test_type, reason).
     """
+
+    # Check in priority order - highest priority returns early.
     # Priority 1: test_filter: PR label is an explicit manual override.
     # This is the escape hatch: run comprehensive on a PR before merge,
     # or downgrade to quick if you know the change is safe.
