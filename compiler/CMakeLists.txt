@@ -133,8 +133,8 @@ if(THEROCK_ENABLE_COMPILER)
       "lib/llvm/lib"
   )
   # Note that we do not trigger on LLVM source changes because the monorepo is
-  # too large to glob like that. Consider having a project dev mode option for
-  # enabling better ergonomics here.
+  # too large to glob like that. Use THEROCK_DEV_PROJECTS=amd-llvm to always
+  # invoke the inner build during local development.
 
   therock_cmake_subproject_provide_package(amd-llvm AMDDeviceLibs lib/llvm/lib/cmake/AMDDeviceLibs)
   therock_cmake_subproject_provide_package(amd-llvm Clang lib/llvm/lib/cmake/clang)

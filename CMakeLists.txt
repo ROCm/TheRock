@@ -153,6 +153,7 @@ therock_enable_external_source("composable-kernel" "${THEROCK_SOURCE_DIR}/ml-lib
 
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
+set(THEROCK_DEV_PROJECTS "" CACHE STRING "Semicolon-separated list of subproject names whose inner build is always invoked, letting the inner ninja determine what needs rebuilding.")
 
 # Initialize the install directory.
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)

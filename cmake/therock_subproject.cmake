@@ -1024,6 +1024,27 @@ function(therock_cmake_subproject_activate target_name)
       LABEL "${target_name}"
       OUTPUT_ON_FAILURE "${_output_on_failure}"
     )
+
+    # THEROCK_DEV_PROJECTS: always invoke the inner build for listed projects.
+    # The build stamp depends on a sentinel file that is touched *after* the
+    # stamp, keeping it perpetually newer and forcing a rebuild every time.
+    set(_is_dev_project FALSE)
+    if(THEROCK_DEV_PROJECTS)
+      list(FIND THEROCK_DEV_PROJECTS "${target_name}" _dev_idx)
+      if(NOT _dev_idx EQUAL -1)
+        set(_is_dev_project TRUE)
+      endif()
+    endif()
+
+    set(_build_extra_depends)
+    set(_build_post_stamp_commands)
+    if(_is_dev_project)
+      set(_dev_sentinel "${_stamp_dir}/dev.sentinel")
+      file(TOUCH "${_dev_sentinel}")
+      set(_build_extra_depends "${_dev_sentinel}")
+      set(_build_post_stamp_commands
+        COMMAND "${CMAKE_COMMAND}" -E touch "${_dev_sentinel}")
+    endif()
     add_custom_command(
       OUTPUT "${_build_stamp_file}"
       COMMAND
@@ -1031,12 +1052,14 @@ function(therock_cmake_subproject_activate target_name)
         "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
         "${CMAKE_COMMAND}" "--build" "${_binary_dir}"
       COMMAND "${CMAKE_COMMAND}" -E touch "${_build_stamp_file}"
+      ${_build_post_stamp_commands}
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Building sub-project ${target_name}${_build_comment_suffix}"
       ${_build_terminal_option}
       DEPENDS
         "${_configure_stamp_file}"
         ${_sources}
+        ${_build_extra_depends}
     )
     add_custom_target(
       "${target_name}+build"
