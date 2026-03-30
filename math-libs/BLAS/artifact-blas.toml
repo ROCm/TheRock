@@ -20,6 +20,12 @@ optional = true
 [components.test."math-libs/BLAS/rocRoller/stage"]
 include = [
   "bin/rocroller-test*",
+  "client/rocroller-gemm",
+  "client/test_gemm_client.py",
+  "client/test_split_liveness.py",
+  "scripts/**",
+  "pytest.ini",
+  "test-profiles.yaml",
 ]
 optional = true
 
