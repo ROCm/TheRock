@@ -53,7 +53,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from generate_local_index import generate_multiarch_indexes
-from github_actions_utils import (
+from github_actions_api import (
     gha_append_step_summary,
     gha_set_output,
 )
@@ -135,9 +135,17 @@ def upload_packages(
     if not package_files:
         raise FileNotFoundError(f"No package files found in {dist_dir}")
 
-    log(f"[INFO] Found {len(package_files)} package files in {dist_dir}:")
+    log(f"[INFO] Found {len(package_files)} top-level package files in {dist_dir}:")
     for f in package_files:
         log(f"  - {f.relative_to(dist_dir)}")
+
+    # Log all files that will actually be uploaded (including subdirectories).
+    all_files = sorted(
+        f for f in dist_dir.rglob("*") if f.is_file() and not f.is_symlink()
+    )
+    log(f"[INFO] Uploading {len(all_files)} total files to {packages_loc.s3_uri}:")
+    for f in all_files:
+        log(f"  {f.relative_to(dist_dir).as_posix()}")
 
     count = backend.upload_directory(dist_dir, packages_loc)
     log(f"[INFO] Uploaded {count} files")

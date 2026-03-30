@@ -9,7 +9,7 @@ ______________________________________________________________________
 ## Overview
 
 1. The script is invoked by the **Test component** workflow with env vars set (component name, GPU arch, test type, sharding).
-1. The script expects the component under test to have a ctest based interface, with labels corresponding to test categories like quick, standard, comprehensive and full(which can be run for scenarios like smoke test, pre-commit etc)
+1. The script expects the component under test to have a ctest based interface, with labels corresponding to test categories like quick, standard, comprehensive and full(which can be run for scenarios like quick test, pre-commit etc)
 1. The component can opt to always exclude some tests or based on condition like OS and GPU where the test is getting run
 1. The script discovers which **GPU-specific test suites** exist by running `ctest --print-labels` and parsing labels of the form `ex_gpu_{gpu_arch}`.
 1. It builds and runs a **ctest** command with the right labels and options (category, parallelism, sharding, etc.).
@@ -43,11 +43,11 @@ ______________________________________________________________________
    Run `ctest --print-labels --test-dir {THEROCK_BIN_DIR}/{TEST_COMPONENT}`. Collect every label that starts with `ex_gpu_` and whose suffix starts with `gfx` (e.g. `ex_gpu_gfx110X` → `gfx110X`). This yields the set of **available GPU architectures** for which a label exists.
    These are the set of GPU's for which some test exclusions apply - i.e there are some tests which should not be run on these GPU models. The exp_gpu\_ labels with these gpu models points to the ctest entries where the tests are excluded.
 1. **Choose category**
-   From `TEST_TYPE`: `smoke` → `quick`, else → `standard`.
+   From `TEST_TYPE`: `quick` → `full`, else → `standard`.
 1. **Resolve GPU arch**
    Parse `AMDGPU_FAMILIES` for the first `gfx...` token (e.g. `gfx1151`). If missing or generic, the script will exclude all GPU-specific tests (`-LE ex_gpu`).
 1. **Match GPU to suite**
-   Using `find_matching_gpu_arch()` (from `github_actions_utils`):
+   Using `find_matching_gpu_arch()` (defined in `test_runner.py`):
 
 - Prefer **exact** match in the discovered set (e.g. `gfx1151`).
 - Else try **wildcard** patterns from most to least specific (e.g. for `gfx1151`: `gfx115X`, then `gfx11X`).

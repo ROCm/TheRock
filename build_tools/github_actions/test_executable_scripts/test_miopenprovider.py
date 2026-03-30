@@ -47,8 +47,8 @@ if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILI
 environ_vars = os.environ.copy()
 test_type = os.getenv("TEST_TYPE", "full")
 
-if test_type == "smoke":
-    # Exclude tests that start with "Full" during smoke tests
+if test_type == "quick":
+    # Exclude tests that start with "Full" during quick tests
     environ_vars["GTEST_FILTER"] = "-Full*"
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")

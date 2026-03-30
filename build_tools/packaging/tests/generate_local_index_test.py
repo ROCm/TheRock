@@ -136,6 +136,40 @@ class TestGenerateSimpleIndex(unittest.TestCase):
             # Check it ends with newline
             self.assertTrue(content.endswith("\n"))
 
+    def test_plus_in_filename_is_url_encoded(self):
+        """Test that '+' in filenames is percent-encoded in hrefs.
+
+        PEP 440 local versions produce filenames like
+        'pkg-1.0+localver-py3-none-any.whl'. S3 interprets a literal '+'
+        in URL paths as a space, so hrefs must encode '+' as '%2B'.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "index.html"
+            local_files = [
+                Path(tmp) / "rocm_sdk_core-7.0.0+abc123-py3-none-linux_x86_64.whl",
+            ]
+            parent_files = [
+                Path(tmp) / "rocm_sdk_libs-7.0.0+abc123-py3-none-linux_x86_64.whl",
+            ]
+
+            generate_simple_index(output, local_files, parent_files=parent_files)
+
+            content = output.read_text()
+            # href should have %2B, not literal +
+            self.assertIn(
+                'href="./rocm_sdk_core-7.0.0%2Babc123-py3-none-linux_x86_64.whl"',
+                content,
+            )
+            self.assertIn(
+                'href="../rocm_sdk_libs-7.0.0%2Babc123-py3-none-linux_x86_64.whl"',
+                content,
+            )
+            # Display text should still have literal +
+            self.assertIn(
+                ">rocm_sdk_core-7.0.0+abc123-py3-none-linux_x86_64.whl</a>",
+                content,
+            )
+
 
 class TestGenerateMultiarchIndexes(unittest.TestCase):
     """Tests for generate_multiarch_indexes()."""

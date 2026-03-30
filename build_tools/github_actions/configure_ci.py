@@ -38,7 +38,7 @@
   * windows_amdgpu_families : List of valid Windows AMD GPU families to execute build and test jobs
   * windows_test_labels : List of test names to run on Windows, optionally filtered by PR labels.
   * enable_build_jobs: If true, builds will be enabled
-  * test_type: The type of test that component tests will run (i.e. smoke, full)
+  * test_type: The type of test that component tests will run (i.e. quick, full)
   * run_functional_tests: If true, functional tests will be enabled (nightly/scheduled builds)
 
   Written to GITHUB_STEP_SUMMARY:
@@ -66,7 +66,7 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
-from github_actions_utils import *
+from github_actions_api import *
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
@@ -394,18 +394,18 @@ def matrix_generator(
                 print(
                     f"    Label '{label}' matched 'test:*' pattern -> test: {test_name}"
                 )
-            # If the "skip-ci" label was added, we skip all builds and tests
+            # If the "ci:skip" label was added, we skip all builds and tests
             # We don't want to check for anymore labels
-            if "skip-ci" == label:
-                print(f"    Label 'skip-ci' detected -> skipping all builds and tests")
+            if "ci:skip" == label:
+                print(f"    Label 'ci:skip' detected -> skipping all builds and tests")
                 selected_target_names = []
                 selected_test_names = []
                 requested_target_names = []
                 requested_test_names = []
                 break
-            if "run-all-archs-ci" == label:
+            if "ci:run-all-archs" == label:
                 print(
-                    f"    Label 'run-all-archs-ci' detected -> enabling all architectures"
+                    f"    Label 'ci:run-all-archs' detected -> enabling all architectures"
                 )
                 selected_target_names = [
                     target
@@ -583,6 +583,7 @@ def main(base_args, linux_families, windows_families):
     is_workflow_dispatch = github_event_name == "workflow_dispatch"
     is_pull_request = github_event_name == "pull_request"
     is_schedule = github_event_name == "schedule"
+    github_run_id = base_args.get("github_run_id")
 
     branch_name = base_args.get("branch_name", "")
     base_ref = base_args.get("base_ref")
@@ -594,16 +595,18 @@ def main(base_args, linux_families, windows_families):
 
     print("Found metadata:")
     print(f"  github_event_name: {github_event_name}")
+    print(f"    is_push: {is_push}")
+    print(f"    is_workflow_dispatch: {is_workflow_dispatch}")
+    print(f"    is_pull_request: {is_pull_request}")
+    print(f"    is_schedule: {is_schedule}")
+    print(f"  github_run_id: {github_run_id}")
     print(f"  branch_name: {branch_name}")
     print(f"  base_ref: {base_ref}")
-    print(f"  multi_arch: {multi_arch}")
     print(f"  build_variant: {build_variant}")
-    print(f"  is_push: {is_push}")
-    print(f"  is_workflow_dispatch: {is_workflow_dispatch}")
-    print(f"  is_pull_request: {is_pull_request}")
-    print(f"  is_schedule: {is_schedule}")
+    print(f"  multi_arch: {multi_arch}")
     print(f"  linux_use_prebuilt_artifacts: {linux_use_prebuilt_artifacts}")
     print(f"  windows_use_prebuilt_artifacts: {windows_use_prebuilt_artifacts}")
+    pr_labels = None
     if is_pull_request:
         pr_labels = get_pr_labels(base_args)
         print(f"  pr_labels: {pr_labels}")
@@ -646,15 +649,15 @@ def main(base_args, linux_families, windows_families):
     )
     print("")
 
-    test_type = "smoke"
-    test_type_reason = "default (smoke tests)"
+    test_type = "quick"
+    test_type_reason = "default (quick tests)"
     run_functional_tests = False
 
     if is_schedule:
         # Always build and run full tests on scheduled runs.
         enable_build_jobs = True
-        test_type = "full"
-        test_type_reason = "scheduled run triggers full tests"
+        test_type = "comprehensive"
+        test_type_reason = "scheduled run triggers comprehensive tests"
         # Functional tests run on nightly/scheduled builds
         run_functional_tests = True
     elif is_workflow_dispatch:
@@ -676,8 +679,24 @@ def main(base_args, linux_families, windows_families):
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = is_ci_run_required(modified_paths)
 
+        # multi_arch_ci.yml is now the default, so the "non-multi-arch" ci.yml
+        # now requires an opt-in to run on pull requests.
+        # This avoids doubling CI load during the transition from ci.yml
+        # to multi_arch_ci.yml. See https://github.com/ROCm/TheRock/issues/3337
+        # TODO(#3399): move multi-arch CI configuration to its own script
+        if (
+            not multi_arch
+            and is_pull_request
+            and "ci:run-non-multi-arch" not in (pr_labels or [])
+        ):
+            print(
+                "Skipping non-multi-arch CI: 'ci:run-non-multi-arch' label not found. "
+                "Add the label to opt in."
+            )
+            enable_build_jobs = False
+
         # If the modified path contains any git submodules, we want to run a full test suite.
-        # Otherwise, we just run smoke tests
+        # Otherwise, we just run quick tests
         submodule_paths = get_git_submodule_paths(repo_root=THEROCK_DIR)
         matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
         if matching_submodule_paths:
@@ -691,8 +710,8 @@ def main(base_args, linux_families, windows_families):
             test_type_reason = f"test label(s) specified: {combined_test_labels}"
 
         for matrix_row in linux_variants_output + windows_variants_output:
-            # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a smoke test type
-            if matrix_row.get("run-full-tests-only", False) and test_type == "smoke":
+            # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a quick test type
+            if matrix_row.get("run-full-tests-only", False) and test_type == "quick":
                 matrix_row["test-runs-on"] = ""
             # For nightly_check_only_for_family architectures, we want to run only full tests during nightly (scheduled) run
             # Otherwise, we run sanity checks in all other scenarios (presubmit/postsubmit)
@@ -700,6 +719,23 @@ def main(base_args, linux_families, windows_families):
                 is_pull_request or is_push
             ):
                 matrix_row["sanity_check_only_for_family"] = True
+
+        # If a test filter label is included, we set the "test_type" to the designated filter
+        if pr_labels and any("test_filter:" in label for label in pr_labels):
+            for label in pr_labels:
+                if "test_filter:" in label:
+                    filter_type = label.split(":")[1]
+                    # If the filter type is not recognized, we ignore the label and keep the default test type
+                    if filter_type not in [
+                        "quick",
+                        "standard",
+                        "comprehensive",
+                        "full",
+                    ]:
+                        continue
+                    test_type = filter_type
+                    test_type_reason = f"test filter label specified: {label}"
+                    break
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
@@ -739,6 +775,34 @@ def main(base_args, linux_families, windows_families):
     """
     )
 
+    # Multi-arch build summary: add links to logs and artifacts index pages.
+    # These are posted early (before builds complete) so they appear at the top
+    # of the job summary. The server-side Lambda generates the index pages as
+    # logs and artifacts flow in.
+    # TODO(#3399): move multi-arch CI configuration to its own script
+    if multi_arch and enable_build_jobs:
+        # Lazy import since multi-arch CI configuration will move soon
+        sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
+        from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
+        if github_run_id:
+            summary_lines = [
+                "## Build outputs",
+                "",
+                "Platform | 📋 Logs | 📦 Artifacts",
+                "-- | -- | --",
+            ]
+            for platform_name in ["linux", "windows"]:
+                root = WorkflowOutputRoot.from_workflow_run(
+                    run_id=github_run_id, platform=platform_name
+                )
+                log_url = root.root_log_index().https_url
+                artifact_url = root.root_index().https_url
+                summary_lines.append(
+                    f"{platform_name.capitalize()} | {log_url} | {artifact_url}"
+                )
+            gha_append_step_summary("\n".join(summary_lines))
+
     output = {
         "linux_variants": json.dumps(linux_variants_output),
         "linux_test_labels": json.dumps(linux_test_output),
@@ -773,6 +837,7 @@ if __name__ == "__main__":
         )
         sys.exit(1)
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
+    base_args["github_run_id"] = os.environ.get("GITHUB_RUN_ID", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
     base_args["linux_use_prebuilt_artifacts"] = (
         os.environ.get("LINUX_USE_PREBUILT_ARTIFACTS") == "true"
