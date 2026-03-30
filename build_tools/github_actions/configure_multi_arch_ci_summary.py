@@ -30,7 +30,7 @@ def format_summary(
     lines = ["## Multi-Arch CI Configuration", ""]
 
     if not outputs.is_ci_enabled:
-        return _format_skipped(lines, ci_inputs)
+        return _format_skipped_ci(lines, ci_inputs)
 
     if not outputs.jobs:
         return "\n".join(lines)
@@ -47,21 +47,19 @@ def format_summary(
         lines.append("No GPU families selected — nothing to build or test.")
         return "\n".join(lines)
 
-    # Non-default callout
-    callouts = _non_default_callouts(ci_inputs, outputs)
-    if callouts:
+    # Highlight noteworthy non-default settings ahead of the standard output.
+    highlights = _non_default_highlights(ci_inputs)
+    if highlights:
         lines.append("> [!NOTE]")
         lines.append("> **Non-default configuration:**")
-        for callout in callouts:
+        for callout in highlights:
             lines.append(f"> - {callout}")
         lines.append("")
 
-    # build-rocm
     lines.append("### build-rocm")
     lines.append("")
     _append_build_rocm(lines, ci_inputs, outputs)
 
-    # test-rocm
     lines.append("### test-rocm")
     lines.append("")
     _append_test_rocm(lines, outputs)
@@ -69,7 +67,7 @@ def format_summary(
     return "\n".join(lines)
 
 
-def _format_skipped(lines: list[str], ci_inputs: CIInputs) -> str:
+def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
     # Determine skip reason (same priority order as should_skip_ci).
     if "ci:skip" in ci_inputs.pr_labels:
         reason = "`ci:skip` PR label"
@@ -82,65 +80,59 @@ def _format_skipped(lines: list[str], ci_inputs: CIInputs) -> str:
     return "\n".join(lines)
 
 
-def _non_default_callouts(ci_inputs: CIInputs, outputs: CIOutputs) -> list[str]:
-    callouts: list[str] = []
-    jobs = outputs.jobs
+def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
+    highlights: list[str] = []
 
     # Explicit family selection (workflow_dispatch)
     if ci_inputs.is_workflow_dispatch:
-        if ci_inputs.linux_amdgpu_families or ci_inputs.windows_amdgpu_families:
-            parts = []
-            if ci_inputs.linux_amdgpu_families:
-                fams = ", ".join(ci_inputs.linux_amdgpu_families)
-                parts.append(f"Linux: `[{fams}]`")
-            if ci_inputs.windows_amdgpu_families:
-                fams = ", ".join(ci_inputs.windows_amdgpu_families)
-                parts.append(f"Windows: `[{fams}]`")
-            callouts.append(f"Explicit family selection — {', '.join(parts)}")
+        parts = []
+        if ci_inputs.linux_amdgpu_families:
+            families = ", ".join(ci_inputs.linux_amdgpu_families)
+            parts.append(f"Linux: `[{families}]`")
+        if ci_inputs.windows_amdgpu_families:
+            families = ", ".join(ci_inputs.windows_amdgpu_families)
+            parts.append(f"Windows: `[{families}]`")
+        if parts:
+            highlights.append(f"Explicit family selection — {', '.join(parts)}")
 
     # PR labels that affect behavior
     for label in ci_inputs.pr_labels:
         if label.startswith("gfx"):
-            callouts.append(
+            highlights.append(
                 f"Label `{label}`: added family `{label}` "
                 f"(not in default presubmit set)"
             )
         elif label.startswith("test_filter:"):
-            callouts.append(
+            highlights.append(
                 f"Label `{label}`: overrode test level (default would be `quick`)"
             )
         elif label.startswith("test:"):
-            callouts.append(f"Label `{label}`: requested component tests")
+            highlights.append(f"Label `{label}`: requested component tests")
         elif label.startswith("ci:"):
-            callouts.append(f"Label `{label}`")
+            highlights.append(f"Label `{label}`")
 
     # Explicit test labels (workflow_dispatch)
     if ci_inputs.is_workflow_dispatch:
         if ci_inputs.linux_test_labels:
-            callouts.append(
+            highlights.append(
                 f"Explicit Linux test labels: `{ci_inputs.linux_test_labels}`"
             )
         if ci_inputs.windows_test_labels:
-            callouts.append(
+            highlights.append(
                 f"Explicit Windows test labels: `{ci_inputs.windows_test_labels}`"
             )
 
-    # Prebuilt stages
-    if jobs and jobs.build_rocm.prebuilt_stages:
-        stage_list = ", ".join(jobs.build_rocm.prebuilt_stages)
-        run_id = jobs.build_rocm.baseline_run_id
-        repo = _REPO_SLUG
-        callouts.append(
-            f"Prebuilt stages: `[{stage_list}]` from run "
-            f"[{run_id}](https://github.com/{repo}/actions/runs/{run_id})"
-        )
-
-    return callouts
+    return highlights
 
 
 def _append_build_rocm(
     lines: list[str], ci_inputs: CIInputs, outputs: CIOutputs
 ) -> None:
+    # Note: this assumes that the build_rocm job is never skipped.
+    # We may decide to skip it under certain conditions in the future
+    # (e.g. only editing pytorch-related files, no ROCm-related files).
+    # This code will need to adapt then.
+
     jobs = outputs.jobs
 
     # Prebuilt info
@@ -194,6 +186,11 @@ def _append_build_rocm(
 
 
 def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
+    # Note: this assumes that the test_rocm job is never skipped.
+    # We may decide to skip it under certain conditions in the future
+    # (e.g. only editing pytorch-related files, no ROCm-related files).
+    # This code will need to adapt then.
+
     jobs = outputs.jobs
     test_rocm = jobs.test_rocm
 
