@@ -18,6 +18,10 @@ on:
         description: "Target Quartz repository (owner/repo)"
         type: string
         default: "ROCm/Quartz"
+      quartz_workflow_ref:
+        description: "Branch in Quartz repo where the ingest workflow lives"
+        type: string
+        default: "feat/ingestion"
 
 permissions:
   contents: read
@@ -26,6 +30,7 @@ permissions:
 
 env:
   QUARTZ_REPO: ${{ inputs.quartz_repo || 'ROCm/Quartz' }}
+  QUARTZ_WORKFLOW_REF: ${{ inputs.quartz_workflow_ref || 'feat/ingestion' }}
 
 jobs:
   notify:
@@ -294,5 +299,21 @@ jobs:
               event_type: eventType,
               client_payload: clientPayload,
             });
+            core.info(`Dispatched repository_dispatch ${eventType} to ${process.env.QUARTZ_REPO}`);
 
-            core.info(`Dispatched ${eventType} to ${process.env.QUARTZ_REPO}`);
+            // Also trigger the workflow_dispatch-based ingest workflow in Quartz.
+            try {
+              await github.rest.actions.createWorkflowDispatch({
+                owner,
+                repo,
+                workflow_id: 'ingest_manual.yml',
+                ref: process.env.QUARTZ_WORKFLOW_REF,
+                inputs: {
+                  payload_json: JSON.stringify(clientPayload),
+                  fetch_jobs: 'true',
+                },
+              });
+              core.info(`Dispatched workflow_dispatch to ${process.env.QUARTZ_REPO} (ref: ${process.env.QUARTZ_WORKFLOW_REF})`);
+            } catch (e) {
+              core.warning(`Failed to dispatch workflow_dispatch: ${e.message}`);
+            }
