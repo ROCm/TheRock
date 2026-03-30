@@ -105,10 +105,6 @@ jobs:
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
-        # TODO(TheRock#3288): Re-enable gfx950-dcgpu runners once we get more capacity
-        exclude:
-          - family_info:
-              amdgpu_family: gfx950-dcgpu
     uses: ./.github/workflows/test_artifacts.yml
     with:
       # Use architecture-specific artifact group for fetching per-arch artifacts
@@ -142,10 +138,6 @@ jobs:
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
-        # TODO(TheRock#3288): Re-enable gfx950-dcgpu runners once we get more capacity
-        exclude:
-          - family_info:
-              amdgpu_family: gfx950-dcgpu
     uses: ./.github/workflows/test_rocm_wheels.yml
     with:
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
@@ -166,10 +158,6 @@ jobs:
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
-        # TODO(TheRock#3288): Re-enable gfx950-dcgpu runners once we get more capacity
-        exclude:
-          - family_info:
-              amdgpu_family: gfx950-dcgpu
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels_ci.yml
     with:
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
