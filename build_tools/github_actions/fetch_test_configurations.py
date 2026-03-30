@@ -216,6 +216,16 @@ test_matrix = {
             "windows": 1,
         },
     },
+    "amdsmi": {
+        "job_name": "amdsmi",
+        "fetch_artifact_args": "--base-only",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_amdsmi.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     "hipblaslt": {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
