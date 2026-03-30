@@ -103,6 +103,7 @@ add_custom_target(
       --
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
+      --libdir "${CMAKE_INSTALL_PREFIX}/lib"
       --disable-static
       --enable-libnuma
       # CRITICAL for GPU discovery
