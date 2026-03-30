@@ -560,12 +560,23 @@ class TestSelectTargets(unittest.TestCase):
 
 
 class TestExpandBuildConfigs(unittest.TestCase):
-    """Test expand_build_configs: TargetSelection × build_variant → BuildConfigs.
+    """Test expand_build_configs: TargetSelection × CIInputs → BuildConfigs.
 
     Tests verify structural properties of the output, not specific data values
     from amdgpu_family_matrix.py. Changing a runner label or flipping
     expect_failure in the matrix data should not require test updates here.
     """
+
+    def _inputs(self, **kwargs):
+        defaults = dict(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        defaults.update(kwargs)
+        return cm.CIInputs(**defaults)
 
     def test_build_config_to_dict_has_all_fields(self):
         """BuildConfig.to_dict() produces all expected keys."""
@@ -587,7 +598,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
     def test_empty_targets_both_none(self):
         """Empty targets on both platforms → both None."""
         targets = cm.TargetSelection()
-        result = cm.expand_build_configs(targets=targets, build_variant="release")
+        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs())
         self.assertIsNone(result.linux)
         self.assertIsNone(result.windows)
 
@@ -625,7 +636,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant="release",
         )
         targets = cm.select_targets(inputs)
-        result = cm.expand_build_configs(targets=targets, build_variant="release")
+        result = cm.expand_build_configs(targets=targets, ci_inputs=inputs)
         required_keys = {
             "amdgpu_family",
             "amdgpu_targets",
@@ -673,7 +684,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             linux_families=["gfx94x", "gfx110x"],
             windows_families=["gfx110x"],
         )
-        result = cm.expand_build_configs(targets=targets, build_variant="release")
+        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs())
 
         # All target families that support the variant appear in output.
         linux_per_family = result.linux.per_family_info
@@ -700,13 +711,48 @@ class TestExpandBuildConfigs(unittest.TestCase):
             linux_families=["gfx94x", "gfx110x"],
             windows_families=["gfx110x"],
         )
-        result = cm.expand_build_configs(targets=targets, build_variant="asan")
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=self._inputs(build_variant="asan")
+        )
         # Only gfx94x on linux survives.
         self.assertIsNotNone(result.linux)
         linux_per_family = result.linux.per_family_info
         self.assertEqual(len(linux_per_family), 1)
         # Windows has no asan variant config at all.
         self.assertIsNone(result.windows)
+
+    def test_test_runner_kernel_overrides_runner_label(self):
+        """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
+        targets = cm.TargetSelection(linux_families=["gfx1151"])
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["test-runs-on"], "linux-strix-halo-gpu-rocm-oem")
+
+    def test_test_runner_kernel_clears_unsupported_family(self):
+        """test_runner:oem label clears runner for families without kernel support."""
+        # gfx94x has no test-runs-on-kernel entry
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_no_test_runner_label_uses_default(self):
+        """Without test_runner: label, default runner labels are used."""
+        targets = cm.TargetSelection(linux_families=["gfx1151"])
+        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs())
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        # Default runner, not the oem one
+        self.assertNotEqual(entry["test-runs-on"], "")
+        self.assertNotIn("oem", entry["test-runs-on"])
 
 
 # ---------------------------------------------------------------------------

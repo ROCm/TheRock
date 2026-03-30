@@ -110,6 +110,11 @@ def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
             highlights.append(
                 f"Label `{label}`: overrode test level (default would be `quick`)"
             )
+        elif label.startswith("test_runner:"):
+            kernel = label.split(":")[1]
+            highlights.append(
+                f"Label `{label}`: using `{kernel}` kernel-specific test runners"
+            )
         elif label.startswith("test:"):
             highlights.append(f"Label `{label}`: requested component tests")
         elif label.startswith("ci:"):

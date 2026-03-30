@@ -498,6 +498,7 @@ def _determine_test_type(
     """
 
     # Check in priority order - highest priority returns early.
+
     # Priority 1: test_filter: PR label is an explicit manual override.
     # This is the escape hatch: run comprehensive on a PR before merge,
     # or downgrade to quick if you know the change is safe.
@@ -711,7 +712,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
-    build_variant: str,
+    ci_inputs: CIInputs,
     all_families: dict[str, dict],
     variant_config: dict,
     prebuilt_stages: list[str] | None = None,
@@ -728,8 +729,17 @@ def _expand_build_config_for_platform(
     - test-runs-on: runner label for testing (empty = no test runner available)
     - sanity_check_only_for_family: whether to limit test scope
     """
-    per_family_info: list[dict] = []
+    build_variant = ci_inputs.build_variant
 
+    # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
+    # Selects kernel-specific test runners for families that support them.
+    test_runner_kernel = ""
+    for label in ci_inputs.pr_labels:
+        if label.startswith("test_runner:"):
+            test_runner_kernel = label.split(":")[1]
+            break
+
+    per_family_info: list[dict] = []
     for family_name in families:
         # select_targets already validates family names and filters by
         # platform availability. Family name uniqueness is validated by
@@ -744,11 +754,31 @@ def _expand_build_config_for_platform(
             )
             continue
 
+        # Determine test runner label.
+        test_runs_on = platform_info["test-runs-on"]
+        # When a test_runner:<kernel> label is set, use the
+        # kernel-specific runner if available, otherwise disable testing for
+        # this family (the default runner may not have the right kernel).
+        if test_runner_kernel:
+            kernel_runners = platform_info.get("test-runs-on-kernel", {})
+            if test_runner_kernel in kernel_runners:
+                test_runs_on = kernel_runners[test_runner_kernel]
+                print(
+                    f"  {family_name}: using {test_runner_kernel} kernel "
+                    f"runner: {test_runs_on}"
+                )
+            else:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: no {test_runner_kernel} kernel "
+                    f"runner available, disabling tests"
+                )
+
         per_family_info.append(
             {
                 "amdgpu_family": platform_info["family"],
                 "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
-                "test-runs-on": platform_info["test-runs-on"],
+                "test-runs-on": test_runs_on,
                 "sanity_check_only_for_family": platform_info.get(
                     "sanity_check_only_for_family", False
                 ),
@@ -779,7 +809,7 @@ def _expand_build_config_for_platform(
 
 def expand_build_configs(
     targets: TargetSelection,
-    build_variant: str,
+    ci_inputs: CIInputs,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfigs:
@@ -791,6 +821,7 @@ def expand_build_configs(
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
     )
+    build_variant = ci_inputs.build_variant
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
@@ -809,7 +840,7 @@ def expand_build_configs(
         config = _expand_build_config_for_platform(
             families=families,
             platform=platform,
-            build_variant=build_variant,
+            ci_inputs=ci_inputs,
             all_families=all_families,
             variant_config=variant_config,
             prebuilt_stages=prebuilt_stages,
@@ -897,7 +928,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     print("\n=== Building per-platform configs ===")
     builds = expand_build_configs(
         targets=targets,
-        build_variant=ci_inputs.build_variant,
+        ci_inputs=ci_inputs,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
     )
