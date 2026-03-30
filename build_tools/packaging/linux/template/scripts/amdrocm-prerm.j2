@@ -33,6 +33,16 @@ do_update_alternatives(){
     # Remove /opt/rocm/core soft link
     update-alternatives --remove "core" "$PKG_INSTALL_PREFIX"
     update-alternatives --remove "core-{{ version_major }}" "$PKG_INSTALL_PREFIX"
+
+    # Remove /opt/rocm/bin, /opt/rocm/lib, and /opt/rocm/include soft links
+    update-alternatives --remove "rocm-bin" "$PKG_INSTALL_PREFIX/bin"
+    update-alternatives --remove "rocm-lib" "$PKG_INSTALL_PREFIX/lib"
+    update-alternatives --remove "rocm-include" "$PKG_INSTALL_PREFIX/include"
+
+    # Remove /opt/rocm/llvm, /opt/rocm/amdgcn, and /opt/rocm/libexec soft links
+    update-alternatives --remove "rocm-llvm" "$PKG_INSTALL_PREFIX/llvm"
+    update-alternatives --remove "rocm-amdgcn" "$PKG_INSTALL_PREFIX/amdgcn"
+    update-alternatives --remove "rocm-libexec" "$PKG_INSTALL_PREFIX/libexec"
 }
 
 if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE:-$ID}"

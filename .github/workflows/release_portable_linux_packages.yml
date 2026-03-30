@@ -53,6 +53,7 @@ on:
       families:
         description: "Comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`"
         type: string
+        default: "gfx94X"
       prerelease_version:
         description: "(Optional) Number of the prerelease"
         type: string

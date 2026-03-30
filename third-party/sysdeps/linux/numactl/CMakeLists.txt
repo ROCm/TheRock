@@ -82,6 +82,7 @@ add_custom_target(
   COMMAND
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
+      --libdir "${CMAKE_INSTALL_PREFIX}/lib"
       --disable-static
   COMMAND
     make -j "${PAR_JOBS}" V=1

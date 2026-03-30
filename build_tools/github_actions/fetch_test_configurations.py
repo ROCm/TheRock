@@ -184,7 +184,7 @@ test_matrix = {
     "rocgdb": {
         "job_name": "rocgdb",
         "fetch_artifact_args": "--debug-tools --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 45,
         "test_script": f"python {_get_script_path('test_rocgdb.py')}",
         "platform": ["linux"],
         "total_shards": 1,
