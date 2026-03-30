@@ -621,7 +621,11 @@ int main() {
        {"V_PK_ADD_BF16_X",
         "TENSOR_LOAD_TO_LDS_X",
         "V_CVT_F16_FP8_X",
-        "V_DIV_SCALE_F64_X"}) {
+        "V_DIV_SCALE_F64_X",
+        "X_V_PK_ADD_BF16_X",
+        "X_TENSOR_LOAD_TO_LDS_X",
+        "X_V_CVT_F16_FP8_X",
+        "X_V_DIV_SCALE_F64_X"}) {
     if (!Expect(SelectStubDecoderRoute(near_miss_instruction) ==
                         StubDecoderRoute::kUnsupported &&
                     FindStubDecoderRouteInfo(near_miss_instruction) ==

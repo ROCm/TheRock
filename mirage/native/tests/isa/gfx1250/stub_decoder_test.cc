@@ -7409,6 +7409,18 @@ int main() {
                       "V_DIV_SCALE_F64_X",
                       StubDecodeStatus::kUnknownInstruction) &&
                   MatchesSelectorDecodeStatusParity(
+                      "X_V_PK_ADD_BF16_X",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "X_TENSOR_LOAD_TO_LDS_X",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "X_V_CVT_F16_FP8_X",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "X_V_DIV_SCALE_F64_X",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
                       "", StubDecodeStatus::kUnknownInstruction),
               "expected selector and decode surfaces to agree on unknown-name status")) {
     return 1;
@@ -7472,7 +7484,11 @@ int main() {
         "V_PK_ADD_BF16_X",
         "TENSOR_LOAD_TO_LDS_X",
         "V_CVT_F16_FP8_X",
-        "V_DIV_SCALE_F64_X"}) {
+        "V_DIV_SCALE_F64_X",
+        "X_V_PK_ADD_BF16_X",
+        "X_TENSOR_LOAD_TO_LDS_X",
+        "X_V_CVT_F16_FP8_X",
+        "X_V_DIV_SCALE_F64_X"}) {
     const StubDecodedInstruction near_miss_decode =
         DecodeStubInstruction(near_miss_instruction);
     if (!Expect(MatchesUnknownDecode(near_miss_decode, near_miss_instruction) &&
@@ -8090,7 +8106,11 @@ int main() {
           "TENSOR_LOAD_TO_LDS_X",
           "X_V_CVT_F16_FP8",
           "X_V_DIV_SCALE_F64",
-          "V_DIV_SCALE_F64_X"}) {
+          "V_DIV_SCALE_F64_X",
+          "X_V_PK_ADD_BF16_X",
+          "X_TENSOR_LOAD_TO_LDS_X",
+          "X_V_CVT_F16_FP8_X",
+          "X_V_DIV_SCALE_F64_X"}) {
       const StubDecoderRouteInfo synthetic_near_miss{
           near_miss_instruction,
           manifest.route,
