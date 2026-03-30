@@ -49,6 +49,11 @@ INDEX_BUCKETS: Set = set()
 # Do not move bucket initialization exclusively into main(), as the
 # Lambda wrapper imports and calls update_pep503_index() directly.
 def initialize_bucket(bucket_name: Optional[str]) -> None:
+    '''
+    initialize_bucket() is required for both CLI and Lambda usage.
+    Do not move bucket initialization exclusively into main(), as the
+    Lambda wrapper imports and calls update_pep503_index() directly.
+   '''
     # Resolve and configure the S3 bucket used for index updates.
     # CLI --bucket takes precedence over S3_BUCKET_PY; fails if neither is set.
     global BUCKET_NAME, BUCKET, INDEX_BUCKETS
@@ -486,17 +491,16 @@ class S3Index:
             rc.fetch_metadata()
             rc.fetch_pep658()
         return rc
-"""
-NOTE:
-This function is used both by the CLI (via main()) and by the AWS Lambda
-wrapper (lambda_function.py). It must remain callable without relying on
-CLI argument parsing or main() initialization.
-"""
+
 def update_pep503_index(prefix: str, compute_sha256: bool = False, upload: bool = True):
     """
     Regenerates the PEP 503 simple index for a given S3 prefix.
     Fetches valid artifacts, applies allow-list filtering, optionally updates
     checksums, and uploads (or saves) the generated index.html files.
+
+    This function is used both by the CLI (via main()) and by the AWS Lambda
+    wrapper (lambda_function.py). It must remain callable without relying on
+    CLI argument parsing or main() initialization.
     """
     print(f"Processing prefix: {prefix}")
     stime = time.time()
@@ -528,16 +532,16 @@ def create_parser() -> argparse.ArgumentParser:
         "--auto-detect-prefixes",
         action="store_true",
         help=(
-        "Automatically detect architecture prefixes under the given base "
-        "path using S3 CommonPrefixes. Disabled by default."
+            "Automatically detect architecture prefixes under the given base "
+            "path using S3 CommonPrefixes. Disabled by default."
     )
     )
     parser.add_argument(
         "--starting-from",
         type=str,
         help=(
-        "Base prefix for auto-detection (e.g. v2/, v2-staging/, v3/whl/). "
-        "Required when using --auto-detect-prefixes."
+            "Base prefix for auto-detection (e.g. v2/, v2-staging/, v3/whl/). "
+            "Required when using --auto-detect-prefixes."
     )
     )
     parser.add_argument("--do-not-upload", action="store_true")
