@@ -34,7 +34,7 @@ functional_matrix = {
     "test_code_obj_version": {
         "job_name": "test_code_obj_version",
         "fetch_artifact_args": "--tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 5,
         "test_script": (
             "python " f"{_get_functional_script_path('test_code_obj_version.py')}"
         ),
