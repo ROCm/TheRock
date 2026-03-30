@@ -583,6 +583,7 @@ def main(base_args, linux_families, windows_families):
     is_workflow_dispatch = github_event_name == "workflow_dispatch"
     is_pull_request = github_event_name == "pull_request"
     is_schedule = github_event_name == "schedule"
+    github_run_id = base_args.get("github_run_id")
 
     branch_name = base_args.get("branch_name", "")
     base_ref = base_args.get("base_ref")
@@ -594,14 +595,15 @@ def main(base_args, linux_families, windows_families):
 
     print("Found metadata:")
     print(f"  github_event_name: {github_event_name}")
+    print(f"    is_push: {is_push}")
+    print(f"    is_workflow_dispatch: {is_workflow_dispatch}")
+    print(f"    is_pull_request: {is_pull_request}")
+    print(f"    is_schedule: {is_schedule}")
+    print(f"  github_run_id: {github_run_id}")
     print(f"  branch_name: {branch_name}")
     print(f"  base_ref: {base_ref}")
-    print(f"  multi_arch: {multi_arch}")
     print(f"  build_variant: {build_variant}")
-    print(f"  is_push: {is_push}")
-    print(f"  is_workflow_dispatch: {is_workflow_dispatch}")
-    print(f"  is_pull_request: {is_pull_request}")
-    print(f"  is_schedule: {is_schedule}")
+    print(f"  multi_arch: {multi_arch}")
     print(f"  linux_use_prebuilt_artifacts: {linux_use_prebuilt_artifacts}")
     print(f"  windows_use_prebuilt_artifacts: {windows_use_prebuilt_artifacts}")
     pr_labels = None
@@ -677,17 +679,18 @@ def main(base_args, linux_families, windows_families):
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = is_ci_run_required(modified_paths)
 
-        # TODO(#3399): move multi-arch CI configuration to its own script
-        # Multi-arch CI on PRs requires explicit opt-in via label.
+        # multi_arch_ci.yml is now the default, so the "non-multi-arch" ci.yml
+        # now requires an opt-in to run on pull requests.
         # This avoids doubling CI load during the transition from ci.yml
         # to multi_arch_ci.yml. See https://github.com/ROCm/TheRock/issues/3337
+        # TODO(#3399): move multi-arch CI configuration to its own script
         if (
-            multi_arch
+            not multi_arch
             and is_pull_request
-            and "ci:run-multi-arch" not in (pr_labels or [])
+            and "ci:run-non-multi-arch" not in (pr_labels or [])
         ):
             print(
-                "Skipping multi-arch CI: 'ci:run-multi-arch' label not found. "
+                "Skipping non-multi-arch CI: 'ci:run-non-multi-arch' label not found. "
                 "Add the label to opt in."
             )
             enable_build_jobs = False
@@ -772,6 +775,34 @@ def main(base_args, linux_families, windows_families):
     """
     )
 
+    # Multi-arch build summary: add links to logs and artifacts index pages.
+    # These are posted early (before builds complete) so they appear at the top
+    # of the job summary. The server-side Lambda generates the index pages as
+    # logs and artifacts flow in.
+    # TODO(#3399): move multi-arch CI configuration to its own script
+    if multi_arch and enable_build_jobs:
+        # Lazy import since multi-arch CI configuration will move soon
+        sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
+        from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
+        if github_run_id:
+            summary_lines = [
+                "## Build outputs",
+                "",
+                "Platform | 📋 Logs | 📦 Artifacts",
+                "-- | -- | --",
+            ]
+            for platform_name in ["linux", "windows"]:
+                root = WorkflowOutputRoot.from_workflow_run(
+                    run_id=github_run_id, platform=platform_name
+                )
+                log_url = root.root_log_index().https_url
+                artifact_url = root.root_index().https_url
+                summary_lines.append(
+                    f"{platform_name.capitalize()} | {log_url} | {artifact_url}"
+                )
+            gha_append_step_summary("\n".join(summary_lines))
+
     output = {
         "linux_variants": json.dumps(linux_variants_output),
         "linux_test_labels": json.dumps(linux_test_output),
@@ -806,6 +837,7 @@ if __name__ == "__main__":
         )
         sys.exit(1)
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
+    base_args["github_run_id"] = os.environ.get("GITHUB_RUN_ID", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
     base_args["linux_use_prebuilt_artifacts"] = (
         os.environ.get("LINUX_USE_PREBUILT_ARTIFACTS") == "true"

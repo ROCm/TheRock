@@ -47,14 +47,14 @@ CONFIG_PRESETS_MAP = {
     # For initial implementation, pre and post submit will be the same
     "github-oss-presubmit": {
         "secondary_storage": CACHE_SRV_DEV,
-        "log_file": REPO_ROOT / "build/logs/ccache.log",
-        "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
+        "log_file": REPO_ROOT / "build/logs/ccache/ccache.log",
+        "stats_log": REPO_ROOT / "build/logs/ccache/ccache_stats.log",
         "max_size": "5G",
     },
     "github-oss-postsubmit": {
         "secondary_storage": CACHE_SRV_REL,
-        "log_file": REPO_ROOT / "build/logs/ccache.log",
-        "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
+        "log_file": REPO_ROOT / "build/logs/ccache/ccache.log",
+        "stats_log": REPO_ROOT / "build/logs/ccache/ccache_stats.log",
         "max_size": "5G",
     },
 }
