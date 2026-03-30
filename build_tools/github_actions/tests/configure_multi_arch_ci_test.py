@@ -50,6 +50,7 @@ def _run_from_environ(
 
     try:
         env = {
+            "GITHUB_RUN_ID": "12345",
             "GITHUB_EVENT_NAME": event_name,
             "GITHUB_EVENT_PATH": event_path,
             "GITHUB_REF_NAME": branch_name,
@@ -72,6 +73,7 @@ class TestCIInputs(unittest.TestCase):
     def test_event_type_properties(self):
         """Event type properties are mutually exclusive."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="pull_request",
             branch_name="feature",
             base_ref="HEAD^",
@@ -85,6 +87,7 @@ class TestCIInputs(unittest.TestCase):
     def test_defaults(self):
         """Fields with defaults can be omitted."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="push",
             branch_name="main",
             base_ref="HEAD^1",
@@ -168,6 +171,7 @@ class TestShouldSkipCI(unittest.TestCase):
 
     def _inputs(self, **kwargs):
         defaults = dict(
+            run_id="12345",
             event_name="pull_request",
             branch_name="feature",
             base_ref="HEAD^",
@@ -178,26 +182,20 @@ class TestShouldSkipCI(unittest.TestCase):
 
     def test_skip_ci_label(self):
         """PR with ci:skip label skips CI regardless of changed files."""
-        inputs = self._inputs(pr_labels=["ci:skip", "ci:run-multi-arch"])
+        inputs = self._inputs(pr_labels=["ci:skip"])
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         self.assertTrue(cm.should_skip_ci(inputs, git))
 
-    def test_pr_without_multi_arch_label_skips(self):
-        """PR without ci:run-multi-arch label skips multi-arch CI."""
+    def test_pr_without_skip_label_proceeds(self):
+        """PR without ci:skip label proceeds to path filtering."""
         inputs = self._inputs(pr_labels=[])
-        git = cm.GitContext(changed_files=["CMakeLists.txt"])
-        self.assertTrue(cm.should_skip_ci(inputs, git))
-
-    def test_pr_with_multi_arch_label_proceeds(self):
-        """PR with ci:run-multi-arch label proceeds to path filtering."""
-        inputs = self._inputs(pr_labels=["ci:run-multi-arch"])
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
     @patch("configure_multi_arch_ci.is_ci_run_required", return_value=False)
     def test_path_filter_says_skip(self, mock_filter):
         """When is_ci_run_required returns False, skip CI."""
-        inputs = self._inputs(pr_labels=["ci:run-multi-arch"])
+        inputs = self._inputs()
         git = cm.GitContext(changed_files=["docs/README.md"])
         self.assertTrue(cm.should_skip_ci(inputs, git))
         mock_filter.assert_called_once_with(["docs/README.md"])
@@ -205,7 +203,7 @@ class TestShouldSkipCI(unittest.TestCase):
     @patch("configure_multi_arch_ci.is_ci_run_required", return_value=True)
     def test_path_filter_says_required(self, mock_filter):
         """When is_ci_run_required returns True, don't skip."""
-        inputs = self._inputs(pr_labels=["ci:run-multi-arch"])
+        inputs = self._inputs()
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
@@ -228,6 +226,7 @@ class TestDecideJobs(unittest.TestCase):
 
     def _inputs(self, **kwargs):
         defaults = dict(
+            run_id="12345",
             event_name="pull_request",
             branch_name="feature",
             base_ref="HEAD^",
@@ -372,6 +371,7 @@ class TestSelectTargets(unittest.TestCase):
     def test_push_includes_postsubmit_families(self):
         """Push trigger selects presubmit+postsubmit families."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="push",
             branch_name="main",
             base_ref="HEAD^1",
@@ -384,6 +384,7 @@ class TestSelectTargets(unittest.TestCase):
     def test_schedule_returns_all_families(self):
         """Schedule trigger selects all families (presubmit+postsubmit+nightly)."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="schedule",
             branch_name="main",
             base_ref="HEAD^1",
@@ -392,6 +393,7 @@ class TestSelectTargets(unittest.TestCase):
         result = cm.select_targets(inputs)
         # Schedule should have more families than push (nightly families added)
         push_inputs = cm.CIInputs(
+            run_id="12345",
             event_name="push",
             branch_name="main",
             base_ref="HEAD^1",
@@ -403,6 +405,7 @@ class TestSelectTargets(unittest.TestCase):
     def test_pull_request_defaults_to_presubmit_only(self):
         """PR without labels gets presubmit families only, not postsubmit."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="pull_request",
             branch_name="feature",
             base_ref="HEAD^",
@@ -416,12 +419,14 @@ class TestSelectTargets(unittest.TestCase):
     def test_pull_request_gfx_label_adds_family(self):
         """PR with a gfx label adds that family to the defaults."""
         inputs_without = cm.CIInputs(
+            run_id="12345",
             event_name="pull_request",
             branch_name="feature",
             base_ref="HEAD^",
             build_variant="release",
         )
         inputs_with = cm.CIInputs(
+            run_id="12345",
             event_name="pull_request",
             branch_name="feature",
             base_ref="HEAD^",
@@ -437,6 +442,7 @@ class TestSelectTargets(unittest.TestCase):
     def test_pull_request_run_all_archs_label(self):
         """PR with ci:run-all-archs label selects all families."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="pull_request",
             branch_name="feature",
             base_ref="HEAD^",
@@ -450,6 +456,7 @@ class TestSelectTargets(unittest.TestCase):
     def test_pull_request_unknown_gfx_label_raises(self):
         """PR with an unknown gfx label fails fast."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="pull_request",
             branch_name="feature",
             base_ref="HEAD^",
@@ -462,6 +469,7 @@ class TestSelectTargets(unittest.TestCase):
     def test_workflow_dispatch_per_platform(self):
         """workflow_dispatch selects families per platform."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="workflow_dispatch",
             branch_name="main",
             base_ref="HEAD^1",
@@ -479,6 +487,7 @@ class TestSelectTargets(unittest.TestCase):
     def test_workflow_dispatch_empty_input(self):
         """workflow_dispatch with empty lists returns empty families."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="workflow_dispatch",
             branch_name="main",
             base_ref="HEAD^1",
@@ -491,6 +500,7 @@ class TestSelectTargets(unittest.TestCase):
     def test_workflow_dispatch_unknown_family_raises(self):
         """workflow_dispatch with unknown family fails fast."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="workflow_dispatch",
             branch_name="main",
             base_ref="HEAD^1",
@@ -506,6 +516,7 @@ class TestSelectTargets(unittest.TestCase):
     def test_workflow_dispatch_wrong_platform_raises(self):
         """Requesting a family for a platform it doesn't support should fail."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="workflow_dispatch",
             branch_name="main",
             base_ref="HEAD^1",
@@ -519,6 +530,7 @@ class TestSelectTargets(unittest.TestCase):
     def test_unsupported_event_type_raises(self):
         """Unknown event type raises ValueError."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="repository_dispatch",
             branch_name="main",
             base_ref="HEAD^1",
@@ -530,6 +542,7 @@ class TestSelectTargets(unittest.TestCase):
     def test_platform_filtering(self):
         """Families without a platform entry are excluded from that platform."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="push",
             branch_name="main",
             base_ref="HEAD^1",
@@ -605,6 +618,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         """Release variant with families on both platforms produces both configs
         with correctly structured per-family info."""
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="push",
             branch_name="main",
             base_ref="HEAD^1",
@@ -705,6 +719,7 @@ class TestFormatSummary(unittest.TestCase):
 
     def _inputs(self, **kwargs):
         defaults = dict(
+            run_id="12345",
             event_name="push",
             branch_name="main",
             base_ref="HEAD^1",
@@ -757,6 +772,7 @@ class TestConfigurePipeline(unittest.TestCase):
         """If should_skip_ci returns True, pipeline short-circuits."""
         mock_skip.return_value = True
         inputs = cm.CIInputs(
+            run_id="12345",
             event_name="workflow_dispatch",
             branch_name="main",
             base_ref="HEAD^1",
