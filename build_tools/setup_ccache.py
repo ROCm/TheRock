@@ -95,12 +95,18 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
 
     # Compiler check: on POSIX we use a custom script that fingerprints the
     # compiler binary and its shared libraries via ldd + sha256sum. On Windows
-    # (MSVC) those tools don't exist; ccache's default mtime check works well.
+    # those tools don't exist, so we use ccache's built-in "content" check
+    # which hashes the compiler binary. The default "mtime" check fails for
+    # compilers built from source (e.g., ROCm clang++) because each CI run
+    # rebuilds the compiler with a new mtime, producing different cache keys
+    # even when the binary is identical -- causing 98%+ miss rates.
     if not IS_WINDOWS:
         lines.append(
             f"compiler_check = {sys.executable} {compiler_check_file} "
             f"{dir / 'compiler_check_cache'} %compiler%"
         )
+    else:
+        lines.append("compiler_check = content")
 
     # Slop settings.
     # Creating a hard link to a file increasing the link count, which triggers
