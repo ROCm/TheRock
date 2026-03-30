@@ -26,7 +26,7 @@ The CI pipeline is a DAG of job groups:
 
 Step 4 determines which job groups to run, skip, or satisfy with prebuilt
 artifacts. Within build-rocm, per-stage rebuild/prebuilt granularity is
-available. Test details (which tests to run, smoke vs full) are decided
+available. Test details (which tests to run, quick vs full) are decided
 per test job group.
 
 Inputs:
@@ -47,8 +47,7 @@ Outputs (written to GITHUB_OUTPUT):
 import enum
 import json
 import os
-from dataclasses import dataclass, field, fields
-from pathlib import Path
+from dataclasses import asdict, dataclass, field, fields
 
 
 from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
@@ -150,8 +149,12 @@ class CIInputs:
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
         if event_name == "pull_request":
+            # Extract label name strings from the event payload's label objects:
+            #   Sample input:  [{"name": "ci:skip", "color": "fff", ...}, ...]
+            #   Sample output: ["ci:skip", ...]
             pr_obj = event.get("pull_request", {})
             pr_labels = [label["name"].lower() for label in pr_obj.get("labels", [])]
+
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
         elif event_name == "push":
@@ -186,7 +189,10 @@ class GitContext:
     construct GitContext directly without touching git.
     """
 
+    # List of relative file paths modified relative to a base ref
     changed_files: list[str] | None = None
+
+    # List of paths of all git submodules in the repo
     submodule_paths: list[str] | None = None
 
     @staticmethod
@@ -237,8 +243,33 @@ class TargetSelection:
 # ---------------------------------------------------------------------------
 # Job decisions — the CI pipeline as a DAG of job groups
 #
-# Each node gets a JobGroupDecision (run/prebuilt/skip). Subclasses add
-# group-specific details (per-stage granularity, test type, etc.).
+# The CI pipeline forms a DAG where each node is a job group:
+#
+#   build-rocm ──> test-rocm
+#              └─> build-rocm-python ──> build-pytorch ──> test-pytorch
+#
+# Each node gets a JobAction: RUN, PREBUILT, or SKIP.
+#   - RUN:      Build from source (or run tests).
+#   - PREBUILT: Fetch artifacts from a prior successful run. Only valid for
+#               build job groups (build-rocm, build-rocm-python).
+#   - SKIP:     Don't run at all. Used when no downstream job needs this
+#               node's outputs.
+#
+# Note: this is aspirational and not fully implemented yet.
+#
+# Example: a commit that only changes ROCm python packaging code:
+#
+#   [PREBUILT] build-rocm          (ROCm itself unchanged, reuse artifacts)
+#       │
+#       ├──> [SKIP] test-rocm      (ROCm unchanged, no need to re-test)
+#       │
+#       └──> [RUN] build-rocm-python ──> [RUN] build-pytorch
+#              (packaging changed)            │
+#                                             └──> [RUN] test-pytorch
+#
+# Subclasses of JobGroupDecision add group-specific details:
+#   - BuildRocmDecision: per-stage rebuild/prebuilt granularity
+#   - TestRocmDecision: test type (quick/standard/comprehensive/full)
 # ---------------------------------------------------------------------------
 
 
@@ -353,19 +384,9 @@ class BuildConfig:
     baseline_run_id: str = ""
 
     def to_dict(self) -> dict:
-        """Convert to dict for JSON serialization."""
-        return {
-            "per_family_info": self.per_family_info,
-            "dist_amdgpu_families": self.dist_amdgpu_families,
-            "artifact_group": self.artifact_group,
-            "build_variant_label": self.build_variant_label,
-            "build_variant_suffix": self.build_variant_suffix,
-            "build_variant_cmake_preset": self.build_variant_cmake_preset,
-            "expect_failure": self.expect_failure,
-            "build_pytorch": self.build_pytorch,
-            "prebuilt_stages": ",".join(self.prebuilt_stages),
-            "baseline_run_id": self.baseline_run_id,
-        }
+        d = asdict(self)
+        d["prebuilt_stages"] = ",".join(self.prebuilt_stages)
+        return d
 
 
 @dataclass(frozen=True)
@@ -829,9 +850,9 @@ def write_outputs(
 
     This is the only function with side effects (besides from_environ).
     """
-    test_type = outputs.jobs.test_rocm.test_type if outputs.jobs else "quick"
     linux = outputs.builds.linux
     windows = outputs.builds.windows
+    test_type = outputs.jobs.test_rocm.test_type
     output_vars = {
         # Workflow YAML references this as 'enable_build_jobs'
         "enable_build_jobs": json.dumps(outputs.is_ci_enabled),
