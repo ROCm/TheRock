@@ -28,6 +28,7 @@ Usage as a script:
 import argparse
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 
 def generate_simple_index(
@@ -85,12 +86,12 @@ def generate_simple_index(
     # Add local files with ./ prefix
     for file_path in sorted(local_files):
         filename = file_path.name
-        html_parts.append(f'  <a href="./{filename}">{filename}</a><br>')
+        html_parts.append(f'  <a href="./{quote(filename)}">{filename}</a><br>')
 
     # Add parent files with ../ prefix
     for file_path in sorted(parent_files):
         filename = file_path.name
-        html_parts.append(f'  <a href="../{filename}">{filename}</a><br>')
+        html_parts.append(f'  <a href="../{quote(filename)}">{filename}</a><br>')
 
     html_parts.extend(["</body>", "</html>", ""])  # Trailing newline
 
