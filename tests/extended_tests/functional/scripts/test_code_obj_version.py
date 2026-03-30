@@ -321,10 +321,7 @@ class CovBackwardCompatibilityTest(FunctionalBase):
         for label, offset in [("n_minus_1", 1), ("n_minus_2", 2)]:
             target = base_version - offset
             variant = f"backward_compat_{label}"
-            compile_cmd = (
-                f"hipcc {self.source_file} "
-                f"-mcode-object-version={target}"
-            )
+            compile_cmd = f"hipcc {self.source_file} " f"-mcode-object-version={target}"
 
             if target < 0:
                 self._record_result(
