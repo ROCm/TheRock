@@ -66,6 +66,10 @@ TEST_TO_IGNORE = {
             "Unit_hipMemsetASyncMulti",
             "Unit_hipHostAlloc_AllocateMoreThanAvailGPUMemory",
             "Unit_hipStreamValue_Write - TestParams<uint32_t, PtrType::DevicePtrToHost>",
+            # TODO(#4081): Flaky with compiler submodule update — subprocess aborted.
+            "Unit_NonHost_Printf_loop",
+            "Unit_NonHost_Printf_multiple_Threads",
+            "Unit_NonHost_Printf_BufferAvailability",
         ]
     },
     "gfx110X-all": {
