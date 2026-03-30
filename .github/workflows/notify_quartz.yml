@@ -341,6 +341,15 @@ jobs:
                 })),
               };
 
+            } else if (eventName === 'workflow_dispatch') {
+              eventType = 'workflow_dispatch_test';
+              clientPayload = {
+                event_type: eventType,
+                repository: fullRepo,
+                triggered_by: context.actor,
+                timestamp: new Date().toISOString(),
+              };
+
             } else {
               core.info(`Unhandled event: ${eventName}, skipping dispatch.`);
               return;
