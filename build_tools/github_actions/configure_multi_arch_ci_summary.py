@@ -37,7 +37,7 @@ def format_summary(
 
     # One-liner: trigger, branch, variant
     lines.append(
-        f"Trigger: `{ci_inputs.event_name}` on `{ci_inputs.branch_name}` branch, "
+        f"Trigger: `{ci_inputs.event_name}` on `{ci_inputs.commit_ref}`, "
         f"`{ci_inputs.build_variant}` variant."
     )
     lines.append("")

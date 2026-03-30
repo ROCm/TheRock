@@ -47,7 +47,7 @@ Outputs (written to GITHUB_OUTPUT):
 import enum
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 
@@ -86,11 +86,11 @@ class CIInputs:
     access needed.
     """
 
-    run_id: str
-    event_name: str  # push, pull_request, schedule, workflow_dispatch
-    branch_name: str
-    base_ref: str  # Git ref for diffing (PR base or HEAD^1)
-    build_variant: str  # release, asan, tsan
+    run_id: str  # GITHUB_RUN_ID value
+    event_name: str  # GITHUB_EVENT_NAME value (e.g. "push", "pull_request", "schedule", "workflow_dispatch")
+    commit_ref: str  # GITHUB_REF_NAME value
+    base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
+    build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
 
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
@@ -108,16 +108,8 @@ class CIInputs:
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
-        print(f"  event: {self.event_name}")
-        print(f"  branch: {self.branch_name}")
-        print(f"  variant: {self.build_variant}")
-        print(f"  pr_labels: {self.pr_labels}")
-        print(f"  linux_amdgpu_families: {self.linux_amdgpu_families}")
-        print(f"  windows_amdgpu_families: {self.windows_amdgpu_families}")
-        print(f"  linux_test_labels: {self.linux_test_labels!r}")
-        print(f"  windows_test_labels: {self.windows_test_labels!r}")
-        print(f"  prebuilt_stages: {self.prebuilt_stages!r}")
-        print(f"  baseline_run_id: {self.baseline_run_id!r}")
+        for f in fields(self):
+            print(f"  {f.name}: {getattr(self, f.name)!r}")
 
     @property
     def is_pull_request(self) -> bool:
@@ -138,25 +130,25 @@ class CIInputs:
     @staticmethod
     def from_environ() -> "CIInputs":
         """Parse from GitHub Actions environment."""
-        run_id = os.environ.get("GITHUB_RUN_ID", "")
-        event_name = os.environ.get("GITHUB_EVENT_NAME", "")
-        branch_name = os.environ.get("GITHUB_REF_NAME", "")
-        if not branch_name:
-            raise RuntimeError("GITHUB_REF_NAME is not set.")
+        run_id = os.environ["GITHUB_RUN_ID"]
+        event_name = os.environ["GITHUB_EVENT_NAME"]
+        commit_ref = os.environ["GITHUB_REF_NAME"]
 
-        # Read the full event webhook payload.
-        event_path = os.environ.get("GITHUB_EVENT_PATH", "")
-        if event_path and Path(event_path).exists():
-            with open(event_path) as f:
-                event = json.load(f)
-        else:
-            event = {}
+        # Read the full event webhook payload (common to all event triggers).
+        event_path = os.environ["GITHUB_EVENT_PATH"]
+        with open(event_path) as f:
+            event = json.load(f)
 
-        # Extract fields based on event type.
+        # Extract additional fields based on event type.
+
+        # "inputs" are set for workflow_dispatch, empty otherwise.
         inputs = event.get("inputs") or {}
+
+        # BUILD_VARIANT comes from workflow_call inputs, not the event payload.
+        build_variant = os.environ.get("BUILD_VARIANT", "release")
+
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
-
         if event_name == "pull_request":
             pr_obj = event.get("pull_request", {})
             pr_labels = [label["name"].lower() for label in pr_obj.get("labels", [])]
@@ -165,13 +157,10 @@ class CIInputs:
         elif event_name == "push":
             base_ref = event.get("before", "HEAD^1")
 
-        # BUILD_VARIANT comes from workflow_call inputs, not the event payload.
-        build_variant = os.environ.get("BUILD_VARIANT", "release")
-
         return CIInputs(
             run_id=run_id,
             event_name=event_name,
-            branch_name=branch_name,
+            commit_ref=commit_ref,
             base_ref=base_ref,
             build_variant=build_variant,
             pr_labels=pr_labels,
