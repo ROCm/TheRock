@@ -22,8 +22,6 @@ on:
   push:
     branches:
       - main
-      # testing
-      - users/geomin12/host-asan
 
 permissions:
   contents: read
@@ -39,13 +37,16 @@ concurrency:
 jobs:
   setup:
     uses: ./.github/workflows/setup.yml
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'schedule' }}
+    # TESTING
+    # if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     with:
       build_variant: "asan"
 
   setup_host_asan:
     uses: ./.github/workflows/setup.yml
-    if: ${{ github.event_name == 'push' }}
+    # testing
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch }}
     with:
       build_variant: "host-asan"
 
