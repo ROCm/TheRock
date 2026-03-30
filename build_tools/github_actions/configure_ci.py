@@ -51,7 +51,6 @@
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 from typing import Iterable, List, Optional
 import string
@@ -469,13 +468,14 @@ def main(base_args, linux_families, windows_families):
 
     print("Found metadata:")
     print(f"  github_event_name: {github_event_name}")
+    print(f"    is_push: {is_push}")
+    print(f"    is_workflow_dispatch: {is_workflow_dispatch}")
+    print(f"    is_pull_request: {is_pull_request}")
+    print(f"    is_schedule: {is_schedule}")
     print(f"  branch_name: {branch_name}")
     print(f"  base_ref: {base_ref}")
     print(f"  build_variant: {build_variant}")
-    print(f"  is_push: {is_push}")
-    print(f"  is_workflow_dispatch: {is_workflow_dispatch}")
-    print(f"  is_pull_request: {is_pull_request}")
-    print(f"  is_schedule: {is_schedule}")
+    print(f"  multi_arch: {multi_arch}")
     print(f"  linux_use_prebuilt_artifacts: {linux_use_prebuilt_artifacts}")
     print(f"  windows_use_prebuilt_artifacts: {windows_use_prebuilt_artifacts}")
     pr_labels = None
@@ -544,6 +544,18 @@ def main(base_args, linux_families, windows_families):
         # TODO(#199): other behavior changes
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = is_ci_run_required(modified_paths)
+
+        # multi_arch_ci.yml is now the default, so the "non-multi-arch" ci.yml
+        # now requires an opt-in to run on pull requests.
+        # This avoids doubling CI load during the transition from ci.yml
+        # to multi_arch_ci.yml. See https://github.com/ROCm/TheRock/issues/3337
+        # TODO(#3399): move multi-arch CI configuration to its own script
+        if is_pull_request and "ci:run-non-multi-arch" not in (pr_labels or []):
+            print(
+                "Skipping non-multi-arch CI: 'ci:run-non-multi-arch' label not found. "
+                "Add the label to opt in."
+            )
+            enable_build_jobs = False
 
         # If the modified path contains any git submodules, we want to run a full test suite.
         # Otherwise, we just run quick tests

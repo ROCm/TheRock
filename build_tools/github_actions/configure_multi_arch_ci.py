@@ -86,6 +86,7 @@ class CIInputs:
     access needed.
     """
 
+    run_id: str
     event_name: str  # push, pull_request, schedule, workflow_dispatch
     branch_name: str
     base_ref: str  # Git ref for diffing (PR base or HEAD^1)
@@ -137,6 +138,7 @@ class CIInputs:
     @staticmethod
     def from_environ() -> "CIInputs":
         """Parse from GitHub Actions environment."""
+        run_id = os.environ.get("GITHUB_RUN_ID", "")
         event_name = os.environ.get("GITHUB_EVENT_NAME", "")
         branch_name = os.environ.get("GITHUB_REF_NAME", "")
         if not branch_name:
@@ -167,6 +169,7 @@ class CIInputs:
         build_variant = os.environ.get("BUILD_VARIANT", "release")
 
         return CIInputs(
+            run_id=run_id,
             event_name=event_name,
             branch_name=branch_name,
             base_ref=base_ref,
@@ -429,19 +432,11 @@ def should_skip_ci(
 
     Returns True for:
     - 'ci:skip' PR label
-    - pull_request without 'ci:run-multi-arch' label (opt-in during transition)
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
     """
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
-        return True
-
-    # Multi-arch CI on PRs requires explicit opt-in via label to avoid
-    # doubling CI load during the transition.
-    # See https://github.com/ROCm/TheRock/issues/3337.
-    if ci_inputs.is_pull_request and "ci:run-multi-arch" not in ci_inputs.pr_labels:
-        print("  Skipping: PR without 'ci:run-multi-arch' label")
         return True
 
     # If we have a list of changed files (push/pull_request events), check if

@@ -7,6 +7,14 @@ from configure_multi_arch_ci import (
     CIInputs,
     CIOutputs,
 )
+from pathlib import Path
+import sys
+
+THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
+
+sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Hardcoded for now — prebuilt artifacts are always fetched from ROCm/TheRock
 # workflow runs. TODO(#3399): when baseline_run_id carries a repo qualifier,
@@ -51,7 +59,7 @@ def format_summary(
     # build-rocm
     lines.append("### build-rocm")
     lines.append("")
-    _append_build_rocm(lines, outputs)
+    _append_build_rocm(lines, ci_inputs, outputs)
 
     # test-rocm
     lines.append("### test-rocm")
@@ -130,7 +138,9 @@ def _non_default_callouts(ci_inputs: CIInputs, outputs: CIOutputs) -> list[str]:
     return callouts
 
 
-def _append_build_rocm(lines: list[str], outputs: CIOutputs) -> None:
+def _append_build_rocm(
+    lines: list[str], ci_inputs: CIInputs, outputs: CIOutputs
+) -> None:
     jobs = outputs.jobs
 
     # Prebuilt info
@@ -164,6 +174,23 @@ def _append_build_rocm(lines: list[str], outputs: CIOutputs) -> None:
             )
             lines.append(f"| {platform} | {families} | `{config.artifact_group}` |")
     lines.append("")
+
+    # Link to log and artifact index pages
+    lines.extend(
+        [
+            "## Build outputs",
+            "",
+            "Platform | 📋 Logs | 📦 Artifacts",
+            "-- | -- | --",
+        ]
+    )
+    for platform_name in ["linux", "windows"]:
+        output_root = WorkflowOutputRoot.from_workflow_run(
+            run_id=ci_inputs.run_id, platform=platform_name
+        )
+        log_url = output_root.root_log_index().https_url
+        artifact_url = output_root.root_index().https_url
+        lines.append(f"{platform_name.capitalize()} | {log_url} | {artifact_url}")
 
 
 def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
