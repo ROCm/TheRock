@@ -235,6 +235,7 @@ jobs:
           package_version: ${{ needs.setup_metadata.outputs.version }}
           extra_cmake_options: ''
           cmake_preset: ''
+          ROCM_BUILD_ID: ${{ github.sha }}
         run: |
           python3 ./build_tools/github_actions/build_configure.py \
             --build-dir ${{ env.BUILD_DIR }} \
