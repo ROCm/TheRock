@@ -52,20 +52,17 @@ jobs:
   linux_build_and_test:
     name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
     needs: [setup, setup_host_asan]
-    if: >-
-      ${{
-        (
-          needs.setup.outputs.linux_variants != '[]' &&
-          needs.setup.outputs.enable_build_jobs == 'true'
-        ) || (
-          needs.setup_host_asan.outputs.linux_variants != '[]' &&
-          needs.setup_host_asan.outputs.enable_build_jobs == 'true'
-        )
-      }}
+    if: |
+      always() &&
+      !cancelled() &&
+      (
+        (needs.setup.result == 'success' && needs.setup.outputs.enable_build_jobs == 'true') ||
+        (needs.setup_host_asan.result == 'success' && needs.setup_host_asan.outputs.enable_build_jobs == 'true')
+      )
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON(needs.setup.outputs.linux_variants) }}
+        variant: ${{ fromJSON(needs.setup.result == 'success' && needs.setup.outputs.linux_variants || needs.setup_host_asan.outputs.linux_variants) }}
     uses: ./.github/workflows/ci_linux.yml
     secrets: inherit
     with:
@@ -75,12 +72,12 @@ jobs:
       build_variant_label: ${{ matrix.variant.build_variant_label }}
       build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
       build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}
-      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
+      test_labels: ${{ needs.setup.result == 'success' && needs.setup.outputs.linux_test_labels || needs.setup_host_asan.outputs.linux_test_labels }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       expect_failure: ${{ matrix.variant.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
-      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      test_type: ${{ needs.setup.outputs.test_type }}
+      rocm_package_version: ${{ needs.setup.result == 'success' && needs.setup.outputs.rocm_package_version || needs.setup_host_asan.outputs.rocm_package_version }}
+      test_type: ${{ needs.setup.result == 'success' && needs.setup.outputs.test_type || needs.setup_host_asan.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
     permissions:
       contents: read
