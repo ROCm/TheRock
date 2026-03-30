@@ -51,11 +51,16 @@ jobs:
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
-    needs: setup
+    needs: [setup, setup_host_asan]
     if: >-
       ${{
-        needs.setup.outputs.linux_variants != '[]' &&
-        needs.setup.outputs.enable_build_jobs == 'true'
+        (
+          needs.setup.outputs.linux_variants != '[]' &&
+          needs.setup.outputs.enable_build_jobs == 'true'
+        ) || (
+          needs.setup_host_asan.outputs.linux_variants != '[]' &&
+          needs.setup_host_asan.outputs.enable_build_jobs == 'true'
+        )
       }}
     strategy:
       fail-fast: false
