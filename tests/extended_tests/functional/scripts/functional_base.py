@@ -3,9 +3,13 @@
 
 """Base class for functional tests with common functionality."""
 
+import os
+import shlex
+import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
+
 from prettytable import PrettyTable
 
 # Add parent directory to path for utils import
@@ -34,6 +38,57 @@ class FunctionalBase(ExtendedTestBase):
         """
         super().__init__(test_name, display_name or test_name)
         self.script_dir = Path(__file__).resolve().parent
+
+    def execute_command_with_output(
+        self, cmd: List[str], cwd: Path = None, env: Dict[str, str] = None
+    ) -> Tuple[int, str]:
+        """Execute a command and return its exit code and captured output.
+
+        Unlike ExtendedTestBase.execute_command (which returns only the exit
+        code), this variant also captures and returns stdout/stderr as a single
+        string.  Useful when the caller needs to parse or inspect the output.
+        """
+        work_dir = cwd or self.therock_dir
+        log.info(f"++ Exec [{work_dir}]$ {shlex.join(cmd)}")
+
+        process_env = os.environ.copy()
+        if env:
+            process_env.update(env)
+
+        process = subprocess.Popen(
+            cmd,
+            cwd=work_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=process_env,
+        )
+
+        output_lines = []
+        for line in process.stdout:
+            line_text = line.rstrip()
+            log.info(line_text)
+            output_lines.append(line_text)
+
+        process.wait()
+        return process.returncode, "\n".join(output_lines)
+
+    def get_rocm_env_with_path(self) -> Dict[str, str]:
+        """Get environment with ROCm libraries on LD_LIBRARY_PATH and ROCm
+        tool directories on PATH.
+
+        Extends get_rocm_env() by prepending standard ROCm bin directories
+        (hipcc, llvm tools, etc.) to PATH and setting HIP_PLATFORM=amd.
+        """
+        env = self.get_rocm_env()
+        extra_dirs = [
+            str(self.rocm_path / "bin"),
+            str(self.rocm_path / "llvm" / "bin"),
+        ]
+        existing_path = env.get("PATH", "")
+        env["PATH"] = ":".join(d for d in extra_dirs + [existing_path] if d)
+        env["HIP_PLATFORM"] = "amd"
+        return env
 
     def create_result_tables(
         self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]
