@@ -1,0 +1,8 @@
+[components.lib."hecbench-spirv/hecbench-spirv/stage"]
+include = [
+  "libexec/hecbench_spirv/src/**",
+]
+[components.test."hecbench-spirv/hecbench-spirv/stage"]
+include = [
+  "libexec/hecbench_spirv/src/**",
+]

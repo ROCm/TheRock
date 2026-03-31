@@ -465,6 +465,10 @@ add_subdirectory(ml-libs)
 add_subdirectory(iree-libs)
 add_subdirectory(media-libs)
 
+if(THEROCK_ENABLE_HECBENCH_SPIRV)
+  add_subdirectory(third-party/hecbench-spirv)
+endif()
+
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)
 endif()

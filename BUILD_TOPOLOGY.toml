@@ -187,6 +187,10 @@ artifact_groups = ["profiler-apps"]
 description = "Media Libraries"
 artifact_groups = ["media-libs"]
 
+[build_stages.hecbench-spirv]
+description = "HeCBench SPIR-V benchmark suite (runs on nightly only)"
+artifact_groups = ["hecbench-spirv"]
+
 # ==============================================================================
 # ARTIFACT GROUPS - Logical groupings of related artifacts
 # ==============================================================================
@@ -297,6 +301,12 @@ description = "Profiler applications and analysis tools"
 type = "generic"
 artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi"]
 source_sets = ["rocm-systems"]
+
+[artifact_groups.hecbench-spirv]
+description = "HeCBench SPIR-V benchmark suite (prebuilt benchmarks)"
+type = "generic"
+artifact_group_deps = ["hip-runtime"]
+source_sets = []
 
 [artifact_groups.iree-compiler]
 description = "IREE compiler"
@@ -736,4 +746,14 @@ artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+disable_platforms = ["windows"]
+
+# --- Benchmark Artifacts ---
+
+[artifacts.hecbench-spirv]
+artifact_group = "hecbench-spirv"
+type = "target-neutral"
+artifact_deps = ["core-hip", "amd-llvm"]
+feature_name = "HECBENCH_SPIRV"
+feature_group = "BENCHMARKS"
 disable_platforms = ["windows"]

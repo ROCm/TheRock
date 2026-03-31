@@ -93,6 +93,20 @@ benchmark_matrix = {
         # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
         "expect_failure": True,
     },
+    # HeCBench SPIR-V benchmark tests
+    "hecbench_spirv_bench": {
+        "job_name": "hecbench_spirv_bench",
+        "fetch_artifact_args": "--hecbench_spirv --tests",
+        "timeout_minutes": 180,
+        "test_script": f"python {_get_benchmark_script_path('test_hecbench_spirv.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+        # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
+        "expect_failure": True,
+    },
     # Communication benchmark tests
     # DISABLED: RCCL Performance Benchmark - Waiting for OpenMPI integration
     # TODO: Enable after OpenMPI is added to TheRock (Issue #2887, blocked by #1284)

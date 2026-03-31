@@ -13,7 +13,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, IO, List, Optional
+from typing import Any, Dict, IO, List, Optional, Union
 
 # Add build_tools/github_actions to path for github_actions_api
 sys.path.insert(
@@ -85,7 +85,9 @@ class ExtendedTestBase:
         log_file_handle: Optional[IO] = None,
         env: Optional[Dict[str, str]] = None,
         cwd: Optional[str] = None,
-    ) -> int:
+        timeout: Optional[float] = None,
+        capture_output: bool = False,
+    ) -> Union[int, subprocess.CompletedProcess[str]]:
         """Execute a command, stream output to log, and optionally write to a file.
 
         Args:
@@ -93,10 +95,17 @@ class ExtendedTestBase:
             log_file_handle: Optional file handle to write output to (used by benchmarks).
             env: Optional environment variables to merge with current environment.
             cwd: Working directory for the command. Defaults to self.therock_dir.
+            timeout: Optional timeout in seconds. Returns code 124 when exceeded.
+            capture_output: If True, return subprocess.CompletedProcess with captured stdout/stderr.
 
         Returns:
-            Exit code from the command.
+            Exit code from the command when capture_output is False.
+            subprocess.CompletedProcess when capture_output is True.
         """
+        if timeout is not None and timeout <= 0:
+            raise ValueError(f"timeout must be > 0 when provided, got: {timeout}")
+
+        timeout_exit_code = 124
         run_cwd = cwd or str(self.therock_dir)
         log.info(f"++ Exec [{run_cwd}]$ {shlex.join(cmd)}")
         if log_file_handle:
@@ -111,19 +120,54 @@ class ExtendedTestBase:
             cmd,
             cwd=run_cwd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            stderr=subprocess.PIPE if capture_output else subprocess.STDOUT,
             text=True,
             bufsize=1,
             env=process_env,
         )
 
-        for line in process.stdout:
-            log.info(line.strip())
-            if log_file_handle:
-                log_file_handle.write(f"{line}")
+        stdout_data = ""
+        stderr_data = "" if capture_output else ""
+        timed_out = False
 
-        process.wait()
-        return process.returncode
+        try:
+            stdout_data, stderr_data = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            timed_out = True
+            log.error(f"Command timed out after {timeout} seconds: {shlex.join(cmd)}")
+            process.kill()
+            cleanup_stdout = ""
+            cleanup_stderr = ""
+            try:
+                cleanup_stdout, cleanup_stderr = process.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                # Return partial output if pipes still have unread data.
+                cleanup_stdout = ""
+                cleanup_stderr = ""
+
+            stdout_data = f"{exc.stdout or ''}{cleanup_stdout or ''}"
+            if capture_output:
+                stderr_data = f"{exc.stderr or ''}{cleanup_stderr or ''}"
+
+        output_for_log = stdout_data
+        if capture_output and stderr_data:
+            output_for_log = f"{output_for_log}{stderr_data}"
+
+        for line in output_for_log.splitlines(True):
+            log.info(line.rstrip())
+            if log_file_handle:
+                log_file_handle.write(line)
+
+        rc = timeout_exit_code if timed_out else process.returncode
+        if capture_output:
+            return subprocess.CompletedProcess(
+                args=cmd,
+                returncode=rc,
+                stdout=stdout_data,
+                stderr=stderr_data,
+            )
+
+        return rc
 
     def create_test_result(
         self,

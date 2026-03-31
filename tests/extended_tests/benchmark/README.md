@@ -13,7 +13,7 @@ Automated benchmark testing framework for ROCm libraries with system detection, 
 
 ## Features
 
-- **Automated Benchmark Execution** - ROCfft, ROCrand, ROCsolver, hipBLASLt, rocBLAS, RCCL
+- **Automated Benchmark Execution** - ROCfft, ROCrand, ROCsolver, hipBLASLt, rocBLAS, RCCL, HeCBench SPIR-V
 - **System Auto-Detection** - Hardware, OS, GPU, and ROCm version detection
 - **Distributed Testing** - Multi-GPU RCCL benchmarks (requires OpenMPI in Docker image)
 - **Results Management** - Local storage (JSON) and API upload with retry logic
@@ -27,6 +27,7 @@ Automated benchmark testing framework for ROCm libraries with system detection, 
 ### Available Benchmarks
 
 - `extended_tests/benchmark/scripts/test_hipblaslt_benchmark.py` - hipBLASLt benchmark suite
+- `extended_tests/benchmark/scripts/test_hecbench_spirv.py` - HeCBench SPIR-V benchmark suite
 - `extended_tests/benchmark/scripts/test_rccl_benchmark.py` - RCCL collective communication benchmarks (requires OpenMPI)
 - `extended_tests/benchmark/scripts/test_rocblas_benchmark.py` - rocBLAS benchmark suite
 - `extended_tests/benchmark/scripts/test_rocfft_benchmark.py` - ROCfft benchmark suite
@@ -40,6 +41,7 @@ extended_tests/benchmark/                       # Benchmark test directory
 ├── scripts/                     # Benchmark test implementations
 │   ├── benchmark_base.py        # Base class for all benchmarks
 │   ├── test_hipblaslt_benchmark.py
+│   ├── test_hecbench_spirv.py
 │   ├── test_rccl_benchmark.py
 │   ├── test_rocblas_benchmark.py
 │   ├── test_rocfft_benchmark.py
@@ -96,14 +98,15 @@ ci_nightly.yml → ci_linux.yml
 
 The following benchmark tests are defined in `tests/extended_tests/benchmark/benchmark_test_matrix.py`:
 
-| Test Name         | Library   | Platform       | Timeout | Shards |
-| ----------------- | --------- | -------------- | ------- | ------ |
-| `hipblaslt_bench` | hipBLASLt | Linux, Windows | 60 min  | 1      |
-| `rccl_bench`      | RCCL      | Linux          | 60 min  | 1      |
-| `rocblas_bench`   | rocBLAS   | Linux          | 60 min  | 1      |
-| `rocfft_bench`    | ROCfft    | Linux, Windows | 60 min  | 1      |
-| `rocrand_bench`   | ROCrand   | Linux, Windows | 60 min  | 1      |
-| `rocsolver_bench` | ROCsolver | Linux, Windows | 60 min  | 1      |
+| Test Name              | Library         | Platform       | Timeout | Shards |
+| ---------------------- | --------------- | -------------- | ------- | ------ |
+| `hipblaslt_bench`      | hipBLASLt       | Linux, Windows | 60 min  | 1      |
+| `hecbench_spirv_bench` | HeCBench SPIR-V | Linux          | 180 min | 1      |
+| `rccl_bench`           | RCCL            | Linux          | 60 min  | 1      |
+| `rocblas_bench`        | rocBLAS         | Linux          | 90 min  | 1      |
+| `rocfft_bench`         | ROCfft          | Linux, Windows | 60 min  | 1      |
+| `rocrand_bench`        | ROCrand         | Linux, Windows | 90 min  | 1      |
+| `rocsolver_bench`      | ROCsolver       | Linux, Windows | 60 min  | 1      |
 
 **GPU Family Support:**
 
