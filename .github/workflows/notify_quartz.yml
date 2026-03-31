@@ -82,7 +82,7 @@ permissions:
   checks: read
 
 env:
-  QUARTZ_REPO: ${{ inputs.quartz_repo || 'ROCm/Quartz' }}
+  QUARTZ_REPO: ${{ inputs.quartz_repo || 'cgoea/Quartz' }}
   QUARTZ_WORKFLOW_REF: ${{ inputs.quartz_workflow_ref || 'feat/ingestion' }}
 
 jobs:
@@ -90,18 +90,19 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@2e564a0bb8e7cc2b907b2401a2afe177882d4325 # v3.0.0
-        with:
-          app-id: ${{ secrets.GH_APP_HAULY_ID }}
-          private-key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-          owner: "ROCm"
+      # - name: Generate GitHub App token
+      #   id: app-token
+      #   uses: actions/create-github-app-token@2e564a0bb8e7cc2b907b2401a2afe177882d4325 # v3.0.0
+      #   with:
+      #     app-id: ${{ secrets.GH_APP_HAULY_ID }}
+      #     private-key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+      #     owner: "ROCm"
 
       - name: Dispatch event to Quartz
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
-          github-token: ${{ steps.app-token.outputs.token }}
+          # github-token: ${{ steps.app-token.outputs.token }}
+          github-token: ${{ secrets.QUARTZ_FORK_TEST_ONLY_CGOEA }}
           script: |
             const [owner, repo] = process.env.QUARTZ_REPO.split('/');
             const eventName = context.eventName;
