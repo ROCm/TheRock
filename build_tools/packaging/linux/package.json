@@ -333,10 +333,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-fft-devel"
+      "amdrocm-fft-devel",
+      "amdrocm-rand"
     ],
     "RPMRequires": [
-      "amdrocm-fft-devel"
+      "amdrocm-fft-devel",
+      "amdrocm-rand"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm FFT test files",
@@ -361,6 +363,18 @@
             "Name": "hipFFT",
             "Components": [
               "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "fftw3",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "fftw3",
+            "Components": [
+              "lib"
             ]
           }
         ]
@@ -1908,10 +1922,16 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-dnn-devel"
+      "amdrocm-dnn-devel",
+      "amdrocm-runtime",
+      "amdrocm-blas",
+      "amdrocm-sysdeps"
     ],
     "RPMRequires": [
-      "amdrocm-dnn-devel"
+      "amdrocm-dnn-devel",
+      "amdrocm-runtime",
+      "amdrocm-blas",
+      "amdrocm-sysdeps"
     ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
     "Description_Short": "AMD DNN test files",

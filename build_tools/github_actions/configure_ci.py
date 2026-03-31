@@ -51,7 +51,6 @@
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 from typing import Iterable, List, Optional
 import string
@@ -139,116 +138,6 @@ def filter_known_names(
     return filtered_names
 
 
-def generate_multi_arch_matrix(
-    target_names: List[str],
-    lookup_matrix: dict,
-    platform: str,
-    platform_build_variants: dict,
-    base_args: dict,
-) -> List[dict]:
-    """Generate matrix grouped by build_variant with structured per-family data.
-
-    In multi-arch mode, instead of creating one entry per (family × build_variant),
-    we create one entry per build_variant containing all families that support it.
-    This allows multi_arch_build_portable_linux.yml to run generic stages once
-    and matrix over families only for per-arch stages.
-
-    Args:
-        target_names: List of target family names (e.g., ["gfx94X", "gfx1201"])
-        lookup_matrix: Family info matrix from amdgpu_family_matrix.py
-        platform: Platform name ("linux" or "windows")
-        platform_build_variants: Dict of build variant configs for this platform
-        base_args: Base arguments including 'build_variant' to filter by
-
-    Returns:
-        List of matrix entries, each containing:
-        - matrix_per_family_json: JSON array of {amdgpu_family, test-runs-on} objects
-          for per-architecture job matrix expansion
-        - dist_amdgpu_families: Semicolon-separated family names for THEROCK_DIST_AMDGPU_TARGETS
-        - build_variant_label: Human-readable label (e.g., "Release", "ASAN", "TSAN")
-        - build_variant_suffix: Suffix for artifact naming (e.g., "", "asan", "tsan"). Empty string
-          for release builds, short identifier for other variants.
-        - build_variant_cmake_preset: CMake preset name (e.g., "release", "asan", "tsan")
-        - expect_failure: If True, job failure is non-blocking (continue-on-error)
-        - artifact_group: Unique identifier for artifact grouping, formatted as
-          "multi-arch-{suffix}" where suffix defaults to "release" if empty
-    """
-    # Collect per-family info for each build_variant
-    variant_to_family_info: dict[str, List[dict]] = {}
-    variant_info: dict[str, dict] = {}
-
-    for target_name in target_names:
-        platform_set = lookup_matrix.get(target_name)
-        if not platform_set or platform not in platform_set:
-            continue
-        platform_info = platform_set.get(platform)
-        family_name = platform_info["family"]
-        test_runs_on = platform_info.get("test-runs-on", "")
-
-        for build_variant_name in platform_info.get("build_variants", []):
-            if build_variant_name != base_args.get("build_variant"):
-                continue
-
-            if build_variant_name not in variant_to_family_info:
-                variant_to_family_info[build_variant_name] = []
-                variant_info[build_variant_name] = platform_build_variants.get(
-                    build_variant_name
-                )
-
-            # Check for duplicates by family name
-            existing_families = [
-                f["amdgpu_family"] for f in variant_to_family_info[build_variant_name]
-            ]
-            if family_name not in existing_families:
-                # fetch-gfx-targets: individual GPU arch(s) on the test runner,
-                # used for fetching split (per-target) artifacts.
-                fetch_gfx_targets = platform_info.get("fetch-gfx-targets", [])
-                variant_to_family_info[build_variant_name].append(
-                    {
-                        "amdgpu_family": family_name,
-                        "amdgpu_targets": ",".join(fetch_gfx_targets),
-                        "test-runs-on": test_runs_on,
-                        "sanity_check_only_for_family": platform_info.get(
-                            "sanity_check_only_for_family", False
-                        ),
-                        # Per-family pytorch flag. False for families with known
-                        # build failures. Used to gate per-family pytorch wheel
-                        # builds in multi_arch_ci_linux.yml.
-                        # NOTE: This is distinct from a future combined (multi-arch)
-                        # pytorch build that would build once against the full index.
-                        "build_pytorch": not platform_info.get(
-                            "expect_pytorch_failure", False
-                        ),
-                    }
-                )
-
-    # Create one matrix entry per build_variant
-    matrix_output = []
-    for variant_name, family_info_list in variant_to_family_info.items():
-        info = variant_info[variant_name]
-        if not info:
-            continue
-
-        # Extract family names for dist_amdgpu_families
-        family_names = [f["amdgpu_family"] for f in family_info_list]
-
-        expect_failure = info.get("expect_failure", False)
-        expect_pytorch_failure = info.get("expect_pytorch_failure", False)
-        matrix_row = {
-            "matrix_per_family_json": json.dumps(family_info_list),
-            "dist_amdgpu_families": ";".join(family_names),
-            "artifact_group": f"multi-arch-{info.get('build_variant_suffix') or 'release'}",
-            "build_variant_label": info["build_variant_label"],
-            "build_variant_suffix": info["build_variant_suffix"],
-            "build_variant_cmake_preset": info["build_variant_cmake_preset"],
-            "expect_failure": expect_failure,
-            "build_pytorch": not expect_failure and not expect_pytorch_failure,
-        }
-        matrix_output.append(matrix_row)
-
-    return matrix_output
-
-
 def determine_long_lived_branch(branch_name: str) -> bool:
     # For long-lived branches (main, releases) we want to run both presubmit and postsubmit jobs on push,
     # instead of just presubmit jobs (as for other branches)
@@ -272,7 +161,6 @@ def matrix_generator(
     base_args={},
     families={},
     platform="linux",
-    multi_arch=False,
 ):
     """
     Generates a matrix of "family" and "test-runs-on" parameters based on the workflow inputs.
@@ -299,7 +187,7 @@ def matrix_generator(
         if is_long_lived_branch:
             active_trigger_types.extend(["presubmit", "postsubmit"])
         else:
-            # Non-long-lived branch pushes (e.g., multi_arch/bringup1) use presubmit defaults
+            # Non-long-lived branch pushes use presubmit defaults
             active_trigger_types.append("presubmit")
     if is_schedule:
         active_trigger_types.extend(["presubmit", "postsubmit", "nightly"])
@@ -463,19 +351,6 @@ def matrix_generator(
         platform_build_variants, dict
     ), f"Expected build variant {platform} in {all_build_variants}"
 
-    # In multi-arch mode, group all families into one entry per build_variant
-    if multi_arch:
-        matrix_output = generate_multi_arch_matrix(
-            unique_target_names,
-            lookup_matrix,
-            platform,
-            platform_build_variants,
-            base_args,
-        )
-        print(f"Generated multi-arch build matrix: {str(matrix_output)}")
-        print(f"Generated test list: {str(unique_test_names)}")
-        return matrix_output, unique_test_names
-
     # Expand selected target names back to a matrix (cross-product of families × variants).
     matrix_output = []
     for target_name in unique_target_names:
@@ -583,12 +458,10 @@ def main(base_args, linux_families, windows_families):
     is_workflow_dispatch = github_event_name == "workflow_dispatch"
     is_pull_request = github_event_name == "pull_request"
     is_schedule = github_event_name == "schedule"
-    github_run_id = base_args.get("github_run_id")
 
     branch_name = base_args.get("branch_name", "")
     base_ref = base_args.get("base_ref")
     build_variant = base_args.get("build_variant", "")
-    multi_arch = base_args.get("multi_arch", False)
 
     linux_use_prebuilt_artifacts = base_args.get("linux_use_prebuilt_artifacts")
     windows_use_prebuilt_artifacts = base_args.get("windows_use_prebuilt_artifacts")
@@ -599,11 +472,9 @@ def main(base_args, linux_families, windows_families):
     print(f"    is_workflow_dispatch: {is_workflow_dispatch}")
     print(f"    is_pull_request: {is_pull_request}")
     print(f"    is_schedule: {is_schedule}")
-    print(f"  github_run_id: {github_run_id}")
     print(f"  branch_name: {branch_name}")
     print(f"  base_ref: {base_ref}")
     print(f"  build_variant: {build_variant}")
-    print(f"  multi_arch: {multi_arch}")
     print(f"  linux_use_prebuilt_artifacts: {linux_use_prebuilt_artifacts}")
     print(f"  windows_use_prebuilt_artifacts: {windows_use_prebuilt_artifacts}")
     pr_labels = None
@@ -619,9 +490,7 @@ def main(base_args, linux_families, windows_families):
         )
     print("")
 
-    print(
-        f"Generating build matrix for Linux (multi_arch={multi_arch}): {str(linux_families)}"
-    )
+    print(f"Generating build matrix for Linux: {str(linux_families)}")
     linux_variants_output, linux_test_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
@@ -630,13 +499,10 @@ def main(base_args, linux_families, windows_families):
         base_args,
         linux_families,
         platform="linux",
-        multi_arch=multi_arch,
     )
     print("")
 
-    print(
-        f"Generating build matrix for Windows (multi_arch={multi_arch}): {str(windows_families)}"
-    )
+    print(f"Generating build matrix for Windows: {str(windows_families)}")
     windows_variants_output, windows_test_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
@@ -645,7 +511,6 @@ def main(base_args, linux_families, windows_families):
         base_args,
         windows_families,
         platform="windows",
-        multi_arch=multi_arch,
     )
     print("")
 
@@ -684,11 +549,7 @@ def main(base_args, linux_families, windows_families):
         # This avoids doubling CI load during the transition from ci.yml
         # to multi_arch_ci.yml. See https://github.com/ROCm/TheRock/issues/3337
         # TODO(#3399): move multi-arch CI configuration to its own script
-        if (
-            not multi_arch
-            and is_pull_request
-            and "ci:run-non-multi-arch" not in (pr_labels or [])
-        ):
+        if is_pull_request and "ci:run-non-multi-arch" not in (pr_labels or []):
             print(
                 "Skipping non-multi-arch CI: 'ci:run-non-multi-arch' label not found. "
                 "Add the label to opt in."
@@ -739,7 +600,7 @@ def main(base_args, linux_families, windows_families):
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
-    # Format variants for summary - handle both regular and multi-arch modes
+    # Format variants for summary
     def format_variants(variants):
         result = []
         for item in variants:
@@ -754,10 +615,6 @@ def main(base_args, linux_families, windows_families):
                 if flags:
                     label += f" ({', '.join(flags)})"
                 result.append(label)
-            elif "matrix_per_family_json" in item:
-                # Multi-arch mode: show the families from the JSON
-                families = json.loads(item["matrix_per_family_json"])
-                result.append([f["amdgpu_family"] for f in families])
         return result
 
     gha_append_step_summary(
@@ -774,34 +631,6 @@ def main(base_args, linux_families, windows_families):
 * `run_functional_tests`: {json.dumps(run_functional_tests)}
     """
     )
-
-    # Multi-arch build summary: add links to logs and artifacts index pages.
-    # These are posted early (before builds complete) so they appear at the top
-    # of the job summary. The server-side Lambda generates the index pages as
-    # logs and artifacts flow in.
-    # TODO(#3399): move multi-arch CI configuration to its own script
-    if multi_arch and enable_build_jobs:
-        # Lazy import since multi-arch CI configuration will move soon
-        sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
-        from _therock_utils.workflow_outputs import WorkflowOutputRoot
-
-        if github_run_id:
-            summary_lines = [
-                "## Build outputs",
-                "",
-                "Platform | 📋 Logs | 📦 Artifacts",
-                "-- | -- | --",
-            ]
-            for platform_name in ["linux", "windows"]:
-                root = WorkflowOutputRoot.from_workflow_run(
-                    run_id=github_run_id, platform=platform_name
-                )
-                log_url = root.root_log_index().https_url
-                artifact_url = root.root_index().https_url
-                summary_lines.append(
-                    f"{platform_name.capitalize()} | {log_url} | {artifact_url}"
-                )
-            gha_append_step_summary("\n".join(summary_lines))
 
     output = {
         "linux_variants": json.dumps(linux_variants_output),
@@ -837,7 +666,6 @@ if __name__ == "__main__":
         )
         sys.exit(1)
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
-    base_args["github_run_id"] = os.environ.get("GITHUB_RUN_ID", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
     base_args["linux_use_prebuilt_artifacts"] = (
         os.environ.get("LINUX_USE_PREBUILT_ARTIFACTS") == "true"
@@ -855,6 +683,5 @@ if __name__ == "__main__":
         "ADDITIONAL_LABEL_OPTIONS", ""
     )
     base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
-    base_args["multi_arch"] = os.environ.get("MULTI_ARCH", "false") == "true"
 
     main(base_args, linux_families, windows_families)
