@@ -15,6 +15,7 @@ on:
     branches:
       - main
       - multi_arch/**
+      - release/therock-*
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:
