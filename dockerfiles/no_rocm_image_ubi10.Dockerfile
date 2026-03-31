@@ -6,7 +6,9 @@ RUN dnf install -y --nodocs sudo && dnf clean all
 
 # Create tester user with sudo privileges and render/video permissions
 RUN useradd -m -s /bin/bash -U -G wheel tester
-RUN groupadd -g 109 render && usermod -a -G render,video tester
+# UBI 10 may already ship a `render` group; only create if missing
+RUN (getent group render >/dev/null || groupadd -g 109 render) \
+    && usermod -a -G render,video tester
 # Disable sudo password for wheel group
 RUN echo '%wheel ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
