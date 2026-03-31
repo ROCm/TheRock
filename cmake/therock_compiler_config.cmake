@@ -7,7 +7,9 @@
 # This improves compatibility with ccache and sccache:
 # https://github.com/ccache/ccache/issues/1040
 if(WIN32 AND NOT DEFINED CMAKE_MSVC_DEBUG_INFORMATION_FORMAT)
-  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>")
+  # Use embedded debug info (/Z7) for Debug/RelWithDebInfo/Release to avoid
+  # MSVC shared-PDB contention (C1041) in highly parallel builds (e.g. with sccache).
+  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<$<CONFIG:Debug,RelWithDebInfo,Release>:Embedded>")
 endif()
 
 if(WIN32 AND NOT MSVC AND NOT THEROCK_DISABLE_MSVC_CHECK)
