@@ -85,7 +85,9 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             # TODO(#3298): Re-enable machine once HSA_STATUS_ERROR_OUT_OF_RESOURCES issues are resolved
             # Label is linux-gfx110X-gpu-rocm, fetch-gfx-targets should be ["gfx1100"]
-            "test-runs-on": "",
+            # Previous: "test-runs-on": "",
+            # Previous (OSSCI when re-enabled): "test-runs-on": "linux-gfx110X-gpu-rocm",
+            "test-runs-on": "gpu_navi3x",
             "family": "gfx110X-all",
             "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
@@ -93,7 +95,9 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx110X-gpu-rocm",
+            # Previous: "test-runs-on": "",
+            # Previous (OSSCI when re-enabled): "test-runs-on": "windows-gfx110X-gpu-rocm",
+            "test-runs-on": "gpu_navi3x",
             "family": "gfx110X-all",
             "fetch-gfx-targets": ["gfx1100"],
             "bypass_tests_for_releases": True,
@@ -102,7 +106,8 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx1151": {
         "linux": {
-            "test-runs-on": "linux-gfx1151-gpu-rocm",
+            # Previous (OSSCI): "test-runs-on": "linux-gfx1151-gpu-rocm",
+            "test-runs-on": "igpu_stxh",
             "test-runs-on-kernel": {
                 "oem": "linux-strix-halo-gpu-rocm-oem",
             },
@@ -113,7 +118,8 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx1151-gpu-rocm",
+            # Previous (OSSCI): "test-runs-on": "windows-gfx1151-gpu-rocm",
+            "test-runs-on": "igpu_stxh",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
@@ -127,7 +133,9 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             # TODO(#2683): Re-enable label once stable
             # Label is linux-gfx120X-gpu-rocm
-            "test-runs-on": "",
+            # Previous: "test-runs-on": "",
+            # Previous (OSSCI): "test-runs-on": "linux-gfx120X-gpu-rocm",
+            "test-runs-on": "gpu_navi4x",
             "family": "gfx120X-all",
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
@@ -137,7 +145,9 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             # TODO(#2962): Re-enable machine once sanity checks work with this architecture
             # Label is windows-gfx120X-gpu-rocm, fetch-gfx-targets should be ["gfx1200", "gfx1201"]
-            "test-runs-on": "",
+            # Previous: "test-runs-on": "",
+            # Previous (OSSCI): "test-runs-on": "windows-gfx120X-gpu-rocm",
+            "test-runs-on": "gpu_navi4x",
             "family": "gfx120X-all",
             "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
