@@ -274,13 +274,15 @@ test_matrix = {
     "rocfft": {
         "job_name": "rocfft",
         "fetch_artifact_args": "--fft --rand --tests",
+        # 146039(approx) tests needs 6hr 50mins, so 410 mins / 8 shards = 52 mins per shard
+        # 52 mins + 20% margin = 60 mins
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocfft.py')}",
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 8,
+            "windows": 8,
         },
     },
     "hipfft": {
