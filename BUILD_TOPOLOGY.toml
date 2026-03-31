@@ -401,6 +401,12 @@ feature_name = "HOST_SUITE_SPARSE"
 feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by default)
 disable_platforms = ["windows"]
 
+[artifacts.elfio]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = ["amd-llvm"]
+feature_group = "CORE"
+
 [artifacts.fftw3]
 artifact_group = "third-party-libs"
 type = "target-neutral"
@@ -673,7 +679,7 @@ disable_platforms = ["windows"]
 [artifacts.rocprofiler-sdk]
 artifact_group = "profiler-core"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "base", "aqlprofile"]  # rocprofiler-register is in base
+artifact_deps = ["core-runtime", "base", "aqlprofile", "elfio"]  # rocprofiler-register is in base
 feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]

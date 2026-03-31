@@ -21,6 +21,7 @@ add_subdirectory(nlohmann-json)
 add_subdirectory(simde)
 add_subdirectory(yaml-cpp)
 add_subdirectory(Catch2)
+add_subdirectory(elfio)
 add_subdirectory(FunctionalPlus)
 add_subdirectory(fftw3)
 

@@ -95,6 +95,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DROCPROFILER_BUILD_TESTS=${THEROCK_BUILD_TESTING}
       -DROCPROFILER_BUILD_INTEGRATION_TESTS=OFF
       -DROCPROFILER_BUILD_SAMPLES=OFF
+      -DROCPROFILER_BUILD_ELFIO=OFF
       -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
@@ -107,6 +108,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprofiler-sdk-tests
     COMPILER_TOOLCHAIN
       amd-hip
+    BUILD_DEPS
+      therock-elfio
     RUNTIME_DEPS
       aqlprofile
       hip-clr
