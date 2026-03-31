@@ -199,45 +199,48 @@ jobs:
       - name: Install Python Dependencies
         run: |
           if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
-            PY=python
+            python -m pip install --upgrade pip
+            python -m pip install -r build_tools/packaging/linux/tests/requirements.txt
           elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
-            PY=python3.13
+            python3.13 -m pip install --upgrade pip
+            python3.13 -m pip install -r build_tools/packaging/linux/tests/requirements.txt
           else
-            PY=python3.12
+            python3.12 -m pip install --upgrade pip
+            python3.12 -m pip install -r build_tools/packaging/linux/tests/requirements.txt
           fi
-          "$PY" -m pip install --upgrade pip
-          "$PY" -m pip install -r build_tools/packaging/linux/tests/requirements.txt
 
       - name: Package Installation Test
         id: install-test
         run: |
+          echo "TEST - OS:${{ inputs.os_profile }} REPO:${{ env.REPO_URL }} Arch:${{ env.GFX_ARCH }} Type:${{ env.RELEASE_TYPE }}"
           if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
-            PY=python
+            python build_tools/packaging/linux/native_linux_package_install_test.py \
+              ${TEST_TYPE:+--test-type "$TEST_TYPE"} \
+              --os-profile "$OS_PROFILE" \
+              --repo-url "$REPO_URL" \
+              --gfx-arch "$GFX_ARCH" \
+              --install-prefix "$INSTALL_PREFIX" \
+              --release-type "$RELEASE_TYPE" \
+              ${GPG_KEY_URL:+--gpg-key-url "$GPG_KEY_URL"}
           elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
-            PY=python3.13
+            python3.13 build_tools/packaging/linux/native_linux_package_install_test.py \
+              ${TEST_TYPE:+--test-type "$TEST_TYPE"} \
+              --os-profile "$OS_PROFILE" \
+              --repo-url "$REPO_URL" \
+              --gfx-arch "$GFX_ARCH" \
+              --install-prefix "$INSTALL_PREFIX" \
+              --release-type "$RELEASE_TYPE" \
+              ${GPG_KEY_URL:+--gpg-key-url "$GPG_KEY_URL"}
           else
-            PY=python3.12
+            python3.12 build_tools/packaging/linux/native_linux_package_install_test.py \
+              ${TEST_TYPE:+--test-type "$TEST_TYPE"} \
+              --os-profile "$OS_PROFILE" \
+              --repo-url "$REPO_URL" \
+              --gfx-arch "$GFX_ARCH" \
+              --install-prefix "$INSTALL_PREFIX" \
+              --release-type "$RELEASE_TYPE" \
+              ${GPG_KEY_URL:+--gpg-key-url "$GPG_KEY_URL"}
           fi
-          echo "=========================================================================="
-          echo "INSTALLATION TEST - NATIVE LINUX PACKAGES"
-          echo "=========================================================================="
-          echo "OS Profile: ${{ inputs.os_profile }}"
-          echo "Repository URL: ${{ env.REPO_URL }}"
-          echo "Install Prefix: ${{ env.INSTALL_PREFIX }}"
-          echo "GPU Architecture: ${{ env.GFX_ARCH }}"
-          echo "Release Type: ${{ env.RELEASE_TYPE }}"
-          if [ -n "${{ env.TEST_TYPE }}" ]; then echo "Test Type: ${{ env.TEST_TYPE }}"; fi
-          echo "=========================================================================="
-          echo ""
-
-          "$PY" build_tools/packaging/linux/native_linux_package_install_test.py \
-            ${TEST_TYPE:+--test-type "$TEST_TYPE"} \
-            --os-profile "$OS_PROFILE" \
-            --repo-url "$REPO_URL" \
-            --gfx-arch "$GFX_ARCH" \
-            --install-prefix "$INSTALL_PREFIX" \
-            --release-type "$RELEASE_TYPE" \
-            ${GPG_KEY_URL:+--gpg-key-url "$GPG_KEY_URL"}
 
       - name: Test Report
         if: always()
