@@ -101,7 +101,7 @@ The test workflow downloads only the artifacts needed for the specific tests bei
 
 **Test configuration:** Each test specifies which artifacts to download, timeout, platform support (Linux/Windows), and the test script to run.
 
-**Test scripts:** Python scripts in [`build_tools/github_actions/test_executable_scripts/`](../../build_tools/github_actions/test_executable_scripts/) that work on both Linux and Windows.
+**Test scripts:** Python scripts in [`build_tools/github_actions/test_executable_scripts/`](../../build_tools/github_actions/test_executable_scripts/) that work on both Linux and Windows. (shortly, these scripts will be migrated to their respective monorepos)
 
 See [adding_tests.md](adding_tests.md) for how to add new tests to the CI pipeline.
 
@@ -189,5 +189,5 @@ See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [
 ## Getting Help
 
 - **Issues:** [TheRock GitHub Issues](https://github.com/ROCm/TheRock/issues)
-- **Discussions:** Ask in your PR or create a Discussion
+- **Discussions:** Ask in your PR or ask in the public Discord
 - **Documentation:** Check the [docs/development/](.) directory
