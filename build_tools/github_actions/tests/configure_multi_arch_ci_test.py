@@ -797,6 +797,10 @@ class TestFormatSummary(unittest.TestCase):
         # on more exact formatting would create a change detector test.
         self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
 
+    def test_skipped_ci_write_outputs_summary(self):
+        outputs = cm.CIOutputs(is_ci_enabled=False)
+        cm.write_outputs(self._inputs(), outputs)
+
 
 # ---------------------------------------------------------------------------
 # End-to-end: configure() pipeline
@@ -812,6 +816,7 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
         self.assertIsNone(outputs.builds.windows)
+        self.assertIsNone(outputs.jobs)
 
     @patch("configure_multi_arch_ci.should_skip_ci")
     def test_pipeline_skips_when_gate_says_skip(self, mock_skip):

@@ -876,7 +876,7 @@ def write_outputs(
     """
     linux = outputs.builds.linux
     windows = outputs.builds.windows
-    test_type = outputs.jobs.test_rocm.test_type
+    test_type = outputs.jobs.test_rocm.test_type if outputs.is_ci_enabled else ""
     output_vars = {
         # Workflow YAML references this as 'enable_build_jobs'
         "enable_build_jobs": json.dumps(outputs.is_ci_enabled),
