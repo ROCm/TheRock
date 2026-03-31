@@ -18,6 +18,10 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import upload_jax_manifest
+from manifest_utils import (
+    normalize_python_version_for_filename,
+    normalize_ref_for_filename,
+)
 
 
 class TestNormalizePythonVersion(unittest.TestCase):
@@ -25,41 +29,41 @@ class TestNormalizePythonVersion(unittest.TestCase):
 
     def test_strips_py_prefix(self):
         self.assertEqual(
-            upload_jax_manifest.normalize_python_version_for_filename("py3.12"),
+            normalize_python_version_for_filename("py3.12"),
             "3.12",
         )
 
     def test_plain_version(self):
         self.assertEqual(
-            upload_jax_manifest.normalize_python_version_for_filename("3.12"),
+            normalize_python_version_for_filename("3.12"),
             "3.12",
         )
 
     def test_strips_whitespace(self):
         self.assertEqual(
-            upload_jax_manifest.normalize_python_version_for_filename("  py3.13  "),
+            normalize_python_version_for_filename("  py3.13  "),
             "3.13",
         )
 
 
 class TestSanitizeRefForFilename(unittest.TestCase):
-    """Tests for sanitize_ref_for_filename()."""
+    """Tests for normalize_ref_for_filename()."""
 
     def test_simple_ref(self):
         self.assertEqual(
-            upload_jax_manifest.sanitize_ref_for_filename("nightly"),
+            normalize_ref_for_filename("nightly"),
             "nightly",
         )
 
     def test_slashes_replaced(self):
         self.assertEqual(
-            upload_jax_manifest.sanitize_ref_for_filename("release/0.4.28"),
+            normalize_ref_for_filename("release/0.4.28"),
             "release-0.4.28",
         )
 
     def test_multiple_slashes(self):
         self.assertEqual(
-            upload_jax_manifest.sanitize_ref_for_filename("users/alice/experiment"),
+            normalize_ref_for_filename("users/alice/experiment"),
             "users-alice-experiment",
         )
 

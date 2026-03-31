@@ -16,8 +16,8 @@ TheRock aims to support as many subprojects as possible on "native" Windows
 ROCm is composed of many subprojects, some of which are supported on Windows:
 
 - https://rocm.docs.amd.com/en/latest/what-is-rocm.html
-- https://rocm.docs.amd.com/projects/install-on-windows/en/latest/reference/component-support.html
-- https://rocm.docs.amd.com/projects/install-on-windows/en/latest/conceptual/release-versioning.html#windows-builds-from-source
+- https://rocm.docs.amd.com/projects/install-on-windows/en/latest/conceptual/component-support.html
+- https://rocm.docs.amd.com/projects/install-on-windows/en/latest/about/release-versioning.html#windows-builds-from-source
 
 This table tracks current support status for each subproject in TheRock on
 Windows. Some subprojects may need extra patches to build within TheRock (on

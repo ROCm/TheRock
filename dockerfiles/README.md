@@ -122,7 +122,7 @@ Supporting scripts:
 
 - [`install_rocm_deps.sh`](install_rocm_deps.sh): Auto-detects the distribution
   and installs ROCm runtime dependencies using the appropriate package manager
-  (apt, dnf, or tdnf).
+  (apt, dnf, tdnf, or zypper).
 
 - [`install_rocm_tarball.sh`](install_rocm_tarball.sh): Downloads ROCm tarball
   from `rocm.{nightlies|prereleases|devreleases}.amd.com` or `repo.amd.com` (for

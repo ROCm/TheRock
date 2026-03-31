@@ -1,0 +1,80 @@
+name: TheRock Manifest Diff Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_ref:
+        description: 'Start commit SHA or workflow run ID (required when using workflow mode or commit SHA mode without find-last-successful)'
+        required: false
+        type: string
+      end_ref:
+        description: 'End commit SHA or workflow run ID'
+        required: true
+        type: string
+      workflow_mode:
+        description: 'Treat inputs as workflow run IDs instead of commit SHAs'
+        required: false
+        type: boolean
+        default: false
+      find_last_successful:
+        description: 'Workflow file to find last successful run (e.g., ci_nightly.yml)'
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      start_ref:
+        required: false
+        type: string
+      end_ref:
+        required: true
+        type: string
+      workflow_mode:
+        required: false
+        type: boolean
+        default: false
+      find_last_successful:
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  generate-report:
+    name: Generate Manifest Diff Report
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Generate manifest diff report
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 build_tools/generate_manifest_diff_report.py \
+            --end "${{ inputs.end_ref }}" \
+            --start "${{ inputs.start_ref || '' }}" \
+            --find-last-successful "${{ inputs.find_last_successful || '' }}" \
+            ${{ inputs.workflow_mode && '--workflow-mode' || '' }} \
+            --output-dir reports
+
+      - name: Configure AWS Credentials
+        if: ${{ github.repository == 'ROCm/TheRock' }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
+      - name: Upload Report to S3
+        if: ${{ github.repository == 'ROCm/TheRock' }}
+        run: |
+          python3 build_tools/github_actions/upload_test_report_script.py \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family manifest-diff \
+            --report-path reports \
+            --index-file-name index.html
