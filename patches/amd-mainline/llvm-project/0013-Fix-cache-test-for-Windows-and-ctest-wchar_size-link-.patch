@@ -1,28 +1,25 @@
-From ccc5b0a7abf418df062329b32c9db99273d68d66 Mon Sep 17 00:00:00 2001
+From 2bb3ec52606a9ebd16c5751c3ec38fc500824dfc Mon Sep 17 00:00:00 2001
 From: Andrey Kasaurov <andrey.kasaurov@amd.com>
-Date: Thu, 26 Mar 2026 23:36:47 -0400
-Subject: [PATCH] Fix cache test for Windows and ctest wchar_size link failure
+Date: Tue, 31 Mar 2026 02:44:54 -0400
+Subject: [PATCH] Fix cache test for Windows and ctest wchar_size linking
 
-Make the cache bad-dir lit test cross-platform by matching both the
-Linux and Windows error messages with a regex alternation instead
-of marking the test UNSUPPORTED on Windows.
-
-Add -fshort-wchar when compiling test input bitcodes on Windows to
-match the flag used by device-libs (see amd/device-libs/cmake/OCL.cmake),
-fixing the comgr_compile_source_to_executable ctest failure caused by
-conflicting wchar_size module flags.
+- Use cross-platform FileCheck regex in compile-minimal-cached-bad-dir.cl
+  to match both Linux ("Not a directory") and Windows ("no such file or
+  directory") error messages.
+- Add -fshort-wchar flag when compiling test input bitcodes on Windows
+  to match device-libs and avoid conflicting wchar_size module flags.
 ---
- .../cache-tests/compile-minimal-test-cached-bad-dir.cl   | 7 +++++--
+ .../cache-tests/compile-minimal-cached-bad-dir.cl        | 7 +++++--
  amd/comgr/test/CMakeLists.txt                            | 9 +++++++++
  2 files changed, 14 insertions(+), 2 deletions(-)
 
-diff --git a/amd/comgr/test-lit/cache-tests/compile-minimal-test-cached-bad-dir.cl b/amd/comgr/test-lit/cache-tests/compile-minimal-test-cached-bad-dir.cl
-index c705c0081b4d..a2e2e88193ef 100644
---- a/amd/comgr/test-lit/cache-tests/compile-minimal-test-cached-bad-dir.cl
-+++ b/amd/comgr/test-lit/cache-tests/compile-minimal-test-cached-bad-dir.cl
+diff --git a/amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl b/amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl
+index aff955b02f98..512d167c8c43 100644
+--- a/amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl
++++ b/amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl
 @@ -9,5 +9,8 @@
- // RUN:     compile-opencl-minimal %S/../compile-minimal-test.cl %t.bin 1.2
- // RUN: %llvm-objdump -d %t.bin | %FileCheck %S/../compile-minimal-test.cl
+ // RUN:     compile-opencl-minimal %S/../compile-minimal.cl %t.bin 1.2
+ // RUN: %llvm-objdump -d %t.bin | %FileCheck %S/../compile-minimal.cl
  // RUN: %FileCheck --check-prefix=BAD %s < %t.log
 -// BAD: Failed to open cache file
 -// BAD-SAME: Not a directory
