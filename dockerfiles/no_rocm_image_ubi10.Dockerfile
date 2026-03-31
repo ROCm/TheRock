@@ -1,0 +1,38 @@
+# This Docker image is used for TheRock builds and tests, providing a clean ROCm-less container
+
+FROM registry.access.redhat.com/ubi10/ubi:latest
+
+RUN dnf install -y --nodocs sudo && dnf clean all
+
+# Create tester user with sudo privileges and render/video permissions
+RUN useradd -m -s /bin/bash -U -G wheel tester
+RUN groupadd -g 109 render && usermod -a -G render,video tester
+# Disable sudo password for wheel group
+RUN echo '%wheel ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+# Set as default user
+USER tester
+
+RUN sudo dnf install -y --nodocs \
+    git \
+    jq \
+    unzip \
+    zip \
+    cmake \
+    ninja-build \
+    clang \
+    lld \
+    wget \
+    libgfortran \
+    libquadmath \
+    libatomic \
+    valgrind \
+    && sudo dnf clean all
+
+RUN sudo dnf install -y --nodocs git-lfs \
+    && sudo dnf clean all
+
+RUN sudo dnf install -y --nodocs python3-setuptools python3-wheel \
+    && sudo dnf clean all
+
+WORKDIR /home/tester/
