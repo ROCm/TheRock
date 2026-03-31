@@ -217,12 +217,14 @@ test_matrix = {
     "hipsparse": {
         "job_name": "hipsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
+        # 59022(approx) tests needs 32 mins, so 32 mins / 2 shards = 16 mins per shard
+        # 16 mins + 20% margin = 20 mins
+        "timeout_minutes": 20,
         "test_script": f"python {_get_script_path('test_hipsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 2,
+            "windows": 2,
         },
     },
     "rocsparse": {
