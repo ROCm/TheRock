@@ -2447,6 +2447,7 @@
       "amdrocm-ck",
       "amdrocm-dnn",
       "amdrocm-rccl",
+      "amdrocm-rocshmem",
       "amdrocm-math-common",
       "amdrocm-amdsmi",
       "amdrocm-hipify",
@@ -2466,6 +2467,7 @@
       "amdrocm-ck",
       "amdrocm-dnn",
       "amdrocm-rccl",
+      "amdrocm-rocshmem",
       "amdrocm-math-common",
       "amdrocm-amdsmi",
       "amdrocm-hipify",
@@ -2673,13 +2675,15 @@
       "amdrocm-core-devel",
       "amdrocm-developer-tools",
       "amdrocm-rdc",
-      "amdrocm-opencl"
+      "amdrocm-opencl",
+      "amdrocm-rocshmem-devel"
     ],
     "RPMRequires": [
       "amdrocm-core-devel",
       "amdrocm-developer-tools",
       "amdrocm-rdc",
-      "amdrocm-opencl"
+      "amdrocm-opencl",
+      "amdrocm-rocshmem-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core sdk metapackage",
