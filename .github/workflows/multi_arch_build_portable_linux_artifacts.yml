@@ -134,7 +134,8 @@ jobs:
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
         run: |
-          ninja -C build/compiler/amd-comgr/build check-comgr
+          LD_LIBRARY_PATH="${BUILD_DIR}/compiler/amd-comgr/stage/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+            ninja -C "${BUILD_DIR}/compiler/amd-comgr/build" check-comgr
 
       - name: Report
         if: ${{ !cancelled() }}
