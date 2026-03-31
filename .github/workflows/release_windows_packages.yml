@@ -175,7 +175,7 @@ jobs:
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_LOG: error
       SCCACHE_DIR: ${{ github.workspace }}/output/sccache_cache
-      SCCACHE_DIRECT: true
+      SCCACHE_DIRECT: false
 
     steps:
       - name: "Checking out repository"
