@@ -125,8 +125,8 @@ jobs:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-gfx942-1gpu-ossci-rocm' || 'ubuntu-24.04' }}
     container:
-      # Use container matching the OS profile (SLES / Ubuntu|Debian / AlmaLinux)
-      image: ${{ startsWith(inputs.os_profile, 'sles') && 'registry.suse.com/bci/bci-base:16.0' || ((startsWith(inputs.os_profile, 'ubuntu') || startsWith(inputs.os_profile, 'debian')) && 'ubuntu:24.04') || 'almalinux:9' }}
+      # Images by OS profile: sles* -> SUSE BCI 16; ubuntu*/debian* -> ubuntu:24.04; other rpm (e.g. rhel10) -> RHEL UBI 9.4.
+      image: ${{ startsWith(inputs.os_profile, 'sles') && 'registry.suse.com/bci/bci-base:16.0' || ((startsWith(inputs.os_profile, 'ubuntu') || startsWith(inputs.os_profile, 'debian')) && 'ubuntu:24.04') || 'registry.access.redhat.com/ubi9/ubi:9.4' }}
       options: --ipc host
         --privileged
     env:
@@ -156,9 +156,11 @@ jobs:
               apt install -y pciutils kmod apt-utils
             fi
           elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
-            # SLES prerequisites (uses zypper)
+            # SLES prerequisites (uses BCI base - zypper)
             zypper refresh
             zypper install -y \
+              python313 \
+              python313-pip \
               wget \
               curl \
               ca-certificates \
@@ -170,8 +172,10 @@ jobs:
               zypper install -y pciutils kmod
             fi
           else
-            # Use --allowerasing to handle curl-minimal conflict on AlmaLinux 9
+            # rpm (non-SLES, e.g. rhel10): RHEL UBI 9.4; Use --allowerasing to handle curl-minimal conflict on RHEL UBI 9.4
             dnf install -y --allowerasing \
+              python3.12 \
+              python3.12-pip \
               wget \
               curl \
               ca-certificates \
@@ -187,17 +191,33 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up Python
+        if: ${{ env.PKG_TYPE == 'deb' }}
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
 
       - name: Install Python Dependencies
         run: |
-          pip install -r build_tools/packaging/linux/tests/requirements.txt
+          if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
+            PY=python
+          elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
+            PY=python3.13
+          else
+            PY=python3.12
+          fi
+          "$PY" -m pip install --upgrade pip
+          "$PY" -m pip install -r build_tools/packaging/linux/tests/requirements.txt
 
       - name: Package Installation Test
         id: install-test
         run: |
+          if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
+            PY=python
+          elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
+            PY=python3.13
+          else
+            PY=python3.12
+          fi
           echo "=========================================================================="
           echo "INSTALLATION TEST - NATIVE LINUX PACKAGES"
           echo "=========================================================================="
@@ -210,7 +230,7 @@ jobs:
           echo "=========================================================================="
           echo ""
 
-          python build_tools/packaging/linux/native_linux_package_install_test.py \
+          "$PY" build_tools/packaging/linux/native_linux_package_install_test.py \
             ${TEST_TYPE:+--test-type "$TEST_TYPE"} \
             --os-profile "$OS_PROFILE" \
             --repo-url "$REPO_URL" \
