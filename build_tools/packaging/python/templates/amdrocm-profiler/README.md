@@ -9,6 +9,7 @@ profiling tools:
 - `rocprof-sys-avail`
 - `rocprof-sys-causal`
 - `rocprof-sys-instrument`
+- `rocprof-sys-python`
 - `rocprof-sys-run`
 - `rocprof-sys-sample`
 
