@@ -119,17 +119,10 @@ prefer the CDN URLs for reading (e.g. `pip install --index-url`).
 ### Build system buckets
 
 We mirror third-party dependency files into S3 for use by the build system.
-This serves several purposes:
 
-- **Supply chain integrity**: pinned, checksummed copies prevent sources
-  from changing outside of our control.
-- **Network performance**: dependencies are served over the same network
-  optimized for build machine access, so we're not at the mercy of third party
-  web servers.
-
-| Bucket                  | Contents                                                           | IAM role                           |
-| ----------------------- | ------------------------------------------------------------------ | ---------------------------------- |
-| `rocm-third-party-deps` | Source/dep mirrors for [`third_party/`](/third-party/) subprojects | None (files are uploaded manually) |
+| Bucket                  | Contents                                                | Details                                                                                                                    |
+| ----------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `rocm-third-party-deps` | Mirrors for [`third_party/`](/third-party/) subprojects | See ["Updating a third-party mirror"](./git_chores.md#updating-a-third-party-mirror) in [`git_chores.md`](./git_chores.md) |
 
 ### Cache buckets
 
