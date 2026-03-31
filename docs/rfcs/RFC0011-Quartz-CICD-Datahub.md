@@ -21,7 +21,7 @@ Quartz closes this gap. It is implemented as GitHub Actions workflows in a dedic
    — when new nightlies or prereleases are available, via push (workflow trigger) or pull (status.json polling)
    — when any other branch has finished the CI, via push (workflow trigger)
 1. **Accept results back from downstream projects** — build and test outcomes against TheRock artifacts, stored in the database
-1. **Power analytics dashboards** — Grafana queries database directly; no GitHub API calls at query time
+1. **Power analytics dashboards** — Dashboards query database directly; no GitHub API calls at query time
 1. **Stay within the GitHub ecosystem** — no external infrastructure required other than the database
 
 ## Non-Goals
@@ -57,9 +57,9 @@ Quartz sits between TheRock CI and the rest of the ROCm ecosystem. TheRock jobs 
                INSERT │     (GH App: Quartz Hunt or Quartz Kibble-<project>)
                       │
                       ▼
-            ┌──────────────────────────┐                  ┌──────────────────────────┐
-            │       Database           │◄─────────────────│  Dashboards (Grafana)    │
-            │  • therock_workflow_runs │    SQL queries   └──────────────────────────┘
+            ┌──────────────────────────┐                  ┌──────────────────────────────────────────┐
+            │       Database           │◄─────────────────│  Dashboards (Grafana, TheRock HUD, ...)  │
+            │  • therock_workflow_runs │    SQL queries   └──────────────────────────────────────────┘
             │  • therock_workflow_jobs │
             │  • downstream_*          │
             └──────────────────────────┘
@@ -247,7 +247,7 @@ Across all phases, a dedicated test repository mocks TheRock and downstream proj
 Create the `ROCm/quartz` repository and database, stand up the Quartz Hauly GitHub App, and implement the TheRock data ingest workflow. Scope is limited to nightly and prerelease workflows. Publish `status.json` artifacts so downstream projects can begin polling immediately.
 
 **Phase 2 — Subscription: Quartz → Downstream + Dashboards**
-Implement the Quartz Conveyor app and outbound notification workflow. Onboard the first downstream subscriber. Connect Grafana to ClickHouse Cloud for analytics dashboards.
+Implement the Quartz Conveyor app and outbound notification workflow. Onboard the first downstream subscriber. Connect the dashboards to use ClickHouse Cloud for analytics.
 
 **Phase 3 — Reporting Back: Downstream → Quartz**
 Define the downstream callback schema and implement the Quartz Hunt (Tier 1) and Quartz Kibble (Tier 2) ingest workflows. Provide onboarding templates for downstream projects. Covered in a follow-up — see Scope and Deferred Work.
@@ -317,11 +317,11 @@ When a downstream project PR triggers a TheRock CI run, notify that project auto
 - Validate full push notification flow end-to-end using the test repository mocking TheRock and a downstream subscriber
 - Onboard real subscribers (starting with rocm-examples) only after successful validation
 
-### C. Grafana Dashboards
+### C. Dashboards
 
-- Create read-only ClickHouse service account for Grafana
+- Create read-only ClickHouse service account for dashboards
 - Create ClickHouse materialized views for pre-aggregated dashboard queries (pass rates per architecture, nightly history, build duration trends)
-- Connect Grafana to ClickHouse using the read-only account
+- Connect dashboards to ClickHouse using the read-only account
 - Create new dashboards or update existing ones to use ClickHouse as the data backend, querying the materialized views
 
 ## Alternatives Considered
@@ -373,3 +373,4 @@ This RFC proposes Quartz, a central CI/CD data hub that gives the ROCm ecosystem
 - 2026-03-16: Add Phase 1 and Phase 2 implementation plans; update deduplication strategy to version integer with GitHub API timestamps; resolve dispatch mechanism to `workflow_dispatch`; various consistency fixes (Laura Promberger)
 - 2026-03-18: Add missing scripts to repository structure; add GitHub Issues and GitHub Project tracking note; minor fixes (Laura Promberger)
 - 2026-03-19: Refactor workflow permissions to read-all default with job-level elevation; move Scope and Deferred Work before Implementation Phases; rewrite Summary; swap Phase 3 (downstream reporting) and Phase 4 (all TheRock workflows); add `docs/` directory to repository structure (Laura Promberger)
+- 2026-03-31: Clarify dashboards are not Grafana-specific — any dashboard related the TheRock CI is in scope (Laura Promberger)
