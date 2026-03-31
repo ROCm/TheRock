@@ -4,7 +4,7 @@
 therock_subproject_fetch(therock-elfio-sources
   CMAKE_PROJECT
   # Originally mirrored from: "https://github.com/serge1/ELFIO/releases/download/Release_3.12/elfio-3.12.tar.gz"
-  URL "https://github.com/serge1/ELFIO/releases/download/Release_3.12/elfio-3.12.tar.gz"
+  URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/elfio-3.12.tar.gz"
   URL_HASH "SHA512=13ec6be1f8ee3d7dc96d4ff141d3c199dacd818470c0d902403215571ce3d998afe9e71a8c64e0e69cfb86a4794752d93e2e406025f4812e499e51b67201e23c"
   PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py ${CMAKE_SOURCE_DIR}/patches/third-party/elfio
 )
