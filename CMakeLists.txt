@@ -12,6 +12,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+cmake_policy(SET CMP0141 NEW)  # MSVC debug info format policy
 project(THEROCK)
 
 cmake_policy(SET CMP0135 NEW)
