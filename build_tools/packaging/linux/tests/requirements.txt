@@ -1,0 +1,5 @@
+# Pip dependencies for Install Test.
+pyelftools
+requests
+prettytable
+PyYAML

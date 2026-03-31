@@ -14,14 +14,13 @@ THEROCK_PATH = THEROCK_BIN_PATH.parent
 THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
 ROCPROFILER_COMPUTE_DIRECTORY = THEROCK_PATH / "libexec" / "rocprofiler-compute"
 
-# Set up excluded tests (include Jiras)
-# AIPROFSDK-36: rocr issue causing test to fail
+# Set up excluded tests
 EXCLUDED_TESTS = [
-    "test_profile_pc_sampling",
+    "test_profile_live_attach_detach",
 ]
 
-# Smoke Tests
-SMOKE_TESTS = [
+# quick Tests
+QUICK_TESTS = [
     "test_autogen_config",
     "test_utils",
     "test_num_xcds_cli_output",
@@ -77,12 +76,12 @@ def execute_tests():
         f"{shard_index},,{total_shards}",
     ]
 
-    # If smoke tests are enabled, we run smoke tests only.
+    # If quick tests are enabled, we run quick tests only.
     # Otherwise, we run the normal test suite
     test_type = os.getenv("TEST_TYPE", "full")
-    if test_type == "smoke":
+    if test_type == "quick":
         cmd.append("--tests-regex")
-        cmd.append("|".join(SMOKE_TESTS))
+        cmd.append("|".join(QUICK_TESTS))
 
     logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(cmd)}")
     subprocess.run(

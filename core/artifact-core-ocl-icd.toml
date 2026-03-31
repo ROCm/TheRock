@@ -1,0 +1,7 @@
+# opencl
+[components.lib."core/ocl-icd/stage"]
+# Linux implicitly includes lib/libOpenCL.so
+# Windows needs to explicitly include bin/OpenCL.dll
+include = [
+  "bin/**",
+]
