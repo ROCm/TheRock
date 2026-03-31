@@ -900,7 +900,7 @@ class ConfigureCITest(unittest.TestCase):
             platform="linux",
         )
         entry = linux_target_output[0]
-        self.assertEqual(entry["test-runs-on"], "rocm-asan-mi325-sandbox")
+        self.assertEqual(entry["test-runs-on"], "linux-gfx942-8gpu-sandbox-ossci-rocm")
 
 
 if __name__ == "__main__":
