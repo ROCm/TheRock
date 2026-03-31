@@ -61,7 +61,6 @@ jobs:
         --group-add 110
         --ulimit memlock=-1:-1
         --security-opt seccomp=unconfined
-        --env-file /etc/podinfo/gha-gpu-isolation-settings
         --user 0:0
         ${{ fromJSON(inputs.component).container_options }}
     strategy:
