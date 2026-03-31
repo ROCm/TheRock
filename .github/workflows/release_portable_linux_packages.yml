@@ -196,7 +196,6 @@ jobs:
       SCCACHE_LOG: error
       SCCACHE_DIR: ${{ github.workspace }}/output/sccache_cache
       SCCACHE_DIRECT: true
-      SCCACHE_SLOPPY_STATS: true
 
     steps:
       - name: "Checking out repository"
@@ -224,16 +223,14 @@ jobs:
           # sccache uses these creds for the whole build; default 1h STS is too short for multi-hour jobs.
           role-duration-seconds: 43200
 
-      #Set up ccache with a custom configuration.
+      # Start sccache server to apply custom sccache configuration
       - name: Setup sccache
         run: |
-          echo ${{ github.workspace }}
-          pwd || true
           sccache --start-server
+          sccache --show-stats
       - name: Runner health status
         run: |
           ./build_tools/health_status.py
-          sccache --show-stats
 
       - name: Fetch sources
         timeout-minutes: 30
@@ -259,7 +256,6 @@ jobs:
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
-          ccache -s
 
       - name: Build Python Packages
         run: |
@@ -274,6 +270,9 @@ jobs:
           echo "Full SDK du:"
           echo "------------"
           du -h -d 1 ${{ env.OUTPUT_DIR }}/build/dist/rocm
+          echo "sccache stats after build"
+          echo "-----------------------"
+          sccache --show-stats
 
       # Analyze ninja build log to generate per-component timing report
       - name: Analyze Build Times
@@ -283,13 +282,6 @@ jobs:
         run: |
           python3 build_tools/resource_info.py --finalize
           python3 build_tools/analyze_build_times.py --build-dir ${{ env.OUTPUT_DIR }}/build
-      - name: Configure AWS Credentials
-        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
-          role-duration-seconds: 43200
 
       - name: Post Build Upload
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
