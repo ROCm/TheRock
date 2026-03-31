@@ -6,7 +6,7 @@
 /rocm-systems           @ROCm/TheRock-infra-write
 
 # New patches are strongly discouraged. See patches/README.md.
-/patches/               @ScottTodd @marbre
+/patches/               @ScottTodd @marbre @skganesan008
 
 # This file accumulated unrelated code, tighten reviews until cleaned up.
 /build_tools/github_actions/github_actions_api.py       @ScottTodd
