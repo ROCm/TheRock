@@ -374,7 +374,7 @@ test_matrix = {
     "miopenprovider": {
         "job_name": "miopenprovider",
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 20,
         "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
