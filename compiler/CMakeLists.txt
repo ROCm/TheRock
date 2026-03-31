@@ -46,6 +46,8 @@ if(THEROCK_ENABLE_COMPILER)
     message(STATUS "Using stable amd-llvm revision info: Repo='${LLVM_SMREV_REPO}', Revision='${LLVM_SMREV_REVISION}'")
   endif()
 
+  list(JOIN THEROCK_AMDGPU_TARGETS "\\;" THEROCK_AMDGPU_TARGETS_ESCAPED)
+
   therock_cmake_subproject_declare(amd-llvm
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
@@ -83,6 +85,9 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_ENABLE_AMDCLANG=ON
       -DLLVM_INSTALL_TOOLCHAIN_ONLY=OFF
       -DLLVM_BUILD_LLVM_C_DYLIB=OFF
+
+      # GPU Targets
+      "-DTHEROCK_AMDGPU_TARGETS=${THEROCK_AMDGPU_TARGETS_ESCAPED}"
 
       # Build optimizations
       -DLLVM_BUILD_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
