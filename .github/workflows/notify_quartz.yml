@@ -82,7 +82,7 @@ permissions:
   checks: read
 
 env:
-  QUARTZ_REPO: ${{ inputs.quartz_repo || 'ROCm/Quartz' }}
+  QUARTZ_REPO: ${{ inputs.quartz_repo || 'ROCm/Quartz-Tester' }}
   QUARTZ_WORKFLOW_REF: ${{ inputs.quartz_workflow_ref || 'feat/ingestion' }}
 
 jobs:
