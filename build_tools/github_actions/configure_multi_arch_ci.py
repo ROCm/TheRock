@@ -681,6 +681,10 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
             if label.startswith("gfx"):
+                # Trim suffixes from labels since amdgpu_family_matrix.py
+                # specifies families with no suffix (e.g. `gfx94x`) but
+                # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
+                # Note: labels are normalized to lowercase during parsing.
                 target = label.split("-")[0]
                 linux_names.append(target)
                 windows_names.append(target)
