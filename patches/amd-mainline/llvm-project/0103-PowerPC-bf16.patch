@@ -1,0 +1,98 @@
+From e7f3089d740d0ee2a4658883a560dc19a6580a34 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Tue, 31 Mar 2026 13:23:26 +0000
+Subject: [PATCH] Add bf16 support for PPC
+
+---
+ clang/lib/Basic/Targets/PPC.cpp             |  6 ++++++
+ clang/lib/Basic/Targets/PPC.h               | 12 ++++++++++++
+ llvm/lib/Target/PowerPC/PPCISelLowering.cpp | 14 ++++++++++++++
+ 3 files changed, 32 insertions(+)
+
+diff --git a/clang/lib/Basic/Targets/PPC.cpp b/clang/lib/Basic/Targets/PPC.cpp
+index a37a68ad9172..b335434fe462 100644
+--- a/clang/lib/Basic/Targets/PPC.cpp
++++ b/clang/lib/Basic/Targets/PPC.cpp
+@@ -80,6 +80,11 @@ bool PPCTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
+       HasQuadwordAtomics = true;
+     } else if (Feature == "+longcall") {
+       UseLongCalls = true;
++    } else if (Feature == "+bf16") {
++      // Explicit +bf16 feature: mark as having "full" bf16 support
++      // (front-end may use this to decide whether to emit native conversions).
++      HasPPCBFloat16 = true;
++      HasFullBFloat16 = true;
+     }
+     // TODO: Finish this list and add an assert that we've handled them
+     // all.
+@@ -618,6 +623,7 @@ bool PPCTargetInfo::hasFeature(StringRef Feature) const {
+       .Case("rop-protect", HasROPProtect)
+       .Case("quadword-atomics", HasQuadwordAtomics)
+       .Case("longcall", UseLongCalls)
++      .Case("bf16", HasPPCBFloat16)
+       .Default(false);
+ }
+ 
+diff --git a/clang/lib/Basic/Targets/PPC.h b/clang/lib/Basic/Targets/PPC.h
+index 5088152dcbb3..922a74975cb9 100644
+--- a/clang/lib/Basic/Targets/PPC.h
++++ b/clang/lib/Basic/Targets/PPC.h
+@@ -72,6 +72,9 @@ class LLVM_LIBRARY_VISIBILITY PPCTargetInfo : public TargetInfo {
+   bool HasPCRelativeMemops = false;
+   bool HasQuadwordAtomics = false;
+   bool UseLongCalls = false;
++  // BFloat16 support: available as a load/store + software-arithmetic type
++  // on all PPC targets (hardware conversion via VSX on POWER8+).
++  bool HasPPCBFloat16 = false;
+ 
+ protected:
+   std::string ABI;
+@@ -85,11 +88,20 @@ public:
+     HasStrictFP = true;
+     HasIbm128 = true;
+     HasUnalignedAccess = true;
++    
+     // Enable _Float16 support on PowerPC via software promotion to float32.
+     // Arithmetic is performed in float32 and converted back, matching the
+     // approach used by x86 (without native FP16) and other soft-promote
+     // targets. Power9+ (ISA 3.0) additionally has native f16 load/store.
+     HasFloat16 = true;
++    
++    // __bf16 is available on all PPC targets as a 16-bit load/store type
++    // with arithmetic promoted to float32 (same model as x86 without AVX512-BF16).
++    BFloat16Width = BFloat16Align = 16;
++    BFloat16Format = &llvm::APFloat::BFloat();
++    // Enable __bf16 type support unconditionally; ppc64le defaults to power8
++    // which has the VSX needed for efficient float<->bf16 conversion.
++    HasBFloat16 = true;
+   }
+ 
+   // PowerPC does not use the __gnu_h2f_ieee / __gnu_f2h_ieee intrinsics
+diff --git a/llvm/lib/Target/PowerPC/PPCISelLowering.cpp b/llvm/lib/Target/PowerPC/PPCISelLowering.cpp
+index 3c2ad1b30b13..bcfadf728c93 100644
+--- a/llvm/lib/Target/PowerPC/PPCISelLowering.cpp
++++ b/llvm/lib/Target/PowerPC/PPCISelLowering.cpp
+@@ -257,6 +257,20 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
+     setTruncStoreAction(MVT::f32, MVT::f16, Expand);
+   }
+ 
++  // BFloat16 (bf16) support on PowerPC:
++  // There is no native bf16 arithmetic or load/store on POWER hardware.
++  // We use TypeSoftPromoteHalf (the LLVM default for !isTypeLegal(MVT::bf16))
++  // for arithmetic operations, but we must explicitly mark extending loads
++  // and truncating stores from/to bf16 as Expand so the legalizer knows to
++  // treat the 16-bit value as a plain i16 memory operation and let the
++  // software-promote path handle the conversion through f32.
++  for (MVT VT : {MVT::f32, MVT::f64, MVT::f128}) {
++    setLoadExtAction(ISD::EXTLOAD, VT, MVT::bf16, Expand);
++    setTruncStoreAction(VT, MVT::bf16, Expand);
++    setOperationAction(ISD::BF16_TO_FP, VT, Expand);
++    setOperationAction(ISD::FP_TO_BF16, VT, Expand);
++  }
++
+   setTruncStoreAction(MVT::f64, MVT::f32, Expand);
+ 
+   // PowerPC has pre-inc load and store's.
+-- 
+2.47.3
+

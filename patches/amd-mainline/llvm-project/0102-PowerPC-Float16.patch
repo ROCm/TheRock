@@ -1,0 +1,35 @@
+From 63e39ce93312181a6c91026ee1809596c9784c20 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Mon, 30 Mar 2026 19:26:30 +0000
+Subject: [PATCH] Add _Float16 support for PPC
+
+---
+ clang/lib/Basic/Targets/PPC.h | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/clang/lib/Basic/Targets/PPC.h b/clang/lib/Basic/Targets/PPC.h
+index 664c9e15d8d1..5088152dcbb3 100644
+--- a/clang/lib/Basic/Targets/PPC.h
++++ b/clang/lib/Basic/Targets/PPC.h
+@@ -85,8 +85,18 @@ public:
+     HasStrictFP = true;
+     HasIbm128 = true;
+     HasUnalignedAccess = true;
++    // Enable _Float16 support on PowerPC via software promotion to float32.
++    // Arithmetic is performed in float32 and converted back, matching the
++    // approach used by x86 (without native FP16) and other soft-promote
++    // targets. Power9+ (ISA 3.0) additionally has native f16 load/store.
++    HasFloat16 = true;
+   }
+ 
++  // PowerPC does not use the __gnu_h2f_ieee / __gnu_f2h_ieee intrinsics
++  // for _Float16 <-> float conversions; the LLVM backend handles them
++  // directly via TypeSoftPromoteHalf legalization.
++  bool useFP16ConversionIntrinsics() const override { return false; }
++
+   // Set the language option for altivec based on our value.
+   void adjust(DiagnosticsEngine &Diags, LangOptions &Opts,
+               const TargetInfo *Aux) override;
+-- 
+2.47.3
+
