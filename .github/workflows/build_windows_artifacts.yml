@@ -144,6 +144,11 @@ jobs:
           python build_tools/memory_monitor.py --phase Build -- \
             cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
+      - name: Run comgr tests
+        continue-on-error: true
+        run: |
+          ninja -C "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" check-comgr
+
       - name: Report
         if: ${{ !cancelled() }}
         shell: bash
