@@ -7,9 +7,9 @@ This document provides an overview of how Continuous Integration (CI) works in T
 TheRock CI follows this workflow:
 
 1. **Build** ROCm from source via TheRock
-2. **Upload** build artifacts to S3 (public-read buckets)
-3. **Test** workflows download those artifacts from S3
-4. **Run** tests against the downloaded artifacts
+1. **Upload** build artifacts to S3 (public-read buckets)
+1. **Test** workflows download those artifacts from S3
+1. **Run** tests against the downloaded artifacts
 
 Instead of Jenkins and Groovy pipelines, TheRock uses **GitHub Actions** workflows defined in YAML files under `.github/workflows/`.
 
@@ -38,6 +38,7 @@ Each stage runs as a separate job, uploads its artifacts and logs to S3, then do
 - **Flexibility:** Different stages can run on different runner types (e.g., CPU-only for foundation, GPU for tests)
 
 **Key workflow files:**
+
 - [`.github/workflows/multi_arch_ci.yml`](/.github/workflows/multi_arch_ci.yml) - Main entry point
 - [`.github/workflows/multi_arch_build_portable_linux_artifacts.yml`](/.github/workflows/multi_arch_build_portable_linux_artifacts.yml) - Build orchestration
 
@@ -63,10 +64,12 @@ graph LR
 TheRock uses Amazon S3 for artifact storage. **All artifact buckets are public-read**, so no authentication is needed to download them.
 
 **CI Buckets (build outputs):**
+
 - `therock-ci-artifacts` - Builds from `ROCm/TheRock`
 - `therock-ci-artifacts-external` - Builds from forks and downstream repos (`rocm-libraries`, `rocm-systems`)
 
 **Release Buckets:**
+
 - `therock-nightly-artifacts` - Nightly builds
 - `therock-dev-artifacts` - Development builds
 - `therock-prerelease-artifacts` - Pre-release builds
@@ -78,6 +81,7 @@ See [s3_buckets.md](s3_buckets.md) for the complete bucket list and authenticati
 Download artifacts using the `install_rocm_from_artifacts.py` script, which handles fetching from S3 and extracting to the correct locations.
 
 See [installing_artifacts.md](installing_artifacts.md) for detailed instructions on:
+
 - Finding GitHub run IDs
 - Selecting components to download
 - Installing from CI runs vs releases
@@ -109,18 +113,19 @@ See [adding_tests.md](adding_tests.md) for how to add new tests to the CI pipeli
 
 For teams migrating from MathCI, here are the key differences:
 
-| Aspect                  | MathCI (Jenkins)                     | TheRock CI (GitHub Actions)                       |
-| ----------------------- | ------------------------------------ | ------------------------------------------------- |
-| **Pipeline Definition** | Groovy scripts in rocJenkins         | YAML files in `.github/workflows/`                |
-| **Test Integration**    | Update Groovy pipeline               | Add entry to `fetch_test_configurations.py`       |
-| **Artifact Access**     | Jenkins artifacts                    | Public-read S3 buckets                            |
-| **Test Execution**      | Jenkins agents                       | GitHub-hosted or self-hosted runners              |
-| **Logs**                | Jenkins UI                           | S3 (see [workflow_outputs.md](workflow_outputs.md)) |
+| Aspect                  | MathCI (Jenkins)             | TheRock CI (GitHub Actions)                         |
+| ----------------------- | ---------------------------- | --------------------------------------------------- |
+| **Pipeline Definition** | Groovy scripts in rocJenkins | YAML files in `.github/workflows/`                  |
+| **Test Integration**    | Update Groovy pipeline       | Add entry to `fetch_test_configurations.py`         |
+| **Artifact Access**     | Jenkins artifacts            | Public-read S3 buckets                              |
+| **Test Execution**      | Jenkins agents               | GitHub-hosted or self-hosted runners                |
+| **Logs**                | Jenkins UI                   | S3 (see [workflow_outputs.md](workflow_outputs.md)) |
 
 **Migration workflow:**
+
 1. Create test script in `build_tools/github_actions/test_executable_scripts/`
-2. Add entry to `fetch_test_configurations.py`
-3. Ensure artifact dependencies are configured in `install_rocm_from_artifacts.py`
+1. Add entry to `fetch_test_configurations.py`
+1. Ensure artifact dependencies are configured in `install_rocm_from_artifacts.py`
 
 See [adding_tests.md](adding_tests.md) for step-by-step instructions.
 
@@ -149,8 +154,8 @@ See [test_filtering.md](test_filtering.md) for advanced filtering options.
 ### Add a New Test
 
 1. Create test script in `build_tools/github_actions/test_executable_scripts/`
-2. Add entry to `fetch_test_configurations.py`
-3. Ensure artifact dependencies are configured in `install_rocm_from_artifacts.py`
+1. Add entry to `fetch_test_configurations.py`
+1. Ensure artifact dependencies are configured in `install_rocm_from_artifacts.py`
 
 See [adding_tests.md](adding_tests.md) for step-by-step instructions.
 
@@ -169,18 +174,21 @@ See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [
 ## Further Reading
 
 ### Build System
+
 - [artifacts.md](artifacts.md) - Artifact organization and packaging
 - [build_system.md](build_system.md) - CMake build architecture
 - [dependencies.md](dependencies.md) - Dependency management
 - [installing_artifacts.md](installing_artifacts.md) - Installing ROCm from artifacts
 
 ### Testing
+
 - [adding_tests.md](adding_tests.md) - Adding new tests to CI
 - [test_environment_reproduction.md](test_environment_reproduction.md) - Reproducing CI failures locally
 - [test_filtering.md](test_filtering.md) - Running specific test subsets
 - [test_debugging.md](test_debugging.md) - Debugging test failures
 
 ### Infrastructure
+
 - [s3_buckets.md](s3_buckets.md) - S3 bucket organization and authentication
 - [workflow_outputs.md](workflow_outputs.md) - CI output directory structure
 - [github_actions_debugging.md](github_actions_debugging.md) - Debugging GitHub Actions
