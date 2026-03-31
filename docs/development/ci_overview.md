@@ -189,5 +189,5 @@ See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [
 ## Getting Help
 
 - **Issues:** [TheRock GitHub Issues](https://github.com/ROCm/TheRock/issues)
-- **Discussions:** Ask in your PR or ask in the public Discord
+- **Discussions:** Ask in your PR or ask in the [public Discord](https://discord.gg/R6Gf7Bfp4)
 - **Documentation:** Check the [docs/development/](.) directory
