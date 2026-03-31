@@ -1746,12 +1746,19 @@
             "Components": [
               "test"
             ]
+          },
+          {
+            "Name": "rccl-tests",
+            "Components": [
+              "test"
+            ]
           }
         ]
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "True",
+    "DisablePackaging": "True"
   },
 
   {
