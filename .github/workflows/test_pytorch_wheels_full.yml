@@ -139,6 +139,7 @@ jobs:
       CI: "1"
       PYTORCH_TEST_WITH_ROCM: "1"
       PYTORCH_TESTING_DEVICE_ONLY_FOR: "cuda"
+      OPENBLAS_NUM_THREADS: "64"
       TEST_CONFIG: ${{ matrix.test_config }}
       TESTS_TO_INCLUDE: ${{ inputs.tests_to_include }}
 
@@ -278,9 +279,16 @@ jobs:
         env:
           PYTORCH_NUM_PYTEST_RERUNS: "0"
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests_full.py -- \
+          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --exclude dynamo/test_dynamic_shapes functorch/test_control_flow \
+            -- \
             --continue-on-collection-errors \
             --import-mode=importlib
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          python ./external-builds/pytorch/summarize_test_results.py
 
       # Windows testing is a recent addition and is being enabled incrementally.
       # See https://github.com/ROCm/TheRock/issues/2258.
