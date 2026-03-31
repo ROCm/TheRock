@@ -218,7 +218,7 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             # Label is linux-gfx90a-gpu-rocm
             # Downtime in 3/17/26 - 3/18/26 for maintenance
-            "test-runs-on": "",
+            "test-runs-on": "npi-test-runner",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "sanity_check_only_for_family": True,
