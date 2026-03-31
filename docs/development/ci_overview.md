@@ -95,10 +95,6 @@ graph LR
     C --> D2[Test rocFFT]
     C --> D3[Test MIOpen]
     C --> D4[Test...]
-    D1 --> E[Upload Test Results to S3]
-    D2 --> E
-    D3 --> E
-    D4 --> E
 ```
 
 The test workflow downloads only the artifacts needed for the specific tests being run (e.g., `--blas --tests` for rocBLAS tests), installs them, and runs the test scripts in parallel.
@@ -109,31 +105,6 @@ The test workflow downloads only the artifacts needed for the specific tests bei
 
 See [adding_tests.md](adding_tests.md) for how to add new tests to the CI pipeline.
 
-## Test Data and Datasets
-
-> [!NOTE]
-> For teams migrating from MathCI: This section addresses how to store and access test datasets in TheRock CI.
-
-TheRock provides several options for storing and accessing test data:
-
-### Storage Options
-
-1. **Include in artifact:** For small datasets (<10MB)
-   - Add test data files to your component's stage directory during build
-   - They'll be packaged into the `test` component automatically
-   - Downloaded with test artifacts
-
-2. **S3 storage:** For large datasets
-   - Upload to a public-read S3 bucket (e.g., `therock-ci-artifacts`)
-   - Download in your test script before running tests
-   - Persistent and accessible from all CI runs
-
-3. **Git LFS:** For datasets versioned with code
-   - Store in the component's repository using Git Large File Storage
-   - Downloaded during source fetch
-
-See [artifacts.md](artifacts.md) for how to configure artifact packaging, and [adding_tests.md](adding_tests.md) for test script examples.
-
 ## MathCI Migration Guide
 
 For teams migrating from MathCI, here are the key differences:
@@ -142,7 +113,6 @@ For teams migrating from MathCI, here are the key differences:
 | ----------------------- | ------------------------------------ | ------------------------------------------------- |
 | **Pipeline Definition** | Groovy scripts in rocJenkins         | YAML files in `.github/workflows/`                |
 | **Test Integration**    | Update Groovy pipeline               | Add entry to `fetch_test_configurations.py`       |
-| **Test Data Storage**   | Central Jenkins-managed location     | S3 buckets or artifact bundles                    |
 | **Artifact Access**     | Jenkins artifacts                    | Public-read S3 buckets                            |
 | **Test Execution**      | Jenkins agents                       | GitHub-hosted or self-hosted runners              |
 | **Logs**                | Jenkins UI                           | S3 (see [workflow_outputs.md](workflow_outputs.md)) |
@@ -153,73 +123,6 @@ For teams migrating from MathCI, here are the key differences:
 3. Ensure artifact dependencies are configured in `install_rocm_from_artifacts.py`
 
 See [adding_tests.md](adding_tests.md) for step-by-step instructions.
-
-## Repository Organization
-
-TheRock has a monorepo structure with multiple related repositories that share CI infrastructure.
-
-### ROCm/TheRock
-
-The main repository containing the super-project build system.
-
-- **Purpose:** Build ROCm from source, orchestrate CI
-- **Contains:** Build scripts, CI workflows, documentation
-- **Submodules:** Component source code (as git submodules)
-- **CI Workflows:** Full build + test for all components
-
-### ROCm/rocm-libraries
-
-Downstream repository for testing math/ML libraries in isolation.
-
-- **Purpose:** Component-specific testing without rebuilding entire ROCm stack
-- **Submodules:** rocBLAS, rocFFT, MIOpen, etc.
-- **CI Workflows:** Uses TheRock CI infrastructure and tools
-- **Artifacts:** Downloads base ROCm from TheRock, builds only math libraries
-
-**Key Differences from TheRock:**
-- Downloads pre-built `base`, `compiler`, and `core` artifacts from TheRock
-- Only builds math/ML library components
-- Faster iteration for library developers
-- Shares same test scripts and CI tooling
-
-### ROCm/rocm-systems
-
-Downstream repository for system-level components and media libraries.
-
-- **Purpose:** Testing rocDecode, rocJPEG, and system management tools
-- **Submodules:** rocDecode, rocJPEG, rocm-smi-lib
-- **CI Workflows:** Uses TheRock CI infrastructure and tools
-- **Artifacts:** Downloads base ROCm from TheRock, builds only system components
-
-**Key Differences from TheRock:**
-- Downloads pre-built `base`, `compiler`, and `core` artifacts from TheRock
-- Only builds system/media library components
-- Specialized test data requirements (video bitstreams, JPEG samples)
-
-### How They Interact
-
-```mermaid
-graph TD
-    A[ROCm/TheRock] -->|Builds All| B[Complete ROCm Stack]
-    B -->|Uploads to S3| C[therock-ci-artifacts]
-    C -->|Downloads base artifacts| D[ROCm/rocm-libraries]
-    C -->|Downloads base artifacts| E[ROCm/rocm-systems]
-    D -->|Builds| F[Math/ML Libraries]
-    E -->|Builds| G[System/Media Libraries]
-    F -->|Uploads to S3| H[therock-ci-artifacts-external]
-    G -->|Uploads to S3| H
-```
-
-**Shared Infrastructure:**
-- Same S3 buckets (external repos use `therock-ci-artifacts-external`)
-- Same build tools (`install_rocm_from_artifacts.py`, `fileset_tool.py`)
-- Same test framework (`fetch_test_configurations.py`, test scripts)
-- Same artifact format and component organization
-
-**When to Use Which:**
-- **TheRock:** Full ROCm development, testing inter-component dependencies
-- **rocm-libraries:** Math/ML library development, faster library-only builds
-- **rocm-systems:** System component development, media library testing
 
 ## Common CI Tasks
 
