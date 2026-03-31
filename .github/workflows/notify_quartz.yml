@@ -97,6 +97,9 @@ jobs:
           app-id: ${{ secrets.GH_APP_HAULY_ID }}
           private-key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
           owner: "ROCm"
+          repositories: |
+            Quartz
+            Quartz-Tester
 
       - name: Dispatch event to Quartz
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
