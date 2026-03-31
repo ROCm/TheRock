@@ -228,12 +228,14 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
+        # 86876(approx) tests needs 1hr 40mins, so 100mins / 4 shards = 25mins per shard
+        # 25 mins + 20% margin = 30 mins
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 4,
+            "windows": 4,
         },
     },
     "hipsparselt": {
