@@ -355,27 +355,14 @@ jobs:
               return;
             }
 
-            await github.rest.repos.createDispatchEvent({
+            await github.rest.actions.createWorkflowDispatch({
               owner,
               repo,
-              event_type: eventType,
-              client_payload: clientPayload,
+              workflow_id: 'ingest_manual.yml',
+              ref: process.env.QUARTZ_WORKFLOW_REF,
+              inputs: {
+                payload_json: JSON.stringify(clientPayload),
+                fetch_jobs: 'true',
+              },
             });
-            core.info(`Dispatched repository_dispatch ${eventType} to ${process.env.QUARTZ_REPO}`);
-
-            // Also trigger the workflow_dispatch-based ingest workflow in Quartz.
-            try {
-              await github.rest.actions.createWorkflowDispatch({
-                owner,
-                repo,
-                workflow_id: 'ingest_manual.yml',
-                ref: process.env.QUARTZ_WORKFLOW_REF,
-                inputs: {
-                  payload_json: JSON.stringify(clientPayload),
-                  fetch_jobs: 'true',
-                },
-              });
-              core.info(`Dispatched workflow_dispatch to ${process.env.QUARTZ_REPO} (ref: ${process.env.QUARTZ_WORKFLOW_REF})`);
-            } catch (e) {
-              core.warning(`Failed to dispatch workflow_dispatch: ${e.message}`);
-            }
+            core.info(`Dispatched workflow_dispatch to ${process.env.QUARTZ_REPO} (ref: ${process.env.QUARTZ_WORKFLOW_REF})`);
