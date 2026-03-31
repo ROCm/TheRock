@@ -170,7 +170,7 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "windows-gfx110X-gpu-rocm",
                     },
-                    "fetch-gfx-targets": ["gfx1100"],
+                    "fetch-gfx-targets": ["gfx1100", "gfx1101"],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
