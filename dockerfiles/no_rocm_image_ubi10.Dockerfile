@@ -1,5 +1,7 @@
 # This Docker image is used for TheRock builds and tests, providing a clean ROCm-less container
-
+#
+# Base image: registry.access.redhat.com/ubi10/ubi:latest (Red Hat UBI 10). Catalog:
+# https://catalog.redhat.com/en/software/containers/ubi10/ubi/66f2b46b122803e4937d11ae
 FROM registry.access.redhat.com/ubi10/ubi:latest
 
 RUN dnf install -y --nodocs sudo && dnf clean all
