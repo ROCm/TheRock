@@ -193,10 +193,10 @@ jobs:
       SCCACHE_REGION: us-east-2
       SCCACHE_S3_KEY_PREFIX: "linux/${{ matrix.target_bundle.amdgpu_family }}/"
       SCCACHE_S3_USE_SSL: "true"
-      SCCACHE_LOG: debug
+      SCCACHE_LOG: error
       SCCACHE_DIR: ${{ github.workspace }}/output/sccache_cache
       SCCACHE_DIRECT: true
-      SCCACHE_DEBUG: 1
+      SCCACHE_SLOPPY_STATS: true
 
     steps:
       - name: "Checking out repository"

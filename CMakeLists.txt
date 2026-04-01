@@ -329,6 +329,17 @@ if(CMAKE_CXX_VISIBILITY_PRESET)
   list(APPEND DEFAULT_CMAKE_ARGS ${CMAKE_CXX_VISIBILITY_PRESET})
 endif()
 
+if(MSVC)
+  # Propagate MSVC debug-info policy and flags to nested CMake runs
+  # (ExternalProject builds) to avoid shared-PDB contention (C1041).
+  list(APPEND DEFAULT_CMAKE_ARGS
+    "-DCMAKE_POLICY_DEFAULT_CMP0141=NEW"
+    "-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded"
+    "-DCMAKE_C_FLAGS_INIT=/FS /Z7"
+    "-DCMAKE_CXX_FLAGS_INIT=/FS /Z7"
+  )
+endif()
+
 ################################################################################
 # patchelf / install_name_tool
 # Building with bundled sysdep or rocGDB requires patchelf on Linux and
