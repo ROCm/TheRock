@@ -880,8 +880,8 @@ def write_outputs(
     output_vars = {
         # Workflow YAML references this as 'enable_build_jobs'
         "enable_build_jobs": json.dumps(outputs.is_ci_enabled),
-        "linux_build_config": (json.dumps(linux.to_dict()) if linux else ""),
-        "windows_build_config": (json.dumps(windows.to_dict()) if windows else ""),
+        "linux_build_config": json.dumps(linux.to_dict()) if linux else "",
+        "windows_build_config": json.dumps(windows.to_dict()) if windows else "",
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
