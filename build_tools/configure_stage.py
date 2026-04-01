@@ -162,7 +162,11 @@ def generate_cmake_args(
         args.append(f"-DTHEROCK_ENABLE_{feature}=ON")
 
     # Enable comgr tests for stages that build the compiler.
+    # Explicitly disable THEROCK_BUILD_TESTING to prevent hip-tests (and other
+    # test suites) from being configured -- on Windows, hip-tests fails because
+    # CMake cannot find a system ROCm installation for HIP compiler detection.
     if stage_name == "compiler-runtime":
+        args.append("-DTHEROCK_BUILD_TESTING=OFF")
         args.append("-DTHEROCK_BUILD_COMGR_TESTS=ON")
 
     return args

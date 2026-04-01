@@ -107,6 +107,7 @@ def build_configure(build_dir, manylinux=False):
             f"-DTHEROCK_PACKAGE_VERSION={package_version}",
             f"-DCMAKE_C_COMPILER_LAUNCHER={c_launcher}",
             f"-DCMAKE_CXX_COMPILER_LAUNCHER={cxx_launcher}",
+            "-DTHEROCK_BUILD_TESTING=OFF",
             "-DTHEROCK_BUILD_COMGR_TESTS=ON",
         ]
     )
