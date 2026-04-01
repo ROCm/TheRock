@@ -774,7 +774,13 @@ def run():
             entry = deepcopy(value)
             entry["is_benchmark"] = True
             selected_matrix[key] = entry
-
+    
+    # resetting all sharding to 1 for all tests for NPI case currently we have 1P1G system only
+    for key in selected_matrix:
+        selected_matrix[key]["total_shards_dict"] = {platform: 1}
+        selected_matrix[key]["shard_arr"] = [1]
+        selected_matrix[key]["total_shards"] = 1
+    
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]
 
