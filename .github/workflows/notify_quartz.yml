@@ -361,7 +361,7 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               owner,
               repo,
-              workflow_id: 'ingest_manual.yml',
+              workflow_id: 'receive_therock_data.yml',
               ref: process.env.QUARTZ_WORKFLOW_REF,
               inputs: {
                 payload_json: JSON.stringify(clientPayload),
