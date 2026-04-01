@@ -334,6 +334,7 @@ def retrieve_artifacts_by_run_id(args):
         "core-ocl_dev",
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
+        "core-cov-tests_test",
     ]
 
     if args.base_only:

@@ -489,6 +489,8 @@ if(THEROCK_BUILD_TESTING)
     #   then add instructions in the README to run with a command like
     #   `./build/dlopen-hip install/amdhip64.dll`
   endif()
+
+  add_subdirectory(tests/extended_tests)
 endif()
 
 ################################################################################

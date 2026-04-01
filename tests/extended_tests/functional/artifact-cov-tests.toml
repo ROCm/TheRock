@@ -1,0 +1,5 @@
+# Code object version backward-compatibility test
+[components.test."cov-backward-compat/stage"]
+include = [
+  "bin/cov-tests/**",
+]

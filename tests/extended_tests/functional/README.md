@@ -14,9 +14,10 @@ Functional tests validate correctness and verify expected behavior without perfo
 
 ## Available Tests
 
-| Test Script                 | Library | Platform | Timeout | Description                        |
-| --------------------------- | ------- | -------- | ------- | ---------------------------------- |
-| `test_miopendriver_conv.py` | MIOpen  | Linux    | 30 min  | Convolution forward/backward tests |
+| Test Script                 | Library | Platform | Timeout | Description                                     |
+| --------------------------- | ------- | -------- | ------- | ----------------------------------------------- |
+| `test_miopendriver_conv.py` | MIOpen  | Linux    | 30 min  | Convolution forward/backward tests              |
+| `test_code_obj_version.py`  | HIP     | Linux    | 5 min   | Code object version backward-compatibility test |
 
 ## CI Configuration
 
@@ -30,15 +31,27 @@ Functional tests validate correctness and verify expected behavior without perfo
 ```
 functional/
 ├── scripts/
-│   ├── functional_base.py        # Base class for all functional tests
-│   └── test_miopendriver_conv.py # MIOpen convolution test
+│   ├── functional_base.py                    # Base class for all functional tests
+│   ├── test_miopendriver_conv.py             # MIOpen convolution test
+│   └── test_code_obj_version.py              # Code object version backward-compat test
+│
+├── sources/
+│   ├── cov_backward_compat_hiprtc.cpp        # hipRTC test binary (built by TheRock)
+│   └── CMakeLists.txt                        # Build definition for the test binary
 │
 ├── configs/
-│   └── miopendriver_conv.json    # Test configuration
+│   └── miopendriver_conv.json                # Test configuration
 │
-├── functional_test_matrix.py     # CI test matrix definitions
-└── README.md                     # This file
+├── artifact-cov-tests.toml                   # Artifact descriptor for the test binary
+├── functional_test_matrix.py                 # CI test matrix definitions
+└── README.md                                 # This file
 ```
+
+> **Note:** The code object version test relies on a pre-built hipRTC executable
+> (`cov_backward_compat`) whose source lives in `sources/`. It is compiled on
+> TheRock's build side (see the top-level `CMakeLists.txt` testing section) and
+> packaged as the `core-cov-tests` artifact. The executable is installed to
+> `bin/cov-tests/` in the ROCm tree.
 
 ## How Functional Tests Work
 
