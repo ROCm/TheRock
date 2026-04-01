@@ -539,6 +539,12 @@ def run():
         # For regular workflow, use test_matrix
         logging.info("Using test_matrix only (regular tests)")
         selected_matrix = test_matrix.copy()
+        # resettign all sharding to 1 for all tests for NPI case
+        for key in selected_matrix:
+            selected_matrix[key]["total_shards_dict"] = {platform: 1}
+            selected_matrix[key]["shard_arr"] = [1]
+            selected_matrix[key]["total_shards"] = 1
+
         # For nightly/scheduled builds, merge functional tests into the test matrix
         if run_functional_tests and functional_matrix:
             logging.info(
