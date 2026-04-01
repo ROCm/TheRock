@@ -2528,6 +2528,7 @@
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
+      "amdrocm-rocshmem-devel",
       "amdrocm-dnn-devel",
       "amdrocm-decode-devel",
       "amdrocm-jpeg-devel"
@@ -2545,6 +2546,7 @@
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
+      "amdrocm-rocshmem-devel",
       "amdrocm-dnn-devel",
       "amdrocm-decode-devel",
       "amdrocm-jpeg-devel"
@@ -2675,15 +2677,13 @@
       "amdrocm-core-devel",
       "amdrocm-developer-tools",
       "amdrocm-rdc",
-      "amdrocm-opencl",
-      "amdrocm-rocshmem-devel"
+      "amdrocm-opencl"
     ],
     "RPMRequires": [
       "amdrocm-core-devel",
       "amdrocm-developer-tools",
       "amdrocm-rdc",
-      "amdrocm-opencl",
-      "amdrocm-rocshmem-devel"
+      "amdrocm-opencl"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core sdk metapackage",
