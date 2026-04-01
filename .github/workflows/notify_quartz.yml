@@ -74,7 +74,7 @@ on:
       quartz_workflow_ref:
         description: "Branch in Quartz repo where the ingest workflow lives"
         type: string
-        default: "feat/ingestion"
+        default: "users/lpromber/cgoea_ingestion"
 
 permissions:
   contents: read
