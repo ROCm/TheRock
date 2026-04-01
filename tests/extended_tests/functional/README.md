@@ -35,7 +35,7 @@ functional/
 │   ├── test_miopendriver_conv.py             # MIOpen convolution test
 │   └── test_code_obj_version.py              # Code object version backward-compat test
 │
-├── sources/
+├── srcs/
 │   ├── cov_backward_compat_hiprtc.cpp        # hipRTC test binary (built by TheRock)
 │   └── CMakeLists.txt                        # Build definition for the test binary
 │
@@ -48,7 +48,7 @@ functional/
 ```
 
 > **Note:** The code object version test relies on a pre-built hipRTC executable
-> (`cov_backward_compat`) whose source lives in `sources/`. It is compiled on
+> (`cov_backward_compat`) whose source lives in `srcs/`. It is compiled on
 > TheRock's build side (see the top-level `CMakeLists.txt` testing section) and
 > packaged as the `core-cov-tests` artifact. The executable is installed to
 > `bin/cov-tests/` in the ROCm tree.
