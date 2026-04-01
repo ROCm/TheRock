@@ -89,6 +89,11 @@ jobs:
       fail-fast: false
       matrix:
         variant: ${{ fromJSON(needs.setup.outputs.linux_variants) }}
+        # TODO(TheRock#3288): Re-enable gfx950-dcgpu runners once we get more capacity
+        #     Or delete all of ci.yml as part of https://github.com/ROCm/TheRock/issues/3340 first?
+        exclude:
+          - variant:
+              family: gfx950-dcgpu
     uses: ./.github/workflows/ci_linux.yml
     secrets: inherit
     with:
