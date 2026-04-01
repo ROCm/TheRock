@@ -72,7 +72,9 @@ class CovBackwardCompatibilityTest(FunctionalBase):
 
         log.info("Executing: %s", binary)
         rc, output = self.execute_command_with_output(
-            [str(binary)], cwd=binary.parent, env=env,
+            [str(binary)],
+            cwd=binary.parent,
+            env=env,
         )
 
         # Parse JSONL output — each line is one variant result.
@@ -97,27 +99,31 @@ class CovBackwardCompatibilityTest(FunctionalBase):
             if requested_cov >= 0:
                 cov_info = f"requested_cov={requested_cov}, {cov_info}"
 
-            self.test_results.append({
-                "test_suite": "cov_backward_compat",
-                "test_case": variant,
-                "command": str(binary),
-                "return_code": 0 if status == "PASS" else 1,
-                "status": status,
-                "detected_code_object_version": detected_cov,
-                "info": cov_info,
-                "error": error,
-            })
+            self.test_results.append(
+                {
+                    "test_suite": "cov_backward_compat",
+                    "test_case": variant,
+                    "command": str(binary),
+                    "return_code": 0 if status == "PASS" else 1,
+                    "status": status,
+                    "detected_code_object_version": detected_cov,
+                    "info": cov_info,
+                    "error": error,
+                }
+            )
 
         if not parsed_any:
             status = "FAIL" if rc != 0 else "ERROR"
-            self.test_results.append({
-                "test_suite": "cov_backward_compat",
-                "test_case": "execution",
-                "command": str(binary),
-                "return_code": rc,
-                "status": status,
-                "error": f"Binary exited with code {rc}, no parseable JSONL output",
-            })
+            self.test_results.append(
+                {
+                    "test_suite": "cov_backward_compat",
+                    "test_case": "execution",
+                    "command": str(binary),
+                    "return_code": rc,
+                    "status": status,
+                    "error": f"Binary exited with code {rc}, no parseable JSONL output",
+                }
+            )
 
     def parse_results(self) -> List[Dict[str, Any]]:
         log.info("Parsing %s Results", self.display_name)
