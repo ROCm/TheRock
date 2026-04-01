@@ -348,7 +348,7 @@ def build_run_test_cmd(
 # we kill the process tree.  PyTorch's run_test.py is known to hang after
 # all test files complete due to leaked daemon threads or orphan child
 # processes.  See https://github.com/ROCm/TheRock/issues/999
-_IDLE_TIMEOUT_SECONDS = 600  # 10 minutes
+_IDLE_TIMEOUT_SECONDS = 1800  # 30 minutes
 
 
 def run_with_timeout(cmd: list[str], cwd: str) -> int:
