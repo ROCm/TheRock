@@ -48,37 +48,6 @@ def log(*args):
     sys.stdout.flush()
 
 
-# This method will output logs of the Windows Time Service and is meant
-# to help debug spurious AWS auth issues caused by time differences when
-# uploading with the AWS CLI tool. For context, see this issue and PR:
-# https://github.com/ROCm/TheRock/issues/875
-# https://github.com/ROCm/TheRock/pull/1581#issuecomment-3490177590
-def write_time_sync_log():
-    if platform.system().lower() != "windows":
-        log("[*] Current OS not windows, Skipping.")
-        return
-
-    # Logs are from `w32tm` run in Windows HostProcess containers on Azure VMs
-    # with `/query /status` and `/stripchart /computer:time.aws.com /dataonly`
-    # and are mounted via the readonly H: drive for Github Runner Pods to access
-    startfile = Path("H:\\start.log")
-    timefile = Path("H:\\time.log")
-
-    # Only output if these files exist in the H: drive as expected on Build VMs
-    if startfile.is_file() and timefile.is_file():
-        log(f"[*] Checking time sync at: {datetime.now()}")
-
-        log("[*] Start Time Sync Log:")
-        log(startfile.read_text())
-
-        log("[*] Time Sync Log (last ~50 lines):")
-        timef = open(timefile)
-        timelines = timef.readlines()
-        log("".join(timelines[-51:]))
-    else:
-        log("[*] time.log and/or start.log not present in H:")
-
-
 def create_ninja_log_archive(build_dir: Path):
     log_dir = build_dir / "logs"
 
@@ -269,10 +238,6 @@ def run(args):
         run_id=args.run_id, platform=PLATFORM
     )
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
-
-    log("Write Windows time sync log")
-    log("----------------------")
-    write_time_sync_log()
 
     # Upload artifacts only if the job not failed
     if not args.job_status or args.job_status == "success":
