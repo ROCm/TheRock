@@ -130,6 +130,16 @@ function(therock_finalize_features)
     set(THEROCK_ENABLE_ROCPROFSYS OFF CACHE BOOL "" FORCE)
     set(THEROCK_ENABLE_ROCPROFSYS OFF PARENT_SCOPE)
   endif()
+  # rdc depends on esmi_lib, which is only supported on x86_64 
+  # Disable it automatically on other archs.
+  if(THEROCK_ENABLE_RDC AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|i.86")
+    message(WARNING
+        "rdc is not supported on ${CMAKE_SYSTEM_PROCESSOR}, "
+        "disabling THEROCK_ENABLE_RDC automatically.")
+    set(THEROCK_ENABLE_RDC OFF CACHE BOOL "" FORCE)
+    set(THEROCK_ENABLE_RDC OFF PARENT_SCOPE)
+  endif()
+
 endfunction()
 
 function(therock_report_features)
