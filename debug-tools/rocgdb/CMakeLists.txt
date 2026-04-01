@@ -141,6 +141,17 @@ endif()
 # Adjust LDFLAGS. NCURSES_RPATH is empty when not using bundled sysdeps.
 set(LDFLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NCURSES_RPATH} -Wl,--enable-new-dtags")
 
+# LLD is stricter than GNU ld about duplicate symbols from static archives.
+# rocgdb links libiberty statically, which provides symbols (xmalloc, xstrdup,
+# etc.) also defined in other linked archives. Only relax this when using LLD.
+# See https://github.com/ROCm/TheRock/issues/4223
+if(CMAKE_LINKER)
+  get_filename_component(_rocgdb_linker_name "${CMAKE_LINKER}" NAME)
+  if(_rocgdb_linker_name MATCHES "ld\\.lld")
+    string(APPEND LDFLAGS " -Wl,--allow-multiple-definition")
+  endif()
+endif()
+
 # Replace all semicolons (the CMake separator) with colons (the ENV separator).
 # We need this to pass it on to rocgdb's configure.
 string(REPLACE ";" ":" PKG_CONFIG_PATH_ENV_VAR "${THEROCK_PKG_CONFIG_DIRS}")
