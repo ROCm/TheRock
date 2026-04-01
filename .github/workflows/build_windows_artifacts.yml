@@ -175,15 +175,9 @@ jobs:
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
 
-      # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
-      # fall back to runner base credentials (therock-ci-artifacts-external).
       - name: Configure AWS Credentials
-        if: ${{ always() && github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
-          special-characters-workaround: true
+        if: ${{ always() }}
+        uses: ./.github/actions/configure_aws_artifacts_credentials
 
       - name: Post Build Upload
         if: always()

@@ -44,17 +44,8 @@ jobs:
       - name: Install artifact manager dependencies
         run: pip install boto3
 
-      # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
-      # fall back to runner base credentials (therock-ci-artifacts-external).
-      #
-      # This is just needed for write access to the current run's bucket,
-      # all possible source run buckets have public read access.
-      - name: Configure AWS Credentials
-        if: ${{ github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+      - name: Configure AWS credentials for artifact uploads
+        uses: ./.github/actions/configure_aws_artifacts_credentials
 
       - name: Copy prebuilt stage artifacts
         env:
