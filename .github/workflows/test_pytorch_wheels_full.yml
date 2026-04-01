@@ -276,6 +276,7 @@ jobs:
 
       - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
+        timeout-minutes: 300
         env:
           PYTORCH_NUM_PYTEST_RERUNS: "0"
         run: |
