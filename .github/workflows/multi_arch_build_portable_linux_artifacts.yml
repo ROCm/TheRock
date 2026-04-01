@@ -146,7 +146,8 @@ jobs:
           echo "CCache Stats:"
           ccache -s -v
           echo "Artifacts:"
-          ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+          ls -lhS "${BUILD_DIR}"/artifacts/*.tar.zst 2>/dev/null || echo "No .tar.zst artifacts found"
+          ls -lhS "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No .tar.xz artifacts found"
 
       # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
       # fall back to runner base credentials (therock-ci-artifacts-external).
