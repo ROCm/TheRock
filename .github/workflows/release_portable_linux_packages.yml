@@ -189,8 +189,12 @@ jobs:
       EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
       EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
       THEROCK_BUILD_PROF_LOG_DIR: ${{ github.workspace }}/output/build/logs/therock-build-prof
-      CCACHE_DIR: ${{ github.workspace }}/output/caches/ccache
-      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      SCCACHE_LOG: error
+      SCCACHE_DIR: ${{ github.workspace }}/output/sccache_cache
+      SCCACHE_DIRECT: true
+      SCCACHE_SLOPPY_STATS: true
+      SCCACHE_SERVER_URL: http://bazelremote-svc-test.bazelremote-ns-test.svc.cluster.local:8080
+
 
     steps:
       - name: "Checking out repository"
@@ -207,15 +211,11 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
-      # Set up ccache with a custom configuration.
-      - name: Setup ccache
-        env:
-          CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
+      # Start sccache server to apply custom sccache configuration
+      - name: Setup sccache
         run: |
-          ./build_tools/setup_ccache.py \
-            --config-preset "github-oss-${{ env.CI_TYPE }}" \
-            --dir "$(dirname $CCACHE_CONFIGPATH)" \
-            --local-path "$CCACHE_DIR"
+          sccache --start-server
+          sccache --show-stats
 
       - name: Runner health status
         run: |
@@ -246,7 +246,9 @@ jobs:
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
-          ccache -s
+          echo "sccache stats after build"
+          echo "-----------------------"
+          sccache --show-stats
 
       - name: Build Python Packages
         run: |

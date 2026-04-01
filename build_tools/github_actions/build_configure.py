@@ -51,7 +51,7 @@ if extra_cxx_compiler_launcher:
 
 
 def build_compiler_launcher(
-    extra_launcher: str, default_launcher: str = "ccache"
+    extra_launcher: str, default_launcher: str = "sccache"
 ) -> str:
     """Build compiler launcher string.
 

@@ -298,11 +298,20 @@ def find_ccache() -> Optional[str]:
 
     return shutil.which("ccache")
 
+def find_sccache() -> Optional[str]:
+    """
+    Find sccache executable in PATH.
+    Returns the path to sccache if found, None otherwise.
+    """
+    import shutil
+
+    return shutil.which("sccache")
+
 
 def run_and_log_command(repo_root: Path, log_dir: str) -> int:
     """
     Compiler launcher mode: run compiler command and emit per-command log file.
-    Automatically prepends ccache if available (unless already present in command).
+    Automatically prepends sccache if available (unless already present in command).
     """
     if len(sys.argv) <= 1:
         return 0
@@ -312,12 +321,12 @@ def run_and_log_command(repo_root: Path, log_dir: str) -> int:
     pwd = os.getcwd()
     cmd_args = sys.argv[1:]
 
-    # Automatically prepend ccache if available and not already in the command
+    # Automatically prepend sccache if available and not already in the command
     # This allows resource_info.py to be used as a single compiler launcher
     # without needing CMake list syntax (semicolon-separated launchers)
-    ccache_path = find_ccache()
-    if ccache_path and cmd_args and not cmd_args[0].endswith("ccache"):
-        cmd_args = [ccache_path] + cmd_args
+    sccache_path = find_sccache()
+    if sccache_path and cmd_args and not cmd_args[0].endswith("sccache"):
+        cmd_args = [sccache_path] + cmd_args
 
     cmd_str = " ".join(shlex.quote(arg) for arg in cmd_args)
 
