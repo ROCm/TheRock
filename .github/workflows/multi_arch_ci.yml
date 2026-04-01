@@ -41,11 +41,11 @@ on:
         type: string
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
-  # pull_request:
-  #   types:
-  #     - labeled
-  #     - opened
-  #     - synchronize
+  pull_request:
+    types:
+      - labeled
+      - opened
+      - synchronize
 
 permissions:
   contents: read

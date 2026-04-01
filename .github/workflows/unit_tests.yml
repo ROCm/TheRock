@@ -8,7 +8,7 @@ on:
     branches:
       - main
       - release/therock-*
-  # pull_request:
+  pull_request:
   workflow_dispatch:
 
 permissions:
