@@ -635,6 +635,34 @@ int main() {
       return 1;
     }
   }
+  for (std::string_view decorated_near_miss_instruction :
+       {"x_v_pk_add_bf16",
+        "x_tensor_load_to_lds",
+        "x_v_cvt_f16_fp8",
+        "x_v_div_scale_f64",
+        "v_pk_add_bf16_x",
+        "tensor_load_to_lds_x",
+        "v_cvt_f16_fp8_x",
+        "v_div_scale_f64_x",
+        "x_v_pk_add_bf16_x",
+        "x_tensor_load_to_lds_x",
+        "x_v_cvt_f16_fp8_x",
+        "x_v_div_scale_f64_x",
+        " X_V_PK_ADD_BF16",
+        "X_V_PK_ADD_BF16 ",
+        " X_TENSOR_LOAD_TO_LDS",
+        "TENSOR_LOAD_TO_LDS_X ",
+        " X_V_CVT_F16_FP8_X",
+        "X_V_DIV_SCALE_F64_X "}) {
+    if (!Expect(SelectStubDecoderRoute(decorated_near_miss_instruction) ==
+                        StubDecoderRoute::kUnsupported &&
+                    FindStubDecoderRouteInfo(decorated_near_miss_instruction) ==
+                        nullptr &&
+                    !ListedInAnyRoute(decorated_near_miss_instruction),
+                "expected decorated known opcode near-misses to stay excluded from all routed selector surfaces")) {
+      return 1;
+    }
+  }
 
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
     const StubDecoderRoute expected_route =

@@ -7509,6 +7509,46 @@ int main() {
       }
     }
   }
+  for (std::string_view decorated_near_miss_instruction :
+       {"x_v_pk_add_bf16",
+        "x_tensor_load_to_lds",
+        "x_v_cvt_f16_fp8",
+        "x_v_div_scale_f64",
+        "v_pk_add_bf16_x",
+        "tensor_load_to_lds_x",
+        "v_cvt_f16_fp8_x",
+        "v_div_scale_f64_x",
+        "x_v_pk_add_bf16_x",
+        "x_tensor_load_to_lds_x",
+        "x_v_cvt_f16_fp8_x",
+        "x_v_div_scale_f64_x",
+        " X_V_PK_ADD_BF16",
+        "X_V_PK_ADD_BF16 ",
+        " X_TENSOR_LOAD_TO_LDS",
+        "TENSOR_LOAD_TO_LDS_X ",
+        " X_V_CVT_F16_FP8_X",
+        "X_V_DIV_SCALE_F64_X "}) {
+    const StubDecodedInstruction decorated_near_miss_decode =
+        DecodeStubInstruction(decorated_near_miss_instruction);
+    if (!Expect(MatchesUnknownDecode(decorated_near_miss_decode,
+                                     decorated_near_miss_instruction) &&
+                    MatchesUnknownHelperSurface(decorated_near_miss_decode),
+                "expected decorated known opcode near-misses to keep exact unknown decode parity")) {
+      return 1;
+    }
+    for (const StubDecoderRouteManifest& manifest :
+         GetStubDecoderRouteManifests()) {
+      const StubDecodedInstruction via_entrypoint =
+          DecodeViaExplicitRouteEntrypoint(manifest.route,
+                                          decorated_near_miss_instruction);
+      if (!Expect(MatchesUnknownDecode(via_entrypoint,
+                                       decorated_near_miss_instruction) &&
+                      MatchesUnknownHelperSurface(via_entrypoint),
+                  "expected decorated known opcode near-misses to keep exact route-keyed unknown parity")) {
+        return 1;
+      }
+    }
+  }
   if (!Expect(GetStubOpcodeShapeName(static_cast<StubOpcodeShape>(99)) ==
                       "kUnknown" &&
                   GetStubExecutionDomainName(
@@ -8212,6 +8252,144 @@ int main() {
                   near_miss_invalid_hint_decoded.operand_descriptors
                           .descriptor_count == 0,
               "expected synthetic routed route-info with near-miss known opcode to ignore invalid caller decode-hint while keeping empty unknown structure")) {
+        return 1;
+      }
+    }
+    for (std::string_view decorated_near_miss_instruction :
+         {"x_v_pk_add_bf16",
+          "x_tensor_load_to_lds",
+          "x_v_cvt_f16_fp8",
+          "x_v_div_scale_f64",
+          "v_pk_add_bf16_x",
+          "tensor_load_to_lds_x",
+          "v_cvt_f16_fp8_x",
+          "v_div_scale_f64_x",
+          "x_v_pk_add_bf16_x",
+          "x_tensor_load_to_lds_x",
+          "x_v_cvt_f16_fp8_x",
+          "x_v_div_scale_f64_x",
+          " X_V_PK_ADD_BF16",
+          "X_V_PK_ADD_BF16 ",
+          " X_TENSOR_LOAD_TO_LDS",
+          "TENSOR_LOAD_TO_LDS_X ",
+          " X_V_CVT_F16_FP8_X",
+          "X_V_DIV_SCALE_F64_X "}) {
+      const StubDecoderRouteInfo synthetic_decorated_near_miss{
+          decorated_near_miss_instruction,
+          manifest.route,
+          "kSyntheticRouteInfoDecoratedNearMiss",
+          manifest.route_priority + 260u,
+          DecodeSeedHint::kUnknown,
+          "SYNTHETIC_DECORATED_NEAR_MISS_ENC",
+          2600u + manifest.route_priority,
+          26u + manifest.route_priority,
+          false,
+          false,
+      };
+      const StubDecodedInstruction decorated_near_miss_decoded =
+          DecodeStubInstruction(synthetic_decorated_near_miss);
+      if (!Expect(
+              decorated_near_miss_decoded.status ==
+                      StubDecodeStatus::kDecodedStub &&
+                  MatchesRouteInfoPayload(decorated_near_miss_decoded,
+                                          synthetic_decorated_near_miss) &&
+                  decorated_near_miss_decoded.entrypoint_name ==
+                      manifest.entrypoint_name &&
+                  MatchesUnknownHelperSurface(decorated_near_miss_decoded) &&
+                  MatchesTopLevelFlags(decorated_near_miss_decoded,
+                                       false,
+                                       false,
+                                       false,
+                                       false) &&
+                  MatchesLayout(decorated_near_miss_decoded,
+                                ExpectedLayout{}) &&
+                  decorated_near_miss_decoded.operand_roles.binding_count ==
+                      0 &&
+                  decorated_near_miss_decoded.operand_slots.binding_count ==
+                      0 &&
+                  decorated_near_miss_decoded.operand_descriptors
+                          .descriptor_count == 0,
+              "expected synthetic routed route-info with decorated near-miss known opcode to preserve caller metadata while keeping empty unknown structure")) {
+        return 1;
+      }
+      StubDecoderRouteInfo synthetic_decorated_near_miss_valid_wrong_hint =
+          synthetic_decorated_near_miss;
+      synthetic_decorated_near_miss_valid_wrong_hint.route_name =
+          "kSyntheticRouteInfoDecoratedNearMissValidWrongHint";
+      synthetic_decorated_near_miss_valid_wrong_hint.route_priority =
+          manifest.route_priority + 265u;
+      synthetic_decorated_near_miss_valid_wrong_hint.decode_hint =
+          AlternateDecodeHintForRoute(manifest.route);
+      const StubDecodedInstruction
+          decorated_near_miss_valid_wrong_hint_decoded =
+              DecodeStubInstruction(
+                  synthetic_decorated_near_miss_valid_wrong_hint);
+      if (!Expect(
+              decorated_near_miss_valid_wrong_hint_decoded.status ==
+                      StubDecodeStatus::kDecodedStub &&
+                  MatchesRouteInfoPayload(
+                      decorated_near_miss_valid_wrong_hint_decoded,
+                      synthetic_decorated_near_miss_valid_wrong_hint) &&
+                  decorated_near_miss_valid_wrong_hint_decoded.entrypoint_name ==
+                      manifest.entrypoint_name &&
+                  MatchesUnknownHelperSurface(
+                      decorated_near_miss_valid_wrong_hint_decoded) &&
+                  MatchesTopLevelFlags(
+                      decorated_near_miss_valid_wrong_hint_decoded,
+                      false,
+                      false,
+                      false,
+                      false) &&
+                  MatchesLayout(
+                      decorated_near_miss_valid_wrong_hint_decoded,
+                      ExpectedLayout{}) &&
+                  decorated_near_miss_valid_wrong_hint_decoded.operand_roles
+                          .binding_count == 0 &&
+                  decorated_near_miss_valid_wrong_hint_decoded.operand_slots
+                          .binding_count == 0 &&
+                  decorated_near_miss_valid_wrong_hint_decoded
+                          .operand_descriptors.descriptor_count == 0,
+              "expected synthetic routed route-info with decorated near-miss known opcode to ignore valid mismatching caller decode-hint while keeping empty unknown structure")) {
+        return 1;
+      }
+      StubDecoderRouteInfo synthetic_decorated_near_miss_invalid_hint =
+          synthetic_decorated_near_miss;
+      synthetic_decorated_near_miss_invalid_hint.route_name =
+          "kSyntheticRouteInfoDecoratedNearMissInvalidHint";
+      synthetic_decorated_near_miss_invalid_hint.route_priority =
+          manifest.route_priority + 275u;
+      synthetic_decorated_near_miss_invalid_hint.decode_hint =
+          static_cast<DecodeSeedHint>(99);
+      const StubDecodedInstruction
+          decorated_near_miss_invalid_hint_decoded =
+              DecodeStubInstruction(
+                  synthetic_decorated_near_miss_invalid_hint);
+      if (!Expect(
+              decorated_near_miss_invalid_hint_decoded.status ==
+                      StubDecodeStatus::kDecodedStub &&
+                  MatchesRouteInfoPayload(
+                      decorated_near_miss_invalid_hint_decoded,
+                      synthetic_decorated_near_miss_invalid_hint) &&
+                  decorated_near_miss_invalid_hint_decoded.entrypoint_name ==
+                      manifest.entrypoint_name &&
+                  MatchesUnknownHelperSurface(
+                      decorated_near_miss_invalid_hint_decoded) &&
+                  MatchesTopLevelFlags(
+                      decorated_near_miss_invalid_hint_decoded,
+                      false,
+                      false,
+                      false,
+                      false) &&
+                  MatchesLayout(
+                      decorated_near_miss_invalid_hint_decoded,
+                      ExpectedLayout{}) &&
+                  decorated_near_miss_invalid_hint_decoded.operand_roles
+                          .binding_count == 0 &&
+                  decorated_near_miss_invalid_hint_decoded.operand_slots
+                          .binding_count == 0 &&
+                  decorated_near_miss_invalid_hint_decoded.operand_descriptors
+                          .descriptor_count == 0,
+              "expected synthetic routed route-info with decorated near-miss known opcode to ignore invalid caller decode-hint while keeping empty unknown structure")) {
         return 1;
       }
     }
