@@ -43,7 +43,7 @@ jobs:
     env:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       PLATFORM: ${{ inputs.platform }}
-      THEROCK_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
+      THEROCK_ARTIFACTS_DIR: ${{ github.workspace }}/.download_cache
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -68,9 +68,9 @@ jobs:
             --platform="${{ env.PLATFORM }}" \
             --output-dir="${{ github.workspace }}" \
             --no-extract
-          # NOTE: artifact_manager.py appends /artifacts to --output-dir
-          # in non-flatten mode, so pass workspace root here so that
-          # artifacts land in THEROCK_ARTIFACTS_DIR ($workspace/artifacts).
+          # NOTE: artifact_manager.py appends /.download_cache to --output-dir
+          # in --no-extract mode, so pass workspace root here so that
+          # artifacts land in THEROCK_ARTIFACTS_DIR ($workspace/.download_cache).
 
       - name: Validate artifact structure
         run: |
