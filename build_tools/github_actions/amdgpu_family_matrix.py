@@ -283,7 +283,7 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx90a": {
         "linux": {
-            "test-runs-on": "therock-ci-test-runners",
+            "test-runs-on": "linux-gfx90a-gpu-npi-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "sanity_check_only_for_family": True,
@@ -467,6 +467,22 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+        },
+    },
+    "gfx1250": {
+        "linux": {
+            "test-runs-on": "linux-gfx1250-gpu-npi-rocm",
+            "family": "gfx1250",
+            "fetch-gfx-targets": ["gfx1250"],
+            "sanity_check_only_for_family": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx1250",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "expect_pytorch_failure": True,
         },
     },
 }
