@@ -108,7 +108,7 @@ jobs:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     outputs:
-      s3_prefix: ${{ steps.repo-metadata.outputs.s3_prefix }}
+      s3_prefix: ${{ steps.s3_config.outputs.s3_prefix }}
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
@@ -117,27 +117,12 @@ jobs:
       ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
       RELEASE_TYPE: ${{ inputs.release_type || '' }}
-      S3_BUCKET_NATIVE: "therock-${{ inputs.release_type }}-packages"
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
-
-      # TODO: remove repo-metadata once s3_prefix is available PR#3561,
-      # repo-metadata is a work around only for generating s3_prefix.
-      - name: Set repo_sub_folder
-        id: repo-metadata
-        run: |
-          BUILD_DATE=$(date +%Y%m%d)
-          REPO_SUB_FOLDER="${BUILD_DATE}-${{ env.ARTIFACT_RUN_ID }}"
-          if [ "${{ inputs.release_type }}" = "prerelease" ]; then
-            S3_PREFIX="v3/packages/${{ inputs.native_package_type }}"
-          else
-            S3_PREFIX="v3/packages/${{ inputs.native_package_type }}/${REPO_SUB_FOLDER}"
-          fi
-          echo "s3_prefix=${S3_PREFIX}" >> $GITHUB_OUTPUT
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -147,6 +132,18 @@ jobs:
       - name: Install Python requirements
         run: |
           pip install pyelftools boto3 jinja2
+
+      - name: Determine S3 bucket and prefix
+        id: s3_config
+        run: |
+          python ./build_tools/packaging/linux/get_s3_config.py \
+            --release-type "${{ env.RELEASE_TYPE }}" \
+            --repository "${{ github.repository }}" \
+            --is-fork "${{ github.event.pull_request.head.repo.fork || 'false' }}" \
+            --pkg-type "${{ inputs.native_package_type }}" \
+            --artifact-id "${{ env.ARTIFACT_RUN_ID }}" \
+            --rocm-version "${{ inputs.rocm_version }}" \
+            --output-format github >> $GITHUB_OUTPUT
 
       - name: Install System requirements
         run: |
@@ -197,13 +194,16 @@ jobs:
         if: ${{ !inputs.skip_package_upload }}
         id: upload-packages
         run: |
-          echo "Uploading to s3 bucket : ${{ inputs.release_type }}"
+          echo "Uploading to S3 bucket: ${{ steps.s3_config.outputs.s3_bucket }}"
+          echo "Using prefix: ${{ steps.s3_config.outputs.s3_prefix }}"
+          echo "Job type: ${{ steps.s3_config.outputs.job_type }}"
           python ./build_tools/packaging/linux/upload_package_repo.py \
             --pkg-type ${{ inputs.native_package_type }} \
-            --s3-bucket ${{ env.S3_BUCKET_NATIVE }} \
+            --s3-bucket ${{ steps.s3_config.outputs.s3_bucket }} \
             --amdgpu-family ${{ inputs.artifact_group }} \
             --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
-            --job ${{ inputs.release_type }}
+            --job ${{ steps.s3_config.outputs.job_type }} \
+            --s3-prefix "${{ steps.s3_config.outputs.s3_prefix }}"
 
   get_install_test_profiles:
     name: Get Install test OS profiles for ${{ inputs.native_package_type }}
