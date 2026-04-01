@@ -379,17 +379,6 @@ def gha_append_step_summary(summary: str):
         f.write(summary + "\n\n")
 
 
-def gha_emit_metrics(metrics: dict):
-    """Writes structured metrics as a hidden HTML comment in the job summary.
-
-    The comment is invisible in the GitHub UI but machine-parseable by
-    notify_quartz.yml (or any consumer) via the regex:
-        /<!-- THEROCK_METRICS ({.*?}) -->/
-    """
-    payload = json.dumps(metrics, separators=(",", ":"))
-    gha_append_step_summary(f"<!-- THEROCK_METRICS {payload} -->")
-
-
 def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
     """Sends a request to the given GitHub REST API URL and returns the response.
 

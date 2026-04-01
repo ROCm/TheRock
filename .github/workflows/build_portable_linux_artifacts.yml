@@ -166,14 +166,6 @@ jobs:
           python3 build_tools/resource_info.py --finalize
           python3 build_tools/analyze_build_times.py --build-dir build
 
-      - name: Emit Build Metrics
-        if: ${{ !cancelled() }}
-        run: |
-          python3 build_tools/github_actions/emit_build_metrics.py \
-            --ccache \
-            --artifact-dir build/artifacts \
-            --resource-info-dir build/logs/therock-build-prof
-
       # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
       # fall back to runner base credentials (therock-ci-artifacts-external).
       - name: Configure AWS Credentials

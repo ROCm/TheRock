@@ -164,70 +164,7 @@ jobs:
                 }
               }
 
-              // Fetch job summaries ($GITHUB_STEP_SUMMARY content) via check runs.
-              // Each Actions job is a check run; summaries live in output.summary.
-              // Capped to stay within the ~65KB repository_dispatch payload limit.
-              if (jobs.length > 0 && checkSuiteId) {
-                const TOTAL_CAP = 49152;
-                try {
-                  const summaryMap = new Map();
-                  for (let page = 1; ; page++) {
-                    const { data: crData } = await github.rest.checks.listForSuite({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      check_suite_id: checkSuiteId,
-                      per_page: 100,
-                      page,
-                    });
-                    for (const cr of (crData.check_runs || [])) {
-                      if (cr.output && cr.output.summary) {
-                        summaryMap.set(cr.id, cr.output.summary);
-                      }
-                    }
-                    if ((crData.check_runs || []).length < 100) break;
-                  }
-                  let totalSize = 0;
-                  for (const job of jobs) {
-                    const raw = summaryMap.get(job.id);
-                    if (!raw) continue;
-                    const remaining = TOTAL_CAP - totalSize;
-                    if (remaining <= 0) {
-                      core.warning('Total summary size exceeded limit, skipping remaining');
-                      break;
-                    }
-                    if (raw.length <= remaining) {
-                      job.summary = raw;
-                      totalSize += raw.length;
-                    } else {
-                      job.summary = raw.substring(0, remaining) + '\n...[truncated]';
-                      totalSize = TOTAL_CAP;
-                      core.warning('Summary truncated to fit payload limit');
-                      break;
-                    }
-                  }
-                } catch (e) {
-                  core.warning(`Failed to fetch job summaries: ${e.message}`);
-                }
-              }
-
-              // Extract structured metrics from THEROCK_METRICS HTML comments
-              // embedded in job summaries by emit_build_metrics.py.
-              const metricsRe = /<!--\s*THEROCK_METRICS\s+(\{.*?\})\s*-->/g;
-              for (const job of jobs) {
-                if (!job.summary) continue;
-                const allMetrics = {};
-                let m;
-                while ((m = metricsRe.exec(job.summary)) !== null) {
-                  try { Object.assign(allMetrics, JSON.parse(m[1])); }
-                  catch (_) {}
-                }
-                metricsRe.lastIndex = 0;
-                if (Object.keys(allMetrics).length > 0) {
-                  job.metrics = allMetrics;
-                }
-              }
-
-              // Lucky solution to detect parent workflow via shared check suite.
+              // Detect parent workflow via shared check suite.
               let parentWorkflow = null;
               if (checkSuiteId) {
                 try {

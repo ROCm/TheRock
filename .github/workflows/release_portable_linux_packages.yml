@@ -270,14 +270,6 @@ jobs:
           python3 build_tools/resource_info.py --finalize
           python3 build_tools/analyze_build_times.py --build-dir ${{ env.OUTPUT_DIR }}/build
 
-      - name: Emit Build Metrics
-        if: ${{ !cancelled() }}
-        run: |
-          python3 build_tools/github_actions/emit_build_metrics.py \
-            --ccache \
-            --artifact-dir ${{ env.OUTPUT_DIR }}/build/artifacts \
-            --resource-info-dir ${{ env.OUTPUT_DIR }}/build/logs/therock-build-prof
-
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
