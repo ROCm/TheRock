@@ -93,7 +93,7 @@ jobs:
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
     uses: ./.github/workflows/test_artifacts_structure.yml
     with:
-      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: linux
 
   test_artifacts_per_family:
