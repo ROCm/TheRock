@@ -27,13 +27,12 @@ class ConfigureTargetRunTest(unittest.TestCase):
 
     def test_windows_gfx115x(self):
         runner_label = configure_target_run.get_runner_label("gfx1151", "windows")
-        # Previous (OSSCI): "windows-gfx1151-gpu-rocm"
-        self.assertEqual(runner_label, "igpu_stxh")
+        # igpu_stxh runners carry windows-gfx115X-* and windows-gfx1151-*; matrix uses OSSCI-style 1151.
+        self.assertEqual(runner_label, "windows-gfx1151-gpu-rocm")
 
     def test_windows_gfx120X_all(self):
         runner_label = configure_target_run.get_runner_label("gfx120X-all", "windows")
-        # Previous: no runner (""); OSSCI when enabled: "windows-gfx120X-gpu-rocm"
-        self.assertEqual(runner_label, "gpu_navi4x")
+        self.assertEqual(runner_label, "windows-gfx120X-gpu-rocm")
 
 
 if __name__ == "__main__":

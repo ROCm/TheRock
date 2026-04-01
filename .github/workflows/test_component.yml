@@ -37,9 +37,6 @@ jobs:
       (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
       (${{ inputs.amdgpu_families }})
       ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
-    # Same pattern as test_artifacts "Configure test matrix": single label from matrix (ci_linux / ci_windows
-    # already pass OS-appropriate test_runs_on). inputs.platform remains for container image (below), from
-    # configure_test_matrix outputs.platform / fetch_test_configurations.py (RUNNER_OS).
     runs-on: ${{ inputs.test_runs_on }}
     continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
     timeout-minutes: 210

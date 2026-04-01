@@ -84,10 +84,9 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx110x": {
         "linux": {
             # TODO(#3298): Re-enable machine once HSA_STATUS_ERROR_OUT_OF_RESOURCES issues are resolved
-            # Label is linux-gfx110X-gpu-rocm, fetch-gfx-targets should be ["gfx1100"]
-            # Previous: "test-runs-on": "",
-            # Previous (OSSCI when re-enabled): "test-runs-on": "linux-gfx110X-gpu-rocm",
-            "test-runs-on": "gpu_navi3x",
+            # Composite label matches TheRock-Infra update_orchestrai_runner_labels.sh (pool: gpu_navi3x).
+            # fetch-gfx-targets should be ["gfx1100"] when split artifacts are available on this runner.
+            "test-runs-on": "linux-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
             "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
@@ -95,9 +94,7 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            # Previous: "test-runs-on": "",
-            # Previous (OSSCI when re-enabled): "test-runs-on": "windows-gfx110X-gpu-rocm",
-            "test-runs-on": "gpu_navi3x",
+            "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
             "fetch-gfx-targets": ["gfx1100"],
             "bypass_tests_for_releases": True,
@@ -106,8 +103,9 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx1151": {
         "linux": {
-            # Previous (OSSCI): "test-runs-on": "linux-gfx1151-gpu-rocm",
-            "test-runs-on": "igpu_stxh",
+            # igpu_stxh runners get both *-gfx115X-* and *-gfx1151-* from TheRock-Infra
+            # update_orchestrai_runner_labels.sh; use OSSCI-style gfx1151 for matrix / benchmarks.
+            "test-runs-on": "linux-gfx1151-gpu-rocm",
             "test-runs-on-kernel": {
                 "oem": "linux-strix-halo-gpu-rocm-oem",
             },
@@ -118,8 +116,7 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            # Previous (OSSCI): "test-runs-on": "windows-gfx1151-gpu-rocm",
-            "test-runs-on": "igpu_stxh",
+            "test-runs-on": "windows-gfx1151-gpu-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
@@ -132,10 +129,8 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx120x": {
         "linux": {
             # TODO(#2683): Re-enable label once stable
-            # Label is linux-gfx120X-gpu-rocm
-            # Previous: "test-runs-on": "",
-            # Previous (OSSCI): "test-runs-on": "linux-gfx120X-gpu-rocm",
-            "test-runs-on": "gpu_navi4x",
+            # Composite label matches TheRock-Infra update_orchestrai_runner_labels.sh (pool: gpu_navi4x).
+            "test-runs-on": "linux-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
@@ -144,10 +139,8 @@ amdgpu_family_info_matrix_presubmit = {
         },
         "windows": {
             # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-            # Label is windows-gfx120X-gpu-rocm, fetch-gfx-targets should be ["gfx1200", "gfx1201"]
-            # Previous: "test-runs-on": "",
-            # Previous (OSSCI): "test-runs-on": "windows-gfx120X-gpu-rocm",
-            "test-runs-on": "gpu_navi4x",
+            # fetch-gfx-targets should be ["gfx1200", "gfx1201"] when artifacts are available.
+            "test-runs-on": "windows-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
             "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
