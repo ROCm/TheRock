@@ -345,10 +345,15 @@ int main() {
                   vds_boundary_bucket_statuses.front().operand_count_6_count ==
                       0u &&
                   vds_boundary_bucket_statuses.front()
-                          .transferable_with_decoder_work_count == 2u &&
+                          .transferable_as_is_rollup_count == 0u &&
                   vds_boundary_bucket_statuses.front()
-                          .transferable_with_decoder_and_semantic_work_count ==
-                      2u &&
+                          .transferable_with_decoder_work_rollup_count == 2u &&
+                  vds_boundary_bucket_statuses.front()
+                          .transferable_with_semantic_work_rollup_count ==
+                      0u &&
+                  vds_boundary_bucket_statuses.front()
+                          .gfx1201_specific_rollup_count ==
+                      0u &&
                   vds_boundary_bucket_statuses.front()
                           .transferable_as_is_state_count == 0u &&
                   vds_boundary_bucket_statuses.front()
@@ -360,8 +365,8 @@ int main() {
                       2u &&
                   vds_boundary_bucket_statuses.front()
                           .gfx1201_specific_state_count == 0u &&
-                  vds_boundary_bucket_statuses.front().gfx1201_specific_count ==
-                      0u,
+                  vds_boundary_bucket_statuses.front()
+                          .safe_under_current_request == false,
               "expected first VDS bucket status") ||
       !Expect(vds_boundary_bucket_statuses.back().bucket_name == "bvh_stack" &&
                   vds_boundary_bucket_statuses.back().instruction_count == 3u &&
@@ -378,10 +383,15 @@ int main() {
                   vds_boundary_bucket_statuses.back().operand_count_6_count ==
                       0u &&
                   vds_boundary_bucket_statuses.back()
-                          .transferable_with_decoder_work_count == 0u &&
+                          .transferable_as_is_rollup_count == 0u &&
                   vds_boundary_bucket_statuses.back()
-                          .transferable_with_decoder_and_semantic_work_count ==
+                          .transferable_with_decoder_work_rollup_count == 0u &&
+                  vds_boundary_bucket_statuses.back()
+                          .transferable_with_semantic_work_rollup_count ==
                       0u &&
+                  vds_boundary_bucket_statuses.back()
+                          .gfx1201_specific_rollup_count ==
+                      3u &&
                   vds_boundary_bucket_statuses.back()
                           .transferable_as_is_state_count == 0u &&
                   vds_boundary_bucket_statuses.back()
@@ -393,8 +403,8 @@ int main() {
                       0u &&
                   vds_boundary_bucket_statuses.back()
                           .gfx1201_specific_state_count == 3u &&
-                  vds_boundary_bucket_statuses.back().gfx1201_specific_count ==
-                      3u,
+                  vds_boundary_bucket_statuses.back()
+                          .safe_under_current_request == false,
               "expected last VDS bucket status") ||
       !Expect(append_bucket_status->blocking_dimension ==
                       "allocator_or_gds_semantics" &&
@@ -408,11 +418,14 @@ int main() {
                   append_bucket_status->operand_count_4_count == 0u &&
                   append_bucket_status->operand_count_5_count == 0u &&
                   append_bucket_status->operand_count_6_count == 0u &&
-                  append_bucket_status->transferable_with_decoder_work_count ==
+                  append_bucket_status->transferable_as_is_rollup_count == 0u &&
+                  append_bucket_status
+                          ->transferable_with_decoder_work_rollup_count ==
                       2u &&
                   append_bucket_status
-                          ->transferable_with_decoder_and_semantic_work_count ==
-                      2u &&
+                          ->transferable_with_semantic_work_rollup_count ==
+                      0u &&
+                  append_bucket_status->gfx1201_specific_rollup_count == 0u &&
                   append_bucket_status->transferable_as_is_state_count == 0u &&
                   append_bucket_status
                           ->transferable_with_decoder_work_state_count == 0u &&
@@ -422,7 +435,6 @@ int main() {
                           ->transferable_with_decoder_and_semantic_work_state_count ==
                       2u &&
                   append_bucket_status->gfx1201_specific_state_count == 0u &&
-                  append_bucket_status->gfx1201_specific_count == 0u &&
                   !append_bucket_status->safe_under_current_request,
               "expected append bucket summary status") ||
       !Expect(exchange_bucket_status->blocking_dimension ==
@@ -437,11 +449,14 @@ int main() {
                   exchange_bucket_status->operand_count_4_count == 0u &&
                   exchange_bucket_status->operand_count_5_count == 5u &&
                   exchange_bucket_status->operand_count_6_count == 2u &&
+                  exchange_bucket_status->transferable_as_is_rollup_count ==
+                      0u &&
                   exchange_bucket_status
-                          ->transferable_with_decoder_work_count == 1u &&
+                          ->transferable_with_decoder_work_rollup_count == 1u &&
                   exchange_bucket_status
-                          ->transferable_with_decoder_and_semantic_work_count ==
-                      1u &&
+                          ->transferable_with_semantic_work_rollup_count ==
+                      0u &&
+                  exchange_bucket_status->gfx1201_specific_rollup_count == 6u &&
                   exchange_bucket_status->transferable_as_is_state_count == 0u &&
                   exchange_bucket_status
                           ->transferable_with_decoder_work_state_count == 0u &&
@@ -451,7 +466,7 @@ int main() {
                           ->transferable_with_decoder_and_semantic_work_state_count ==
                       1u &&
                   exchange_bucket_status->gfx1201_specific_state_count == 6u &&
-                  exchange_bucket_status->gfx1201_specific_count == 6u,
+                  !exchange_bucket_status->safe_under_current_request,
               "expected exchange bucket summary status") ||
       !Expect(multi_bucket_status->blocking_dimension ==
                       "multi_address_semantics" &&
@@ -465,11 +480,14 @@ int main() {
                   multi_bucket_status->operand_count_4_count == 4u &&
                   multi_bucket_status->operand_count_5_count == 0u &&
                   multi_bucket_status->operand_count_6_count == 4u &&
-                  multi_bucket_status->transferable_with_decoder_work_count ==
+                  multi_bucket_status->transferable_as_is_rollup_count == 0u &&
+                  multi_bucket_status
+                          ->transferable_with_decoder_work_rollup_count ==
                       0u &&
                   multi_bucket_status
-                          ->transferable_with_decoder_and_semantic_work_count ==
+                          ->transferable_with_semantic_work_rollup_count ==
                       0u &&
+                  multi_bucket_status->gfx1201_specific_rollup_count == 12u &&
                   multi_bucket_status->transferable_as_is_state_count == 0u &&
                   multi_bucket_status
                           ->transferable_with_decoder_work_state_count == 0u &&
@@ -479,7 +497,7 @@ int main() {
                           ->transferable_with_decoder_and_semantic_work_state_count ==
                       0u &&
                   multi_bucket_status->gfx1201_specific_state_count == 12u &&
-                  multi_bucket_status->gfx1201_specific_count == 12u,
+                  !multi_bucket_status->safe_under_current_request,
               "expected multi-address bucket summary status") ||
       !Expect(bvh_bucket_status->blocking_dimension ==
                       "gfx1201_specific_bvh_semantics" &&
@@ -493,11 +511,14 @@ int main() {
                   bvh_bucket_status->operand_count_4_count == 3u &&
                   bvh_bucket_status->operand_count_5_count == 0u &&
                   bvh_bucket_status->operand_count_6_count == 0u &&
-                  bvh_bucket_status->transferable_with_decoder_work_count ==
+                  bvh_bucket_status->transferable_as_is_rollup_count == 0u &&
+                  bvh_bucket_status
+                          ->transferable_with_decoder_work_rollup_count ==
                       0u &&
                   bvh_bucket_status
-                          ->transferable_with_decoder_and_semantic_work_count ==
+                          ->transferable_with_semantic_work_rollup_count ==
                       0u &&
+                  bvh_bucket_status->gfx1201_specific_rollup_count == 3u &&
                   bvh_bucket_status->transferable_as_is_state_count == 0u &&
                   bvh_bucket_status
                           ->transferable_with_decoder_work_state_count == 0u &&
@@ -507,7 +528,7 @@ int main() {
                           ->transferable_with_decoder_and_semantic_work_state_count ==
                       0u &&
                   bvh_bucket_status->gfx1201_specific_state_count == 3u &&
-                  bvh_bucket_status->gfx1201_specific_count == 3u,
+                  !bvh_bucket_status->safe_under_current_request,
               "expected BVH bucket summary status")) {
     return 1;
   }
