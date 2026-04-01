@@ -65,7 +65,9 @@ jobs:
             --run-id="${{ env.ARTIFACT_RUN_ID }}" \
             --stage=all \
             --amdgpu-families="${{ inputs.amdgpu_families }}" \
-            --output-dir="${{ github.workspace }}"
+            --platform="${{ env.PLATFORM }}" \
+            --output-dir="${{ github.workspace }}" \
+            --no-extract
           # NOTE: artifact_manager.py appends /artifacts to --output-dir
           # in non-flatten mode, so pass workspace root here so that
           # artifacts land in THEROCK_ARTIFACTS_DIR ($workspace/artifacts).
