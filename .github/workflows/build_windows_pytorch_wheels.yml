@@ -236,9 +236,6 @@ jobs:
               --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
               --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
               --require-related-commit
-          python ./external-builds/pytorch/pytorch_triton_repo.py checkout \
-              --checkout-dir ${{ env.CHECKOUT_ROOT }}/triton \
-              --torch-dir ${{ env.CHECKOUT_ROOT }}/torch
 
       # Note: determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV, which includes --rocm-sdk-version and --version-suffix.
@@ -273,6 +270,10 @@ jobs:
           if "${{ inputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
           if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
 
+          REM Triton is only built for nightly releases
+          set "TRITON_FLAGS="
+          if "${{ inputs.pytorch_git_ref }}"=="nightly" set "TRITON_FLAGS=--triton-dir ${{ env.CHECKOUT_ROOT }}/triton --build-triton"
+
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }} (cache: ${{ inputs.cache_type }})"
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
@@ -281,8 +282,7 @@ jobs:
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
             --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
-            --triton-dir ${{ env.CHECKOUT_ROOT }}/triton ^
-            --build-triton ^
+            %TRITON_FLAGS% ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
@@ -311,6 +311,12 @@ jobs:
       - name: Generate PyTorch manifest
         shell: bash
         run: |
+          # Only include triton-dir for nightly releases
+          TRITON_ARG=""
+          if [ "${{ inputs.pytorch_git_ref }}" = "nightly" ]; then
+            TRITON_ARG="--triton-dir ${CHECKOUT_ROOT}/triton"
+          fi
+
           python build_tools/github_actions/generate_pytorch_manifest.py \
             --manifest-dir "${PACKAGE_DIST_DIR}/manifests" \
             --python-version "${{ inputs.python_version }}" \
@@ -318,7 +324,7 @@ jobs:
             --pytorch-dir "${CHECKOUT_ROOT}/torch" \
             --pytorch-audio-dir "${CHECKOUT_ROOT}/audio" \
             --pytorch-vision-dir "${CHECKOUT_ROOT}/vision" \
-            --triton-dir "${CHECKOUT_ROOT}/triton"
+            ${TRITON_ARG}
 
       - name: Configure AWS Credentials
         if: always()
@@ -438,6 +444,13 @@ jobs:
         if: ${{ env.upload == 'true' }}
         run: |
           echo "Copying exact tested wheels to release S3 bucket..."
+
+          # Only include triton_windows for nightly releases
+          TRITON_INCLUDE=""
+          if [ "${{ inputs.pytorch_git_ref }}" = "nightly" ] && [ -n "${TRITON_VERSION}" ]; then
+            TRITON_INCLUDE="--include triton_windows-${TRITON_VERSION}-${CP_VERSION}-win_amd64.whl"
+          fi
+
           aws s3 cp \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
@@ -446,7 +459,7 @@ jobs:
             --include "torch-${TORCH_VERSION}-${CP_VERSION}-win_amd64.whl" \
             --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-win_amd64.whl" \
             --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-win_amd64.whl" \
-            --include "triton_windows-${TRITON_VERSION}-${CP_VERSION}-win_amd64.whl"
+            ${TRITON_INCLUDE}
 
       - name: Install python deps for CI
         run: |
