@@ -6,39 +6,20 @@ name: Multi-Arch CI - Linux
 on:
   workflow_call:
     inputs:
-      artifact_group:
+      build_config:
         type: string
-      matrix_per_family_json:
-        type: string
-        description: "JSON array of {amdgpu_family, test-runs-on} objects for per-arch stages"
-      dist_amdgpu_families:
-        type: string
-        description: "Semicolon-separated list of all GPU families for dist targets"
-      build_variant_label:
-        type: string
-      build_variant_cmake_preset:
-        type: string
-      build_variant_suffix:
-        type: string
+        description: >-
+          JSON object with build configuration for this platform. Fields:
+          artifact_group, per_family_info, dist_amdgpu_families,
+          build_variant_label, build_variant_cmake_preset,
+          build_variant_suffix, expect_failure, build_pytorch,
+          prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
-      expect_failure:
-        type: boolean
-      prebuilt_stages:
-        type: string
-        default: ""
-        description: "Comma-separated build stages to skip; artifacts are copied from baseline_run_id instead"
-      baseline_run_id:
-        type: string
-        default: ""
-        description: "Workflow run ID to copy prebuilt stage artifacts from"
       rocm_package_version:
         type: string
       test_type:
         type: string
-      build_pytorch:
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -46,7 +27,7 @@ permissions:
 jobs:
   copy_prebuilt_stages:
     name: Copy Prebuilt Stages
-    if: ${{ inputs.prebuilt_stages != '' && inputs.baseline_run_id != '' }}
+    if: ${{ fromJSON(inputs.build_config).prebuilt_stages != '' && fromJSON(inputs.build_config).baseline_run_id != '' }}
     runs-on: azure-linux-scale-rocm
     permissions:
       contents: read
@@ -80,9 +61,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python build_tools/artifact_manager.py copy \
-            --source-run-id=${{ inputs.baseline_run_id }} \
-            --stage="${{ inputs.prebuilt_stages }}" \
-            --amdgpu-families="${{ inputs.dist_amdgpu_families }}"
+            --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
+            --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
+            --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}"
 
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
@@ -91,14 +72,14 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
     secrets: inherit
     with:
-      matrix_per_family_json: ${{ inputs.matrix_per_family_json }}
-      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
-      artifact_group: ${{ inputs.artifact_group }}
-      build_variant_label: ${{ inputs.build_variant_label }}
-      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_variant_suffix: ${{ inputs.build_variant_suffix }}
-      expect_failure: ${{ inputs.expect_failure }}
-      prebuilt_stages: ${{ inputs.prebuilt_stages }}
+      matrix_per_family_json: ${{ toJSON(fromJSON(inputs.build_config).per_family_info) }}
+      dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      build_variant_label: ${{ fromJSON(inputs.build_config).build_variant_label }}
+      build_variant_cmake_preset: ${{ fromJSON(inputs.build_config).build_variant_cmake_preset }}
+      build_variant_suffix: ${{ fromJSON(inputs.build_config).build_variant_suffix }}
+      expect_failure: ${{ fromJSON(inputs.build_config).expect_failure }}
+      prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       test_type: ${{ inputs.test_type }}
     permissions:
@@ -109,21 +90,21 @@ jobs:
     needs: [build_multi_arch_stages]
     name: Validate Artifact Structure
     # If we are expecting a build failure, do not run tests to save machine capacity.
-    if: ${{ !failure() && !cancelled() && inputs.expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
     uses: ./.github/workflows/test_artifacts_structure.yml
     with:
-      artifact_group: ${{ inputs.artifact_group }}
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       platform: linux
 
   test_artifacts_per_family:
     needs: [copy_prebuilt_stages, build_multi_arch_stages]
     name: Test ${{ matrix.family_info.amdgpu_family }}
     # If we are expecting a build failure, do not run tests to save machine capacity.
-    if: ${{ !failure() && !cancelled() && inputs.expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
     strategy:
       fail-fast: false
       matrix:
-        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
+        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
       # Use architecture-specific artifact group for fetching per-arch artifacts
@@ -138,11 +119,11 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    if: ${{ !failure() && !cancelled() && inputs.expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
     with:
-      artifact_group: ${{ inputs.artifact_group }}
-      amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
     permissions:
@@ -152,11 +133,11 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python ${{ matrix.family_info.amdgpu_family }}
-    if: ${{ !failure() && !cancelled() && inputs.expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
     strategy:
       fail-fast: false
       matrix:
-        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
+        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_rocm_wheels.yml
     with:
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
@@ -172,11 +153,11 @@ jobs:
   build_pytorch_wheels_per_family:
     needs: [build_python_packages]
     name: Build PyTorch | ${{ matrix.family_info.amdgpu_family }}
-    if: ${{ !failure() && !cancelled() && inputs.build_pytorch == true }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true }}
     strategy:
       fail-fast: false
       matrix:
-        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
+        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels_ci.yml
     with:
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
