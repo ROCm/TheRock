@@ -286,6 +286,15 @@ jobs:
             --continue-on-collection-errors \
             --import-mode=importlib
 
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-reports-${{ matrix.test_config }}-${{ matrix.shard }}-${{ matrix.num_shards }}
+          path: external-builds/pytorch/pytorch/test/test-reports/
+          if-no-files-found: ignore
+          retention-days: 1
+
       - name: Generate test summary
         if: always()
         run: |
@@ -321,3 +330,55 @@ jobs:
             echo "No run_pytorch_tests_exit_code.txt found"
             exit 1
           fi
+
+  test_summary:
+    if: always()
+    needs: test_wheels
+    name: Test Summary
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+          sparse-checkout: external-builds/pytorch/summarize_test_results.py
+
+      - name: Download all test report artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: artifacts
+          pattern: test-reports-*
+
+      - name: Generate combined summary
+        env:
+          AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+        run: |
+          python external-builds/pytorch/summarize_test_results.py \
+            --combined-dir artifacts
+
+  test_summary:
+    needs: test_wheels
+    if: always()
+    name: Test Summary
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+          sparse-checkout: external-builds/pytorch/summarize_test_results.py
+
+      - name: Download all test report artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: artifacts
+          pattern: test-reports-*
+
+      - name: Generate combined test summary
+        env:
+          AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+        run: |
+          python external-builds/pytorch/summarize_test_results.py \
+            --combined-dir artifacts/
