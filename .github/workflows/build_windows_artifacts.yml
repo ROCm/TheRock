@@ -143,6 +143,11 @@ jobs:
         continue-on-error: true
         run: |
           ninja -C "${{ env.BUILD_DIR }}" amd-comgr+build
+          echo "=== Library status after amd-comgr+build ==="
+          ls -la "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/"*comgr* || true
+          ninja -C "${{ env.BUILD_DIR }}/compiler/amd-comgr/build"
+          echo "=== Library status after inner build ==="
+          ls -la "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/"*comgr* || true
           ninja -C "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" check-comgr
 
       - name: Build therock-archives and therock-dist

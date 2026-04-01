@@ -129,6 +129,12 @@ jobs:
         continue-on-error: true
         run: |
           ninja -C "${BUILD_DIR}" amd-comgr+build
+          echo "=== Library status after amd-comgr+build ==="
+          ls -la "${BUILD_DIR}/compiler/amd-comgr/build/libamd_comgr.so"* || true
+          file "${BUILD_DIR}/compiler/amd-comgr/build/libamd_comgr.so.3" || true
+          ninja -C "${BUILD_DIR}/compiler/amd-comgr/build"
+          echo "=== Library status after inner build ==="
+          ls -la "${BUILD_DIR}/compiler/amd-comgr/build/libamd_comgr.so"* || true
           ninja -C "${BUILD_DIR}/compiler/amd-comgr/build" check-comgr
 
       - name: Build therock-archives and therock-dist
