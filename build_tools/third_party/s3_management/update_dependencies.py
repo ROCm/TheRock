@@ -5,10 +5,11 @@
 # Forked from https://github.com/pytorch/test-infra/blob/1ffc7f7b3b421b57c380de469e11744f54399f09/s3_management/update_dependencies.py.
 # Changes incorporated from https://github.com/pytorch/test-infra/blob/a87d94b148bbd2c68e69e542350099a971f4c8d3/s3_management/update_dependencies.py.
 
-from typing import Any, Dict, List
+from typing import Dict, List
 from os import getenv
 
 import boto3  # type: ignore[import-untyped]
+from boto3.resources.base import ServiceResource
 import re
 
 
@@ -74,12 +75,13 @@ PACKAGES_PER_PROJECT = {
 
 
 def get_project_paths() -> List[str]:
+    # Deduplicate project names from PACKAGES_PER_PROJECT and return them sorted.
     return sorted(
         set(pkg_info["project"] for pkg_info in PACKAGES_PER_PROJECT.values())
     )
 
 
-def get_s3_bucket(bucket_name: str | None = None) -> Any:
+def get_s3_bucket(bucket_name: str | None = None) -> ServiceResource:
     s3 = boto3.resource("s3")
     resolved_bucket_name = bucket_name or getenv("S3_BUCKET_PY", "therock-dev-python")
     return s3.Bucket(resolved_bucket_name)
@@ -154,7 +156,7 @@ def is_wheel_allowed(pkg: str) -> bool:
 
 
 def upload_missing_whls(
-    bucket: Any,
+    bucket: ServiceResource,
     pkg_name: str = "numpy",
     prefix: str = "whl/test",
     *,
