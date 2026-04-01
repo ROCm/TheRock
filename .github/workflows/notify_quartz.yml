@@ -74,12 +74,11 @@ on:
       quartz_workflow_ref:
         description: "Branch in Quartz repo where the ingest workflow lives"
         type: string
-        default: "feat/ingestion"
+        default: "main"
 
 permissions:
   contents: read
   actions: read
-  checks: read
 
 env:
   QUARTZ_REPO: ${{ inputs.quartz_repo || 'ROCm/Quartz-Tester' }}
@@ -87,9 +86,12 @@ env:
 
 jobs:
   notify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - name: Generate GitHub App token
         id: app-token
         uses: actions/create-github-app-token@2e564a0bb8e7cc2b907b2401a2afe177882d4325 # v3.0.0
@@ -99,207 +101,9 @@ jobs:
           owner: "ROCm"
 
       - name: Dispatch event to Quartz
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-        with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          script: |
-            const [owner, repo] = process.env.QUARTZ_REPO.split('/');
-            const eventName = context.eventName;
-            const fullRepo = `${context.repo.owner}/${context.repo.repo}`;
-            let eventType, clientPayload;
-
-            if (eventName === 'workflow_run') {
-              const wr = context.payload.workflow_run;
-              const action = context.payload.action;
-              eventType = `workflow_run_${action}`;
-
-              // Fetch full run details for inputs and metadata not in webhook payload
-              let inputs = {};
-              let referencedWorkflows = [];
-              let checkSuiteId = null;
-              try {
-                const { data: runData } = await github.rest.actions.getWorkflowRun({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  run_id: wr.id,
-                });
-                inputs = runData.inputs || {};
-                referencedWorkflows = (runData.referenced_workflows || []).map(rw => ({
-                  path: rw.path,
-                  sha: rw.sha,
-                  ref: rw.ref,
-                }));
-                checkSuiteId = runData.check_suite_id || null;
-              } catch (e) {
-                core.warning(`Failed to fetch run details: ${e.message}`);
-              }
-
-              // Fetch jobs to capture matrix/job names (including dynamic matrices).
-              // Only meaningful for completed runs — on "requested" the jobs
-              // (especially dynamic matrix expansions) don't exist yet.
-              let jobs = [];
-              if (action === 'completed') {
-                try {
-                  for (let page = 1; ; page++) {
-                    const { data: jobsData } = await github.rest.actions.listJobsForWorkflowRun({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      run_id: wr.id,
-                      per_page: 100,
-                      page,
-                    });
-                    const batch = jobsData.jobs || [];
-                    for (const j of batch) {
-                      jobs.push({
-                        id: j.id,
-                        name: j.name,
-                        status: j.status,
-                        conclusion: j.conclusion,
-                      });
-                    }
-                    if (batch.length < 100) break;
-                  }
-                } catch (e) {
-                  core.warning(`Failed to fetch jobs: ${e.message}`);
-                }
-              }
-
-              // Detect parent workflow via shared check suite.
-              let parentWorkflow = null;
-              if (checkSuiteId) {
-                try {
-                  const { data: suiteRuns } = await github.rest.actions.listWorkflowRunsForRepo({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    check_suite_id: checkSuiteId,
-                    per_page: 10,
-                  });
-                  const parent = (suiteRuns.workflow_runs || []).find(r => r.id !== wr.id);
-                  if (parent) {
-                    parentWorkflow = {
-                      id: parent.id,
-                      name: parent.name,
-                      workflow_id: parent.workflow_id,
-                      path: parent.path,
-                      event: parent.event,
-                      html_url: parent.html_url,
-                      status: parent.status,
-                      conclusion: parent.conclusion,
-                    };
-                  }
-                } catch (e) {
-                  core.warning(`Failed to detect parent workflow: ${e.message}`);
-                }
-              }
-
-              clientPayload = {
-                event_type: eventType,
-                repository: fullRepo,
-                workflow_run: {
-                  id: wr.id,
-                  name: wr.name,
-                  display_title: wr.display_title,
-                  path: wr.path,
-                  workflow_id: wr.workflow_id,
-                  status: wr.status,
-                  conclusion: wr.conclusion,
-                  event: wr.event,
-                  head_branch: wr.head_branch,
-                  head_sha: wr.head_sha,
-                  run_number: wr.run_number,
-                  run_attempt: wr.run_attempt,
-                  html_url: wr.html_url,
-                  created_at: wr.created_at,
-                  updated_at: wr.updated_at,
-                  run_started_at: wr.run_started_at,
-                  actor: wr.actor ? { login: wr.actor.login, id: wr.actor.id } : null,
-                  triggering_actor: wr.triggering_actor
-                    ? { login: wr.triggering_actor.login, id: wr.triggering_actor.id }
-                    : null,
-                  pull_requests: (wr.pull_requests || []).map(pr => ({
-                    number: pr.number,
-                    head: { ref: pr.head.ref, sha: pr.head.sha },
-                    base: { ref: pr.base.ref, sha: pr.base.sha },
-                  })),
-                  inputs: inputs,
-                  release_type: inputs.release_type || null,
-                  jobs: jobs,
-                  parent_workflow: parentWorkflow,
-                  referenced_workflows: referencedWorkflows,
-                },
-              };
-
-            } else if (eventName === 'pull_request') {
-              const pr = context.payload.pull_request;
-              eventType = 'pull_request_event';
-              clientPayload = {
-                event_type: eventType,
-                repository: fullRepo,
-                action: context.payload.action,
-                pull_request: {
-                  id: pr.id,
-                  number: pr.number,
-                  state: pr.state,
-                  title: pr.title,
-                  draft: pr.draft,
-                  merged: pr.merged,
-                  merge_commit_sha: pr.merge_commit_sha,
-                  head: { ref: pr.head.ref, sha: pr.head.sha },
-                  base: { ref: pr.base.ref, sha: pr.base.sha },
-                  user: pr.user ? { login: pr.user.login } : null,
-                  created_at: pr.created_at,
-                  updated_at: pr.updated_at,
-                  closed_at: pr.closed_at,
-                  merged_at: pr.merged_at,
-                  additions: pr.additions,
-                  deletions: pr.deletions,
-                  changed_files: pr.changed_files,
-                  commits: pr.commits,
-                },
-              };
-
-            } else if (eventName === 'push') {
-              const p = context.payload;
-              eventType = 'push_event';
-              clientPayload = {
-                event_type: eventType,
-                repository: fullRepo,
-                ref: p.ref,
-                before: p.before,
-                after: p.after,
-                forced: p.forced || false,
-                pusher: p.pusher || {},
-                head_commit: p.head_commit
-                  ? { timestamp: p.head_commit.timestamp }
-                  : null,
-                commits: (p.commits || []).map(c => ({
-                  id: c.id,
-                  timestamp: c.timestamp,
-                })),
-              };
-
-            } else if (eventName === 'workflow_dispatch') {
-              eventType = 'workflow_dispatch_test';
-              clientPayload = {
-                event_type: eventType,
-                repository: fullRepo,
-                triggered_by: context.actor,
-                timestamp: new Date().toISOString(),
-              };
-
-            } else {
-              core.info(`Unhandled event: ${eventName}, skipping dispatch.`);
-              return;
-            }
-
-            await github.rest.actions.createWorkflowDispatch({
-              owner,
-              repo,
-              workflow_id: 'ingest_manual.yml',
-              ref: process.env.QUARTZ_WORKFLOW_REF,
-              inputs: {
-                payload_json: JSON.stringify(clientPayload),
-                fetch_jobs: 'true',
-              },
-            });
-            core.info(`Dispatched workflow_dispatch to ${process.env.QUARTZ_REPO} (ref: ${process.env.QUARTZ_WORKFLOW_REF})`);
+        env:
+          QUARTZ_DISPATCH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          python build_tools/github_actions/notify_quartz.py \
+            --quartz-repo "${{ env.QUARTZ_REPO }}" \
+            --quartz-workflow-ref "${{ env.QUARTZ_WORKFLOW_REF }}"
