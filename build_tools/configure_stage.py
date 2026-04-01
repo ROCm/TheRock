@@ -161,15 +161,6 @@ def generate_cmake_args(
     for feature in sorted(features):
         args.append(f"-DTHEROCK_ENABLE_{feature}=ON")
 
-    # Disable general testing in all stages: hip-tests fails to find the
-    # ROCm root on Windows (CMakeDetermineHIPCompiler.cmake:174) regardless of
-    # whether the compiler is built locally or imported.  Since the staged
-    # pipeline only builds artifacts (tests run in separate jobs), disabling
-    # THEROCK_BUILD_TESTING is safe and avoids the cascading failure where a
-    # missing core-hiptests artifact causes downstream stages to attempt a
-    # doomed hip-tests configure from scratch.
-    args.append("-DTHEROCK_BUILD_TESTING=OFF")
-
     if stage_name == "compiler-runtime":
         args.append("-DTHEROCK_BUILD_COMGR_TESTS=ON")
 

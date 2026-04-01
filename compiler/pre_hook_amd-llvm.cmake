@@ -68,9 +68,10 @@ else()
   set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
 endif()
 
-# Enable LLVM tools when tests are enabled (tests need the tools) or when explicitly requested
+# Install FileCheck and llvm-lit when any test mode is enabled (LLVM tests,
+# comgr tests, or explicit tool request).  These are lightweight additions
+# that don't change the core compiler artifact.
 if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR THEROCK_BUILD_COMGR_TESTS OR THEROCK_ENABLE_LLVM_TESTS)
-  set(LLVM_BUILD_TOOLS ON CACHE BOOL "Build LLVM tools required for tests" FORCE)
   set(LLVM_INSTALL_UTILS ON CACHE BOOL "Install LLVM utility binaries like FileCheck" FORCE)
 
   # Install llvm-lit script and the lit Python module for running LIT tests.
@@ -121,6 +122,14 @@ exec "${SCRIPT_DIR}/llvm-lit.real" "$@"
       file(CHMOD \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
     ")
   endif()
+endif()
+
+# Build ALL LLVM tools only when LLVM tests or tools are explicitly requested.
+# THEROCK_BUILD_COMGR_TESTS is excluded here: comgr tests only need FileCheck
+# + llvm-lit (handled above), and enabling LLVM_BUILD_TOOLS changes the
+# amd-llvm artifact layout, causing amdgcn-link failures in downstream stages.
+if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR THEROCK_ENABLE_LLVM_TESTS)
+  set(LLVM_BUILD_TOOLS ON CACHE BOOL "Build LLVM tools required for tests" FORCE)
 endif()
 # we have never enabled benchmarks,
 # disabling more explicitly after a bug fix enabled.
@@ -188,9 +197,12 @@ function(therock_set_implicit_llvm_options type tools_dir required_tool_names)
   endforeach()
 endfunction()
 
-# When LLVM tests, tools, or Comgr tests are enabled, build all tools (don't selectively disable).
-# Otherwise, only build the minimum required tools for production.
-if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS AND NOT THEROCK_BUILD_COMGR_TESTS AND NOT THEROCK_ENABLE_LLVM_TESTS)
+# When LLVM tests or tools are explicitly requested, build all tools.
+# THEROCK_BUILD_COMGR_TESTS only needs FileCheck + llvm-lit (handled above via
+# LLVM_INSTALL_UTILS), so it does NOT skip the selective tool disabling -- this
+# keeps the amd-llvm artifact identical to the production build, preventing
+# amdgcn-link failures in downstream stages on Windows.
+if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS AND NOT THEROCK_ENABLE_LLVM_TESTS)
   block()
     # This list contains the minimum tooling that must be enabled to build LLVM.
     # It is empically derived (either configure or ninja invocation will fail
