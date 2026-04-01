@@ -41,6 +41,7 @@ Environment variables (all overridable via CLI flags or workflow YAML):
 import argparse
 import os
 import platform
+import signal
 import subprocess
 import sys
 import tempfile
@@ -343,6 +344,72 @@ def build_run_test_cmd(
     return cmd
 
 
+# Grace period (seconds) after run_test.py stops producing output before
+# we kill the process tree.  PyTorch's run_test.py is known to hang after
+# all test files complete due to leaked daemon threads or orphan child
+# processes.  See https://github.com/ROCm/TheRock/issues/999
+_IDLE_TIMEOUT_SECONDS = 600  # 10 minutes
+
+
+def run_with_timeout(cmd: list[str], cwd: str) -> int:
+    """Run a command in a new process group and kill it if it goes idle.
+
+    Streams stdout/stderr in real time.  If no output is produced for
+    ``_IDLE_TIMEOUT_SECONDS`` the entire process group is killed.  This
+    works around run_test.py hanging after all tests finish.
+    """
+    import select
+
+    proc = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+
+    assert proc.stdout is not None
+    last_output_time = _monotonic()
+
+    try:
+        while True:
+            ready, _, _ = select.select([proc.stdout], [], [], 30.0)
+            if ready:
+                line = proc.stdout.readline()
+                if not line:
+                    break
+                sys.stdout.buffer.write(line)
+                sys.stdout.buffer.flush()
+                last_output_time = _monotonic()
+            else:
+                if proc.poll() is not None:
+                    break
+                idle = _monotonic() - last_output_time
+                if idle >= _IDLE_TIMEOUT_SECONDS:
+                    print(
+                        f"\nrun_test.py produced no output for "
+                        f"{int(idle)}s — killing process group "
+                        f"(see https://github.com/ROCm/TheRock/issues/999)"
+                    )
+                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                    proc.wait(timeout=30)
+                    return proc.returncode if proc.returncode is not None else 1
+
+        proc.wait()
+        return proc.returncode if proc.returncode is not None else 1
+
+    except Exception:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        raise
+
+
+def _monotonic() -> float:
+    """Monotonic clock wrapper for readability."""
+    import time
+
+    return time.monotonic()
+
+
 def main(argv: list[str]) -> int:
     args, passthrough_args = cmd_arguments(argv)
 
@@ -389,9 +456,9 @@ def main(argv: list[str]) -> int:
     cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)
     print(f"Executing: {' '.join(cmd)}")
 
-    result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
-    print(f"run_test.py finished with return code: {result.returncode}")
-    return result.returncode
+    return_code = run_with_timeout(cmd, cwd=str(args.pytorch_dir))
+    print(f"run_test.py finished with return code: {return_code}")
+    return return_code
 
 
 if __name__ == "__main__":
