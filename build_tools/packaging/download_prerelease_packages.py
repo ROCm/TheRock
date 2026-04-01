@@ -124,6 +124,7 @@ MAX_S3_KEYS_CHECK = 100
 BYTES_TO_MB = 1024 * 1024  # Conversion factor from bytes to MB
 
 # Package categories
+# Note: replace - in package names with _ to match the filename patterns in S3
 PACKAGES_TO_PROMOTE = {
     "rocm",
     "rocm_sdk_core",
@@ -133,19 +134,23 @@ PACKAGES_TO_PROMOTE = {
     "torchaudio",
     "torchvision",
     "triton",
+    "apex",
+    "jax_rocm7_pjrt",
+    "jax_rocm7_plugin",
+    "jaxlib",
 }
 
 # copied from build_tools/third_party/s3_management/update_dependencies.py PACKAGES_PER_PROJECT
 # Note: replace - in package names with _ to match the filename patterns in S3
 DEPENDENCY_PACKAGES = {
-    # no jax in release, yet
-    # "dbus_python",
-    # "flatbuffers",
-    # "ml_dtypes",
-    # "opt_einsum",
-    # "tomli",
+    # Jax
+    "dbus_python",
+    "flatbuffers",
+    "ml_dtypes",
+    "opt_einsum",
+    "tomli",
     #
-    # "torch"
+    # Torch
     "sympy",
     "mpmath",
     "pillow",
@@ -156,7 +161,8 @@ DEPENDENCY_PACKAGES = {
     "filelock",
     "fsspec",
     "typing_extensions",
-    # "rocm"
+    #
+    # ROCM
     "setuptools",
 }
 

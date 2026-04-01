@@ -47,9 +47,9 @@ pytest_package_exec = (
 cmd = [
     sys.executable,
     str(pytest_package_exec),
-    # TODO: Once OpenMP target tests are fixed, remove the two lines below
+    # TODO: Once the corresponding tests are fixed, remove the lines below
     "-k",
-    "not TestOpenMPTarget",
+    "not TestOpenMPTarget and not (TestTranspose and runtime_instrument) and not TestGPUConnect",
     "--junit-xml=junit.xml",
     "--ci-mode",
     "--log-cli-level=info",

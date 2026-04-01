@@ -111,6 +111,7 @@ class StorageBackend(ABC):
         source_dir: Path,
         dest: StorageLocation,
         include: list[str] | None = None,
+        exclude: list[str] | None = None,
     ) -> int:
         """Upload files from *source_dir* to *dest*, preserving relative paths.
 
@@ -119,6 +120,9 @@ class StorageBackend(ABC):
             dest: Destination location (the directory root in the backend).
             include: Optional glob patterns to filter files (e.g.
                 ``["*.tar.xz*"]``). If ``None``, all files are uploaded.
+            exclude: Optional glob patterns to reject files (e.g.
+                ``["ccache/*"]``). Applied after *include*. Matched against
+                the file's path relative to *source_dir*.
 
         Returns:
             Number of files uploaded.
@@ -132,6 +136,13 @@ class StorageBackend(ABC):
         files: set[Path] = set()
         for pattern in patterns:
             files.update(source_dir.rglob(pattern))
+
+        if exclude:
+            excluded: set[Path] = set()
+            for pattern in exclude:
+                excluded.update(source_dir.rglob(pattern))
+            files -= excluded
+
         sorted_files = sorted(f for f in files if f.is_file() and not f.is_symlink())
 
         file_list = [
@@ -144,6 +155,15 @@ class StorageBackend(ABC):
             )
             for f in sorted_files
         ]
+        logger.info(
+            "upload_directory: %s -> %s/%s (%d files)",
+            source_dir,
+            dest.bucket,
+            dest.relative_path,
+            len(file_list),
+        )
+        for f, loc in file_list:
+            logger.info("  %s", f.relative_to(source_dir).as_posix())
         return self.upload_files(file_list)
 
 
@@ -185,18 +205,7 @@ def _s3_retry(operation: str, location: str, func, *args, **kwargs):
 
 
 class S3StorageBackend(StorageBackend):
-    """S3 storage backend using boto3.
-
-    The S3 client is lazily initialized on first use.  Credentials are
-    resolved through boto3's default credential chain, which checks (in
-    order): environment variables, shared credentials file
-    (``AWS_SHARED_CREDENTIALS_FILE``), instance metadata, etc.  This
-    matches how the ``aws`` CLI resolves credentials.
-
-    ``upload_files()`` uploads in parallel using a thread pool whose size
-    is controlled by *upload_concurrency* (default: 10, matching the AWS
-    CLI).  The boto3 connection pool is sized to match.
-    """
+    """S3 storage backend using boto3."""
 
     def __init__(
         self,
@@ -210,7 +219,23 @@ class S3StorageBackend(StorageBackend):
 
     @property
     def s3_client(self):
-        """Lazy-initialized boto3 S3 client."""
+        """Lazy-initialized boto3 S3 client.
+
+        Credentials are resolved through boto3's default credential chain
+        (see https://docs.aws.amazon.com/boto3/latest/guide/credentials.html).
+        Relevant locations are checked in order:
+
+        1. Environment variables (``AWS_ACCESS_KEY_ID``,
+           ``AWS_SECRET_ACCESS_KEY``, ``AWS_SESSION_TOKEN``)
+        2. Assume role providers
+        3. Shared credentials file (``AWS_SHARED_CREDENTIALS_FILE``)
+
+        Unlike `S3Backend` in `artifact_backend.py`, this class does
+        **not** fall back to `signature_version=UNSIGNED` when no
+        credentials are found. StorageBackend is used for uploads, which
+        always require authentication. If we later add file listing or
+        downloading support (and not just upload/copy), this should be changed.
+        """
         if self._s3_client is None:
             import boto3
             from botocore.config import Config
@@ -262,6 +287,7 @@ class S3StorageBackend(StorageBackend):
             logger.info("[DRY RUN] %s -> %s (%s)", source, dest.s3_uri, content_type)
             return
 
+        logger.debug("upload %s -> %s (%s)", source, dest.s3_uri, content_type)
         _s3_retry(
             "upload",
             dest.s3_uri,

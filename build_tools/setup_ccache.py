@@ -26,30 +26,34 @@ Typical usage for the current shell (will set the CCACHE_CONFIGPATH var):
 
 import argparse
 from pathlib import Path
+import platform
 import sys
 import subprocess
 
 THIS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent
+IS_WINDOWS = platform.system() == "Windows"
 POSIX_CCACHE_COMPILER_CHECK_PATH = THIS_DIR / "posix_ccache_compiler_check.py"
-POSIX_COMPILER_CHECK_SCRIPT = POSIX_CCACHE_COMPILER_CHECK_PATH.read_text()
-CACHE_SRV = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
+POSIX_COMPILER_CHECK_SCRIPT = (
+    POSIX_CCACHE_COMPILER_CHECK_PATH.read_text() if not IS_WINDOWS else None
+)
+CACHE_SRV_DEV = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
+CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
+
+DEFAULT_LOG_DIR = REPO_ROOT / "build" / "logs" / "ccache"
 
 # See https://ccache.dev/manual/4.6.1.html#_configuration
+# log_file and stats_log are set dynamically in gen_config() using --log-dir
+# so that Windows workflows can direct logs to BUILD_DIR/logs/ccache/ (B:\build)
+# instead of REPO_ROOT/build/logs/ccache/ (C: drive).
 CONFIG_PRESETS_MAP = {
     "local": {},
-    # Moving build_*_packages.yml CCACHE Env variables to here (linux for now)
-    # For initial implementation, pre and post submit will be the same
     "github-oss-presubmit": {
-        "secondary_storage": CACHE_SRV,
-        "log_file": REPO_ROOT / "build/logs/ccache.log",
-        "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
+        "secondary_storage": CACHE_SRV_DEV,
         "max_size": "5G",
     },
     "github-oss-postsubmit": {
-        "secondary_storage": CACHE_SRV,
-        "log_file": REPO_ROOT / "build/logs/ccache.log",
-        "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
+        "secondary_storage": CACHE_SRV_REL,
         "max_size": "5G",
     },
 }
@@ -58,18 +62,21 @@ CONFIG_PRESETS_MAP = {
 def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     lines = []
 
-    # Initial implementation of presets will maintain current yml behavior
-    # which allows both "local" and "remote" cache (see `storage interaction`)
-    # and inserts all ccache env var configs along side below's local defaults
     config_preset: str = args.config_preset
     selected_config = CONFIG_PRESETS_MAP[config_preset]
     for k, v in selected_config.items():
         lines.append(f"{k} = {v}")
-        # Ensure full dir path for logs exists, else ccache will fail and stop CI
-        if k == "log_file" or k == "stats_log":
-            log_dir = v.parent.absolute()
-            if not log_dir.exists():
-                log_dir.mkdir(parents=True, exist_ok=True)
+
+    # Log paths: use --log-dir if provided, otherwise default to
+    # REPO_ROOT/build/logs/ccache. On Windows CI the build dir is on
+    # a separate drive (B:\build) from the source checkout (C: drive),
+    # so workflows must pass --log-dir to place logs where the upload
+    # scripts expect them.
+    if config_preset != "local":
+        ccache_log_dir: Path = args.log_dir if args.log_dir else DEFAULT_LOG_DIR
+        ccache_log_dir.mkdir(parents=True, exist_ok=True)
+        lines.append(f"log_file = {ccache_log_dir / 'ccache.log'}")
+        lines.append(f"stats_log = {ccache_log_dir / 'ccache_stats.log'}")
 
     # (TODO:consider https://ccache.dev/manual/4.6.1.html#_storage_interaction)
     # Switch based on cache type.
@@ -86,11 +93,14 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
         local_path.mkdir(parents=True, exist_ok=True)
         lines.append(f"cache_dir = {local_path}")
 
-    # Compiler check.
-    lines.append(
-        f"compiler_check = {sys.executable} {compiler_check_file} "
-        f"{dir / 'compiler_check_cache'} %compiler%"
-    )
+    # Compiler check: on POSIX we use a custom script that fingerprints the
+    # compiler binary and its shared libraries via ldd + sha256sum. On Windows
+    # (MSVC) those tools don't exist; ccache's default mtime check works well.
+    if not IS_WINDOWS:
+        lines.append(
+            f"compiler_check = {sys.executable} {compiler_check_file} "
+            f"{dir / 'compiler_check_cache'} %compiler%"
+        )
 
     # Slop settings.
     # Creating a hard link to a file increasing the link count, which triggers
@@ -114,12 +124,12 @@ def run(args: argparse.Namespace):
     compiler_check_file = dir / "compiler_check.py"
 
     config_contents = gen_config(dir, compiler_check_file, args)
-    compiler_check_script = POSIX_COMPILER_CHECK_SCRIPT
     if args.init or not config_file.exists():
         print(f"Initializing ccache dir: {dir}", file=sys.stderr)
         dir.mkdir(parents=True, exist_ok=True)
         config_file.write_text(config_contents)
-        compiler_check_file.write_text(compiler_check_script)
+        if not IS_WINDOWS:
+            compiler_check_file.write_text(POSIX_COMPILER_CHECK_SCRIPT)
 
     else:
         # Check to see if updated.
@@ -128,9 +138,9 @@ def run(args: argparse.Namespace):
                 f"NOTE: {config_file} does not match expected. Run with --init to regenerate",
                 file=sys.stderr,
             )
-        if (
+        if not IS_WINDOWS and (
             not compiler_check_file.exists()
-            or compiler_check_file.read_text() != compiler_check_script
+            or compiler_check_file.read_text() != POSIX_COMPILER_CHECK_SCRIPT
         ):
             print(
                 f"NOTE: {compiler_check_file} does not match expected. Run with --init to regenerate it",
@@ -152,7 +162,10 @@ def run(args: argparse.Namespace):
                 file=sys.stderr,
             )
     # Output options.
-    print(f"export CCACHE_CONFIGPATH={config_file}")
+    if IS_WINDOWS:
+        print(f"set CCACHE_CONFIGPATH={config_file}")
+    else:
+        print(f"export CCACHE_CONFIGPATH={config_file}")
 
 
 def main(argv: list[str]):
@@ -189,6 +202,13 @@ def main(argv: list[str]):
     )
 
     p.add_argument("--remote-storage", help="Remote storage configuration/URL")
+
+    p.add_argument(
+        "--log-dir",
+        type=Path,
+        help="Directory for ccache log files. Defaults to REPO_ROOT/build/logs/ccache. "
+        "On Windows CI, pass BUILD_DIR/logs/ccache so logs land in the build tree.",
+    )
 
     preset_group = p.add_mutually_exclusive_group()
     preset_group.add_argument(
