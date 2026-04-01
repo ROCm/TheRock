@@ -118,7 +118,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk lib/cmake/rocprofiler-sdk)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-roctx lib/cmake/rocprofiler-sdk-roctx)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-rocpd lib/cmake/rocprofiler-sdk-rocpd)
-  therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-rocattach lib/cmake/rocprofiler-sdk-rocattach)
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64") 
+    therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-rocattach lib/cmake/rocprofiler-sdk-rocattach)
+  endif()
   therock_cmake_subproject_activate(rocprofiler-sdk)
 
   therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk/dist/lib
@@ -126,8 +128,14 @@ if(THEROCK_ENABLE_ROCPROFV3)
       librocprofiler-sdk.so
       librocprofiler-sdk-roctx.so
       librocprofiler-sdk-rocpd.so
-      librocprofiler-sdk-rocattach.so
   )
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+    therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk/dist/lib
+      LIB_NAMES
+        librocprofiler-sdk-rocattach.so
+    )
+  endif()
+
   therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk/dist/lib/rocprofiler-sdk
     LIB_NAMES
       libgotcha.so
