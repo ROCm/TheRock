@@ -139,6 +139,11 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py
 
+      - name: Build therock-archives and therock-dist
+        run: |
+          python build_tools/memory_monitor.py --phase Build -- \
+            cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
+
       - name: Run comgr tests
         continue-on-error: true
         run: |
@@ -147,11 +152,6 @@ jobs:
           ctest --test-dir "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" --output-on-failure
           "${{ env.BUILD_DIR }}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
             "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v
-
-      - name: Build therock-archives and therock-dist
-        run: |
-          python build_tools/memory_monitor.py --phase Build -- \
-            cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}

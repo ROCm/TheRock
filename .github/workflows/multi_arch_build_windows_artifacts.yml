@@ -152,6 +152,11 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
 
+      - name: Build stage
+        run: |
+          python build_tools/memory_monitor.py --phase Build -- \
+            cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+
       - name: Run comgr tests
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
@@ -162,19 +167,11 @@ jobs:
           "${{ env.BUILD_DIR }}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
             "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v
 
-      - name: Build stage
-        run: |
-          python build_tools/memory_monitor.py --phase Build -- \
-            cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
-
       - name: Report
         if: ${{ !cancelled() }}
         run: |
           echo "CCache Stats:"
           ccache -s -v
-          echo "Artifacts:"
-          ls -lhS "${BUILD_DIR}"/artifacts/*.tar.zst 2>/dev/null || echo "No .tar.zst artifacts found"
-          ls -lhS "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No .tar.xz artifacts found"
 
       # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
       # fall back to runner base credentials (therock-ci-artifacts-external).
@@ -196,6 +193,12 @@ jobs:
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}"
+
+      - name: Report artifact sizes
+        if: ${{ !cancelled() }}
+        run: |
+          echo "Compressed artifact sizes:"
+          ls -lhS "${BUILD_DIR}"/.upload_cache/*.tar.zst 2>/dev/null || echo "No .tar.zst artifacts found"
 
       - name: Upload stage logs
         if: ${{ always() }}
