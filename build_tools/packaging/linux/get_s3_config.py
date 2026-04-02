@@ -6,9 +6,9 @@
 """
 Determine S3 bucket and prefix for ROCm package uploads.
 
-This script implements the S3 bucket selection logic for native Linux packages,
+This script implements the S3 bucket selection logic for native packages,
 determining the appropriate bucket and prefix based on release type, repository,
-and fork status.
+fork status, and platform.
 
 Decision Tree:
   ├─ IF release_type is set (dev/nightly/prerelease/release)
@@ -18,11 +18,11 @@ Decision Tree:
   │
   ├─ ELSE IF fork PR OR non-ROCm/TheRock repository
   │  └─ Use: therock-ci-artifacts-external bucket (external CI)
-  │     └─ prefix: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
+  │     └─ prefix: <artifact_id>-<platform>/packages/<pkg_type>
   │
   └─ ELSE (default: ROCm/TheRock non-fork)
      └─ Use: therock-ci-artifacts bucket (internal CI)
-        └─ prefix: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
+        └─ prefix: <artifact_id>-<platform>/packages/<pkg_type>
 
 Usage:
     # GitHub Actions output format
@@ -32,6 +32,8 @@ Usage:
         --is-fork false \\
         --pkg-type deb \\
         --artifact-id 12345678 \\
+        --rocm-version "8.1.0~dev20251203" \\
+        --platform linux \\
         --output-format github
 
     # Environment variables format
@@ -41,15 +43,18 @@ Usage:
         --is-fork false \\
         --pkg-type rpm \\
         --artifact-id 12345678 \\
+        --platform linux \\
         --output-format env
 
-    # JSON format
+    # JSON format with prerelease
     python get_s3_config.py \\
-        --release-type nightly \\
+        --release-type prerelease \\
         --repository "ROCm/TheRock" \\
         --is-fork false \\
         --pkg-type deb \\
         --artifact-id 12345678 \\
+        --rocm-version "8.1.0~pre2" \\
+        --platform linux \\
         --output-format json
 """
 
@@ -97,6 +102,7 @@ def generate_package_repository_url(
     pkg_type: str,
     yyyymmdd: str,
     artifact_id: str,
+    platform: str = "linux",
 ) -> str:
     """
     Generate the public repository URL for package installation.
@@ -106,12 +112,13 @@ def generate_package_repository_url(
         pkg_type: Package type ('deb' or 'rpm')
         yyyymmdd: Date string in YYYYMMDD format
         artifact_id: Artifact/run ID
+        platform: Platform name ('linux' or 'windows'), defaults to 'linux'
 
     Returns:
         Public repository URL for package installation instructions
 
     Examples:
-        CI:         https://therock-ci-artifacts.s3.amazonaws.com/v3/packages/deb/20260320-12345678
+        CI:         https://therock-ci-artifacts.s3.amazonaws.com/12345678-linux/packages/deb
         Nightly:    https://rocm.nightlies.amd.com/deb/20260320-12345678
         Prerelease: https://rocm.prereleases.amd.com/packages/ubuntu2404 (deb) or .../rhel10 (rpm)
         Release:    https://repo.amd.com/rocm/packages/ubuntu2404 (deb) or .../rhel10 (rpm)
@@ -132,7 +139,7 @@ def generate_package_repository_url(
         return f"https://therock-dev-packages.s3.amazonaws.com/v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
     else:
         # CI builds (including empty release_type or 'ci')
-        return f"https://therock-ci-artifacts.s3.amazonaws.com/v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
+        return f"https://therock-ci-artifacts.s3.amazonaws.com/{artifact_id}-{platform}/packages/{pkg_type}"
 
 
 def determine_s3_config(
@@ -142,6 +149,7 @@ def determine_s3_config(
     pkg_type: str,
     artifact_id: str,
     rocm_version: Optional[str] = None,
+    platform: str = "linux",
 ) -> Tuple[str, str, str, str]:
     """
     Determine S3 bucket, prefix, job type, and public repository URL based on inputs.
@@ -153,10 +161,21 @@ def determine_s3_config(
         pkg_type: Package type ('deb' or 'rpm')
         artifact_id: Artifact/run ID for versioning
         rocm_version: ROCm package version string (for date extraction)
+        platform: Platform name ('linux' or 'windows'), defaults to 'linux'
 
     Returns:
         Tuple of (s3_bucket, s3_prefix, job_type, package_repository_url)
+
+    Raises:
+        ValueError: If pkg_type is 'deb' or 'rpm' but platform is not 'linux'
     """
+    # Validate platform for native packages (deb/rpm are Linux-only)
+    if pkg_type in ("deb", "rpm") and platform != "linux":
+        raise ValueError(
+            f"Package type '{pkg_type}' is only supported on Linux platform, "
+            f"but platform is '{platform}'"
+        )
+
     # Extract date from version for consistency between version and S3 path
     yyyymmdd = extract_date_from_version(rocm_version)
 
@@ -179,14 +198,14 @@ def determine_s3_config(
     # Branch 2: Fork PRs or external repositories
     elif is_fork or repository != "ROCm/TheRock":
         s3_bucket = "therock-ci-artifacts-external"
-        s3_prefix = f"v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
+        s3_prefix = f"{artifact_id}-{platform}/packages/{pkg_type}"
         job_type = "ci"
         print(f"✓ Using external bucket: {s3_bucket}", file=sys.stderr)
 
     # Branch 3: Default - ROCm/TheRock non-fork (normal CI builds)
     else:
         s3_bucket = "therock-ci-artifacts"
-        s3_prefix = f"v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
+        s3_prefix = f"{artifact_id}-{platform}/packages/{pkg_type}"
         job_type = "ci"
         print(f"✓ Using default CI bucket: {s3_bucket}", file=sys.stderr)
 
@@ -196,6 +215,7 @@ def determine_s3_config(
         pkg_type=pkg_type,
         yyyymmdd=yyyymmdd,
         artifact_id=artifact_id,
+        platform=platform,
     )
 
     print(f"S3 bucket: {s3_bucket}", file=sys.stderr)
@@ -246,6 +266,13 @@ def main():
         help="ROCm package version string (for date extraction, e.g., '8.1.0~dev20251203')",
     )
     parser.add_argument(
+        "--platform",
+        required=False,
+        default="linux",
+        choices=["linux", "windows"],
+        help="Platform name (default: 'linux')",
+    )
+    parser.add_argument(
         "--output-format",
         choices=["env", "json", "github"],
         default="env",
@@ -265,6 +292,7 @@ def main():
         pkg_type=args.pkg_type,
         artifact_id=args.artifact_id,
         rocm_version=args.rocm_version,
+        platform=args.platform,
     )
 
     # Output in requested format

@@ -24,10 +24,11 @@ class GeneratePackageRepositoryUrlTest(unittest.TestCase):
             pkg_type="deb",
             yyyymmdd="20260320",
             artifact_id="12345678",
+            platform="linux",
         )
         self.assertEqual(
             url,
-            "https://therock-ci-artifacts.s3.amazonaws.com/v3/packages/deb/20260320-12345678",
+            "https://therock-ci-artifacts.s3.amazonaws.com/12345678-linux/packages/deb",
         )
 
     def test_nightly_url(self):
@@ -80,10 +81,11 @@ class GeneratePackageRepositoryUrlTest(unittest.TestCase):
             pkg_type="deb",
             yyyymmdd="20260320",
             artifact_id="99999999",
+            platform="linux",
         )
         self.assertEqual(
             url,
-            "https://therock-ci-artifacts.s3.amazonaws.com/v3/packages/deb/20260320-99999999",
+            "https://therock-ci-artifacts.s3.amazonaws.com/99999999-linux/packages/deb",
         )
 
 
@@ -205,7 +207,7 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
             rocm_version=None,
         )
         self.assertEqual(bucket, "therock-ci-artifacts")
-        self.assertIn("v3/packages/deb/", prefix)
+        self.assertEqual(prefix, "12345678-linux/packages/deb")
         self.assertEqual(job_type, "ci")
 
     def test_empty_release_type(self):
@@ -219,7 +221,7 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
             rocm_version=None,
         )
         self.assertEqual(bucket, "therock-ci-artifacts")
-        self.assertIn("v3/packages/deb/", prefix)
+        self.assertEqual(prefix, "12345678-linux/packages/deb")
         self.assertEqual(job_type, "ci")
 
 
@@ -237,7 +239,7 @@ class DetermineS3ConfigRepositoryTest(unittest.TestCase):
             rocm_version="8.1.0~dev20251203",
         )
         self.assertEqual(bucket, "therock-ci-artifacts-external")
-        self.assertEqual(prefix, "v3/packages/rpm/20251203-12345678")
+        self.assertEqual(prefix, "12345678-linux/packages/rpm")
         self.assertEqual(job_type, "ci")
 
     def test_external_repository(self):
@@ -251,7 +253,7 @@ class DetermineS3ConfigRepositoryTest(unittest.TestCase):
             rocm_version="8.1.0~dev20251203",
         )
         self.assertEqual(bucket, "therock-ci-artifacts-external")
-        self.assertEqual(prefix, "v3/packages/deb/20251203-12345678")
+        self.assertEqual(prefix, "12345678-linux/packages/deb")
         self.assertEqual(job_type, "ci")
 
     def test_default_rocm_therock(self):
@@ -265,7 +267,7 @@ class DetermineS3ConfigRepositoryTest(unittest.TestCase):
             rocm_version="8.1.0~dev20251203",
         )
         self.assertEqual(bucket, "therock-ci-artifacts")
-        self.assertEqual(prefix, "v3/packages/deb/20251203-12345678")
+        self.assertEqual(prefix, "12345678-linux/packages/deb")
         self.assertEqual(job_type, "ci")
 
 
@@ -358,6 +360,57 @@ class DetermineS3ConfigDateConsistencyTest(unittest.TestCase):
         )
         # Should use current date
         self.assertIn("20260312", prefix)
+
+
+class PlatformValidationTest(unittest.TestCase):
+    """Tests for platform validation with native packages."""
+
+    def test_deb_on_windows_raises_error(self):
+        """Test that deb packages on Windows platform raises ValueError."""
+        with self.assertRaises(ValueError) as context:
+            get_s3_config.determine_s3_config(
+                release_type="ci",
+                repository="ROCm/TheRock",
+                is_fork=False,
+                pkg_type="deb",
+                artifact_id="12345678",
+                rocm_version=None,
+                platform="windows",
+            )
+        self.assertIn("deb", str(context.exception))
+        self.assertIn("Linux", str(context.exception))
+        self.assertIn("windows", str(context.exception))
+
+    def test_rpm_on_windows_raises_error(self):
+        """Test that rpm packages on Windows platform raises ValueError."""
+        with self.assertRaises(ValueError) as context:
+            get_s3_config.determine_s3_config(
+                release_type="dev",
+                repository="ROCm/TheRock",
+                is_fork=False,
+                pkg_type="rpm",
+                artifact_id="12345678",
+                rocm_version="8.1.0~dev20251203",
+                platform="windows",
+            )
+        self.assertIn("rpm", str(context.exception))
+        self.assertIn("Linux", str(context.exception))
+        self.assertIn("windows", str(context.exception))
+
+    def test_deb_on_linux_succeeds(self):
+        """Test that deb packages on Linux platform works correctly."""
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
+            release_type="ci",
+            repository="ROCm/TheRock",
+            is_fork=False,
+            pkg_type="deb",
+            artifact_id="12345678",
+            rocm_version=None,
+            platform="linux",
+        )
+        self.assertEqual(bucket, "therock-ci-artifacts")
+        self.assertEqual(prefix, "12345678-linux/packages/deb")
+        self.assertEqual(job_type, "ci")
 
 
 if __name__ == "__main__":

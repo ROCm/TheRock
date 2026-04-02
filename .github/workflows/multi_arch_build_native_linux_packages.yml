@@ -7,10 +7,6 @@ on:
         description: "Semicolon-separated list of all GPU families (e.g., 'gfx94X-dcgpu;gfx120X-all')"
         required: true
         type: string
-      artifact_group:
-        type: string
-        description: "Artifact group for fetching artifacts (e.g., 'multi-arch-release' for multi-arch builds). Note: This parameter is unused currently"
-        required: true
       artifact_run_id:
         description: "Workflow run id to download the artifacts from"
         required: true
@@ -106,6 +102,7 @@ jobs:
             --pkg-type "${{ inputs.native_package_type }}" \
             --artifact-id "${{ env.ARTIFACT_RUN_ID }}" \
             --rocm-version "${{ inputs.rocm_version }}" \
+            --platform linux \
             --output-format github >> $GITHUB_OUTPUT
 
       - name: Determine IAM role
@@ -169,8 +166,7 @@ jobs:
 
       - name: Configure AWS Credentials
         # Only assume OIDC role for authorized repositories (ROCm/TheRock, ROCm/rockrel).
-        # This blocks fork PRs from accessing internal S3 buckets while allowing both
-        # CI builds (TheRock) and release builds (rockrel) to upload packages.
+        # Allowing both CI builds (TheRock) and release builds (rockrel) to upload packages.
         if: ${{ (github.repository == 'ROCm/TheRock' || github.repository == 'ROCm/rockrel') && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
         with:
