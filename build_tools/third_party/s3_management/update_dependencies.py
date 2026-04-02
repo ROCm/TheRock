@@ -13,22 +13,6 @@ from boto3.resources.base import ServiceResource
 import re
 
 
-# Note: v2-staging first, in case issues are observed while the script runs
-# and the developer wants to more safely cancel the script.
-VERSIONS = ["v2-staging", "v2"]
-
-SUBFOLDERS = [
-    "gfx101X-dgpu",
-    "gfx103X-dgpu",
-    "gfx110X-all",
-    "gfx1150",
-    "gfx1151",
-    "gfx120X-all",
-    "gfx90X-dcgpu",
-    "gfx94X-dcgpu",
-    "gfx950-dcgpu",
-]
-
 # Whitelist of allowed wheel platform and Python tags.
 # Wheels not matching both criteria are skipped (not uploaded to S3).
 
@@ -83,8 +67,62 @@ def get_project_paths() -> List[str]:
 
 def get_s3_bucket(bucket_name: str | None = None) -> ServiceResource:
     s3 = boto3.resource("s3")
-    resolved_bucket_name = bucket_name or getenv("S3_BUCKET_PY", "therock-dev-python")
+    resolved_bucket_name = bucket_name or getenv("S3_BUCKET_PY")
+    if not resolved_bucket_name:
+        raise RuntimeError("Bucket must be provided via --bucket or S3_BUCKET_PY")
     return s3.Bucket(resolved_bucket_name)
+
+
+def detect_prefixes_from_bucket(
+    bucket: ServiceResource, base_prefix: str
+) -> List[str]:
+    normalized_base_prefix = base_prefix.rstrip("/") + "/"
+    print(f"INFO: Auto-detecting prefixes under '{normalized_base_prefix}'")
+
+    client = boto3.client("s3")
+    paginator = client.get_paginator("list_objects_v2")
+    page_iterator = paginator.paginate(
+        Bucket=bucket.name,
+        Prefix=normalized_base_prefix,
+        Delimiter="/",
+    )
+
+    prefixes: set[str] = set()
+    for page in page_iterator:
+        for common_prefix in page.get("CommonPrefixes", []):
+            prefixes.add(common_prefix["Prefix"].rstrip("/"))
+
+    detected_prefixes = sorted(prefixes)
+    print(f"INFO: Detected prefixes: {detected_prefixes}")
+    return detected_prefixes
+
+
+def resolve_target_prefixes(
+    *,
+    bucket: ServiceResource,
+    explicit_prefix: str | None = None,
+    auto_detect_prefixes: bool = False,
+    starting_from: str | None = None,
+) -> List[str]:
+    if explicit_prefix:
+        return [explicit_prefix.rstrip("/")]
+
+    if starting_from and not auto_detect_prefixes:
+        raise RuntimeError(
+            "--auto-detect-prefixes must be provided when using --starting-from"
+        )
+
+    if auto_detect_prefixes:
+        if not starting_from:
+            raise RuntimeError(
+                "--starting-from must be provided when using --auto-detect-prefixes"
+            )
+        return detect_prefixes_from_bucket(bucket, starting_from)
+
+    raise RuntimeError(
+        "Must provide either --prefix or --auto-detect-prefixes with "
+        "--starting-from"
+    )
 
 
 def download(url: str) -> bytes:
@@ -219,6 +257,9 @@ def run_update_dependencies(
     dry_run: bool = False,
     only_pypi: bool = False,
     bucket_name: str | None = None,
+    prefix: str | None = None,
+    auto_detect_prefixes: bool = False,
+    starting_from: str | None = None,
 ) -> None:
     print(f"Running update_dependencies for package={package}, dry_run={dry_run}")
 
@@ -229,41 +270,63 @@ def run_update_dependencies(
         )
 
     bucket = get_s3_bucket(bucket_name)
+    selected_packages = {
+        pkg_name: pkg_info
+        for pkg_name, pkg_info in PACKAGES_PER_PROJECT.items()
+        if pkg_info["project"] == package
+    }
+    target_prefixes = resolve_target_prefixes(
+        bucket=bucket,
+        explicit_prefix=prefix,
+        auto_detect_prefixes=auto_detect_prefixes,
+        starting_from=starting_from,
+    )
 
-    for prefix in SUBFOLDERS:
-        # Filter packages by the selected project path
-        selected_packages = {
-            pkg_name: pkg_info
-            for pkg_name, pkg_info in PACKAGES_PER_PROJECT.items()
-            if pkg_info["project"] == package
-        }
-        for version in VERSIONS:
-            for pkg_name, pkg_info in selected_packages.items():
-                if "target" in pkg_info and pkg_info["target"] != "":
-                    full_path = f"{version}/{prefix}/{pkg_info['target']}"
-                else:
-                    full_path = f"{version}/{prefix}"
+    for full_path in target_prefixes:
+        for pkg_name, pkg_info in selected_packages.items():
+            pkg_prefix = full_path
+            if "target" in pkg_info and pkg_info["target"] != "":
+                pkg_prefix = f"{full_path}/{pkg_info['target']}"
 
-                for target_version in pkg_info["versions"]:
-                    upload_missing_whls(
-                        bucket,
-                        pkg_name,
-                        full_path,
-                        dry_run=dry_run,
-                        only_pypi=only_pypi,
-                        target_version=target_version,
-                    )
+            for target_version in pkg_info["versions"]:
+                upload_missing_whls(
+                    bucket,
+                    pkg_name,
+                    pkg_prefix,
+                    dry_run=dry_run,
+                    only_pypi=only_pypi,
+                    target_version=target_version,
+                )
 
 
 def main() -> None:
     from argparse import ArgumentParser
 
-    default_bucket_name = getenv("S3_BUCKET_PY", "therock-dev-python")
-    parser = ArgumentParser(
-        f"Upload dependent packages to s3://{default_bucket_name}"
-    )
+    parser = ArgumentParser("Upload dependent packages to S3")
     project_paths = get_project_paths()
     parser.add_argument("--package", choices=project_paths, default="torch")
+    parser.add_argument("--bucket", type=str, help="S3 bucket name")
+    parser.add_argument(
+        "--prefix",
+        type=str,
+        help="Explicit prefix to update",
+    )
+    parser.add_argument(
+        "--auto-detect-prefixes",
+        action="store_true",
+        help=(
+            "Automatically detect architecture prefixes under the given base "
+            "path using S3 CommonPrefixes."
+        ),
+    )
+    parser.add_argument(
+        "--starting-from",
+        type=str,
+        help=(
+            "Base prefix for auto-detection (e.g. v2/, v2-staging/, v3/). "
+            "Required when using --auto-detect-prefixes."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--only-pypi", action="store_true")
 
@@ -273,6 +336,10 @@ def main() -> None:
         package=args.package,
         dry_run=args.dry_run,
         only_pypi=args.only_pypi,
+        bucket_name=args.bucket,
+        prefix=args.prefix,
+        auto_detect_prefixes=args.auto_detect_prefixes,
+        starting_from=args.starting_from,
     )
 
 
