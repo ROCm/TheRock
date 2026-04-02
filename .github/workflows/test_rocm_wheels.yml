@@ -89,7 +89,9 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
-      - name: Setup venv and install 'rocm[libraries]'
+      # Key off install_libraries success (not test_libraries) so devel install/test still run
+      - name: Install rocm[libraries]
+        id: install_libraries
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages "rocm[libraries]==${{ inputs.rocm_version }}" \
@@ -99,15 +101,20 @@ jobs:
             --activate-in-future-github-actions-steps
 
       - name: Show installed packages (libraries)
+        if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
         run: |
           pip freeze
 
-      - name: Run 'rocm-sdk test' with 'rocm[libraries]' installed
+      - name: Test rocm[libraries]
+        id: test_libraries
+        if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
         timeout-minutes: 5
         run: |
           rocm-sdk test
 
-      - name: Install 'rocm[libraries,devel]' into existing venv
+      - name: Install rocm[libraries,devel]
+        id: install_devel
+        if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages "rocm[libraries,devel]==${{ inputs.rocm_version }}" \
@@ -116,10 +123,12 @@ jobs:
             --find-links=${{ inputs.package_find_links_url }}
 
       - name: Show installed packages (libraries,devel)
+        if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}
         run: |
           pip freeze
 
-      - name: Run 'rocm-sdk test' with 'rocm[libraries,devel]' installed
+      - name: Test rocm[libraries,devel]
+        if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}
         timeout-minutes: 5
         run: |
           rocm-sdk test
