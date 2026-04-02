@@ -18,10 +18,10 @@ TheRock uses a multi-stage CI pipeline that splits the build into stages (founda
 
 ```mermaid
 graph TD
-    A[generic build] --> B1[arch build (gfx94X-dcgpu)]
-    A[generic build] --> B2[arch build (gfx110X-dgpu)]
-    B1 --> C[test (gfx94X-dcgpu)]
-    B2 --> D[test (gfx110X-dgpu)]
+    A[generic build] --> B1[arch build \(gfx94X-dcgpu\)]
+    A[generic build] --> B2[arch build \(gfx110X-dgpu\)]
+    B1 --> C[test \(gfx94X-dcgpu\)]
+    B2 --> D[test \(gfx110X-dgpu\)]
 ```
 
 Each stage runs as a separate job, uploads its artifacts and logs to S3, then downstream stages download and build on top of them. This allows for:
