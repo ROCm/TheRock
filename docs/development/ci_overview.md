@@ -8,7 +8,7 @@ TheRock CI follows this workflow:
 
 1. **Build** ROCm from source via TheRock on CPU machines
 1. **Upload** build artifacts to S3 (public-read buckets)
-2. **Test** downloads and tests artifacts on GPU machines for testing
+1. **Test** downloads and tests artifacts on GPU machines for testing
 
 Instead of Jenkins and Groovy pipelines, TheRock uses **GitHub Actions** workflows defined in YAML files under `.github/workflows/`.
 
@@ -20,7 +20,7 @@ TheRock uses a multi-stage CI pipeline that splits the build into stages (founda
 graph LR
     A[Core build stage]
     A --> C1[Math-Libs build gfx1151]
-    A --> C2[Math-Libs buold gfx110X-all]
+    A --> C2[Math-Libs build gfx110X-all]
     A --> C3[Math-Libs build gfx94X-dcgpu]
     C1 --> D1[Test gfx1151]
     C2 --> D2[Test gfx110X-all]
@@ -36,8 +36,10 @@ Each stage runs as a separate job, uploads its artifacts and logs to S3, then do
 **Key workflow files:**
 
 - [`.github/workflows/multi_arch_ci.yml`](/.github/workflows/multi_arch_ci.yml) - Main entry point
-- [`.github/workflows/multi_`](https://github.com/ROCm/TheRock/blob/main/.github/workflows/multi_arch_ci_linux.yml)
-- [`.github/workflows/multi_arch_build_portable_linux_artifacts.yml`](/.github/workflows/multi_arch_build_portable_linux_artifacts.yml) - Build orchestration
+  - [`.github/workflows/multi_arch_ci_linux.yml`](/.github/workflows/multi_arch_ci_linux.yml) - build rocm, test rocm, build rocm python, build pytorch for Linux
+  - [`.github/workflows/multi_arch_build_portable_linux.yml`](/.github/workflows/multi_arch_build_portable_linux.yml) - Linux stages for "build rocm"
+  - [`.github/workflows/multi_arch_ci_windows.yml`](/.github/workflows/multi_arch_ci_windows.yml) - build rocm, test rocm, build rocm python, build pytorch for Windows
+  - [`.github/workflows/multi_arch_build_windows.yml`](/.github/workflows/multi_arch_build_windows.yml) - Windows stages for "build rocm"
 
 ## Build Phase
 
@@ -45,12 +47,11 @@ TheRock builds ROCm components from source and produces **artifacts** - archive 
 
 ```mermaid
 graph LR
-    A[Configure CMake] --> B[Build with Ninja]
-    B --> C[Package Artifacts]
-    C --> D[Upload to S3]
+    A[Configure CMake] --> B[CMake Build]
+    B --> D[Upload to S3]
 ```
 
-**What gets built:** Compiler (LLVM), core runtime (HIP, ROCr), math libraries (rocBLAS, rocFFT), ML libraries (MIOpen), media libraries (rocDecode, rocJPEG), and more.
+**What gets built:** Compiler (LLVM, etc.), core runtime (HIP, ROCr, etc.), math libraries (rocBLAS, rocFFT, etc.), ML libraries (MIOpen, etc.), media libraries (rocDecode, rocJPEG), and more.
 
 **Artifact organization:** Each component is packaged into separate archives by sub-components (lib, run, dev, doc, test). See [artifacts.md](artifacts.md) for complete details on artifact structure and naming conventions.
 
@@ -60,24 +61,13 @@ graph LR
 
 TheRock uses Amazon S3 for artifact storage. **All artifact buckets are public-read**, so no authentication is needed to download them.
 
-**CI Buckets (build outputs):**
-
-- `therock-ci-artifacts` - Builds from `ROCm/TheRock`
-- `therock-ci-artifacts-external` - Builds from forks and downstream repos (`rocm-libraries`, `rocm-systems`)
-
-**Release Buckets:**
-
-- `therock-nightly-artifacts` - Nightly builds
-- `therock-dev-artifacts` - Development builds
-- `therock-prerelease-artifacts` - Pre-release builds
-
 See [s3_buckets.md](s3_buckets.md) for the complete bucket list and authentication details for uploads.
 
 ### Accessing Artifacts
 
-Download artifacts using the `install_rocm_from_artifacts.py` script, which handles fetching from S3 and extracting to the correct locations.
+Download artifacts using the [`fetch_artifacts.py`](https://github.com/ROCm/TheRock/blob/main/build_tools/fetch_artifacts.py) script, which handles fetching from S3 and extracting to the correct locations.
 
-See [installing_artifacts.md](installing_artifacts.md) for detailed instructions on:
+See [installing_artifacts.md](installing_artifacts.md) for detailed instructions on how the CI system installs artifacts:
 
 - Finding GitHub run IDs
 - Selecting components to download
@@ -90,8 +80,7 @@ Tests are defined in [`fetch_test_configurations.py`](../../build_tools/github_a
 
 ```mermaid
 graph LR
-    A[Download Artifacts from S3] --> B[Sanity Check]
-    B --> C[Configure Test Matrix]
+    A[Configure Test Matrix] --> C[Sanity Check]
     C --> D1[Test rocBLAS]
     C --> D2[Test rocFFT]
     C --> D3[Test MIOpen]
@@ -108,19 +97,25 @@ See [adding_tests.md](adding_tests.md) for how to add new tests to the CI pipeli
 
 ## Common CI Tasks
 
+### Viewing logs
+
+After a CI completes, you will be able to see a GitHub Step Summary in the `Summary` page of the CI run.
+
+<img src="./assets/step_summary.png"/>
+
+You are able to find the index pages for artifacts and logs, as well as additional CI information.
+
 ### Trigger a CI Run
 
-**For PRs:** CI runs automatically on every push and when labels are added.
+CI runs on:
 
-**For specific GPU families:** Add a label to your PR (e.g., `gfx1151-linux`, `gfx94X-windows`)
+- [`workflow_dispatch`](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml) of `multi_arch_ci`
+  - if a build is already available in CI, you are able to re-use those artifacts for test runs. See `ci_behavior_manipulation.md` doc below.
+- `pull_request`
+- `push` to `main` branch
+- `schedule`: nightly runs
 
-**Manual trigger:** Use the "Run workflow" button on the [Multi-Arch CI workflow page](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)
-
-### Download Artifacts from a CI Run
-
-Use `install_rocm_from_artifacts.py` with a run ID from the GitHub Actions UI.
-
-See [installing_artifacts.md](installing_artifacts.md) for detailed instructions on finding run IDs and selecting components.
+See [`ci_behavior_manipulation.md`](https://github.com/ROCm/TheRock/blob/main/docs/development/ci_behavior_manipulation.md) on ways to trigger and manipulate the CI
 
 ### Run Specific Tests
 
