@@ -404,8 +404,9 @@ disable_platforms = ["windows"]
 [artifacts.elfio]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = ["amd-llvm"]
+artifact_deps = []
 feature_group = "CORE"
+disable_platforms = ["windows"]
 
 [artifacts.fftw3]
 artifact_group = "third-party-libs"
