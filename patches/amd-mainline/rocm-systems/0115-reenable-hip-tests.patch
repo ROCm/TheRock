@@ -1,0 +1,31 @@
+From 6793160db69f959e0d5f4375c12801a64c0bbded Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 2 Apr 2026 19:00:59 +0000
+Subject: [PATCH] Re-enable hip-test
+
+---
+ projects/hip-tests/catch/unit/CMakeLists.txt | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/projects/hip-tests/catch/unit/CMakeLists.txt b/projects/hip-tests/catch/unit/CMakeLists.txt
+index 2737ea9da3..49a3863124 100644
+--- a/projects/hip-tests/catch/unit/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/CMakeLists.txt
+@@ -51,11 +51,9 @@ add_subdirectory(virtualMemoryManagement)
+ # TODO Rock build failures
+ if(UNIX)
+   add_subdirectory(atomics)
+-  if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+-      add_subdirectory(math)
+-      # TODO compute build failures
+-      add_subdirectory(deviceLib)
+-  endif()
++  add_subdirectory(math)
++  # TODO compute build failures
++  add_subdirectory(deviceLib)
+   add_subdirectory(syncthreads)
+ endif()
+ if(HIP_PLATFORM STREQUAL "amd")
+-- 
+2.47.3
+

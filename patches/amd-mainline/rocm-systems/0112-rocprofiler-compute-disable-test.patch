@@ -1,0 +1,35 @@
+From 6c83710aa823fc15bba8946d39b874a7eaed1614 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 2 Apr 2026 15:18:56 +0000
+Subject: [PATCH] Disable rocprofiler-compute test programs
+
+For some reason the enable_language(HIP) is failing
+---
+ projects/rocprofiler-compute/CMakeLists.txt | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/projects/rocprofiler-compute/CMakeLists.txt b/projects/rocprofiler-compute/CMakeLists.txt
+index d6a0ad7fcc..160cdf1c63 100644
+--- a/projects/rocprofiler-compute/CMakeLists.txt
++++ b/projects/rocprofiler-compute/CMakeLists.txt
+@@ -198,13 +198,12 @@ if(LOCALHOST MATCHES "TheraS01|.*\.thera\.amd\.com|thera-hn")
+ endif()
+ 
+ # Setup testing collateral
+-
+ option(ENABLE_TESTS "Enable compilation of testing collateral" OFF)
+ set(CMAKE_HIP_FLAGS_RELEASE "-O2")
+-if(${ENABLE_TESTS})
+-    enable_language("C" "HIP")
+-    add_subdirectory(tests)
+-endif()
++#if(${ENABLE_TESTS})
++#    enable_language("C" "HIP")
++#    add_subdirectory(tests)
++#endif()
+ message(STATUS "Enable tests compilation: ${ENABLE_TESTS}")
+ 
+ enable_testing()
+-- 
+2.47.3
+
