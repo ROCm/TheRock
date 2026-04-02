@@ -24,6 +24,10 @@ import logging
 import shlex
 from pathlib import Path
 
+# Import the ctest retry helper
+sys.path.append(str(Path(__file__).resolve().parent))
+from ctest_retry_helper import parse_not_run_tests, retry_not_run_tests
+
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
@@ -271,7 +275,29 @@ def main():
     # Execute the command
     try:
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-        result = subprocess.run(cmd, cwd=THEROCK_DIR, env=environ_vars, check=False)
+        result = subprocess.run(
+            cmd,
+            cwd=THEROCK_DIR,
+            env=environ_vars,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        # Print output for visibility
+        print(result.stdout)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+
+        # Check for tests that were not run
+        not_run_tests = parse_not_run_tests(result.stdout)
+
+        # Retry not-run tests if any were found
+        if not_run_tests:
+            retry_result = retry_not_run_tests(cmd, not_run_tests, THEROCK_DIR, environ_vars)
+            if retry_result != 0:
+                return retry_result
+
         return result.returncode
     except Exception as e:
         print(f"Error running ctest: {e}", file=sys.stderr)

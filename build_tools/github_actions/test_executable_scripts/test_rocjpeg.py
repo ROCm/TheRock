@@ -7,6 +7,10 @@ from pathlib import Path
 import sys
 import platform
 
+# Import the ctest retry helper
+sys.path.append(str(Path(__file__).resolve().parent))
+from ctest_retry_helper import run_ctest_with_retry
+
 logging.basicConfig(level=logging.INFO)
 THEROCK_BIN_DIR_STR = os.getenv("THEROCK_BIN_DIR")
 if THEROCK_BIN_DIR_STR is None:
@@ -92,7 +96,9 @@ def execute_tests(env):
         "--output-on-failure",
     ]
     logging.info(f"++ Exec [{ROCJPEG_TEST_DIR}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, cwd=ROCJPEG_TEST_DIR, check=True, env=env)
+    exit_code = run_ctest_with_retry(cmd, ROCJPEG_TEST_DIR, env)
+    if exit_code != 0:
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":

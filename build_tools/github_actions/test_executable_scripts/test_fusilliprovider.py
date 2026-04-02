@@ -4,8 +4,12 @@
 import logging
 import os
 import shlex
-import subprocess
+import sys
 from pathlib import Path
+
+# Import the ctest retry helper
+sys.path.append(str(Path(__file__).resolve().parent))
+from ctest_retry_helper import run_ctest_with_retry
 
 THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -51,9 +55,6 @@ environ_vars["PATH"] = f"{THEROCK_BIN_DIR}:{environ_vars['PATH']}"
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 if test_type == "quick":
     logging.info("   TEST_TYPE=quick: Excluding Full* tests via GTEST_FILTER")
-subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=True,
-    env=environ_vars,
-)
+
+exit_code = run_ctest_with_retry(cmd, THEROCK_DIR, environ_vars)
+sys.exit(exit_code)

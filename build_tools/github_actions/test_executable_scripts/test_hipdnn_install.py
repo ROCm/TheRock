@@ -15,9 +15,13 @@ import logging
 import os
 import platform
 import shlex
-import subprocess
+import sys
 import tempfile
 from pathlib import Path
+
+# Import the ctest retry helper
+sys.path.append(str(Path(__file__).resolve().parent))
+from ctest_retry_helper import run_ctest_with_retry
 
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -99,7 +103,9 @@ def run_tests(build_dir: Path):
         "120",
     ]
     logging.info(f"++ Test: {shlex.join(test_cmd)}")
-    subprocess.run(test_cmd, check=True, cwd=THEROCK_DIR, env=environ_vars)
+    exit_code = run_ctest_with_retry(test_cmd, THEROCK_DIR, environ_vars)
+    if exit_code != 0:
+        sys.exit(exit_code)
 
 
 def run_list_engines_test():

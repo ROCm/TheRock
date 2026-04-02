@@ -4,9 +4,12 @@
 import logging
 import os
 import shlex
-import subprocess
-from pathlib import Path
 import sys
+from pathlib import Path
+
+# Import the ctest retry helper
+sys.path.append(str(Path(__file__).resolve().parent))
+from ctest_retry_helper import run_ctest_with_retry
 
 # Base Paths
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -102,12 +105,9 @@ def execute_tests():
     ]
 
     logging.info(f"++ Exec [{ROCPROFILER_SDK_TESTS_PATH}]$ {shlex.join(ctest_cmd)}")
-    subprocess.run(
-        ctest_cmd,
-        cwd=ROCPROFILER_SDK_TESTS_PATH,
-        check=True,
-        env=environ_vars,
-    )
+    exit_code = run_ctest_with_retry(ctest_cmd, ROCPROFILER_SDK_TESTS_PATH, environ_vars)
+    if exit_code != 0:
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":

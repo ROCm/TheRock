@@ -4,8 +4,12 @@
 import logging
 import os
 import shlex
-import subprocess
+import sys
 from pathlib import Path
+
+# Import the ctest retry helper
+sys.path.append(str(Path(__file__).resolve().parent))
+from ctest_retry_helper import run_ctest_with_retry
 
 # Resolve paths
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -84,12 +88,9 @@ def execute_tests():
         cmd.append("|".join(QUICK_TESTS))
 
     logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(cmd)}")
-    subprocess.run(
-        cmd,
-        cwd=THEROCK_PATH,
-        check=True,
-        env=environ_vars,
-    )
+    exit_code = run_ctest_with_retry(cmd, THEROCK_PATH, environ_vars)
+    if exit_code != 0:
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":
