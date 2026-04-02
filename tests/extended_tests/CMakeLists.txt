@@ -11,7 +11,7 @@ if(NOT WIN32 AND THEROCK_ENABLE_HIP_RUNTIME)
   # then loads, executes, and verifies each variant.
   therock_cmake_subproject_declare(cov-backward-compat
     EXTERNAL_SOURCE_DIR
-      "${CMAKE_CURRENT_SOURCE_DIR}/functional/sources"
+      "${CMAKE_CURRENT_SOURCE_DIR}/functional/srcs"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/cov-backward-compat"
     BACKGROUND_BUILD
     DISABLE_AMDGPU_TARGETS
