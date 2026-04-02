@@ -12,6 +12,5 @@ include = [
 [components.doc."core/ocl-clr/stage"]
 [components.test."core/ocl-clr/stage"]
 include = [
-  "tests/**",
-  "share/opencl/**",
+  "bin/**",
 ]
