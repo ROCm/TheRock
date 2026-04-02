@@ -162,15 +162,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../../../lib;$ORIGIN/../../rocm_sysdeps/lib")
 endif()
 
-# Disable the LLVM mega-driver (llvm-driver / llvm.exe).  When enabled, tools
-# with GENERATE_DRIVER (including lld and clang) are compiled as object
-# libraries linked into a single "llvm" binary; individual tool names become
-# copies/symlinks of it.  However, lld's own name is NOT registered as a
-# driver alias -- only its sub-names (lld-link, ld.lld, …) are.  The Clang
-# HIP driver calls GetProgramPath("lld") which requires a real lld.exe, so
-# the mega-driver leaves the HIP pipeline broken on Windows.
-set(LLVM_TOOL_LLVM_DRIVER_BUILD OFF CACHE BOOL "Disable LLVM mega-driver" FORCE)
-
 # Disable all implicit LLVM tools by default so that we can allow-list just what
 # we want. It is unfortunate that LLVM doesn't have a global option to do this
 # bulk disabling. In the absence of that, we manually generate options using
@@ -197,9 +188,10 @@ function(therock_set_implicit_llvm_options type tools_dir required_tool_names)
   endforeach()
 endfunction()
 
-# When LLVM tests, tools, or Comgr tests are enabled, build all tools (don't selectively disable).
-# Otherwise, only build the minimum required tools for production.
-if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS AND NOT THEROCK_BUILD_COMGR_TESTS AND NOT THEROCK_ENABLE_LLVM_TESTS)
+# When LLVM tests or tools are explicitly enabled, build all tools (don't selectively disable).
+# Comgr tests only need the production tool set plus LLVM_INSTALL_UTILS (FileCheck, not, count),
+# so they don't skip selective disabling -- the mega-driver is naturally disabled by the allow-list.
+if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS AND NOT THEROCK_ENABLE_LLVM_TESTS)
   block()
     # This list contains the minimum tooling that must be enabled to build LLVM.
     # It is empically derived (either configure or ninja invocation will fail

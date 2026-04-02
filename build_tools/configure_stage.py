@@ -162,7 +162,6 @@ def generate_cmake_args(
         args.append(f"-DTHEROCK_ENABLE_{feature}=ON")
 
     if stage_name == "compiler-runtime":
-        args.append("-DTHEROCK_BUILD_TESTING=OFF")
         args.append("-DTHEROCK_BUILD_COMGR_TESTS=ON")
 
     return args
