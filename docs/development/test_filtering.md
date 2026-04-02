@@ -5,6 +5,7 @@
 ## Types of filters
 
 - <b>quick</b>: A "sanity check" to ensure the system is fundamentally working
+
   - Runs on: pull requests (if ROCm non-component related change), push to main branch
   - Characteristics: Shallow validation, focus on critical paths, component runs properly
   - Execution time: < 5 min
