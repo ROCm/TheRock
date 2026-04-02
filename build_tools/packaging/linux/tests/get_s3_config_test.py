@@ -14,6 +14,79 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import get_s3_config
 
 
+class GeneratePackageRepositoryUrlTest(unittest.TestCase):
+    """Tests for package repository URL generation."""
+
+    def test_ci_url(self):
+        """Test CI build URL format."""
+        url = get_s3_config.generate_package_repository_url(
+            release_type="ci",
+            pkg_type="deb",
+            yyyymmdd="20260320",
+            artifact_id="12345678",
+        )
+        self.assertEqual(
+            url,
+            "https://therock-ci-artifacts.s3.amazonaws.com/v3/packages/deb/20260320-12345678",
+        )
+
+    def test_nightly_url(self):
+        """Test nightly build URL format."""
+        url = get_s3_config.generate_package_repository_url(
+            release_type="nightly",
+            pkg_type="rpm",
+            yyyymmdd="20260320",
+            artifact_id="87654321",
+        )
+        self.assertEqual(url, "https://rocm.nightlies.amd.com/rpm/20260320-87654321")
+
+    def test_prerelease_url(self):
+        """Test prerelease URL format with default OS profile (ubuntu2404 for deb)."""
+        url = get_s3_config.generate_package_repository_url(
+            release_type="prerelease",
+            pkg_type="deb",
+            yyyymmdd="20260320",
+            artifact_id="12345678",
+        )
+        self.assertEqual(url, "https://rocm.prereleases.amd.com/packages/ubuntu2404")
+
+    def test_release_url(self):
+        """Test release URL format with default OS profile (rhel10 for rpm)."""
+        url = get_s3_config.generate_package_repository_url(
+            release_type="release",
+            pkg_type="rpm",
+            yyyymmdd="20260320",
+            artifact_id="12345678",
+        )
+        self.assertEqual(url, "https://repo.amd.com/rocm/packages/rhel10")
+
+    def test_dev_url(self):
+        """Test dev build URL format."""
+        url = get_s3_config.generate_package_repository_url(
+            release_type="dev",
+            pkg_type="deb",
+            yyyymmdd="20260320",
+            artifact_id="11111111",
+        )
+        self.assertEqual(
+            url,
+            "https://therock-dev-packages.s3.amazonaws.com/v3/packages/deb/20260320-11111111",
+        )
+
+    def test_empty_release_type_uses_ci(self):
+        """Test that empty release type falls back to CI URL."""
+        url = get_s3_config.generate_package_repository_url(
+            release_type="",
+            pkg_type="deb",
+            yyyymmdd="20260320",
+            artifact_id="99999999",
+        )
+        self.assertEqual(
+            url,
+            "https://therock-ci-artifacts.s3.amazonaws.com/v3/packages/deb/20260320-99999999",
+        )
+
+
 class ExtractDateFromVersionTest(unittest.TestCase):
     """Tests for date extraction from ROCm package versions."""
 
@@ -67,7 +140,7 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
 
     def test_dev_release_type(self):
         """Test dev release type uses dev-packages bucket."""
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="dev",
             repository="ROCm/TheRock",
             is_fork=False,
@@ -81,7 +154,7 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
 
     def test_nightly_release_type(self):
         """Test nightly release type uses nightly-packages bucket."""
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="nightly",
             repository="ROCm/TheRock",
             is_fork=False,
@@ -95,7 +168,7 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
 
     def test_prerelease_release_type(self):
         """Test prerelease uses prerelease-packages bucket without date."""
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="prerelease",
             repository="ROCm/TheRock",
             is_fork=False,
@@ -109,7 +182,7 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
 
     def test_release_release_type(self):
         """Test release uses release-packages bucket without date."""
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="release",
             repository="ROCm/TheRock",
             is_fork=False,
@@ -123,7 +196,7 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
 
     def test_ci_release_type(self):
         """Test 'ci' release type falls through to CI bucket logic."""
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="ci",
             repository="ROCm/TheRock",
             is_fork=False,
@@ -137,7 +210,7 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
 
     def test_empty_release_type(self):
         """Test empty release type falls through to CI bucket logic."""
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="",
             repository="ROCm/TheRock",
             is_fork=False,
@@ -155,7 +228,7 @@ class DetermineS3ConfigRepositoryTest(unittest.TestCase):
 
     def test_fork_pr(self):
         """Test fork PR uses external bucket."""
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="",
             repository="ROCm/TheRock",
             is_fork=True,
@@ -169,7 +242,7 @@ class DetermineS3ConfigRepositoryTest(unittest.TestCase):
 
     def test_external_repository(self):
         """Test external repository uses external bucket."""
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="",
             repository="someone/fork",
             is_fork=False,
@@ -183,7 +256,7 @@ class DetermineS3ConfigRepositoryTest(unittest.TestCase):
 
     def test_default_rocm_therock(self):
         """Test default ROCm/TheRock uses ci-artifacts bucket."""
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="",
             repository="ROCm/TheRock",
             is_fork=False,
@@ -201,7 +274,7 @@ class DetermineS3ConfigPackageTypeTest(unittest.TestCase):
 
     def test_deb_package_type(self):
         """Test deb package type in prefix."""
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="dev",
             repository="ROCm/TheRock",
             is_fork=False,
@@ -213,7 +286,7 @@ class DetermineS3ConfigPackageTypeTest(unittest.TestCase):
 
     def test_rpm_package_type(self):
         """Test rpm package type in prefix."""
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="dev",
             repository="ROCm/TheRock",
             is_fork=False,
@@ -230,7 +303,7 @@ class DetermineS3ConfigDateConsistencyTest(unittest.TestCase):
     def test_date_extracted_from_deb_version(self):
         """Test date in S3 path matches date in deb version."""
         version = "8.1.0~dev20251203"
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="dev",
             repository="ROCm/TheRock",
             is_fork=False,
@@ -244,7 +317,7 @@ class DetermineS3ConfigDateConsistencyTest(unittest.TestCase):
     def test_date_extracted_from_rpm_version(self):
         """Test date in S3 path matches date in rpm version."""
         version = "8.1.0~20251203gf689a8e"
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="dev",
             repository="ROCm/TheRock",
             is_fork=False,
@@ -258,7 +331,7 @@ class DetermineS3ConfigDateConsistencyTest(unittest.TestCase):
     def test_date_extracted_from_wheel_version(self):
         """Test date in S3 path matches date in wheel version."""
         version = "7.10.0a20251021"
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="nightly",
             repository="ROCm/TheRock",
             is_fork=False,
@@ -275,7 +348,7 @@ class DetermineS3ConfigDateConsistencyTest(unittest.TestCase):
         mock_now = mock_datetime.now.return_value
         mock_now.strftime.return_value = "20260312"
 
-        bucket, prefix, job_type = get_s3_config.determine_s3_config(
+        bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="dev",
             repository="ROCm/TheRock",
             is_fork=False,

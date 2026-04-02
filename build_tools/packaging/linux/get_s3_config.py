@@ -92,6 +92,49 @@ def extract_date_from_version(version: Optional[str]) -> str:
     return datetime.now().strftime("%Y%m%d")
 
 
+def generate_package_repository_url(
+    release_type: str,
+    pkg_type: str,
+    yyyymmdd: str,
+    artifact_id: str,
+) -> str:
+    """
+    Generate the public repository URL for package installation.
+
+    Args:
+        release_type: Release type ('dev', 'nightly', 'prerelease', 'release', 'ci', or empty)
+        pkg_type: Package type ('deb' or 'rpm')
+        yyyymmdd: Date string in YYYYMMDD format
+        artifact_id: Artifact/run ID
+
+    Returns:
+        Public repository URL for package installation instructions
+
+    Examples:
+        CI:         https://therock-ci-artifacts.s3.amazonaws.com/v3/packages/deb/20260320-12345678
+        Nightly:    https://rocm.nightlies.amd.com/deb/20260320-12345678
+        Prerelease: https://rocm.prereleases.amd.com/packages/ubuntu2404 (deb) or .../rhel10 (rpm)
+        Release:    https://repo.amd.com/rocm/packages/ubuntu2404 (deb) or .../rhel10 (rpm)
+    """
+    if release_type == "nightly":
+        # Nightly packages use CDN domain
+        return f"https://rocm.nightlies.amd.com/{pkg_type}/{yyyymmdd}-{artifact_id}"
+    elif release_type == "prerelease":
+        # Prerelease packages use CDN domain with default OS profile
+        os_profile = "ubuntu2404" if pkg_type == "deb" else "rhel10"
+        return f"https://rocm.prereleases.amd.com/packages/{os_profile}"
+    elif release_type == "release":
+        # Release packages use official repo domain with default OS profile
+        os_profile = "ubuntu2404" if pkg_type == "deb" else "rhel10"
+        return f"https://repo.amd.com/rocm/packages/{os_profile}"
+    elif release_type == "dev":
+        # Dev packages use S3 direct URL
+        return f"https://therock-dev-packages.s3.amazonaws.com/v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
+    else:
+        # CI builds (including empty release_type or 'ci')
+        return f"https://therock-ci-artifacts.s3.amazonaws.com/v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
+
+
 def determine_s3_config(
     release_type: str,
     repository: str,
@@ -99,9 +142,9 @@ def determine_s3_config(
     pkg_type: str,
     artifact_id: str,
     rocm_version: Optional[str] = None,
-) -> Tuple[str, str, str]:
+) -> Tuple[str, str, str, str]:
     """
-    Determine S3 bucket, prefix, and job type based on inputs.
+    Determine S3 bucket, prefix, job type, and public repository URL based on inputs.
 
     Args:
         release_type: Release type ('dev', 'nightly', 'prerelease', 'release', 'ci', or empty)
@@ -112,7 +155,7 @@ def determine_s3_config(
         rocm_version: ROCm package version string (for date extraction)
 
     Returns:
-        Tuple of (s3_bucket, s3_prefix, job_type)
+        Tuple of (s3_bucket, s3_prefix, job_type, package_repository_url)
     """
     # Extract date from version for consistency between version and S3 path
     yyyymmdd = extract_date_from_version(rocm_version)
@@ -147,11 +190,20 @@ def determine_s3_config(
         job_type = "ci"
         print(f"✓ Using default CI bucket: {s3_bucket}", file=sys.stderr)
 
+    # Generate public repository URL
+    package_repository_url = generate_package_repository_url(
+        release_type=release_type if release_type else "ci",
+        pkg_type=pkg_type,
+        yyyymmdd=yyyymmdd,
+        artifact_id=artifact_id,
+    )
+
     print(f"S3 bucket: {s3_bucket}", file=sys.stderr)
     print(f"S3 prefix: {s3_prefix}", file=sys.stderr)
     print(f"Job type: {job_type}", file=sys.stderr)
+    print(f"Package repository URL: {package_repository_url}", file=sys.stderr)
 
-    return s3_bucket, s3_prefix, job_type
+    return s3_bucket, s3_prefix, job_type, package_repository_url
 
 
 def main():
@@ -206,7 +258,7 @@ def main():
     is_fork = args.is_fork.lower() in ("true", "1", "yes")
 
     # Determine S3 configuration
-    s3_bucket, s3_prefix, job_type = determine_s3_config(
+    s3_bucket, s3_prefix, job_type, package_repository_url = determine_s3_config(
         release_type=args.release_type,
         repository=args.repository,
         is_fork=is_fork,
@@ -221,6 +273,7 @@ def main():
             "s3_bucket": s3_bucket,
             "s3_prefix": s3_prefix,
             "job_type": job_type,
+            "package_repository_url": package_repository_url,
         }
         print(json.dumps(output, indent=2))
     elif args.output_format == "github":
@@ -228,10 +281,12 @@ def main():
         print(f"s3_bucket={s3_bucket}")
         print(f"s3_prefix={s3_prefix}")
         print(f"job_type={job_type}")
+        print(f"package_repository_url={package_repository_url}")
     else:  # env format
         print(f"export S3_BUCKET={s3_bucket}")
         print(f"export S3_PREFIX={s3_prefix}")
         print(f"export JOB_TYPE={job_type}")
+        print(f"export PACKAGE_REPOSITORY_URL={package_repository_url}")
 
 
 if __name__ == "__main__":
