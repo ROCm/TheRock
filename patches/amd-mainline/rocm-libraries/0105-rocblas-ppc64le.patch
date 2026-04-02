@@ -1,35 +1,21 @@
-From 9abae93ca5e7746b030b5a8adc6db44e375ed5af Mon Sep 17 00:00:00 2001
+From 0f34f9a19ffd0d62ca5b9348284e06054a6e96f5 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 26 Mar 2026 19:38:27 +0000
+Date: Thu, 2 Apr 2026 21:13:20 +0000
 Subject: [PATCH] rocblas ppc64le
 
 ---
- projects/rocblas/CMakeLists.txt                   | 15 +++++++++++++++
- .../rocblas/clients/common/cblas_interface.cpp    |  5 +++++
- 2 files changed, 20 insertions(+)
+ projects/rocblas/CMakeLists.txt                     | 1 +
+ projects/rocblas/clients/common/cblas_interface.cpp | 5 +++++
+ 2 files changed, 6 insertions(+)
 
 diff --git a/projects/rocblas/CMakeLists.txt b/projects/rocblas/CMakeLists.txt
-index 016b9fe9c7..8aea65094b 100644
+index 016b9fe9c7..3cd5d1e340 100644
 --- a/projects/rocblas/CMakeLists.txt
 +++ b/projects/rocblas/CMakeLists.txt
-@@ -33,6 +33,21 @@ unset(ENV{ROCM_BUILD_ID})
+@@ -33,6 +33,7 @@ unset(ENV{ROCM_BUILD_ID})
  
  project( rocblas LANGUAGES CXX )
  
-+# Only apply this on PowerPC architectures
-+if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
-+  # 1. The Alias: Map the problematic _Float16 to the supported __fp16
-+  add_compile_definitions("$<$<COMPILE_LANGUAGE:CXX>:_Float16=__fp16>")
-+
-+  # 2. The Driver Flag: Tell Clang it's okay to pass these in registers
-+  # Note: Using -Xclang because the driver was complaining earlier
-+  set(PPC_PFE_FLAGS "-Xclang" "-fallow-half-arguments-and-returns")
-+  add_compile_options("$<$<OR:$<COMPILE_LANGUAGE:CXX>,$<COMPILE_LANGUAGE:C>>:${PPC_PFE_FLAGS}>")
-+
-+  # 3. The Operator Block: Stop the headers from trying to use GPU-only math operators on host
-+  add_compile_definitions("$<$<COMPILE_LANGUAGE:CXX>:__HIP_NO_HALF_OPERATORS__=1>")
-+  add_compile_definitions("$<$<COMPILE_LANGUAGE:CXX>:__HIP_NO_HALF_CONVERSIONS__=1>")
-+endif()
 +
  # Append our library helper cmake path and the cmake path for hip (for convenience)
  list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )

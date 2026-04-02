@@ -1,6 +1,6 @@
-From 43351e1d18b37c75a496231d4b961b50a429f2d9 Mon Sep 17 00:00:00 2001
+From d477f0cf73f9f843c7c8392666a4a953c9116c37 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 26 Mar 2026 19:38:27 +0000
+Date: Thu, 2 Apr 2026 21:13:20 +0000
 Subject: [PATCH] hipsparselt ppc64le
 
 ---

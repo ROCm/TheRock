@@ -1,54 +1,23 @@
-From 475ff52d8b356ec26a19cd0de08059a483575515 Mon Sep 17 00:00:00 2001
+From 57e830e516f43a6d1d9d1014f8c3414164c4951e Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 26 Mar 2026 19:38:27 +0000
+Date: Thu, 2 Apr 2026 21:13:20 +0000
 Subject: [PATCH] hipdnn ppc64le
 
 ---
- projects/hipdnn/CMakeLists.txt                      |  8 ++++++++
- projects/hipdnn/samples/CMakeLists.txt              |  5 +++++
+ projects/hipdnn/samples/CMakeLists.txt              |  1 +
  .../utilities/CpuFpReferenceValidation.hpp          | 13 +++++++++++++
  .../utilities/pointwise/CpuDeviceExecutor.hpp       |  4 ++++
  .../tests/utilities/TestCpuReferencePointwise.cpp   |  6 +++++-
- 5 files changed, 35 insertions(+), 1 deletion(-)
+ 4 files changed, 23 insertions(+), 1 deletion(-)
 
-diff --git a/projects/hipdnn/CMakeLists.txt b/projects/hipdnn/CMakeLists.txt
-index 9cfbe679b1..195b8acd96 100644
---- a/projects/hipdnn/CMakeLists.txt
-+++ b/projects/hipdnn/CMakeLists.txt
-@@ -73,6 +73,11 @@ else()
-     )
- endif()
- 
-+
-+if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
-+    add_compile_options("-xhip")
-+endif()
-+
- set(HIPDNN_PLUGIN_ENGINE_SUBDIR "hipdnn_plugins/engines"
-     CACHE STRING "Subdirectory for official hipDNN engine plugins"
- )
-@@ -200,6 +205,9 @@ list(
-     -Wno-error=unused-command-line-argument # Disable error for unused command line arguments
-     -Wswitch-default # Warn if a switch statement does not have a default case
- )
-+if(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "ppc64le")
-+    list(APPEND HIPDNN_WARNING_COMPILE_OPTIONS -Wno-implicit-float-conversion)
-+endif()
- 
- add_compile_options(${EXTRA_COMPILE_OPTIONS})
- add_link_options(${EXTRA_LINK_OPTIONS})
 diff --git a/projects/hipdnn/samples/CMakeLists.txt b/projects/hipdnn/samples/CMakeLists.txt
-index 1003ef6dac..4ef2347675 100644
+index 1003ef6dac..85e31b7cf1 100644
 --- a/projects/hipdnn/samples/CMakeLists.txt
 +++ b/projects/hipdnn/samples/CMakeLists.txt
-@@ -9,6 +9,11 @@ cmake_minimum_required(VERSION 3.25.2)
+@@ -9,6 +9,7 @@ cmake_minimum_required(VERSION 3.25.2)
  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
  
  project(hipdnn_samples VERSION 0.1.0 LANGUAGES CXX)
-+
-+if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
-+    add_definitions(-D_Float16=float)
-+endif()
 +
  include(GNUInstallDirs)
  set(CMAKE_CXX_STANDARD 17)

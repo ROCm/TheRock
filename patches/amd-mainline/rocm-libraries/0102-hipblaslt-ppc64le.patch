@@ -1,6 +1,6 @@
-From c7a4c0b074d66f81e3470c01c7e476d8f142523e Mon Sep 17 00:00:00 2001
+From 789d571d7dcd7235f2b8f602cd95b15148ddb771 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 26 Mar 2026 19:38:27 +0000
+Date: Thu, 2 Apr 2026 21:13:20 +0000
 Subject: [PATCH] hipblaslt ppc64le
 
 ---
