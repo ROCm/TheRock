@@ -17,8 +17,6 @@ therock_cmake_subproject_declare(therock-elfio
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
   COMPILER_TOOLCHAIN
     amd-llvm
-  BUILD_DEPS
-    amd-llvm
   CMAKE_ARGS
     -DELFIO_BUILD_EXAMPLES=OFF
     -DELFIO_BUILD_TESTS=OFF
