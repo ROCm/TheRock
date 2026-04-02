@@ -7,18 +7,18 @@ on:
   workflow_dispatch:
     inputs:
       artifact_github_repo:
-        description: GitHub repository for artifact_run_id
+        description: "GitHub repository for artifact_run_id"
         type: string
         default: ROCm/TheRock
       artifact_run_id:
-        description: Workflow run ID to download artifacts from
+        description: "artifact_run_id to download artifacts from"
         type: string
         default: "17865324892" # TODO: default to the most recent successful run (using a script)
       artifact_group:
-        description: "The artifact group to build (ex: gfx94X-dcgpu, gfx101X-dgpu, gfx1151, gfx120X-all)"
+        description: "artifact_group to build (e.g. 'gfx94X-dcgpu' for single family builds, 'multi-arch-release' for multi-arch builds with 'amdgpu_families' set)"
         type: string
       amdgpu_families:
-        description: "Comma-separated list of GPU families for multi-arch builds (e.g., 'gfx94X-dcgpu,gfx120X-all'). Leave empty for single-family builds (uses artifact_group)."
+        description: "amdgpu_families for multi-arch builds as a semicolon-separated list (e.g. 'gfx94X-dcgpu;gfx120X-all'). Leave empty for single-family builds (those only use artifact_group)"
         type: string
         default: ""
       multiarch_index:
@@ -26,6 +26,7 @@ on:
         type: boolean
         default: false
       package_version:
+        description: "package_version to set on packages, e.g. '7.13.0.dev0+dbd7369489260265fc6ddfc9d0de1262a95fe974'"
         type: string
   workflow_call:
     inputs:
@@ -37,11 +38,9 @@ on:
       artifact_group:
         type: string
       amdgpu_families:
-        description: "Comma-separated GPU families for multi-arch. Empty = single-family mode using artifact_group."
         type: string
         default: ""
       multiarch_index:
-        description: "Enable multi-arch indexing (generates per-family indexes)"
         type: boolean
         default: false
       package_version:
