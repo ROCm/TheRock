@@ -184,6 +184,7 @@ if(THEROCK_ENABLE_PRIM)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+      ${THEROCK_BUNDLED_SQLITE3}
   )
   therock_cmake_subproject_glob_c_sources(rocThrust
     SUBDIRS
