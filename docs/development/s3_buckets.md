@@ -4,11 +4,24 @@ TheRock uses Amazon S3 buckets to store CI build outputs (artifacts, logs,
 python packages, etc.) and release artifacts. This page lists all buckets
 and explains the authentication needed to upload to them.
 
+## Table of contents
+
+- [Authentication](#authentication)
+- [Bucket inventory](#bucket-inventory)
+  - [CI buckets](#ci-buckets): `therock-ci-artifacts`, `therock-ci-artifacts-external`
+  - [Release buckets](#release-buckets): `therock-{dev,nightly,prerelease,release}-{artifacts,packages,python,tarball}`
+  - [Build system buckets](#build-system-buckets): `rocm-third-party-deps`
+  - [Cache buckets](#cache-buckets): `therock-*-pytorch-sccache`
+  - [Legacy buckets](#legacy-buckets): `therock-artifacts`, `therock-artifacts-external`
+
 ## Authentication
 
-Most buckets require assuming an IAM role via
+Most buckets have public _read_ access for use by developers as well as CI/CD
+systems.
+
+To _write_ to most buckets, assuming an IAM role via
 [`aws-actions/configure-aws-credentials`](https://github.com/aws-actions/configure-aws-credentials)
-using OIDC. This requires `id-token: write` in the job's `permissions` block.
+using OIDC is needed. This requires `id-token: write` in the job's `permissions` block.
 The full ARN pattern is
 `arn:aws:iam::692859939525:role/therock-{ci,dev,nightly,prerelease}`.
 
@@ -103,6 +116,14 @@ prefer the CDN URLs for reading (e.g. `pip install --index-url`).
 | `therock-release-python`                                                                 | Python packages | —                    | [`repo.amd.com/rocm/whl/`](https://repo.amd.com/rocm/whl/)                                                                  |
 | `therock-release-tarball`                                                                | ROCm tarballs   | —                    | [`repo.amd.com/rocm/tarball/`](https://repo.amd.com/rocm/tarball/)                                                          |
 
+### Build system buckets
+
+We mirror third-party dependency files into S3 for use by the build system.
+
+| Bucket                  | Contents                                                | Details                                                                                                                    |
+| ----------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `rocm-third-party-deps` | Mirrors for [`third_party/`](/third-party/) subprojects | See ["Updating a third-party mirror"](./git_chores.md#updating-a-third-party-mirror) in [`git_chores.md`](./git_chores.md) |
+
 ### Cache buckets
 
 | Bucket                               | Contents                   | IAM role             |
@@ -114,7 +135,7 @@ prefer the CDN URLs for reading (e.g. `pip install --index-url`).
 
 ### Legacy buckets
 
-CI runs before 2025-11-11 ([TheRock #2046](https://github.com/ROCm/TheRock/issues/2046))
+CI runs before 2025-11-11 (see [TheRock#2046](https://github.com/ROCm/TheRock/issues/2046))
 used different bucket names. These are no longer written to but still contain
 historical data. We may remove these once we implement a retention policy for
 artifacts.
