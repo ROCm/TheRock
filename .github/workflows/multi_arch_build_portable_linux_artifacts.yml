@@ -145,6 +145,8 @@ jobs:
         run: |
           echo "CCache Stats:"
           ccache -s -v
+          echo "Artifacts:"
+          ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
       # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
       # fall back to runner base credentials (therock-ci-artifacts-external).
@@ -165,12 +167,6 @@ jobs:
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}"
-
-      - name: Report artifact sizes
-        if: ${{ !cancelled() }}
-        run: |
-          echo "Compressed artifact sizes:"
-          ls -lhS "${BUILD_DIR}"/.upload_cache/*.tar.zst 2>/dev/null || echo "No .tar.zst artifacts found"
 
       - name: Upload stage logs
         if: ${{ always() }}
