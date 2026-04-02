@@ -6,10 +6,9 @@ This document provides an overview of how Continuous Integration (CI) works in T
 
 TheRock CI follows this workflow:
 
-1. **Build** ROCm from source via TheRock
+1. **Build** ROCm from source via TheRock on CPU machines
 1. **Upload** build artifacts to S3 (public-read buckets)
-1. **Test** workflows download those artifacts from S3
-1. **Run** tests against the downloaded artifacts
+2. **Test** downloads and tests artifacts on GPU machines for testing
 
 Instead of Jenkins and Groovy pipelines, TheRock uses **GitHub Actions** workflows defined in YAML files under `.github/workflows/`.
 
@@ -18,33 +17,31 @@ Instead of Jenkins and Groovy pipelines, TheRock uses **GitHub Actions** workflo
 TheRock uses a multi-stage CI pipeline that splits the build into stages (foundation → compiler-runtime → math-libs, etc.) with dependency chaining.
 
 ```mermaid
-graph TD
-    A[Foundation Stage] --> B[Compiler-Runtime Stage]
-    B --> C1[Math-Libs gfx1151]
-    B --> C2[Math-Libs gfx110X-all]
-    B --> C3[Math-Libs gfx94X-dcgpu]
+graph LR
+    A[Core build stage]
+    A --> C1[Math-Libs build gfx1151]
+    A --> C2[Math-Libs buold gfx110X-all]
+    A --> C3[Math-Libs build gfx94X-dcgpu]
     C1 --> D1[Test gfx1151]
     C2 --> D2[Test gfx110X-all]
     C3 --> D3[Test gfx94X-dcgpu]
-    C1 --> E1[Build Python Packages gfx1151]
-    C2 --> E2[Build Python Packages gfx110X-all]
-    C3 --> E3[Build Python Packages gfx94X-dcgpu]
 ```
 
 Each stage runs as a separate job, uploads its artifacts and logs to S3, then downstream stages download and build on top of them. This allows for:
 
 - **Parallelization:** Multiple GPU families can build math-libs simultaneously once compiler-runtime completes
 - **Incremental builds:** Test-only runs can skip build stages by downloading pre-built artifacts
-- **Flexibility:** Different stages can run on different runner types (e.g., CPU-only for foundation, GPU for tests)
+- **Flexibility:** Different stages can run on different runner types (e.g., CPU-only for build, GPU for tests)
 
 **Key workflow files:**
 
 - [`.github/workflows/multi_arch_ci.yml`](/.github/workflows/multi_arch_ci.yml) - Main entry point
+- [`.github/workflows/multi_`](https://github.com/ROCm/TheRock/blob/main/.github/workflows/multi_arch_ci_linux.yml)
 - [`.github/workflows/multi_arch_build_portable_linux_artifacts.yml`](/.github/workflows/multi_arch_build_portable_linux_artifacts.yml) - Build orchestration
 
 ## Build Phase
 
-TheRock builds ROCm components from source and produces **artifacts** - archive slices of key components organized by role (lib, dev, test, etc.).
+TheRock builds ROCm components from source and produces **artifacts** - archive slices of key components.
 
 ```mermaid
 graph LR
@@ -55,7 +52,7 @@ graph LR
 
 **What gets built:** Compiler (LLVM), core runtime (HIP, ROCr), math libraries (rocBLAS, rocFFT), ML libraries (MIOpen), media libraries (rocDecode, rocJPEG), and more.
 
-**Artifact organization:** Each component is packaged into separate archives by role (libraries, headers, tests, tools). See [artifacts.md](artifacts.md) for complete details on artifact structure and naming conventions.
+**Artifact organization:** Each component is packaged into separate archives by sub-components (lib, run, dev, doc, test). See [artifacts.md](artifacts.md) for complete details on artifact structure and naming conventions.
 
 ## Artifact Storage and Distribution
 
@@ -108,26 +105,6 @@ The test workflow downloads only the artifacts needed for the specific tests bei
 **Test scripts:** Python scripts in [`build_tools/github_actions/test_executable_scripts/`](../../build_tools/github_actions/test_executable_scripts/) that work on both Linux and Windows. (shortly, these scripts will be migrated to their respective monorepos)
 
 See [adding_tests.md](adding_tests.md) for how to add new tests to the CI pipeline.
-
-## MathCI Migration Guide
-
-For teams migrating from MathCI, here are the key differences:
-
-| Aspect                  | MathCI (Jenkins)             | TheRock CI (GitHub Actions)                         |
-| ----------------------- | ---------------------------- | --------------------------------------------------- |
-| **Pipeline Definition** | Groovy scripts in rocJenkins | YAML files in `.github/workflows/`                  |
-| **Test Integration**    | Update Groovy pipeline       | Add entry to `fetch_test_configurations.py`         |
-| **Artifact Access**     | Jenkins artifacts            | Public-read S3 buckets                              |
-| **Test Execution**      | Jenkins agents               | GitHub-hosted or self-hosted runners                |
-| **Logs**                | Jenkins UI                   | S3 (see [workflow_outputs.md](workflow_outputs.md)) |
-
-**Migration workflow:**
-
-1. Create test script in `build_tools/github_actions/test_executable_scripts/`
-1. Add entry to `fetch_test_configurations.py`
-1. Ensure artifact dependencies are configured in `install_rocm_from_artifacts.py`
-
-See [adding_tests.md](adding_tests.md) for step-by-step instructions.
 
 ## Common CI Tasks
 
