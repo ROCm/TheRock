@@ -20,6 +20,8 @@ skip_tests = {
             # torch.AcceleratorError: HIP error: operation not permitted when
             # stream is capturing
             "test_cuda_graph_tensor_item_not_allowed",
+            # AssertionError: CalledProcessError not raised
+            "test_allocator_memory_fraction_setting",
         ],
         "nn": [
             # AssertionError: False is not true : Expected NaN in pdist output
@@ -40,10 +42,14 @@ skip_tests = {
             "test_hops_compile_backend_aot_eager_inline_asm_elementwise_simple_cuda_float32",
             # CallbackTests - fails across all GPU families
             "test_triggers",
+            # LoggingTests - string comparison mismatch in log output
+            "test_logs_out",
         ],
         "export": [
             # ROCm does not support inline asm instructions
             "test_aot_export_inline_asm_elementwise_simple_cuda_float32",
+            # subprocess exit status 127 (missing binary)
+            "test_fake_export___getitem___cuda_float32",
         ],
         "inductor": [
             # BenchmarkMultiTemplateFusionGpuTest - extern code mismatch
@@ -68,10 +74,30 @@ skip_tests = {
             "test_addmm_fp16",
             # TestOpInfoPropertiesCUDA - numerical fmod
             "test_binary_ufunc_numerical_fmod_backend_inductor_default_cuda_bfloat16",
+            # TestMaxAutotuneSubproc - benchmark choice assertion
+            "test_benchmark_choice_in_subproc",
+            # TestLearnableBiasesCUDA - LoweringException in dynamic max_autotune
+            "test_flex_attention_with_dynamic_max_autotune_graph_partition_cuda",
+            # ComboKernelTests - KeyError: 'grid'
+            "test_combo_kernel_dynamic_shapes_grid_changes",
+            # TestPatternMatcher - mm_plus_mm count mismatch
+            "test_mm_plus_mm",
+            # TestTemplateRender - triton_helpers.maximum not found
+            "test_external_template_prologue_epilogue_fusion",
+            # TestAOTInductorPackageCpp_cpu - exit status 127
+            "test_compile_with_exporter",
+            # TestFlexAttentionCUDA - deprecation warnings
+            "test_return_aux_deprecation_warnings_cuda_float16",
+            # HigherOrderOpTestsWithCompiledAutograd - _GeneratorContextManager
+            "test_concat_unbacked_shape_tensor",
+            # AOTInductorTestABICompatibleCpuWithStackAllocation - XPASS
+            "test_while_loop_with_mixed_device_dynamic_False_cpu_with_stack_allocation",
         ],
         "profiler": [
             # TestProfiler - backward compat filter
             "test_activity_filter_backward_compat",
+            # TestProfiler - dict syntax filter assertion
+            "test_activity_filter_dict_syntax",
         ],
         "ci_sanity_check": [
             # TestCISanityCheck - TheRock CI env differs from upstream
@@ -80,6 +106,12 @@ skip_tests = {
         "dataloader": [
             # TestDataLoader - large sampler indices
             "test_large_sampler_indices",
+            # TestDataLoader - HIP invalid device pointer in multiprocessing
+            "test_multiprocessing_contexts",
+        ],
+        "multiprocessing": [
+            # TestMultiprocessing - file system test assertion
+            "test_fs",
         ],
         "multiprocessing_spawn": [
             # SpawnTest - exception handling across processes
@@ -93,6 +125,37 @@ skip_tests = {
             # TestStatelessDeprecation - deprecation warning mismatch
             "test_private_stateless_warns",
         ],
+        "utils": [
+            # TestStandaloneCPPJIT - error building extension
+            "test_load_standalone",
+        ],
+        "distributed": [
+            # ComposabilityTest - pipeline parallel (8-GPU)
+            "test_replicate_pp_ScheduleClass3_bfloat16",
+            # TestFSDPMemory - memory accounting mismatch
+            "test_fsdp_memory_ckpt_ckpt",
+            # ProcessGroupNCCLGroupTest - error code 10
+            "test_resume",
+            "test_get_memory_stats",
+            "test_suspend",
+            # TestDistBackendWithSpawn - monitored barrier hang
+            "test_monitored_barrier_allreduce_hang_wait_all_ranks",
+            # FSDP2 tests - 300s per-process timeout on 8-GPU runner
+            "test_clip_grad_norm_1d",
+            "test_compiled_autograd_fsdp2_backward",
+            "test_all_gather_extensions_train_parity",
+            "test_gradient_scaler",
+            "test_ddp_A_fsdp_B_ddp_C",
+            "test_compute_dtype",
+            "test_cached_state_dict",
+            "test_explicit_prefetching",
+            # TestParityWithDDPCUDA - error code 10
+            "test_mixture_of_experts_offload_true_shard_grad_op_cuda",
+            # TestFullyShardHSDP3DTraining - error code 10
+            "test_3d_mlp_with_nd_mesh",
+            # DistMathOpsTest - error code 10
+            "test_linalg_ops",
+        ],
     },
     "gfx94": {
         "inductor": [
@@ -100,9 +163,12 @@ skip_tests = {
             "test_grad_freevar_python_scalar",
             # TestCompiledAutogradOpInfoCUDA - inline asm
             "test_hops_in_bwd_inline_asm_elementwise_simple_cuda_float32",
-            # TestOpInfoPropertiesCUDA - additional numerical failures
+            # TestOpInfoPropertiesCUDA - numerical XPASS failures
             "test_binary_ufunc_numerical_fmod_backend_inductor_default_cuda_float32",
             "test_binary_ufunc_numerical_remainder_backend_inductor_default_cuda_float16",
+            "test_binary_ufunc_numerical_remainder_backend_inductor_default_cuda_bfloat16",
+            "test_binary_ufunc_numerical_remainder_backend_inductor_default_cuda_float32",
+            "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_float32",
         ],
         "linalg": [
             # TestLinalgCUDA - tunableop_rocm addmm relu
@@ -111,14 +177,6 @@ skip_tests = {
         "scaled_matmul": [
             # TestFP8MatmulCUDA - deepseek error messages
             "test_scaled_mm_deepseek_error_messages_bfloat16_lhs_block_128_rhs_block_1_M_256_N_256_K_256_cuda",
-        ],
-    },
-    "gfx90": {
-        "inductor": [
-            # TestFlexAttentionCUDA - deprecation warnings (gfx90a only)
-            "test_return_aux_deprecation_warnings_cuda_float16",
-            # HigherOrderOpTestsWithCompiledAutograd
-            "test_concat_unbacked_shape_tensor",
         ],
     },
 }

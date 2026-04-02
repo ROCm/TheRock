@@ -162,12 +162,64 @@ _ARTIFACT_RE = re.compile(
 )
 
 
+def _build_report_header(
+    torch_version: str,
+    python_version: str,
+    amdgpu_family: str,
+    package_index_url: str,
+    pytorch_git_ref: str,
+) -> list[str]:
+    """Build the PyTorch Test Report header lines."""
+    pytorch_repo_org = "pytorch" if pytorch_git_ref == "nightly" else "ROCm"
+    pytorch_web_url = f"https://github.com/{pytorch_repo_org}/pytorch"
+    index_url = f"{package_index_url}/{amdgpu_family}/"
+
+    lines = [
+        "## PyTorch Test Report",
+        "",
+        f"* Torch version: `{torch_version}`",
+        f"* Python version: `{python_version}`",
+        f"* GPU family: `{amdgpu_family}`",
+        f"* Package index: {index_url}",
+        f"* PyTorch source code: {pytorch_web_url}/tree/{pytorch_git_ref}",
+        "",
+        "To reproduce, see [Running/testing PyTorch]"
+        "(https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch"
+        "#runningtesting-pytorch) and setup with:",
+        "",
+        "```bash",
+        "# Fetch pytorch source files, including tests:",
+        f"git clone --branch {pytorch_git_ref} {pytorch_web_url}.git",
+        "",
+        "# Install torch and test requirements",
+        f"pip install --index-url={index_url} torch=={torch_version}",
+        "pip install -r pytorch/.ci/docker/requirements-ci.txt",
+        "```",
+        "",
+    ]
+    return lines
+
+
 def write_combined_summary(
     combined_dir: Path,
     amdgpu_family: str,
     summary_file: str,
+    torch_version: str = "",
+    python_version: str = "",
+    package_index_url: str = "",
+    pytorch_git_ref: str = "",
 ) -> None:
     """Scan all artifact directories and write one combined table."""
+    lines: list[str] = []
+
+    if torch_version and amdgpu_family:
+        lines.extend(
+            _build_report_header(
+                torch_version, python_version, amdgpu_family,
+                package_index_url, pytorch_git_ref,
+            )
+        )
+
     rows: list[tuple[str, int, str]] = []
     shard_dirs = sorted(combined_dir.iterdir())
 
@@ -200,7 +252,6 @@ def write_combined_summary(
                 )
             )
 
-    lines = []
     if not rows:
         lines.append(f"### All tests passed — {amdgpu_family} :white_check_mark:")
         lines.append("")
@@ -258,6 +309,22 @@ def main() -> int:
         "--amdgpu-family",
         default=os.getenv("AMDGPU_FAMILY", "unknown"),
     )
+    parser.add_argument(
+        "--torch-version",
+        default=os.getenv("TORCH_VERSION", ""),
+    )
+    parser.add_argument(
+        "--python-version",
+        default=os.getenv("PYTHON_VERSION", ""),
+    )
+    parser.add_argument(
+        "--package-index-url",
+        default=os.getenv("PACKAGE_INDEX_URL", ""),
+    )
+    parser.add_argument(
+        "--pytorch-git-ref",
+        default=os.getenv("PYTORCH_GIT_REF", ""),
+    )
     args = parser.parse_args()
 
     summary_file = os.getenv("GITHUB_STEP_SUMMARY", "")
@@ -266,7 +333,15 @@ def main() -> int:
         if not args.combined_dir.is_dir():
             print(f"Combined directory not found: {args.combined_dir}")
             return 0
-        write_combined_summary(args.combined_dir, args.amdgpu_family, summary_file)
+        write_combined_summary(
+            args.combined_dir,
+            args.amdgpu_family,
+            summary_file,
+            torch_version=args.torch_version,
+            python_version=args.python_version,
+            package_index_url=args.package_index_url,
+            pytorch_git_ref=args.pytorch_git_ref,
+        )
         return 0
 
     if not args.reports_dir.is_dir():
