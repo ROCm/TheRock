@@ -58,12 +58,12 @@ run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.rocm_version
 
 jobs:
   test_wheels:
-    name: Test wheels (${{ matrix.image.name }}) | ${{ inputs.amdgpu_family }}
+    name: Test ROCm wheels | ${{ inputs.amdgpu_family }}
     if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 30
     container:
-      image: ${{ contains(inputs.test_runs_on, 'linux') && matrix.image.url || null }}
+      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
       options: --ipc host
         --group-add video
         --device /dev/kfd
@@ -74,10 +74,6 @@ jobs:
         --user 0:0 # Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
     strategy:
       fail-fast: false
-      matrix:
-        image:
-          - name: ubuntu
-            url: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
     defaults:
       run:
         shell: bash
