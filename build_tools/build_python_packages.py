@@ -42,9 +42,12 @@ def load_therock_manifest(artifact_dir: Path) -> dict:
         / "therock"
         / "therock_manifest.json"
     )
-    if manifest_path.exists():
-        return json.loads(manifest_path.read_text())
-    return {}
+    if not manifest_path.exists():
+        raise FileNotFoundError(
+            f"therock_manifest.json not found at {manifest_path}. "
+            f"Is base_lib_generic present in {artifact_dir}?"
+        )
+    return json.loads(manifest_path.read_text())
 
 
 def run(args: argparse.Namespace):
