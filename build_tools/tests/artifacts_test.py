@@ -628,5 +628,351 @@ class ComponentScannerTest(TmpDirTestCase):
             )
 
 
+class ArtifactNameEdgeCaseTest(TmpDirTestCase):
+    """Additional edge case tests for ArtifactName parsing."""
+
+    def testFromPathNonDir(self):
+        """Test from_path with an archive file."""
+        p = Path(self.temp_dir / "name_component_generic.tar.zst")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.touch()
+        an = ArtifactName.from_path(p)
+        self.assertIsNotNone(an)
+        self.assertEqual(an.name, "name")
+        self.assertEqual(an.component, "component")
+        self.assertEqual(an.target_family, "generic")
+
+    def testFromPathInvalidDir(self):
+        """Test from_path returns None for directories with wrong format."""
+        # Needs only two segments or more than three to be invalid
+        p = Path(self.temp_dir / "onlytwoparts")
+        p.mkdir(parents=True, exist_ok=True)
+        an = ArtifactName.from_path(p)
+        self.assertIsNone(an)
+
+    def testFromFilenameZst(self):
+        """Test from_filename with .tar.zst extension."""
+        an = ArtifactName.from_filename("name_component_gfx1100.tar.zst")
+        self.assertIsNotNone(an)
+        self.assertEqual(an.name, "name")
+        self.assertEqual(an.component, "component")
+        self.assertEqual(an.target_family, "gfx1100")
+
+    def testFromFilenameInvalidExtension(self):
+        """Test from_filename returns None for unsupported extensions."""
+        self.assertIsNone(ArtifactName.from_filename("name_component_generic.tar.gz"))
+        self.assertIsNone(ArtifactName.from_filename("name_component_generic.zip"))
+
+    def testRepr(self):
+        """Test string representation."""
+        an = ArtifactName("rocblas", "lib", "gfx1100")
+        self.assertEqual(repr(an), "Artifact(rocblas[lib:gfx1100])")
+
+    def testEqualityDifferentComponent(self):
+        """Test inequality for different components."""
+        an1 = ArtifactName("name", "lib", "generic")
+        an2 = ArtifactName("name", "dev", "generic")
+        self.assertNotEqual(an1, an2)
+
+    def testEqualityDifferentType(self):
+        """Test equality returns NotImplemented for non-ArtifactName."""
+        an = ArtifactName("name", "lib", "generic")
+        result = an.__eq__("not an ArtifactName")
+        self.assertIs(result, NotImplemented)
+
+    def testHashConsistency(self):
+        """Test that equal ArtifactNames have same hash."""
+        an1 = ArtifactName("a", "b", "c")
+        an2 = ArtifactName("a", "b", "c")
+        an3 = ArtifactName("a", "b", "d")
+        self.assertEqual(hash(an1), hash(an2))
+        # Different names should (usually) have different hashes
+        self.assertNotEqual(hash(an1), hash(an3))
+
+    def testCanBeUsedInSet(self):
+        """Test that ArtifactNames work in sets."""
+        an1 = ArtifactName("a", "b", "c")
+        an2 = ArtifactName("a", "b", "c")
+        an3 = ArtifactName("x", "y", "z")
+        s = {an1, an2, an3}
+        self.assertEqual(len(s), 2)
+
+
+class OpenArchiveForReadTest(TmpDirTestCase):
+    """Tests for _open_archive_for_read function."""
+
+    def test_unknown_format_raises(self):
+        """Test that unknown archive format raises ValueError."""
+        from _therock_utils.artifacts import _open_archive_for_read
+
+        p = Path(self.temp_dir / "file.tar.gz")
+        p.touch()
+        with self.assertRaises(ValueError) as ctx:
+            _open_archive_for_read(p)
+        self.assertIn("Unknown archive format", str(ctx.exception))
+
+    def test_xz_archive(self):
+        """Test opening a .tar.xz archive."""
+        import tarfile
+
+        from _therock_utils.artifacts import _open_archive_for_read
+
+        # Create a valid tar.xz archive
+        archive_path = Path(self.temp_dir / "test_archive.tar.xz")
+        test_file = Path(self.temp_dir / "test_content.txt")
+        test_file.write_text("test content")
+
+        with tarfile.open(archive_path, "w:xz") as tf:
+            tf.add(test_file, arcname="test_content.txt")
+
+        with _open_archive_for_read(archive_path) as tf:
+            members = tf.getnames()
+            self.assertIn("test_content.txt", members)
+
+    def test_zst_archive(self):
+        """Test opening a .tar.zst archive."""
+        import tarfile
+
+        import pyzstd
+        from _therock_utils.artifacts import _open_archive_for_read
+
+        # Create a valid tar.zst archive
+        archive_path = Path(self.temp_dir / "test_archive.tar.zst")
+        test_file = Path(self.temp_dir / "test_content.txt")
+        test_file.write_text("test content")
+
+        # Create tar archive in memory, then compress with zstd
+        tar_path = Path(self.temp_dir / "temp.tar")
+        with tarfile.open(tar_path, "w") as tf:
+            tf.add(test_file, arcname="test_content.txt")
+
+        with open(tar_path, "rb") as f_in:
+            data = f_in.read()
+        compressed = pyzstd.compress(data)
+        archive_path.write_bytes(compressed)
+
+        with _open_archive_for_read(archive_path) as tf:
+            members = tf.getnames()
+            self.assertIn("test_content.txt", members)
+
+
+class ArtifactCatalogTest(TmpDirTestCase):
+    """Tests for ArtifactCatalog class."""
+
+    def _create_artifact_dir(self, name: str, manifest_lines: list[str]):
+        """Create an artifact directory with manifest and files."""
+        artifact_dir = self.temp_dir / name
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create manifest
+        manifest = artifact_dir / "artifact_manifest.txt"
+        manifest.write_text("\n".join(manifest_lines) + "\n")
+
+        # Create directories referenced by manifest
+        for line in manifest_lines:
+            if line:
+                (artifact_dir / line).mkdir(parents=True, exist_ok=True)
+
+        return artifact_dir
+
+    def test_scans_artifact_directories(self):
+        """Test that ArtifactCatalog scans valid artifact directories."""
+        from _therock_utils.artifacts import ArtifactCatalog
+
+        # Create artifact dirs in the expected format
+        self._create_artifact_dir("mylib_lib_generic", ["stage/rocm"])
+        # Add a file inside the manifested dir
+        (self.temp_dir / "mylib_lib_generic" / "stage/rocm" / "libfoo.so").write_text(
+            "content"
+        )
+
+        catalog = ArtifactCatalog(self.temp_dir)
+        self.assertEqual(len(catalog.artifact_basedirs), 1)
+        names = catalog.artifact_names
+        self.assertEqual(len(names), 1)
+        self.assertEqual(names[0].name, "mylib")
+        self.assertEqual(names[0].component, "lib")
+
+    def test_filter_artifacts(self):
+        """Test that ArtifactCatalog respects the filter function."""
+        from _therock_utils.artifacts import ArtifactCatalog
+
+        self._create_artifact_dir("mylib_lib_generic", ["stage/rocm"])
+        (self.temp_dir / "mylib_lib_generic" / "stage/rocm" / "lib.so").write_text("")
+
+        self._create_artifact_dir("mylib_dev_generic", ["stage/rocm"])
+        (self.temp_dir / "mylib_dev_generic" / "stage/rocm" / "foo.h").write_text("")
+
+        # Filter to only lib component
+        catalog = ArtifactCatalog(
+            self.temp_dir, filter=lambda an: an.component == "lib"
+        )
+        names = catalog.artifact_names
+        self.assertEqual(len(names), 1)
+        self.assertEqual(names[0].component, "lib")
+
+    def test_all_target_families(self):
+        """Test all_target_families property."""
+        from _therock_utils.artifacts import ArtifactCatalog
+
+        self._create_artifact_dir("mylib_lib_gfx1100", ["stage/rocm"])
+        (self.temp_dir / "mylib_lib_gfx1100" / "stage/rocm" / "lib.so").write_text("")
+
+        self._create_artifact_dir("mylib_lib_generic", ["stage/rocm"])
+        (self.temp_dir / "mylib_lib_generic" / "stage/rocm" / "lib.so").write_text("")
+
+        catalog = ArtifactCatalog(self.temp_dir)
+        families = catalog.all_target_families
+        # 'generic' should be excluded
+        self.assertNotIn("generic", families)
+        self.assertIn("gfx1100", families)
+
+    def test_skips_non_artifact_directories(self):
+        """Test that non-artifact directories are skipped."""
+        from _therock_utils.artifacts import ArtifactCatalog
+
+        # Directory without proper name format
+        (self.temp_dir / "not_an_artifact").mkdir()
+        # File (not directory)
+        (self.temp_dir / "file.txt").write_text("")
+        # Directory without manifest
+        (self.temp_dir / "valid_name_generic").mkdir()
+
+        catalog = ArtifactCatalog(self.temp_dir)
+        self.assertEqual(len(catalog.artifact_basedirs), 0)
+
+
+class ArtifactPopulatorTest(TmpDirTestCase):
+    """Tests for ArtifactPopulator class."""
+
+    def _create_artifact_tree(self, name: str, files: dict[str, str]):
+        """Create an artifact directory with manifest and files.
+
+        Args:
+            name: Artifact directory name
+            files: Dict mapping relative paths (under stage/rocm) to content
+        """
+        artifact_dir = self.temp_dir / "artifacts" / name
+        manifest_paths = ["stage/rocm"]
+
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        manifest = artifact_dir / "artifact_manifest.txt"
+        manifest.write_text("\n".join(manifest_paths))
+
+        for relpath, content in files.items():
+            full_path = artifact_dir / "stage/rocm" / relpath
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+            full_path.write_text(content)
+
+        return artifact_dir
+
+    def test_populate_from_dir(self):
+        """Test populating from an exploded artifact directory."""
+        from _therock_utils.artifacts import ArtifactPopulator
+
+        artifact_dir = self._create_artifact_tree(
+            "mylib_lib_generic",
+            {"lib/libfoo.so": "library content", "bin/tool": "tool content"},
+        )
+
+        output = self.temp_dir / "output"
+        populator = ArtifactPopulator(output_path=output)
+        populator(artifact_dir)
+
+        self.assertTrue((output / "stage/rocm" / "lib" / "libfoo.so").exists())
+        self.assertTrue((output / "stage/rocm" / "bin" / "tool").exists())
+        self.assertEqual(
+            (output / "stage/rocm" / "lib" / "libfoo.so").read_text(),
+            "library content",
+        )
+
+    def test_populate_from_dir_flatten(self):
+        """Test populating with flatten=True."""
+        from _therock_utils.artifacts import ArtifactPopulator
+
+        artifact_dir = self._create_artifact_tree(
+            "mylib_lib_generic",
+            {"lib/libfoo.so": "library content"},
+        )
+
+        output = self.temp_dir / "output"
+        populator = ArtifactPopulator(output_path=output, flatten=True)
+        populator(artifact_dir)
+
+        # With flatten, files go directly to output without the relpath prefix
+        self.assertTrue((output / "lib" / "libfoo.so").exists())
+        self.assertFalse((output / "stage/rocm" / "lib" / "libfoo.so").exists())
+
+    def test_on_relpath_callback(self):
+        """Test that on_relpath is called for each relpath."""
+        from _therock_utils.artifacts import ArtifactPopulator
+
+        artifact_dir = self._create_artifact_tree(
+            "mylib_lib_generic", {"file.txt": "content"}
+        )
+
+        output = self.temp_dir / "output"
+        populator = ArtifactPopulator(output_path=output)
+        populator(artifact_dir)
+
+        self.assertIn("stage/rocm", populator.relpaths)
+
+    def test_populate_from_tar_xz_archive(self):
+        """Test populating from a .tar.xz archive."""
+        import tarfile
+
+        from _therock_utils.artifacts import ArtifactPopulator
+
+        archive_path = self.temp_dir / "mylib_lib_generic.tar.xz"
+
+        with tarfile.open(archive_path, "w:xz") as tf:
+            # Add manifest as first member
+            manifest_content = b"stage/rocm\n"
+            import io
+
+            manifest_info = tarfile.TarInfo(name="artifact_manifest.txt")
+            manifest_info.size = len(manifest_content)
+            tf.addfile(manifest_info, io.BytesIO(manifest_content))
+
+            # Add a file
+            file_content = b"library content"
+            file_info = tarfile.TarInfo(name="stage/rocm/lib/libfoo.so")
+            file_info.size = len(file_content)
+            file_info.mode = 0o755
+            tf.addfile(file_info, io.BytesIO(file_content))
+
+        output = self.temp_dir / "output"
+        populator = ArtifactPopulator(output_path=output)
+        populator(archive_path)
+
+        self.assertTrue((output / "stage/rocm" / "lib" / "libfoo.so").exists())
+        self.assertEqual(
+            (output / "stage/rocm" / "lib" / "libfoo.so").read_text(),
+            "library content",
+        )
+
+    def test_archive_without_manifest_raises(self):
+        """Test that archive without manifest as first member raises error."""
+        import io
+        import tarfile
+
+        from _therock_utils.artifacts import ArtifactPopulator
+
+        archive_path = self.temp_dir / "bad_archive.tar.xz"
+
+        with tarfile.open(archive_path, "w:xz") as tf:
+            # Add a file instead of manifest as first member
+            content = b"not a manifest"
+            info = tarfile.TarInfo(name="some_file.txt")
+            info.size = len(content)
+            tf.addfile(info, io.BytesIO(content))
+
+        output = self.temp_dir / "output"
+        populator = ArtifactPopulator(output_path=output)
+        with self.assertRaises(IOError) as ctx:
+            populator(archive_path)
+        self.assertIn("artifact_manifest.txt", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

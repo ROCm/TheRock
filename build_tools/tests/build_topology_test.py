@@ -553,6 +553,482 @@ class BuildTopologyTest(unittest.TestCase):
         foundation_inbound = topology.get_inbound_artifacts("foundation")
         self.assertEqual(len(foundation_inbound), 0)
 
+    def test_get_artifact_feature_name_default(self):
+        """Test default feature name derivation from artifact name."""
+        self.write_topology(
+            """
+            [artifacts.rocm-core]
+            artifact_group = "base"
+            type = "target-neutral"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["rocm-core"]
+        feature_name = topology.get_artifact_feature_name(artifact)
+        self.assertEqual(feature_name, "ROCM_CORE")
+
+    def test_get_artifact_feature_name_override(self):
+        """Test explicit feature_name override."""
+        self.write_topology(
+            """
+            [artifacts.rocm-core]
+            artifact_group = "base"
+            type = "target-neutral"
+            feature_name = "MY_CUSTOM_NAME"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["rocm-core"]
+        feature_name = topology.get_artifact_feature_name(artifact)
+        self.assertEqual(feature_name, "MY_CUSTOM_NAME")
+
+    def test_get_artifact_feature_group_default(self):
+        """Test default feature group derivation from artifact group."""
+        self.write_topology(
+            """
+            [artifact_groups.math-libs]
+            description = "Math libraries"
+            type = "generic"
+
+            [artifacts.rocblas]
+            artifact_group = "math-libs"
+            type = "target-neutral"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["rocblas"]
+        feature_group = topology.get_artifact_feature_group(artifact)
+        self.assertEqual(feature_group, "MATH_LIBS")
+
+    def test_get_artifact_feature_group_override(self):
+        """Test explicit feature_group override."""
+        self.write_topology(
+            """
+            [artifacts.rocblas]
+            artifact_group = "math-libs"
+            type = "target-neutral"
+            feature_group = "CUSTOM_GROUP"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["rocblas"]
+        feature_group = topology.get_artifact_feature_group(artifact)
+        self.assertEqual(feature_group, "CUSTOM_GROUP")
+
+    def test_get_submodules_for_source_set(self):
+        """Test getting submodules for a specific source set."""
+        self.write_topology(
+            """
+            [source_sets.compiler-sources]
+            description = "Compiler sources"
+            submodules = ["llvm-project", "device-libs"]
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        submodules = topology.get_submodules_for_source_set("compiler-sources")
+        self.assertEqual(len(submodules), 2)
+        names = [s.name for s in submodules]
+        self.assertIn("llvm-project", names)
+        self.assertIn("device-libs", names)
+
+    def test_get_submodules_for_source_set_not_found(self):
+        """Test error when source set doesn't exist."""
+        self.write_topology(
+            """
+            [metadata]
+            version = "1.0"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        with self.assertRaises(ValueError) as ctx:
+            topology.get_submodules_for_source_set("nonexistent")
+        self.assertIn("not found", str(ctx.exception))
+
+    def test_get_submodules_for_stage(self):
+        """Test getting submodules needed for a build stage."""
+        self.write_topology(
+            """
+            [source_sets.base-sources]
+            description = "Base sources"
+            submodules = ["rocm-cmake", "rocm-core"]
+
+            [source_sets.compiler-sources]
+            description = "Compiler sources"
+            submodules = ["llvm-project"]
+
+            [build_stages.compiler]
+            description = "Compiler stage"
+            artifact_groups = ["compiler-group"]
+
+            [artifact_groups.compiler-group]
+            description = "Compiler group"
+            type = "generic"
+            source_sets = ["base-sources", "compiler-sources"]
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        submodules = topology.get_submodules_for_stage("compiler")
+        names = [s.name for s in submodules]
+        self.assertIn("rocm-cmake", names)
+        self.assertIn("rocm-core", names)
+        self.assertIn("llvm-project", names)
+        self.assertEqual(len(names), 3)
+
+    def test_get_submodules_for_stage_deduplication(self):
+        """Test that overlapping source sets deduplicate submodules."""
+        self.write_topology(
+            """
+            [source_sets.set-a]
+            description = "Set A"
+            submodules = ["shared-mod", "mod-a"]
+
+            [source_sets.set-b]
+            description = "Set B"
+            submodules = ["shared-mod", "mod-b"]
+
+            [build_stages.stage1]
+            description = "Stage 1"
+            artifact_groups = ["group1"]
+
+            [artifact_groups.group1]
+            description = "Group 1"
+            type = "generic"
+            source_sets = ["set-a", "set-b"]
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        submodules = topology.get_submodules_for_stage("stage1")
+        names = [s.name for s in submodules]
+        # shared-mod should appear only once
+        self.assertEqual(names.count("shared-mod"), 1)
+        self.assertEqual(len(names), 3)
+
+    def test_get_submodules_for_stage_platform_filter(self):
+        """Test that platform-disabled source sets are skipped."""
+        self.write_topology(
+            """
+            [source_sets.linux-only]
+            description = "Linux only sources"
+            submodules = ["linux-mod"]
+            disable_platforms = ["windows"]
+
+            [source_sets.common]
+            description = "Common sources"
+            submodules = ["common-mod"]
+
+            [build_stages.stage1]
+            description = "Stage 1"
+            artifact_groups = ["group1"]
+
+            [artifact_groups.group1]
+            description = "Group 1"
+            type = "generic"
+            source_sets = ["linux-only", "common"]
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+
+        # On linux, both source sets should be included
+        linux_mods = topology.get_submodules_for_stage("stage1", platform="linux")
+        linux_names = [s.name for s in linux_mods]
+        self.assertIn("linux-mod", linux_names)
+        self.assertIn("common-mod", linux_names)
+
+        # On windows, linux-only source set should be skipped
+        win_mods = topology.get_submodules_for_stage("stage1", platform="windows")
+        win_names = [s.name for s in win_mods]
+        self.assertNotIn("linux-mod", win_names)
+        self.assertIn("common-mod", win_names)
+
+    def test_get_submodules_for_stage_not_found(self):
+        """Test error when build stage doesn't exist."""
+        self.write_topology(
+            """
+            [metadata]
+            version = "1.0"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        with self.assertRaises(ValueError):
+            topology.get_submodules_for_stage("nonexistent")
+
+    def test_get_python_requires_for_stage(self):
+        """Test getting python_requires for artifacts in a stage."""
+        self.write_topology(
+            """
+            [build_stages.stage1]
+            description = "Stage 1"
+            artifact_groups = ["group1"]
+
+            [artifact_groups.group1]
+            description = "Group 1"
+            type = "generic"
+
+            [artifacts.artifact1]
+            artifact_group = "group1"
+            type = "target-neutral"
+            python_requires = ["-r requirements.txt", "mako"]
+
+            [artifacts.artifact2]
+            artifact_group = "group1"
+            type = "target-neutral"
+            python_requires = ["pyyaml"]
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        requires = topology.get_python_requires_for_stage("stage1")
+        self.assertIn("-r requirements.txt", requires)
+        self.assertIn("mako", requires)
+        self.assertIn("pyyaml", requires)
+        self.assertEqual(len(requires), 3)
+
+    def test_get_python_requires_for_stage_deduplication(self):
+        """Test that duplicate python_requires are deduplicated."""
+        self.write_topology(
+            """
+            [build_stages.stage1]
+            description = "Stage 1"
+            artifact_groups = ["group1"]
+
+            [artifact_groups.group1]
+            description = "Group 1"
+            type = "generic"
+
+            [artifacts.artifact1]
+            artifact_group = "group1"
+            type = "target-neutral"
+            python_requires = ["mako", "pyyaml"]
+
+            [artifacts.artifact2]
+            artifact_group = "group1"
+            type = "target-neutral"
+            python_requires = ["mako", "jinja2"]
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        requires = topology.get_python_requires_for_stage("stage1")
+        # mako should appear only once
+        self.assertEqual(requires.count("mako"), 1)
+        self.assertEqual(len(requires), 3)
+
+    def test_get_python_requires_for_stage_not_found(self):
+        """Test error when stage doesn't exist."""
+        self.write_topology(
+            """
+            [metadata]
+            version = "1.0"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        with self.assertRaises(ValueError):
+            topology.get_python_requires_for_stage("nonexistent")
+
+    def test_get_python_requires_for_stage_empty(self):
+        """Test stage with no python_requires."""
+        self.write_topology(
+            """
+            [build_stages.stage1]
+            description = "Stage 1"
+            artifact_groups = ["group1"]
+
+            [artifact_groups.group1]
+            description = "Group 1"
+            type = "generic"
+
+            [artifacts.artifact1]
+            artifact_group = "group1"
+            type = "target-neutral"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        requires = topology.get_python_requires_for_stage("stage1")
+        self.assertEqual(requires, [])
+
+    def test_validate_naming_conventions_valid(self):
+        """Test validation passes for correctly named entities."""
+        self.write_topology(
+            """
+            [build_stages.my-stage]
+            description = "A stage"
+            artifact_groups = ["my-group"]
+
+            [artifact_groups.my-group]
+            description = "A group"
+            type = "generic"
+
+            [artifacts.my-artifact]
+            artifact_group = "my-group"
+            type = "target-neutral"
+            feature_name = "MY_ARTIFACT"
+            feature_group = "MY_GROUP"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+        # Filter to only naming convention errors
+        naming_errors = [
+            e
+            for e in errors
+            if "should be" in e or "invalid type" in e or "invalid platform" in e
+        ]
+        self.assertEqual(naming_errors, [])
+
+    def test_validate_naming_conventions_invalid_names(self):
+        """Test validation catches invalid entity names."""
+        self.write_topology(
+            """
+            [build_stages.MyStage]
+            description = "Bad name"
+            artifact_groups = []
+
+            [artifact_groups.My_Group]
+            description = "Bad name"
+            type = "generic"
+
+            [artifacts.BadArtifact]
+            artifact_group = "My_Group"
+            type = "target-neutral"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+        self.assertTrue(any("MyStage" in e and "lowercase" in e for e in errors))
+        self.assertTrue(any("My_Group" in e and "lowercase" in e for e in errors))
+        self.assertTrue(any("BadArtifact" in e and "lowercase" in e for e in errors))
+
+    def test_validate_naming_conventions_invalid_feature_name(self):
+        """Test validation catches invalid feature_name format."""
+        self.write_topology(
+            """
+            [artifacts.my-artifact]
+            artifact_group = "group"
+            type = "target-neutral"
+            feature_name = "bad-name"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+        self.assertTrue(
+            any("feature_name" in e and "UPPERCASE" in e for e in errors)
+        )
+
+    def test_validate_naming_conventions_invalid_platform(self):
+        """Test validation catches invalid platform values."""
+        self.write_topology(
+            """
+            [artifacts.my-artifact]
+            artifact_group = "group"
+            type = "target-neutral"
+            platform = "macos"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+        self.assertTrue(any("invalid platform" in e for e in errors))
+
+    def test_get_all_submodules(self):
+        """Test getting all submodules across all source sets."""
+        self.write_topology(
+            """
+            [source_sets.set-a]
+            description = "Set A"
+            submodules = ["mod-a", "shared"]
+
+            [source_sets.set-b]
+            description = "Set B"
+            submodules = ["mod-b", "shared"]
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        all_mods = topology.get_all_submodules()
+        names = [s.name for s in all_mods]
+        self.assertIn("mod-a", names)
+        self.assertIn("mod-b", names)
+        self.assertIn("shared", names)
+        # shared should appear only once
+        self.assertEqual(names.count("shared"), 1)
+
+    def test_get_source_sets(self):
+        """Test getting all source sets."""
+        self.write_topology(
+            """
+            [source_sets.set-a]
+            description = "Set A"
+            submodules = ["mod-a"]
+
+            [source_sets.set-b]
+            description = "Set B"
+            submodules = ["mod-b"]
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        source_sets = topology.get_source_sets()
+        self.assertEqual(len(source_sets), 2)
+        names = [ss.name for ss in source_sets]
+        self.assertIn("set-a", names)
+        self.assertIn("set-b", names)
+
+    def test_artifact_disable_platforms(self):
+        """Test parsing of artifact disable_platforms."""
+        self.write_topology(
+            """
+            [artifacts.my-artifact]
+            artifact_group = "group"
+            type = "target-neutral"
+            disable_platforms = ["windows"]
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["my-artifact"]
+        self.assertEqual(artifact.disable_platforms, ["windows"])
+
+    def test_artifact_split_databases(self):
+        """Test parsing of artifact split_databases."""
+        self.write_topology(
+            """
+            [artifacts.my-artifact]
+            artifact_group = "group"
+            type = "target-neutral"
+            split_databases = ["rocblas", "hipblaslt"]
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["my-artifact"]
+        self.assertEqual(artifact.split_databases, ["rocblas", "hipblaslt"])
+
+    def test_python_requires_must_be_list(self):
+        """Test that python_requires as non-list raises ValueError."""
+        self.write_topology(
+            """
+            [artifacts.my-artifact]
+            artifact_group = "group"
+            type = "target-neutral"
+            python_requires = "not-a-list"
+        """
+        )
+        with self.assertRaises(ValueError) as ctx:
+            BuildTopology(self.topology_path)
+        self.assertIn("python_requires must be a list", str(ctx.exception))
+
+    def test_circular_artifact_dependency(self):
+        """Test validation catches circular artifact dependencies."""
+        self.write_topology(
+            """
+            [artifacts.artifact-a]
+            artifact_group = "group"
+            type = "target-neutral"
+            artifact_deps = ["artifact-b"]
+
+            [artifacts.artifact-b]
+            artifact_group = "group"
+            type = "target-neutral"
+            artifact_deps = ["artifact-a"]
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+        self.assertTrue(any("Circular dependency" in e for e in errors))
+
 
 if __name__ == "__main__":
     unittest.main()
