@@ -11,7 +11,7 @@
   - Execution time: < 5 min
   - Target: build system updates, CI system updates, non-component specific updates
 
-  > Note: This label is not intended to run on component changes, this is for build/CI changes that impacts all components and need a quick sanity check
+> Note: This label is not intended to run on component changes, this is for build/CI changes that impacts all components and need a quick sanity check
 
 <br/>
 
