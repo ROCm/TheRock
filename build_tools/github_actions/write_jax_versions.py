@@ -75,7 +75,9 @@ def get_all_jax_wheel_versions(
     if jaxlib_version:
         all_versions = all_versions | {"jaxlib_version": jaxlib_version}
     else:
-        _log("INFO: No jaxlib wheel found. For JAX >= 0.9.1, jaxlib is not built - use upstream PyPI.")
+        _log(
+            "INFO: No jaxlib wheel found. For JAX >= 0.9.1, jaxlib is not built - use upstream PyPI."
+        )
 
     if jax_plugin_version:
         all_versions = all_versions | {"jax_plugin_version": jax_plugin_version}
