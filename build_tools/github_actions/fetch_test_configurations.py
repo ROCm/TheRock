@@ -20,6 +20,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from copy import deepcopy
 
 # Add tests directory to path for extended_tests imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
@@ -523,42 +524,23 @@ def run():
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
-    # Build the test matrix: start with regular tests, then merge extended
-    # tests (functional + benchmarks) when enabled.
-    selected_matrix = test_matrix.copy()
+    # Build the selected test matrix with minimal branching:
+    # 1) Start from regular tests
+    # 2) Optionally merge extended functional tests
+    # 3) Override entirely if running benchmarks
+    selected_matrix: dict = deepcopy(test_matrix)
+    logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
 
-    if run_extended_tests:
-        if functional_matrix:
-            logging.info(
-                f"Merging {len(functional_matrix)} functional test(s) into test matrix"
-            )
-            selected_matrix.update(functional_matrix)
+    if run_extended_tests and functional_matrix:
+        logging.info(
+            f"Merging {len(functional_matrix)} functional test(s) into test matrix"
+        )
+        for key, value in functional_matrix.items():
+            selected_matrix[key] = deepcopy(value)
 
-        if benchmark_matrix:
-            amdgpu_families_matrix = get_all_families_for_trigger_types(
-                ["presubmit", "postsubmit", "nightly"]
-            )
-            shortened_name = amdgpu_families.split("-")[0].lower()
-            benchmark_runner = (
-                amdgpu_families_matrix.get(shortened_name, {})
-                .get(platform, {})
-                .get("benchmark-runs-on", "")
-            )
-
-            if benchmark_runner:
-                logging.info(
-                    f"Merging {len(benchmark_matrix)} benchmark(s) into test matrix "
-                    f"with runner {benchmark_runner}"
-                )
-                for key, value in benchmark_matrix.items():
-                    merged = value.copy()
-                    merged["benchmark_runner"] = benchmark_runner
-                    selected_matrix[key] = merged
-            else:
-                logging.info(
-                    f"Skipping benchmarks: no benchmark runner for "
-                    f"{amdgpu_families} on {platform}"
-                )
+    if test_type == "benchmark":
+        logging.info("Using benchmark_matrix only (test_type=benchmark)")
+        selected_matrix = deepcopy(benchmark_matrix)
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]

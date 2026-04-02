@@ -592,6 +592,13 @@ def main(base_args, linux_families, windows_families):
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
     print(f"run_extended_tests: {run_extended_tests}")
 
+    # Pre-resolve benchmark runner: blank it out when extended tests are
+    # disabled so downstream YAML doesn't need to re-check run_extended_tests.
+    if not run_extended_tests:
+        for row in linux_variants_output + windows_variants_output:
+            if "benchmark-runs-on" in row:
+                row["benchmark-runs-on"] = ""
+
     # Format variants for summary
     def format_variants(variants):
         result = []
