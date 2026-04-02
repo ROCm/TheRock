@@ -1,6 +1,6 @@
-From cf4c84fe55ba9a88d4949bf7d410efb78942bdc3 Mon Sep 17 00:00:00 2001
+From 7c3f526733906192988c82223bfb77ddbedbd3cd Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 26 Mar 2026 19:38:17 +0000
+Date: Thu, 2 Apr 2026 21:15:16 +0000
 Subject: [PATCH] rocprofiler-sdk ppc64le
 
 ---

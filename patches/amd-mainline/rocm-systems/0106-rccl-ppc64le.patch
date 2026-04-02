@@ -1,6 +1,6 @@
-From 0118504739f3ddc93858a1f1d949fe88f2a1f9e2 Mon Sep 17 00:00:00 2001
+From 97a7e8c1de17f7c4a0c2c488dbdf99ae8681e6f6 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 26 Mar 2026 19:38:17 +0000
+Date: Thu, 2 Apr 2026 21:15:16 +0000
 Subject: [PATCH] rccl ppc64le
 
 ---
