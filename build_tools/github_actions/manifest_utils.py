@@ -75,9 +75,11 @@ def git_upstream_commit(dirpath: Path, *, label: str) -> str:
     commit = capture_optional(
         ["git", "rev-parse", "THEROCK_UPSTREAM_DIFFBASE"], cwd=dirpath
     )
-    if not commit:
+    if commit:
+        log(f"{label} upstream commit (via THEROCK_UPSTREAM_DIFFBASE): {commit}")
+    else:
         commit = capture(["git", "rev-parse", "HEAD"], cwd=dirpath)
-    log(f"[{label}] upstream commit: {commit}")
+        log(f"{label} upstream commit (HEAD fallback): {commit}")
     return commit
 
 
