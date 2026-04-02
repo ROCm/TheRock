@@ -268,6 +268,27 @@ if(THEROCK_ENABLE_ROCPROFV3)
       string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_TEST_AMDGPU_TARGETS}")
     endif()
 
+    therock_detect_python_versions(_rocprofsys_detected_python_executables _rocprofsys_detected_python_versions)
+    if(NOT _rocprofsys_detected_python_versions OR NOT _rocprofsys_detected_python_executables)
+      message(STATUS "No python versions detected for rocprofiler-systems, disabling Python support")
+      set(_ROCPROFSYS_USE_PYTHON OFF)
+      set(_ROCPROFSYS_PYTHON_ROOT_DIRS_STR "")
+      set(_ROCPROFSYS_PYTHON_VERSIONS_STR "")
+    else()
+      set(_ROCPROFSYS_USE_PYTHON ON)
+      # Build root dirs from detected executables.
+      set(_ROCPROFSYS_PYTHON_ROOT_DIRS)
+      foreach(_exe IN LISTS _rocprofsys_detected_python_executables)
+        cmake_path(GET _exe PARENT_PATH _bin_dir)
+        cmake_path(GET _bin_dir PARENT_PATH _root_dir)
+        list(APPEND _ROCPROFSYS_PYTHON_ROOT_DIRS "${_root_dir}")
+      endforeach()
+      list(JOIN _ROCPROFSYS_PYTHON_ROOT_DIRS "\;" _ROCPROFSYS_PYTHON_ROOT_DIRS_STR)
+      list(JOIN _rocprofsys_detected_python_versions "\;" _ROCPROFSYS_PYTHON_VERSIONS_STR)
+      message(STATUS "Detected Python versions for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_VERSIONS_STR}")
+      message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
+    endif()
+
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
@@ -280,9 +301,14 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
-        -DROCPROFSYS_BUILD_FOR_THEROCK=ON
+        -DROCPROFSYS_BUILD_FOR_THEROCK=ON # TODO: Will be deprecated
+        -DROCPROFSYS_INSTALL_TESTING="${THEROCK_BUILD_TESTING}"
+        -DROCPROFSYS_INSTALL_EXAMPLES="${THEROCK_BUILD_TESTING}"
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
         -DROCPROFSYS_BUILD_SPDLOG=OFF
+        -DROCPROFSYS_USE_PYTHON="${_ROCPROFSYS_USE_PYTHON}"
+        -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_ROCPROFSYS_PYTHON_VERSIONS_STR}"
+        -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}"
         "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
       INSTALL_RPATH_DIRS
         "lib"

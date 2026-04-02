@@ -66,7 +66,7 @@ jobs:
       build_variant: "release"
 
   linux_build_and_test:
-    name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config).build_variant_label }}
+    name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
     needs: setup
     if: >-
       ${{
@@ -85,7 +85,7 @@ jobs:
       id-token: write
 
   windows_build_and_test:
-    name: Windows::${{ fromJSON(needs.setup.outputs.windows_build_config).build_variant_label }}
+    name: Windows::${{ fromJSON(needs.setup.outputs.windows_build_config || '{}').build_variant_label || 'skip' }}
     needs: setup
     if: >-
       ${{
