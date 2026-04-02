@@ -137,7 +137,7 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
       GFX_ARCH: ${{ inputs.gfx_arch || 'gfx94x' }}
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
-      TEST_TYPE: ${{ inputs.test_type }}
+      TEST_TYPE: ${{ inputs.test_type || 'sanity' }}
     steps:
       - name: Install System Prerequisites
         run: |
@@ -215,31 +215,31 @@ jobs:
           echo "TEST - OS:${{ inputs.os_profile }} REPO:${{ env.REPO_URL }} Arch:${{ env.GFX_ARCH }} Type:${{ env.RELEASE_TYPE }}"
           if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
             python build_tools/packaging/linux/native_linux_package_install_test.py \
-              ${TEST_TYPE:+--test-type "$TEST_TYPE"} \
+              --test-type "$TEST_TYPE" \
               --os-profile "$OS_PROFILE" \
               --repo-url "$REPO_URL" \
               --gfx-arch "$GFX_ARCH" \
               --install-prefix "$INSTALL_PREFIX" \
               --release-type "$RELEASE_TYPE" \
-              ${GPG_KEY_URL:+--gpg-key-url "$GPG_KEY_URL"}
+              --gpg-key-url "$GPG_KEY_URL"
           elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
             python3.13 build_tools/packaging/linux/native_linux_package_install_test.py \
-              ${TEST_TYPE:+--test-type "$TEST_TYPE"} \
+              --test-type "$TEST_TYPE" \
               --os-profile "$OS_PROFILE" \
               --repo-url "$REPO_URL" \
               --gfx-arch "$GFX_ARCH" \
               --install-prefix "$INSTALL_PREFIX" \
               --release-type "$RELEASE_TYPE" \
-              ${GPG_KEY_URL:+--gpg-key-url "$GPG_KEY_URL"}
+              --gpg-key-url "$GPG_KEY_URL"
           else
             python3.12 build_tools/packaging/linux/native_linux_package_install_test.py \
-              ${TEST_TYPE:+--test-type "$TEST_TYPE"} \
+              --test-type "$TEST_TYPE" \
               --os-profile "$OS_PROFILE" \
               --repo-url "$REPO_URL" \
               --gfx-arch "$GFX_ARCH" \
               --install-prefix "$INSTALL_PREFIX" \
               --release-type "$RELEASE_TYPE" \
-              ${GPG_KEY_URL:+--gpg-key-url "$GPG_KEY_URL"}
+              --gpg-key-url "$GPG_KEY_URL"
           fi
 
       - name: Test Report
