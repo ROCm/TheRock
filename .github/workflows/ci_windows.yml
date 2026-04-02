@@ -25,6 +25,9 @@ on:
       run_extended_tests:
         type: string
         default: 'false'
+      benchmark_runs_on:
+        type: string
+        default: ""
       expect_failure:
         type: boolean
       use_prebuilt_artifacts:
@@ -88,7 +91,7 @@ jobs:
 
   test_windows_artifacts:
     needs: [build_windows_artifacts]
-    name: Test Artifacts
+    name: ${{ matrix.test_mode.name }}
     # If the dependent job failed/cancelled, this job will not be run
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
     # previous build step is run or skipped.concurrency.
@@ -103,14 +106,30 @@ jobs:
         ) &&
         inputs.expect_failure == false
       }}
+    strategy:
+      fail-fast: false
+      matrix:
+        test_mode:
+          - name: "Test Artifacts"
+            test_type_override: ""
+          - name: "Test Benchmarks"
+            test_type_override: "benchmark"
     uses: ./.github/workflows/test_artifacts.yml
     secrets: inherit
     with:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.test_runs_on }}
+      # For regular tests: use test_runs_on.
+      # For benchmarks: use benchmark_runs_on (already blanked by
+      # configure_ci.py when extended tests are disabled).
+      test_runs_on: >-
+        ${{
+          (matrix.test_mode.test_type_override != 'benchmark' && inputs.test_runs_on) ||
+          (matrix.test_mode.test_type_override == 'benchmark' && inputs.benchmark_runs_on) ||
+          ''
+        }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      test_type: ${{ inputs.test_type }}
+      test_type: ${{ matrix.test_mode.test_type_override != '' && matrix.test_mode.test_type_override || inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
       run_extended_tests: ${{ inputs.run_extended_tests }}

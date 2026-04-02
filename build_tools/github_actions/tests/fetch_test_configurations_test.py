@@ -193,8 +193,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("func1", names)
 
     # -----------------------
-    # Benchmark merging via run_extended_tests
+    # Benchmark selection via test_type=benchmark
     # -----------------------
+    # Runner gating (run_extended_tests + benchmark-runs-on availability)
+    # is now resolved upstream in configure_ci.py.  By the time
+    # fetch_test_configurations runs, test_type is already "benchmark" and the
+    # runner is already set — so we only test matrix selection here.
 
     def _setup_benchmark_test(self):
         """Common setup for benchmark tests: fake matrix + isolate from other components."""
@@ -207,43 +211,18 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             }
         }
 
-    def test_benchmarks_merged_when_enabled(self):
-        os.environ["RUN_EXTENDED_TESTS"] = "true"
+    def test_benchmarks_selected_when_test_type_benchmark(self):
+        os.environ["TEST_TYPE"] = "benchmark"
         self._setup_benchmark_test()
-
-        def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"benchmark-runs-on": "linux-bench-runner"}}}
-
-        fetch_test_configurations.get_all_families_for_trigger_types = (
-            fake_get_all_families
-        )
 
         fetch_test_configurations.run()
         components = self._get_components()
 
         self.assertEqual(len(components), 1)
         self.assertEqual(components[0]["job_name"], "bench1")
-        self.assertEqual(components[0]["benchmark_runner"], "linux-bench-runner")
 
-    def test_benchmarks_skipped_when_no_runner(self):
-        os.environ["RUN_EXTENDED_TESTS"] = "true"
-        self._setup_benchmark_test()
-
-        def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {}}}
-
-        fetch_test_configurations.get_all_families_for_trigger_types = (
-            fake_get_all_families
-        )
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        names = {job["job_name"] for job in components}
-        self.assertNotIn("bench1", names)
-
-    def test_benchmarks_not_merged_when_disabled(self):
-        os.environ["RUN_EXTENDED_TESTS"] = "false"
+    def test_benchmarks_not_selected_when_test_type_full(self):
+        os.environ["TEST_TYPE"] = "full"
         self._setup_benchmark_test()
 
         fetch_test_configurations.run()

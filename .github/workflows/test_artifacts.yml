@@ -132,14 +132,10 @@ jobs:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      # Runner selection priority:
-      # 1. Benchmark runner (for benchmark tests on dedicated performance runners)
-      # 2. Multi-GPU runner (for multi-GPU tests like RCCL)
-      # 3. Standard test runner (default)
+      # If the test requires a multi GPU, use the multi GPU test runner.
+      # Otherwise, use the standard test runner.
       test_runs_on: >-
         ${{
-          matrix.components.benchmark_runner != '' &&
-            matrix.components.benchmark_runner ||
           matrix.components.multi_gpu_runner != '' &&
             matrix.components.multi_gpu_runner ||
             inputs.test_runs_on
