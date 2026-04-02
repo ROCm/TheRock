@@ -14,35 +14,14 @@ Instead of Jenkins and Groovy pipelines, TheRock uses **GitHub Actions** workflo
 
 ## CI Architecture
 
-TheRock uses a multi-stage CI pipeline that splits the build into stages (foundation → compiler-runtime → math-libs, etc.) with dependency chaining.
+TheRock uses a multi-stage CI pipeline that splits the build into stages (foundation → compiler-runtime → math-libs, etc.) with dependency chaining. Below is a general diagram of the CI flow
 
 ```mermaid
 graph TD
-    A[foundation build] --> B[compiler build]
-    B --> C2[comm-libs build gfx94X-dcgpu]
-    B --> C4[comm-libs build gfx110X-dgpu]
-    B --> C5[debug-tools build]
-    B --> C6[dc-tools-core build]
-    B --> C7[profiler build]
-    B --> C8[media-libs build]
-    B --> C9[iree-compiler build]
-    B --> C1[math-Libs build gfx94X-dcgpu]
-    B --> C3[math-Libs build gfx110X-dgpu]
-    C1 --> C10[fusilli-libs build]
-    C3 --> C10[fusilli-libs build]
-    C9 --> C10[fusilli-libs build]
-    C1 --> D[Upload artifacts]
-    C2 --> D[Upload artifacts]
-    C3 --> D[Upload artifacts]
-    C4 --> D[Upload artifacts]
-    C5 --> D[Upload artifacts]
-    C6 --> D[Upload artifacts]
-    C7 --> D[Upload artifacts]
-    C8 --> D[Upload artifacts]
-    C9 --> D[Upload artifacts]
-    C10 --> D[Upload artifacts]
-    D --> E1[test gfx94X-dcgpu]
-    D --> E2[test gfx110X-dgpu]
+    A[generic build] --> B1[arch build gfx94X-dcgpu]
+    A[generic build] --> B2[arch build gfx110X-dgpu]
+    B1 --> C[test gfx94X-dcgpu]
+    B2 --> D[test gfx110X-dgpu]
 ```
 
 Each stage runs as a separate job, uploads its artifacts and logs to S3, then downstream stages download and build on top of them. This allows for:
