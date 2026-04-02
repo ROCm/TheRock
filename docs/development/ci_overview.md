@@ -29,9 +29,18 @@ graph TD
     B --> C8[media-libs build]
     B --> C9[iree-compiler build]
     B --> C10[fusilli-libs build]
-    C1 --> D1[Test gfx1151]
-    C2 --> D2[Test gfx110X-all]
-    C3 --> D3[Test gfx94X-dcgpu]
+    C1 --> D[Upload artifacts]
+    C2 --> D[Upload artifacts]
+    C3 --> D[Upload artifacts]
+    C4 --> D[Upload artifacts]
+    C5 --> D[Upload artifacts]
+    C6 --> D[Upload artifacts]
+    C7 --> D[Upload artifacts]
+    C8 --> D[Upload artifacts]
+    C9 --> D[Upload artifacts]
+    C10 --> D[Upload artifacts]
+    D --> E1[test gfx94X-dcgpu]
+    D --> E2[test gfx110X-dgpu]
 ```
 
 Each stage runs as a separate job, uploads its artifacts and logs to S3, then downstream stages download and build on top of them. This allows for:
