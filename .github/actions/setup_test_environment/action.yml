@@ -64,6 +64,9 @@ runs:
       shell: bash
       run: |
         choco install --no-progress -y ninja
+        # ctest (and cmake) are required by Python test scripts that invoke `ctest` via subprocess.
+        # Build runners often already have CMake; self-hosted Windows test runners may not.
+        choco install --no-progress -y cmake
 
     - name: Download and Unpack Artifacts
       shell: bash
