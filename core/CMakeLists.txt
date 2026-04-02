@@ -293,7 +293,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
-  if(False)
+  if(THEROCK_BUILD_TESTING)
     set(HIP_TESTS_CMAKE_ARGS)
     set(_hip_tests_subproject_names)
     therock_cmake_subproject_declare(hip-tests
@@ -332,7 +332,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
         hip-tests
     )
     list(APPEND _hip_tests_subproject_names hip-tests)
-  endif()
+  endif(THEROCK_BUILD_TESTING)
 endif(THEROCK_ENABLE_HIP_RUNTIME)
 
 ################################################################################
