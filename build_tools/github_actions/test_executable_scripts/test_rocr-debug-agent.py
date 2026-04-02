@@ -150,9 +150,6 @@ def get_default_paths() -> Dict[str, Path]:
             logger.error(f"[X] Error: run-test.py not found.")
             sys.exit(1)
 
-    logger.info(f"Using test script from location: {test_script}")
-    logger.info(f"Using test binary from location: {test_bin}")
-
     return {
         "test_bin": test_bin,
         "test_script": test_script,
