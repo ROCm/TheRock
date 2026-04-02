@@ -136,33 +136,22 @@ def get_default_paths() -> Dict[str, Path]:
     artifacts_dir = validate_path(Path(artifacts_dir_str), "OUTPUT_ARTIFACTS_DIR")
 
     # Try the old testing script location first (for backwards compatibility).
-    old_test_bin = therock_bin_dir / "rocm-debug-agent-test"
-    old_test_script = artifacts_dir / "src" / "rocm-debug-agent-test" / "run-test.py"
+    test_bin = therock_bin_dir / "rocm-debug-agent-test"
+    test_script = artifacts_dir / "src" / "rocm-debug-agent-test" / "run-test.py"
 
-    if old_test_script.exists():
-        logger.info(f"Using test script from old location: {old_test_script}")
-        logger.info(f"Using test binary from old location: {old_test_bin}")
-        test_bin = old_test_bin
-        test_script = old_test_script
-    else:
-        # Fall back to new the testing script location (both binary and script
+    if not test_script.exists():
+        # Fall back to the new testing script location (both binary and script
         # in the same directory).
-        new_test_dir = artifacts_dir / "tests" / "rocm-debug-agent"
-        new_test_bin = new_test_dir / "rocm-debug-agent-test"
-        new_test_script = new_test_dir / "run-test.py"
+        test_dir = artifacts_dir / "tests" / "rocm-debug-agent"
+        test_bin = test_dir / "rocm-debug-agent-test"
+        test_script = test_dir / "run-test.py"
 
-        if new_test_script.exists():
-            logger.info(f"Using test script from new location: {new_test_script}")
-            logger.info(f"Using test binary from new location: {new_test_bin}")
-            test_bin = new_test_bin
-            test_script = new_test_script
-        else:
-            logger.error(
-                f"[X] Error: run-test.py not found in either location:\n"
-                f"  Old: {old_test_script}\n"
-                f"  New: {new_test_script}"
-            )
+        if not test_script.exists():
+            logger.error(f"[X] Error: run-test.py not found.")
             sys.exit(1)
+
+    logger.info(f"Using test script from location: {test_script}")
+    logger.info(f"Using test binary from location: {test_bin}")
 
     return {
         "test_bin": test_bin,
