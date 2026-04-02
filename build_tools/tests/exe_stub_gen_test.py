@@ -41,6 +41,9 @@ class PosixExeStubTemplateTest(unittest.TestCase):
         self.assertNotIn("@EXEC_RELPATH@", result)
 
 
+_HAS_CC = os.system("cc --version > /dev/null 2>&1") == 0
+
+
 @unittest.skipIf(platform.system() == "Windows", "POSIX-only test")
 class GenerateExeLinkStubPosixTest(unittest.TestCase):
     """Tests for generate_exe_link_stub on POSIX systems."""
@@ -53,23 +56,7 @@ class GenerateExeLinkStubPosixTest(unittest.TestCase):
 
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def _has_cc(self) -> bool:
-        """Check if a C compiler is available."""
-        try:
-            subprocess.run(
-                ["cc", "--version"],
-                capture_output=True,
-                timeout=5,
-            )
-            return True
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            return False
-
-    @unittest.skipUnless(
-        # Check at class load time whether cc is available
-        os.system("cc --version > /dev/null 2>&1") == 0,
-        "C compiler not available",
-    )
+    @unittest.skipUnless(_HAS_CC, "C compiler not available")
     def test_generates_executable(self):
         """Test that generate_exe_link_stub creates an executable file."""
         output_file = Path(self.temp_dir) / "stub"
@@ -77,10 +64,7 @@ class GenerateExeLinkStubPosixTest(unittest.TestCase):
         self.assertTrue(output_file.exists())
         self.assertTrue(os.access(output_file, os.X_OK))
 
-    @unittest.skipUnless(
-        os.system("cc --version > /dev/null 2>&1") == 0,
-        "C compiler not available",
-    )
+    @unittest.skipUnless(_HAS_CC, "C compiler not available")
     def test_stub_executes_target(self):
         """Test that the generated stub correctly executes a target."""
         # Create a simple script to be the target

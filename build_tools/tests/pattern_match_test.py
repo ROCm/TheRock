@@ -55,7 +55,7 @@ class RecursiveGlobPatternTest(unittest.TestCase):
         self.assertFalse(self._match("lib/*.so", "lib/sub/libfoo.so"))
 
     def test_question_mark(self):
-        """'?' should match any characters within a single path segment."""
+        """'?' should match a single character within a path segment."""
         self.assertTrue(self._match("lib/lib?.so", "lib/libA.so"))
         self.assertTrue(self._match("lib/lib?.so", "lib/libXY.so"))
         self.assertFalse(self._match("lib/lib?.so", "lib/sub/libA.so"))
