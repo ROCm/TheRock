@@ -1,0 +1,66 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Setup (Multi-Arch)
+
+on:
+  workflow_call:
+    inputs:
+      build_variant:
+        type: string
+        default: "release"
+    outputs:
+      enable_build_jobs:
+        description: Whether to enable build jobs.
+        value: ${{ jobs.setup.outputs.enable_build_jobs }}
+      linux_build_config:
+        description: JSON object with Linux build configuration, or empty string if skipped.
+        value: ${{ jobs.setup.outputs.linux_build_config }}
+      windows_build_config:
+        description: JSON object with Windows build configuration, or empty string if skipped.
+        value: ${{ jobs.setup.outputs.windows_build_config }}
+      test_type:
+        description: "The test type to run (quick, standard, comprehensive, full)."
+        value: ${{ jobs.setup.outputs.test_type }}
+      linux_test_labels:
+        description: ROCm projects to run Linux tests on. Optional filter.
+        value: ${{ jobs.setup.outputs.linux_test_labels }}
+      windows_test_labels:
+        description: ROCm projects to run Windows tests on. Optional filter.
+        value: ${{ jobs.setup.outputs.windows_test_labels }}
+      rocm_package_version:
+        description: ROCm package version (primarily for Python packages).
+        value: ${{ jobs.setup.outputs.rocm_package_version }}
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-24.04
+    outputs:
+      enable_build_jobs: ${{ steps.configure.outputs.enable_build_jobs }}
+      linux_build_config: ${{ steps.configure.outputs.linux_build_config }}
+      windows_build_config: ${{ steps.configure.outputs.windows_build_config }}
+      test_type: ${{ steps.configure.outputs.test_type }}
+      linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
+      windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
+      rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # We need the parent commit to do a diff
+          fetch-depth: 2
+
+      # The script reads GITHUB_EVENT_PATH directly for PR labels and
+      # workflow_dispatch inputs — no env var pass-through needed.
+      - name: Configuring CI options
+        id: configure
+        env:
+          BUILD_VARIANT: ${{ inputs.build_variant }}
+        run: python ./build_tools/github_actions/configure_multi_arch_ci.py
+
+      - name: Compute package version
+        id: rocm_package_version
+        run: python ./build_tools/compute_rocm_package_version.py --release-type=dev

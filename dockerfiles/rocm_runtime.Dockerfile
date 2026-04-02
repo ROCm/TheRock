@@ -29,6 +29,11 @@
 # - ubuntu:24.04
 # - almalinux:8
 # - mcr.microsoft.com/azurelinux/base/core:3.0
+# - registry.access.redhat.com/ubi8/ubi:8.10 (RHEL 8.10)
+# - registry.access.redhat.com/ubi9/ubi:9.7 (RHEL 9.7)
+# - registry.access.redhat.com/ubi10/ubi:10.1 (RHEL 10.1)
+# - registry.suse.com/bci/bci-base:15.7 (SLES 15.7)
+# - registry.suse.com/bci/bci-base:16.0 (SLES 16.0)
 #
 # Build arguments
 # - BASE_IMAGE       : Base Docker image (default: ubuntu:24.04)
@@ -48,7 +53,7 @@
 #     dockerfiles/
 #
 #   # AlmaLinux 8 + gfx94X (nightly)
-#   docker build --network=host \
+#   docker build \
 #     --build-arg BASE_IMAGE=almalinux:8 \
 #     --build-arg VERSION=7.11.0a20251211 \
 #     --build-arg AMDGPU_FAMILY=gfx94X-dcgpu \
@@ -73,6 +78,51 @@
 #     --build-arg RELEASE_TYPE=stable \
 #     -f dockerfiles/rocm_runtime.Dockerfile \
 #     -t rocm:ubuntu22.04-gfx94X-7.10.0 \
+#     dockerfiles/
+#
+#   # RHEL 8.10 UBI + gfx94X (nightly)
+#   docker build \
+#     --build-arg BASE_IMAGE=registry.access.redhat.com/ubi8/ubi:8.10 \
+#     --build-arg VERSION=7.11.0a20251211 \
+#     --build-arg AMDGPU_FAMILY=gfx94X-dcgpu \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
+#     -t rocm-nightly:rhel8.10-gfx94X-7.11.0a20251211 \
+#     dockerfiles/
+#
+#   # RHEL 9.7 UBI + gfx94X (nightly)
+#   docker build \
+#     --build-arg BASE_IMAGE=registry.access.redhat.com/ubi9/ubi:9.7 \
+#     --build-arg VERSION=7.11.0a20251211 \
+#     --build-arg AMDGPU_FAMILY=gfx94X-dcgpu \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
+#     -t rocm-nightly:rhel9.7-gfx94X-7.11.0a20251211 \
+#     dockerfiles/
+#
+#   # RHEL 10.1 UBI + gfx110X (nightly)
+#   docker build \
+#     --build-arg BASE_IMAGE=registry.access.redhat.com/ubi10/ubi:10.1 \
+#     --build-arg VERSION=7.11.0a20251211 \
+#     --build-arg AMDGPU_FAMILY=gfx110X-all \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
+#     -t rocm-nightly:rhel10.1-gfx110X-7.11.0a20251211 \
+#     dockerfiles/
+#
+#   # SLES 15.7 BCI + gfx110X (nightly)
+#   docker build \
+#     --build-arg BASE_IMAGE=registry.suse.com/bci/bci-base:15.7 \
+#     --build-arg VERSION=7.11.0a20251211 \
+#     --build-arg AMDGPU_FAMILY=gfx110X-all \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
+#     -t rocm-nightly:sles15.7-gfx110X-7.11.0a20251211 \
+#     dockerfiles/
+#
+#   # SLES 16.0 BCI + gfx94X (nightly)
+#   docker build \
+#     --build-arg BASE_IMAGE=registry.suse.com/bci/bci-base:16.0 \
+#     --build-arg VERSION=7.11.0a20251211 \
+#     --build-arg AMDGPU_FAMILY=gfx94X-dcgpu \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
+#     -t rocm-nightly:sles16.0-gfx94X-7.11.0a20251211 \
 #     dockerfiles/
 #
 # Run example:

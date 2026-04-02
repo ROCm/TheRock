@@ -21,7 +21,7 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from github_actions.github_actions_utils import gha_append_step_summary
+from github_actions.github_actions_api import gha_append_step_summary
 
 logging.basicConfig(level=logging.INFO)
 
