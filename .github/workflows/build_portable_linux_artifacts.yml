@@ -133,8 +133,6 @@ jobs:
       - name: Run comgr tests
         continue-on-error: true
         run: |
-          ninja -C "${BUILD_DIR}" amd-comgr+build
-          ninja -C "${BUILD_DIR}/compiler/amd-comgr/build"
           ctest --test-dir "${BUILD_DIR}/compiler/amd-comgr/build" --output-on-failure
           "${BUILD_DIR}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
             "${BUILD_DIR}/compiler/amd-comgr/build/test-lit" -v
