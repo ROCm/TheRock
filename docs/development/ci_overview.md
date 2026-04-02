@@ -17,11 +17,18 @@ Instead of Jenkins and Groovy pipelines, TheRock uses **GitHub Actions** workflo
 TheRock uses a multi-stage CI pipeline that splits the build into stages (foundation → compiler-runtime → math-libs, etc.) with dependency chaining.
 
 ```mermaid
-graph LR
-    A[Core build stage]
-    A --> C1[Math-Libs build gfx1151]
-    A --> C2[Math-Libs build gfx110X-all]
-    A --> C3[Math-Libs build gfx94X-dcgpu]
+graph TD
+    A[foundation build] --> B[compiler build]
+    B --> C1[math-Libs build gfx94X-dcgpu]
+    B --> C2[comm-libs build gfx94X-dcgpu]
+    B --> C3[math-Libs build gfx110X-dgpu]
+    B --> C4[comm-libs build gfx110X-dgpu]
+    B --> C5[debug-tools build]
+    B --> C6[dc-tools-core build]
+    B --> C7[profiler build]
+    B --> C8[media-libs build]
+    B --> C9[iree-compiler build]
+    B --> C10[fusilli-libs build]
     C1 --> D1[Test gfx1151]
     C2 --> D2[Test gfx110X-all]
     C3 --> D3[Test gfx94X-dcgpu]
@@ -99,11 +106,11 @@ See [adding_tests.md](adding_tests.md) for how to add new tests to the CI pipeli
 
 ### Viewing logs
 
-After a CI completes, you will be able to see a GitHub Step Summary in the `Summary` page of the CI run.
+At the start of a CI run, you will be able to see a GitHub Step Summary in the `Summary` page of the CI run.
+
+As each build completes and uploads, you are able to find the index pages for artifacts and logs.
 
 <img src="./assets/step_summary.png"/>
-
-You are able to find the index pages for artifacts and logs, as well as additional CI information.
 
 ### Trigger a CI Run
 
