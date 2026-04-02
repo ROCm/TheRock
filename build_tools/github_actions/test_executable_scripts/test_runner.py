@@ -86,20 +86,42 @@ ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
 
-TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
+# Component-specific overrides applied on top of defaults.
+# - test_dir_from_rocm: path parts relative to ROCM_PATH to override the test directory
+# - env_prepend: env var name -> list of path-part lists (each relative to ROCM_PATH)
+#                to prepend to the existing value
+COMPONENT_OVERRIDES = {
+    "rocprofiler-compute": {
+        "test_dir_from_rocm": ["libexec", "rocprofiler-compute"],
+        "env_prepend": {
+            "PATH": [["bin"]],
+            "LD_LIBRARY_PATH": [["lib"], ["lib", "rocm_sysdeps", "lib"]],
+        },
+    },
+}
 
-# Add component-specific environment variables here
-if test_component_job_name == "rocprofiler-compute":
-    TEST_DIR = str(ROCM_PATH / "libexec" / "rocprofiler-compute")
-    rocm_bin = str(ROCM_PATH / "bin")
-    rocm_lib = str(ROCM_PATH / "lib")
-    sysdeps_lib = str(ROCM_PATH / "lib" / "rocm_sysdeps" / "lib")
-    environ_vars["PATH"] = ":".join(
-        filter(None, [rocm_bin, environ_vars.get("PATH", "")])
-    )
-    environ_vars["LD_LIBRARY_PATH"] = ":".join(
-        filter(None, [rocm_lib, sysdeps_lib, environ_vars.get("LD_LIBRARY_PATH", "")])
-    )
+
+def apply_component_overrides(job_name, rocm_path, test_dir, env):
+    """Apply component-specific overrides for test_dir and environment variables."""
+    overrides = COMPONENT_OVERRIDES.get(job_name)
+    if not overrides:
+        return test_dir
+
+    if "test_dir_from_rocm" in overrides:
+        test_dir = str(rocm_path.joinpath(*overrides["test_dir_from_rocm"]))
+
+    for env_key, path_parts_list in overrides.get("env_prepend", {}).items():
+        new_paths = [str(rocm_path.joinpath(*parts)) for parts in path_parts_list]
+        existing = env.get(env_key, "")
+        env[env_key] = ":".join(filter(None, new_paths + [existing]))
+
+    return test_dir
+
+
+TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
+TEST_DIR = apply_component_overrides(
+    test_component_job_name, ROCM_PATH, TEST_DIR, environ_vars
+)
 
 logging.basicConfig(level=logging.INFO)
 ##############################################
