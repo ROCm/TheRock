@@ -4,6 +4,8 @@
 # Build-side targets for extended functional tests.
 # Each test that needs a pre-built binary adds its subproject declaration here.
 
+message(STATUS "extended_tests: THEROCK_ENABLE_HIP_RUNTIME=${THEROCK_ENABLE_HIP_RUNTIME} WIN32=${WIN32}")
+
 if(NOT WIN32 AND THEROCK_ENABLE_HIP_RUNTIME)
   # Code object version backward-compatibility test (hipRTC-based).
   # Single executable that compiles a vector-add kernel at runtime via hipRTC

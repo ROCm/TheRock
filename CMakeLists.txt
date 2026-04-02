@@ -477,6 +477,7 @@ endif()
 # Testing
 ################################################################################
 
+message(STATUS "THEROCK_BUILD_TESTING=${THEROCK_BUILD_TESTING} (before extended_tests)")
 if(THEROCK_BUILD_TESTING)
   if(NOT WIN32)
     add_executable(
