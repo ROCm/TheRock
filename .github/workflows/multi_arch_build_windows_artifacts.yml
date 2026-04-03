@@ -162,7 +162,7 @@ jobs:
         continue-on-error: true
         run: |
           rc1=0
-          "${{ env.BUILD_DIR }}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
+          "${{ env.BUILD_DIR }}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit.cmd" \
             "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v || rc1=$?
           rc2=0
           ctest --test-dir "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" --output-on-failure || rc2=$?
