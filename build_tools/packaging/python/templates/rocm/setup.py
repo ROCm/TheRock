@@ -77,6 +77,23 @@ if device_entry and device_entry.is_target_specific:
         dist_info.determine_target_family()
     except Exception:
         EXTRAS_REQUIRE.pop("device", None)
+
+# For target-specific packages with multiple available targets (e.g. device
+# packages in kpack-split mode), generate per-target extras so users can
+# explicitly request a specific ISA: pip install rocm[device-gfx942]
+# Also generate a device-all extra that installs all available device shards.
+for pkg in dist_info.ALL_PACKAGES.values():
+    if not pkg.is_target_specific or pkg.required:
+        continue
+    if len(dist_info.AVAILABLE_TARGET_FAMILIES) > 1:
+        all_requires = []
+        for tf in sorted(dist_info.AVAILABLE_TARGET_FAMILIES):
+            extra_name = f"{pkg.logical_name}-{tf}"
+            req = pkg.get_dist_package_require(target_family=tf)
+            EXTRAS_REQUIRE[extra_name] = [req]
+            all_requires.append(req)
+        EXTRAS_REQUIRE[f"{pkg.logical_name}-all"] = all_requires
+
 print(f"extras_require={EXTRAS_REQUIRE}")
 packages = find_packages(where="./src")
 print("Found packages:", packages)
