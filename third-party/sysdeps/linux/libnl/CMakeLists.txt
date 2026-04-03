@@ -85,14 +85,12 @@ add_custom_target(
     ${patch_source_commands}
   COMMAND
     "${CMAKE_COMMAND}" -E env
-      "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
       # Escaping: Double $ to satisfy CMake, then double $ to satisfy configure,
       # then escaped single quotes to make it to the linker command line.
       #
       # '$$ORIGIN' does make its way to LDFLAGS correctly, but doesn't survive
       # making it to the shared library's RUNPATH.
       "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\' "
-      "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
@@ -103,9 +101,7 @@ add_custom_target(
     make install
   COMMAND
     "${CMAKE_COMMAND}" -E env
-      "PATCHELF=${PATCHELF}"
-      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
-      "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
+      "PATCHELF=${PATCHELF}" --
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
 )
 

@@ -85,7 +85,6 @@ add_custom_target(
       # '$$ORIGIN' does make its way to LDFLAGS correctly, but doesn't survive
       # making it to the shared library's RUNPATH.
       "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\'"
-      "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
@@ -95,9 +94,7 @@ add_custom_target(
     make install
   COMMAND
     "${CMAKE_COMMAND}" -E env
-      "PATCHELF=${PATCHELF}"
-      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
-      "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
+      "PATCHELF=${PATCHELF}" --
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
 )
 
