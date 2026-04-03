@@ -147,9 +147,12 @@ jobs:
       - name: Run comgr tests
         continue-on-error: true
         run: |
-          ctest --test-dir "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" --output-on-failure
+          rc1=0
           "${{ env.BUILD_DIR }}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
-            "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v
+            "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v || rc1=$?
+          rc2=0
+          ctest --test-dir "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" --output-on-failure || rc2=$?
+          [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ]
 
       - name: Report
         if: ${{ !cancelled() }}

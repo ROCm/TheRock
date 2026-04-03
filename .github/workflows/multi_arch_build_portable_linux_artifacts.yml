@@ -134,9 +134,12 @@ jobs:
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
         run: |
-          ctest --test-dir "${BUILD_DIR}/compiler/amd-comgr/build" --output-on-failure
+          rc1=0
           "${BUILD_DIR}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
-            "${BUILD_DIR}/compiler/amd-comgr/build/test-lit" -v
+            "${BUILD_DIR}/compiler/amd-comgr/build/test-lit" -v || rc1=$?
+          rc2=0
+          ctest --test-dir "${BUILD_DIR}/compiler/amd-comgr/build" --output-on-failure || rc2=$?
+          [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ]
 
       - name: Report
         if: ${{ !cancelled() }}
