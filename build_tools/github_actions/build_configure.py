@@ -109,6 +109,7 @@ def build_configure(build_dir, manylinux=False):
             f"-DCMAKE_CXX_COMPILER_LAUNCHER={cxx_launcher}",
             "-DTHEROCK_BUILD_TESTING=OFF",
             "-DTHEROCK_BUILD_COMGR_TESTS=ON",
+            "-DTHEROCK_BUILD_LLVM_TESTS=ON",
         ]
     )
 

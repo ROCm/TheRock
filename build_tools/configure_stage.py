@@ -163,6 +163,7 @@ def generate_cmake_args(
 
     if stage_name == "compiler-runtime":
         args.append("-DTHEROCK_BUILD_COMGR_TESTS=ON")
+        args.append("-DTHEROCK_BUILD_LLVM_TESTS=ON")
 
     return args
 
