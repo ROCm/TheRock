@@ -62,14 +62,14 @@ endif()
 
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
 # Only enable BUILD_TESTING if LLVM tests are explicitly enabled
-if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_ENABLE_LLVM_TESTS)
+if(THEROCK_BUILD_LLVM_TESTS)
   set(BUILD_TESTING ON CACHE BOOL "Enable building LLVM tests" FORCE)
 else()
   set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
 endif()
 
 # Enable LLVM tools when tests are enabled (tests need the tools) or when explicitly requested
-if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR THEROCK_BUILD_COMGR_TESTS OR THEROCK_ENABLE_LLVM_TESTS)
+if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR THEROCK_BUILD_COMGR_TESTS)
   set(LLVM_BUILD_TOOLS ON CACHE BOOL "Build LLVM tools required for tests" FORCE)
   set(LLVM_INSTALL_UTILS ON CACHE BOOL "Install LLVM utility binaries like FileCheck" FORCE)
 
@@ -191,7 +191,7 @@ endfunction()
 # When LLVM tests or tools are explicitly enabled, build all tools (don't selectively disable).
 # Comgr tests only need the production tool set plus LLVM_INSTALL_UTILS (FileCheck, not, count),
 # so they don't skip selective disabling -- the mega-driver is naturally disabled by the allow-list.
-if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS AND NOT THEROCK_ENABLE_LLVM_TESTS)
+if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS)
   block()
     # This list contains the minimum tooling that must be enabled to build LLVM.
     # It is empically derived (either configure or ninja invocation will fail

@@ -118,13 +118,6 @@ option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minim
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 option(THEROCK_BUILD_COMGR_TESTS "Enables building Comgr tests" OFF)
 
-# THEROCK_ENABLE_LLVM_TESTS controls LLVM_INCLUDE_TESTS (generation of check-llvm
-# targets). Default it to ON when THEROCK_BUILD_LLVM_TESTS is ON so a single
-# flag is sufficient, but allow advanced users to override independently.
-if(NOT DEFINED THEROCK_ENABLE_LLVM_TESTS)
-  set(THEROCK_ENABLE_LLVM_TESTS ${THEROCK_BUILD_LLVM_TESTS})
-endif()
-
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
 # Options to control the concurrency for building LLVM.
