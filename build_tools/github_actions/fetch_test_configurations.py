@@ -475,6 +475,13 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        # rocdecode requires FFmpeg dev libraries (libavcodec-dev, libavformat-dev,
+        # libavutil-dev) for test builds. These are not bundled in TheRock
+        # artifacts and are provided via the specialized media image.
+        # TODO: switch to no_rocm_image_ubuntu24_04_media once its first image
+        # is published and the digest is available to pin here (see rocgdb for
+        # the pattern).
+        # "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:...",
     },
     "rocjpeg": {
         "job_name": "rocjpeg",
