@@ -109,6 +109,7 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     outputs:
       s3_prefix: ${{ steps.s3_config.outputs.s3_prefix }}
+      package_install_url: ${{ steps.s3_config.outputs.package_repository_url }}
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
@@ -211,34 +212,25 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [build_native_packages]
     outputs:
-      os_profiles: ${{ steps.set.outputs.os_profiles }}
-      gfx_arch: ${{ steps.set.outputs.gfx_arch }}
-      repo_base_url: ${{ steps.get-base-url.outputs.repo_base_url }}
-      repo_sub_folder: ${{ steps.get-repo-sub-folder.outputs.repo_sub_folder }}
+      os_profiles: ${{ steps.set-os-profiles.outputs.os_profiles }}
+      package_install_url: ${{ needs.build_native_packages.outputs.package_install_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Get base URL (repo_base_url) from CloudFront URL
-        id: get-base-url
-        run: python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url "${{ inputs.cloudfront_base_url }}" >> $GITHUB_OUTPUT
-
-      - name: Get repo_sub_folder from S3 prefix (get_url_repo_params)
-        id: get-repo-sub-folder
-        run: python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix "${{ needs.build_native_packages.outputs.s3_prefix }}" >> $GITHUB_OUTPUT
-
-      - name: Set os_profiles and gfx_arch
-        id: set
+      - name: Set OS profiles
+        id: set-os-profiles
         run: |
           PKG_TYPE="${{ inputs.native_package_type }}"
-          if [ "$PKG_TYPE" = "deb" ]; then
+          RELEASE_TYPE="${{ inputs.release_type }}"
+
+          # OS profiles based on release type
+          if [[ "$RELEASE_TYPE" == "release" || "$RELEASE_TYPE" == "prerelease" ]]; then
+            OS_PROFILES='["ubuntu2404","rhel10"]'
+          elif [ "$PKG_TYPE" = "deb" ]; then
             OS_PROFILES='["ubuntu2404"]'
           else
             OS_PROFILES='["rhel10","sles16"]'
           fi
-          GFX_ARCH=$(echo "${{ inputs.artifact_group }}" | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
+
           echo "os_profiles=${OS_PROFILES}" >> $GITHUB_OUTPUT
-          echo "gfx_arch=${GFX_ARCH}" >> $GITHUB_OUTPUT
 
   test_native_linux_packages_install:
     name: Test Native Linux Packages Install - ${{ matrix.os_profile }}
@@ -250,10 +242,9 @@ jobs:
         os_profile: ${{ fromJson(needs.get_install_test_profiles.outputs.os_profiles) }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
-      repo_base_url: ${{ needs.get_install_test_profiles.outputs.repo_base_url }}
-      repo_sub_folder: ${{ needs.get_install_test_profiles.outputs.repo_sub_folder }}
+      package_install_url: ${{ needs.get_install_test_profiles.outputs.package_install_url }}
       release_type: ${{ inputs.release_type }}
       os_profile: ${{ matrix.os_profile }}
-      gpg_key_url: ${{ inputs.release_type == 'prerelease' && format('{0}/gpg/rocm.gpg', needs.get_install_test_profiles.outputs.repo_base_url) || '' }}
-      gfx_arch: ${{ needs.get_install_test_profiles.outputs.gfx_arch }}
+      gpg_key_url: ${{ inputs.release_type == 'prerelease' && format('{0}/gpg/rocm.gpg', inputs.cloudfront_base_url) || '' }}
+      artifact_group: ${{ inputs.artifact_group }}
       install_prefix: ${{ '/opt/rocm/core' }}

@@ -6,15 +6,10 @@ name: Test Native Linux Packages Install
 on:
   workflow_call:
     inputs:
-      repo_base_url:
-        description: "Base repository URL (scheme + netloc, no trailing slash). repo_url is computed via get_url_repo_params get-repo-url using os_profile, gpg_key_url, and repo_sub_folder."
+      package_install_url:
+        description: "Package installation URL from get_s3_config.py (includes architecture subdirectory for RPM)."
         required: true
         type: string
-      repo_sub_folder:
-        description: "Repo subfolder (e.g. YYYYMMDD-<id> for dev/nightly; empty for prerelease). Passed from build_native_linux_packages."
-        required: false
-        type: string
-        default: ""
       release_type:
         description: "Release line (dev, nightly, prerelease). Passed to get_url_repo_params get-repo-url and logged; native_linux_package_install_test.py maps dev/nightly to nightly and prerelease to prerelease."
         required: true
@@ -28,11 +23,11 @@ on:
         description: OS profile (e.g., ubuntu2404, rhel10, sles16). Package type (deb/rpm) is derived from this.
         required: true
         type: string
-      gfx_arch:
-        description: GPU architecture for package names (e.g. gfx94x). Default gfx94x.
+      artifact_group:
+        description: Artifact group to extract GPU architecture from (e.g., gfx94X-dcgpu). Default gfx94X-dcgpu.
         required: false
         type: string
-        default: "gfx94x"
+        default: "gfx94X-dcgpu"
       install_prefix:
         description: Installation prefix path (optional, defaults to /opt/rocm/core).
         required: false
@@ -45,14 +40,10 @@ on:
         default: ""
   workflow_dispatch:
     inputs:
-      repo_base_url:
-        description: "Base repository URL (no trailing slash)"
+      package_install_url:
+        description: "Package installation URL (includes architecture subdirectory for RPM)"
         required: true
         type: string
-      repo_sub_folder:
-        description: "Repo subfolder (e.g. YYYYMMDD-id; empty for prerelease)"
-        type: string
-        default: ""
       release_type:
         description: "Release line (dev, nightly, or prerelease)"
         required: true
@@ -73,10 +64,10 @@ on:
           - ubuntu2404
           - rhel10
           - sles16
-      gfx_arch:
-        description: GPU architecture (e.g. gfx94x)
+      artifact_group:
+        description: Artifact group to extract GPU architecture from (e.g., gfx94X-dcgpu)
         type: string
-        default: "gfx94x"
+        default: "gfx94X-dcgpu"
       install_prefix:
         description: Installation prefix path
         type: string
@@ -95,28 +86,31 @@ run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
 
 jobs:
   compute_repo_url:
-    name: Get repo URL (get-repo-url)
+    name: Determine package type, repo URL, and GPU architecture
     runs-on: ubuntu-24.04
     outputs:
-      repo_url: ${{ steps.get-repo-url.outputs.repo_url }}
-      pkg_type: ${{ steps.get-repo-url.outputs.pkg_type }}
+      repo_url: ${{ steps.set-repo-params.outputs.repo_url }}
+      pkg_type: ${{ steps.set-repo-params.outputs.pkg_type }}
+      gfx_arch: ${{ steps.set-gfx-arch.outputs.gfx_arch }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Get repo URL from params (get_url_repo_params get-repo-url)
-        id: get-repo-url
+
+      - name: Set repo parameters
+        id: set-repo-params
         run: |
           case "${{ inputs.os_profile }}" in
             ubuntu*|debian*) PKG_TYPE="deb" ;;
             *) PKG_TYPE="rpm" ;;
           esac
           echo "pkg_type=${PKG_TYPE}" >> $GITHUB_OUTPUT
-          python build_tools/packaging/linux/get_url_repo_params.py get-repo-url \
-            --release-type "${{ inputs.release_type }}" \
-            --native-package-type "${PKG_TYPE}" \
-            --repo-base-url "${{ inputs.repo_base_url }}" \
-            --os-profile "${{ inputs.os_profile }}" \
-            --repo-sub-folder "${{ inputs.repo_sub_folder }}" >> $GITHUB_OUTPUT
+          echo "repo_url=${{ inputs.package_install_url }}" >> $GITHUB_OUTPUT
+
+      - name: Set gfx_arch
+        id: set-gfx-arch
+        run: |
+          python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch \
+            --artifact-group "${{ inputs.artifact_group }}" >> $GITHUB_OUTPUT
 
   test_native_linux_packages_install:
     name: Test Native Linux Packages Installation - ${{ inputs.os_profile }}
@@ -135,7 +129,7 @@ jobs:
       OS_PROFILE: ${{ inputs.os_profile }}
       PKG_TYPE: ${{ needs.compute_repo_url.outputs.pkg_type }}
       RELEASE_TYPE: ${{ inputs.release_type }}
-      GFX_ARCH: ${{ inputs.gfx_arch || 'gfx94x' }}
+      GFX_ARCH: ${{ needs.compute_repo_url.outputs.gfx_arch }}
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
       TEST_TYPE: ${{ inputs.test_type || 'sanity' }}
     steps:

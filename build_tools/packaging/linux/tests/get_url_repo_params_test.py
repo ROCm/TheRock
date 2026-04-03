@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 # Unit test coverage for get_url_repo_params.py:
-#   get_base_url, get_repo_sub_folder, get_repo_url, and main() subcommands.
+#   get_base_url, get_repo_sub_folder, get_repo_url, extract_gfx_arch, and main() subcommands.
 
 import os
 import sys
@@ -153,6 +153,79 @@ class GetRepoUrlTest(unittest.TestCase):
         )
 
 
+class ExtractGfxArchTest(unittest.TestCase):
+    """Tests for extract_gfx_arch()."""
+
+    def test_extracts_and_lowercases_gfx_arch(self):
+        # Test that extract_gfx_arch returns the first segment lowercased.
+        self.assertEqual(
+            get_url_repo_params.extract_gfx_arch("gfx94X-dcgpu"),
+            "gfx94x",
+        )
+
+    def test_handles_lowercase_input(self):
+        # Test that extract_gfx_arch works with already-lowercase input.
+        self.assertEqual(
+            get_url_repo_params.extract_gfx_arch("gfx1100-consumer"),
+            "gfx1100",
+        )
+
+    def test_handles_uppercase_prefix(self):
+        # Test that extract_gfx_arch lowercases uppercase prefix.
+        self.assertEqual(
+            get_url_repo_params.extract_gfx_arch("GFX942-server"),
+            "gfx942",
+        )
+
+    def test_handles_no_dash(self):
+        # Test that extract_gfx_arch returns the whole string if no dash present.
+        self.assertEqual(
+            get_url_repo_params.extract_gfx_arch("gfx1100"),
+            "gfx1100",
+        )
+
+    def test_empty_string_raises(self):
+        # Test that extract_gfx_arch raises ValueError for empty string.
+        with self.assertRaises(ValueError) as ctx:
+            get_url_repo_params.extract_gfx_arch("")
+        self.assertIn("cannot be empty", str(ctx.exception))
+
+    def test_handles_multiple_dashes(self):
+        # Test that extract_gfx_arch only takes first segment when multiple dashes.
+        self.assertEqual(
+            get_url_repo_params.extract_gfx_arch("gfx94X-dcgpu-extra-info"),
+            "gfx94x",
+        )
+
+    def test_comma_separated_list(self):
+        # Test that extract_gfx_arch handles comma-separated artifact groups.
+        self.assertEqual(
+            get_url_repo_params.extract_gfx_arch("gfx94X-dcgpu,gfx1100-consumer"),
+            "gfx94x,gfx1100",
+        )
+
+    def test_semicolon_separated_list(self):
+        # Test that extract_gfx_arch handles semicolon-separated artifact groups.
+        self.assertEqual(
+            get_url_repo_params.extract_gfx_arch("gfx94X-dcgpu;gfx1100-consumer"),
+            "gfx94x,gfx1100",
+        )
+
+    def test_mixed_case_list(self):
+        # Test that extract_gfx_arch lowercases all items in list.
+        self.assertEqual(
+            get_url_repo_params.extract_gfx_arch("GFX942-server,GFX1100-consumer"),
+            "gfx942,gfx1100",
+        )
+
+    def test_list_with_spaces(self):
+        # Test that extract_gfx_arch strips whitespace from list items.
+        self.assertEqual(
+            get_url_repo_params.extract_gfx_arch("gfx94X-dcgpu , gfx1100-consumer"),
+            "gfx94x,gfx1100",
+        )
+
+
 class MainSubcommandsTest(unittest.TestCase):
     """Tests for main() subcommands (get-base-url, get-repo-sub-folder, get-repo-url)."""
 
@@ -227,6 +300,52 @@ class MainSubcommandsTest(unittest.TestCase):
                     ]
                 )
         self.assertEqual(code, 1)
+
+    def test_extract_gfx_arch_success(self):
+        # Test that extract-gfx-arch subcommand prints gfx_arch= and returns 0.
+        with patch("sys.stdout") as mock_stdout:
+            code = get_url_repo_params.main(
+                ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu"]
+            )
+        self.assertEqual(code, 0)
+        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
+        self.assertIn("gfx_arch=gfx94x", output)
+
+    def test_extract_gfx_arch_lowercase(self):
+        # Test that extract-gfx-arch handles already-lowercase input.
+        with patch("sys.stdout") as mock_stdout:
+            code = get_url_repo_params.main(
+                ["extract-gfx-arch", "--artifact-group", "gfx1100-consumer"]
+            )
+        self.assertEqual(code, 0)
+        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
+        self.assertIn("gfx_arch=gfx1100", output)
+
+    def test_extract_gfx_arch_empty_returns_one(self):
+        # Test that extract-gfx-arch with empty artifact_group returns 1.
+        with patch("sys.stderr"):
+            code = get_url_repo_params.main(["extract-gfx-arch", "--artifact-group", ""])
+        self.assertEqual(code, 1)
+
+    def test_extract_gfx_arch_comma_list(self):
+        # Test that extract-gfx-arch handles comma-separated list.
+        with patch("sys.stdout") as mock_stdout:
+            code = get_url_repo_params.main(
+                ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu,gfx1100-consumer"]
+            )
+        self.assertEqual(code, 0)
+        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
+        self.assertIn("gfx_arch=gfx94x,gfx1100", output)
+
+    def test_extract_gfx_arch_semicolon_list(self):
+        # Test that extract-gfx-arch handles semicolon-separated list.
+        with patch("sys.stdout") as mock_stdout:
+            code = get_url_repo_params.main(
+                ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu;gfx1100-consumer"]
+            )
+        self.assertEqual(code, 0)
+        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
+        self.assertIn("gfx_arch=gfx94x,gfx1100", output)
 
 
 if __name__ == "__main__":
