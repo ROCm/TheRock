@@ -104,6 +104,14 @@ THEROCK_ENV_VARS = [
 
 PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 
+# Test modules excluded at the run_test.py level (--exclude).  These are
+# modules that hang or crash the subprocess in ways that pytest-timeout
+# cannot catch (e.g. hanging during import or in C extensions).
+# TODO: investigate the root cause and narrow the exclusions.
+EXCLUDED_TEST_MODULES: list[str] = [
+    "nn/test_convolution",  # hangs for 5+ hours, see run 53 shards 7 & 10
+]
+
 
 def has_junit_failures(reports_dir: Path) -> bool:
     """Scan JUnit XML reports for any test failures or errors."""
@@ -352,8 +360,11 @@ def build_run_test_cmd(
 
     if args.include:
         cmd.extend(["--include"] + args.include)
+    excludes = list(EXCLUDED_TEST_MODULES)
     if args.exclude:
-        cmd.extend(["--exclude"] + args.exclude)
+        excludes.extend(args.exclude)
+    if excludes:
+        cmd.extend(["--exclude"] + excludes)
 
     if tests_to_skip:
         cmd.extend(["-k", tests_to_skip])
