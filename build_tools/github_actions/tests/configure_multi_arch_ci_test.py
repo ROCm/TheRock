@@ -120,6 +120,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                     "linux_test_labels": "test:rocprim",
                     "windows_amdgpu_families": "",
                     "windows_test_labels": "",
+                    "run_extended_tests": True,
                     "prebuilt_stages": "foundation,compiler-runtime",
                     "baseline_run_id": "12345",
                 }
@@ -127,8 +128,17 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
         self.assertEqual(inputs.linux_test_labels, "test:rocprim")
+        self.assertTrue(inputs.run_extended_tests)
         self.assertEqual(inputs.prebuilt_stages, "foundation,compiler-runtime")
         self.assertEqual(inputs.baseline_run_id, "12345")
+
+    def test_run_extended_tests_default_false(self):
+        """run_extended_tests defaults to False when not in event payload."""
+        inputs = _run_from_environ(
+            event_name="push",
+            event_payload={"before": "abc123"},
+        )
+        self.assertFalse(inputs.run_extended_tests)
 
     def test_pull_request_extracts_labels(self):
         """PR labels are extracted from event.pull_request.labels."""
@@ -352,6 +362,48 @@ class TestDecideJobs(unittest.TestCase):
             ["compiler-runtime", "foundation"],
         )
         self.assertEqual(decision.rebuild_stages, ["math-libs"])
+
+    # -----------------------
+    # run_extended_tests determination
+    # -----------------------
+
+    def test_extended_tests_default_disabled(self):
+        """Extended tests are disabled by default."""
+        result = cm.decide_jobs(self._inputs(), git_context=cm.GitContext())
+        self.assertFalse(result.test_rocm.run_extended_tests)
+
+    def test_extended_tests_enabled_by_schedule(self):
+        """Schedule trigger enables extended tests."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="schedule"), git_context=cm.GitContext()
+        )
+        self.assertTrue(result.test_rocm.run_extended_tests)
+        self.assertIn("scheduled", result.test_rocm.run_extended_tests_reason)
+
+    def test_extended_tests_enabled_by_pr_label(self):
+        """ci:run-extended-tests PR label enables extended tests."""
+        result = cm.decide_jobs(
+            self._inputs(pr_labels=["ci:run-extended-tests"]),
+            git_context=cm.GitContext(),
+        )
+        self.assertTrue(result.test_rocm.run_extended_tests)
+        self.assertIn("label", result.test_rocm.run_extended_tests_reason)
+
+    def test_extended_tests_enabled_by_workflow_dispatch_input(self):
+        """workflow_dispatch input run_extended_tests=True enables extended tests."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="workflow_dispatch", run_extended_tests=True),
+            git_context=cm.GitContext(),
+        )
+        self.assertTrue(result.test_rocm.run_extended_tests)
+        self.assertIn("workflow_dispatch", result.test_rocm.run_extended_tests_reason)
+
+    def test_extended_tests_not_enabled_by_push(self):
+        """Push trigger does not enable extended tests."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="push"), git_context=cm.GitContext()
+        )
+        self.assertFalse(result.test_rocm.run_extended_tests)
 
 
 # ---------------------------------------------------------------------------
@@ -641,6 +693,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "amdgpu_family",
             "amdgpu_targets",
             "test-runs-on",
+            "benchmark-runs-on",
             "sanity_check_only_for_family",
         }
         for config in [result.linux, result.windows]:
@@ -668,6 +721,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     "amdgpu_family": "gfx94X-dcgpu",
                     "amdgpu_targets": "gfx942",
                     "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+                    "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
                     "sanity_check_only_for_family": false
                 },
                 ...
@@ -753,6 +807,49 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Default runner, not the oem one
         self.assertNotEqual(entry["test-runs-on"], "")
         self.assertNotIn("oem", entry["test-runs-on"])
+
+    # -----------------------
+    # Benchmark runner (benchmark-runs-on) in per_family_info
+    # -----------------------
+
+    def test_benchmark_runner_blank_when_extended_tests_disabled(self):
+        """benchmark-runs-on is blank when run_extended_tests is False."""
+        # gfx94x has benchmark-runs-on defined in amdgpu_family_matrix
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(),
+            run_extended_tests=False,
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["benchmark-runs-on"], "")
+
+    def test_benchmark_runner_populated_when_extended_tests_enabled(self):
+        """benchmark-runs-on is populated from matrix when run_extended_tests is True."""
+        # gfx94x has benchmark-runs-on defined in amdgpu_family_matrix
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(),
+            run_extended_tests=True,
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertNotEqual(entry["benchmark-runs-on"], "")
+
+    def test_benchmark_runner_empty_for_family_without_benchmark(self):
+        """benchmark-runs-on is empty for families that don't define it, even when enabled."""
+        # gfx110x linux has no benchmark-runs-on in amdgpu_family_matrix
+        targets = cm.TargetSelection(linux_families=["gfx110x"])
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(),
+            run_extended_tests=True,
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["benchmark-runs-on"], "")
 
 
 # ---------------------------------------------------------------------------

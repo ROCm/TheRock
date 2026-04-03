@@ -34,6 +34,10 @@ on:
         type: string
         description: "If enabled, reduce test set on Windows to the list of labels prefixed with 'test:' ex: test:rocprim, test:hipcub"
         default: ""
+      run_extended_tests:
+        type: boolean
+        default: false
+        description: "Enable extended tests (functional + benchmarks) on dedicated benchmark runners"
       prebuilt_stages:
         type: string
         default: ""
@@ -80,6 +84,7 @@ jobs:
       test_labels: ${{ needs.setup.outputs.linux_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
+      run_extended_tests: ${{ needs.setup.outputs.run_extended_tests }}
     permissions:
       contents: read
       id-token: write
@@ -99,6 +104,7 @@ jobs:
       test_labels: ${{ needs.setup.outputs.windows_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
+      run_extended_tests: ${{ needs.setup.outputs.run_extended_tests }}
     permissions:
       contents: read
       id-token: write

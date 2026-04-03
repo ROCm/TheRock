@@ -52,7 +52,7 @@ def format_summary(
         return "\n".join(lines)
 
     # Highlight noteworthy non-default settings ahead of the standard output.
-    highlights = _non_default_highlights(ci_inputs)
+    highlights = _non_default_highlights(ci_inputs, outputs)
     if highlights:
         lines.append("> [!NOTE]")
         lines.append("> **Non-default configuration:**")
@@ -84,8 +84,15 @@ def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
     return "\n".join(lines)
 
 
-def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
+def _non_default_highlights(ci_inputs: CIInputs, outputs: CIOutputs) -> list[str]:
     highlights: list[str] = []
+
+    # Extended tests enabled
+    if outputs.jobs and outputs.jobs.test_rocm.run_extended_tests:
+        highlights.append(
+            f"Extended tests (functional + benchmarks) **enabled** "
+            f"({outputs.jobs.test_rocm.run_extended_tests_reason})"
+        )
 
     # Explicit family selection (workflow_dispatch)
     if ci_inputs.is_workflow_dispatch:
@@ -117,6 +124,9 @@ def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
             )
         elif label.startswith("test:"):
             highlights.append(f"Label `{label}`: requested component tests")
+        elif label == "ci:run-extended-tests":
+            # Already covered by the top-level extended-tests highlight.
+            pass
         elif label.startswith("ci:"):
             highlights.append(f"Label `{label}`")
 
@@ -206,6 +216,10 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
     lines.append(
         f"Test level: **{test_rocm.test_type}** ({test_rocm.test_type_reason})"
     )
+    lines.append(
+        f"Extended tests: **{'enabled' if test_rocm.run_extended_tests else 'disabled'}** "
+        f"({test_rocm.run_extended_tests_reason})"
+    )
 
     # Component test labels (per platform)
     if outputs.linux_test_labels:
@@ -214,9 +228,14 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
         lines.append(f"Component tests (Windows): `{outputs.windows_test_labels}`")
     lines.append("")
 
-    # Per-family test runner table
-    lines.append("| Platform | Family | Runner Label | Scope |")
-    lines.append("|----------|--------|--------------|-------|")
+    # Per-family test runner table (include benchmark column only when relevant)
+    show_bench = test_rocm.run_extended_tests
+    if show_bench:
+        lines.append("| Platform | Family | Test Runner | Benchmark Runner | Scope |")
+        lines.append("|----------|--------|-------------|------------------|-------|")
+    else:
+        lines.append("| Platform | Family | Test Runner | Scope |")
+        lines.append("|----------|--------|-------------|-------|")
     for platform, config in [
         ("Linux", outputs.builds.linux),
         ("Windows", outputs.builds.windows),
@@ -231,5 +250,13 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
                 scope = "sanity check only"
             else:
                 scope = test_rocm.test_type
-            lines.append(f"| {platform} | {family} | {runner} | {scope} |")
+            if show_bench:
+                bench_runner = (
+                    f"`{entry['benchmark-runs-on']}`"
+                    if entry.get("benchmark-runs-on")
+                    else "—"
+                )
+                lines.append(f"| {platform} | {family} | {runner} | {bench_runner} | {scope} |")
+            else:
+                lines.append(f"| {platform} | {family} | {runner} | {scope} |")
     lines.append("")

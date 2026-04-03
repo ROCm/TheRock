@@ -100,6 +100,9 @@ class CIInputs:
     linux_test_labels: str = ""
     windows_test_labels: str = ""
 
+    # Extended tests (functional + benchmarks) from workflow_dispatch input
+    run_extended_tests: bool = False
+
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
@@ -160,6 +163,11 @@ class CIInputs:
         elif event_name == "push":
             base_ref = event.get("before", "HEAD^1")
 
+        # workflow_dispatch boolean inputs arrive as JSON booleans in the
+        # event payload, but we also accept the string "true" for safety.
+        raw_extended = inputs.get("run_extended_tests", False)
+        run_extended_tests = raw_extended is True or str(raw_extended).lower() == "true"
+
         return CIInputs(
             run_id=run_id,
             event_name=event_name,
@@ -175,6 +183,7 @@ class CIInputs:
             ),
             linux_test_labels=inputs.get("linux_test_labels", ""),
             windows_test_labels=inputs.get("windows_test_labels", ""),
+            run_extended_tests=run_extended_tests,
             prebuilt_stages=inputs.get("prebuilt_stages", ""),
             baseline_run_id=inputs.get("baseline_run_id", ""),
         )
@@ -326,13 +335,17 @@ class TestRocmDecision(JobGroupDecision):
     - "standard"      — via test_filter:standard PR label
     - "comprehensive" — schedule/nightly
     - "full"          — submodule changes, test:* labels, or test_filter:full
+
+    run_extended_tests enables functional + benchmark tests. Triggers:
+    - workflow_dispatch input: run_extended_tests=true
+    - PR label: ci:run-extended-tests
+    - schedule event (nightly)
     """
 
     test_type: str = "quick"
     test_type_reason: str = "default"
-    # TODO: Consolidate test_type, test labels, and run_functional_tests
-    # (from the single-arch pipeline) into a per-platform test config object
-    # (e.g. linux_test_config JSON) instead of separate top-level outputs.
+    run_extended_tests: bool = False
+    run_extended_tests_reason: str = "default"
 
 
 @dataclass(frozen=True)
@@ -355,6 +368,10 @@ class JobDecisions:
         print(
             f"  test_type: {self.test_rocm.test_type} "
             f"({self.test_rocm.test_type_reason})"
+        )
+        print(
+            f"  run_extended_tests: {self.test_rocm.run_extended_tests} "
+            f"({self.test_rocm.run_extended_tests_reason})"
         )
         print(f"  build_rocm: {self.build_rocm.action.value}")
         print(f"  test_rocm: {self.test_rocm.action.value}")
@@ -539,6 +556,28 @@ def _determine_test_type(
     return "quick", "default"
 
 
+def _determine_run_extended_tests(ci_inputs: CIInputs) -> tuple[bool, str]:
+    """Determine whether extended tests (functional + benchmarks) should run.
+
+    Extended tests are opt-in and controlled by (in priority order):
+    1. Explicit workflow_dispatch input (run_extended_tests=true)
+    2. PR label ci:run-extended-tests
+    3. Schedule event (nightly CI)
+
+    Returns (run_extended_tests, reason).
+    """
+    if ci_inputs.run_extended_tests:
+        return True, "workflow_dispatch input: run_extended_tests=true"
+
+    if "ci:run-extended-tests" in ci_inputs.pr_labels:
+        return True, "ci:run-extended-tests PR label"
+
+    if ci_inputs.is_schedule:
+        return True, "scheduled run"
+
+    return False, "default"
+
+
 def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
@@ -565,10 +604,13 @@ def decide_jobs(
         ci_inputs=ci_inputs,
         git_context=git_context,
     )
+    run_extended, run_extended_reason = _determine_run_extended_tests(ci_inputs)
     test_rocm = TestRocmDecision(
         action=JobAction.RUN,
         test_type=test_type,
         test_type_reason=test_type_reason,
+        run_extended_tests=run_extended,
+        run_extended_tests_reason=run_extended_reason,
     )
 
     # Other jobs run unconditionally with no configuration.
@@ -721,6 +763,7 @@ def _expand_build_config_for_platform(
     variant_config: dict,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
+    run_extended_tests: bool = False,
 ) -> BuildConfig | None:
     """Build a BuildConfig for one platform, or None if no families match.
 
@@ -731,6 +774,8 @@ def _expand_build_config_for_platform(
     - amdgpu_family: family name for THEROCK_AMDGPU_FAMILIES
     - amdgpu_targets: comma-separated gfx targets for split artifact fetching
     - test-runs-on: runner label for testing (empty = no test runner available)
+    - benchmark-runs-on: runner label for benchmarks (empty = no benchmark runner,
+      blanked when run_extended_tests is False)
     - sanity_check_only_for_family: whether to limit test scope
     """
     build_variant = ci_inputs.build_variant
@@ -778,11 +823,19 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
+        # Benchmark runner: include from matrix only when extended tests
+        # are enabled, otherwise blank it so downstream YAML naturally
+        # skips benchmark jobs (test_runs_on == '' → job skipped).
+        benchmark_runs_on = ""
+        if run_extended_tests:
+            benchmark_runs_on = platform_info.get("benchmark-runs-on", "")
+
         per_family_info.append(
             {
                 "amdgpu_family": platform_info["family"],
                 "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
                 "test-runs-on": test_runs_on,
+                "benchmark-runs-on": benchmark_runs_on,
                 "sanity_check_only_for_family": platform_info.get(
                     "sanity_check_only_for_family", False
                 ),
@@ -816,6 +869,7 @@ def expand_build_configs(
     ci_inputs: CIInputs,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
+    run_extended_tests: bool = False,
 ) -> BuildConfigs:
     """Build a BuildConfig for each platform that supports the variant.
 
@@ -849,6 +903,7 @@ def expand_build_configs(
             variant_config=variant_config,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
+            run_extended_tests=run_extended_tests,
         )
         if platform == "linux":
             linux_config = config
@@ -877,6 +932,9 @@ def write_outputs(
     linux = outputs.builds.linux
     windows = outputs.builds.windows
     test_type = outputs.jobs.test_rocm.test_type if outputs.is_ci_enabled else ""
+    run_extended = (
+        outputs.jobs.test_rocm.run_extended_tests if outputs.is_ci_enabled else False
+    )
     output_vars = {
         # Workflow YAML references this as 'enable_build_jobs'
         "enable_build_jobs": json.dumps(outputs.is_ci_enabled),
@@ -885,6 +943,7 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        "run_extended_tests": json.dumps(run_extended),
     }
     gha_set_output(output_vars)
 
@@ -935,6 +994,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         ci_inputs=ci_inputs,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
+        run_extended_tests=jobs.test_rocm.run_extended_tests,
     )
     builds.log()
 

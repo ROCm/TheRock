@@ -20,6 +20,9 @@ on:
         type: string
       test_type:
         type: string
+      run_extended_tests:
+        type: string
+        default: 'false'
 
 permissions:
   contents: read
@@ -98,23 +101,36 @@ jobs:
 
   test_artifacts_per_family:
     needs: [copy_prebuilt_stages, build_multi_arch_stages]
-    name: Test ${{ matrix.family_info.amdgpu_family }}
+    name: ${{ matrix.test_mode.name }} ${{ matrix.family_info.amdgpu_family }}
     # If we are expecting a build failure, do not run tests to save machine capacity.
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
     strategy:
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
+        test_mode:
+          - name: "Test"
+            test_type_override: ""
+          - name: "Test Benchmark"
+            test_type_override: "benchmark"
     uses: ./.github/workflows/test_artifacts.yml
     with:
       # Use architecture-specific artifact group for fetching per-arch artifacts
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
-      test_runs_on: ${{ matrix.family_info.test-runs-on }}
-      test_type: ${{ inputs.test_type }}
+      # For regular tests: use test-runs-on. For benchmarks: use benchmark-runs-on.
+      # Empty runner → test_artifacts.yml skips the job entirely.
+      test_runs_on: >-
+        ${{
+          (matrix.test_mode.test_type_override != 'benchmark' && matrix.family_info.test-runs-on) ||
+          (matrix.test_mode.test_type_override == 'benchmark' && matrix.family_info.benchmark-runs-on) ||
+          ''
+        }}
+      test_type: ${{ matrix.test_mode.test_type_override != '' && matrix.test_mode.test_type_override || inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
+      run_extended_tests: ${{ inputs.run_extended_tests }}
 
   build_python_packages:
     needs: [build_multi_arch_stages]
