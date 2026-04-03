@@ -19,6 +19,9 @@ __pycache__
 # Patch control files.
 .*.smrev
 
+# Branch-specific flag overrides (see FLAGS.cmake).
+/BRANCH_FLAGS.cmake
+
 # Output directories.
 /build/
 /install/

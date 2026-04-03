@@ -121,7 +121,7 @@ apt update<br>
 apt install -y python3<br>
 apt install -y python3-pip<br>
 apt install -y debhelper<br>
-apt install -y llvm<br>
+apt install -y llvm-20<br>
 pip install -r requirements.txt<br>
 
 ### Usage

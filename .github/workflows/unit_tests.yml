@@ -58,10 +58,6 @@ jobs:
         name: coverage-report-${{ matrix.runs-on }}
         path: build/coverage-html/
 
-  # TODO(scotttodd): share code with ci_summary in ci.yml
-  #   Could reuse this from prior projects:
-  #   https://github.com/iree-org/iree/blob/main/.github/workflows/workflow_summary.yml
-  #   (including support for sending alerts on failures)
   unit_tests_summary:
     name: Unit Tests Summary
     if: always()
@@ -69,16 +65,10 @@ jobs:
       - unit_tests
     runs-on: ubuntu-24.04
     steps:
-      - name: Output failed jobs
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Evaluate workflow results
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          echo '${{ toJson(needs) }}'
-          FAILED_JOBS="$(echo '${{ toJson(needs) }}' \
-            | jq --raw-output \
-            'map_values(select(.result!="success" and .result!="skipped")) | keys | join(",")' \
-          )"
-          if [[ "${FAILED_JOBS}" != "" ]]; then
-            echo "The following jobs failed: ${FAILED_JOBS}"
-            exit 1
-          else
-            echo "All required jobs succeeded."
-          fi
+          python build_tools/github_actions/workflow_summary.py \
+            --needs-json '${{ toJSON(needs) }}'

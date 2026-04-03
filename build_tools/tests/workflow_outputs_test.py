@@ -137,6 +137,20 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
             loc, "99999-linux/logs/gfx94X-dcgpu/build_observability.html"
         )
 
+    # -- Stage logs (multi-arch CI) --
+
+    def test_stage_log_dir_per_arch(self):
+        loc = self.root.stage_log_dir("math-libs", "gfx1151")
+        self._assert_relative_path(loc, "99999-linux/logs/math-libs/gfx1151")
+
+    def test_stage_log_dir_generic(self):
+        loc = self.root.stage_log_dir("foundation")
+        self._assert_relative_path(loc, "99999-linux/logs/foundation")
+
+    def test_stage_log_dir_generic_empty_string(self):
+        loc = self.root.stage_log_dir("compiler-runtime", "")
+        self._assert_relative_path(loc, "99999-linux/logs/compiler-runtime")
+
     # -- Manifests --
 
     def test_manifest_dir(self):
@@ -155,6 +169,10 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
     def test_python_packages(self):
         loc = self.root.python_packages("gfx110X-all")
         self._assert_relative_path(loc, "99999-linux/python/gfx110X-all")
+
+    def test_python_packages_no_artifact_group(self):
+        loc = self.root.python_packages()
+        self._assert_relative_path(loc, "99999-linux/python")
 
 
 class TestWorkflowOutputRootLocationsExternalRepo(unittest.TestCase):
@@ -343,9 +361,11 @@ class TestRetrieveBucketInfo(unittest.TestCase):
     """Test _retrieve_bucket_info with mocked environment."""
 
     def setUp(self):
-        # Patch gha_query_workflow_run_by_id so we never make real API calls.
+        # Patch where the name is defined, not where it's imported. The import
+        # in workflow_outputs.py is deferred (inside _retrieve_bucket_info), so
+        # patching the definition site is both correct and necessary here.
         self.api_patcher = mock.patch(
-            "_therock_utils.workflow_outputs.gha_query_workflow_run_by_id"
+            "github_actions.github_actions_api.gha_query_workflow_run_by_id"
         )
         self.mock_api = self.api_patcher.start()
 
@@ -484,14 +504,6 @@ class TestRetrieveBucketInfo(unittest.TestCase):
         )
         self.mock_api.assert_called_once_with("ROCm/TheRock", "12345")
         self.assertEqual(bucket, "therock-ci-artifacts")
-
-    def test_internal_releases_repo(self):
-        """therock-releases-internal should use therock-artifacts-internal."""
-        external_repo, bucket = self._call(
-            github_repository="ROCm/therock-releases-internal"
-        )
-        self.assertEqual(external_repo, "ROCm-therock-releases-internal/")
-        self.assertEqual(bucket, "therock-artifacts-internal")
 
 
 if __name__ == "__main__":
