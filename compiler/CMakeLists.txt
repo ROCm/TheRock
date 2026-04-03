@@ -46,6 +46,14 @@ if(THEROCK_ENABLE_COMPILER)
     message(STATUS "Using stable amd-llvm revision info: Repo='${LLVM_SMREV_REPO}', Revision='${LLVM_SMREV_REVISION}'")
   endif()
 
+  # clang-linker-wrapper is normally disabled on Windows, but check-clang
+  # depends on it unconditionally. Enable it when LLVM tests are requested.
+  if(THEROCK_ENABLE_LLVM_TESTS OR THEROCK_CONDITION_IS_NON_WINDOWS)
+    set(_clang_linker_wrapper_build ON)
+  else()
+    set(_clang_linker_wrapper_build OFF)
+  endif()
+
   therock_cmake_subproject_declare(amd-llvm
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
@@ -95,7 +103,7 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_ENABLE_CLANGD=OFF
       -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
 
-      -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
+      -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${_clang_linker_wrapper_build}
       -DCLANG_TOOL_OFFLOAD_ARCH_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_NON_WINDOWS}
