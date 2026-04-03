@@ -124,6 +124,7 @@ if(THEROCK_ENABLE_PRIM)
         -DROCM_PATH=
         -DROCM_DIR=
         -DBUILD_TEST=ON
+        -DBUILD_BENCHMARK=ON
         -DUSE_SYSTEM_LIB=ON
       COMPILER_TOOLCHAIN
         amd-hip
@@ -131,6 +132,7 @@ if(THEROCK_ENABLE_PRIM)
         rocm-cmake
         therock-googletest
         rocPRIM
+        amdsmi
       RUNTIME_DEPS
         hip-clr
     )
