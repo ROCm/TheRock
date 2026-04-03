@@ -237,8 +237,6 @@ jobs:
         timeout-minutes: 30
         run: |
           ./build_tools/fetch_sources.py --jobs 10
-          ls -lart ${{ github.workspace }} || true
-
 
       - name: Configure Projects
         env:
@@ -258,6 +256,10 @@ jobs:
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
 
+          echo "sccache stats after build"
+          echo "-----------------------"
+          sccache --show-stats
+
       - name: Build Python Packages
         run: |
           python ./build_tools/build_python_packages.py \
@@ -271,6 +273,7 @@ jobs:
           echo "Full SDK du:"
           echo "------------"
           du -h -d 1 ${{ env.OUTPUT_DIR }}/build/dist/rocm
+
           echo "sccache stats after build"
           echo "-----------------------"
           sccache --show-stats
