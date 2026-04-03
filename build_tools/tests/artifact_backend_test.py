@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 import unittest
+from botocore import UNSIGNED
 from pathlib import Path
 from unittest import mock
 
@@ -293,47 +294,6 @@ class TestS3Backend(unittest.TestCase):
         """Test that s3_prefix is constructed correctly."""
         self.assertEqual(self.backend.s3_prefix, "external/test-run-456-linux")
 
-    @mock.patch("boto3.client")
-    def test_s3_client_with_credentials(self, mock_boto_client):
-        """Test S3 client initialization with AWS credentials."""
-        mock_client = mock.MagicMock()
-        mock_boto_client.return_value = mock_client
-
-        with mock.patch.dict(
-            os.environ,
-            {
-                "AWS_ACCESS_KEY_ID": "test-key",
-                "AWS_SECRET_ACCESS_KEY": "test-secret",
-                "AWS_SESSION_TOKEN": "test-token",
-            },
-        ):
-            backend = S3Backend(output_root=_make_s3_root())
-            # Access client to trigger initialization
-            _ = backend.s3_client
-
-        mock_boto_client.assert_called_once()
-        call_kwargs = mock_boto_client.call_args[1]
-        self.assertEqual(call_kwargs["aws_access_key_id"], "test-key")
-        self.assertEqual(call_kwargs["aws_secret_access_key"], "test-secret")
-        self.assertEqual(call_kwargs["aws_session_token"], "test-token")
-
-    @mock.patch("boto3.client")
-    def test_s3_client_without_credentials(self, mock_boto_client):
-        """Test S3 client initialization without AWS credentials (unsigned)."""
-        mock_client = mock.MagicMock()
-        mock_boto_client.return_value = mock_client
-
-        # Clear any existing credentials
-        with mock.patch.dict(os.environ, {}, clear=True):
-            backend = S3Backend(output_root=_make_s3_root())
-            # Access client to trigger initialization
-            _ = backend.s3_client
-
-        mock_boto_client.assert_called_once()
-        call_kwargs = mock_boto_client.call_args[1]
-        # Should use unsigned config
-        self.assertIn("config", call_kwargs)
-
     @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
     def test_list_artifacts(self, mock_client_prop):
         """Test listing S3 artifacts (both zstd and xz)."""
@@ -556,6 +516,113 @@ class TestS3Backend(unittest.TestCase):
 
         with self.assertRaises(TypeError):
             self.backend.copy_artifact("test.tar.zst", local_source)
+
+
+class TestS3BackendCredentials(unittest.TestCase):
+    """Live tests for S3Backend credential resolution.
+
+    These exercise the real boto3 credential chain (no mocks) to verify:
+    - UNSIGNED fallback works for public bucket reads without credentials
+    - AWS_SHARED_CREDENTIALS_FILE is used (so fork PRs can upload artifacts)
+    """
+
+    # Env vars that could provide credentials to boto3's default chain.
+    _CREDENTIAL_ENV_VARS = [
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_SHARED_CREDENTIALS_FILE",
+        "AWS_CONFIG_FILE",
+        "AWS_PROFILE",
+    ]
+
+    def _make_backend(self):
+        output_root = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id="placeholder",
+            platform="linux",
+        )
+        return S3Backend(output_root=output_root)
+
+    def test_list_objects_unsigned(self):
+        """Listing objects in a public bucket must succeed without credentials."""
+        # Point config/credentials files at nonexistent paths so that
+        # ~/.aws/credentials on developer machines is not picked up.
+        env_overrides = {
+            "AWS_CONFIG_FILE": "/nonexistent/aws/config",
+            "AWS_SHARED_CREDENTIALS_FILE": "/nonexistent/aws/credentials",
+        }
+        with mock.patch.dict(os.environ, env_overrides, clear=False):
+            for var in self._CREDENTIAL_ENV_VARS:
+                if var not in env_overrides:
+                    os.environ.pop(var, None)
+
+            backend = self._make_backend()
+
+            config = backend.s3_client._client_config
+            self.assertEqual(
+                config.signature_version,
+                UNSIGNED,
+                "Client should be UNSIGNED when all credentials are cleared",
+            )
+
+            # A real list call against the public bucket should succeed
+            response = backend.s3_client.list_objects_v2(
+                Bucket="therock-ci-artifacts",
+                MaxKeys=1,
+            )
+            self.assertIn("Contents", response)
+            self.assertGreater(len(response["Contents"]), 0)
+
+    def test_shared_credentials_file_produces_authenticated_client(self):
+        """AWS_SHARED_CREDENTIALS_FILE must produce an authenticated client.
+
+        Fork PRs provide credentials via a mounted credentials.ini file,
+        not via AWS_ACCESS_KEY_ID/SECRET/TOKEN env vars. This test would
+        fail with the old manual 3-env-var check that ignored
+        AWS_SHARED_CREDENTIALS_FILE.
+        """
+        # Write a minimal credentials file. Values are intentionally not
+        # real AWS keys — boto3 loads any syntactically valid values.
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".ini", delete=False
+        ) as creds_file:
+            creds_file.write(
+                "[default]\n"
+                "aws_access_key_id = test\n"
+                "aws_secret_access_key = test\n"
+            )
+            creds_path = creds_file.name
+
+        try:
+            env_overrides = {
+                "AWS_SHARED_CREDENTIALS_FILE": creds_path,
+                "AWS_CONFIG_FILE": "/nonexistent/aws/config",
+            }
+            env_clear = [
+                "AWS_ACCESS_KEY_ID",
+                "AWS_SECRET_ACCESS_KEY",
+                "AWS_SESSION_TOKEN",
+                "AWS_PROFILE",
+            ]
+            with mock.patch.dict(os.environ, env_overrides, clear=False):
+                for var in env_clear:
+                    os.environ.pop(var, None)
+
+                backend = self._make_backend()
+                config = backend.s3_client._client_config
+
+                self.assertNotEqual(
+                    config.signature_version,
+                    UNSIGNED,
+                    "Client must NOT use UNSIGNED when credentials are "
+                    "available via AWS_SHARED_CREDENTIALS_FILE. The old "
+                    "manual env-var check ignored this credential source, "
+                    "breaking uploads from fork PRs.",
+                )
+        finally:
+            os.unlink(creds_path)
 
 
 class TestCreateBackendFromEnv(unittest.TestCase):

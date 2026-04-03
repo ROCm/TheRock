@@ -23,7 +23,7 @@ from pathlib import Path
 
 # Add tests directory to path for extended_tests imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
-from github_actions_utils import *
+from github_actions_api import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from extended_tests.functional.functional_test_matrix import functional_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
@@ -75,12 +75,14 @@ test_matrix = {
     "rocblas": {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocblas.py')}",
-        "platform": ["linux", "windows"],
+        # GHA step timeout: max category timeout in rocBLAS should be 24 hours / 6 shards = 4 hours per shard
+        # 240 min + 20% margin = 288 min
+        "timeout_minutes": 288,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 6,
+            "windows": 6,
         },
     },
     "rocroller": {
@@ -147,13 +149,15 @@ test_matrix = {
     "rocsolver": {
         "job_name": "rocsolver",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
+        # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
+        # 24 mins + 20% margin = 30 mins => ~40 mins (considering gpu delays and lags)
+        "timeout_minutes": 40,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 2,
+            "windows": 2,
         },
     },
     # PRIM tests
@@ -182,7 +186,7 @@ test_matrix = {
     "rocgdb": {
         "job_name": "rocgdb",
         "fetch_artifact_args": "--debug-tools --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 45,
         "test_script": f"python {_get_script_path('test_rocgdb.py')}",
         "platform": ["linux"],
         "total_shards": 1,
@@ -318,6 +322,21 @@ test_matrix = {
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
     },
+    # rocprofiler-sdk tests
+    "rocprofiler-sdk": {
+        "job_name": "rocprofiler-sdk",
+        "fetch_artifact_args": "--tests",
+        "timeout_minutes": 15,
+        "additional_requirements_files": [
+            "share/rocprofiler-sdk/tests/requirements.txt",
+        ],
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')}",
+        "platform": ["linux"],
+        "container_options": "--cap-add=SYS_PTRACE",
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # hipDNN tests
     "hipdnn": {
         "job_name": "hipdnn",
@@ -357,7 +376,7 @@ test_matrix = {
     "miopenprovider": {
         "job_name": "miopenprovider",
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 20,
         "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -445,6 +464,26 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+    },
+    "rocdecode": {
+        "job_name": "rocdecode",
+        "fetch_artifact_args": "--rocdecode --tests",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocdecode.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "rocjpeg": {
+        "job_name": "rocjpeg",
+        "fetch_artifact_args": "--rocjpeg --tests",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocjpeg.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
         },
     },
     # aqlprofile tests
