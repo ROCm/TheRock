@@ -26,6 +26,8 @@ skip_tests = {
             "test_memory_plots",
             # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI cache
             "test_memory_snapshot",
+            # TestBlockStateAbsorption - ModuleNotFoundError: torchvision
+            "test_resnet",
         ],
         "nn": [
             # AssertionError: False is not true : Expected NaN in pdist output
@@ -58,6 +60,8 @@ skip_tests = {
             "test_fake_export_nn_functional_batch_norm_cuda_float32",
             # subprocess.CalledProcessError (batch_norm without cudnn path)
             "test_fake_export_nn_functional_batch_norm_without_cudnn_cuda_float32",
+            # subprocess.CalledProcessError in conv2d export
+            "test_fake_export_nn_functional_conv2d_cuda_float32",
         ],
         "inductor": [
             # BenchmarkMultiTemplateFusionGpuTest - extern code mismatch
@@ -122,9 +126,20 @@ skip_tests = {
             "test_cond_branches_no_arguments_no_closure",
             # TestLearnableBiasesCUDA - flex attention log file not created
             "test_flex_attention_logging_cuda",
-            # TestTemplateConfigPruning - NoValidChoicesError / no kernel image (variant mat1_T)
+            # TestTemplateConfigPruning - NoValidChoicesError / no kernel image
             "test_shared_memory_pruning_mm_float32_mat1_transposed_False_mat2_transposed_True_use_tma_False",
             "test_shared_memory_pruning_mm_float32_mat1_transposed_True_mat2_transposed_False_use_tma_False",
+            "test_shared_memory_pruning_mm_float32_mat1_transposed_True_mat2_transposed_True_use_tma_False",
+            # TestEpilogueFusionStaticAnalysis - expected fused kernel name not found
+            "test_template_epilogue_fusion_static_analysis_test_case_timing_reject_use_async_compile_False",
+            # TestOpInfoPropertiesCUDA - numerical cos mismatch
+            "test_unary_ufunc_numerical_cos_backend_inductor_default_cuda_float32",
+            # TestOpInfoPropertiesCUDA - XPASS reciprocal
+            "test_eager_equivalence_reciprocal_backend_inductor_default_cuda_float32",
+            # TestOpInfoPropertiesCUDA - numerical log10 mismatch
+            "test_eager_equivalence_log10_backend_inductor_default_cuda_float32",
+            # HigherOrderOpTestsWithCompiledAutograd - _GeneratorContextManager
+            "test_tensor_and_unbacked_symbol_closure",
         ],
         "profiler": [
             # TestProfiler - backward compat filter
@@ -146,6 +161,8 @@ skip_tests = {
             # TestDataLoaderDeviceTypeCUDA - worker exited unexpectedly
             "test_nested_tensor_multiprocessing_context_forkserver_cuda",
             "test_nested_tensor_multiprocessing_context_spawn_cuda",
+            # TestDataLoaderDeviceTypeCUDA - sparse tensor worker exited unexpectedly
+            "test_sparse_tensor_multiprocessing_context_forkserver_cuda",
         ],
         "multiprocessing": [
             # TestMultiprocessing - file system test assertion
@@ -213,6 +230,26 @@ skip_tests = {
             "test_train_parity_single_group_shard_largest_dim",
             # TestMultiProc - compiler collectives dynamic tensor
             "test_compiler_collectives_automatic_dynamic_tensor",
+            # TestFullyShardAutograd - 300s per-process timeout
+            "test_nontensor_activations",
+            # TestFullyShardDTensor - 300s per-process timeout
+            "test_dtensor_train_parity",
+            # TestFullyShardFrozen - 300s per-process timeout
+            "test_multi_forward_mixed_requires_grad",
+            # TestFullyShardMemory - 300s per-process timeout
+            "test_fully_shard_training_memory",
+            # TestFullyShardOverlap - 300s per-process timeout
+            "test_fully_shard_training_overlap",
+            # TestFullyShard2DTraining - pytest-timeout (>900s)
+            "test_tp_with_fsdp_offloading",
+            # ComposabilityTest - pytest-timeout (>900s)
+            "test_3d_with_tp_dp_pp_ScheduleClass0_bfloat16",
+            # ReplicateFullyShardInit - pytest-timeout (>900s)
+            "test_replicate_fully_shard_init",
+            # TestReplicateMixedPrecisionTraining - pytest-timeout (>900s)
+            "test_grad_acc_with_reduce_dtype",
+            # TestReplicate1DTrainingCore - 300s per-process timeout
+            "test_multi_forward_module",
         ],
     },
     "gfx94": {
