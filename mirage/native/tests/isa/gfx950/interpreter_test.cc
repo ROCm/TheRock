@@ -15769,6 +15769,239 @@ int main() {
   }
 
   {
+  const std::vector<DecodedInstruction> scalar_atomic_maintenance_program = {
+      DecodedInstruction::ThreeOperand("S_ATOMIC_ADD",
+                                       InstructionOperand::Sgpr(4),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_DCACHE_WB"),
+      DecodedInstruction::ThreeOperand("S_ATOMIC_CMPSWAP",
+                                       InstructionOperand::Sgpr(8),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x04)),
+      DecodedInstruction::Nullary("BUFFER_WBL2"),
+      DecodedInstruction::ThreeOperand("S_BUFFER_ATOMIC_ADD_X2",
+                                       InstructionOperand::Sgpr(16),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::Nullary("S_DCACHE_INV_VOL"),
+      DecodedInstruction::ThreeOperand("S_BUFFER_ATOMIC_CMPSWAP_X2",
+                                       InstructionOperand::Sgpr(24),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x40)),
+      DecodedInstruction::Nullary("BUFFER_INV"),
+      DecodedInstruction::OneOperand("S_MEMTIME", InstructionOperand::Sgpr(40)),
+      DecodedInstruction::OneOperand("S_MEMREALTIME",
+                                     InstructionOperand::Sgpr(42)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  const auto make_scalar_atomic_maintenance_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b0101ULL;
+    state.sgprs[0] = 0x100u;
+    state.sgprs[1] = 0u;
+    state.sgprs[2] = 0x100u;
+    state.sgprs[3] = 0u;
+    state.sgprs[4] = 4u;
+    state.sgprs[8] = 0x13572468u;
+    state.sgprs[9] = 0x11110000u;
+    SplitU64(3ULL, &state.sgprs[16], &state.sgprs[17]);
+    SplitU64(0x9999aaaabbbbccccULL, &state.sgprs[24], &state.sgprs[25]);
+    SplitU64(0x1111222233334444ULL, &state.sgprs[26], &state.sgprs[27]);
+    state.sgprs[32] = 0x12345678u;
+    state.sgprs[33] = 0x9abcdef0u;
+    state.sgprs[34] = 0x2468ace0u;
+    state.sgprs[35] = 0x0badc0deu;
+    state.sgprs[40] = 0xaaaabbbbu;
+    state.sgprs[41] = 0xccccddddu;
+    state.sgprs[42] = 0x13579bdfu;
+    state.sgprs[43] = 0x2468ace0u;
+    state.vgprs[12][0] = 0x01020304u;
+    state.vgprs[12][1] = 0x11121314u;
+    state.vgprs[12][2] = 0x21222324u;
+    state.vgprs[12][3] = 0x31323334u;
+    state.vgprs[31][0] = 0xaaaa0001u;
+    state.vgprs[31][1] = 0xbbbb0002u;
+    state.vgprs[31][2] = 0xcccc0003u;
+    state.vgprs[31][3] = 0xdddd0004u;
+    return state;
+  };
+  const auto make_scalar_atomic_maintenance_memory = []() {
+    LinearExecutionMemory memory(0x300, 0);
+    memory.WriteU32(0x100u, 9u);
+    memory.WriteU32(0x104u, 0x11110000u);
+    memory.WriteU32(0x120u, 10u);
+    memory.WriteU32(0x124u, 0u);
+    WriteU64(&memory, 0x140u, 0x1111222233334444ULL);
+    memory.WriteU32(0x0c0u, 0xfeedfaceu);
+    memory.WriteU32(0x1d0u, 0x89abcdefu);
+    return memory;
+  };
+  const auto validate_scalar_atomic_maintenance_state =
+      [&](const WaveExecutionState& state, const LinearExecutionMemory& memory,
+          const char* mode) {
+        const auto expect_timestamp_pair_written =
+            [&](std::uint16_t dest_reg,
+                std::uint32_t initial_lo,
+                std::uint32_t initial_hi,
+                const char* description) {
+              const std::uint32_t written_lo = state.sgprs[dest_reg];
+              const std::uint32_t written_hi = state.sgprs[dest_reg + 1u];
+              return Expect(written_lo != initial_lo || written_hi != initial_hi,
+                            (std::string(mode) + " " + description +
+                             " to clobber only its destination pair")
+                                .c_str()) &&
+                     Expect(written_lo != 0u || written_hi != 0u,
+                            (std::string(mode) + " " + description +
+                             " to produce a non-zero timestamp")
+                                .c_str());
+            };
+        std::uint32_t value = 0;
+        std::uint64_t value_x2 = 0;
+        return Expect(state.halted,
+                      (std::string(mode) +
+                       " scalar atomic maintenance program to halt")
+                          .c_str()) &&
+               Expect(state.exec_mask == 0b0101ULL,
+                      (std::string(mode) +
+                       " scalar atomic maintenance to preserve exec")
+                          .c_str()) &&
+               Expect(state.sgprs[0] == 0x100u && state.sgprs[1] == 0u &&
+                          state.sgprs[2] == 0x100u && state.sgprs[3] == 0u,
+                      (std::string(mode) +
+                       " scalar atomic maintenance to preserve addressing")
+                          .c_str()) &&
+               Expect(state.sgprs[4] == 9u,
+                      (std::string(mode) +
+                       " scalar atomic maintenance s_atomic_add return")
+                          .c_str()) &&
+               Expect(state.sgprs[8] == 0x11110000u &&
+                          state.sgprs[9] == 0x11110000u,
+                      (std::string(mode) +
+                       " scalar atomic maintenance s_atomic_cmpswap result")
+                          .c_str()) &&
+               Expect(ComposeU64(state.sgprs[16], state.sgprs[17]) == 10ULL,
+                      (std::string(mode) +
+                       " scalar atomic maintenance s_buffer_atomic_add_x2 return")
+                          .c_str()) &&
+               Expect(ComposeU64(state.sgprs[24], state.sgprs[25]) ==
+                          0x1111222233334444ULL &&
+                          ComposeU64(state.sgprs[26], state.sgprs[27]) ==
+                              0x1111222233334444ULL,
+                      (std::string(mode) +
+                       " scalar atomic maintenance s_buffer_atomic_cmpswap_x2 result")
+                          .c_str()) &&
+               Expect(state.sgprs[32] == 0x12345678u &&
+                          state.sgprs[33] == 0x9abcdef0u &&
+                          state.sgprs[34] == 0x2468ace0u &&
+                          state.sgprs[35] == 0x0badc0deu,
+                      (std::string(mode) +
+                       " scalar atomic maintenance to preserve unrelated sgprs")
+                          .c_str()) &&
+               expect_timestamp_pair_written(40u, 0xaaaabbbbu, 0xccccddddu,
+                                             "s_memtime") &&
+               expect_timestamp_pair_written(42u, 0x13579bdfu, 0x2468ace0u,
+                                             "s_memrealtime") &&
+               Expect(state.vgprs[12][0] == 0x01020304u &&
+                          state.vgprs[12][1] == 0x11121314u &&
+                          state.vgprs[12][2] == 0x21222324u &&
+                          state.vgprs[12][3] == 0x31323334u &&
+                          state.vgprs[31][0] == 0xaaaa0001u &&
+                          state.vgprs[31][1] == 0xbbbb0002u &&
+                          state.vgprs[31][2] == 0xcccc0003u &&
+                          state.vgprs[31][3] == 0xdddd0004u,
+                      (std::string(mode) +
+                       " scalar atomic maintenance to preserve vgprs")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x100u, &value),
+                      (std::string(mode) +
+                       " scalar atomic maintenance s_atomic_add read")
+                          .c_str()) &&
+               Expect(value == 13u,
+                      (std::string(mode) +
+                       " scalar atomic maintenance s_atomic_add result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x104u, &value),
+                      (std::string(mode) +
+                       " scalar atomic maintenance s_atomic_cmpswap read")
+                          .c_str()) &&
+               Expect(value == 0x13572468u,
+                      (std::string(mode) +
+                       " scalar atomic maintenance s_atomic_cmpswap result")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x120u, &value_x2),
+                      (std::string(mode) +
+                       " scalar atomic maintenance s_buffer_atomic_add_x2 read")
+                          .c_str()) &&
+               Expect(value_x2 == 13ULL,
+                      (std::string(mode) +
+                       " scalar atomic maintenance s_buffer_atomic_add_x2 result")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x140u, &value_x2),
+                      (std::string(mode) +
+                       " scalar atomic maintenance s_buffer_atomic_cmpswap_x2 read")
+                          .c_str()) &&
+               Expect(value_x2 == 0x9999aaaabbbbccccULL,
+                      (std::string(mode) +
+                       " scalar atomic maintenance s_buffer_atomic_cmpswap_x2 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x0c0u, &value),
+                      (std::string(mode) +
+                       " scalar atomic maintenance unrelated read")
+                          .c_str()) &&
+               Expect(value == 0xfeedfaceu,
+                      (std::string(mode) +
+                       " scalar atomic maintenance unrelated memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x1d0u, &value),
+                      (std::string(mode) +
+                       " scalar atomic maintenance trailing read")
+                          .c_str()) &&
+               Expect(value == 0x89abcdefu,
+                      (std::string(mode) +
+                       " scalar atomic maintenance trailing memory preserved")
+                          .c_str());
+      };
+
+  LinearExecutionMemory decoded_scalar_atomic_maintenance_memory =
+      make_scalar_atomic_maintenance_memory();
+  WaveExecutionState decoded_scalar_atomic_maintenance_state =
+      make_scalar_atomic_maintenance_state();
+  if (!Expect(interpreter.ExecuteProgram(
+                   scalar_atomic_maintenance_program,
+                   &decoded_scalar_atomic_maintenance_state,
+                   &decoded_scalar_atomic_maintenance_memory, &error_message),
+              error_message.c_str()) ||
+      !validate_scalar_atomic_maintenance_state(
+          decoded_scalar_atomic_maintenance_state,
+          decoded_scalar_atomic_maintenance_memory, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_scalar_atomic_maintenance_program;
+  if (!Expect(interpreter.CompileProgram(
+                   scalar_atomic_maintenance_program,
+                   &compiled_scalar_atomic_maintenance_program, &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_scalar_atomic_maintenance_memory =
+      make_scalar_atomic_maintenance_memory();
+  WaveExecutionState compiled_scalar_atomic_maintenance_state =
+      make_scalar_atomic_maintenance_state();
+  if (!Expect(interpreter.ExecuteProgram(
+                   compiled_scalar_atomic_maintenance_program,
+                   &compiled_scalar_atomic_maintenance_state,
+                   &compiled_scalar_atomic_maintenance_memory, &error_message),
+              error_message.c_str()) ||
+      !validate_scalar_atomic_maintenance_state(
+          compiled_scalar_atomic_maintenance_state,
+          compiled_scalar_atomic_maintenance_memory, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
   const std::vector<DecodedInstruction> buffer_maintenance_program = {
       DecodedInstruction::Nullary("BUFFER_WBL2"),
       DecodedInstruction::Nullary("BUFFER_INV"),
