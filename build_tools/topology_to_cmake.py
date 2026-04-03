@@ -174,32 +174,8 @@ def generate_build_order(topology: BuildTopology, f: TextIO):
     f.write(")\n\n")
 
 
-def _write_feature(
-    f: TextIO,
-    feature_name: str,
-    feature_group: str,
-    description: str,
-    requires: list,
-    disable_platforms: list = (),
-):
-    """Write a single therock_add_feature() call."""
-    f.write(f"therock_add_feature({feature_name}\n")
-    f.write(f"  GROUP {feature_group}\n")
-    f.write(f'  DESCRIPTION "{description}"\n')
-    if requires:
-        f.write(f"  REQUIRES {' '.join(requires)}\n")
-    if disable_platforms:
-        f.write(f"  DISABLE_PLATFORMS {' '.join(disable_platforms)}\n")
-    f.write(")\n\n")
-
-
 def generate_feature_declarations(topology: BuildTopology, f: TextIO):
-    """Generate therock_add_feature() calls from artifact groups and artifacts.
-
-    For groups with feature_name, a group-level feature is emitted before the
-    artifact features. Artifacts within such a group auto-require the group
-    feature. Artifacts with group_deps also require those group features.
-    """
+    """Generate therock_add_feature() calls from artifacts."""
     f.write(
         "# =============================================================================\n"
     )
@@ -210,81 +186,42 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
 
     f.write("# Note: therock_features is already included in main CMakeLists.txt\n\n")
 
-    # Build a set of groups that have features, for quick lookup
-    group_feature_names: dict[str, str] = {}
-    for group in topology.get_artifact_groups():
-        gfn = topology.get_group_feature_name(group)
-        if gfn:
-            group_feature_names[group.name] = gfn
-
     # We need to generate features in dependency order to satisfy CMake's requirement
-    # that dependencies are defined before they're referenced.
-    # Use the build order which is already topologically sorted.
-    # Within each stage, emit group features before artifact features.
-    emitted_groups: set[str] = set()
+    # that dependencies are defined before they're referenced
+    # Use the build order which is already topologically sorted
+    artifacts_in_order = []
     for stage_name in topology.get_build_order():
         stage = topology.build_stages.get(stage_name)
-        if not stage:
-            continue
-        for group_name in stage.artifact_groups:
-            group = topology.artifact_groups.get(group_name)
-            if not group:
-                continue
+        if stage:
+            for group_name in stage.artifact_groups:
+                for artifact in topology.get_artifacts_in_group(group_name):
+                    if artifact not in artifacts_in_order:
+                        artifacts_in_order.append(artifact)
 
-            # Emit group feature if this group has one and we haven't already
-            group_fn = topology.get_group_feature_name(group)
-            if group_fn and group_name not in emitted_groups:
-                emitted_groups.add(group_name)
-                # Resolve group artifact_deps to feature names
-                group_requires = []
-                for dep_name in group.artifact_deps:
-                    dep_artifact = topology.artifacts.get(dep_name)
-                    if dep_artifact:
-                        group_requires.append(
-                            topology.get_artifact_feature_name(dep_artifact)
-                        )
-                _write_feature(
-                    f,
-                    feature_name=group_fn,
-                    feature_group=group.feature_group or "ALL",
-                    description=f"Enables {group_name} group",
-                    requires=group_requires,
-                )
+    for artifact in artifacts_in_order:
+        feature_name = topology.get_artifact_feature_name(artifact)
+        feature_group = topology.get_artifact_feature_group(artifact)
 
-            # Emit artifact features for this group
-            for artifact in topology.get_artifacts_in_group(group_name):
-                feature_name = topology.get_artifact_feature_name(artifact)
-                feature_group = topology.get_artifact_feature_group(artifact)
+        # Map artifact dependencies to feature names
+        requires = []
+        for dep_name in artifact.artifact_deps:
+            dep_artifact = topology.artifacts.get(dep_name)
+            if dep_artifact:
+                dep_feature = topology.get_artifact_feature_name(dep_artifact)
+                requires.append(dep_feature)
 
-                # Map artifact dependencies to feature names
-                requires = []
-                for dep_name in artifact.artifact_deps:
-                    dep_artifact = topology.artifacts.get(dep_name)
-                    if dep_artifact:
-                        requires.append(
-                            topology.get_artifact_feature_name(dep_artifact)
-                        )
+        # Generate the feature declaration
+        f.write(f"therock_add_feature({feature_name}\n")
+        f.write(f"  GROUP {feature_group}\n")
+        f.write(f'  DESCRIPTION "Enables {artifact.name}"\n')
 
-                # Auto-require: if the artifact's group has a feature, require it
-                if group_name in group_feature_names:
-                    gf = group_feature_names[group_name]
-                    if gf not in requires:
-                        requires.append(gf)
+        if requires:
+            f.write(f"  REQUIRES {' '.join(requires)}\n")
 
-                # group_deps: require features from referenced groups
-                for gd_name in artifact.group_deps:
-                    gf = group_feature_names.get(gd_name)
-                    if gf and gf not in requires:
-                        requires.append(gf)
+        if artifact.disable_platforms:
+            f.write(f"  DISABLE_PLATFORMS {' '.join(artifact.disable_platforms)}\n")
 
-                _write_feature(
-                    f,
-                    feature_name=feature_name,
-                    feature_group=feature_group,
-                    description=f"Enables {artifact.name}",
-                    requires=requires,
-                    disable_platforms=artifact.disable_platforms,
-                )
+        f.write(")\n\n")
 
 
 def generate_validation_metadata(topology: BuildTopology, f: TextIO):

@@ -333,10 +333,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-fft-devel"
+      "amdrocm-fft-devel",
+      "amdrocm-rand"
     ],
     "RPMRequires": [
-      "amdrocm-fft-devel"
+      "amdrocm-fft-devel",
+      "amdrocm-rand"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm FFT test files",
@@ -361,6 +363,18 @@
             "Name": "hipFFT",
             "Components": [
               "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "fftw3",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "fftw3",
+            "Components": [
+              "lib"
             ]
           }
         ]
@@ -1371,12 +1385,10 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "ocl-icd-libopencl1",
       "amdrocm-runtime",
       "amdrocm-sysdeps"
     ],
     "RPMRequires": [
-      "(ocl-icd or ocl-icd-devel)",
       "amdrocm-runtime",
       "amdrocm-sysdeps"
     ],
@@ -1401,6 +1413,17 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "core-ocl-icd",
+        "Artifact_Subdir": [
+          {
+            "Name": "ocl-icd",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "False"
@@ -1411,12 +1434,10 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "ocl-icd-opencl-dev",
       "amdrocm-sysdeps",
       "amdrocm-opencl"
     ],
     "RPMRequires": [
-      "ocl-icd-devel",
       "amdrocm-sysdeps",
       "amdrocm-opencl"
     ],
@@ -1746,12 +1767,19 @@
             "Components": [
               "test"
             ]
+          },
+          {
+            "Name": "rccl-tests",
+            "Components": [
+              "test"
+            ]
           }
         ]
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "True",
+    "DisablePackaging": "True"
   },
 
   {
@@ -1839,6 +1867,83 @@
   },
 
   {
+    "Package": "amdrocm-rocshmem",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-base"
+    ],
+    "RPMRequires": [
+      "amdrocm-base"
+    ],
+    "Maintainer": "rocSHMEM Maintainer <rocshmem-maintainer@amd.com>",
+    "Description_Short": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Description_Long": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems/",
+    "Artifactory": [
+      {
+        "Artifact": "rocshmem",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocshmem",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      }
+    ],
+
+    "Gfxarch": "True"
+  },
+
+  {
+    "Package": "amdrocm-rocshmem-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-rocshmem"
+    ],
+    "RPMRequires": [
+      "amdrocm-rocshmem"
+    ],
+    "Maintainer": "rocSHMEM Maintainer <rocshmem-maintainer@amd.com>",
+    "Description_Short": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Description_Long": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems/",
+    "Artifactory": [
+      {
+        "Artifact": "rocshmem",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocshmem",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+
+    "Gfxarch": "True"
+  },
+
+  {
     "Package": "amdrocm-dnn",
     "Version": "",
     "Architecture": "amd64",
@@ -1901,10 +2006,16 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-dnn-devel"
+      "amdrocm-dnn-devel",
+      "amdrocm-runtime",
+      "amdrocm-blas",
+      "amdrocm-sysdeps"
     ],
     "RPMRequires": [
-      "amdrocm-dnn-devel"
+      "amdrocm-dnn-devel",
+      "amdrocm-runtime",
+      "amdrocm-blas",
+      "amdrocm-sysdeps"
     ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
     "Description_Short": "AMD DNN test files",
@@ -2343,6 +2454,7 @@
       "amdrocm-ck",
       "amdrocm-dnn",
       "amdrocm-rccl",
+      "amdrocm-rocshmem",
       "amdrocm-math-common",
       "amdrocm-amdsmi",
       "amdrocm-hipify",
@@ -2362,6 +2474,7 @@
       "amdrocm-ck",
       "amdrocm-dnn",
       "amdrocm-rccl",
+      "amdrocm-rocshmem",
       "amdrocm-math-common",
       "amdrocm-amdsmi",
       "amdrocm-hipify",
@@ -2422,6 +2535,7 @@
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
+      "amdrocm-rocshmem-devel",
       "amdrocm-dnn-devel",
       "amdrocm-decode-devel",
       "amdrocm-jpeg-devel"
@@ -2439,6 +2553,7 @@
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
+      "amdrocm-rocshmem-devel",
       "amdrocm-dnn-devel",
       "amdrocm-decode-devel",
       "amdrocm-jpeg-devel"
