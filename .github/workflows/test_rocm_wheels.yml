@@ -59,6 +59,7 @@ run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.rocm_version
 jobs:
   test_wheels:
     name: Test ${{ matrix.packages }} wheels | ${{ inputs.amdgpu_family }}
+    if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 30
     container:
