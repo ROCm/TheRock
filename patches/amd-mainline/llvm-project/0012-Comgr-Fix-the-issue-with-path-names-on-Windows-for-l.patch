@@ -1,0 +1,126 @@
+From 21dad863e00d44ba468713b3dc21bfc00e343406 Mon Sep 17 00:00:00 2001
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
+Date: Wed, 25 Mar 2026 12:00:08 -0400
+Subject: [PATCH] [Comgr] Fix the issue with path names on Windows for lit
+ tests
+
+Normalize paths to forward slashes in the comgr lit test
+configuration so that tests work correctly on Windows (Git Bash).
+Use find_program for llvm-lit discovery to handle platform-specific
+extensions (.py, .cmd).  Add the comgr library directory to PATH
+so that amd_comgr.dll can be found at runtime on Windows.
+---
+ amd/comgr/test-lit/CMakeLists.txt     | 11 ++++++-----
+ amd/comgr/test-lit/lit.cfg.py         | 25 ++++++++++++++++++-------
+ amd/comgr/test-lit/lit.site.cfg.py.in | 25 +++++++++++++++++++------
+ 3 files changed, 43 insertions(+), 18 deletions(-)
+
+diff --git a/amd/comgr/test-lit/CMakeLists.txt b/amd/comgr/test-lit/CMakeLists.txt
+index bfc765e4a743..95f34a5ca8b8 100644
+--- a/amd/comgr/test-lit/CMakeLists.txt
++++ b/amd/comgr/test-lit/CMakeLists.txt
+@@ -11,11 +11,12 @@ cannonicalize_cmake_boolean(COMGR_DISABLE_SPIRV)
+ configure_file(lit.site.cfg.py.in lit.site.cfg.py @ONLY)
+ 
+ if (NOT DEFINED LLVM_LIT_PATH)
+-  # Comgr source build
+-  if (EXISTS "${LLVM_TOOLS_BINARY_DIR}/../../bin/llvm-lit")
+-    set(LLVM_LIT_PATH "${LLVM_TOOLS_BINARY_DIR}/../../bin/llvm-lit")
+-  # LLVM external projects build
+-  else()
++  find_program(LLVM_LIT_PATH
++    NAMES llvm-lit llvm-lit.py llvm-lit.cmd
++    PATHS "${LLVM_TOOLS_BINARY_DIR}/../../bin" "${LLVM_TOOLS_BINARY_DIR}"
++    NO_DEFAULT_PATH
++  )
++  if (NOT LLVM_LIT_PATH)
+     set(LLVM_LIT_PATH "${LLVM_TOOLS_BINARY_DIR}/llvm-lit")
+   endif()
+ endif()
+diff --git a/amd/comgr/test-lit/lit.cfg.py b/amd/comgr/test-lit/lit.cfg.py
+index 8f6392ff5958..c246aeba814e 100644
+--- a/amd/comgr/test-lit/lit.cfg.py
++++ b/amd/comgr/test-lit/lit.cfg.py
+@@ -1,7 +1,7 @@
+ import os
++import platform
+ 
+ import lit.formats
+-import lit.util
+ 
+ config.name = "Comgr"
+ config.suffixes = {".hip", ".cl", ".c", ".cpp"}
+@@ -15,13 +15,24 @@ config.test_exec_root = config.my_obj_root
+ if not config.comgr_disable_spirv:
+     config.available_features.add("comgr-has-spirv")
+ 
++if platform.system() == "Windows":
++    config.available_features.add("system-windows")
++elif platform.system() == "Linux":
++    config.available_features.add("system-linux")
++
+ # By default, disable the cache for the tests.
+ # Test for the cache must explicitly enable this variable.
+ config.environment['AMD_COMGR_CACHE'] = "0"
+ 
+-# Add substitutions for LLVM tools
+-config.substitutions.append(('%clang', os.path.join(config.llvm_tools_dir, 'clang')))
+-config.substitutions.append(('%llvm-dis', os.path.join(config.llvm_tools_dir, 'llvm-dis')))
+-config.substitutions.append(('%llvm-objdump', os.path.join(config.llvm_tools_dir, 'llvm-objdump')))
+-config.substitutions.append(('%FileCheck', os.path.join(config.llvm_tools_dir, 'FileCheck')))
+-config.substitutions.append(('%amd-llvm-spirv', os.path.join(config.llvm_tools_dir, 'amd-llvm-spirv')))
++# Resolve tool paths at configure time with forward slashes.  On Windows,
++# os.path.join may return paths with backslashes, which break when written
++# into bash scripts (e.g. "bin\clang" -> "binclang").
++def _fwd(*parts):
++    return os.path.join(*parts).replace("\\", "/")
++
++# %-prefixed substitutions for LLVM tools (used as %clang, %llvm-dis, etc.)
++config.substitutions.append(('%clang', _fwd(config.llvm_tools_dir, 'clang')))
++config.substitutions.append(('%llvm-dis', _fwd(config.llvm_tools_dir, 'llvm-dis')))
++config.substitutions.append(('%llvm-objdump', _fwd(config.llvm_tools_dir, 'llvm-objdump')))
++config.substitutions.append(('%FileCheck', _fwd(config.llvm_tools_dir, 'FileCheck')))
++config.substitutions.append(('%amd-llvm-spirv', _fwd(config.llvm_tools_dir, 'amd-llvm-spirv')))
+diff --git a/amd/comgr/test-lit/lit.site.cfg.py.in b/amd/comgr/test-lit/lit.site.cfg.py.in
+index 30395d720039..cb9bebba7d7e 100644
+--- a/amd/comgr/test-lit/lit.site.cfg.py.in
++++ b/amd/comgr/test-lit/lit.site.cfg.py.in
+@@ -1,16 +1,29 @@
+ import os
+ 
+-config.my_src_root = r'@CMAKE_CURRENT_SOURCE_DIR@'
+-config.my_obj_root = r'@CMAKE_CURRENT_BINARY_DIR@'
++def _fwd(p):
++    """Normalize path to forward slashes so it is safe in bash scripts."""
++    return p.replace("\\", "/")
++
++config.my_src_root = _fwd(r'@CMAKE_CURRENT_SOURCE_DIR@')
++config.my_obj_root = _fwd(r'@CMAKE_CURRENT_BINARY_DIR@')
+ 
+ config.comgr_disable_spirv = @COMGR_DISABLE_SPIRV@
+ 
+-# Needed for Comgr binaries
+-config.environment['PATH'] = os.pathsep.join(["@CMAKE_CURRENT_BINARY_DIR@",
++config.llvm_tools_dir = _fwd(r'@LLVM_TOOLS_BINARY_DIR@')
++config.comgr_obj_dir = config.my_obj_root
++config.comgr_lib_dir = _fwd(os.path.dirname(config.my_obj_root))
++
++# Needed for clang, llvm-dis, etc.
++config.environment['PATH'] = os.pathsep.join([config.llvm_tools_dir,
+                                               config.environment['PATH']])
+ 
+-# Set path to LLVM tools for substitutions
+-config.llvm_tools_dir = r'@LLVM_TOOLS_BINARY_DIR@'
++# Needed for amd_comgr shared library (DLL on Windows)
++config.environment['PATH'] = os.pathsep.join([config.comgr_lib_dir,
++                                              config.environment['PATH']])
++
++# Needed for Comgr test binaries
++config.environment['PATH'] = os.pathsep.join([config.comgr_obj_dir,
++                                              config.environment['PATH']])
+ 
+ lit_config.load_config(
+       config, os.path.join(config.my_src_root, "lit.cfg.py"))
+-- 
+2.34.1
+

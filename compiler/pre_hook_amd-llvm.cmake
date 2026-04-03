@@ -62,24 +62,27 @@ endif()
 
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
 # Only enable BUILD_TESTING if LLVM tests are explicitly enabled
-if(THEROCK_BUILD_LLVM_TESTS)
+if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_ENABLE_LLVM_TESTS)
   set(BUILD_TESTING ON CACHE BOOL "Enable building LLVM tests" FORCE)
 else()
   set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
 endif()
 
 # Enable LLVM tools when tests are enabled (tests need the tools) or when explicitly requested
-if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR THEROCK_BUILD_COMGR_TESTS)
+if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR THEROCK_BUILD_COMGR_TESTS OR THEROCK_ENABLE_LLVM_TESTS)
   set(LLVM_BUILD_TOOLS ON CACHE BOOL "Build LLVM tools required for tests" FORCE)
   set(LLVM_INSTALL_UTILS ON CACHE BOOL "Install LLVM utility binaries like FileCheck" FORCE)
 
   # Install llvm-lit script and the lit Python module for running LIT tests.
   # LLVM_INSTALL_UTILS only installs C++ utilities (FileCheck, not, etc.),
   # but llvm-lit is a Python script that requires separate handling.
-  install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bin/llvm-lit" DESTINATION bin)
+  # On Windows, LLVM generates llvm-lit.py (Python multiprocessing needs the
+  # .py suffix to find the main module) plus a llvm-lit.cmd batch wrapper.
+  # On Unix, it generates llvm-lit (no extension, with a shebang line).
 
-  # Install the lit Python module. This is needed for llvm-lit to function.
-  # We install it to a lib/python subdirectory and set PYTHONPATH in llvm-lit.
+  # Install the lit Python module so llvm-lit works outside the build tree
+  # (the build-tree script has a hardcoded source-tree path that won't exist
+  # after installation).
   set(_lit_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/../llvm/utils/lit")
   install(DIRECTORY "${_lit_source_dir}/lit"
     DESTINATION "lib/python"
@@ -87,22 +90,37 @@ if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR THEROCK_BUILD_COMGR_T
     PATTERN "*.pyc" EXCLUDE
   )
 
-  # Create a wrapper script that sets PYTHONPATH before invoking the real llvm-lit
-  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper" [=[#!/usr/bin/env bash
-# Wrapper script for llvm-lit that sets up PYTHONPATH
+  if(WIN32)
+    install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bin/llvm-lit.py" DESTINATION bin)
+
+    # Create a .cmd wrapper that sets PYTHONPATH so the installed lit module
+    # is found, then delegates to the real llvm-lit.py script.
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper.cmd" [=[@echo off
+set "SCRIPT_DIR=%~dp0"
+set "PYTHONPATH=%SCRIPT_DIR%..\lib\python;%PYTHONPATH%"
+"%SCRIPT_DIR%llvm-lit.real.py" %*
+exit /b %errorlevel%
+]=])
+    install(CODE "
+      file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit.py\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit.real.py\")
+      file(COPY \"${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper.cmd\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/bin\")
+      file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit-wrapper.cmd\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit.cmd\")
+    ")
+  else()
+    install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bin/llvm-lit" DESTINATION bin)
+
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper" [=[#!/usr/bin/env bash
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}/../lib/python:${PYTHONPATH}"
 exec "${SCRIPT_DIR}/llvm-lit.real" "$@"
 ]=])
-  # Install the wrapper and rename the original
-  install(CODE "
-    # Rename the original llvm-lit to llvm-lit.real
-    file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit.real\" )
-    # Install the wrapper script as llvm-lit
-    file(COPY \"${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/bin\")
-    file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit-wrapper\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\")
-    file(CHMOD \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
-  ")
+    install(CODE "
+      file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit.real\")
+      file(COPY \"${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/bin\")
+      file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit-wrapper\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\")
+      file(CHMOD \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    ")
+  endif()
 endif()
 # we have never enabled benchmarks,
 # disabling more explicitly after a bug fix enabled.
@@ -170,9 +188,10 @@ function(therock_set_implicit_llvm_options type tools_dir required_tool_names)
   endforeach()
 endfunction()
 
-# When LLVM tests, tools, or Comgr tests are enabled, build all tools (don't selectively disable).
-# Otherwise, only build the minimum required tools for production.
-if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS AND NOT THEROCK_BUILD_COMGR_TESTS)
+# When LLVM tests or tools are explicitly enabled, build all tools (don't selectively disable).
+# Comgr tests only need the production tool set plus LLVM_INSTALL_UTILS (FileCheck, not, count),
+# so they don't skip selective disabling -- the mega-driver is naturally disabled by the allow-list.
+if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS AND NOT THEROCK_ENABLE_LLVM_TESTS)
   block()
     # This list contains the minimum tooling that must be enabled to build LLVM.
     # It is empically derived (either configure or ninja invocation will fail

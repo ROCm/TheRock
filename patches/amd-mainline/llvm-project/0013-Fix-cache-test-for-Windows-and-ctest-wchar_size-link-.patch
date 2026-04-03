@@ -1,0 +1,58 @@
+From 2bb3ec52606a9ebd16c5751c3ec38fc500824dfc Mon Sep 17 00:00:00 2001
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
+Date: Tue, 31 Mar 2026 02:44:54 -0400
+Subject: [PATCH] Fix cache test for Windows and ctest wchar_size linking
+
+- Use cross-platform FileCheck regex in compile-minimal-cached-bad-dir.cl
+  to match both Linux ("Not a directory") and Windows ("no such file or
+  directory") error messages.
+- Add -fshort-wchar flag when compiling test input bitcodes on Windows
+  to match device-libs and avoid conflicting wchar_size module flags.
+---
+ .../cache-tests/compile-minimal-cached-bad-dir.cl        | 7 +++++--
+ amd/comgr/test/CMakeLists.txt                            | 9 +++++++++
+ 2 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl b/amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl
+index aff955b02f98..512d167c8c43 100644
+--- a/amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl
++++ b/amd/comgr/test-lit/cache-tests/compile-minimal-cached-bad-dir.cl
+@@ -9,5 +9,8 @@
+ // RUN:     compile-opencl-minimal %S/../compile-minimal.cl %t.bin 1.2
+ // RUN: %llvm-objdump -d %t.bin | %FileCheck %S/../compile-minimal.cl
+ // RUN: %FileCheck --check-prefix=BAD %s < %t.log
+-// BAD: Failed to open cache file
+-// BAD-SAME: Not a directory
++// COM: The error message differs by platform:
++// COM: Linux:   Comgr cache, when building the add stream callback: Failed to open cache file <path>: Not a directory
++// COM: Windows: Comgr cache, when getting the cached file stream: no such file or directory: AMDGPUCompilerCache: Can't get a temporary file
++// BAD: Comgr cache,
++// BAD-SAME: {{Not a directory|no such file or directory}}
+diff --git a/amd/comgr/test/CMakeLists.txt b/amd/comgr/test/CMakeLists.txt
+index f4d05005bae5..f21b9899ed71 100644
+--- a/amd/comgr/test/CMakeLists.txt
++++ b/amd/comgr/test/CMakeLists.txt
+@@ -23,11 +23,20 @@ endmacro()
+ # Creates target ${name} which depends on a clang command to compile ${input} to
+ # ${output}, with any additional arguments from ${ARGN}, and add it to the
+ # TEST_INPUT_BITCODES target list.
++set(TEST_INPUT_WCHAR_FLAG)
++if(WIN32)
++  # Match -fshort-wchar used by device libs on Windows (see
++  # amd/device-libs/cmake/OCL.cmake). Without this, linking fails with
++  # conflicting wchar_size module flags.
++  set(TEST_INPUT_WCHAR_FLAG -fshort-wchar)
++endif()
++
+ macro(add_test_input_bitcode name input output)
+   add_custom_command(
+     OUTPUT "${output}"
+     COMMAND "$<TARGET_FILE:clang>" -c -emit-llvm -target amdgcn-amd-amdhsa
+     -mcpu=gfx900 -nogpulib -nogpuinc
++    ${TEST_INPUT_WCHAR_FLAG}
+     ${ARGN} "${CMAKE_CURRENT_SOURCE_DIR}/${input}"
+     -o "${output}"
+     VERBATIM
+-- 
+2.34.1
+

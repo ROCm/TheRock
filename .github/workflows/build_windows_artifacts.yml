@@ -144,6 +144,13 @@ jobs:
           python build_tools/memory_monitor.py --phase Build -- \
             cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
+      - name: Run comgr tests
+        continue-on-error: true
+        run: |
+          ctest --test-dir "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" --output-on-failure
+          "${{ env.BUILD_DIR }}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
+            "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v
+
       - name: Report
         if: ${{ !cancelled() }}
         shell: bash
