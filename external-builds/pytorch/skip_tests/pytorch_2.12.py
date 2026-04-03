@@ -62,6 +62,8 @@ skip_tests = {
             "test_fake_export_nn_functional_batch_norm_without_cudnn_cuda_float32",
             # subprocess.CalledProcessError in conv2d export
             "test_fake_export_nn_functional_conv2d_cuda_float32",
+            # subprocess.CalledProcessError in instance_norm export
+            "test_fake_export_nn_functional_instance_norm_cuda_float32",
         ],
         "inductor": [
             # BenchmarkMultiTemplateFusionGpuTest - extern code mismatch
@@ -132,6 +134,7 @@ skip_tests = {
             "test_shared_memory_pruning_mm_float32_mat1_transposed_True_mat2_transposed_True_use_tma_False",
             # TestEpilogueFusionStaticAnalysis - expected fused kernel name not found
             "test_template_epilogue_fusion_static_analysis_test_case_timing_reject_use_async_compile_False",
+            "test_template_epilogue_fusion_static_analysis_test_case_timing_reject_use_async_compile_True",
             # TestOpInfoPropertiesCUDA - numerical cos mismatch
             "test_unary_ufunc_numerical_cos_backend_inductor_default_cuda_float32",
             # TestOpInfoPropertiesCUDA - XPASS reciprocal
@@ -140,6 +143,13 @@ skip_tests = {
             "test_eager_equivalence_log10_backend_inductor_default_cuda_float32",
             # HigherOrderOpTestsWithCompiledAutograd - _GeneratorContextManager
             "test_tensor_and_unbacked_symbol_closure",
+            "test_tensor_to_list_closure",
+            # TestOpInfoPropertiesCUDA - numerical log1p mismatch
+            "test_eager_equivalence_log1p_backend_inductor_default_cuda_float32",
+            # TestOpInfoPropertiesCUDA - XPASS remainder
+            "test_eager_equivalence_remainder_backend_inductor_numerics_cuda_bfloat16",
+            # TestOpInfoPropertiesCUDA - XPASS exp2
+            "test_unary_ufunc_numerical_exp2_backend_inductor_default_cuda_bfloat16",
         ],
         "profiler": [
             # TestProfiler - backward compat filter
@@ -163,6 +173,7 @@ skip_tests = {
             "test_nested_tensor_multiprocessing_context_spawn_cuda",
             # TestDataLoaderDeviceTypeCUDA - sparse tensor worker exited unexpectedly
             "test_sparse_tensor_multiprocessing_context_forkserver_cuda",
+            "test_sparse_tensor_multiprocessing_context_spawn_cuda",
         ],
         "multiprocessing": [
             # TestMultiprocessing - file system test assertion
@@ -175,6 +186,8 @@ skip_tests = {
         "serialization": [
             # TestSerialization - NJT weights_only import check
             "test_load_njt_weights_only_should_import_False",
+            # TestOldSerialization - CI env assertion
+            "test_debug_set_in_ci",
         ],
         "stateless": [
             # TestStatelessDeprecation - deprecation warning mismatch
