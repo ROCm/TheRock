@@ -134,7 +134,9 @@ jobs:
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
         run: |
-          ninja -C build/compiler/amd-comgr/build check-comgr
+          ctest --test-dir "${BUILD_DIR}/compiler/amd-comgr/build" --output-on-failure
+          "${BUILD_DIR}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
+            "${BUILD_DIR}/compiler/amd-comgr/build/test-lit" -v
 
       - name: Report
         if: ${{ !cancelled() }}
