@@ -199,6 +199,7 @@ int main() {
   const auto vds_boundary_order = GetGfx1201Wave32Phase0VdsBoundaryOrder();
   const auto remaining_vds_instruction_statuses =
       GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses();
+  const auto vds_opcode_segments = GetGfx1201Wave32Phase0VdsOpcodeSegments();
   const auto vds_next_risk_steps = GetGfx1201Wave32Phase0VdsNextRiskSteps();
   const auto first_unsafe_vds_instructions =
       GetGfx1201Wave32FirstUnsafeVdsInstructions();
@@ -239,6 +240,20 @@ int main() {
   const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus*
       missing_vds_opcode_status =
           FindGfx1201Wave32Phase0RemainingVdsInstructionStatusByOpcode(53u);
+  const Gfx1201Wave32Phase0VdsOpcodeSegment* append_segment =
+      FindGfx1201Wave32Phase0VdsOpcodeSegment("append_consume", 0u);
+  const Gfx1201Wave32Phase0VdsOpcodeSegment* exchange_first_segment =
+      FindGfx1201Wave32Phase0VdsOpcodeSegment("exchange_compare_store", 0u);
+  const Gfx1201Wave32Phase0VdsOpcodeSegment* exchange_last_segment =
+      FindGfx1201Wave32Phase0VdsOpcodeSegment("exchange_compare_store", 6u);
+  const Gfx1201Wave32Phase0VdsOpcodeSegment* multi_first_segment =
+      FindGfx1201Wave32Phase0VdsOpcodeSegment("multi_address", 0u);
+  const Gfx1201Wave32Phase0VdsOpcodeSegment* multi_last_segment =
+      FindGfx1201Wave32Phase0VdsOpcodeSegment("multi_address", 5u);
+  const Gfx1201Wave32Phase0VdsOpcodeSegment* bvh_segment =
+      FindGfx1201Wave32Phase0VdsOpcodeSegment("bvh_stack", 0u);
+  const Gfx1201Wave32Phase0VdsOpcodeSegment* missing_segment =
+      FindGfx1201Wave32Phase0VdsOpcodeSegment("append_consume", 1u);
   const Gfx1201Wave32Phase0VdsNextRiskStep* append_step =
       FindGfx1201Wave32Phase0VdsNextRiskStep("append_consume");
   const Gfx1201Wave32Phase0VdsNextRiskStep* exchange_step =
@@ -261,6 +276,8 @@ int main() {
               "expected VDS boundary order count") ||
       !Expect(remaining_vds_instruction_statuses.size() == 24u,
               "expected remaining VDS instruction status count") ||
+      !Expect(vds_opcode_segments.size() == 15u,
+              "expected remaining VDS opcode segment count") ||
       !Expect(vds_next_risk_steps.size() == 4u,
               "expected remaining VDS next-risk step count") ||
       !Expect(first_unsafe_vds_instructions.size() ==
@@ -286,6 +303,13 @@ int main() {
                   stride_opcode_status != nullptr && bvh_status != nullptr &&
                   bvh_opcode_status != nullptr,
               "expected remaining VDS instruction lookups") ||
+      !Expect(append_segment != nullptr && exchange_first_segment != nullptr &&
+                  exchange_last_segment != nullptr &&
+                  multi_first_segment != nullptr && multi_last_segment != nullptr &&
+                  bvh_segment != nullptr,
+              "expected remaining VDS opcode segment lookups") ||
+      !Expect(missing_segment == nullptr,
+              "expected missing remaining VDS opcode segment lookup to fail") ||
       !Expect(append_step != nullptr && exchange_step != nullptr &&
                   multi_address_step != nullptr && bvh_step != nullptr,
               "expected remaining VDS next-risk step lookups") ||
@@ -334,6 +358,12 @@ int main() {
                   vds_boundary_bucket_statuses.front().instruction_count == 2u &&
                   vds_boundary_bucket_statuses.front().first_opcode == 61u &&
                   vds_boundary_bucket_statuses.front().last_opcode == 62u &&
+                  vds_boundary_bucket_statuses.front().opcode_segment_count ==
+                      1u &&
+                  vds_boundary_bucket_statuses.front()
+                          .longest_opcode_segment_instruction_count == 2u &&
+                  vds_boundary_bucket_statuses.front().largest_opcode_gap ==
+                      0u &&
                   vds_boundary_bucket_statuses.front().min_operand_count == 3u &&
                   vds_boundary_bucket_statuses.front().max_operand_count == 3u &&
                   vds_boundary_bucket_statuses.front().operand_count_3_count ==
@@ -372,6 +402,12 @@ int main() {
                   vds_boundary_bucket_statuses.back().instruction_count == 3u &&
                   vds_boundary_bucket_statuses.back().first_opcode == 224u &&
                   vds_boundary_bucket_statuses.back().last_opcode == 226u &&
+                  vds_boundary_bucket_statuses.back().opcode_segment_count ==
+                      1u &&
+                  vds_boundary_bucket_statuses.back()
+                          .longest_opcode_segment_instruction_count == 3u &&
+                  vds_boundary_bucket_statuses.back().largest_opcode_gap ==
+                      0u &&
                   vds_boundary_bucket_statuses.back().min_operand_count == 4u &&
                   vds_boundary_bucket_statuses.back().max_operand_count == 4u &&
                   vds_boundary_bucket_statuses.back().operand_count_3_count ==
@@ -412,6 +448,10 @@ int main() {
                   append_bucket_status->instruction_count == 2u &&
                   append_bucket_status->first_opcode == 61u &&
                   append_bucket_status->last_opcode == 62u &&
+                  append_bucket_status->opcode_segment_count == 1u &&
+                  append_bucket_status
+                          ->longest_opcode_segment_instruction_count == 2u &&
+                  append_bucket_status->largest_opcode_gap == 0u &&
                   append_bucket_status->min_operand_count == 3u &&
                   append_bucket_status->max_operand_count == 3u &&
                   append_bucket_status->operand_count_3_count == 2u &&
@@ -443,6 +483,10 @@ int main() {
                   exchange_bucket_status->instruction_count == 7u &&
                   exchange_bucket_status->first_opcode == 16u &&
                   exchange_bucket_status->last_opcode == 126u &&
+                  exchange_bucket_status->opcode_segment_count == 7u &&
+                  exchange_bucket_status
+                          ->longest_opcode_segment_instruction_count == 1u &&
+                  exchange_bucket_status->largest_opcode_gap == 31u &&
                   exchange_bucket_status->min_operand_count == 5u &&
                   exchange_bucket_status->max_operand_count == 6u &&
                   exchange_bucket_status->operand_count_3_count == 0u &&
@@ -474,6 +518,10 @@ int main() {
                   multi_bucket_status->instruction_count == 12u &&
                   multi_bucket_status->first_opcode == 14u &&
                   multi_bucket_status->last_opcode == 120u &&
+                  multi_bucket_status->opcode_segment_count == 6u &&
+                  multi_bucket_status
+                          ->longest_opcode_segment_instruction_count == 2u &&
+                  multi_bucket_status->largest_opcode_gap == 30u &&
                   multi_bucket_status->min_operand_count == 3u &&
                   multi_bucket_status->max_operand_count == 6u &&
                   multi_bucket_status->operand_count_3_count == 4u &&
@@ -505,6 +553,10 @@ int main() {
                   bvh_bucket_status->instruction_count == 3u &&
                   bvh_bucket_status->first_opcode == 224u &&
                   bvh_bucket_status->last_opcode == 226u &&
+                  bvh_bucket_status->opcode_segment_count == 1u &&
+                  bvh_bucket_status
+                          ->longest_opcode_segment_instruction_count == 3u &&
+                  bvh_bucket_status->largest_opcode_gap == 0u &&
                   bvh_bucket_status->min_operand_count == 4u &&
                   bvh_bucket_status->max_operand_count == 4u &&
                   bvh_bucket_status->operand_count_3_count == 0u &&
@@ -664,6 +716,75 @@ int main() {
                   bvh_opcode_status->support_rollup == "gfx1201_specific" &&
                   bvh_opcode_status->support_state == "gfx1201_specific",
               "expected BVH opcode lookup status")) {
+    return 1;
+  }
+
+  if (!Expect(vds_opcode_segments.front().bucket_name == "append_consume" &&
+                  vds_opcode_segments.front().segment_ordinal == 0u &&
+                  vds_opcode_segments.front().first_opcode == 61u &&
+                  vds_opcode_segments.front().last_opcode == 62u &&
+                  vds_opcode_segments.front().instruction_count == 2u &&
+                  vds_opcode_segments.front().first_instruction_name ==
+                      "DS_CONSUME" &&
+                  vds_opcode_segments.front().last_instruction_name ==
+                      "DS_APPEND",
+              "expected first remaining VDS opcode segment") ||
+      !Expect(vds_opcode_segments.back().bucket_name == "bvh_stack" &&
+                  vds_opcode_segments.back().segment_ordinal == 0u &&
+                  vds_opcode_segments.back().first_opcode == 224u &&
+                  vds_opcode_segments.back().last_opcode == 226u &&
+                  vds_opcode_segments.back().instruction_count == 3u &&
+                  vds_opcode_segments.back().first_instruction_name ==
+                      "DS_BVH_STACK_PUSH4_POP1_RTN_B32" &&
+                  vds_opcode_segments.back().last_instruction_name ==
+                      "DS_BVH_STACK_PUSH8_POP2_RTN_B64",
+              "expected last remaining VDS opcode segment") ||
+      !Expect(append_segment->first_opcode == 61u &&
+                  append_segment->last_opcode == 62u &&
+                  append_segment->instruction_count == 2u &&
+                  append_segment->first_instruction_name == "DS_CONSUME" &&
+                  append_segment->last_instruction_name == "DS_APPEND",
+              "expected append opcode segment") ||
+      !Expect(exchange_first_segment->first_opcode == 16u &&
+                  exchange_first_segment->last_opcode == 16u &&
+                  exchange_first_segment->instruction_count == 1u &&
+                  exchange_first_segment->first_instruction_name ==
+                      "DS_CMPSTORE_B32" &&
+                  exchange_first_segment->last_instruction_name ==
+                      "DS_CMPSTORE_B32",
+              "expected first exchange opcode segment") ||
+      !Expect(exchange_last_segment->first_opcode == 126u &&
+                  exchange_last_segment->last_opcode == 126u &&
+                  exchange_last_segment->instruction_count == 1u &&
+                  exchange_last_segment->first_instruction_name ==
+                      "DS_CONDXCHG32_RTN_B64" &&
+                  exchange_last_segment->last_instruction_name ==
+                      "DS_CONDXCHG32_RTN_B64",
+              "expected last exchange opcode segment") ||
+      !Expect(multi_first_segment->first_opcode == 14u &&
+                  multi_first_segment->last_opcode == 15u &&
+                  multi_first_segment->instruction_count == 2u &&
+                  multi_first_segment->first_instruction_name ==
+                      "DS_STORE_2ADDR_B32" &&
+                  multi_first_segment->last_instruction_name ==
+                      "DS_STORE_2ADDR_STRIDE64_B32",
+              "expected first multi-address opcode segment") ||
+      !Expect(multi_last_segment->first_opcode == 119u &&
+                  multi_last_segment->last_opcode == 120u &&
+                  multi_last_segment->instruction_count == 2u &&
+                  multi_last_segment->first_instruction_name ==
+                      "DS_LOAD_2ADDR_B64" &&
+                  multi_last_segment->last_instruction_name ==
+                      "DS_LOAD_2ADDR_STRIDE64_B64",
+              "expected last multi-address opcode segment") ||
+      !Expect(bvh_segment->first_opcode == 224u &&
+                  bvh_segment->last_opcode == 226u &&
+                  bvh_segment->instruction_count == 3u &&
+                  bvh_segment->first_instruction_name ==
+                      "DS_BVH_STACK_PUSH4_POP1_RTN_B32" &&
+                  bvh_segment->last_instruction_name ==
+                      "DS_BVH_STACK_PUSH8_POP2_RTN_B64",
+              "expected BVH opcode segment")) {
     return 1;
   }
 

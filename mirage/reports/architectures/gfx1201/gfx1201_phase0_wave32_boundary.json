@@ -74,6 +74,9 @@
       "instruction_count": 2,
       "first_opcode": 61,
       "last_opcode": 62,
+      "opcode_segment_count": 1,
+      "longest_opcode_segment_instruction_count": 2,
+      "largest_opcode_gap": 0,
       "min_operand_count": 3,
       "max_operand_count": 3,
       "operand_count_3_count": 2,
@@ -98,6 +101,9 @@
       "instruction_count": 7,
       "first_opcode": 16,
       "last_opcode": 126,
+      "opcode_segment_count": 7,
+      "longest_opcode_segment_instruction_count": 1,
+      "largest_opcode_gap": 31,
       "min_operand_count": 5,
       "max_operand_count": 6,
       "operand_count_3_count": 0,
@@ -122,6 +128,9 @@
       "instruction_count": 12,
       "first_opcode": 14,
       "last_opcode": 120,
+      "opcode_segment_count": 6,
+      "longest_opcode_segment_instruction_count": 2,
+      "largest_opcode_gap": 30,
       "min_operand_count": 3,
       "max_operand_count": 6,
       "operand_count_3_count": 4,
@@ -146,6 +155,9 @@
       "instruction_count": 3,
       "first_opcode": 224,
       "last_opcode": 226,
+      "opcode_segment_count": 1,
+      "longest_opcode_segment_instruction_count": 3,
+      "largest_opcode_gap": 0,
       "min_operand_count": 4,
       "max_operand_count": 4,
       "operand_count_3_count": 0,
@@ -162,6 +174,143 @@
       "transferable_with_decoder_and_semantic_work_state_count": 0,
       "gfx1201_specific_state_count": 3,
       "safe_under_current_request": false
+    }
+  ],
+  "remaining_vds_opcode_segments": [
+    {
+      "bucket_name": "append_consume",
+      "segment_ordinal": 0,
+      "first_opcode": 61,
+      "last_opcode": 62,
+      "instruction_count": 2,
+      "first_instruction_name": "DS_CONSUME",
+      "last_instruction_name": "DS_APPEND"
+    },
+    {
+      "bucket_name": "exchange_compare_store",
+      "segment_ordinal": 0,
+      "first_opcode": 16,
+      "last_opcode": 16,
+      "instruction_count": 1,
+      "first_instruction_name": "DS_CMPSTORE_B32",
+      "last_instruction_name": "DS_CMPSTORE_B32"
+    },
+    {
+      "bucket_name": "exchange_compare_store",
+      "segment_ordinal": 1,
+      "first_opcode": 45,
+      "last_opcode": 45,
+      "instruction_count": 1,
+      "first_instruction_name": "DS_STOREXCHG_RTN_B32",
+      "last_instruction_name": "DS_STOREXCHG_RTN_B32"
+    },
+    {
+      "bucket_name": "exchange_compare_store",
+      "segment_ordinal": 2,
+      "first_opcode": 48,
+      "last_opcode": 48,
+      "instruction_count": 1,
+      "first_instruction_name": "DS_CMPSTORE_RTN_B32",
+      "last_instruction_name": "DS_CMPSTORE_RTN_B32"
+    },
+    {
+      "bucket_name": "exchange_compare_store",
+      "segment_ordinal": 3,
+      "first_opcode": 80,
+      "last_opcode": 80,
+      "instruction_count": 1,
+      "first_instruction_name": "DS_CMPSTORE_B64",
+      "last_instruction_name": "DS_CMPSTORE_B64"
+    },
+    {
+      "bucket_name": "exchange_compare_store",
+      "segment_ordinal": 4,
+      "first_opcode": 109,
+      "last_opcode": 109,
+      "instruction_count": 1,
+      "first_instruction_name": "DS_STOREXCHG_RTN_B64",
+      "last_instruction_name": "DS_STOREXCHG_RTN_B64"
+    },
+    {
+      "bucket_name": "exchange_compare_store",
+      "segment_ordinal": 5,
+      "first_opcode": 112,
+      "last_opcode": 112,
+      "instruction_count": 1,
+      "first_instruction_name": "DS_CMPSTORE_RTN_B64",
+      "last_instruction_name": "DS_CMPSTORE_RTN_B64"
+    },
+    {
+      "bucket_name": "exchange_compare_store",
+      "segment_ordinal": 6,
+      "first_opcode": 126,
+      "last_opcode": 126,
+      "instruction_count": 1,
+      "first_instruction_name": "DS_CONDXCHG32_RTN_B64",
+      "last_instruction_name": "DS_CONDXCHG32_RTN_B64"
+    },
+    {
+      "bucket_name": "multi_address",
+      "segment_ordinal": 0,
+      "first_opcode": 14,
+      "last_opcode": 15,
+      "instruction_count": 2,
+      "first_instruction_name": "DS_STORE_2ADDR_B32",
+      "last_instruction_name": "DS_STORE_2ADDR_STRIDE64_B32"
+    },
+    {
+      "bucket_name": "multi_address",
+      "segment_ordinal": 1,
+      "first_opcode": 46,
+      "last_opcode": 47,
+      "instruction_count": 2,
+      "first_instruction_name": "DS_STOREXCHG_2ADDR_RTN_B32",
+      "last_instruction_name": "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32"
+    },
+    {
+      "bucket_name": "multi_address",
+      "segment_ordinal": 2,
+      "first_opcode": 55,
+      "last_opcode": 56,
+      "instruction_count": 2,
+      "first_instruction_name": "DS_LOAD_2ADDR_B32",
+      "last_instruction_name": "DS_LOAD_2ADDR_STRIDE64_B32"
+    },
+    {
+      "bucket_name": "multi_address",
+      "segment_ordinal": 3,
+      "first_opcode": 78,
+      "last_opcode": 79,
+      "instruction_count": 2,
+      "first_instruction_name": "DS_STORE_2ADDR_B64",
+      "last_instruction_name": "DS_STORE_2ADDR_STRIDE64_B64"
+    },
+    {
+      "bucket_name": "multi_address",
+      "segment_ordinal": 4,
+      "first_opcode": 110,
+      "last_opcode": 111,
+      "instruction_count": 2,
+      "first_instruction_name": "DS_STOREXCHG_2ADDR_RTN_B64",
+      "last_instruction_name": "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64"
+    },
+    {
+      "bucket_name": "multi_address",
+      "segment_ordinal": 5,
+      "first_opcode": 119,
+      "last_opcode": 120,
+      "instruction_count": 2,
+      "first_instruction_name": "DS_LOAD_2ADDR_B64",
+      "last_instruction_name": "DS_LOAD_2ADDR_STRIDE64_B64"
+    },
+    {
+      "bucket_name": "bvh_stack",
+      "segment_ordinal": 0,
+      "first_opcode": 224,
+      "last_opcode": 226,
+      "instruction_count": 3,
+      "first_instruction_name": "DS_BVH_STACK_PUSH4_POP1_RTN_B32",
+      "last_instruction_name": "DS_BVH_STACK_PUSH8_POP2_RTN_B64"
     }
   ],
   "remaining_vds_instruction_statuses": [

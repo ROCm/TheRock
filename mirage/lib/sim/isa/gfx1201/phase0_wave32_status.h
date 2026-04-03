@@ -64,6 +64,16 @@ struct Gfx1201Wave32Phase0VdsBoundaryInstructionStatus {
   bool safe_under_current_request = false;
 };
 
+struct Gfx1201Wave32Phase0VdsOpcodeSegment {
+  std::string_view bucket_name;
+  std::uint32_t segment_ordinal = 0;
+  std::uint32_t first_opcode = 0;
+  std::uint32_t last_opcode = 0;
+  std::uint32_t instruction_count = 0;
+  std::string_view first_instruction_name;
+  std::string_view last_instruction_name;
+};
+
 struct Gfx1201Wave32Phase0VdsBoundaryBucketStatus {
   std::string_view bucket_name;
   std::string_view blocking_dimension;
@@ -71,6 +81,9 @@ struct Gfx1201Wave32Phase0VdsBoundaryBucketStatus {
   std::uint32_t instruction_count = 0;
   std::uint32_t first_opcode = 0;
   std::uint32_t last_opcode = 0;
+  std::uint32_t opcode_segment_count = 0;
+  std::uint32_t longest_opcode_segment_instruction_count = 0;
+  std::uint32_t largest_opcode_gap = 0;
   std::uint16_t min_operand_count = 0;
   std::uint16_t max_operand_count = 0;
   std::uint32_t operand_count_3_count = 0;
@@ -120,6 +133,8 @@ GetGfx1201Wave32Phase0VdsBoundaryBucketStatuses();
 std::span<const std::string_view> GetGfx1201Wave32Phase0VdsBoundaryOrder();
 std::span<const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus>
 GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses();
+std::span<const Gfx1201Wave32Phase0VdsOpcodeSegment>
+GetGfx1201Wave32Phase0VdsOpcodeSegments();
 std::span<const Gfx1201Wave32Phase0VdsNextRiskStep>
 GetGfx1201Wave32Phase0VdsNextRiskSteps();
 const Gfx1201Wave32Phase0VdsBoundaryBucket*
@@ -135,6 +150,9 @@ FindGfx1201Wave32Phase0RemainingVdsInstructionStatus(
 const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus*
 FindGfx1201Wave32Phase0RemainingVdsInstructionStatusByOpcode(
     std::uint32_t opcode);
+const Gfx1201Wave32Phase0VdsOpcodeSegment*
+FindGfx1201Wave32Phase0VdsOpcodeSegment(std::string_view bucket_name,
+                                        std::uint32_t segment_ordinal);
 const Gfx1201Wave32Phase0VdsNextRiskStep*
 FindGfx1201Wave32Phase0VdsNextRiskStep(std::string_view bucket_name);
 bool HasGfx1201Wave32SafeVdsContinuation();

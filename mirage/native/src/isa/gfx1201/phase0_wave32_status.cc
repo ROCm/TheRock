@@ -133,6 +133,11 @@ struct ExecutableInstructionSummary {
   std::string_view first_executable_instruction;
 };
 
+struct BucketOpcodePoint {
+  std::uint32_t opcode = 0;
+  std::string_view instruction_name;
+};
+
 const Gfx1201DecoderSeedEntry* FindVdsSeedEntry(std::string_view instruction_name) {
   const Gfx1201DecoderSeedEncoding* vds_seed =
       FindGfx1201Phase0ComputeDecoderSeed("ENC_VDS");
@@ -170,6 +175,29 @@ ExecutableInstructionSummary SummarizeExecutableInstructions(
   }
 
   return summary;
+}
+
+std::vector<BucketOpcodePoint> CollectBucketOpcodePoints(
+    const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket) {
+  std::vector<BucketOpcodePoint> points;
+  points.reserve(bucket.instruction_names.size());
+
+  for (std::string_view instruction_name : bucket.instruction_names) {
+    const Gfx1201DecoderSeedEntry* seed_entry = FindVdsSeedEntry(instruction_name);
+    if (seed_entry == nullptr) {
+      continue;
+    }
+    points.push_back(BucketOpcodePoint{seed_entry->opcode, instruction_name});
+  }
+
+  std::sort(points.begin(), points.end(),
+            [](const BucketOpcodePoint& lhs, const BucketOpcodePoint& rhs) {
+              if (lhs.opcode != rhs.opcode) {
+                return lhs.opcode < rhs.opcode;
+              }
+              return lhs.instruction_name < rhs.instruction_name;
+            });
+  return points;
 }
 
 std::array<Gfx1201Wave32Phase0EncodingStatus, kTrackedEncodings.size()>
@@ -267,6 +295,8 @@ BuildVdsBoundaryBucketStatuses() {
   statuses.reserve(kVdsBoundaryBuckets.size());
 
   for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket : kVdsBoundaryBuckets) {
+    const std::vector<BucketOpcodePoint> opcode_points =
+        CollectBucketOpcodePoints(bucket);
     Gfx1201Wave32Phase0VdsBoundaryBucketStatus status{
         bucket.bucket_name,
         bucket.blocking_dimension,
@@ -285,12 +315,17 @@ BuildVdsBoundaryBucketStatuses() {
         0u,
         0u,
         0u,
+        0u,
+        0u,
+        0u,
         bucket.safe_under_current_request,
     };
     bool saw_seed_entry = false;
+    std::uint32_t previous_opcode = 0;
 
-    for (std::string_view instruction_name : bucket.instruction_names) {
-      const Gfx1201DecoderSeedEntry* seed_entry = FindVdsSeedEntry(instruction_name);
+    for (const BucketOpcodePoint& point : opcode_points) {
+      const Gfx1201DecoderSeedEntry* seed_entry =
+          FindVdsSeedEntry(point.instruction_name);
       if (seed_entry == nullptr) {
         continue;
       }
@@ -298,12 +333,19 @@ BuildVdsBoundaryBucketStatuses() {
       if (!saw_seed_entry) {
         status.first_opcode = seed_entry->opcode;
         status.last_opcode = seed_entry->opcode;
+        status.opcode_segment_count = 1u;
         status.min_operand_count =
             static_cast<std::uint16_t>(seed_entry->operand_count);
         status.max_operand_count =
             static_cast<std::uint16_t>(seed_entry->operand_count);
         saw_seed_entry = true;
       } else {
+        if (seed_entry->opcode != previous_opcode + 1u) {
+          ++status.opcode_segment_count;
+          status.largest_opcode_gap =
+              std::max(status.largest_opcode_gap,
+                       seed_entry->opcode - previous_opcode - 1u);
+        }
         status.first_opcode = std::min(status.first_opcode, seed_entry->opcode);
         status.last_opcode = std::max(status.last_opcode, seed_entry->opcode);
         status.min_operand_count = std::min(
@@ -313,6 +355,7 @@ BuildVdsBoundaryBucketStatuses() {
             status.max_operand_count,
             static_cast<std::uint16_t>(seed_entry->operand_count));
       }
+      previous_opcode = seed_entry->opcode;
 
       switch (seed_entry->operand_count) {
         case 3:
@@ -367,10 +410,84 @@ BuildVdsBoundaryBucketStatuses() {
       }
     }
 
+    if (!opcode_points.empty()) {
+      std::uint32_t current_segment_instruction_count = 1u;
+      for (std::size_t i = 1; i < opcode_points.size(); ++i) {
+        if (opcode_points[i].opcode == opcode_points[i - 1].opcode + 1u) {
+          ++current_segment_instruction_count;
+        } else {
+          status.longest_opcode_segment_instruction_count =
+              std::max(status.longest_opcode_segment_instruction_count,
+                       current_segment_instruction_count);
+          current_segment_instruction_count = 1u;
+        }
+      }
+      status.longest_opcode_segment_instruction_count =
+          std::max(status.longest_opcode_segment_instruction_count,
+                   current_segment_instruction_count);
+    }
+
     statuses.push_back(status);
   }
 
   return statuses;
+}
+
+std::vector<Gfx1201Wave32Phase0VdsOpcodeSegment> BuildVdsOpcodeSegments() {
+  std::vector<Gfx1201Wave32Phase0VdsOpcodeSegment> segments;
+
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket : kVdsBoundaryBuckets) {
+    const std::vector<BucketOpcodePoint> opcode_points =
+        CollectBucketOpcodePoints(bucket);
+    if (opcode_points.empty()) {
+      continue;
+    }
+
+    std::uint32_t segment_ordinal = 0;
+    std::uint32_t first_opcode = opcode_points.front().opcode;
+    std::uint32_t last_opcode = opcode_points.front().opcode;
+    std::uint32_t instruction_count = 1u;
+    std::string_view first_instruction_name = opcode_points.front().instruction_name;
+    std::string_view last_instruction_name = opcode_points.front().instruction_name;
+
+    for (std::size_t i = 1; i < opcode_points.size(); ++i) {
+      if (opcode_points[i].opcode == last_opcode + 1u) {
+        last_opcode = opcode_points[i].opcode;
+        last_instruction_name = opcode_points[i].instruction_name;
+        ++instruction_count;
+        continue;
+      }
+
+      segments.push_back(Gfx1201Wave32Phase0VdsOpcodeSegment{
+          bucket.bucket_name,
+          segment_ordinal,
+          first_opcode,
+          last_opcode,
+          instruction_count,
+          first_instruction_name,
+          last_instruction_name,
+      });
+      ++segment_ordinal;
+
+      first_opcode = opcode_points[i].opcode;
+      last_opcode = opcode_points[i].opcode;
+      instruction_count = 1u;
+      first_instruction_name = opcode_points[i].instruction_name;
+      last_instruction_name = opcode_points[i].instruction_name;
+    }
+
+    segments.push_back(Gfx1201Wave32Phase0VdsOpcodeSegment{
+        bucket.bucket_name,
+        segment_ordinal,
+        first_opcode,
+        last_opcode,
+        instruction_count,
+        first_instruction_name,
+        last_instruction_name,
+    });
+  }
+
+  return segments;
 }
 
 std::vector<Gfx1201Wave32Phase0VdsNextRiskStep> BuildVdsNextRiskSteps() {
@@ -486,6 +603,13 @@ GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses() {
   return kStatuses;
 }
 
+std::span<const Gfx1201Wave32Phase0VdsOpcodeSegment>
+GetGfx1201Wave32Phase0VdsOpcodeSegments() {
+  static const std::vector<Gfx1201Wave32Phase0VdsOpcodeSegment> kSegments =
+      BuildVdsOpcodeSegments();
+  return kSegments;
+}
+
 std::span<const Gfx1201Wave32Phase0VdsNextRiskStep>
 GetGfx1201Wave32Phase0VdsNextRiskSteps() {
   static const std::vector<Gfx1201Wave32Phase0VdsNextRiskStep> kSteps =
@@ -548,6 +672,19 @@ FindGfx1201Wave32Phase0RemainingVdsInstructionStatusByOpcode(
        GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses()) {
     if (status.opcode == opcode) {
       return &status;
+    }
+  }
+  return nullptr;
+}
+
+const Gfx1201Wave32Phase0VdsOpcodeSegment*
+FindGfx1201Wave32Phase0VdsOpcodeSegment(std::string_view bucket_name,
+                                        std::uint32_t segment_ordinal) {
+  for (const Gfx1201Wave32Phase0VdsOpcodeSegment& segment :
+       GetGfx1201Wave32Phase0VdsOpcodeSegments()) {
+    if (segment.bucket_name == bucket_name &&
+        segment.segment_ordinal == segment_ordinal) {
+      return &segment;
     }
   }
   return nullptr;
