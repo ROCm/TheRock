@@ -87,6 +87,7 @@ amdgpu_family_info_matrix_presubmit = {
             # Composite label matches TheRock-Infra update_orchestrai_runner_labels.sh (pool: gpu_navi3x).
             # fetch-gfx-targets should be ["gfx1100"] when split artifacts are available on this runner.
             "test-runs-on": "linux-gfx110X-gpu-rocm",
+            "nightly_check_only_for_family": True,
             "family": "gfx110X-all",
             "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
@@ -106,6 +107,7 @@ amdgpu_family_info_matrix_presubmit = {
             # igpu_stxh runners get both *-gfx115X-* and *-gfx1151-* from TheRock-Infra
             # update_orchestrai_runner_labels.sh; use OSSCI-style gfx1151 for matrix / benchmarks.
             "test-runs-on": "linux-gfx1151-gpu-rocm",
+            "nightly_check_only_for_family": True,
             "test-runs-on-kernel": {
                 "oem": "linux-strix-halo-gpu-rocm-oem",
             },
@@ -131,6 +133,7 @@ amdgpu_family_info_matrix_presubmit = {
             # TODO(#2683): Re-enable label once stable
             # Composite label matches TheRock-Infra update_orchestrai_runner_labels.sh (pool: gpu_navi4x).
             "test-runs-on": "linux-gfx120X-gpu-rocm",
+            "nightly_check_only_for_family": True,
             "family": "gfx120X-all",
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
@@ -141,6 +144,7 @@ amdgpu_family_info_matrix_presubmit = {
             # TODO(#2962): Re-enable machine once sanity checks work with this architecture
             # fetch-gfx-targets should be ["gfx1200", "gfx1201"] when artifacts are available.
             "test-runs-on": "windows-gfx120X-gpu-rocm",
+            "nightly_check_only_for_family": True,
             "family": "gfx120X-all",
             "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
