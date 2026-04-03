@@ -659,8 +659,18 @@ def main():
         s3_client, args.s3_bucket, prefix, args.pkg_type, uploaded_packages, args.job
     )
 
-    # Generate index.html files from S3 state (recursive for specific upload)
-    generate_index_from_s3(s3_client, args.s3_bucket, prefix)
+    # Skip index.html generation for CI builds. Its handled in lamda fn
+    # Only generate indexes for release builds (dev/nightly/prerelease)
+    if args.job != "ci":
+        # Generate index.html files from S3 state (recursive for specific upload)
+        generate_index_from_s3(s3_client, args.s3_bucket, prefix)
+
+        # Generate a top-level index for the pkg type (e.g., 'deb' or 'rpm')
+        # Uses S3 Delimiter for efficiency (only lists folders, not all nested files)
+        top_prefix = prefix.split("/")[0]
+        generate_top_index_from_s3(s3_client, args.s3_bucket, top_prefix)
+    else:
+        print("Skipping index.html generation for CI build")
 
     # Generate a top-level index for the pkg type (e.g., 'deb' or 'rpm')
     # Uses S3 Delimiter for efficiency (only lists folders, not all nested files)
