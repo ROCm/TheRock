@@ -69,14 +69,13 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(LIBNL_BUILD VERSION "3.12.0")
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
+if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
 set(patch_source_commands)
 list(APPEND patch_source_commands   COMMAND
     bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
-
 
 add_custom_target(
   build ALL

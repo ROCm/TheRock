@@ -71,7 +71,6 @@ set(patch_source_commands)
 list(APPEND patch_source_commands   COMMAND
     bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
 
-
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -80,7 +79,6 @@ add_custom_target(
     ${patch_source_commands}
   COMMAND
     "${CMAKE_COMMAND}" -E env
-      "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
       # Escaping: Double $ to satisfy CMake, then double $ to satisfy configure,
       # then escaped single quotes to make it to the linker command line.
       #
