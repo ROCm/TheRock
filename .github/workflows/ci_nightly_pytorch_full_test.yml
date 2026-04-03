@@ -43,6 +43,10 @@ on:
         description: "PyTorch git ref for test sources"
         type: string
         default: "nightly"
+      pytorch_git_repo:
+        description: "PyTorch git repo for test sources (Options: rocm/pytorch, pytorch/pytorch)"
+        type: string
+        default: "rocm/pytorch"
       test_configs:
         description: "Space-separated test configs to run"
         type: string
@@ -106,6 +110,7 @@ jobs:
       package_index_url: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
       python_version: ${{ inputs.python_version || '3.12' }}
       torch_version: ${{ needs.resolve_torch_version.outputs.torch_version }}
+      pytorch_git_repo: ${{ inputs.pytorch_git_repo || 'rocm/pytorch' }}
       pytorch_git_ref: ${{ inputs.pytorch_git_ref || 'nightly' }}
       test_configs: ${{ inputs.test_configs || 'default distributed inductor' }}
       tests_to_include: ""

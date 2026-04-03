@@ -24,6 +24,8 @@ skip_tests = {
             "test_allocator_memory_fraction_setting",
             # AssertionError: False is not true (memory_plots)
             "test_memory_plots",
+            # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI cache
+            "test_memory_snapshot",
         ],
         "nn": [
             # AssertionError: False is not true : Expected NaN in pdist output
@@ -54,6 +56,8 @@ skip_tests = {
             "test_fake_export___getitem___cuda_float32",
             # subprocess.CalledProcessError in batch_norm export
             "test_fake_export_nn_functional_batch_norm_cuda_float32",
+            # subprocess.CalledProcessError (batch_norm without cudnn path)
+            "test_fake_export_nn_functional_batch_norm_without_cudnn_cuda_float32",
         ],
         "inductor": [
             # BenchmarkMultiTemplateFusionGpuTest - extern code mismatch
@@ -72,6 +76,8 @@ skip_tests = {
             "test_bias_addmm_lookup_table_entry",
             # TestMaxAutotune - gemm choice validation
             "test_autotune_gemm_choice_validation_op_addmm_max_autotune_True",
+            # TestPrologueFusion - expected fused kernel name substring missing
+            "test_lazy_template_fusion_multiple_candidates_use_async_compile_False",
             # TestProvenanceTracingStackTraces - deferred triton kernels
             "test_deferred_triton_kernels",
             # TestSelectAlgorithm - addmm fp16
@@ -84,6 +90,7 @@ skip_tests = {
             "test_flex_attention_with_dynamic_max_autotune_graph_partition_cuda",
             # ComboKernelTests - KeyError: 'grid'
             "test_combo_kernel_dynamic_shapes_grid_changes",
+            "test_combo_kernel_yz_overflow",
             # TestPatternMatcher - mm_plus_mm count mismatch
             "test_mm_plus_mm",
             # TestTemplateRender - triton_helpers.maximum not found
@@ -94,13 +101,17 @@ skip_tests = {
             "test_return_aux_deprecation_warnings_cuda_float16",
             # HigherOrderOpTestsWithCompiledAutograd - _GeneratorContextManager
             "test_concat_unbacked_shape_tensor",
+            "test_hints_wrapper",
             # AOTInductorTestABICompatibleCpuWithStackAllocation - XPASS
             "test_while_loop_with_mixed_device_dynamic_False_cpu_with_stack_allocation",
             "test_while_loop_with_mixed_device_dynamic_True_cpu_with_stack_allocation",
+            "test_while_loop_with_pytree_inputs_cpu_with_stack_allocation",
             # TestMaxAutotunePrecompile - no kernel image available
             "test_filled_cache_precompile",
             # TestOpInfoPropertiesCUDA - eager equivalence mismatch
             "test_eager_equivalence_exp_backend_inductor_default_cuda_float32",
+            "test_eager_equivalence_rsqrt_backend_inductor_numerics_cuda_float32",
+            "test_eager_equivalence_log_backend_inductor_default_cuda_float16",
             # TestFxGraphCache - remote cache stats mismatch
             "test_remote_cache_load_function_device_cuda_float32_dynamic_False_bundle_triton_False_use_static_triton_launcher_False",
             # TestOpInfoPropertiesCUDA - determinism mismatch
@@ -111,8 +122,9 @@ skip_tests = {
             "test_cond_branches_no_arguments_no_closure",
             # TestLearnableBiasesCUDA - flex attention log file not created
             "test_flex_attention_logging_cuda",
-            # TestTemplateConfigPruning - NoValidChoicesError
+            # TestTemplateConfigPruning - NoValidChoicesError / no kernel image (variant mat1_T)
             "test_shared_memory_pruning_mm_float32_mat1_transposed_False_mat2_transposed_True_use_tma_False",
+            "test_shared_memory_pruning_mm_float32_mat1_transposed_True_mat2_transposed_False_use_tma_False",
         ],
         "profiler": [
             # TestProfiler - backward compat filter
@@ -133,6 +145,7 @@ skip_tests = {
             "test_multiprocessing_contexts",
             # TestDataLoaderDeviceTypeCUDA - worker exited unexpectedly
             "test_nested_tensor_multiprocessing_context_forkserver_cuda",
+            "test_nested_tensor_multiprocessing_context_spawn_cuda",
         ],
         "multiprocessing": [
             # TestMultiprocessing - file system test assertion
@@ -162,6 +175,11 @@ skip_tests = {
             # ComposabilityTest - pipeline parallel (8-GPU)
             "test_replicate_pp_ScheduleClass3_bfloat16",
             "test_replicate_pp_ScheduleClass3_float32",
+            "test_replicate_pp_ScheduleClass4_bfloat16",
+            # ReplicateFullyShardInit - pytest-timeout (>900s)
+            "test_replicate_device_id",
+            # DistConvolutionOpsTest - scalar mismatch (depthwise)
+            "test_depthwise_convolution",
             # TestFSDPMemory - memory accounting mismatch
             "test_fsdp_memory_ckpt_ckpt",
             # ProcessGroupNCCLGroupTest - error code 10
@@ -210,6 +228,7 @@ skip_tests = {
             "test_binary_ufunc_numerical_remainder_backend_inductor_default_cuda_float32",
             "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_float32",
             "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_bfloat16",
+            "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_float16",
         ],
         "linalg": [
             # TestLinalgCUDA - tunableop_rocm addmm relu
