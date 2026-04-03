@@ -39,9 +39,9 @@ on:
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
-      run_functional_tests:
-        description: Whether to run functional tests (enabled for nightly/scheduled builds).
-        value: ${{ jobs.setup.outputs.run_functional_tests }}
+      run_extended_tests:
+        description: "Boolean string ('true'/'false') controlling extended test enablement (functional + benchmarks)."
+        value: ${{ jobs.setup.outputs.run_extended_tests }}
 
 permissions:
   contents: read
@@ -61,7 +61,7 @@ jobs:
       test_type: ${{ steps.configure.outputs.test_type }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
-      run_functional_tests: ${{ steps.configure.outputs.run_functional_tests }}
+      run_extended_tests: ${{ steps.configure.outputs.run_extended_tests }}
     steps:
       - name: Checking out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
