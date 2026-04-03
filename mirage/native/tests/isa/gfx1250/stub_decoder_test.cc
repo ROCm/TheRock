@@ -7421,6 +7421,21 @@ int main() {
                       "X_V_DIV_SCALE_F64_X",
                       StubDecodeStatus::kUnknownInstruction) &&
                   MatchesSelectorDecodeStatusParity(
+                      "V_PK__ADD_BF16",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "V_CVT_F16__FP8",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "V_CVT_PK__F16_FP8",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "V_WMMA__F32_16X16X4_F32_w32",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
+                      "V_WMMA_SCALE__F32_16X16X128_F8F6F4",
+                      StubDecodeStatus::kUnknownInstruction) &&
+                  MatchesSelectorDecodeStatusParity(
                       "", StubDecodeStatus::kUnknownInstruction),
               "expected selector and decode surfaces to agree on unknown-name status")) {
     return 1;
@@ -7545,6 +7560,33 @@ int main() {
                                        decorated_near_miss_instruction) &&
                       MatchesUnknownHelperSurface(via_entrypoint),
                   "expected decorated known opcode near-misses to keep exact route-keyed unknown parity")) {
+        return 1;
+      }
+    }
+  }
+  for (std::string_view split_token_near_miss_instruction :
+       {"V_PK__ADD_BF16",
+        "V_CVT_F16__FP8",
+        "V_CVT_PK__F16_FP8",
+        "V_WMMA__F32_16X16X4_F32_w32",
+        "V_WMMA_SCALE__F32_16X16X128_F8F6F4"}) {
+    const StubDecodedInstruction split_token_near_miss_decode =
+        DecodeStubInstruction(split_token_near_miss_instruction);
+    if (!Expect(MatchesUnknownDecode(split_token_near_miss_decode,
+                                     split_token_near_miss_instruction) &&
+                    MatchesUnknownHelperSurface(split_token_near_miss_decode),
+                "expected split-token family near-misses to keep exact unknown decode parity")) {
+      return 1;
+    }
+    for (const StubDecoderRouteManifest& manifest :
+         GetStubDecoderRouteManifests()) {
+      const StubDecodedInstruction via_entrypoint =
+          DecodeViaExplicitRouteEntrypoint(manifest.route,
+                                          split_token_near_miss_instruction);
+      if (!Expect(MatchesUnknownDecode(via_entrypoint,
+                                       split_token_near_miss_instruction) &&
+                      MatchesUnknownHelperSurface(via_entrypoint),
+                  "expected split-token family near-misses to keep exact route-keyed unknown parity")) {
         return 1;
       }
     }
@@ -8662,6 +8704,340 @@ int main() {
                     family_matched_suffix_invalid_hint_decoded.operand_descriptors
                             .descriptor_count == 0,
                 "expected synthetic routed route-info with family-matched suffixed near-miss to ignore invalid caller decode-hint while staying empty-unknown on non-matching routes")) {
+          return 1;
+        }
+      }
+    }
+    struct FamilyMatchedSplitTokenNearMissExpectation {
+      std::string_view instruction_name;
+      StubDecoderRoute route;
+      std::string_view opcode_shape_name;
+      std::string_view execution_domain_name;
+      ExpectedLayout matching_layout;
+      ExpectedLayout nonmatching_layout;
+      bool uses_accumulator = false;
+      bool uses_tensor_memory = false;
+      bool uses_scale_path = false;
+      bool uses_paired_operands = false;
+      bool preserve_generic_operands_on_nonmatching_route = false;
+    };
+    for (const FamilyMatchedSplitTokenNearMissExpectation& expectation :
+         {FamilyMatchedSplitTokenNearMissExpectation{
+              "V_PK__ADD_BF16",
+              StubDecoderRoute::kVop3p,
+              "kVop3pPackedBinary",
+              "kVectorAlu",
+              ExpectedLayout{},
+              ExpectedLayout{},
+              false,
+              false,
+              false,
+              true,
+              false,
+          },
+          FamilyMatchedSplitTokenNearMissExpectation{
+              "V_CVT_F16__FP8",
+              StubDecoderRoute::kVop1,
+              "kFp8ConvertToF16",
+              "kConversion",
+              ExpectedLayout{},
+              ExpectedLayout{},
+              false,
+              false,
+              false,
+              false,
+              false,
+          },
+          FamilyMatchedSplitTokenNearMissExpectation{
+              "V_CVT_PK__F16_FP8",
+              StubDecoderRoute::kVop1,
+              "kFp8PackedConvert",
+              "kConversion",
+              ExpectedLayout{},
+              ExpectedLayout{},
+              false,
+              false,
+              false,
+              true,
+              false,
+          },
+          FamilyMatchedSplitTokenNearMissExpectation{
+              "V_WMMA__F32_16X16X4_F32_w32",
+              StubDecoderRoute::kVop3p,
+              "kWmmaCore",
+              "kMatrix",
+              ExpectedLayout{
+                  StubOperandLayoutKind::kWmmaCoreGeneric,
+                  2,
+                  1,
+                  1,
+                  false,
+                  false,
+                  false,
+                  false,
+                  false,
+              },
+              ExpectedLayout{
+                  StubOperandLayoutKind::kWmmaCoreGeneric,
+                  2,
+                  1,
+                  1,
+                  false,
+                  false,
+                  false,
+                  false,
+                  false,
+              },
+              true,
+              false,
+              false,
+              false,
+              true,
+          },
+          FamilyMatchedSplitTokenNearMissExpectation{
+              "V_WMMA_SCALE__F32_16X16X128_F8F6F4",
+              StubDecoderRoute::kVop3p,
+              "kWmmaScale",
+              "kMatrix",
+              ExpectedLayout{
+                  StubOperandLayoutKind::kWmmaScaleGeneric,
+                  3,
+                  1,
+                  1,
+                  true,
+                  false,
+                  false,
+                  false,
+                  false,
+              },
+              ExpectedLayout{
+                  StubOperandLayoutKind::kWmmaScaleGeneric,
+                  3,
+                  1,
+                  1,
+                  true,
+                  false,
+                  false,
+                  false,
+                  false,
+              },
+              true,
+              false,
+              true,
+              false,
+              true,
+          }}) {
+      const StubDecoderRouteInfo synthetic_family_matched_split_token{
+          expectation.instruction_name,
+          manifest.route,
+          "kSyntheticRouteInfoFamilyMatchedSplitTokenNearMiss",
+          manifest.route_priority + 280u,
+          DecodeSeedHint::kUnknown,
+          "SYNTHETIC_FAMILY_MATCHED_SPLIT_TOKEN_NEAR_MISS_ENC",
+          2800u + manifest.route_priority,
+          28u + manifest.route_priority,
+          false,
+          false,
+      };
+      const StubDecodedInstruction family_matched_split_token_decoded =
+          DecodeStubInstruction(synthetic_family_matched_split_token);
+      const bool matching_route = manifest.route == expectation.route;
+      if (!Expect(
+              family_matched_split_token_decoded.status ==
+                      StubDecodeStatus::kDecodedStub &&
+                  MatchesRouteInfoPayload(family_matched_split_token_decoded,
+                                          synthetic_family_matched_split_token) &&
+                  family_matched_split_token_decoded.entrypoint_name ==
+                      manifest.entrypoint_name,
+              "expected split-token family near-miss synthetic route-info to preserve caller metadata")) {
+        return 1;
+      }
+      if (matching_route) {
+        if (!Expect(
+                std::string_view(GetStubOpcodeShapeName(
+                    family_matched_split_token_decoded.opcode_shape)) ==
+                        expectation.opcode_shape_name &&
+                    std::string_view(GetStubExecutionDomainName(
+                        family_matched_split_token_decoded.execution_domain)) ==
+                        expectation.execution_domain_name &&
+                    MatchesTopLevelFlags(family_matched_split_token_decoded,
+                                         expectation.uses_accumulator,
+                                         expectation.uses_tensor_memory,
+                                         expectation.uses_scale_path,
+                                         expectation.uses_paired_operands) &&
+                    MatchesLayout(family_matched_split_token_decoded,
+                                  expectation.matching_layout),
+                "expected matching-route split-token family near-miss to preserve current family-level classification")) {
+          return 1;
+        }
+      } else {
+        if (!Expect(
+                MatchesTopLevelFlags(family_matched_split_token_decoded,
+                                     false,
+                                     false,
+                                     false,
+                                     false) &&
+                    std::string_view(GetStubOpcodeShapeName(
+                        family_matched_split_token_decoded.opcode_shape)) ==
+                        "kUnknown" &&
+                    std::string_view(GetStubExecutionDomainName(
+                        family_matched_split_token_decoded.execution_domain)) ==
+                        "kUnknown" &&
+                    MatchesLayout(family_matched_split_token_decoded,
+                                  expectation.nonmatching_layout),
+                "expected non-matching-route split-token family near-miss to keep exact top-level fallback behavior")) {
+          return 1;
+        }
+      }
+      if (expectation.instruction_name == "V_WMMA__F32_16X16X4_F32_w32") {
+        if (!Expect(
+                MatchesRoleBindingSequence(
+                    family_matched_split_token_decoded,
+                    {{StubOperandRole::kSource0, 1, false, false},
+                     {StubOperandRole::kSource1, 1, false, false},
+                     {StubOperandRole::kAccumulator, 1, false, false},
+                     {StubOperandRole::kDestination, 1, true, false}}) &&
+                    MatchesSlotBindingSequence(
+                        family_matched_split_token_decoded,
+                        {{StubOperandSlotKind::kDestination,
+                          StubOperandValueClass::kMatrixFragment,
+                          0,
+                          1,
+                          true,
+                          false},
+                         {StubOperandSlotKind::kSource0,
+                          StubOperandValueClass::kMatrixFragment,
+                          1,
+                          1,
+                          false,
+                          false},
+                         {StubOperandSlotKind::kSource1,
+                          StubOperandValueClass::kMatrixFragment,
+                          2,
+                          1,
+                          false,
+                          false},
+                         {StubOperandSlotKind::kAccumulatorSource,
+                          StubOperandValueClass::kAccumulatorFragment,
+                          3,
+                          1,
+                          false,
+                          false}}) &&
+                    MatchesDescriptorSequence(
+                        family_matched_split_token_decoded,
+                        {{StubOperandRole::kDestination,
+                          StubOperandSlotKind::kDestination,
+                          StubOperandValueClass::kMatrixFragment,
+                          StubOperandAccess::kWrite,
+                          1,
+                          false},
+                         {StubOperandRole::kSource0,
+                          StubOperandSlotKind::kSource0,
+                          StubOperandValueClass::kMatrixFragment,
+                          StubOperandAccess::kRead,
+                          1,
+                          false},
+                         {StubOperandRole::kSource1,
+                          StubOperandSlotKind::kSource1,
+                          StubOperandValueClass::kMatrixFragment,
+                          StubOperandAccess::kRead,
+                          1,
+                          false},
+                         {StubOperandRole::kAccumulator,
+                          StubOperandSlotKind::kAccumulatorSource,
+                          StubOperandValueClass::kAccumulatorFragment,
+                          StubOperandAccess::kRead,
+                          1,
+                          false}}),
+                "expected split-token WMMA near-miss to preserve generic matrix operand surfaces")) {
+          return 1;
+        }
+      } else if (expectation.instruction_name ==
+                 "V_WMMA_SCALE__F32_16X16X128_F8F6F4") {
+        if (!Expect(
+                MatchesRoleBindingSequence(
+                    family_matched_split_token_decoded,
+                    {{StubOperandRole::kSource0, 1, false, false},
+                     {StubOperandRole::kSource1, 1, false, false},
+                     {StubOperandRole::kAccumulator, 1, false, false},
+                     {StubOperandRole::kScale, 1, false, false},
+                     {StubOperandRole::kDestination, 1, true, false}}) &&
+                    MatchesSlotBindingSequence(
+                        family_matched_split_token_decoded,
+                        {{StubOperandSlotKind::kDestination,
+                          StubOperandValueClass::kMatrixFragment,
+                          0,
+                          1,
+                          true,
+                          false},
+                         {StubOperandSlotKind::kSource0,
+                          StubOperandValueClass::kMatrixFragment,
+                          1,
+                          1,
+                          false,
+                          false},
+                         {StubOperandSlotKind::kSource1,
+                          StubOperandValueClass::kMatrixFragment,
+                          2,
+                          1,
+                          false,
+                          false},
+                         {StubOperandSlotKind::kAccumulatorSource,
+                          StubOperandValueClass::kAccumulatorFragment,
+                          3,
+                          1,
+                          false,
+                          false},
+                         {StubOperandSlotKind::kScaleSource,
+                          StubOperandValueClass::kScalarRegister,
+                          4,
+                          1,
+                          false,
+                          false}}) &&
+                    MatchesDescriptorSequence(
+                        family_matched_split_token_decoded,
+                        {{StubOperandRole::kDestination,
+                          StubOperandSlotKind::kDestination,
+                          StubOperandValueClass::kMatrixFragment,
+                          StubOperandAccess::kWrite,
+                          1,
+                          false},
+                         {StubOperandRole::kSource0,
+                          StubOperandSlotKind::kSource0,
+                          StubOperandValueClass::kMatrixFragment,
+                          StubOperandAccess::kRead,
+                          1,
+                          false},
+                         {StubOperandRole::kSource1,
+                          StubOperandSlotKind::kSource1,
+                          StubOperandValueClass::kMatrixFragment,
+                          StubOperandAccess::kRead,
+                          1,
+                          false},
+                         {StubOperandRole::kAccumulator,
+                          StubOperandSlotKind::kAccumulatorSource,
+                          StubOperandValueClass::kAccumulatorFragment,
+                          StubOperandAccess::kRead,
+                          1,
+                          false},
+                         {StubOperandRole::kScale,
+                          StubOperandSlotKind::kScaleSource,
+                          StubOperandValueClass::kScalarRegister,
+                          StubOperandAccess::kRead,
+                          1,
+                          false}}),
+                "expected split-token WMMA scale near-miss to preserve generic scale operand surfaces")) {
+          return 1;
+        }
+      } else if (!expectation.preserve_generic_operands_on_nonmatching_route) {
+        if (!Expect(
+                family_matched_split_token_decoded.operand_roles.binding_count ==
+                        0 &&
+                    family_matched_split_token_decoded.operand_slots
+                            .binding_count == 0 &&
+                    family_matched_split_token_decoded.operand_descriptors
+                            .descriptor_count == 0,
+                "expected non-generic split-token family near-miss to keep empty operand surfaces")) {
           return 1;
         }
       }

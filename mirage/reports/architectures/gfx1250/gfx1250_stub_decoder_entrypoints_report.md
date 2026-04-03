@@ -86,6 +86,7 @@
   - exact route-info family-matched suffixed-near-miss checks now pin the current partial structural classification behavior for `V_PK_ADD_BF16_X` on `kVop3p` and `V_CVT_F16_FP8_X` on `kVop1`: caller route metadata stays intact, opcode-shape / execution-domain / paired-flag surfaces follow the matching family only on the matching route, and operand-layout / role / slot / descriptor surfaces stay empty-unknown
   - exact split-surface checks now pin those same family-matched suffixed near misses to remain empty-unknown on both direct name-based decode and explicit route-keyed entrypoint decode, while only the synthetic `StubDecoderRouteInfo` path preserves the current partial family-level classification
   - exact non-matching-route checks now pin those same family-matched suffixed near misses to stay empty-unknown even on synthetic `StubDecoderRouteInfo` inputs when the caller route does not match the family
+  - exact split-token family-near-miss checks now pin `V_PK__ADD_BF16`, `V_CVT_F16__FP8`, `V_CVT_PK__F16_FP8`, `V_WMMA__F32_16X16X4_F32_w32`, and `V_WMMA_SCALE__F32_16X16X128_F8F6F4` to stay selector-excluded and direct-decode unknown, while synthetic `StubDecoderRouteInfo` inputs preserve current route-local partial classification: packed/convert forms keep only matching-route top-level family shape, and WMMA forms preserve generic operand layouts plus generic role/slot/descriptor surfaces even when the caller route does not match
 
 - `VOP3P` packed BF16 slice:
   - `V_PK_ADD_BF16`

@@ -663,6 +663,22 @@ int main() {
       return 1;
     }
   }
+  for (std::string_view split_token_near_miss_instruction :
+       {"V_PK__ADD_BF16",
+        "V_CVT_F16__FP8",
+        "V_CVT_PK__F16_FP8",
+        "V_WMMA__F32_16X16X4_F32_w32",
+        "V_WMMA_SCALE__F32_16X16X128_F8F6F4"}) {
+    if (!Expect(
+            SelectStubDecoderRoute(split_token_near_miss_instruction) ==
+                        StubDecoderRoute::kUnsupported &&
+                    FindStubDecoderRouteInfo(split_token_near_miss_instruction) ==
+                        nullptr &&
+                    !ListedInAnyRoute(split_token_near_miss_instruction),
+            "expected split-token family near-misses to stay excluded from all routed selector surfaces")) {
+      return 1;
+    }
+  }
 
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
     const StubDecoderRoute expected_route =
