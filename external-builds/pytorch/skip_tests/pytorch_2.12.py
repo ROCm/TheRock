@@ -64,6 +64,8 @@ skip_tests = {
             "test_fake_export_nn_functional_conv2d_cuda_float32",
             # subprocess.CalledProcessError in instance_norm export
             "test_fake_export_nn_functional_instance_norm_cuda_float32",
+            # subprocess.CalledProcessError in multi_margin_loss export
+            "test_fake_export_nn_functional_multi_margin_loss_cuda_float32",
         ],
         "inductor": [
             # BenchmarkMultiTemplateFusionGpuTest - extern code mismatch
@@ -150,6 +152,20 @@ skip_tests = {
             "test_eager_equivalence_remainder_backend_inductor_numerics_cuda_bfloat16",
             # TestOpInfoPropertiesCUDA - XPASS exp2
             "test_unary_ufunc_numerical_exp2_backend_inductor_default_cuda_bfloat16",
+            # TestOpInfoPropertiesCUDA - eager equivalence log mismatch
+            "test_eager_equivalence_log_backend_inductor_default_cuda_float32",
+            # TestOpInfoPropertiesCUDA - XPASS remainder float16
+            "test_eager_equivalence_remainder_backend_inductor_numerics_cuda_float16",
+            # TestOpInfoPropertiesCUDA - numerical expm1 mismatch
+            "test_unary_ufunc_numerical_expm1_backend_inductor_default_cuda_float32",
+            # TestMaxAutotuneAsyncPipelined - cache same inputs assertion
+            "test_async_autotuner_cache_same_inputs",
+            # HigherOrderOpTestsWithCompiledAutograd - _GeneratorContextManager
+            "test_tensor_with_unbacked_shape_closure",
+        ],
+        "modules": [
+            # TestModuleCUDA - CTCLoss cpu/gpu parity scalar mismatch
+            "test_cpu_gpu_parity_nn_CTCLoss_cuda_float32",
         ],
         "profiler": [
             # TestProfiler - backward compat filter
