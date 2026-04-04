@@ -6364,17 +6364,22 @@ int main() {
         return 1;
       }
 
-      const auto scratch_word = MakeSmem(*opcode, 4, 0, true, 0);
-      const std::vector<std::uint32_t> scratch_program = {
-          scratch_word[0], scratch_word[1], MakeSopp(1),
+      const std::vector<std::array<std::uint32_t, 2>> scratch_words = {
+          MakeSmem(*opcode, 4, 0, true, 0),
+          MakeSmem(*opcode, 4, 0, false, 70u, true),
       };
-      decoded_program.clear();
-      if (!Expect(!decoder.DecodeProgram(scratch_program, &decoded_program,
-                                         &error_message),
-                  ("expected scratch decode rejection for " +
-                   std::string(opcode_name))
-                      .c_str())) {
-        return 1;
+      for (const auto& scratch_word : scratch_words) {
+        const std::vector<std::uint32_t> scratch_program = {
+            scratch_word[0], scratch_word[1], MakeSopp(1),
+        };
+        decoded_program.clear();
+        if (!Expect(!decoder.DecodeProgram(scratch_program, &decoded_program,
+                                           &error_message),
+                    ("expected scratch decode rejection for " +
+                     std::string(opcode_name))
+                        .c_str())) {
+          return 1;
+        }
       }
     }
   }
