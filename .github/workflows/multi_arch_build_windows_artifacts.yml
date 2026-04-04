@@ -160,14 +160,17 @@ jobs:
       - name: Run comgr tests
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
+        env:
+          TEATIME_FORCE_INTERACTIVE: 1
         run: |
           rc1=0
-          python build_tools/teatime.py --log-timestamps --interactive \
+          python build_tools/teatime.py --log-timestamps \
             --label "comgr lit tests" "${{ env.BUILD_DIR }}/logs/comgr-lit-tests.log" -- \
             "${{ env.BUILD_DIR }}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit.cmd" \
             "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v || rc1=$?
+          echo ""
           rc2=0
-          python build_tools/teatime.py --log-timestamps --interactive \
+          python build_tools/teatime.py --log-timestamps \
             --label "comgr ctest" "${{ env.BUILD_DIR }}/logs/comgr-ctest.log" -- \
             ctest --test-dir "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" --output-on-failure || rc2=$?
           [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ]
