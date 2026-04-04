@@ -25,6 +25,7 @@ execution path.
 - First unsafe VDS ordinal range: `0..1`
 - First unsafe VDS instructions: `DS_APPEND`, `DS_CONSUME`
 - Remaining VDS instruction statuses: `24`
+- Remaining VDS opcode gaps: `11`
 - Remaining VDS bucket order: `append_consume`, `exchange_compare_store`, `multi_address`, `bvh_stack`
 - All currently seeded ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, and ENC_VGLOBAL instruction/encoding pairs are executable on the local wave32 path.
 - There are no remaining imported ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, or ENC_VGLOBAL instruction/encoding pairs outside the current seed surface.
@@ -37,6 +38,7 @@ execution path.
 - The denormalized remaining-VDS status list now also carries exact opcode, operand-count, support-rollup, and support-state metadata for each unsafe instruction.
 - The boundary report now also carries exact per-bucket opcode spans, operand-count spans, operand-count compositions, exact support-rollup composition counts, and exact support-state composition counts for the unresolved VDS tail.
 - The boundary report now also carries exact per-bucket opcode-segment counts, longest contiguous opcode runs, largest opcode gaps, and a denormalized opcode-segment list for the unresolved VDS tail.
+- The boundary report now also carries exact per-bucket opcode span widths, in-span hole counts, singleton-versus-multi-instruction segment counts, and a denormalized inter-segment opcode-gap list for the unresolved VDS tail.
 - The exact unsafe-bucket escalation order is `append_consume`, then `exchange_compare_store`, then `multi_address`, then `bvh_stack`.
 - The boundary report now also carries an exact next-risk step chain with first and last instruction names, cumulative remaining counts, and explicit next-bucket handoff metadata for the unresolved VDS tail.
 - The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.
@@ -51,10 +53,10 @@ execution path.
 
 ## Remaining VDS Bucket Statuses
 
-- `append_consume`: opcode span `61..62`, opcode segments `1`, longest contiguous segment `2`, largest opcode gap `0`, operand-count span `3..3`, operand-count composition `3->2, 4->0, 5->0, 6->0`, rollup composition `as-is->0, decoder->2, semantic->0, gfx1201-specific->0`, state composition `as-is->0, decoder->0, semantic->0, decoder+semantic->2, gfx1201-specific->0`
-- `exchange_compare_store`: opcode span `16..126`, opcode segments `7`, longest contiguous segment `1`, largest opcode gap `31`, operand-count span `5..6`, operand-count composition `3->0, 4->0, 5->5, 6->2`, rollup composition `as-is->0, decoder->1, semantic->0, gfx1201-specific->6`, state composition `as-is->0, decoder->0, semantic->0, decoder+semantic->1, gfx1201-specific->6`
-- `multi_address`: opcode span `14..120`, opcode segments `6`, longest contiguous segment `2`, largest opcode gap `30`, operand-count span `3..6`, operand-count composition `3->4, 4->4, 5->0, 6->4`, rollup composition `as-is->0, decoder->0, semantic->0, gfx1201-specific->12`, state composition `as-is->0, decoder->0, semantic->0, decoder+semantic->0, gfx1201-specific->12`
-- `bvh_stack`: opcode span `224..226`, opcode segments `1`, longest contiguous segment `3`, largest opcode gap `0`, operand-count span `4..4`, operand-count composition `3->0, 4->3, 5->0, 6->0`, rollup composition `as-is->0, decoder->0, semantic->0, gfx1201-specific->3`, state composition `as-is->0, decoder->0, semantic->0, decoder+semantic->0, gfx1201-specific->3`
+- `append_consume`: opcode span `61..62`, span width `2`, in-span opcode holes `0`, opcode segments `1`, singleton segments `0`, multi-instruction segments `1`, longest contiguous segment `2`, largest opcode gap `0`, operand-count span `3..3`, operand-count composition `3->2, 4->0, 5->0, 6->0`, rollup composition `as-is->0, decoder->2, semantic->0, gfx1201-specific->0`, state composition `as-is->0, decoder->0, semantic->0, decoder+semantic->2, gfx1201-specific->0`
+- `exchange_compare_store`: opcode span `16..126`, span width `111`, in-span opcode holes `104`, opcode segments `7`, singleton segments `7`, multi-instruction segments `0`, longest contiguous segment `1`, largest opcode gap `31`, operand-count span `5..6`, operand-count composition `3->0, 4->0, 5->5, 6->2`, rollup composition `as-is->0, decoder->1, semantic->0, gfx1201-specific->6`, state composition `as-is->0, decoder->0, semantic->0, decoder+semantic->1, gfx1201-specific->6`
+- `multi_address`: opcode span `14..120`, span width `107`, in-span opcode holes `95`, opcode segments `6`, singleton segments `0`, multi-instruction segments `6`, longest contiguous segment `2`, largest opcode gap `30`, operand-count span `3..6`, operand-count composition `3->4, 4->4, 5->0, 6->4`, rollup composition `as-is->0, decoder->0, semantic->0, gfx1201-specific->12`, state composition `as-is->0, decoder->0, semantic->0, decoder+semantic->0, gfx1201-specific->12`
+- `bvh_stack`: opcode span `224..226`, span width `3`, in-span opcode holes `0`, opcode segments `1`, singleton segments `0`, multi-instruction segments `1`, longest contiguous segment `3`, largest opcode gap `0`, operand-count span `4..4`, operand-count composition `3->0, 4->3, 5->0, 6->0`, rollup composition `as-is->0, decoder->0, semantic->0, gfx1201-specific->3`, state composition `as-is->0, decoder->0, semantic->0, decoder+semantic->0, gfx1201-specific->3`
 
 ## Remaining VDS Opcode Segments
 
@@ -73,6 +75,20 @@ execution path.
 - `multi_address[4]`: opcode span `110..111`, `2` instructions, first `DS_STOREXCHG_2ADDR_RTN_B64`, last `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64`
 - `multi_address[5]`: opcode span `119..120`, `2` instructions, first `DS_LOAD_2ADDR_B64`, last `DS_LOAD_2ADDR_STRIDE64_B64`
 - `bvh_stack[0]`: opcode span `224..226`, `3` instructions, first `DS_BVH_STACK_PUSH4_POP1_RTN_B32`, last `DS_BVH_STACK_PUSH8_POP2_RTN_B64`
+
+## Remaining VDS Opcode Gaps
+
+- `exchange_compare_store[0]`: segment `0 -> 1`, previous opcode `16` (`DS_CMPSTORE_B32`), next opcode `45` (`DS_STOREXCHG_RTN_B32`), missing opcodes `28`
+- `exchange_compare_store[1]`: segment `1 -> 2`, previous opcode `45` (`DS_STOREXCHG_RTN_B32`), next opcode `48` (`DS_CMPSTORE_RTN_B32`), missing opcodes `2`
+- `exchange_compare_store[2]`: segment `2 -> 3`, previous opcode `48` (`DS_CMPSTORE_RTN_B32`), next opcode `80` (`DS_CMPSTORE_B64`), missing opcodes `31`
+- `exchange_compare_store[3]`: segment `3 -> 4`, previous opcode `80` (`DS_CMPSTORE_B64`), next opcode `109` (`DS_STOREXCHG_RTN_B64`), missing opcodes `28`
+- `exchange_compare_store[4]`: segment `4 -> 5`, previous opcode `109` (`DS_STOREXCHG_RTN_B64`), next opcode `112` (`DS_CMPSTORE_RTN_B64`), missing opcodes `2`
+- `exchange_compare_store[5]`: segment `5 -> 6`, previous opcode `112` (`DS_CMPSTORE_RTN_B64`), next opcode `126` (`DS_CONDXCHG32_RTN_B64`), missing opcodes `13`
+- `multi_address[0]`: segment `0 -> 1`, previous opcode `15` (`DS_STORE_2ADDR_STRIDE64_B32`), next opcode `46` (`DS_STOREXCHG_2ADDR_RTN_B32`), missing opcodes `30`
+- `multi_address[1]`: segment `1 -> 2`, previous opcode `47` (`DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32`), next opcode `55` (`DS_LOAD_2ADDR_B32`), missing opcodes `7`
+- `multi_address[2]`: segment `2 -> 3`, previous opcode `56` (`DS_LOAD_2ADDR_STRIDE64_B32`), next opcode `78` (`DS_STORE_2ADDR_B64`), missing opcodes `21`
+- `multi_address[3]`: segment `3 -> 4`, previous opcode `79` (`DS_STORE_2ADDR_STRIDE64_B64`), next opcode `110` (`DS_STOREXCHG_2ADDR_RTN_B64`), missing opcodes `30`
+- `multi_address[4]`: segment `4 -> 5`, previous opcode `111` (`DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64`), next opcode `119` (`DS_LOAD_2ADDR_B64`), missing opcodes `7`
 
 ## Remaining VDS Next-Risk Chain
 

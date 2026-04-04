@@ -81,7 +81,11 @@ struct Gfx1201Wave32Phase0VdsBoundaryBucketStatus {
   std::uint32_t instruction_count = 0;
   std::uint32_t first_opcode = 0;
   std::uint32_t last_opcode = 0;
+  std::uint32_t opcode_span_width = 0;
+  std::uint32_t opcode_hole_count = 0;
   std::uint32_t opcode_segment_count = 0;
+  std::uint32_t singleton_opcode_segment_count = 0;
+  std::uint32_t multi_instruction_opcode_segment_count = 0;
   std::uint32_t longest_opcode_segment_instruction_count = 0;
   std::uint32_t largest_opcode_gap = 0;
   std::uint16_t min_operand_count = 0;
@@ -100,6 +104,18 @@ struct Gfx1201Wave32Phase0VdsBoundaryBucketStatus {
   std::uint32_t transferable_with_decoder_and_semantic_work_state_count = 0;
   std::uint32_t gfx1201_specific_state_count = 0;
   bool safe_under_current_request = false;
+};
+
+struct Gfx1201Wave32Phase0VdsOpcodeGap {
+  std::string_view bucket_name;
+  std::uint32_t gap_ordinal = 0;
+  std::uint32_t previous_segment_ordinal = 0;
+  std::uint32_t next_segment_ordinal = 0;
+  std::uint32_t previous_opcode = 0;
+  std::uint32_t next_opcode = 0;
+  std::uint32_t missing_opcode_count = 0;
+  std::string_view previous_instruction_name;
+  std::string_view next_instruction_name;
 };
 
 struct Gfx1201Wave32Phase0VdsNextRiskStep {
@@ -135,6 +151,8 @@ std::span<const Gfx1201Wave32Phase0VdsBoundaryInstructionStatus>
 GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses();
 std::span<const Gfx1201Wave32Phase0VdsOpcodeSegment>
 GetGfx1201Wave32Phase0VdsOpcodeSegments();
+std::span<const Gfx1201Wave32Phase0VdsOpcodeGap>
+GetGfx1201Wave32Phase0VdsOpcodeGaps();
 std::span<const Gfx1201Wave32Phase0VdsNextRiskStep>
 GetGfx1201Wave32Phase0VdsNextRiskSteps();
 const Gfx1201Wave32Phase0VdsBoundaryBucket*
@@ -153,6 +171,8 @@ FindGfx1201Wave32Phase0RemainingVdsInstructionStatusByOpcode(
 const Gfx1201Wave32Phase0VdsOpcodeSegment*
 FindGfx1201Wave32Phase0VdsOpcodeSegment(std::string_view bucket_name,
                                         std::uint32_t segment_ordinal);
+const Gfx1201Wave32Phase0VdsOpcodeGap* FindGfx1201Wave32Phase0VdsOpcodeGap(
+    std::string_view bucket_name, std::uint32_t gap_ordinal);
 const Gfx1201Wave32Phase0VdsNextRiskStep*
 FindGfx1201Wave32Phase0VdsNextRiskStep(std::string_view bucket_name);
 bool HasGfx1201Wave32SafeVdsContinuation();

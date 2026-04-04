@@ -200,6 +200,7 @@ int main() {
   const auto remaining_vds_instruction_statuses =
       GetGfx1201Wave32Phase0RemainingVdsInstructionStatuses();
   const auto vds_opcode_segments = GetGfx1201Wave32Phase0VdsOpcodeSegments();
+  const auto vds_opcode_gaps = GetGfx1201Wave32Phase0VdsOpcodeGaps();
   const auto vds_next_risk_steps = GetGfx1201Wave32Phase0VdsNextRiskSteps();
   const auto first_unsafe_vds_instructions =
       GetGfx1201Wave32FirstUnsafeVdsInstructions();
@@ -254,6 +255,20 @@ int main() {
       FindGfx1201Wave32Phase0VdsOpcodeSegment("bvh_stack", 0u);
   const Gfx1201Wave32Phase0VdsOpcodeSegment* missing_segment =
       FindGfx1201Wave32Phase0VdsOpcodeSegment("append_consume", 1u);
+  const Gfx1201Wave32Phase0VdsOpcodeGap* append_gap =
+      FindGfx1201Wave32Phase0VdsOpcodeGap("append_consume", 0u);
+  const Gfx1201Wave32Phase0VdsOpcodeGap* exchange_first_gap =
+      FindGfx1201Wave32Phase0VdsOpcodeGap("exchange_compare_store", 0u);
+  const Gfx1201Wave32Phase0VdsOpcodeGap* exchange_last_gap =
+      FindGfx1201Wave32Phase0VdsOpcodeGap("exchange_compare_store", 5u);
+  const Gfx1201Wave32Phase0VdsOpcodeGap* multi_first_gap =
+      FindGfx1201Wave32Phase0VdsOpcodeGap("multi_address", 0u);
+  const Gfx1201Wave32Phase0VdsOpcodeGap* multi_last_gap =
+      FindGfx1201Wave32Phase0VdsOpcodeGap("multi_address", 4u);
+  const Gfx1201Wave32Phase0VdsOpcodeGap* bvh_gap =
+      FindGfx1201Wave32Phase0VdsOpcodeGap("bvh_stack", 0u);
+  const Gfx1201Wave32Phase0VdsOpcodeGap* missing_gap =
+      FindGfx1201Wave32Phase0VdsOpcodeGap("exchange_compare_store", 6u);
   const Gfx1201Wave32Phase0VdsNextRiskStep* append_step =
       FindGfx1201Wave32Phase0VdsNextRiskStep("append_consume");
   const Gfx1201Wave32Phase0VdsNextRiskStep* exchange_step =
@@ -278,6 +293,8 @@ int main() {
               "expected remaining VDS instruction status count") ||
       !Expect(vds_opcode_segments.size() == 15u,
               "expected remaining VDS opcode segment count") ||
+      !Expect(vds_opcode_gaps.size() == 11u,
+              "expected remaining VDS opcode gap count") ||
       !Expect(vds_next_risk_steps.size() == 4u,
               "expected remaining VDS next-risk step count") ||
       !Expect(first_unsafe_vds_instructions.size() ==
@@ -358,8 +375,14 @@ int main() {
                   vds_boundary_bucket_statuses.front().instruction_count == 2u &&
                   vds_boundary_bucket_statuses.front().first_opcode == 61u &&
                   vds_boundary_bucket_statuses.front().last_opcode == 62u &&
+                  vds_boundary_bucket_statuses.front().opcode_span_width == 2u &&
+                  vds_boundary_bucket_statuses.front().opcode_hole_count == 0u &&
                   vds_boundary_bucket_statuses.front().opcode_segment_count ==
                       1u &&
+                  vds_boundary_bucket_statuses.front()
+                          .singleton_opcode_segment_count == 0u &&
+                  vds_boundary_bucket_statuses.front()
+                          .multi_instruction_opcode_segment_count == 1u &&
                   vds_boundary_bucket_statuses.front()
                           .longest_opcode_segment_instruction_count == 2u &&
                   vds_boundary_bucket_statuses.front().largest_opcode_gap ==
@@ -402,8 +425,14 @@ int main() {
                   vds_boundary_bucket_statuses.back().instruction_count == 3u &&
                   vds_boundary_bucket_statuses.back().first_opcode == 224u &&
                   vds_boundary_bucket_statuses.back().last_opcode == 226u &&
+                  vds_boundary_bucket_statuses.back().opcode_span_width == 3u &&
+                  vds_boundary_bucket_statuses.back().opcode_hole_count == 0u &&
                   vds_boundary_bucket_statuses.back().opcode_segment_count ==
                       1u &&
+                  vds_boundary_bucket_statuses.back()
+                          .singleton_opcode_segment_count == 0u &&
+                  vds_boundary_bucket_statuses.back()
+                          .multi_instruction_opcode_segment_count == 1u &&
                   vds_boundary_bucket_statuses.back()
                           .longest_opcode_segment_instruction_count == 3u &&
                   vds_boundary_bucket_statuses.back().largest_opcode_gap ==
@@ -448,7 +477,12 @@ int main() {
                   append_bucket_status->instruction_count == 2u &&
                   append_bucket_status->first_opcode == 61u &&
                   append_bucket_status->last_opcode == 62u &&
+                  append_bucket_status->opcode_span_width == 2u &&
+                  append_bucket_status->opcode_hole_count == 0u &&
                   append_bucket_status->opcode_segment_count == 1u &&
+                  append_bucket_status->singleton_opcode_segment_count == 0u &&
+                  append_bucket_status->multi_instruction_opcode_segment_count ==
+                      1u &&
                   append_bucket_status
                           ->longest_opcode_segment_instruction_count == 2u &&
                   append_bucket_status->largest_opcode_gap == 0u &&
@@ -483,7 +517,12 @@ int main() {
                   exchange_bucket_status->instruction_count == 7u &&
                   exchange_bucket_status->first_opcode == 16u &&
                   exchange_bucket_status->last_opcode == 126u &&
+                  exchange_bucket_status->opcode_span_width == 111u &&
+                  exchange_bucket_status->opcode_hole_count == 104u &&
                   exchange_bucket_status->opcode_segment_count == 7u &&
+                  exchange_bucket_status->singleton_opcode_segment_count == 7u &&
+                  exchange_bucket_status
+                          ->multi_instruction_opcode_segment_count == 0u &&
                   exchange_bucket_status
                           ->longest_opcode_segment_instruction_count == 1u &&
                   exchange_bucket_status->largest_opcode_gap == 31u &&
@@ -518,7 +557,12 @@ int main() {
                   multi_bucket_status->instruction_count == 12u &&
                   multi_bucket_status->first_opcode == 14u &&
                   multi_bucket_status->last_opcode == 120u &&
+                  multi_bucket_status->opcode_span_width == 107u &&
+                  multi_bucket_status->opcode_hole_count == 95u &&
                   multi_bucket_status->opcode_segment_count == 6u &&
+                  multi_bucket_status->singleton_opcode_segment_count == 0u &&
+                  multi_bucket_status
+                          ->multi_instruction_opcode_segment_count == 6u &&
                   multi_bucket_status
                           ->longest_opcode_segment_instruction_count == 2u &&
                   multi_bucket_status->largest_opcode_gap == 30u &&
@@ -553,7 +597,12 @@ int main() {
                   bvh_bucket_status->instruction_count == 3u &&
                   bvh_bucket_status->first_opcode == 224u &&
                   bvh_bucket_status->last_opcode == 226u &&
+                  bvh_bucket_status->opcode_span_width == 3u &&
+                  bvh_bucket_status->opcode_hole_count == 0u &&
                   bvh_bucket_status->opcode_segment_count == 1u &&
+                  bvh_bucket_status->singleton_opcode_segment_count == 0u &&
+                  bvh_bucket_status
+                          ->multi_instruction_opcode_segment_count == 1u &&
                   bvh_bucket_status
                           ->longest_opcode_segment_instruction_count == 3u &&
                   bvh_bucket_status->largest_opcode_gap == 0u &&
@@ -785,6 +834,86 @@ int main() {
                   bvh_segment->last_instruction_name ==
                       "DS_BVH_STACK_PUSH8_POP2_RTN_B64",
               "expected BVH opcode segment")) {
+    return 1;
+  }
+
+  if (!Expect(vds_opcode_gaps.front().bucket_name == "exchange_compare_store" &&
+                  vds_opcode_gaps.front().gap_ordinal == 0u &&
+                  vds_opcode_gaps.front().previous_segment_ordinal == 0u &&
+                  vds_opcode_gaps.front().next_segment_ordinal == 1u &&
+                  vds_opcode_gaps.front().previous_opcode == 16u &&
+                  vds_opcode_gaps.front().next_opcode == 45u &&
+                  vds_opcode_gaps.front().missing_opcode_count == 28u &&
+                  vds_opcode_gaps.front().previous_instruction_name ==
+                      "DS_CMPSTORE_B32" &&
+                  vds_opcode_gaps.front().next_instruction_name ==
+                      "DS_STOREXCHG_RTN_B32",
+              "expected first remaining VDS opcode gap") ||
+      !Expect(vds_opcode_gaps.back().bucket_name == "multi_address" &&
+                  vds_opcode_gaps.back().gap_ordinal == 4u &&
+                  vds_opcode_gaps.back().previous_segment_ordinal == 4u &&
+                  vds_opcode_gaps.back().next_segment_ordinal == 5u &&
+                  vds_opcode_gaps.back().previous_opcode == 111u &&
+                  vds_opcode_gaps.back().next_opcode == 119u &&
+                  vds_opcode_gaps.back().missing_opcode_count == 7u &&
+                  vds_opcode_gaps.back().previous_instruction_name ==
+                      "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64" &&
+                  vds_opcode_gaps.back().next_instruction_name ==
+                      "DS_LOAD_2ADDR_B64",
+              "expected last remaining VDS opcode gap") ||
+      !Expect(append_gap == nullptr,
+              "expected no append/consume opcode gap") ||
+      !Expect(exchange_first_gap != nullptr &&
+                  exchange_first_gap->gap_ordinal == 0u &&
+                  exchange_first_gap->previous_segment_ordinal == 0u &&
+                  exchange_first_gap->next_segment_ordinal == 1u &&
+                  exchange_first_gap->previous_opcode == 16u &&
+                  exchange_first_gap->next_opcode == 45u &&
+                  exchange_first_gap->missing_opcode_count == 28u &&
+                  exchange_first_gap->previous_instruction_name ==
+                      "DS_CMPSTORE_B32" &&
+                  exchange_first_gap->next_instruction_name ==
+                      "DS_STOREXCHG_RTN_B32",
+              "expected first exchange opcode gap") ||
+      !Expect(exchange_last_gap != nullptr &&
+                  exchange_last_gap->gap_ordinal == 5u &&
+                  exchange_last_gap->previous_segment_ordinal == 5u &&
+                  exchange_last_gap->next_segment_ordinal == 6u &&
+                  exchange_last_gap->previous_opcode == 112u &&
+                  exchange_last_gap->next_opcode == 126u &&
+                  exchange_last_gap->missing_opcode_count == 13u &&
+                  exchange_last_gap->previous_instruction_name ==
+                      "DS_CMPSTORE_RTN_B64" &&
+                  exchange_last_gap->next_instruction_name ==
+                      "DS_CONDXCHG32_RTN_B64",
+              "expected last exchange opcode gap") ||
+      !Expect(multi_first_gap != nullptr &&
+                  multi_first_gap->gap_ordinal == 0u &&
+                  multi_first_gap->previous_segment_ordinal == 0u &&
+                  multi_first_gap->next_segment_ordinal == 1u &&
+                  multi_first_gap->previous_opcode == 15u &&
+                  multi_first_gap->next_opcode == 46u &&
+                  multi_first_gap->missing_opcode_count == 30u &&
+                  multi_first_gap->previous_instruction_name ==
+                      "DS_STORE_2ADDR_STRIDE64_B32" &&
+                  multi_first_gap->next_instruction_name ==
+                      "DS_STOREXCHG_2ADDR_RTN_B32",
+              "expected first multi-address opcode gap") ||
+      !Expect(multi_last_gap != nullptr &&
+                  multi_last_gap->gap_ordinal == 4u &&
+                  multi_last_gap->previous_segment_ordinal == 4u &&
+                  multi_last_gap->next_segment_ordinal == 5u &&
+                  multi_last_gap->previous_opcode == 111u &&
+                  multi_last_gap->next_opcode == 119u &&
+                  multi_last_gap->missing_opcode_count == 7u &&
+                  multi_last_gap->previous_instruction_name ==
+                      "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64" &&
+                  multi_last_gap->next_instruction_name ==
+                      "DS_LOAD_2ADDR_B64",
+              "expected last multi-address opcode gap") ||
+      !Expect(bvh_gap == nullptr, "expected no BVH opcode gap") ||
+      !Expect(missing_gap == nullptr,
+              "expected missing remaining VDS opcode gap lookup to fail")) {
     return 1;
   }
 

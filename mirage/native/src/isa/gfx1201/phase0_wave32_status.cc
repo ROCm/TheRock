@@ -318,6 +318,10 @@ BuildVdsBoundaryBucketStatuses() {
         0u,
         0u,
         0u,
+        0u,
+        0u,
+        0u,
+        0u,
         bucket.safe_under_current_request,
     };
     bool saw_seed_entry = false;
@@ -411,16 +415,32 @@ BuildVdsBoundaryBucketStatuses() {
     }
 
     if (!opcode_points.empty()) {
+      status.opcode_span_width = status.last_opcode - status.first_opcode + 1u;
+      status.opcode_hole_count =
+          status.opcode_span_width > status.instruction_count
+              ? status.opcode_span_width - status.instruction_count
+              : 0u;
+
       std::uint32_t current_segment_instruction_count = 1u;
       for (std::size_t i = 1; i < opcode_points.size(); ++i) {
         if (opcode_points[i].opcode == opcode_points[i - 1].opcode + 1u) {
           ++current_segment_instruction_count;
         } else {
+          if (current_segment_instruction_count == 1u) {
+            ++status.singleton_opcode_segment_count;
+          } else {
+            ++status.multi_instruction_opcode_segment_count;
+          }
           status.longest_opcode_segment_instruction_count =
               std::max(status.longest_opcode_segment_instruction_count,
                        current_segment_instruction_count);
           current_segment_instruction_count = 1u;
         }
+      }
+      if (current_segment_instruction_count == 1u) {
+        ++status.singleton_opcode_segment_count;
+      } else {
+        ++status.multi_instruction_opcode_segment_count;
       }
       status.longest_opcode_segment_instruction_count =
           std::max(status.longest_opcode_segment_instruction_count,
@@ -488,6 +508,63 @@ std::vector<Gfx1201Wave32Phase0VdsOpcodeSegment> BuildVdsOpcodeSegments() {
   }
 
   return segments;
+}
+
+std::vector<Gfx1201Wave32Phase0VdsOpcodeGap> BuildVdsOpcodeGaps() {
+  std::vector<Gfx1201Wave32Phase0VdsOpcodeGap> gaps;
+
+  for (const Gfx1201Wave32Phase0VdsBoundaryBucket& bucket : kVdsBoundaryBuckets) {
+    const std::vector<BucketOpcodePoint> opcode_points =
+        CollectBucketOpcodePoints(bucket);
+    if (opcode_points.size() < 2u) {
+      continue;
+    }
+
+    std::uint32_t segment_ordinal = 0u;
+    std::uint32_t previous_segment_ordinal = 0u;
+    std::uint32_t previous_opcode = opcode_points.front().opcode;
+    std::string_view previous_instruction_name =
+        opcode_points.front().instruction_name;
+
+    for (std::size_t i = 1; i < opcode_points.size(); ++i) {
+      const BucketOpcodePoint& point = opcode_points[i];
+      if (point.opcode == previous_opcode + 1u) {
+        previous_opcode = point.opcode;
+        previous_instruction_name = point.instruction_name;
+        continue;
+      }
+
+      const std::uint32_t next_segment_ordinal = segment_ordinal + 1u;
+      gaps.push_back(Gfx1201Wave32Phase0VdsOpcodeGap{
+          bucket.bucket_name,
+          0u,
+          previous_segment_ordinal,
+          next_segment_ordinal,
+          previous_opcode,
+          point.opcode,
+          point.opcode - previous_opcode - 1u,
+          previous_instruction_name,
+          point.instruction_name,
+      });
+
+      segment_ordinal = next_segment_ordinal;
+      previous_segment_ordinal = segment_ordinal;
+      previous_opcode = point.opcode;
+      previous_instruction_name = point.instruction_name;
+    }
+  }
+
+  std::uint32_t gap_ordinal = 0u;
+  std::string_view current_bucket_name;
+  for (Gfx1201Wave32Phase0VdsOpcodeGap& gap : gaps) {
+    if (gap.bucket_name != current_bucket_name) {
+      current_bucket_name = gap.bucket_name;
+      gap_ordinal = 0u;
+    }
+    gap.gap_ordinal = gap_ordinal++;
+  }
+
+  return gaps;
 }
 
 std::vector<Gfx1201Wave32Phase0VdsNextRiskStep> BuildVdsNextRiskSteps() {
@@ -610,6 +687,13 @@ GetGfx1201Wave32Phase0VdsOpcodeSegments() {
   return kSegments;
 }
 
+std::span<const Gfx1201Wave32Phase0VdsOpcodeGap>
+GetGfx1201Wave32Phase0VdsOpcodeGaps() {
+  static const std::vector<Gfx1201Wave32Phase0VdsOpcodeGap> kGaps =
+      BuildVdsOpcodeGaps();
+  return kGaps;
+}
+
 std::span<const Gfx1201Wave32Phase0VdsNextRiskStep>
 GetGfx1201Wave32Phase0VdsNextRiskSteps() {
   static const std::vector<Gfx1201Wave32Phase0VdsNextRiskStep> kSteps =
@@ -685,6 +769,17 @@ FindGfx1201Wave32Phase0VdsOpcodeSegment(std::string_view bucket_name,
     if (segment.bucket_name == bucket_name &&
         segment.segment_ordinal == segment_ordinal) {
       return &segment;
+    }
+  }
+  return nullptr;
+}
+
+const Gfx1201Wave32Phase0VdsOpcodeGap* FindGfx1201Wave32Phase0VdsOpcodeGap(
+    std::string_view bucket_name, std::uint32_t gap_ordinal) {
+  for (const Gfx1201Wave32Phase0VdsOpcodeGap& gap :
+       GetGfx1201Wave32Phase0VdsOpcodeGaps()) {
+    if (gap.bucket_name == bucket_name && gap.gap_ordinal == gap_ordinal) {
+      return &gap;
     }
   }
   return nullptr;
