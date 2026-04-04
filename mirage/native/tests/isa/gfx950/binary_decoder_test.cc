@@ -9321,6 +9321,67 @@ int main() {
     return 1;
   }
 
+  const std::array<std::string_view, 28> kAdditionalFlatAtomicOpcodes = {
+      "FLAT_ATOMIC_SUB",        "FLAT_ATOMIC_SMIN",
+      "FLAT_ATOMIC_UMIN",       "FLAT_ATOMIC_SMAX",
+      "FLAT_ATOMIC_UMAX",       "FLAT_ATOMIC_AND",
+      "FLAT_ATOMIC_OR",         "FLAT_ATOMIC_XOR",
+      "FLAT_ATOMIC_INC",        "FLAT_ATOMIC_DEC",
+      "FLAT_ATOMIC_ADD_F32",    "FLAT_ATOMIC_PK_ADD_F16",
+      "FLAT_ATOMIC_ADD_F64",    "FLAT_ATOMIC_MIN_F64",
+      "FLAT_ATOMIC_MAX_F64",    "FLAT_ATOMIC_PK_ADD_BF16",
+      "FLAT_ATOMIC_SWAP_X2",    "FLAT_ATOMIC_CMPSWAP_X2",
+      "FLAT_ATOMIC_SUB_X2",     "FLAT_ATOMIC_SMIN_X2",
+      "FLAT_ATOMIC_UMIN_X2",    "FLAT_ATOMIC_SMAX_X2",
+      "FLAT_ATOMIC_UMAX_X2",    "FLAT_ATOMIC_AND_X2",
+      "FLAT_ATOMIC_OR_X2",      "FLAT_ATOMIC_XOR_X2",
+      "FLAT_ATOMIC_INC_X2",     "FLAT_ATOMIC_DEC_X2",
+  };
+  for (std::string_view opcode_name : kAdditionalFlatAtomicOpcodes) {
+    const auto opcode_value =
+        FindDefaultEncodingOpcode(opcode_name, "ENC_FLAT");
+    if (!Expect(opcode_value.has_value(),
+                ("expected catalog opcode for " + std::string(opcode_name))
+                    .c_str())) {
+      return 1;
+    }
+
+    const auto word = MakeFlatAtomic(*opcode_value, true, 60, 10, 20, 4);
+    const std::array<std::uint32_t, 2> encoded_word = {word[0], word[1]};
+    DecodedInstruction instruction;
+    std::size_t words_consumed = 0;
+    if (!Expect(decoder.DecodeInstruction(encoded_word, &instruction,
+                                          &words_consumed, &error_message),
+                error_message.c_str()) ||
+        !Expect(words_consumed == 2,
+                ("expected two-word decode for " + std::string(opcode_name))
+                    .c_str()) ||
+        !Expect(instruction.opcode == opcode_name,
+                ("expected opcode decode for " + std::string(opcode_name))
+                    .c_str()) ||
+        !Expect(instruction.operand_count == 4,
+                ("expected operand count for " + std::string(opcode_name))
+                    .c_str()) ||
+        !Expect(instruction.operands[0].kind == OperandKind::kVgpr &&
+                    instruction.operands[0].index == 60,
+                ("expected destination decode for " + std::string(opcode_name))
+                    .c_str()) ||
+        !Expect(instruction.operands[1].kind == OperandKind::kVgpr &&
+                    instruction.operands[1].index == 10,
+                ("expected address decode for " + std::string(opcode_name))
+                    .c_str()) ||
+        !Expect(instruction.operands[2].kind == OperandKind::kVgpr &&
+                    instruction.operands[2].index == 20,
+                ("expected data decode for " + std::string(opcode_name))
+                    .c_str()) ||
+        !Expect(instruction.operands[3].kind == OperandKind::kImm32 &&
+                    instruction.operands[3].imm32 == 4u,
+                ("expected offset decode for " + std::string(opcode_name))
+                    .c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 20> kAdditionalFlatMemoryOpcodes = {
       "FLAT_LOAD_UBYTE",        "FLAT_LOAD_UBYTE_D16",
       "FLAT_LOAD_UBYTE_D16_HI", "FLAT_LOAD_SBYTE",
