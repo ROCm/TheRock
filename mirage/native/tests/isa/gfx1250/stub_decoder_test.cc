@@ -7639,12 +7639,13 @@ int main() {
     }
     return false;
   };
+  // Exact validation for the routed post-pair-load 50-seed tail.
   for (std::size_t i = 2; i < scale_paired_seeded_instructions.size(); ++i) {
     const std::string_view instruction_name =
         scale_paired_seeded_instructions[i];
     const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
     if (!Expect(seed != nullptr,
-                "expected scale-paired batch instruction to remain present in the seed catalog")) {
+                "expected scale-paired tail batch instruction to remain present in the seed catalog")) {
       return 1;
     }
 
@@ -7653,7 +7654,7 @@ int main() {
     if (route_info == nullptr) {
       const StubDecodedInstruction decoded = DecodeStubInstruction(instruction_name);
       if (!Expect(MatchesUnsupportedSeedDecode(decoded, *seed),
-                  "expected deferred scale-paired batch instruction to keep exact unsupported-seed decode parity")) {
+                  "expected deferred scale-paired tail batch instruction to keep exact unsupported-seed decode parity")) {
         return 1;
       }
       for (const StubDecoderRouteManifest& manifest :
@@ -7661,7 +7662,7 @@ int main() {
         const StubDecodedInstruction via_entrypoint =
             DecodeViaExplicitRouteEntrypoint(manifest.route, instruction_name);
         if (!Expect(MatchesUnsupportedSeedDecode(via_entrypoint, *seed),
-                    "expected deferred scale-paired batch instruction to keep exact route-keyed unsupported parity")) {
+                    "expected deferred scale-paired tail batch instruction to keep exact route-keyed unsupported parity")) {
           return 1;
         }
       }
@@ -7686,7 +7687,7 @@ int main() {
                 route_manifest->route_priority == route_info->route_priority &&
                 route_contains_instruction(route_info->route, instruction_name) &&
                 SelectStubDecoderRoute(instruction_name) == route_info->route,
-            "expected routed scale-paired batch instruction to preserve exact route-keyed parity, selector/manifest consistency, and local operand surfaces")) {
+            "expected routed scale-paired tail batch instruction to preserve exact route-keyed parity, selector/manifest consistency, and local operand surfaces")) {
       return 1;
     }
 
@@ -7718,14 +7719,14 @@ int main() {
                 GetStubExecutionDomainName(via_name.execution_domain) ==
                     "kMatrix" &&
                 MatchesTopLevelFlags(via_name, true, false, true, false),
-            "expected scale WMMA batch instruction to keep exact matrix-scale route classification")) {
+            "expected scale WMMA tail batch instruction to keep exact matrix-scale route classification")) {
       return 1;
     }
     if (instruction_name == "V_WMMA_SCALE16_F32_16X16X128_F8F6F4" ||
         instruction_name == "V_WMMA_SCALE_F32_16X16X128_F8F6F4") {
       if (!Expect(
               MatchesLayout(via_name,
-                            instruction_name ==
+                                instruction_name ==
                                     "V_WMMA_SCALE16_F32_16X16X128_F8F6F4"
                                 ? ExpectedLayout{
                                       StubOperandLayoutKind::
@@ -7751,7 +7752,7 @@ int main() {
                                       false,
                                       false,
                                   }),
-              "expected exact scale WMMA route to preserve local operand-layout classification")) {
+              "expected exact scale WMMA tail batch route to preserve local operand-layout classification")) {
         return 1;
       }
     } else {
@@ -7765,7 +7766,7 @@ int main() {
                                  false,
                                  false,
                                  false}),
-                  "expected generic scale WMMA route to preserve local operand-layout classification")) {
+                  "expected generic scale WMMA tail batch route to preserve local operand-layout classification")) {
         return 1;
       }
     }
