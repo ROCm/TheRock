@@ -679,6 +679,24 @@ int main() {
       return 1;
     }
   }
+  for (std::string_view delayed_split_token_near_miss_instruction :
+       {"V_PK_ADD__BF16",
+        "V_CVT__F16_FP8",
+        "V_CVT_PK_F16__FP8",
+        "V_WMMA_F32__16X16X4_F32_w32",
+        "V_WMMA_SCALE_F32__16X16X128_F8F6F4"}) {
+    if (!Expect(
+            SelectStubDecoderRoute(delayed_split_token_near_miss_instruction) ==
+                        StubDecoderRoute::kUnsupported &&
+                    FindStubDecoderRouteInfo(
+                        delayed_split_token_near_miss_instruction) ==
+                        nullptr &&
+                    !ListedInAnyRoute(
+                        delayed_split_token_near_miss_instruction),
+            "expected delayed split-token family near-misses to stay excluded from all routed selector surfaces")) {
+      return 1;
+    }
+  }
 
   for (const DecoderSeedInfo& seed : GetDecoderSeedInfos()) {
     const StubDecoderRoute expected_route =

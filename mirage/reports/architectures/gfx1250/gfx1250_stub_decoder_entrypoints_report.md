@@ -60,6 +60,7 @@
   - exact negative-path parity validation across routed wrong-entrypoint decodes and unsupported seeded ops
   - exact decode-hint-to-route/name/priority parity validation independent of selector implementation
   - exact selector negative-path fallback validation for unsupported routes, invalid routes, invalid decode hints, unknown instructions, empty instruction names, and prefixed or suffixed known-opcode near misses
+  - exact delayed split-token family near-miss validation for selector exclusion, direct-decode unknown parity, explicit route-keyed unknown parity, and synthetic route-info family-local partial classification
 
 ## Routed Seed Metadata Coverage
 
@@ -87,6 +88,7 @@
   - exact split-surface checks now pin those same family-matched suffixed near misses to remain empty-unknown on both direct name-based decode and explicit route-keyed entrypoint decode, while only the synthetic `StubDecoderRouteInfo` path preserves the current partial family-level classification
   - exact non-matching-route checks now pin those same family-matched suffixed near misses to stay empty-unknown even on synthetic `StubDecoderRouteInfo` inputs when the caller route does not match the family
   - exact split-token family-near-miss checks now pin `V_PK__ADD_BF16`, `V_CVT_F16__FP8`, `V_CVT_PK__F16_FP8`, `V_WMMA__F32_16X16X4_F32_w32`, and `V_WMMA_SCALE__F32_16X16X128_F8F6F4` to stay selector-excluded and direct-decode unknown, while synthetic `StubDecoderRouteInfo` inputs preserve current route-local partial classification: packed/convert forms keep only matching-route top-level family shape, and WMMA forms preserve generic operand layouts plus generic role/slot/descriptor surfaces even when the caller route does not match
+  - exact delayed split-token family-near-miss checks now pin `V_PK_ADD__BF16`, `V_CVT__F16_FP8`, `V_CVT_PK_F16__FP8`, `V_WMMA_F32__16X16X4_F32_w32`, and `V_WMMA_SCALE_F32__16X16X128_F8F6F4` to stay selector-excluded and direct-decode unknown, while synthetic `StubDecoderRouteInfo` inputs preserve current route-local partial classification: `V_PK_ADD__BF16` and `V_CVT_PK_F16__FP8` keep matching-route family shape only, `V_CVT__F16_FP8` stays empty-unknown on every route, and the WMMA forms preserve generic operand layouts plus generic role/slot/descriptor surfaces even when the caller route does not match
 
 - `VOP3P` packed BF16 slice:
   - `V_PK_ADD_BF16`

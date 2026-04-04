@@ -7591,6 +7591,34 @@ int main() {
       }
     }
   }
+  for (std::string_view delayed_split_token_near_miss_instruction :
+       {"V_PK_ADD__BF16",
+        "V_CVT__F16_FP8",
+        "V_CVT_PK_F16__FP8",
+        "V_WMMA_F32__16X16X4_F32_w32",
+        "V_WMMA_SCALE_F32__16X16X128_F8F6F4"}) {
+    const StubDecodedInstruction delayed_split_token_near_miss_decode =
+        DecodeStubInstruction(delayed_split_token_near_miss_instruction);
+    if (!Expect(MatchesUnknownDecode(delayed_split_token_near_miss_decode,
+                                     delayed_split_token_near_miss_instruction) &&
+                    MatchesUnknownHelperSurface(
+                        delayed_split_token_near_miss_decode),
+                "expected delayed split-token family near-misses to keep exact unknown decode parity")) {
+      return 1;
+    }
+    for (const StubDecoderRouteManifest& manifest :
+         GetStubDecoderRouteManifests()) {
+      const StubDecodedInstruction via_entrypoint =
+          DecodeViaExplicitRouteEntrypoint(
+              manifest.route, delayed_split_token_near_miss_instruction);
+      if (!Expect(MatchesUnknownDecode(via_entrypoint,
+                                       delayed_split_token_near_miss_instruction) &&
+                      MatchesUnknownHelperSurface(via_entrypoint),
+                  "expected delayed split-token family near-misses to keep exact route-keyed unknown parity")) {
+        return 1;
+      }
+    }
+  }
   if (!Expect(GetStubOpcodeShapeName(static_cast<StubOpcodeShape>(99)) ==
                       "kUnknown" &&
                   GetStubExecutionDomainName(
@@ -9040,6 +9068,369 @@ int main() {
                 "expected non-generic split-token family near-miss to keep empty operand surfaces")) {
           return 1;
         }
+      }
+    }
+    struct FamilyMatchedDelayedSplitTokenNearMissExpectation {
+      std::string_view instruction_name;
+      StubDecoderRoute route;
+      std::string_view opcode_shape_name;
+      std::string_view execution_domain_name;
+      ExpectedLayout matching_layout;
+      ExpectedLayout nonmatching_layout;
+      bool uses_accumulator = false;
+      bool uses_tensor_memory = false;
+      bool uses_scale_path = false;
+      bool uses_paired_operands = false;
+      bool preserve_generic_operands_on_nonmatching_route = false;
+    };
+    for (const FamilyMatchedDelayedSplitTokenNearMissExpectation& expectation :
+         {FamilyMatchedDelayedSplitTokenNearMissExpectation{
+              "V_PK_ADD__BF16",
+              StubDecoderRoute::kVop3p,
+              "kVop3pPackedBinary",
+              "kVectorAlu",
+              ExpectedLayout{},
+              ExpectedLayout{},
+              false,
+              false,
+              false,
+              true,
+              false,
+          },
+          FamilyMatchedDelayedSplitTokenNearMissExpectation{
+              "V_CVT__F16_FP8",
+              StubDecoderRoute::kVop1,
+              "kUnknown",
+              "kUnknown",
+              ExpectedLayout{},
+              ExpectedLayout{},
+              false,
+              false,
+              false,
+              false,
+              false,
+          },
+          FamilyMatchedDelayedSplitTokenNearMissExpectation{
+              "V_CVT_PK_F16__FP8",
+              StubDecoderRoute::kVop1,
+              "kFp8PackedConvert",
+              "kConversion",
+              ExpectedLayout{},
+              ExpectedLayout{},
+              false,
+              false,
+              false,
+              true,
+              false,
+          },
+          FamilyMatchedDelayedSplitTokenNearMissExpectation{
+              "V_WMMA_F32__16X16X4_F32_w32",
+              StubDecoderRoute::kVop3p,
+              "kWmmaCore",
+              "kMatrix",
+              ExpectedLayout{
+                  StubOperandLayoutKind::kWmmaCoreGeneric,
+                  2,
+                  1,
+                  1,
+                  false,
+                  false,
+                  false,
+                  false,
+                  false,
+              },
+              ExpectedLayout{
+                  StubOperandLayoutKind::kWmmaCoreGeneric,
+                  2,
+                  1,
+                  1,
+                  false,
+                  false,
+                  false,
+                  false,
+                  false,
+              },
+              true,
+              false,
+              false,
+              false,
+              true,
+          },
+          FamilyMatchedDelayedSplitTokenNearMissExpectation{
+              "V_WMMA_SCALE_F32__16X16X128_F8F6F4",
+              StubDecoderRoute::kVop3p,
+              "kWmmaScale",
+              "kMatrix",
+              ExpectedLayout{
+                  StubOperandLayoutKind::kWmmaScaleGeneric,
+                  3,
+                  1,
+                  1,
+                  true,
+                  false,
+                  false,
+                  false,
+                  false,
+              },
+              ExpectedLayout{
+                  StubOperandLayoutKind::kWmmaScaleGeneric,
+                  3,
+                  1,
+                  1,
+                  true,
+                  false,
+                  false,
+                  false,
+                  false,
+              },
+              true,
+              false,
+              true,
+              false,
+              true,
+          }}) {
+      const StubDecoderRouteInfo synthetic_family_matched_delayed_split_token{
+          expectation.instruction_name,
+          manifest.route,
+          "kSyntheticRouteInfoFamilyMatchedDelayedSplitTokenNearMiss",
+          manifest.route_priority + 290u,
+          DecodeSeedHint::kUnknown,
+          "SYNTHETIC_FAMILY_MATCHED_DELAYED_SPLIT_TOKEN_NEAR_MISS_ENC",
+          2900u + manifest.route_priority,
+          29u + manifest.route_priority,
+          false,
+          false,
+      };
+      const auto validate_delayed_split_token =
+          [&](const StubDecodedInstruction& decoded,
+              const StubDecoderRouteInfo& route_info,
+              const char* matching_message,
+              const char* nonmatching_message,
+              const char* nongeneric_message) -> bool {
+        const bool matching_route = manifest.route == expectation.route;
+        if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub &&
+                        MatchesRouteInfoPayload(decoded, route_info) &&
+                        decoded.entrypoint_name == manifest.entrypoint_name,
+                    "expected delayed split-token family near-miss synthetic route-info to preserve caller metadata")) {
+          return false;
+        }
+        if (matching_route) {
+          if (!Expect(
+                  std::string_view(GetStubOpcodeShapeName(decoded.opcode_shape)) ==
+                          expectation.opcode_shape_name &&
+                      std::string_view(
+                          GetStubExecutionDomainName(decoded.execution_domain)) ==
+                          expectation.execution_domain_name &&
+                      MatchesTopLevelFlags(decoded,
+                                           expectation.uses_accumulator,
+                                           expectation.uses_tensor_memory,
+                                           expectation.uses_scale_path,
+                                           expectation.uses_paired_operands) &&
+                      MatchesLayout(decoded, expectation.matching_layout),
+                  matching_message)) {
+            return false;
+          }
+        } else {
+          if (!Expect(
+                  MatchesTopLevelFlags(decoded, false, false, false, false) &&
+                      std::string_view(GetStubOpcodeShapeName(
+                          decoded.opcode_shape)) == "kUnknown" &&
+                      std::string_view(GetStubExecutionDomainName(
+                          decoded.execution_domain)) == "kUnknown" &&
+                      MatchesLayout(decoded, expectation.nonmatching_layout),
+                  nonmatching_message)) {
+            return false;
+          }
+        }
+        if (expectation.instruction_name == "V_WMMA_F32__16X16X4_F32_w32") {
+          return Expect(
+              MatchesRoleBindingSequence(
+                  decoded,
+                  {{StubOperandRole::kSource0, 1, false, false},
+                   {StubOperandRole::kSource1, 1, false, false},
+                   {StubOperandRole::kAccumulator, 1, false, false},
+                   {StubOperandRole::kDestination, 1, true, false}}) &&
+                  MatchesSlotBindingSequence(
+                      decoded,
+                      {{StubOperandSlotKind::kDestination,
+                        StubOperandValueClass::kMatrixFragment,
+                        0,
+                        1,
+                        true,
+                        false},
+                       {StubOperandSlotKind::kSource0,
+                        StubOperandValueClass::kMatrixFragment,
+                        1,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kSource1,
+                        StubOperandValueClass::kMatrixFragment,
+                        2,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kAccumulatorSource,
+                        StubOperandValueClass::kAccumulatorFragment,
+                        3,
+                        1,
+                        false,
+                        false}}) &&
+                  MatchesDescriptorSequence(
+                      decoded,
+                      {{StubOperandRole::kDestination,
+                        StubOperandSlotKind::kDestination,
+                        StubOperandValueClass::kMatrixFragment,
+                        StubOperandAccess::kWrite,
+                        1,
+                        false},
+                       {StubOperandRole::kSource0,
+                        StubOperandSlotKind::kSource0,
+                        StubOperandValueClass::kMatrixFragment,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kSource1,
+                        StubOperandSlotKind::kSource1,
+                        StubOperandValueClass::kMatrixFragment,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kAccumulator,
+                        StubOperandSlotKind::kAccumulatorSource,
+                        StubOperandValueClass::kAccumulatorFragment,
+                        StubOperandAccess::kRead,
+                        1,
+                        false}}),
+              "expected delayed split-token WMMA near-miss to preserve generic matrix operand surfaces");
+        }
+        if (expectation.instruction_name ==
+            "V_WMMA_SCALE_F32__16X16X128_F8F6F4") {
+          return Expect(
+              MatchesRoleBindingSequence(
+                  decoded,
+                  {{StubOperandRole::kSource0, 1, false, false},
+                   {StubOperandRole::kSource1, 1, false, false},
+                   {StubOperandRole::kAccumulator, 1, false, false},
+                   {StubOperandRole::kScale, 1, false, false},
+                   {StubOperandRole::kDestination, 1, true, false}}) &&
+                  MatchesSlotBindingSequence(
+                      decoded,
+                      {{StubOperandSlotKind::kDestination,
+                        StubOperandValueClass::kMatrixFragment,
+                        0,
+                        1,
+                        true,
+                        false},
+                       {StubOperandSlotKind::kSource0,
+                        StubOperandValueClass::kMatrixFragment,
+                        1,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kSource1,
+                        StubOperandValueClass::kMatrixFragment,
+                        2,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kAccumulatorSource,
+                        StubOperandValueClass::kAccumulatorFragment,
+                        3,
+                        1,
+                        false,
+                        false},
+                       {StubOperandSlotKind::kScaleSource,
+                        StubOperandValueClass::kScalarRegister,
+                        4,
+                        1,
+                        false,
+                        false}}) &&
+                  MatchesDescriptorSequence(
+                      decoded,
+                      {{StubOperandRole::kDestination,
+                        StubOperandSlotKind::kDestination,
+                        StubOperandValueClass::kMatrixFragment,
+                        StubOperandAccess::kWrite,
+                        1,
+                        false},
+                       {StubOperandRole::kSource0,
+                        StubOperandSlotKind::kSource0,
+                        StubOperandValueClass::kMatrixFragment,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kSource1,
+                        StubOperandSlotKind::kSource1,
+                        StubOperandValueClass::kMatrixFragment,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kAccumulator,
+                        StubOperandSlotKind::kAccumulatorSource,
+                        StubOperandValueClass::kAccumulatorFragment,
+                        StubOperandAccess::kRead,
+                        1,
+                        false},
+                       {StubOperandRole::kScale,
+                        StubOperandSlotKind::kScaleSource,
+                        StubOperandValueClass::kScalarRegister,
+                        StubOperandAccess::kRead,
+                        1,
+                        false}}),
+              "expected delayed split-token WMMA scale near-miss to preserve generic scale operand surfaces");
+        }
+        if (!expectation.preserve_generic_operands_on_nonmatching_route) {
+          return Expect(decoded.operand_roles.binding_count == 0 &&
+                            decoded.operand_slots.binding_count == 0 &&
+                            decoded.operand_descriptors.descriptor_count == 0,
+                        nongeneric_message);
+        }
+        return true;
+      };
+      if (!validate_delayed_split_token(
+              DecodeStubInstruction(synthetic_family_matched_delayed_split_token),
+              synthetic_family_matched_delayed_split_token,
+              "expected matching-route delayed split-token family near-miss to preserve current family-level classification",
+              "expected non-matching-route delayed split-token family near-miss to keep exact top-level fallback behavior",
+              "expected non-generic delayed split-token family near-miss to keep empty operand surfaces")) {
+        return 1;
+      }
+      StubDecoderRouteInfo
+          synthetic_family_matched_delayed_split_token_valid_wrong_hint =
+              synthetic_family_matched_delayed_split_token;
+      synthetic_family_matched_delayed_split_token_valid_wrong_hint.route_name =
+          "kSyntheticRouteInfoFamilyMatchedDelayedSplitTokenNearMissValidWrongHint";
+      synthetic_family_matched_delayed_split_token_valid_wrong_hint
+          .route_priority = manifest.route_priority + 295u;
+      synthetic_family_matched_delayed_split_token_valid_wrong_hint
+          .decode_hint = AlternateDecodeHintForRoute(manifest.route);
+      if (!validate_delayed_split_token(
+              DecodeStubInstruction(
+                  synthetic_family_matched_delayed_split_token_valid_wrong_hint),
+              synthetic_family_matched_delayed_split_token_valid_wrong_hint,
+              "expected matching-route delayed split-token family near-miss to ignore valid mismatching caller decode-hint while preserving current family-level classification",
+              "expected non-matching-route delayed split-token family near-miss to ignore valid mismatching caller decode-hint while keeping exact top-level fallback behavior",
+              "expected non-generic delayed split-token family near-miss to ignore valid mismatching caller decode-hint while keeping empty operand surfaces")) {
+        return 1;
+      }
+      StubDecoderRouteInfo
+          synthetic_family_matched_delayed_split_token_invalid_hint =
+              synthetic_family_matched_delayed_split_token;
+      synthetic_family_matched_delayed_split_token_invalid_hint.route_name =
+          "kSyntheticRouteInfoFamilyMatchedDelayedSplitTokenNearMissInvalidHint";
+      synthetic_family_matched_delayed_split_token_invalid_hint
+          .route_priority = manifest.route_priority + 305u;
+      synthetic_family_matched_delayed_split_token_invalid_hint.decode_hint =
+          static_cast<DecodeSeedHint>(99);
+      if (!validate_delayed_split_token(
+              DecodeStubInstruction(
+                  synthetic_family_matched_delayed_split_token_invalid_hint),
+              synthetic_family_matched_delayed_split_token_invalid_hint,
+              "expected matching-route delayed split-token family near-miss to ignore invalid caller decode-hint while preserving current family-level classification",
+              "expected non-matching-route delayed split-token family near-miss to ignore invalid caller decode-hint while keeping exact top-level fallback behavior",
+              "expected non-generic delayed split-token family near-miss to ignore invalid caller decode-hint while keeping empty operand surfaces")) {
+        return 1;
       }
     }
   }
