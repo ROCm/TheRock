@@ -6380,6 +6380,21 @@ int main() {
                         .c_str())) {
           return 1;
         }
+
+        const std::array<std::uint32_t, 2> scratch_instruction = {
+            scratch_word[0], scratch_word[1],
+        };
+        DecodedInstruction decoded_instruction;
+        std::size_t words_consumed = 0;
+        if (!Expect(!decoder.DecodeInstruction(scratch_instruction,
+                                               &decoded_instruction,
+                                               &words_consumed,
+                                               &error_message),
+                    ("expected scratch instruction rejection for " +
+                     std::string(opcode_name))
+                        .c_str())) {
+          return 1;
+        }
       }
     }
   }
