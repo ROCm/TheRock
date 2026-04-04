@@ -135,10 +135,14 @@ jobs:
         continue-on-error: true
         run: |
           rc1=0
-          "${BUILD_DIR}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
+          python build_tools/teatime.py --log-timestamps --interactive \
+            --label "comgr lit tests" "${BUILD_DIR}/logs/comgr-lit-tests.log" -- \
+            "${BUILD_DIR}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
             "${BUILD_DIR}/compiler/amd-comgr/build/test-lit" -v || rc1=$?
           rc2=0
-          ctest --test-dir "${BUILD_DIR}/compiler/amd-comgr/build" --output-on-failure || rc2=$?
+          python build_tools/teatime.py --log-timestamps --interactive \
+            --label "comgr ctest" "${BUILD_DIR}/logs/comgr-ctest.log" -- \
+            ctest --test-dir "${BUILD_DIR}/compiler/amd-comgr/build" --output-on-failure || rc2=$?
           [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ]
 
       - name: Report
