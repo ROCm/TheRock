@@ -12388,6 +12388,10 @@ int main() {
            memory->WriteU32(0x100u, 0x11223344u) &&
            memory->WriteU32(0x104u, 0x55667788u) &&
            memory->WriteU32(0x108u, 0x99aabbccu) &&
+           memory->WriteU32(0x130u, 0x33330000u) &&
+           memory->WriteU32(0x134u, 0x33330001u) &&
+           memory->WriteU32(0x138u, 0x33330002u) &&
+           memory->WriteU32(0x13cu, 0x33330003u) &&
            memory->WriteU32(0x120u, 0xfeedfaceu);
   };
   const auto make_scalar_memory_state = []() {
@@ -12411,6 +12415,9 @@ int main() {
       DecodedInstruction::ThreeOperand("S_LOAD_DWORDX2", InstructionOperand::Sgpr(6),
                                        InstructionOperand::Sgpr(0),
                                        InstructionOperand::Imm32(4)),
+      DecodedInstruction::ThreeOperand("S_LOAD_DWORDX4", InstructionOperand::Sgpr(8),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x30)),
       DecodedInstruction::ThreeOperand("S_STORE_DWORD", InstructionOperand::Sgpr(4),
                                        InstructionOperand::Sgpr(0),
                                        InstructionOperand::Sgpr(2)),
@@ -12439,6 +12446,11 @@ int main() {
                Expect(state.sgprs[7] == 0x99aabbccu,
                       (std::string(mode) + " s_load_dwordx2 high result")
                           .c_str()) &&
+               Expect(state.sgprs[8] == 0x33330000u &&
+                          state.sgprs[9] == 0x33330001u &&
+                          state.sgprs[10] == 0x33330002u &&
+                          state.sgprs[11] == 0x33330003u,
+                      (std::string(mode) + " s_load_dwordx4 result").c_str()) &&
                Expect(state.sgprs[12] == 0x13579bdfu &&
                           state.sgprs[13] == 0x2468ace0u,
                       (std::string(mode) + " scalar memory preserves unrelated sgprs")
@@ -12466,6 +12478,18 @@ int main() {
                           .c_str()) &&
                Expect(value == 0x99aabbccu,
                       (std::string(mode) + " scalar memory x2 high source preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x130u, &value),
+                      (std::string(mode) + " scalar memory source read")
+                          .c_str()) &&
+               Expect(value == 0x33330000u,
+                      (std::string(mode) + " scalar memory x4 source preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x13cu, &value),
+                      (std::string(mode) + " scalar memory source read")
+                          .c_str()) &&
+               Expect(value == 0x33330003u,
+                      (std::string(mode) + " scalar memory x4 tail source preserved")
                           .c_str()) &&
                Expect(memory.ReadU32(0x110u, &value),
                       (std::string(mode) + " stored value read").c_str()) &&
