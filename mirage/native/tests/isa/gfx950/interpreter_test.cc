@@ -559,6 +559,224 @@ bool RunBufferAtomicSemanticCase(
   return true;
 }
 
+bool RunScalarAtomicSemanticCase(
+    const mirage::sim::isa::Gfx950Interpreter& interpreter,
+    const AtomicSemanticCase& test_case,
+    bool uses_buffer_descriptor,
+    bool use_compiled_program = false) {
+  using namespace mirage::sim::isa;
+
+  constexpr std::uint64_t kAtomicAddress = 0x100;
+  constexpr std::uint16_t kAddressReg = 0;
+  constexpr std::uint16_t kDataReg = 20;
+  constexpr std::uint16_t kUnrelatedScalarReg = 10;
+  constexpr std::uint16_t kUnrelatedVectorReg = 80;
+
+  LinearExecutionMemory memory(0x400, 0);
+  for (std::uint8_t dword_index = 0; dword_index < test_case.memory_dword_count;
+       ++dword_index) {
+    if (!memory.WriteU32(kAtomicAddress + static_cast<std::uint64_t>(dword_index) * 4u,
+                         test_case.initial_memory[dword_index])) {
+      std::cerr << test_case.opcode << ": failed to seed scalar atomic memory\n";
+      return false;
+    }
+  }
+  if (!memory.WriteU32(0x80u, 0x11223344u) ||
+      !memory.WriteU32(0x140u, 0x55667788u)) {
+    std::cerr << test_case.opcode
+              << ": failed to seed unrelated scalar atomic memory\n";
+    return false;
+  }
+
+  static thread_local WaveExecutionState state;
+  state = {};
+  state.exec_mask = 0x1ULL;
+  state.sgprs[kAddressReg] = static_cast<std::uint32_t>(kAtomicAddress);
+  state.sgprs[kAddressReg + 1] = 0u;
+  state.sgprs[2] = uses_buffer_descriptor ? 0x400u : 0x2468ace0u;
+  state.sgprs[3] = uses_buffer_descriptor ? 0u : 0x0badc0deu;
+  state.sgprs[kUnrelatedScalarReg] = 0x12345678u;
+  state.sgprs[kUnrelatedScalarReg + 1] = 0x9abcdef0u;
+  state.vgprs[kUnrelatedVectorReg][0] = 0x01020304u;
+  state.vgprs[kUnrelatedVectorReg][1] = 0x11121314u;
+  state.vgprs[kUnrelatedVectorReg][2] = 0x21222324u;
+  state.vgprs[kUnrelatedVectorReg][3] = 0x31323334u;
+  for (std::uint8_t dword_index = 0; dword_index < test_case.data_dword_count;
+       ++dword_index) {
+    state.sgprs[kDataReg + dword_index] = test_case.data[dword_index];
+  }
+
+  const std::vector<DecodedInstruction> program = {
+      DecodedInstruction::ThreeOperand(
+          test_case.opcode, InstructionOperand::Sgpr(kDataReg),
+          InstructionOperand::Sgpr(kAddressReg), InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  std::string error_message;
+  if (use_compiled_program) {
+    std::vector<CompiledInstruction> compiled_program;
+    if (!interpreter.CompileProgram(program, &compiled_program, &error_message)) {
+      std::cerr << test_case.opcode
+                << ": failed to compile scalar atomic program: "
+                << error_message << '\n';
+      return false;
+    }
+    if (!interpreter.ExecuteProgram(compiled_program, &state, &memory,
+                                    &error_message)) {
+      std::cerr << test_case.opcode << ": compiled scalar atomic: "
+                << error_message << '\n';
+      return false;
+    }
+  } else if (!interpreter.ExecuteProgram(program, &state, &memory,
+                                         &error_message)) {
+    std::cerr << test_case.opcode << ": decoded scalar atomic: "
+              << error_message << '\n';
+    return false;
+  }
+
+  for (std::uint8_t dword_index = 0; dword_index < test_case.memory_dword_count;
+       ++dword_index) {
+    std::uint32_t actual_value = 0;
+    if (!memory.ReadU32(kAtomicAddress + static_cast<std::uint64_t>(dword_index) * 4u,
+                        &actual_value)) {
+      std::cerr << test_case.opcode
+                << ": failed to read scalar atomic result memory\n";
+      return false;
+    }
+    if (actual_value != test_case.expected_memory[dword_index]) {
+      std::cerr << test_case.opcode << ": scalar atomic memory dword "
+                << +dword_index << " mismatch\n";
+      return false;
+    }
+  }
+
+  for (std::uint8_t dword_index = 0; dword_index < test_case.data_dword_count;
+       ++dword_index) {
+    const std::uint32_t expected_value =
+        (dword_index < test_case.memory_dword_count)
+            ? test_case.expected_return[dword_index]
+            : test_case.data[dword_index];
+    if (state.sgprs[kDataReg + dword_index] != expected_value) {
+      std::cerr << test_case.opcode << ": scalar atomic data dword "
+                << +dword_index << " mismatch\n";
+      return false;
+    }
+  }
+
+  const std::uint32_t expected_descriptor_2 =
+      uses_buffer_descriptor ? 0x400u : 0x2468ace0u;
+  const std::uint32_t expected_descriptor_3 =
+      uses_buffer_descriptor ? 0u : 0x0badc0deu;
+  if (!state.halted || state.exec_mask != 0x1ULL ||
+      state.sgprs[kAddressReg] != static_cast<std::uint32_t>(kAtomicAddress) ||
+      state.sgprs[kAddressReg + 1] != 0u || state.sgprs[2] != expected_descriptor_2 ||
+      state.sgprs[3] != expected_descriptor_3 ||
+      state.sgprs[kUnrelatedScalarReg] != 0x12345678u ||
+      state.sgprs[kUnrelatedScalarReg + 1] != 0x9abcdef0u ||
+      state.vgprs[kUnrelatedVectorReg][0] != 0x01020304u ||
+      state.vgprs[kUnrelatedVectorReg][1] != 0x11121314u ||
+      state.vgprs[kUnrelatedVectorReg][2] != 0x21222324u ||
+      state.vgprs[kUnrelatedVectorReg][3] != 0x31323334u) {
+    std::cerr << test_case.opcode << ": scalar atomic preservation mismatch\n";
+    return false;
+  }
+
+  std::uint32_t unrelated_value = 0;
+  if (!memory.ReadU32(0x80u, &unrelated_value) || unrelated_value != 0x11223344u ||
+      !memory.ReadU32(0x140u, &unrelated_value) ||
+      unrelated_value != 0x55667788u) {
+    std::cerr << test_case.opcode << ": scalar atomic unrelated memory mismatch\n";
+    return false;
+  }
+  return true;
+}
+
+bool RunScalarAtomicFamilySweep(
+    const mirage::sim::isa::Gfx950Interpreter& interpreter) {
+  static const std::array<AtomicSemanticCase, 26> scalar_atomic_cases = {{
+      {"S_ATOMIC_SWAP", 1, 1, OneDword(0x11110000u), OneDword(0xaaaa5555u),
+       OneDword(0xaaaa5555u), OneDword(0x11110000u)},
+      {"S_ATOMIC_CMPSWAP", 1, 2, OneDword(0x11110000u),
+       TwoDwords(ComposeU64(0x13572468u, 0x11110000u)),
+       OneDword(0x13572468u), OneDword(0x11110000u)},
+      {"S_ATOMIC_ADD", 1, 1, OneDword(9u), OneDword(4u), OneDword(13u),
+       OneDword(9u)},
+      {"S_ATOMIC_SUB", 1, 1, OneDword(9u), OneDword(4u), OneDword(5u),
+       OneDword(9u)},
+      {"S_ATOMIC_SMIN", 1, 1, OneDword(5u),
+       OneDword(static_cast<std::uint32_t>(-3)),
+       OneDword(static_cast<std::uint32_t>(-3)), OneDword(5u)},
+      {"S_ATOMIC_UMIN", 1, 1, OneDword(9u), OneDword(4u), OneDword(4u),
+       OneDword(9u)},
+      {"S_ATOMIC_SMAX", 1, 1, OneDword(static_cast<std::uint32_t>(-10)),
+       OneDword(3u), OneDword(3u), OneDword(static_cast<std::uint32_t>(-10))},
+      {"S_ATOMIC_UMAX", 1, 1, OneDword(2u), OneDword(9u), OneDword(9u),
+       OneDword(2u)},
+      {"S_ATOMIC_AND", 1, 1, OneDword(0x0000f0f0u), OneDword(0x00000ff0u),
+       OneDword(0x000000f0u), OneDword(0x0000f0f0u)},
+      {"S_ATOMIC_OR", 1, 1, OneDword(0x0000f000u), OneDword(0x000000f1u),
+       OneDword(0x0000f0f1u), OneDword(0x0000f000u)},
+      {"S_ATOMIC_XOR", 1, 1, OneDword(0xf0f0f0f0u), OneDword(0x0f0f0f0fu),
+       OneDword(0xffffffffu), OneDword(0xf0f0f0f0u)},
+      {"S_ATOMIC_INC", 1, 1, OneDword(3u), OneDword(5u), OneDword(4u),
+       OneDword(3u)},
+      {"S_ATOMIC_DEC", 1, 1, OneDword(0u), OneDword(9u), OneDword(9u),
+       OneDword(0u)},
+      {"S_ATOMIC_SWAP_X2", 2, 2, TwoDwords(0x1111222233334444ULL),
+       TwoDwords(0xaaaabbbbccccddddULL), TwoDwords(0xaaaabbbbccccddddULL),
+       TwoDwords(0x1111222233334444ULL)},
+      {"S_ATOMIC_CMPSWAP_X2", 2, 4, TwoDwords(0x1111222233334444ULL),
+       FourDwords(0xaaaabbbbccccddddULL, 0x1111222233334444ULL),
+       TwoDwords(0xaaaabbbbccccddddULL), TwoDwords(0x1111222233334444ULL)},
+      {"S_ATOMIC_ADD_X2", 2, 2, TwoDwords(10ULL), TwoDwords(3ULL),
+       TwoDwords(13ULL), TwoDwords(10ULL)},
+      {"S_ATOMIC_SUB_X2", 2, 2, TwoDwords(10ULL), TwoDwords(3ULL),
+       TwoDwords(7ULL), TwoDwords(10ULL)},
+      {"S_ATOMIC_SMIN_X2", 2, 2, TwoDwords(7ULL),
+       TwoDwords(0xfffffffffffffffbULL), TwoDwords(0xfffffffffffffffbULL),
+       TwoDwords(7ULL)},
+      {"S_ATOMIC_UMIN_X2", 2, 2, TwoDwords(9ULL), TwoDwords(4ULL),
+       TwoDwords(4ULL), TwoDwords(9ULL)},
+      {"S_ATOMIC_SMAX_X2", 2, 2, TwoDwords(0xfffffffffffffffbULL), TwoDwords(3ULL),
+       TwoDwords(3ULL), TwoDwords(0xfffffffffffffffbULL)},
+      {"S_ATOMIC_UMAX_X2", 2, 2, TwoDwords(2ULL), TwoDwords(9ULL),
+       TwoDwords(9ULL), TwoDwords(2ULL)},
+      {"S_ATOMIC_AND_X2", 2, 2, TwoDwords(0x00ff00ff00ff00ffULL),
+       TwoDwords(0x0f0f0f0f0f0f0f0fULL), TwoDwords(0x000f000f000f000fULL),
+       TwoDwords(0x00ff00ff00ff00ffULL)},
+      {"S_ATOMIC_OR_X2", 2, 2, TwoDwords(0xf000f000f000f000ULL),
+       TwoDwords(0x0f0f0f0f0f0f0f0fULL), TwoDwords(0xff0fff0fff0fff0fULL),
+       TwoDwords(0xf000f000f000f000ULL)},
+      {"S_ATOMIC_XOR_X2", 2, 2, TwoDwords(0xf0f0f0f0f0f0f0f0ULL),
+       TwoDwords(0x0f0f0f0f0f0f0f0fULL), TwoDwords(0xffffffffffffffffULL),
+       TwoDwords(0xf0f0f0f0f0f0f0f0ULL)},
+      {"S_ATOMIC_INC_X2", 2, 2, TwoDwords(3ULL), TwoDwords(5ULL),
+       TwoDwords(4ULL), TwoDwords(3ULL)},
+      {"S_ATOMIC_DEC_X2", 2, 2, TwoDwords(0ULL), TwoDwords(9ULL),
+       TwoDwords(9ULL), TwoDwords(0ULL)},
+  }};
+
+  for (const AtomicSemanticCase& test_case : scalar_atomic_cases) {
+    if (!RunScalarAtomicSemanticCase(interpreter, test_case, false, false) ||
+        !RunScalarAtomicSemanticCase(interpreter, test_case, false, true)) {
+      return false;
+    }
+  }
+
+  for (const AtomicSemanticCase& test_case : scalar_atomic_cases) {
+    AtomicSemanticCase buffer_case = test_case;
+    const std::string buffer_opcode =
+        "S_BUFFER_" + std::string(test_case.opcode.substr(2));
+    buffer_case.opcode = buffer_opcode;
+    if (!RunScalarAtomicSemanticCase(interpreter, buffer_case, true, false) ||
+        !RunScalarAtomicSemanticCase(interpreter, buffer_case, true, true)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool RunFlatAtomicSemanticCase(
     const mirage::sim::isa::Gfx950Interpreter& interpreter,
     const AtomicSemanticCase& test_case,
@@ -23849,6 +24067,10 @@ int main() {
         !RunFlatAtomicSemanticCase(interpreter, flat_case, true, false)) {
       return 1;
     }
+  }
+
+  if (!RunScalarAtomicFamilySweep(interpreter)) {
+    return 1;
   }
 
   return 0;
