@@ -161,30 +161,33 @@ jobs:
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
         run: |
-          mkdir -p "${{ env.BUILD_DIR }}/logs"
           rc1=0
-          ninja -C "${{ env.BUILD_DIR }}/compiler/amd-llvm/build" check-llvm \
-            2>&1 | tee "${{ env.BUILD_DIR }}/logs/check-llvm.log" || rc1=$?
+          python build_tools/teatime.py --log-timestamps --interactive \
+            --label "check-llvm" "${{ env.BUILD_DIR }}/logs/check-llvm.log" -- \
+            ninja -C "${{ env.BUILD_DIR }}/compiler/amd-llvm/build" check-llvm || rc1=$?
           rc2=0
-          ninja -C "${{ env.BUILD_DIR }}/compiler/amd-llvm/build" check-clang \
-            2>&1 | tee "${{ env.BUILD_DIR }}/logs/check-clang.log" || rc2=$?
+          python build_tools/teatime.py --log-timestamps --interactive \
+            --label "check-clang" "${{ env.BUILD_DIR }}/logs/check-clang.log" -- \
+            ninja -C "${{ env.BUILD_DIR }}/compiler/amd-llvm/build" check-clang || rc2=$?
           rc3=0
-          ninja -C "${{ env.BUILD_DIR }}/compiler/amd-llvm/build" check-lld \
-            2>&1 | tee "${{ env.BUILD_DIR }}/logs/check-lld.log" || rc3=$?
+          python build_tools/teatime.py --log-timestamps --interactive \
+            --label "check-lld" "${{ env.BUILD_DIR }}/logs/check-lld.log" -- \
+            ninja -C "${{ env.BUILD_DIR }}/compiler/amd-llvm/build" check-lld || rc3=$?
           [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && [ $rc3 -eq 0 ]
 
       - name: Run comgr tests
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
         run: |
-          mkdir -p "${{ env.BUILD_DIR }}/logs"
           rc1=0
-          "${{ env.BUILD_DIR }}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit.cmd" \
-            "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v \
-            2>&1 | tee "${{ env.BUILD_DIR }}/logs/comgr-lit-tests.log" || rc1=$?
+          python build_tools/teatime.py --log-timestamps --interactive \
+            --label "comgr lit tests" "${{ env.BUILD_DIR }}/logs/comgr-lit-tests.log" -- \
+            "${{ env.BUILD_DIR }}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit.cmd" \
+            "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v || rc1=$?
           rc2=0
-          ctest --test-dir "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" --output-on-failure \
-            2>&1 | tee "${{ env.BUILD_DIR }}/logs/comgr-ctest.log" || rc2=$?
+          python build_tools/teatime.py --log-timestamps --interactive \
+            --label "comgr ctest" "${{ env.BUILD_DIR }}/logs/comgr-ctest.log" -- \
+            ctest --test-dir "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" --output-on-failure || rc2=$?
           [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ]
 
       - name: Report
