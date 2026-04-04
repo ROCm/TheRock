@@ -22881,6 +22881,833 @@ int main() {
     return 1;
   }
 
+  {
+  const auto seed_atomic_no_return_memory =
+      [](LinearExecutionMemory* memory) -> bool {
+    if (memory == nullptr) {
+      return false;
+    }
+    return memory->WriteU32(0x520u, 10u) && memory->WriteU32(0x524u, 20u) &&
+           memory->WriteU32(0x528u, 30u) && memory->WriteU32(0x52cu, 40u) &&
+           memory->WriteU32(0x540u, 100u) &&
+           memory->WriteU32(0x544u, 110u) &&
+           memory->WriteU32(0x548u, 120u) &&
+           memory->WriteU32(0x54cu, 130u) &&
+           WriteU64(memory, 0x560u, 1000ULL) &&
+           WriteU64(memory, 0x568u, 2000ULL) &&
+           WriteU64(memory, 0x570u, 2500ULL) &&
+           WriteU64(memory, 0x578u, 3000ULL) &&
+           memory->WriteU32(0x5e0u, 0xfeedfaceu) &&
+           memory->WriteU32(0x5f0u, 0x89abcdefu);
+  };
+
+  const auto make_global_atomic_no_return_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x500u;
+    state.sgprs[1] = 0u;
+    state.sgprs[10] = 0x12345678u;
+    state.sgprs[11] = 0x9abcdef0u;
+    const auto set_lane_u64 = [&](std::uint16_t reg,
+                                  std::size_t lane,
+                                  std::uint64_t value) {
+      std::uint32_t low = 0;
+      std::uint32_t high = 0;
+      SplitU64(value, &low, &high);
+      state.vgprs[reg][lane] = low;
+      state.vgprs[reg + 1][lane] = high;
+    };
+    set_lane_u64(14u, 0u, 0x20ULL);
+    set_lane_u64(14u, 1u, 0x24ULL);
+    set_lane_u64(14u, 2u, 0x28ULL);
+    set_lane_u64(14u, 3u, 0x2cULL);
+    set_lane_u64(16u, 0u, 0x40ULL);
+    set_lane_u64(16u, 1u, 0x44ULL);
+    set_lane_u64(16u, 2u, 0x48ULL);
+    set_lane_u64(16u, 3u, 0x4cULL);
+    set_lane_u64(18u, 0u, 0x60ULL);
+    set_lane_u64(18u, 1u, 0x68ULL);
+    set_lane_u64(18u, 2u, 0x70ULL);
+    set_lane_u64(18u, 3u, 0x78ULL);
+    state.vgprs[20][0] = 1u;
+    state.vgprs[20][1] = 2u;
+    state.vgprs[20][2] = 3u;
+    state.vgprs[20][3] = 4u;
+    state.vgprs[22][0] = 100u;
+    state.vgprs[22][1] = 999u;
+    state.vgprs[22][2] = 120u;
+    state.vgprs[22][3] = 130u;
+    state.vgprs[23][0] = 700u;
+    state.vgprs[23][1] = 777u;
+    state.vgprs[23][2] = 888u;
+    state.vgprs[23][3] = 900u;
+    set_lane_u64(24u, 0u, 3ULL);
+    set_lane_u64(24u, 1u, 5ULL);
+    set_lane_u64(24u, 2u, 7ULL);
+    set_lane_u64(24u, 3u, 9ULL);
+    state.vgprs[40][0] = 0xaaaab001u;
+    state.vgprs[40][1] = 0xaaaab002u;
+    state.vgprs[40][2] = 0xaaaab003u;
+    state.vgprs[40][3] = 0xaaaab004u;
+    state.vgprs[41][0] = 0xbbbbc001u;
+    state.vgprs[41][1] = 0xbbbbc002u;
+    state.vgprs[41][2] = 0xbbbbc003u;
+    state.vgprs[41][3] = 0xbbbbc004u;
+    return state;
+  };
+  const WaveExecutionState initial_global_atomic_no_return_state =
+      make_global_atomic_no_return_state();
+  const std::vector<DecodedInstruction> global_atomic_no_return_program = {
+      DecodedInstruction::FourOperand("GLOBAL_ATOMIC_ADD",
+                                      InstructionOperand::Vgpr(14),
+                                      InstructionOperand::Vgpr(20),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("GLOBAL_ATOMIC_CMPSWAP",
+                                      InstructionOperand::Vgpr(16),
+                                      InstructionOperand::Vgpr(22),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("GLOBAL_ATOMIC_ADD_X2",
+                                      InstructionOperand::Vgpr(18),
+                                      InstructionOperand::Vgpr(24),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  const auto validate_global_atomic_no_return =
+      [&](const WaveExecutionState& state,
+          const LinearExecutionMemory& memory,
+          const char* mode) {
+        const auto expect_vgpr_range_preserved =
+            [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+              for (std::uint16_t vgpr = begin; vgpr <= end; ++vgpr) {
+                for (std::size_t lane = 0; lane < 4; ++lane) {
+                  if (state.vgprs[vgpr][lane] !=
+                      initial_global_atomic_no_return_state.vgprs[vgpr][lane]) {
+                    return Expect(false, (std::string(mode) + label).c_str());
+                  }
+                }
+              }
+              return true;
+            };
+        std::uint32_t value = 0;
+        std::uint64_t value_x2 = 0;
+        return Expect(state.halted,
+                      (std::string(mode) +
+                       " global atomic no-return program to halt")
+                          .c_str()) &&
+               Expect(state.exec_mask == 0b1011ULL,
+                      (std::string(mode) +
+                       " global atomic no-return preserves exec")
+                          .c_str()) &&
+               Expect(state.sgprs[0] == 0x500u && state.sgprs[1] == 0u &&
+                          state.sgprs[10] == 0x12345678u &&
+                          state.sgprs[11] == 0x9abcdef0u,
+                      (std::string(mode) +
+                       " global atomic no-return preserves sgprs")
+                          .c_str()) &&
+               expect_vgpr_range_preserved(
+                   14u, 25u,
+                   " global atomic no-return preserves addresses and data") &&
+               expect_vgpr_range_preserved(
+                   40u, 41u,
+                   " global atomic no-return preserves unrelated vgprs") &&
+               Expect(memory.ReadU32(0x520u, &value),
+                      (std::string(mode) +
+                       " global atomic no-return add lane 0 read")
+                          .c_str()) &&
+               Expect(value == 11u,
+                      (std::string(mode) +
+                       " global atomic no-return add lane 0 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x524u, &value),
+                      (std::string(mode) +
+                       " global atomic no-return add lane 1 read")
+                          .c_str()) &&
+               Expect(value == 22u,
+                      (std::string(mode) +
+                       " global atomic no-return add lane 1 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x528u, &value),
+                      (std::string(mode) +
+                       " global atomic no-return inactive add read")
+                          .c_str()) &&
+               Expect(value == 30u,
+                      (std::string(mode) +
+                       " global atomic no-return inactive add suppression")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x52cu, &value),
+                      (std::string(mode) +
+                       " global atomic no-return add lane 3 read")
+                          .c_str()) &&
+               Expect(value == 44u,
+                      (std::string(mode) +
+                       " global atomic no-return add lane 3 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x540u, &value),
+                      (std::string(mode) +
+                       " global atomic no-return cmpswap lane 0 read")
+                          .c_str()) &&
+               Expect(value == 700u,
+                      (std::string(mode) +
+                       " global atomic no-return cmpswap lane 0 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x544u, &value),
+                      (std::string(mode) +
+                       " global atomic no-return cmpswap lane 1 read")
+                          .c_str()) &&
+               Expect(value == 110u,
+                      (std::string(mode) +
+                       " global atomic no-return cmpswap lane 1 mismatch result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x548u, &value),
+                      (std::string(mode) +
+                       " global atomic no-return inactive cmpswap read")
+                          .c_str()) &&
+               Expect(value == 120u,
+                      (std::string(mode) +
+                       " global atomic no-return inactive cmpswap suppression")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x54cu, &value),
+                      (std::string(mode) +
+                       " global atomic no-return cmpswap lane 3 read")
+                          .c_str()) &&
+               Expect(value == 900u,
+                      (std::string(mode) +
+                       " global atomic no-return cmpswap lane 3 result")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x560u, &value_x2),
+                      (std::string(mode) +
+                       " global atomic no-return add_x2 lane 0 read")
+                          .c_str()) &&
+               Expect(value_x2 == 1003ULL,
+                      (std::string(mode) +
+                       " global atomic no-return add_x2 lane 0 result")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x568u, &value_x2),
+                      (std::string(mode) +
+                       " global atomic no-return add_x2 lane 1 read")
+                          .c_str()) &&
+               Expect(value_x2 == 2005ULL,
+                      (std::string(mode) +
+                       " global atomic no-return add_x2 lane 1 result")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x570u, &value_x2),
+                      (std::string(mode) +
+                       " global atomic no-return inactive add_x2 read")
+                          .c_str()) &&
+               Expect(value_x2 == 2500ULL,
+                      (std::string(mode) +
+                       " global atomic no-return inactive add_x2 suppression")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x578u, &value_x2),
+                      (std::string(mode) +
+                       " global atomic no-return add_x2 lane 3 read")
+                          .c_str()) &&
+               Expect(value_x2 == 3009ULL,
+                      (std::string(mode) +
+                       " global atomic no-return add_x2 lane 3 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x5e0u, &value),
+                      (std::string(mode) +
+                       " global atomic no-return unrelated read")
+                          .c_str()) &&
+               Expect(value == 0xfeedfaceu,
+                      (std::string(mode) +
+                       " global atomic no-return unrelated memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x5f0u, &value),
+                      (std::string(mode) +
+                       " global atomic no-return trailing read")
+                          .c_str()) &&
+               Expect(value == 0x89abcdefu,
+                      (std::string(mode) +
+                       " global atomic no-return trailing memory preserved")
+                          .c_str());
+      };
+
+  LinearExecutionMemory decoded_global_atomic_no_return_memory(0x800, 0);
+  if (!Expect(seed_atomic_no_return_memory(
+                  &decoded_global_atomic_no_return_memory),
+              "expected decoded global atomic no-return seed writes")) {
+    return 1;
+  }
+  WaveExecutionState decoded_global_atomic_no_return_state =
+      make_global_atomic_no_return_state();
+  if (!Expect(interpreter.ExecuteProgram(global_atomic_no_return_program,
+                                         &decoded_global_atomic_no_return_state,
+                                         &decoded_global_atomic_no_return_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_global_atomic_no_return(
+          decoded_global_atomic_no_return_state,
+          decoded_global_atomic_no_return_memory, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_global_atomic_no_return_program;
+  if (!Expect(interpreter.CompileProgram(
+                   global_atomic_no_return_program,
+                   &compiled_global_atomic_no_return_program, &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_global_atomic_no_return_memory(0x800, 0);
+  if (!Expect(seed_atomic_no_return_memory(
+                  &compiled_global_atomic_no_return_memory),
+              "expected compiled global atomic no-return seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_global_atomic_no_return_state =
+      make_global_atomic_no_return_state();
+  if (!Expect(interpreter.ExecuteProgram(
+                   compiled_global_atomic_no_return_program,
+                   &compiled_global_atomic_no_return_state,
+                   &compiled_global_atomic_no_return_memory, &error_message),
+              error_message.c_str()) ||
+      !validate_global_atomic_no_return(
+          compiled_global_atomic_no_return_state,
+          compiled_global_atomic_no_return_memory, "compiled")) {
+    return 1;
+  }
+
+  const auto make_flat_atomic_no_return_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[10] = 0x12345678u;
+    state.sgprs[11] = 0x9abcdef0u;
+    const auto set_lane_u64 = [&](std::uint16_t reg,
+                                  std::size_t lane,
+                                  std::uint64_t value) {
+      std::uint32_t low = 0;
+      std::uint32_t high = 0;
+      SplitU64(value, &low, &high);
+      state.vgprs[reg][lane] = low;
+      state.vgprs[reg + 1][lane] = high;
+    };
+    set_lane_u64(14u, 0u, 0x520ULL);
+    set_lane_u64(14u, 1u, 0x524ULL);
+    set_lane_u64(14u, 2u, 0x528ULL);
+    set_lane_u64(14u, 3u, 0x52cULL);
+    set_lane_u64(16u, 0u, 0x540ULL);
+    set_lane_u64(16u, 1u, 0x544ULL);
+    set_lane_u64(16u, 2u, 0x548ULL);
+    set_lane_u64(16u, 3u, 0x54cULL);
+    set_lane_u64(18u, 0u, 0x560ULL);
+    set_lane_u64(18u, 1u, 0x568ULL);
+    set_lane_u64(18u, 2u, 0x570ULL);
+    set_lane_u64(18u, 3u, 0x578ULL);
+    state.vgprs[20][0] = 1u;
+    state.vgprs[20][1] = 2u;
+    state.vgprs[20][2] = 3u;
+    state.vgprs[20][3] = 4u;
+    state.vgprs[22][0] = 100u;
+    state.vgprs[22][1] = 999u;
+    state.vgprs[22][2] = 120u;
+    state.vgprs[22][3] = 130u;
+    state.vgprs[23][0] = 700u;
+    state.vgprs[23][1] = 777u;
+    state.vgprs[23][2] = 888u;
+    state.vgprs[23][3] = 900u;
+    set_lane_u64(24u, 0u, 3ULL);
+    set_lane_u64(24u, 1u, 5ULL);
+    set_lane_u64(24u, 2u, 7ULL);
+    set_lane_u64(24u, 3u, 9ULL);
+    state.vgprs[40][0] = 0xcccdd001u;
+    state.vgprs[40][1] = 0xcccdd002u;
+    state.vgprs[40][2] = 0xcccdd003u;
+    state.vgprs[40][3] = 0xcccdd004u;
+    state.vgprs[41][0] = 0xdddee001u;
+    state.vgprs[41][1] = 0xdddee002u;
+    state.vgprs[41][2] = 0xdddee003u;
+    state.vgprs[41][3] = 0xdddee004u;
+    return state;
+  };
+  const WaveExecutionState initial_flat_atomic_no_return_state =
+      make_flat_atomic_no_return_state();
+  const std::vector<DecodedInstruction> flat_atomic_no_return_program = {
+      DecodedInstruction::ThreeOperand("FLAT_ATOMIC_ADD",
+                                       InstructionOperand::Vgpr(14),
+                                       InstructionOperand::Vgpr(20),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_ATOMIC_CMPSWAP",
+                                       InstructionOperand::Vgpr(16),
+                                       InstructionOperand::Vgpr(22),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_ATOMIC_ADD_X2",
+                                       InstructionOperand::Vgpr(18),
+                                       InstructionOperand::Vgpr(24),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  const auto validate_flat_atomic_no_return =
+      [&](const WaveExecutionState& state,
+          const LinearExecutionMemory& memory,
+          const char* mode) {
+        const auto expect_vgpr_range_preserved =
+            [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+              for (std::uint16_t vgpr = begin; vgpr <= end; ++vgpr) {
+                for (std::size_t lane = 0; lane < 4; ++lane) {
+                  if (state.vgprs[vgpr][lane] !=
+                      initial_flat_atomic_no_return_state.vgprs[vgpr][lane]) {
+                    return Expect(false, (std::string(mode) + label).c_str());
+                  }
+                }
+              }
+              return true;
+            };
+        std::uint32_t value = 0;
+        std::uint64_t value_x2 = 0;
+        return Expect(state.halted,
+                      (std::string(mode) +
+                       " flat atomic no-return program to halt")
+                          .c_str()) &&
+               Expect(state.exec_mask == 0b1011ULL,
+                      (std::string(mode) +
+                       " flat atomic no-return preserves exec")
+                          .c_str()) &&
+               Expect(state.sgprs[10] == 0x12345678u &&
+                          state.sgprs[11] == 0x9abcdef0u,
+                      (std::string(mode) +
+                       " flat atomic no-return preserves sgprs")
+                          .c_str()) &&
+               expect_vgpr_range_preserved(
+                   14u, 25u,
+                   " flat atomic no-return preserves addresses and data") &&
+               expect_vgpr_range_preserved(
+                   40u, 41u,
+                   " flat atomic no-return preserves unrelated vgprs") &&
+               Expect(memory.ReadU32(0x520u, &value),
+                      (std::string(mode) +
+                       " flat atomic no-return add lane 0 read")
+                          .c_str()) &&
+               Expect(value == 11u,
+                      (std::string(mode) +
+                       " flat atomic no-return add lane 0 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x524u, &value),
+                      (std::string(mode) +
+                       " flat atomic no-return add lane 1 read")
+                          .c_str()) &&
+               Expect(value == 22u,
+                      (std::string(mode) +
+                       " flat atomic no-return add lane 1 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x528u, &value),
+                      (std::string(mode) +
+                       " flat atomic no-return inactive add read")
+                          .c_str()) &&
+               Expect(value == 30u,
+                      (std::string(mode) +
+                       " flat atomic no-return inactive add suppression")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x52cu, &value),
+                      (std::string(mode) +
+                       " flat atomic no-return add lane 3 read")
+                          .c_str()) &&
+               Expect(value == 44u,
+                      (std::string(mode) +
+                       " flat atomic no-return add lane 3 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x540u, &value),
+                      (std::string(mode) +
+                       " flat atomic no-return cmpswap lane 0 read")
+                          .c_str()) &&
+               Expect(value == 700u,
+                      (std::string(mode) +
+                       " flat atomic no-return cmpswap lane 0 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x544u, &value),
+                      (std::string(mode) +
+                       " flat atomic no-return cmpswap lane 1 read")
+                          .c_str()) &&
+               Expect(value == 110u,
+                      (std::string(mode) +
+                       " flat atomic no-return cmpswap lane 1 mismatch result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x548u, &value),
+                      (std::string(mode) +
+                       " flat atomic no-return inactive cmpswap read")
+                          .c_str()) &&
+               Expect(value == 120u,
+                      (std::string(mode) +
+                       " flat atomic no-return inactive cmpswap suppression")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x54cu, &value),
+                      (std::string(mode) +
+                       " flat atomic no-return cmpswap lane 3 read")
+                          .c_str()) &&
+               Expect(value == 900u,
+                      (std::string(mode) +
+                       " flat atomic no-return cmpswap lane 3 result")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x560u, &value_x2),
+                      (std::string(mode) +
+                       " flat atomic no-return add_x2 lane 0 read")
+                          .c_str()) &&
+               Expect(value_x2 == 1003ULL,
+                      (std::string(mode) +
+                       " flat atomic no-return add_x2 lane 0 result")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x568u, &value_x2),
+                      (std::string(mode) +
+                       " flat atomic no-return add_x2 lane 1 read")
+                          .c_str()) &&
+               Expect(value_x2 == 2005ULL,
+                      (std::string(mode) +
+                       " flat atomic no-return add_x2 lane 1 result")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x570u, &value_x2),
+                      (std::string(mode) +
+                       " flat atomic no-return inactive add_x2 read")
+                          .c_str()) &&
+               Expect(value_x2 == 2500ULL,
+                      (std::string(mode) +
+                       " flat atomic no-return inactive add_x2 suppression")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x578u, &value_x2),
+                      (std::string(mode) +
+                       " flat atomic no-return add_x2 lane 3 read")
+                          .c_str()) &&
+               Expect(value_x2 == 3009ULL,
+                      (std::string(mode) +
+                       " flat atomic no-return add_x2 lane 3 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x5e0u, &value),
+                      (std::string(mode) +
+                       " flat atomic no-return unrelated read")
+                          .c_str()) &&
+               Expect(value == 0xfeedfaceu,
+                      (std::string(mode) +
+                       " flat atomic no-return unrelated memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x5f0u, &value),
+                      (std::string(mode) +
+                       " flat atomic no-return trailing read")
+                          .c_str()) &&
+               Expect(value == 0x89abcdefu,
+                      (std::string(mode) +
+                       " flat atomic no-return trailing memory preserved")
+                          .c_str());
+      };
+
+  LinearExecutionMemory decoded_flat_atomic_no_return_memory(0x800, 0);
+  if (!Expect(seed_atomic_no_return_memory(&decoded_flat_atomic_no_return_memory),
+              "expected decoded flat atomic no-return seed writes")) {
+    return 1;
+  }
+  WaveExecutionState decoded_flat_atomic_no_return_state =
+      make_flat_atomic_no_return_state();
+  if (!Expect(interpreter.ExecuteProgram(flat_atomic_no_return_program,
+                                         &decoded_flat_atomic_no_return_state,
+                                         &decoded_flat_atomic_no_return_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_flat_atomic_no_return(decoded_flat_atomic_no_return_state,
+                                      decoded_flat_atomic_no_return_memory,
+                                      "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_flat_atomic_no_return_program;
+  if (!Expect(interpreter.CompileProgram(
+                   flat_atomic_no_return_program,
+                   &compiled_flat_atomic_no_return_program, &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_flat_atomic_no_return_memory(0x800, 0);
+  if (!Expect(seed_atomic_no_return_memory(
+                  &compiled_flat_atomic_no_return_memory),
+              "expected compiled flat atomic no-return seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_flat_atomic_no_return_state =
+      make_flat_atomic_no_return_state();
+  if (!Expect(interpreter.ExecuteProgram(
+                   compiled_flat_atomic_no_return_program,
+                   &compiled_flat_atomic_no_return_state,
+                   &compiled_flat_atomic_no_return_memory, &error_message),
+              error_message.c_str()) ||
+      !validate_flat_atomic_no_return(compiled_flat_atomic_no_return_state,
+                                      compiled_flat_atomic_no_return_memory,
+                                      "compiled")) {
+    return 1;
+  }
+
+  const auto make_buffer_atomic_no_return_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[2] = 0x500u;
+    state.sgprs[3] = 0u;
+    state.sgprs[4] = 0x100u;
+    state.sgprs[5] = 0u;
+    state.sgprs[10] = 0x12345678u;
+    state.sgprs[11] = 0x9abcdef0u;
+    state.vgprs[14][0] = 0x20u;
+    state.vgprs[14][1] = 0x24u;
+    state.vgprs[14][2] = 0x28u;
+    state.vgprs[14][3] = 0x2cu;
+    state.vgprs[16][0] = 0x40u;
+    state.vgprs[16][1] = 0x44u;
+    state.vgprs[16][2] = 0x48u;
+    state.vgprs[16][3] = 0x4cu;
+    state.vgprs[18][0] = 0x60u;
+    state.vgprs[18][1] = 0x68u;
+    state.vgprs[18][2] = 0x70u;
+    state.vgprs[18][3] = 0x78u;
+    state.vgprs[20][0] = 1u;
+    state.vgprs[20][1] = 2u;
+    state.vgprs[20][2] = 3u;
+    state.vgprs[20][3] = 4u;
+    state.vgprs[22][0] = 100u;
+    state.vgprs[22][1] = 999u;
+    state.vgprs[22][2] = 120u;
+    state.vgprs[22][3] = 130u;
+    state.vgprs[23][0] = 700u;
+    state.vgprs[23][1] = 777u;
+    state.vgprs[23][2] = 888u;
+    state.vgprs[23][3] = 900u;
+    SplitU64(3ULL, &state.vgprs[24][0], &state.vgprs[25][0]);
+    SplitU64(5ULL, &state.vgprs[24][1], &state.vgprs[25][1]);
+    SplitU64(7ULL, &state.vgprs[24][2], &state.vgprs[25][2]);
+    SplitU64(9ULL, &state.vgprs[24][3], &state.vgprs[25][3]);
+    state.vgprs[40][0] = 0xeeeff001u;
+    state.vgprs[40][1] = 0xeeeff002u;
+    state.vgprs[40][2] = 0xeeeff003u;
+    state.vgprs[40][3] = 0xeeeff004u;
+    state.vgprs[41][0] = 0xfff00001u;
+    state.vgprs[41][1] = 0xfff00002u;
+    state.vgprs[41][2] = 0xfff00003u;
+    state.vgprs[41][3] = 0xfff00004u;
+    return state;
+  };
+  const WaveExecutionState initial_buffer_atomic_no_return_state =
+      make_buffer_atomic_no_return_state();
+  const std::vector<DecodedInstruction> buffer_atomic_no_return_program = {
+      DecodedInstruction::SixOperand("BUFFER_ATOMIC_ADD",
+                                     InstructionOperand::Vgpr(20),
+                                     InstructionOperand::Vgpr(14),
+                                     InstructionOperand::Sgpr(2),
+                                     InstructionOperand::Imm32(0),
+                                     InstructionOperand::Imm32(0),
+                                     InstructionOperand::Imm32(0)),
+      DecodedInstruction::SixOperand("BUFFER_ATOMIC_CMPSWAP",
+                                     InstructionOperand::Vgpr(22),
+                                     InstructionOperand::Vgpr(16),
+                                     InstructionOperand::Sgpr(2),
+                                     InstructionOperand::Imm32(0),
+                                     InstructionOperand::Imm32(0),
+                                     InstructionOperand::Imm32(0)),
+      DecodedInstruction::SixOperand("BUFFER_ATOMIC_ADD_X2",
+                                     InstructionOperand::Vgpr(24),
+                                     InstructionOperand::Vgpr(18),
+                                     InstructionOperand::Sgpr(2),
+                                     InstructionOperand::Imm32(0),
+                                     InstructionOperand::Imm32(0),
+                                     InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  const auto validate_buffer_atomic_no_return =
+      [&](const WaveExecutionState& state,
+          const LinearExecutionMemory& memory,
+          const char* mode) {
+        const auto expect_vgpr_range_preserved =
+            [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+              for (std::uint16_t vgpr = begin; vgpr <= end; ++vgpr) {
+                for (std::size_t lane = 0; lane < 4; ++lane) {
+                  if (state.vgprs[vgpr][lane] !=
+                      initial_buffer_atomic_no_return_state.vgprs[vgpr][lane]) {
+                    return Expect(false, (std::string(mode) + label).c_str());
+                  }
+                }
+              }
+              return true;
+            };
+        std::uint32_t value = 0;
+        std::uint64_t value_x2 = 0;
+        return Expect(state.halted,
+                      (std::string(mode) +
+                       " buffer atomic no-return program to halt")
+                          .c_str()) &&
+               Expect(state.exec_mask == 0b1011ULL,
+                      (std::string(mode) +
+                       " buffer atomic no-return preserves exec")
+                          .c_str()) &&
+               Expect(state.sgprs[2] == 0x500u && state.sgprs[3] == 0u &&
+                          state.sgprs[4] == 0x100u && state.sgprs[5] == 0u &&
+                          state.sgprs[10] == 0x12345678u &&
+                          state.sgprs[11] == 0x9abcdef0u,
+                      (std::string(mode) +
+                       " buffer atomic no-return preserves sgprs")
+                          .c_str()) &&
+               expect_vgpr_range_preserved(
+                   14u, 25u,
+                   " buffer atomic no-return preserves addresses and data") &&
+               expect_vgpr_range_preserved(
+                   40u, 41u,
+                   " buffer atomic no-return preserves unrelated vgprs") &&
+               Expect(memory.ReadU32(0x520u, &value),
+                      (std::string(mode) +
+                       " buffer atomic no-return add lane 0 read")
+                          .c_str()) &&
+               Expect(value == 11u,
+                      (std::string(mode) +
+                       " buffer atomic no-return add lane 0 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x524u, &value),
+                      (std::string(mode) +
+                       " buffer atomic no-return add lane 1 read")
+                          .c_str()) &&
+               Expect(value == 22u,
+                      (std::string(mode) +
+                       " buffer atomic no-return add lane 1 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x528u, &value),
+                      (std::string(mode) +
+                       " buffer atomic no-return inactive add read")
+                          .c_str()) &&
+               Expect(value == 30u,
+                      (std::string(mode) +
+                       " buffer atomic no-return inactive add suppression")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x52cu, &value),
+                      (std::string(mode) +
+                       " buffer atomic no-return add lane 3 read")
+                          .c_str()) &&
+               Expect(value == 44u,
+                      (std::string(mode) +
+                       " buffer atomic no-return add lane 3 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x540u, &value),
+                      (std::string(mode) +
+                       " buffer atomic no-return cmpswap lane 0 read")
+                          .c_str()) &&
+               Expect(value == 700u,
+                      (std::string(mode) +
+                       " buffer atomic no-return cmpswap lane 0 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x544u, &value),
+                      (std::string(mode) +
+                       " buffer atomic no-return cmpswap lane 1 read")
+                          .c_str()) &&
+               Expect(value == 110u,
+                      (std::string(mode) +
+                       " buffer atomic no-return cmpswap lane 1 mismatch result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x548u, &value),
+                      (std::string(mode) +
+                       " buffer atomic no-return inactive cmpswap read")
+                          .c_str()) &&
+               Expect(value == 120u,
+                      (std::string(mode) +
+                       " buffer atomic no-return inactive cmpswap suppression")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x54cu, &value),
+                      (std::string(mode) +
+                       " buffer atomic no-return cmpswap lane 3 read")
+                          .c_str()) &&
+               Expect(value == 900u,
+                      (std::string(mode) +
+                       " buffer atomic no-return cmpswap lane 3 result")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x560u, &value_x2),
+                      (std::string(mode) +
+                       " buffer atomic no-return add_x2 lane 0 read")
+                          .c_str()) &&
+               Expect(value_x2 == 1003ULL,
+                      (std::string(mode) +
+                       " buffer atomic no-return add_x2 lane 0 result")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x568u, &value_x2),
+                      (std::string(mode) +
+                       " buffer atomic no-return add_x2 lane 1 read")
+                          .c_str()) &&
+               Expect(value_x2 == 2005ULL,
+                      (std::string(mode) +
+                       " buffer atomic no-return add_x2 lane 1 result")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x570u, &value_x2),
+                      (std::string(mode) +
+                       " buffer atomic no-return inactive add_x2 read")
+                          .c_str()) &&
+               Expect(value_x2 == 2500ULL,
+                      (std::string(mode) +
+                       " buffer atomic no-return inactive add_x2 suppression")
+                          .c_str()) &&
+               Expect(ReadU64(memory, 0x578u, &value_x2),
+                      (std::string(mode) +
+                       " buffer atomic no-return add_x2 lane 3 read")
+                          .c_str()) &&
+               Expect(value_x2 == 3009ULL,
+                      (std::string(mode) +
+                       " buffer atomic no-return add_x2 lane 3 result")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x5e0u, &value),
+                      (std::string(mode) +
+                       " buffer atomic no-return unrelated read")
+                          .c_str()) &&
+               Expect(value == 0xfeedfaceu,
+                      (std::string(mode) +
+                       " buffer atomic no-return unrelated memory preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x5f0u, &value),
+                      (std::string(mode) +
+                       " buffer atomic no-return trailing read")
+                          .c_str()) &&
+               Expect(value == 0x89abcdefu,
+                      (std::string(mode) +
+                       " buffer atomic no-return trailing memory preserved")
+                          .c_str());
+      };
+
+  LinearExecutionMemory decoded_buffer_atomic_no_return_memory(0x800, 0);
+  if (!Expect(seed_atomic_no_return_memory(
+                  &decoded_buffer_atomic_no_return_memory),
+              "expected decoded buffer atomic no-return seed writes")) {
+    return 1;
+  }
+  WaveExecutionState decoded_buffer_atomic_no_return_state =
+      make_buffer_atomic_no_return_state();
+  if (!Expect(interpreter.ExecuteProgram(buffer_atomic_no_return_program,
+                                         &decoded_buffer_atomic_no_return_state,
+                                         &decoded_buffer_atomic_no_return_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_buffer_atomic_no_return(
+          decoded_buffer_atomic_no_return_state,
+          decoded_buffer_atomic_no_return_memory, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_buffer_atomic_no_return_program;
+  if (!Expect(interpreter.CompileProgram(
+                   buffer_atomic_no_return_program,
+                   &compiled_buffer_atomic_no_return_program, &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_buffer_atomic_no_return_memory(0x800, 0);
+  if (!Expect(seed_atomic_no_return_memory(
+                  &compiled_buffer_atomic_no_return_memory),
+              "expected compiled buffer atomic no-return seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_buffer_atomic_no_return_state =
+      make_buffer_atomic_no_return_state();
+  if (!Expect(interpreter.ExecuteProgram(
+                   compiled_buffer_atomic_no_return_program,
+                   &compiled_buffer_atomic_no_return_state,
+                   &compiled_buffer_atomic_no_return_memory, &error_message),
+              error_message.c_str()) ||
+      !validate_buffer_atomic_no_return(
+          compiled_buffer_atomic_no_return_state,
+          compiled_buffer_atomic_no_return_memory, "compiled")) {
+    return 1;
+  }
+  }
+
   const std::vector<AtomicSemanticCase> atomic_cases = {
       {"GLOBAL_ATOMIC_SUB", 1, 1, OneDword(10u), OneDword(3u), OneDword(7u),
        OneDword(10u)},
