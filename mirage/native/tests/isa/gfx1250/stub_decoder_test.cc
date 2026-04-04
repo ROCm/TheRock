@@ -7777,6 +7777,17 @@ int main() {
               "expected fp8/bf8 family to expose 87 seeded instructions")) {
     return 1;
   }
+  if (!Expect(fp8_bf8_seeded_instructions.front() == "V_CVT_F16_FP8" &&
+                  fp8_bf8_seeded_instructions[49] ==
+                      "V_CVT_SCALE_PK8_F16_FP8" &&
+                  fp8_bf8_seeded_instructions[50] ==
+                      "V_CVT_SCALE_PK8_F32_BF8" &&
+                  fp8_bf8_seeded_instructions.back() ==
+                      "V_WMMA_SCALE_F32_32X16X128_F4_w32",
+              "expected fp8/bf8 family to expose exact leading 50-seed batch boundaries")) {
+    return 1;
+  }
+  // Exact validation for the routed leading 50-seed fp8/bf8 batch.
   for (std::size_t i = 0; i < 50; ++i) {
     const std::string_view instruction_name = fp8_bf8_seeded_instructions[i];
     const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
