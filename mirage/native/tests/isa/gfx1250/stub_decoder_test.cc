@@ -7768,6 +7768,92 @@ int main() {
       }
     }
   }
+  const auto fp8_bf8_seeded_instructions =
+      GetSeededInstructionNames(SeedFamily::kFp8Bf8);
+  if (!Expect(fp8_bf8_seeded_instructions.size() == 87,
+              "expected fp8/bf8 family to expose 87 seeded instructions")) {
+    return 1;
+  }
+  for (std::size_t i = 0; i < 50; ++i) {
+    const std::string_view instruction_name = fp8_bf8_seeded_instructions[i];
+    const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
+    if (!Expect(seed != nullptr,
+                "expected fp8/bf8 batch instruction to remain present in the seed catalog")) {
+      return 1;
+    }
+
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
+    if (route_info == nullptr) {
+      const StubDecodedInstruction decoded = DecodeStubInstruction(instruction_name);
+      bool listed_in_any_route = false;
+      for (const StubDecoderRouteManifest& manifest :
+           GetStubDecoderRouteManifests()) {
+        if (route_contains_instruction(manifest.route, instruction_name)) {
+          listed_in_any_route = true;
+          break;
+        }
+      }
+      if (!Expect(MatchesUnsupportedSeedDecode(decoded, *seed) &&
+                      MatchesUnknownHelperSurface(decoded) &&
+                      MatchesUnsupportedInstructionDecode(
+                          decoded, instruction_name) &&
+                      SelectStubDecoderRoute(instruction_name) ==
+                          StubDecoderRoute::kUnsupported &&
+                      !listed_in_any_route,
+                  "expected fp8/bf8 batch instruction to keep exact unsupported-seed decode parity and selector exclusion")) {
+        return 1;
+      }
+      for (const StubDecoderRouteManifest& manifest :
+           GetStubDecoderRouteManifests()) {
+        const StubDecodedInstruction via_entrypoint =
+            DecodeViaExplicitRouteEntrypoint(manifest.route,
+                                             instruction_name);
+        if (!Expect(MatchesUnsupportedSeedDecode(via_entrypoint, *seed) &&
+                        MatchesUnknownHelperSurface(via_entrypoint),
+                    "expected fp8/bf8 batch instruction to keep exact route-keyed unsupported parity")) {
+          return 1;
+        }
+      }
+      continue;
+    }
+
+    const StubDecodedInstruction via_name = DecodeStubInstruction(instruction_name);
+    const StubDecodedInstruction via_route_info = DecodeStubInstruction(*route_info);
+    const StubDecodedInstruction via_entrypoint = DecodeViaRouteEntrypoint(*route_info);
+    const StubDecoderRouteManifest* route_manifest =
+        FindStubDecoderRouteManifest(route_info->route);
+    if (!Expect(
+            via_name.status == StubDecodeStatus::kDecodedStub &&
+                MatchesDecodedInstruction(via_name, via_route_info) &&
+                MatchesDecodedInstruction(via_name, via_entrypoint) &&
+                MatchesRouteInfoPayload(via_name, *route_info) &&
+                MatchesLayoutToRecordInvariants(via_name) &&
+                MatchesDescriptorToSlotParity(via_name) &&
+                route_manifest != nullptr &&
+                route_manifest->route == route_info->route &&
+                route_manifest->route_name == route_info->route_name &&
+                route_manifest->route_priority == route_info->route_priority &&
+                route_contains_instruction(route_info->route,
+                                           instruction_name) &&
+                SelectStubDecoderRoute(instruction_name) == route_info->route,
+            "expected fp8/bf8 batch instruction to preserve exact route-keyed parity, selector/manifest consistency, and local operand surfaces")) {
+      return 1;
+    }
+
+    if (!Expect(GetStubOpcodeShapeName(via_name.opcode_shape) ==
+                        ExpectedOpcodeShapeName(instruction_name) &&
+                    GetStubExecutionDomainName(via_name.execution_domain) ==
+                        ExpectedExecutionDomainName(instruction_name) &&
+                    GetStubOperandLayoutName(via_name.operand_layout.layout_kind) ==
+                        ExpectedOperandLayoutName(instruction_name) &&
+                    AllRoleHelperNamesKnown(via_name) &&
+                    AllSlotKindHelperNamesKnown(via_name) &&
+                    AllValueClassHelperNamesKnown(via_name),
+                "expected fp8/bf8 batch instruction to keep exact helper-name parity and coverage")) {
+      return 1;
+    }
+  }
   if (!Expect(GetStubOpcodeShapeName(static_cast<StubOpcodeShape>(99)) ==
                       "kUnknown" &&
                   GetStubExecutionDomainName(

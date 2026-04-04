@@ -382,6 +382,31 @@ bool ScalePairedFamilyManifestMatchesSeedCatalog() {
          seeded_instructions.back() == "V_WMMA_SCALE_F32_32X16X128_F4_w32";
 }
 
+bool Fp8Bf8FamilyManifestMatchesSeedCatalog() {
+  const SeedFamilyManifest* manifest =
+      FindSeedFamilyManifest(SeedFamily::kFp8Bf8);
+  if (manifest == nullptr) {
+    return false;
+  }
+
+  const auto seeded_instructions =
+      GetSeededInstructionNames(SeedFamily::kFp8Bf8);
+  return seeded_instructions.size() == 87 &&
+         manifest->seeded_instruction_count == 87 &&
+         manifest->xml_backed_count == 3 &&
+         manifest->llvm_only_count == 84 &&
+         manifest->target_specific_count == 84 &&
+         manifest->vop1_hint_count == 5 &&
+         manifest->vop3_hint_count == 52 &&
+         manifest->vop3p_hint_count == 30 &&
+         manifest->vop3_sdst_hint_count == 0 &&
+         manifest->mimg_tensor_hint_count == 0 &&
+         seeded_instructions.front() == "V_CVT_F16_FP8" &&
+         seeded_instructions[49] == "V_CVT_SCALE_PK8_F16_FP8" &&
+         seeded_instructions[50] == "V_CVT_SCALE_PK8_F32_BF8" &&
+         seeded_instructions.back() == "V_WMMA_SCALE_F32_32X16X128_F4_w32";
+}
+
 }  // namespace
 
 int main() {
@@ -528,6 +553,10 @@ int main() {
   }
   if (!Expect(ScalePairedFamilyManifestMatchesSeedCatalog(),
               "expected scale-paired family manifest to keep exact seed-catalog parity across the 50-slice batch after the paired-load helpers")) {
+    return 1;
+  }
+  if (!Expect(Fp8Bf8FamilyManifestMatchesSeedCatalog(),
+              "expected fp8/bf8 family manifest to keep exact seed-catalog parity across the first 50-slice batch")) {
     return 1;
   }
   for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
