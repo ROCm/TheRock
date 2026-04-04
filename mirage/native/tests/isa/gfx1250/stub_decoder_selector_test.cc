@@ -458,6 +458,31 @@ bool Vop3pTailBatchMatchesSeedCatalog() {
          seeded_instructions[61] == "V_WMMA_SCALE_F32_32X16X128_F4_w32";
 }
 
+bool WmmaFamilyManifestMatchesSeedCatalog() {
+  const SeedFamilyManifest* manifest = FindSeedFamilyManifest(SeedFamily::kWmma);
+  if (manifest == nullptr) {
+    return false;
+  }
+
+  const auto seeded_instructions = GetSeededInstructionNames(SeedFamily::kWmma);
+  return seeded_instructions.size() == 47 &&
+         manifest->seeded_instruction_count == 47 &&
+         manifest->xml_backed_count == 0 &&
+         manifest->llvm_only_count == 47 &&
+         manifest->target_specific_count == 47 &&
+         manifest->vop1_hint_count == 0 &&
+         manifest->vop3_hint_count == 0 &&
+         manifest->vop3p_hint_count == 45 &&
+         manifest->vop3_sdst_hint_count == 0 &&
+         manifest->mimg_tensor_hint_count == 2 &&
+         seeded_instructions.front() == "V_WMMA_F32_16X16X4_F32_w32" &&
+         seeded_instructions[1] == "V_WMMA_BF16F32_16X16X32_BF16_w32" &&
+         seeded_instructions[2] == "V_SWMMAC_F32_16X16X64_F16_w32" &&
+         seeded_instructions[3] == "TENSOR_LOAD_TO_LDS" &&
+         seeded_instructions[4] == "TENSOR_STORE_FROM_LDS" &&
+         seeded_instructions.back() == "V_WMMA_SCALE_F32_32X16X128_F4_w32";
+}
+
 }  // namespace
 
 int main() {
@@ -616,6 +641,10 @@ int main() {
   }
   if (!Expect(Vop3pTailBatchMatchesSeedCatalog(),
               "expected VOP3P family manifest to keep exact seed-catalog parity across the remaining tail batch")) {
+    return 1;
+  }
+  if (!Expect(WmmaFamilyManifestMatchesSeedCatalog(),
+              "expected WMMA family manifest to keep exact seed-catalog parity across the routed tensor and WMMA batch")) {
     return 1;
   }
   for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {

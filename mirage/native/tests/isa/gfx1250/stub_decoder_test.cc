@@ -8051,6 +8051,65 @@ int main() {
       return 1;
     }
   }
+  const auto wmma_seeded_instructions =
+      GetSeededInstructionNames(SeedFamily::kWmma);
+  if (!Expect(wmma_seeded_instructions.size() == 47,
+              "expected WMMA family to expose 47 seeded instructions")) {
+    return 1;
+  }
+  for (std::size_t i = 0; i < wmma_seeded_instructions.size(); ++i) {
+    const std::string_view instruction_name = wmma_seeded_instructions[i];
+    const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
+    if (!Expect(seed != nullptr,
+                "expected WMMA batch instruction to remain present in the seed catalog")) {
+      return 1;
+    }
+
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
+    if (!Expect(route_info != nullptr &&
+                    IsInstructionListedForRoute(route_info->route,
+                                                instruction_name),
+                "expected WMMA batch instruction to keep exact route-keyed parity")) {
+      return 1;
+    }
+
+    const StubDecodedInstruction via_name = DecodeStubInstruction(instruction_name);
+    const StubDecodedInstruction via_route_info =
+        DecodeStubInstruction(*route_info);
+    const StubDecodedInstruction via_entrypoint =
+        DecodeViaRouteEntrypoint(*route_info);
+    const StubDecoderRouteManifest* route_manifest =
+        FindStubDecoderRouteManifest(route_info->route);
+    if (!Expect(
+            via_name.status == StubDecodeStatus::kDecodedStub &&
+                MatchesDecodedInstruction(via_name, via_route_info) &&
+                MatchesDecodedInstruction(via_name, via_entrypoint) &&
+                MatchesRouteInfoPayload(via_name, *route_info) &&
+                MatchesLayoutToRecordInvariants(via_name) &&
+                MatchesDescriptorToSlotParity(via_name) &&
+                route_manifest != nullptr &&
+                route_manifest->route == route_info->route &&
+                route_manifest->route_name == route_info->route_name &&
+                route_manifest->route_priority == route_info->route_priority &&
+                SelectStubDecoderRoute(instruction_name) == route_info->route,
+            "expected WMMA batch instruction to preserve exact route-keyed parity, selector/manifest consistency, and local operand surfaces")) {
+      return 1;
+    }
+
+    if (!Expect(GetStubOpcodeShapeName(via_name.opcode_shape) ==
+                        ExpectedOpcodeShapeName(instruction_name) &&
+                    GetStubExecutionDomainName(via_name.execution_domain) ==
+                        ExpectedExecutionDomainName(instruction_name) &&
+                    GetStubOperandLayoutName(via_name.operand_layout.layout_kind) ==
+                        ExpectedOperandLayoutName(instruction_name) &&
+                    AllRoleHelperNamesKnown(via_name) &&
+                    AllSlotKindHelperNamesKnown(via_name) &&
+                    AllValueClassHelperNamesKnown(via_name),
+                "expected WMMA batch instruction to keep exact helper-name parity and coverage")) {
+      return 1;
+    }
+  }
   if (!Expect(GetStubOpcodeShapeName(static_cast<StubOpcodeShape>(99)) ==
                       "kUnknown" &&
                   GetStubExecutionDomainName(
