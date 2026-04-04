@@ -552,7 +552,7 @@ int main() {
     return 1;
   }
   if (!Expect(ScalePairedFamilyManifestMatchesSeedCatalog(),
-              "expected scale-paired family manifest to keep exact seed-catalog parity across the 50-slice batch after the paired-load helpers")) {
+              "expected scale-paired family manifest to keep exact seed-catalog parity across the post-pair-load 50-slice batch and paired-load anchors")) {
     return 1;
   }
   if (!Expect(Fp8Bf8FamilyManifestMatchesSeedCatalog(),

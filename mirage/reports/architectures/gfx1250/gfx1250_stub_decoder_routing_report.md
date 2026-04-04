@@ -85,6 +85,50 @@
 
 - `V_DIV_SCALE_F64`
 
+## Scale Paired Follow-On
+
+- Priority: routed through `kVop3p` after the paired-load helpers
+- Description: post-pair-load scale conversion and scale WMMA follow-on slice
+- Focus instruction count: `52`
+- Route-keyed exactness split:
+  - Routed paired-load helpers:
+    - `V_WMMA_LD_SCALE_PAIRED_B32`
+    - `V_WMMA_LD_SCALE16_PAIRED_B64`
+  - Deferred unsupported forms:
+    - `V_CVT_SCALEF32_PK16_BF6_BF16`
+    - `V_CVT_SCALEF32_PK16_BF6_F16`
+    - `V_CVT_SCALEF32_PK16_BF6_F32`
+    - `V_CVT_SCALEF32_PK16_FP6_BF16`
+    - `V_CVT_SCALEF32_PK16_FP6_F16`
+    - `V_CVT_SCALEF32_PK16_FP6_F32`
+    - `V_CVT_SCALEF32_PK8_BF8_BF16`
+    - `V_CVT_SCALEF32_PK8_BF8_F16`
+    - `V_CVT_SCALEF32_PK8_BF8_F32`
+    - `V_CVT_SCALEF32_PK8_FP4_BF16`
+    - `V_CVT_SCALEF32_PK8_FP4_F16`
+    - `V_CVT_SCALEF32_PK8_FP4_F32`
+    - `V_CVT_SCALEF32_PK8_FP8_BF16`
+    - `V_CVT_SCALEF32_PK8_FP8_F16`
+    - `V_CVT_SCALEF32_PK8_FP8_F32`
+    - `V_CVT_SCALEF32_SR_PK16_BF6_BF16`
+    - `V_CVT_SCALEF32_SR_PK16_BF6_F16`
+    - `V_CVT_SCALEF32_SR_PK16_BF6_F32`
+    - `V_CVT_SCALEF32_SR_PK16_FP6_BF16`
+    - `V_CVT_SCALEF32_SR_PK16_FP6_F16`
+    - `V_CVT_SCALEF32_SR_PK16_FP6_F32`
+    - `V_CVT_SCALEF32_SR_PK8_BF8_BF16`
+    - `V_CVT_SCALEF32_SR_PK8_BF8_F16`
+    - `V_CVT_SCALEF32_SR_PK8_BF8_F32`
+    - `V_CVT_SCALEF32_SR_PK8_FP4_BF16`
+    - `V_CVT_SCALEF32_SR_PK8_FP4_F16`
+    - `V_CVT_SCALEF32_SR_PK8_FP4_F32`
+  - Routed exactness anchors:
+    - `V_DIV_SCALE_F64`
+    - `V_WMMA_SCALE_F32_16X16X128_F8F6F4`
+    - `V_WMMA_SCALE16_F32_16X16X128_F8F6F4`
+    - `V_WMMA_SCALE_F32_32X16X128_F4_w32`
+    - `V_WMMA_SCALE16_F32_32X16X128_F4_w32`
+
 ## Deferred Seed Hints
 
 - Deferred `kVop3` / unsupported-first-pass seeds: `52`
