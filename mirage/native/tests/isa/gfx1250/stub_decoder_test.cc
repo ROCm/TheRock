@@ -14,6 +14,7 @@ using mirage::sim::isa::gfx1250::DecodeVop1Stub;
 using mirage::sim::isa::gfx1250::DecodeVop3SdstStub;
 using mirage::sim::isa::gfx1250::DecodeVop3pStub;
 using mirage::sim::isa::gfx1250::DecoderSeedInfo;
+using mirage::sim::isa::gfx1250::FindDecoderSeedInfo;
 using mirage::sim::isa::gfx1250::FindStubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteInfo;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteManifest;
@@ -29,6 +30,7 @@ using mirage::sim::isa::gfx1250::GetStubOperandSlotKindName;
 using mirage::sim::isa::gfx1250::GetStubOperandValueClassName;
 using mirage::sim::isa::gfx1250::GetStubOpcodeShapeName;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteInfos;
+using mirage::sim::isa::gfx1250::GetSeededInstructionNames;
 using mirage::sim::isa::gfx1250::SelectStubDecoderRoute;
 using mirage::sim::isa::gfx1250::StubDecodedInstruction;
 using mirage::sim::isa::gfx1250::StubDecodeStatus;
@@ -44,6 +46,7 @@ using mirage::sim::isa::gfx1250::StubOperandRole;
 using mirage::sim::isa::gfx1250::StubOperandSlotKind;
 using mirage::sim::isa::gfx1250::StubOperandValueClass;
 using mirage::sim::isa::gfx1250::StubOpcodeShape;
+using mirage::sim::isa::gfx1250::SeedFamily;
 
 struct ShapeExtents {
   std::uint16_t rows = 0xffff;
@@ -7613,8 +7616,154 @@ int main() {
               manifest.route, delayed_split_token_near_miss_instruction);
       if (!Expect(MatchesUnknownDecode(via_entrypoint,
                                        delayed_split_token_near_miss_instruction) &&
-                      MatchesUnknownHelperSurface(via_entrypoint),
+                  MatchesUnknownHelperSurface(via_entrypoint),
                   "expected delayed split-token family near-misses to keep exact route-keyed unknown parity")) {
+        return 1;
+      }
+    }
+  }
+  const auto scale_paired_seeded_instructions =
+      GetSeededInstructionNames(SeedFamily::kScalePaired);
+  if (!Expect(scale_paired_seeded_instructions.size() == 52,
+              "expected scale-paired family to expose 52 seeded instructions")) {
+    return 1;
+  }
+  const auto route_contains_instruction = [](StubDecoderRoute route,
+                                             std::string_view instruction_name) {
+    for (std::string_view candidate : GetStubDecoderRouteInstructions(route)) {
+      if (candidate == instruction_name) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for (std::size_t i = 2; i < scale_paired_seeded_instructions.size(); ++i) {
+    const std::string_view instruction_name =
+        scale_paired_seeded_instructions[i];
+    const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
+    if (!Expect(seed != nullptr,
+                "expected scale-paired batch instruction to remain present in the seed catalog")) {
+      return 1;
+    }
+
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
+    if (route_info == nullptr) {
+      const StubDecodedInstruction decoded = DecodeStubInstruction(instruction_name);
+      if (!Expect(MatchesUnsupportedSeedDecode(decoded, *seed),
+                  "expected deferred scale-paired batch instruction to keep exact unsupported-seed decode parity")) {
+        return 1;
+      }
+      for (const StubDecoderRouteManifest& manifest :
+           GetStubDecoderRouteManifests()) {
+        const StubDecodedInstruction via_entrypoint =
+            DecodeViaExplicitRouteEntrypoint(manifest.route, instruction_name);
+        if (!Expect(MatchesUnsupportedSeedDecode(via_entrypoint, *seed),
+                    "expected deferred scale-paired batch instruction to keep exact route-keyed unsupported parity")) {
+          return 1;
+        }
+      }
+      continue;
+    }
+
+    const StubDecodedInstruction via_name = DecodeStubInstruction(instruction_name);
+    const StubDecodedInstruction via_route_info = DecodeStubInstruction(*route_info);
+    const StubDecodedInstruction via_entrypoint = DecodeViaRouteEntrypoint(*route_info);
+    const StubDecoderRouteManifest* route_manifest =
+        FindStubDecoderRouteManifest(route_info->route);
+    if (!Expect(
+            via_name.status == StubDecodeStatus::kDecodedStub &&
+                MatchesDecodedInstruction(via_name, via_route_info) &&
+                MatchesDecodedInstruction(via_name, via_entrypoint) &&
+                MatchesRouteInfoPayload(via_name, *route_info) &&
+                MatchesLayoutToRecordInvariants(via_name) &&
+                MatchesDescriptorToSlotParity(via_name) &&
+                route_manifest != nullptr &&
+                route_manifest->route == route_info->route &&
+                route_manifest->route_name == route_info->route_name &&
+                route_manifest->route_priority == route_info->route_priority &&
+                route_contains_instruction(route_info->route, instruction_name) &&
+                SelectStubDecoderRoute(instruction_name) == route_info->route,
+            "expected routed scale-paired batch instruction to preserve exact route-keyed parity, selector/manifest consistency, and local operand surfaces")) {
+      return 1;
+    }
+
+    if (instruction_name == "V_DIV_SCALE_F64") {
+      if (!Expect(
+              GetStubOpcodeShapeName(via_name.opcode_shape) ==
+                      "kVop3SdstScale" &&
+                  GetStubExecutionDomainName(via_name.execution_domain) ==
+                      "kScaleAssist" &&
+                  MatchesTopLevelFlags(via_name, false, false, true, false) &&
+                  MatchesLayout(via_name,
+                                {StubOperandLayoutKind::kVDivScaleF64,
+                                 3,
+                                 2,
+                                 0,
+                                 true,
+                                 false,
+                                 false,
+                                 false,
+                                 false}),
+              "expected V_DIV_SCALE_F64 to keep exact scale-assist route classification")) {
+        return 1;
+      }
+      continue;
+    }
+
+    if (!Expect(
+            GetStubOpcodeShapeName(via_name.opcode_shape) == "kWmmaScale" &&
+                GetStubExecutionDomainName(via_name.execution_domain) ==
+                    "kMatrix" &&
+                MatchesTopLevelFlags(via_name, true, false, true, false),
+            "expected scale WMMA batch instruction to keep exact matrix-scale route classification")) {
+      return 1;
+    }
+    if (instruction_name == "V_WMMA_SCALE16_F32_16X16X128_F8F6F4" ||
+        instruction_name == "V_WMMA_SCALE_F32_16X16X128_F8F6F4") {
+      if (!Expect(
+              MatchesLayout(via_name,
+                            instruction_name ==
+                                    "V_WMMA_SCALE16_F32_16X16X128_F8F6F4"
+                                ? ExpectedLayout{
+                                      StubOperandLayoutKind::
+                                          kWmmaScale16F32_16x16x128_F8F6F4,
+                                      3,
+                                      1,
+                                      1,
+                                      true,
+                                      false,
+                                      false,
+                                      false,
+                                      false,
+                                  }
+                                : ExpectedLayout{
+                                      StubOperandLayoutKind::
+                                          kWmmaScaleF32_16x16x128_F8F6F4,
+                                      3,
+                                      1,
+                                      1,
+                                      true,
+                                      false,
+                                      false,
+                                      false,
+                                      false,
+                                  }),
+              "expected exact scale WMMA route to preserve local operand-layout classification")) {
+        return 1;
+      }
+    } else {
+      if (!Expect(MatchesLayout(via_name,
+                                {StubOperandLayoutKind::kWmmaScaleGeneric,
+                                 3,
+                                 1,
+                                 1,
+                                 true,
+                                 false,
+                                 false,
+                                 false,
+                                 false}),
+                  "expected generic scale WMMA route to preserve local operand-layout classification")) {
         return 1;
       }
     }

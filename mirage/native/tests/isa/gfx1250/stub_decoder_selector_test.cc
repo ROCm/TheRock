@@ -3,15 +3,18 @@
 #include <string_view>
 #include <vector>
 
+#include "lib/sim/isa/gfx1250/decoder_seed_catalog.h"
 #include "lib/sim/isa/gfx1250/stub_decoder_selector.h"
 
 namespace {
 
 using mirage::sim::isa::gfx1250::DecodeSeedHint;
 using mirage::sim::isa::gfx1250::DecoderSeedInfo;
+using mirage::sim::isa::gfx1250::FindSeedFamilyManifest;
 using mirage::sim::isa::gfx1250::GetDecoderSeedInfos;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteInfo;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteManifest;
+using mirage::sim::isa::gfx1250::GetSeededInstructionNames;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteInfos;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteInstructions;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteManifests;
@@ -20,6 +23,8 @@ using mirage::sim::isa::gfx1250::SelectStubDecoderRoute;
 using mirage::sim::isa::gfx1250::StubDecoderRoute;
 using mirage::sim::isa::gfx1250::StubDecoderRouteInfo;
 using mirage::sim::isa::gfx1250::StubDecoderRouteManifest;
+using mirage::sim::isa::gfx1250::SeedFamily;
+using mirage::sim::isa::gfx1250::SeedFamilyManifest;
 
 bool Expect(bool condition, const char* message) {
   if (!condition) {
@@ -352,6 +357,31 @@ bool UnsupportedSeededSliceMatchesExcludedSelectorSurface() {
          CountSeededInstructionsForRoute(StubDecoderRoute::kUnsupported);
 }
 
+bool ScalePairedFamilyManifestMatchesSeedCatalog() {
+  const SeedFamilyManifest* manifest =
+      FindSeedFamilyManifest(SeedFamily::kScalePaired);
+  if (manifest == nullptr) {
+    return false;
+  }
+
+  const auto seeded_instructions =
+      GetSeededInstructionNames(SeedFamily::kScalePaired);
+  return seeded_instructions.size() == 52 &&
+         manifest->seeded_instruction_count == 52 &&
+         manifest->xml_backed_count == 1 &&
+         manifest->llvm_only_count == 51 &&
+         manifest->target_specific_count == 51 &&
+         manifest->vop1_hint_count == 0 &&
+         manifest->vop3_hint_count == 45 &&
+         manifest->vop3p_hint_count == 6 &&
+         manifest->vop3_sdst_hint_count == 1 &&
+         manifest->mimg_tensor_hint_count == 0 &&
+         seeded_instructions.front() == "V_WMMA_LD_SCALE_PAIRED_B32" &&
+         seeded_instructions[1] == "V_WMMA_LD_SCALE16_PAIRED_B64" &&
+         seeded_instructions[2] == "V_CVT_SCALEF32_PK16_BF6_BF16" &&
+         seeded_instructions.back() == "V_WMMA_SCALE_F32_32X16X128_F4_w32";
+}
+
 }  // namespace
 
 int main() {
@@ -494,6 +524,10 @@ int main() {
   }
   if (!Expect(UnsupportedSeededSliceMatchesExcludedSelectorSurface(),
               "expected unsupported seeded remainder to stay fully excluded from routed selector surfaces")) {
+    return 1;
+  }
+  if (!Expect(ScalePairedFamilyManifestMatchesSeedCatalog(),
+              "expected scale-paired family manifest to keep exact seed-catalog parity across the 50-slice batch after the paired-load helpers")) {
     return 1;
   }
   for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
