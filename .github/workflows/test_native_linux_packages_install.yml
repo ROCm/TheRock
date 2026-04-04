@@ -140,6 +140,7 @@ jobs:
           if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
             apt update
             apt install -y \
+              python3 \
               wget \
               curl \
               ca-certificates \
@@ -153,8 +154,7 @@ jobs:
             # SLES prerequisites (uses BCI base - zypper)
             zypper refresh
             zypper install -y \
-              python313 \
-              python313-pip \
+              python3 \
               wget \
               curl \
               ca-certificates \
@@ -168,8 +168,7 @@ jobs:
           else
             # rpm (non-SLES, e.g. rhel10): RHEL UBI 9.4; Use --allowerasing to handle curl-minimal conflict on RHEL UBI 9.4
             dnf install -y --allowerasing \
-              python3.12 \
-              python3.12-pip \
+              python3 \
               wget \
               curl \
               ca-certificates \
@@ -184,57 +183,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Set up Python
-        if: ${{ env.PKG_TYPE == 'deb' }}
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: '3.12'
+      - name: Setup Python and install runtime
+        run: |
+          python3 build_tools/packaging/linux/setup_python_cmd.py \
+            --os-profile "${{ inputs.os_profile }}" \
+            --install-runtime \
+            --output-format github >> $GITHUB_ENV
 
       - name: Install Python Dependencies
         run: |
-          if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
-            python -m pip install --upgrade pip
-            python -m pip install -r build_tools/packaging/linux/tests/requirements.txt
-          elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
-            python3.13 -m pip install --upgrade pip
-            python3.13 -m pip install -r build_tools/packaging/linux/tests/requirements.txt
-          else
-            python3.12 -m pip install --upgrade pip
-            python3.12 -m pip install -r build_tools/packaging/linux/tests/requirements.txt
-          fi
+          $PYTHON_CMD -m pip install --upgrade pip
+          $PYTHON_CMD -m pip install -r build_tools/packaging/linux/tests/requirements.txt
 
       - name: Package Installation Test
         id: install-test
         run: |
           echo "TEST - OS:${{ inputs.os_profile }} REPO:${{ env.REPO_URL }} Arch:${{ env.GFX_ARCH }} Type:${{ env.RELEASE_TYPE }}"
-          if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
-            python build_tools/packaging/linux/native_linux_package_install_test.py \
-              --test-type "$TEST_TYPE" \
-              --os-profile "$OS_PROFILE" \
-              --repo-url "$REPO_URL" \
-              --gfx-arch "$GFX_ARCH" \
-              --install-prefix "$INSTALL_PREFIX" \
-              --release-type "$RELEASE_TYPE" \
-              --gpg-key-url "$GPG_KEY_URL"
-          elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
-            python3.13 build_tools/packaging/linux/native_linux_package_install_test.py \
-              --test-type "$TEST_TYPE" \
-              --os-profile "$OS_PROFILE" \
-              --repo-url "$REPO_URL" \
-              --gfx-arch "$GFX_ARCH" \
-              --install-prefix "$INSTALL_PREFIX" \
-              --release-type "$RELEASE_TYPE" \
-              --gpg-key-url "$GPG_KEY_URL"
-          else
-            python3.12 build_tools/packaging/linux/native_linux_package_install_test.py \
-              --test-type "$TEST_TYPE" \
-              --os-profile "$OS_PROFILE" \
-              --repo-url "$REPO_URL" \
-              --gfx-arch "$GFX_ARCH" \
-              --install-prefix "$INSTALL_PREFIX" \
-              --release-type "$RELEASE_TYPE" \
-              --gpg-key-url "$GPG_KEY_URL"
-          fi
+          $PYTHON_CMD build_tools/packaging/linux/native_linux_package_install_test.py \
+            --test-type "$TEST_TYPE" \
+            --os-profile "$OS_PROFILE" \
+            --repo-url "$REPO_URL" \
+            --gfx-arch "$GFX_ARCH" \
+            --install-prefix "$INSTALL_PREFIX" \
+            --release-type "$RELEASE_TYPE" \
+            --gpg-key-url "$GPG_KEY_URL"
 
       - name: Test Report
         if: always()

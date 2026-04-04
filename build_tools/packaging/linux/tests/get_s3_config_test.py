@@ -39,7 +39,9 @@ class GeneratePackageRepositoryUrlTest(unittest.TestCase):
             yyyymmdd="20260320",
             artifact_id="87654321",
         )
-        self.assertEqual(url, "https://rocm.nightlies.amd.com/rpm/20260320-87654321/x86_64/")
+        self.assertEqual(
+            url, "https://rocm.nightlies.amd.com/rpm/20260320-87654321/x86_64/"
+        )
 
     def test_prerelease_url(self):
         """Test prerelease URL format with default OS profile (ubuntu2404 for deb)."""

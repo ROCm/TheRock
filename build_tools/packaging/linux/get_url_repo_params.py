@@ -10,18 +10,21 @@ Output is always KEY=value (suitable for GITHUB_OUTPUT).
 Subcommands (get operations):
 
   get-base-url         Get base URL (scheme + netloc) from an input URL. Prints repo_base_url=<value>.
+  get-gpg-url          Get GPG key URL from a package repository URL. Prints gpg_key_url=<value>.
   get-repo-sub-folder  Get repo_sub_folder from an S3 prefix (last segment if YYYYMMDD-<id>, else empty). Prints repo_sub_folder=<value>.
   get-repo-url         Get full repo URL from components(release_type, native_package_type, repo_base_url, os_profile, repo_sub_folder). Prints repo_url=<value>.
   extract-gfx-arch     Extract and normalize GPU architecture from artifact group. Prints gfx_arch=<value>.
 
 Usage:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url <url>
+  python build_tools/packaging/linux/get_url_repo_params.py get-gpg-url --from-url <url>
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix <prefix>
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url ...
   python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch --artifact-group <group>
 
 Examples:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url https://example.com/v2/whl
+  python build_tools/packaging/linux/get_url_repo_params.py get-gpg-url --from-url https://rocm.prereleases.amd.com/packages/ubuntu2404
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix v3/packages/deb/20260204-12345
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --native-package-type deb --repo-base-url https://x.com --os-profile ubuntu2404 --repo-sub-folder ''
   python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch --artifact-group gfx94X-dcgpu
@@ -51,6 +54,33 @@ def cmd_base_url(args: argparse.Namespace) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     print(f"repo_base_url={base_url}")
+    return 0
+
+
+# --- gpg_key_url ---
+
+
+def get_gpg_key_url(package_url: str) -> str:
+    """
+    Get GPG key URL from package repository URL.
+
+    Extracts base URL and appends /gpg/rocm.gpg path.
+
+    Examples:
+        https://rocm.prereleases.amd.com/packages/ubuntu2404 -> https://rocm.prereleases.amd.com/gpg/rocm.gpg
+        https://repo.amd.com/rocm/packages/rhel10/x86_64/ -> https://repo.amd.com/gpg/rocm.gpg
+    """
+    base_url = get_base_url(package_url)
+    return f"{base_url}/gpg/rocm.gpg"
+
+
+def cmd_gpg_key_url(args: argparse.Namespace) -> int:
+    try:
+        gpg_url = get_gpg_key_url(args.from_url)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    print(f"gpg_key_url={gpg_url}")
     return 0
 
 
@@ -187,6 +217,20 @@ def main(argv: list[str] | None = None) -> int:
         help="Any URL to derive base URL from (scheme + netloc only; e.g. https://example.com/v2/whl → https://example.com)",
     )
     p_base.set_defaults(func=cmd_base_url)
+
+    # get-gpg-url: get GPG key URL from package repository URL
+    p_gpg = subparsers.add_parser(
+        "get-gpg-url",
+        help="Get GPG key URL from a package repository URL (extracts base URL and appends /gpg/rocm.gpg).",
+    )
+    p_gpg.add_argument(
+        "--from-url",
+        type=str,
+        required=True,
+        metavar="URL",
+        help="Package repository URL to derive GPG key URL from (e.g. https://rocm.prereleases.amd.com/packages/ubuntu2404 → https://rocm.prereleases.amd.com/gpg/rocm.gpg)",
+    )
+    p_gpg.set_defaults(func=cmd_gpg_key_url)
 
     # get-repo-sub-folder: get repo_sub_folder from S3 prefix
     p_repo = subparsers.add_parser(

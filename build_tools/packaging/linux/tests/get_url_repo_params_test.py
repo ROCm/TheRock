@@ -50,6 +50,37 @@ class GetBaseUrlTest(unittest.TestCase):
             get_url_repo_params.get_base_url("")
 
 
+class GetGpgKeyUrlTest(unittest.TestCase):
+    """Tests for get_gpg_key_url()."""
+
+    def test_extracts_base_and_adds_gpg_path(self):
+        # Test that get_gpg_key_url extracts base URL and appends /gpg/rocm.gpg.
+        self.assertEqual(
+            get_url_repo_params.get_gpg_key_url(
+                "https://rocm.prereleases.amd.com/packages/ubuntu2404"
+            ),
+            "https://rocm.prereleases.amd.com/gpg/rocm.gpg",
+        )
+
+    def test_strips_path_from_url(self):
+        # Test that get_gpg_key_url strips path and query from URL.
+        self.assertEqual(
+            get_url_repo_params.get_gpg_key_url(
+                "https://repo.amd.com/rocm/packages/rhel10/x86_64/"
+            ),
+            "https://repo.amd.com/gpg/rocm.gpg",
+        )
+
+    def test_handles_nightly_url(self):
+        # Test that get_gpg_key_url works with nightly URLs.
+        self.assertEqual(
+            get_url_repo_params.get_gpg_key_url(
+                "https://rocm.nightlies.amd.com/deb/20260204-12345/"
+            ),
+            "https://rocm.nightlies.amd.com/gpg/rocm.gpg",
+        )
+
+
 class GetRepoSubFolderTest(unittest.TestCase):
     """Tests for get_repo_sub_folder()."""
 
@@ -324,14 +355,20 @@ class MainSubcommandsTest(unittest.TestCase):
     def test_extract_gfx_arch_empty_returns_one(self):
         # Test that extract-gfx-arch with empty artifact_group returns 1.
         with patch("sys.stderr"):
-            code = get_url_repo_params.main(["extract-gfx-arch", "--artifact-group", ""])
+            code = get_url_repo_params.main(
+                ["extract-gfx-arch", "--artifact-group", ""]
+            )
         self.assertEqual(code, 1)
 
     def test_extract_gfx_arch_comma_list(self):
         # Test that extract-gfx-arch handles comma-separated list.
         with patch("sys.stdout") as mock_stdout:
             code = get_url_repo_params.main(
-                ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu,gfx1100-consumer"]
+                [
+                    "extract-gfx-arch",
+                    "--artifact-group",
+                    "gfx94X-dcgpu,gfx1100-consumer",
+                ]
             )
         self.assertEqual(code, 0)
         output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
@@ -341,11 +378,31 @@ class MainSubcommandsTest(unittest.TestCase):
         # Test that extract-gfx-arch handles semicolon-separated list.
         with patch("sys.stdout") as mock_stdout:
             code = get_url_repo_params.main(
-                ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu;gfx1100-consumer"]
+                [
+                    "extract-gfx-arch",
+                    "--artifact-group",
+                    "gfx94X-dcgpu;gfx1100-consumer",
+                ]
             )
         self.assertEqual(code, 0)
         output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertIn("gfx_arch=gfx94x,gfx1100", output)
+
+    def test_get_gpg_url_success(self):
+        # Test that get-gpg-url subcommand prints gpg_key_url= and returns 0.
+        with patch("sys.stdout") as mock_stdout:
+            code = get_url_repo_params.main(
+                [
+                    "get-gpg-url",
+                    "--from-url",
+                    "https://rocm.prereleases.amd.com/packages/ubuntu2404",
+                ]
+            )
+        self.assertEqual(code, 0)
+        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
+        self.assertIn(
+            "gpg_key_url=https://rocm.prereleases.amd.com/gpg/rocm.gpg", output
+        )
 
 
 if __name__ == "__main__":

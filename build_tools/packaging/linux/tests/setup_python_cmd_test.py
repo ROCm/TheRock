@@ -20,9 +20,15 @@ class ResolvePythonCmdTest(unittest.TestCase):
 
     def test_ubuntu_profiles(self):
         """Test Ubuntu profiles return python3.12."""
-        self.assertEqual(setup_python_cmd.resolve_python_cmd("ubuntu2404"), "python3.12")
-        self.assertEqual(setup_python_cmd.resolve_python_cmd("ubuntu2204"), "python3.12")
-        self.assertEqual(setup_python_cmd.resolve_python_cmd("ubuntu2004"), "python3.12")
+        self.assertEqual(
+            setup_python_cmd.resolve_python_cmd("ubuntu2404"), "python3.12"
+        )
+        self.assertEqual(
+            setup_python_cmd.resolve_python_cmd("ubuntu2204"), "python3.12"
+        )
+        self.assertEqual(
+            setup_python_cmd.resolve_python_cmd("ubuntu2004"), "python3.12"
+        )
 
     def test_debian_profiles(self):
         """Test Debian profiles return python3.12."""
@@ -100,9 +106,7 @@ class InstallPythonRuntimeTest(unittest.TestCase):
 
         # First call: zypper refresh
         refresh_call = mock_run.call_args_list[0]
-        self.assertEqual(
-            refresh_call[0][0], ["zypper", "--non-interactive", "refresh"]
-        )
+        self.assertEqual(refresh_call[0][0], ["zypper", "--non-interactive", "refresh"])
         self.assertTrue(refresh_call[1]["check"])
 
         # Second call: zypper install
