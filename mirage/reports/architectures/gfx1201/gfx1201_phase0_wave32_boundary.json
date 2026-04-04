@@ -603,6 +603,19 @@
     "last_instruction_name": "",
     "safe_under_current_request": false
   },
+  "next_vds_50_slice_window_followup_followup_followup_followup_followup_followup_followup_followup_followup": {
+    "start_opcode": 564,
+    "end_opcode": 613,
+    "opcode_span_width": 50,
+    "instruction_count": 0,
+    "opcode_hole_count": 50,
+    "bucket_count": 0,
+    "bucket_names": [],
+    "instruction_names": [],
+    "first_instruction_name": "",
+    "last_instruction_name": "",
+    "safe_under_current_request": false
+  },
   "remaining_vds_instruction_statuses": [
     {
       "instruction_name": "DS_APPEND",
