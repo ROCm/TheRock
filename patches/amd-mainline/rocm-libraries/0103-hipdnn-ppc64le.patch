@@ -1,6 +1,6 @@
-From 57e830e516f43a6d1d9d1014f8c3414164c4951e Mon Sep 17 00:00:00 2001
+From 84bbe9fa49438082e48ae9485ac23fb943338d4c Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 2 Apr 2026 21:13:20 +0000
+Date: Fri, 3 Apr 2026 12:24:24 +0000
 Subject: [PATCH] hipdnn ppc64le
 
 ---
@@ -11,7 +11,7 @@ Subject: [PATCH] hipdnn ppc64le
  4 files changed, 23 insertions(+), 1 deletion(-)
 
 diff --git a/projects/hipdnn/samples/CMakeLists.txt b/projects/hipdnn/samples/CMakeLists.txt
-index 1003ef6dac..85e31b7cf1 100644
+index c3baa6cab4..09cf8cb7ad 100644
 --- a/projects/hipdnn/samples/CMakeLists.txt
 +++ b/projects/hipdnn/samples/CMakeLists.txt
 @@ -9,6 +9,7 @@ cmake_minimum_required(VERSION 3.25.2)
@@ -23,10 +23,10 @@ index 1003ef6dac..85e31b7cf1 100644
  set(CMAKE_CXX_STANDARD 17)
  
 diff --git a/projects/hipdnn/test_sdk/include/hipdnn_test_sdk/utilities/CpuFpReferenceValidation.hpp b/projects/hipdnn/test_sdk/include/hipdnn_test_sdk/utilities/CpuFpReferenceValidation.hpp
-index ac426b2a3c..f793b0bdd8 100644
+index 7d7c6faa3e..2eec6d20f1 100644
 --- a/projects/hipdnn/test_sdk/include/hipdnn_test_sdk/utilities/CpuFpReferenceValidation.hpp
 +++ b/projects/hipdnn/test_sdk/include/hipdnn_test_sdk/utilities/CpuFpReferenceValidation.hpp
-@@ -57,6 +57,18 @@ public:
+@@ -72,6 +72,18 @@ public:
  
              if(absDiff > threshold)
              {
@@ -45,7 +45,7 @@ index ac426b2a3c..f793b0bdd8 100644
                  // Log error and mark as failed
                  HIPDNN_SDK_LOG_ERROR(
                      "Validation failed at indices "
-@@ -65,6 +77,7 @@ public:
+@@ -80,6 +92,7 @@ public:
                      << ", absolute difference = " << absDiff << ", threshold = " << threshold
                      << ", difference - threshold = " << (absDiff - threshold)
                      << ", (atol=" << _absoluteTolerance << ", rtol=" << _relativeTolerance << ")");
@@ -54,7 +54,7 @@ index ac426b2a3c..f793b0bdd8 100644
              }
              return result.load(std::memory_order_relaxed);
 diff --git a/projects/hipdnn/test_sdk/include/hipdnn_test_sdk/utilities/pointwise/CpuDeviceExecutor.hpp b/projects/hipdnn/test_sdk/include/hipdnn_test_sdk/utilities/pointwise/CpuDeviceExecutor.hpp
-index 7d8756aa2e..d8093a1ae3 100644
+index fe96d4a5f1..1513ad1bf8 100644
 --- a/projects/hipdnn/test_sdk/include/hipdnn_test_sdk/utilities/pointwise/CpuDeviceExecutor.hpp
 +++ b/projects/hipdnn/test_sdk/include/hipdnn_test_sdk/utilities/pointwise/CpuDeviceExecutor.hpp
 @@ -84,7 +84,11 @@ public:
@@ -70,10 +70,10 @@ index 7d8756aa2e..d8093a1ae3 100644
          };
  
 diff --git a/projects/hipdnn/test_sdk/tests/utilities/TestCpuReferencePointwise.cpp b/projects/hipdnn/test_sdk/tests/utilities/TestCpuReferencePointwise.cpp
-index 054708e008..c5e9dc75c5 100644
+index f78a3184ee..089659a39c 100644
 --- a/projects/hipdnn/test_sdk/tests/utilities/TestCpuReferencePointwise.cpp
 +++ b/projects/hipdnn/test_sdk/tests/utilities/TestCpuReferencePointwise.cpp
-@@ -1111,7 +1111,11 @@ protected:
+@@ -1133,7 +1133,11 @@ protected:
                          auto xCompute = static_cast<ComputeType>(inputVal);
                          auto dyCompute = static_cast<ComputeType>(upstreamGradVal);
                          auto tanhVal = std::tanh(xCompute);
@@ -84,8 +84,8 @@ index 054708e008..c5e9dc75c5 100644
 +			auto localGradient = ComputeType{1} - (tanhVal * tanhVal);
 +#endif
                          auto downstreamGrad = dyCompute * localGradient;
-                         expected.setHostValue(static_cast<OutputType>(downstreamGrad), n, c, h, w);
-                     }
+                         expected.setHostValue(
+                             safeTestTypeCast<OutputType>(downstreamGrad), n, c, h, w);
 -- 
 2.47.3
 

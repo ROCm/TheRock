@@ -1,0 +1,27 @@
+From 0e9af7bc9c22a117a290e0baf0e0ea4b7a9e52a8 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Sat, 4 Apr 2026 00:40:24 +0000
+Subject: [PATCH] Disable rocprim tests on ppc64le
+
+Failing due to clang crash.
+---
+ projects/rocprim/CMakeLists.txt | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/projects/rocprim/CMakeLists.txt b/projects/rocprim/CMakeLists.txt
+index 24d89c4fdc..0724cbef28 100644
+--- a/projects/rocprim/CMakeLists.txt
++++ b/projects/rocprim/CMakeLists.txt
+@@ -204,7 +204,8 @@ if(ROCPRIM_PROJECT_IS_TOP_LEVEL AND (BUILD_TEST OR BUILD_BENCHMARK))
+ endif()
+ 
+ # Tests
+-if(BUILD_TEST)
++# Disable tests on ppc64le for now
++if(BUILD_TEST AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+   if(USE_SYSTEM_LIB)
+     find_package(rocprim REQUIRED CONFIG PATHS "/opt/rocm/rocprim")
+     if (NOT ${rocprim_VERSION} VERSION_EQUAL ${VERSION_STRING})
+-- 
+2.47.3
+

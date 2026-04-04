@@ -1,25 +1,12 @@
-From 0f34f9a19ffd0d62ca5b9348284e06054a6e96f5 Mon Sep 17 00:00:00 2001
+From 1a2de0fa0e07e0220ad2bcf744d58ab581f45a79 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 2 Apr 2026 21:13:20 +0000
+Date: Fri, 3 Apr 2026 12:29:36 +0000
 Subject: [PATCH] rocblas ppc64le
 
 ---
- projects/rocblas/CMakeLists.txt                     | 1 +
  projects/rocblas/clients/common/cblas_interface.cpp | 5 +++++
- 2 files changed, 6 insertions(+)
+ 1 file changed, 5 insertions(+)
 
-diff --git a/projects/rocblas/CMakeLists.txt b/projects/rocblas/CMakeLists.txt
-index 016b9fe9c7..3cd5d1e340 100644
---- a/projects/rocblas/CMakeLists.txt
-+++ b/projects/rocblas/CMakeLists.txt
-@@ -33,6 +33,7 @@ unset(ENV{ROCM_BUILD_ID})
- 
- project( rocblas LANGUAGES CXX )
- 
-+
- # Append our library helper cmake path and the cmake path for hip (for convenience)
- list( APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake )
- include(build-options) # library and client
 diff --git a/projects/rocblas/clients/common/cblas_interface.cpp b/projects/rocblas/clients/common/cblas_interface.cpp
 index ef31c58668..9c7d4e46fa 100644
 --- a/projects/rocblas/clients/common/cblas_interface.cpp
