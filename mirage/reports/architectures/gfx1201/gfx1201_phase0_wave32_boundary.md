@@ -26,6 +26,7 @@ execution path.
 - First unsafe VDS instructions: `DS_APPEND`, `DS_CONSUME`
 - Remaining VDS instruction statuses: `24`
 - Remaining VDS opcode gaps: `11`
+- Next 50-slice frontier window: opcode `14..63`, `11` instructions, `39` holes, safe under current request `false`
 - Remaining VDS bucket order: `append_consume`, `exchange_compare_store`, `multi_address`, `bvh_stack`
 - All currently seeded ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, and ENC_VGLOBAL instruction/encoding pairs are executable on the local wave32 path.
 - There are no remaining imported ENC_VOP1, ENC_VOP2, ENC_VOPC, ENC_SMEM, or ENC_VGLOBAL instruction/encoding pairs outside the current seed surface.
@@ -89,6 +90,10 @@ execution path.
 - `multi_address[2]`: segment `2 -> 3`, previous opcode `56` (`DS_LOAD_2ADDR_STRIDE64_B32`), next opcode `78` (`DS_STORE_2ADDR_B64`), missing opcodes `21`
 - `multi_address[3]`: segment `3 -> 4`, previous opcode `79` (`DS_STORE_2ADDR_STRIDE64_B64`), next opcode `110` (`DS_STOREXCHG_2ADDR_RTN_B64`), missing opcodes `30`
 - `multi_address[4]`: segment `4 -> 5`, previous opcode `111` (`DS_STOREXCHG_2ADDR_STRIDE64_RTN_B64`), next opcode `119` (`DS_LOAD_2ADDR_B64`), missing opcodes `7`
+
+## Next 50-Slice Frontier Window
+
+- `opcode 14..63`: `11` instructions, `39` holes, `3` buckets, safe under current request `false`, covering `DS_STORE_2ADDR_B32`, `DS_STORE_2ADDR_STRIDE64_B32`, `DS_CMPSTORE_B32`, `DS_STOREXCHG_RTN_B32`, `DS_STOREXCHG_2ADDR_RTN_B32`, `DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32`, `DS_CMPSTORE_RTN_B32`, `DS_LOAD_2ADDR_B32`, `DS_LOAD_2ADDR_STRIDE64_B32`, `DS_CONSUME`, and `DS_APPEND`.
 
 ## Remaining VDS Next-Risk Chain
 

@@ -453,6 +453,35 @@
       "next_instruction_name": "DS_LOAD_2ADDR_B64"
     }
   ],
+  "next_vds_50_slice_window": {
+    "start_opcode": 14,
+    "end_opcode": 63,
+    "opcode_span_width": 50,
+    "instruction_count": 11,
+    "opcode_hole_count": 39,
+    "bucket_count": 3,
+    "bucket_names": [
+      "multi_address",
+      "exchange_compare_store",
+      "append_consume"
+    ],
+    "instruction_names": [
+      "DS_STORE_2ADDR_B32",
+      "DS_STORE_2ADDR_STRIDE64_B32",
+      "DS_CMPSTORE_B32",
+      "DS_STOREXCHG_RTN_B32",
+      "DS_STOREXCHG_2ADDR_RTN_B32",
+      "DS_STOREXCHG_2ADDR_STRIDE64_RTN_B32",
+      "DS_CMPSTORE_RTN_B32",
+      "DS_LOAD_2ADDR_B32",
+      "DS_LOAD_2ADDR_STRIDE64_B32",
+      "DS_CONSUME",
+      "DS_APPEND"
+    ],
+    "first_instruction_name": "DS_STORE_2ADDR_B32",
+    "last_instruction_name": "DS_APPEND",
+    "safe_under_current_request": false
+  },
   "remaining_vds_instruction_statuses": [
     {
       "instruction_name": "DS_APPEND",
