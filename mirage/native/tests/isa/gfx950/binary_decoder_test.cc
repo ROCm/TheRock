@@ -6302,11 +6302,11 @@ int main() {
         "S_BUFFER_ATOMIC_XOR",  "S_BUFFER_ATOMIC_INC",
         "S_BUFFER_ATOMIC_DEC",
     };
-    const std::array<std::string_view, 13> kScalarBufferAtomic64Opcodes = {
-        "S_BUFFER_ATOMIC_SWAP_X2", "S_BUFFER_ATOMIC_CMPSWAP_X2",
-        "S_BUFFER_ATOMIC_ADD_X2",  "S_BUFFER_ATOMIC_SUB_X2",
-        "S_BUFFER_ATOMIC_SMIN_X2", "S_BUFFER_ATOMIC_UMIN_X2",
-        "S_BUFFER_ATOMIC_SMAX_X2", "S_BUFFER_ATOMIC_UMAX_X2",
+  const std::array<std::string_view, 13> kScalarBufferAtomic64Opcodes = {
+      "S_BUFFER_ATOMIC_SWAP_X2", "S_BUFFER_ATOMIC_CMPSWAP_X2",
+      "S_BUFFER_ATOMIC_ADD_X2",  "S_BUFFER_ATOMIC_SUB_X2",
+      "S_BUFFER_ATOMIC_SMIN_X2", "S_BUFFER_ATOMIC_UMIN_X2",
+      "S_BUFFER_ATOMIC_SMAX_X2", "S_BUFFER_ATOMIC_UMAX_X2",
         "S_BUFFER_ATOMIC_AND_X2",  "S_BUFFER_ATOMIC_OR_X2",
         "S_BUFFER_ATOMIC_XOR_X2",  "S_BUFFER_ATOMIC_INC_X2",
         "S_BUFFER_ATOMIC_DEC_X2",
@@ -6347,6 +6347,35 @@ int main() {
                                      0x180u,
                                      "scalar buffer atomic cmpswap x2 decode")) {
       return 1;
+    }
+  }
+
+  {
+    const std::array<std::string_view, 6> kUnsupportedScalarScratchOpcodes = {
+        "S_SCRATCH_LOAD_DWORD",  "S_SCRATCH_LOAD_DWORDX2",
+        "S_SCRATCH_LOAD_DWORDX4", "S_SCRATCH_STORE_DWORD",
+        "S_SCRATCH_STORE_DWORDX2", "S_SCRATCH_STORE_DWORDX4",
+    };
+    for (std::string_view opcode_name : kUnsupportedScalarScratchOpcodes) {
+      const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_SMEM");
+      if (!Expect(opcode.has_value(),
+                  ("expected catalog opcode for " + std::string(opcode_name))
+                      .c_str())) {
+        return 1;
+      }
+
+      const auto scratch_word = MakeSmem(*opcode, 4, 0, true, 0);
+      const std::vector<std::uint32_t> scratch_program = {
+          scratch_word[0], scratch_word[1], MakeSopp(1),
+      };
+      decoded_program.clear();
+      if (!Expect(!decoder.DecodeProgram(scratch_program, &decoded_program,
+                                         &error_message),
+                  ("expected scratch decode rejection for " +
+                   std::string(opcode_name))
+                      .c_str())) {
+        return 1;
+      }
     }
   }
 

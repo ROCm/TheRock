@@ -3535,6 +3535,19 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 6> kUnsupportedScalarScratchOpcodes = {
+      "S_SCRATCH_LOAD_DWORD",  "S_SCRATCH_LOAD_DWORDX2",
+      "S_SCRATCH_LOAD_DWORDX4", "S_SCRATCH_STORE_DWORD",
+      "S_SCRATCH_STORE_DWORDX2", "S_SCRATCH_STORE_DWORDX4",
+  };
+  for (std::string_view opcode : kUnsupportedScalarScratchOpcodes) {
+    const std::string message =
+        "expected " + std::string(opcode) + " to remain unsupported";
+    if (!Expect(!interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 8> kScalarBufferMemoryOpcodes = {
       "S_BUFFER_LOAD_DWORD",   "S_BUFFER_LOAD_DWORDX2",
       "S_BUFFER_LOAD_DWORDX4", "S_BUFFER_LOAD_DWORDX8",
