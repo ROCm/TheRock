@@ -10,6 +10,7 @@ namespace {
 
 using mirage::sim::isa::gfx1250::DecodeSeedHint;
 using mirage::sim::isa::gfx1250::DecoderSeedInfo;
+using mirage::sim::isa::gfx1250::FindDecoderSeedInfo;
 using mirage::sim::isa::gfx1250::FindSeedFamilyManifest;
 using mirage::sim::isa::gfx1250::GetDecoderSeedInfos;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteInfo;
