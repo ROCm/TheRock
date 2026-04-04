@@ -9383,6 +9383,48 @@ int main() {
     }
   }
 
+  for (std::string_view opcode_name : kAdditionalFlatAtomicOpcodes) {
+    const auto opcode_value =
+        FindDefaultEncodingOpcode(opcode_name, "ENC_FLAT");
+    if (!Expect(opcode_value.has_value(),
+                ("expected catalog opcode for " + std::string(opcode_name))
+                    .c_str())) {
+      return 1;
+    }
+
+    const auto atomic_word = MakeFlatAtomic(*opcode_value, false, 60, 10, 20, 4);
+    const std::array<std::uint32_t, 2> encoded_atomic_word = {atomic_word[0],
+                                                               atomic_word[1]};
+    DecodedInstruction instruction;
+    std::size_t words_consumed = 0;
+    if (!Expect(decoder.DecodeInstruction(encoded_atomic_word, &instruction,
+                                          &words_consumed, &error_message),
+                error_message.c_str()) ||
+        !Expect(words_consumed == 2,
+                ("expected two-word decode for " + std::string(opcode_name))
+                    .c_str()) ||
+        !Expect(instruction.opcode == opcode_name,
+                ("expected opcode decode for " + std::string(opcode_name))
+                    .c_str()) ||
+        !Expect(instruction.operand_count == 3,
+                ("expected operand count for " + std::string(opcode_name))
+                    .c_str()) ||
+        !Expect(instruction.operands[0].kind == OperandKind::kVgpr &&
+                    instruction.operands[0].index == 10,
+                ("expected address VGPR decode for " + std::string(opcode_name))
+                    .c_str()) ||
+        !Expect(instruction.operands[1].kind == OperandKind::kVgpr &&
+                    instruction.operands[1].index == 20,
+                ("expected data VGPR decode for " + std::string(opcode_name))
+                    .c_str()) ||
+        !Expect(instruction.operands[2].kind == OperandKind::kImm32 &&
+                    instruction.operands[2].imm32 == 4u,
+                ("expected offset decode for " + std::string(opcode_name))
+                    .c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 20> kAdditionalFlatMemoryOpcodes = {
       "FLAT_LOAD_UBYTE",        "FLAT_LOAD_UBYTE_D16",
       "FLAT_LOAD_UBYTE_D16_HI", "FLAT_LOAD_SBYTE",
@@ -9598,6 +9640,92 @@ int main() {
     }
 
     const bool return_prior_value = (opcode_index % 2) == 0;
+    const auto atomic_word =
+        MakeGlobalAtomic(*opcode_value, return_prior_value, 60, 10, 20, 4, -8);
+    const std::array<std::uint32_t, 2> encoded_atomic_word = {atomic_word[0],
+                                                               atomic_word[1]};
+    DecodedInstruction instruction;
+    std::size_t words_consumed = 0;
+    if (!Expect(decoder.DecodeInstruction(encoded_atomic_word, &instruction,
+                                          &words_consumed,
+                                          &error_message),
+                error_message.c_str())) {
+      return 1;
+    }
+
+    const std::string consumed_message =
+        "expected two-word decode for " + std::string(opcode_name);
+    if (!Expect(words_consumed == 2, consumed_message.c_str())) {
+      return 1;
+    }
+    const std::string opcode_message =
+        "expected opcode decode for " + std::string(opcode_name);
+    if (!Expect(instruction.opcode == opcode_name, opcode_message.c_str())) {
+      return 1;
+    }
+    const std::string operand_count_message =
+        "expected operand count for " + std::string(opcode_name);
+    if (!Expect(instruction.operand_count == (return_prior_value ? 5 : 4),
+                operand_count_message.c_str())) {
+      return 1;
+    }
+
+    if (return_prior_value) {
+      const std::string dst_message =
+          "expected return VGPR decode for " + std::string(opcode_name);
+      if (!Expect(instruction.operands[0].kind == OperandKind::kVgpr &&
+                      instruction.operands[0].index == 60,
+                  dst_message.c_str()) ||
+          !Expect(instruction.operands[2].kind == OperandKind::kVgpr &&
+                      instruction.operands[2].index == 20,
+                  ("expected data VGPR decode for " + std::string(opcode_name))
+                      .c_str()) ||
+          !Expect(instruction.operands[3].kind == OperandKind::kSgpr &&
+                      instruction.operands[3].index == 4,
+                  ("expected scalar base decode for " + std::string(opcode_name))
+                      .c_str()) ||
+          !Expect(instruction.operands[4].kind == OperandKind::kImm32 &&
+                      instruction.operands[4].imm32 ==
+                          static_cast<std::uint32_t>(-8),
+                  ("expected offset decode for " + std::string(opcode_name))
+                      .c_str())) {
+        return 1;
+      }
+    } else {
+      const std::string addr_message =
+          "expected address VGPR decode for " + std::string(opcode_name);
+      if (!Expect(instruction.operands[0].kind == OperandKind::kVgpr &&
+                      instruction.operands[0].index == 10,
+                  addr_message.c_str()) ||
+          !Expect(instruction.operands[1].kind == OperandKind::kVgpr &&
+                      instruction.operands[1].index == 20,
+                  ("expected data VGPR decode for " + std::string(opcode_name))
+                      .c_str()) ||
+          !Expect(instruction.operands[2].kind == OperandKind::kSgpr &&
+                      instruction.operands[2].index == 4,
+                  ("expected scalar base decode for " + std::string(opcode_name))
+                      .c_str()) ||
+          !Expect(instruction.operands[3].kind == OperandKind::kImm32 &&
+                      instruction.operands[3].imm32 ==
+                          static_cast<std::uint32_t>(-8),
+                  ("expected offset decode for " + std::string(opcode_name))
+                      .c_str())) {
+        return 1;
+      }
+    }
+  }
+
+  for (std::size_t opcode_index = 0; opcode_index < kGlobalAtomicOpcodes.size();
+       ++opcode_index) {
+    const std::string_view opcode_name = kGlobalAtomicOpcodes[opcode_index];
+    const std::optional<std::uint32_t> opcode_value =
+        FindDefaultEncodingOpcode(opcode_name, "ENC_FLAT_GLBL");
+    if (!Expect(opcode_value.has_value(),
+                ("expected catalog opcode for " + std::string(opcode_name)).c_str())) {
+      return 1;
+    }
+
+    const bool return_prior_value = (opcode_index % 2) != 0;
     const auto atomic_word =
         MakeGlobalAtomic(*opcode_value, return_prior_value, 60, 10, 20, 4, -8);
     const std::array<std::uint32_t, 2> encoded_atomic_word = {atomic_word[0],
