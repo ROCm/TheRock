@@ -15576,6 +15576,10 @@ int main() {
                                        InstructionOperand::Sgpr(0),
                                        InstructionOperand::Imm32(0x10)),
       DecodedInstruction::Nullary("BUFFER_WBL2"),
+      DecodedInstruction::ThreeOperand("S_BUFFER_LOAD_DWORDX4",
+                                       InstructionOperand::Sgpr(12),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x20)),
       DecodedInstruction::ThreeOperand("S_BUFFER_STORE_DWORD",
                                        InstructionOperand::Sgpr(4),
                                        InstructionOperand::Sgpr(0),
@@ -15615,6 +15619,10 @@ int main() {
     memory.WriteU32(0x100u, 0x11110000u);
     memory.WriteU32(0x110u, 0x22220000u);
     memory.WriteU32(0x114u, 0x22220001u);
+    memory.WriteU32(0x120u, 0x33330000u);
+    memory.WriteU32(0x124u, 0x33330001u);
+    memory.WriteU32(0x128u, 0x33330002u);
+    memory.WriteU32(0x12cu, 0x33330003u);
     memory.WriteU32(0x180u, 0x33330000u);
     memory.WriteU32(0x300u, 0xdeadbeefu);
     memory.WriteU32(0x310u, 0x01234567u);
@@ -15652,6 +15660,13 @@ int main() {
                           state.sgprs[9] == 0x22220001u,
                       (std::string(mode) +
                        " scalar buffer maintenance s_buffer_load_dwordx2 result")
+                          .c_str()) &&
+               Expect(state.sgprs[12] == 0x33330000u &&
+                          state.sgprs[13] == 0x33330001u &&
+                          state.sgprs[14] == 0x33330002u &&
+                          state.sgprs[15] == 0x33330003u,
+                      (std::string(mode) +
+                       " scalar buffer maintenance s_buffer_load_dwordx4 result")
                           .c_str()) &&
                Expect(state.vgprs[18][0] == 0x01010101u &&
                           state.vgprs[18][1] == 0x02020202u &&
