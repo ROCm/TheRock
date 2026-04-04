@@ -495,6 +495,45 @@ bool Fp8Bf8LeadingBatchRouteSurfaceMatchesSeedCatalog() {
   return true;
 }
 
+bool Fp8Bf8TailBatchRouteSurfaceMatchesSeedCatalog() {
+  const auto seeded_instructions =
+      GetSeededInstructionNames(SeedFamily::kFp8Bf8);
+  if (seeded_instructions.size() != 87 ||
+      seeded_instructions[50] != "V_CVT_SCALE_PK8_F32_BF8" ||
+      seeded_instructions.back() != "V_WMMA_SCALE_F32_32X16X128_F4_w32") {
+    return false;
+  }
+
+  for (std::size_t i = 50; i < seeded_instructions.size(); ++i) {
+    const std::string_view instruction_name = seeded_instructions[i];
+    const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
+    if (seed == nullptr) {
+      return false;
+    }
+
+    const StubDecoderRoute expected_route =
+        ExpectedRouteForDecodeHint(seed->decode_hint);
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
+    if (expected_route == StubDecoderRoute::kUnsupported) {
+      if (SelectStubDecoderRoute(instruction_name) !=
+              StubDecoderRoute::kUnsupported ||
+          route_info != nullptr || ListedInAnyRoute(instruction_name)) {
+        return false;
+      }
+      continue;
+    }
+
+    if (route_info == nullptr || route_info->route != expected_route ||
+        SelectStubDecoderRoute(instruction_name) != expected_route ||
+        !Contains(expected_route, instruction_name) ||
+        !MatchesSeedCatalogParity(*route_info, *seed)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool Fp8Bf8FamilyManifestMatchesSeedCatalog() {
   const SeedFamilyManifest* manifest =
       FindSeedFamilyManifest(SeedFamily::kFp8Bf8);
@@ -754,6 +793,10 @@ int main() {
   }
   if (!Expect(Fp8Bf8LeadingBatchRouteSurfaceMatchesSeedCatalog(),
               "expected fp8/bf8 family to keep exact route-keyed parity and selector exclusion across the leading 50-seed batch")) {
+    return 1;
+  }
+  if (!Expect(Fp8Bf8TailBatchRouteSurfaceMatchesSeedCatalog(),
+              "expected fp8/bf8 family to keep exact route-keyed parity and selector exclusion across the remaining tail batch")) {
     return 1;
   }
   if (!Expect(Fp8Bf8FamilyManifestMatchesSeedCatalog(),
