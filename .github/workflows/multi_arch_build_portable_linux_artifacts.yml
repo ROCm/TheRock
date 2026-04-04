@@ -140,10 +140,12 @@ jobs:
           python build_tools/teatime.py --log-timestamps \
             --label "check-llvm" "${BUILD_DIR}/logs/check-llvm.log" -- \
             ninja -C "${BUILD_DIR}/compiler/amd-llvm/build" check-llvm || rc1=$?
+          echo ""
           rc2=0
           python build_tools/teatime.py --log-timestamps \
             --label "check-clang" "${BUILD_DIR}/logs/check-clang.log" -- \
             ninja -C "${BUILD_DIR}/compiler/amd-llvm/build" check-clang || rc2=$?
+          echo ""
           rc3=0
           python build_tools/teatime.py --log-timestamps \
             --label "check-lld" "${BUILD_DIR}/logs/check-lld.log" -- \
@@ -161,6 +163,7 @@ jobs:
             --label "comgr lit tests" "${BUILD_DIR}/logs/comgr-lit-tests.log" -- \
             "${BUILD_DIR}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
             "${BUILD_DIR}/compiler/amd-comgr/build/test-lit" -v || rc1=$?
+          echo ""
           rc2=0
           python build_tools/teatime.py --log-timestamps \
             --label "comgr ctest" "${BUILD_DIR}/logs/comgr-ctest.log" -- \
