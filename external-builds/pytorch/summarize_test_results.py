@@ -68,9 +68,9 @@ def parse_junit_xml(xml_path: Path) -> list[dict]:
             results.append(
                 {
                     "file": classname,
-                    "class": classname.rsplit(".", 1)[-1]
-                    if "." in classname
-                    else classname,
+                    "class": (
+                        classname.rsplit(".", 1)[-1] if "." in classname else classname
+                    ),
                     "test": name,
                     "status": status,
                     "message": message,
@@ -157,9 +157,7 @@ def write_shard_summary(
 # Combined summary (called from the post-matrix summary job)
 # ---------------------------------------------------------------------------
 
-_ARTIFACT_RE = re.compile(
-    r"test-reports-(?P<config>[^-]+)-(?P<shard>\d+)-(?P<num>\d+)"
-)
+_ARTIFACT_RE = re.compile(r"test-reports-(?P<config>[^-]+)-(?P<shard>\d+)-(?P<num>\d+)")
 
 
 def _build_report_header(
@@ -215,8 +213,11 @@ def write_combined_summary(
     if torch_version and amdgpu_family:
         lines.extend(
             _build_report_header(
-                torch_version, python_version, amdgpu_family,
-                package_index_url, pytorch_git_ref,
+                torch_version,
+                python_version,
+                amdgpu_family,
+                package_index_url,
+                pytorch_git_ref,
             )
         )
 
@@ -264,8 +265,7 @@ def write_combined_summary(
             "| Test Name | Status | Error |"
         )
         lines.append(
-            "|--------|-------|-----------|-----------|"
-            "-----------|--------|-------|"
+            "|--------|-------|-----------|-----------|" "-----------|--------|-------|"
         )
         lines.extend(row for _, _, row in rows)
         lines.append("")

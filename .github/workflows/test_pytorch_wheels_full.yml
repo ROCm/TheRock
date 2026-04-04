@@ -73,6 +73,9 @@ on:
       pytorch_git_ref:
         type: string
         default: "release/2.9"
+      pytorch_git_repo:
+        type: string
+        default: "rocm/pytorch"
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -340,4 +343,3 @@ jobs:
         run: |
           python external-builds/pytorch/summarize_test_results.py \
             --combined-dir artifacts
-
