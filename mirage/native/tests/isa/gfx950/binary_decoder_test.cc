@@ -9321,7 +9321,7 @@ int main() {
     return 1;
   }
 
-  const std::array<std::string_view, 28> kAdditionalFlatAtomicOpcodes = {
+  const std::array<std::string_view, 29> kAdditionalFlatAtomicOpcodes = {
       "FLAT_ATOMIC_SUB",        "FLAT_ATOMIC_SMIN",
       "FLAT_ATOMIC_UMIN",       "FLAT_ATOMIC_SMAX",
       "FLAT_ATOMIC_UMAX",       "FLAT_ATOMIC_AND",
@@ -9331,11 +9331,12 @@ int main() {
       "FLAT_ATOMIC_ADD_F64",    "FLAT_ATOMIC_MIN_F64",
       "FLAT_ATOMIC_MAX_F64",    "FLAT_ATOMIC_PK_ADD_BF16",
       "FLAT_ATOMIC_SWAP_X2",    "FLAT_ATOMIC_CMPSWAP_X2",
-      "FLAT_ATOMIC_SUB_X2",     "FLAT_ATOMIC_SMIN_X2",
-      "FLAT_ATOMIC_UMIN_X2",    "FLAT_ATOMIC_SMAX_X2",
-      "FLAT_ATOMIC_UMAX_X2",    "FLAT_ATOMIC_AND_X2",
-      "FLAT_ATOMIC_OR_X2",      "FLAT_ATOMIC_XOR_X2",
-      "FLAT_ATOMIC_INC_X2",     "FLAT_ATOMIC_DEC_X2",
+      "FLAT_ATOMIC_ADD_X2",     "FLAT_ATOMIC_SUB_X2",
+      "FLAT_ATOMIC_SMIN_X2",    "FLAT_ATOMIC_UMIN_X2",
+      "FLAT_ATOMIC_SMAX_X2",    "FLAT_ATOMIC_UMAX_X2",
+      "FLAT_ATOMIC_AND_X2",     "FLAT_ATOMIC_OR_X2",
+      "FLAT_ATOMIC_XOR_X2",     "FLAT_ATOMIC_INC_X2",
+      "FLAT_ATOMIC_DEC_X2",
   };
   for (std::string_view opcode_name : kAdditionalFlatAtomicOpcodes) {
     const auto opcode_value =
