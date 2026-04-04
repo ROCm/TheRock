@@ -212,6 +212,46 @@ if(THEROCK_ENABLE_HIPDNN)
   )
 endif(THEROCK_ENABLE_HIPDNN)
 
+if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
+  ##############################################################################
+  # hipDNN integration tests
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipdnn_integration_tests
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/integration-tests"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipdnn_integration_tests"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DENABLE_CLANG_TIDY=OFF
+      -DENABLE_CLANG_FORMAT=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      hipDNN
+      therock-googletest
+      therock-nlohmann-json
+  )
+  therock_cmake_subproject_glob_c_sources(hipdnn_integration_tests
+  SUBDIRS
+    .
+  )
+  therock_cmake_subproject_activate(hipdnn_integration_tests)
+
+  therock_provide_artifact(hipdnn-integration-tests
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-hipdnn-integration-tests.toml
+    COMPONENTS
+      test
+    SUBPROJECT_DEPS
+      hipdnn_integration_tests
+  )
+endif(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
+
 if(THEROCK_ENABLE_MIOPENPROVIDER)
   ##############################################################################
   # hipDNN MIOpen provider
@@ -234,6 +274,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
       amd-hip
     BUILD_DEPS
       hipDNN
+      hipdnn_integration_tests
       therock-googletest
       therock-flatbuffers
       therock-nlohmann-json
@@ -278,6 +319,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
       amd-hip
     BUILD_DEPS
       hipDNN
+      hipdnn_integration_tests
       therock-googletest
       therock-flatbuffers
       therock-nlohmann-json
