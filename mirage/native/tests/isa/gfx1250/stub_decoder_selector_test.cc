@@ -382,6 +382,38 @@ bool ScalePairedFamilyManifestMatchesSeedCatalog() {
          seeded_instructions.back() == "V_WMMA_SCALE_F32_32X16X128_F4_w32";
 }
 
+bool ScalePairedFamilyRouteSurfaceMatchesSeedCatalog() {
+  const auto seeded_instructions =
+      GetSeededInstructionNames(SeedFamily::kScalePaired);
+  for (const std::string_view instruction_name : seeded_instructions) {
+    const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
+    if (seed == nullptr) {
+      return false;
+    }
+
+    const StubDecoderRoute expected_route =
+        ExpectedRouteForDecodeHint(seed->decode_hint);
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
+    if (expected_route == StubDecoderRoute::kUnsupported) {
+      if (SelectStubDecoderRoute(instruction_name) !=
+              StubDecoderRoute::kUnsupported ||
+          route_info != nullptr || ListedInAnyRoute(instruction_name)) {
+        return false;
+      }
+      continue;
+    }
+
+    if (route_info == nullptr || route_info->route != expected_route ||
+        SelectStubDecoderRoute(instruction_name) != expected_route ||
+        !Contains(expected_route, instruction_name) ||
+        !MatchesSeedCatalogParity(*route_info, *seed)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool Fp8Bf8FamilyManifestMatchesSeedCatalog() {
   const SeedFamilyManifest* manifest =
       FindSeedFamilyManifest(SeedFamily::kFp8Bf8);
@@ -629,6 +661,10 @@ int main() {
   }
   if (!Expect(ScalePairedFamilyManifestMatchesSeedCatalog(),
               "expected scale-paired family manifest to keep exact seed-catalog parity across the post-pair-load 50-slice batch and paired-load anchors")) {
+    return 1;
+  }
+  if (!Expect(ScalePairedFamilyRouteSurfaceMatchesSeedCatalog(),
+              "expected scale-paired family to keep exact route-keyed parity, selector exclusion, and manifest consistency across the post-pair-load 50-slice batch")) {
     return 1;
   }
   if (!Expect(Fp8Bf8FamilyManifestMatchesSeedCatalog(),
