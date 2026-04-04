@@ -133,17 +133,19 @@ jobs:
       - name: Run LLVM lit tests
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
+        env:
+          TEATIME_FORCE_INTERACTIVE: 1
         run: |
           rc1=0
-          python build_tools/teatime.py --log-timestamps --interactive \
+          python build_tools/teatime.py --log-timestamps \
             --label "check-llvm" "${BUILD_DIR}/logs/check-llvm.log" -- \
             ninja -C "${BUILD_DIR}/compiler/amd-llvm/build" check-llvm || rc1=$?
           rc2=0
-          python build_tools/teatime.py --log-timestamps --interactive \
+          python build_tools/teatime.py --log-timestamps \
             --label "check-clang" "${BUILD_DIR}/logs/check-clang.log" -- \
             ninja -C "${BUILD_DIR}/compiler/amd-llvm/build" check-clang || rc2=$?
           rc3=0
-          python build_tools/teatime.py --log-timestamps --interactive \
+          python build_tools/teatime.py --log-timestamps \
             --label "check-lld" "${BUILD_DIR}/logs/check-lld.log" -- \
             ninja -C "${BUILD_DIR}/compiler/amd-llvm/build" check-lld || rc3=$?
           [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && [ $rc3 -eq 0 ]
@@ -151,14 +153,16 @@ jobs:
       - name: Run comgr tests
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
+        env:
+          TEATIME_FORCE_INTERACTIVE: 1
         run: |
           rc1=0
-          python build_tools/teatime.py --log-timestamps --interactive \
+          python build_tools/teatime.py --log-timestamps \
             --label "comgr lit tests" "${BUILD_DIR}/logs/comgr-lit-tests.log" -- \
             "${BUILD_DIR}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
             "${BUILD_DIR}/compiler/amd-comgr/build/test-lit" -v || rc1=$?
           rc2=0
-          python build_tools/teatime.py --log-timestamps --interactive \
+          python build_tools/teatime.py --log-timestamps \
             --label "comgr ctest" "${BUILD_DIR}/logs/comgr-ctest.log" -- \
             ctest --test-dir "${BUILD_DIR}/compiler/amd-comgr/build" --output-on-failure || rc2=$?
           [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ]
