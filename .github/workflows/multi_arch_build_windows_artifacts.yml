@@ -161,15 +161,20 @@ jobs:
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
         run: |
-          ninja -C "${{ env.BUILD_DIR }}/compiler/amd-llvm/build" check-llvm check-clang check-lld
+          mkdir -p "${{ env.BUILD_DIR }}/logs"
+          ninja -C "${{ env.BUILD_DIR }}/compiler/amd-llvm/build" check-llvm check-clang check-lld \
+            2>&1 | tee "${{ env.BUILD_DIR }}/logs/llvm-lit-tests.log"
 
       - name: Run comgr tests
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
         run: |
-          ctest --test-dir "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" --output-on-failure
+          mkdir -p "${{ env.BUILD_DIR }}/logs"
+          ctest --test-dir "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" --output-on-failure \
+            2>&1 | tee "${{ env.BUILD_DIR }}/logs/comgr-ctest.log"
           "${{ env.BUILD_DIR }}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit" \
-            "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v
+            "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v \
+            2>&1 | tee "${{ env.BUILD_DIR }}/logs/comgr-lit-tests.log"
 
       - name: Report
         if: ${{ !cancelled() }}
