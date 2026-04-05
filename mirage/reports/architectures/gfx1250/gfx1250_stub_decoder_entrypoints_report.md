@@ -99,6 +99,7 @@
   - exact VOP3P tail batch validation now covers the remaining `SeedFamily::kVop3p` slice from `V_WMMA_F32_16X16X64_BF8_BF8_w32` through `V_WMMA_SCALE_F32_32X16X128_F4_w32`: the routed WMMA, paired-load, and scale-tail forms keep exact route-surface parity, selector/manifest consistency, and local operand-layout / descriptor exactness, while the malformed split-token and delayed split-token tail near-misses stay unknown on direct decode and route-keyed decode
   - exact WMMA family route-surface validation now covers the routed `SeedFamily::kWmma` follow-on slice: the routed `V_WMMA_*` / `V_SWMMAC_*` forms and the tensor-memory anchors keep exact route-keyed parity, selector/manifest consistency, manifest-count parity, and local operand-layout / descriptor exactness
   - exact WMMA follow-on batch validation now pins the routed `SeedFamily::kWmma` slice with route-info payload parity, exact route-manifest count parity, and helper-name coverage across the routed matrix and tensor anchors
+  - exact WMMA route-manifest count parity validation now pins the routed `SeedFamily::kWmma` slice against per-route instruction totals across the routed matrix and tensor anchors
 
 - `VOP3P` packed BF16 slice:
   - `V_PK_ADD_BF16`

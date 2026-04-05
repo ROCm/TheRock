@@ -730,6 +730,34 @@ bool WmmaFamilyRouteSurfaceMatchesSeedCatalog() {
   return true;
 }
 
+bool WmmaFamilyRouteManifestCountParityMatchesSeedCatalog() {
+  const auto seeded_instructions = GetSeededInstructionNames(SeedFamily::kWmma);
+  if (seeded_instructions.size() != 47) {
+    return false;
+  }
+
+  for (const std::string_view instruction_name : seeded_instructions) {
+    const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
+    if (seed == nullptr) {
+      return false;
+    }
+
+    const StubDecoderRoute expected_route =
+        ExpectedRouteForDecodeHint(seed->decode_hint);
+    const StubDecoderRouteManifest* manifest =
+        FindStubDecoderRouteManifest(expected_route);
+    if (manifest == nullptr ||
+        manifest->instruction_count !=
+            GetStubDecoderRouteInstructions(expected_route).size() ||
+        manifest->instruction_count != CountSeededInstructionsForRoute(
+                                            expected_route)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 }  // namespace
 
 int main() {
@@ -916,6 +944,10 @@ int main() {
   }
   if (!Expect(WmmaFamilyRouteSurfaceMatchesSeedCatalog(),
               "expected WMMA family to keep exact route-keyed parity, manifest parity, and selector consistency across the routed tensor and WMMA follow-on batch")) {
+    return 1;
+  }
+  if (!Expect(WmmaFamilyRouteManifestCountParityMatchesSeedCatalog(),
+              "expected WMMA family to keep exact route-manifest count parity across the routed tensor and WMMA follow-on batch")) {
     return 1;
   }
   for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {

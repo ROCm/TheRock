@@ -8107,6 +8107,8 @@ int main() {
                 route_manifest->route_name == route_info->route_name &&
                 route_manifest->route_priority == route_info->route_priority &&
                 route_manifest->instruction_count ==
+                    CountRouteInfosForRoute(route_info->route) &&
+                route_manifest->instruction_count ==
                     GetStubDecoderRouteInstructions(route_info->route).size() &&
                 SelectStubDecoderRoute(instruction_name) == route_info->route,
             "expected WMMA batch instruction to preserve exact route-keyed parity, selector/manifest consistency, and local operand surfaces")) {
