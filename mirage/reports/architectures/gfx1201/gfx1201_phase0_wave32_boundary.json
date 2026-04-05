@@ -707,6 +707,19 @@
     "last_instruction_name": "",
     "safe_under_current_request": false
   },
+  "next_vds_50_slice_window_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup": {
+    "start_opcode": 964,
+    "end_opcode": 1013,
+    "opcode_span_width": 50,
+    "instruction_count": 0,
+    "opcode_hole_count": 50,
+    "bucket_count": 0,
+    "bucket_names": [],
+    "instruction_names": [],
+    "first_instruction_name": "",
+    "last_instruction_name": "",
+    "safe_under_current_request": false
+  },
   "remaining_vds_instruction_statuses": [
     {
       "instruction_name": "DS_APPEND",
@@ -1284,6 +1297,6 @@
     "The boundary report now also carries an exact next-risk step chain with first and last instruction names, cumulative remaining counts, and explicit next-bucket handoff metadata for the unresolved VDS tail.",
     "The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.",
     "The boundary report now also carries a denormalized per-op remaining-VDS status list with bucket, blocking dimension, bucket risk rank, tail ordinal, bucket ordinal, and safe flag.",
-    "The sixteenth empty layer is opcode 864..913 and remains empty, and the next 50-slice frontier window is opcode 914..963 and remains empty, so the current continuation remains metadata-only."
+    "The seventeenth empty layer is opcode 914..963 and remains empty, and the next 50-slice frontier window is opcode 964..1013 and remains empty, so the current continuation remains metadata-only."
   ]
 }

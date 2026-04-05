@@ -44,7 +44,7 @@ execution path.
 - The boundary report now also carries an exact next-risk step chain with first and last instruction names, cumulative remaining counts, and explicit next-bucket handoff metadata for the unresolved VDS tail.
 - The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.
 - The boundary report now also carries a denormalized per-op remaining-VDS status list with bucket, blocking dimension, bucket risk rank, tail ordinal, bucket ordinal, and safe flag.
-- The boundary report now also carries an extended empty-window metadata chain through opcode `914..963`, so the current continuation remains metadata-only.
+- The boundary report now also carries an extended empty-window metadata chain through opcode `964..1013`, so the current continuation remains metadata-only.
 
 ## Remaining VDS Boundary
 
@@ -163,6 +163,10 @@ execution path.
 ## Seventeenth Follow-up 50-Slice Frontier Window
 
 - `opcode 914..963`: `0` instructions, `50` holes, `0` buckets, safe under current request `false`, covering no remaining VDS instructions.
+
+## Eighteenth Follow-up 50-Slice Frontier Window
+
+- `opcode 964..1013`: `0` instructions, `50` holes, `0` buckets, safe under current request `false`, covering no remaining VDS instructions.
 
 ## Remaining VDS Next-Risk Chain
 
