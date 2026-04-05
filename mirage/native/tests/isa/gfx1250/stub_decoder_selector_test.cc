@@ -691,6 +691,38 @@ bool WmmaFamilyManifestMatchesSeedCatalog() {
          seeded_instructions.back() == "V_WMMA_SCALE_F32_32X16X128_F4_w32";
 }
 
+bool WmmaFamilyRouteSurfaceMatchesSeedCatalog() {
+  const auto seeded_instructions = GetSeededInstructionNames(SeedFamily::kWmma);
+  if (seeded_instructions.size() != 47 ||
+      seeded_instructions.front() != "V_WMMA_F32_16X16X4_F32_w32" ||
+      seeded_instructions[1] != "V_WMMA_BF16F32_16X16X32_BF16_w32" ||
+      seeded_instructions[2] != "V_SWMMAC_F32_16X16X64_F16_w32" ||
+      seeded_instructions[3] != "TENSOR_LOAD_TO_LDS" ||
+      seeded_instructions[4] != "TENSOR_STORE_FROM_LDS" ||
+      seeded_instructions.back() != "V_WMMA_SCALE_F32_32X16X128_F4_w32") {
+    return false;
+  }
+
+  for (const std::string_view instruction_name : seeded_instructions) {
+    const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
+    if (seed == nullptr) {
+      return false;
+    }
+
+    const StubDecoderRoute expected_route =
+        ExpectedRouteForDecodeHint(seed->decode_hint);
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
+    if (route_info == nullptr || route_info->route != expected_route ||
+        SelectStubDecoderRoute(instruction_name) != expected_route ||
+        !Contains(expected_route, instruction_name) ||
+        !MatchesSeedCatalogParity(*route_info, *seed)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 int main() {
@@ -873,6 +905,10 @@ int main() {
   }
   if (!Expect(WmmaFamilyManifestMatchesSeedCatalog(),
               "expected WMMA family manifest to keep exact seed-catalog parity across the routed tensor and WMMA batch")) {
+    return 1;
+  }
+  if (!Expect(WmmaFamilyRouteSurfaceMatchesSeedCatalog(),
+              "expected WMMA family to keep exact route-keyed parity and selector consistency across the routed tensor and WMMA follow-on batch")) {
     return 1;
   }
   for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {

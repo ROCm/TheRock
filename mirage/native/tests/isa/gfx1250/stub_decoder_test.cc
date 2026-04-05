@@ -8069,6 +8069,7 @@ int main() {
               "expected WMMA family to expose 47 seeded instructions")) {
     return 1;
   }
+  // Exact validation for the routed WMMA follow-on batch after the VOP3P tail.
   for (std::size_t i = 0; i < wmma_seeded_instructions.size(); ++i) {
     const std::string_view instruction_name = wmma_seeded_instructions[i];
     const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
