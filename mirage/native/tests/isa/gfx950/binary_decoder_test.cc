@@ -6400,6 +6400,22 @@ int main() {
   }
 
   {
+    const std::array<std::string_view, 2> kUnsupportedScalarBufferWideOpcodes = {
+        "S_BUFFER_LOAD_DWORDX3",
+        "S_BUFFER_STORE_DWORDX3",
+    };
+    for (std::string_view opcode_name : kUnsupportedScalarBufferWideOpcodes) {
+      const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_SMEM");
+      if (!Expect(!opcode.has_value(),
+                  ("expected no default encoding opcode for " +
+                   std::string(opcode_name))
+                      .c_str())) {
+        return 1;
+      }
+    }
+  }
+
+  {
     const auto dcache_inv_opcode =
         FindDefaultEncodingOpcode("S_DCACHE_INV", "ENC_SMEM");
     const auto dcache_wb_opcode =

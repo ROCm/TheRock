@@ -8662,6 +8662,29 @@ int main() {
     return 1;
   }
 
+  const std::array<std::string_view, 2> kUnsupportedScalarBufferWideExecutionOpcodes = {
+      "S_BUFFER_LOAD_DWORDX3",
+      "S_BUFFER_STORE_DWORDX3",
+  };
+  for (std::string_view opcode : kUnsupportedScalarBufferWideExecutionOpcodes) {
+    const std::vector<DecodedInstruction> unsupported_program = {
+        DecodedInstruction::ThreeOperand(opcode, InstructionOperand::Sgpr(4),
+                                         InstructionOperand::Sgpr(0),
+                                         InstructionOperand::Imm32(0)),
+    };
+    if (!Expect(!interpreter.ExecuteProgram(unsupported_program,
+                                            &unsupported_state,
+                                            &error_message),
+                ("expected " + std::string(opcode) +
+                 " execution rejection")
+                    .c_str()) ||
+        !Expect(!error_message.empty(),
+                ("expected " + std::string(opcode) + " execution error")
+                    .c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 6> kUnsupportedScalarScratchOpcodes = {
       "S_SCRATCH_LOAD_DWORD",  "S_SCRATCH_LOAD_DWORDX2",
       "S_SCRATCH_LOAD_DWORDX4", "S_SCRATCH_STORE_DWORD",
