@@ -8069,7 +8069,8 @@ int main() {
               "expected WMMA family to expose 47 seeded instructions")) {
     return 1;
   }
-  // Exact validation for the routed WMMA follow-on batch after the VOP3P tail.
+  // Exact validation for the routed WMMA follow-on batch after the VOP3P tail,
+  // including manifest-count parity on the routed slice.
   for (std::size_t i = 0; i < wmma_seeded_instructions.size(); ++i) {
     const std::string_view instruction_name = wmma_seeded_instructions[i];
     const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
@@ -8105,6 +8106,8 @@ int main() {
                 route_manifest->route == route_info->route &&
                 route_manifest->route_name == route_info->route_name &&
                 route_manifest->route_priority == route_info->route_priority &&
+                route_manifest->instruction_count ==
+                    GetStubDecoderRouteInstructions(route_info->route).size() &&
                 SelectStubDecoderRoute(instruction_name) == route_info->route,
             "expected WMMA batch instruction to preserve exact route-keyed parity, selector/manifest consistency, and local operand surfaces")) {
       return 1;

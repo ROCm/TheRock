@@ -711,9 +711,16 @@ bool WmmaFamilyRouteSurfaceMatchesSeedCatalog() {
 
     const StubDecoderRoute expected_route =
         ExpectedRouteForDecodeHint(seed->decode_hint);
+    const StubDecoderRouteManifest* manifest =
+        FindStubDecoderRouteManifest(expected_route);
     const StubDecoderRouteInfo* route_info =
         FindStubDecoderRouteInfo(instruction_name);
-    if (route_info == nullptr || route_info->route != expected_route ||
+    if (manifest == nullptr || manifest->route != expected_route ||
+        manifest->route_name != ExpectedRouteName(expected_route) ||
+        manifest->route_priority != ExpectedRoutePriority(expected_route) ||
+        manifest->instruction_count !=
+            GetStubDecoderRouteInstructions(expected_route).size() ||
+        route_info == nullptr || route_info->route != expected_route ||
         SelectStubDecoderRoute(instruction_name) != expected_route ||
         !Contains(expected_route, instruction_name) ||
         !MatchesSeedCatalogParity(*route_info, *seed)) {
@@ -908,7 +915,7 @@ int main() {
     return 1;
   }
   if (!Expect(WmmaFamilyRouteSurfaceMatchesSeedCatalog(),
-              "expected WMMA family to keep exact route-keyed parity and selector consistency across the routed tensor and WMMA follow-on batch")) {
+              "expected WMMA family to keep exact route-keyed parity, manifest parity, and selector consistency across the routed tensor and WMMA follow-on batch")) {
     return 1;
   }
   for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
