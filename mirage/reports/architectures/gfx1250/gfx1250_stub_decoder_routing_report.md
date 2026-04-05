@@ -176,6 +176,5 @@
 
 ## Recommended Next Slice
 
-- Add architecture-local stub decoder entry points keyed by `StubDecoderRoute` instead of instruction name.
-- Implement the first `kVop3p` selector stubs for `V_PK_ADD_BF16`, `V_PK_FMA_BF16`, and `V_WMMA_F32_16X16X4_F32_w32`.
-- Add `kMimgTensor` stubs for `TENSOR_LOAD_TO_LDS` and `TENSOR_STORE_FROM_LDS`, then wire `kVop1` and `kVop3Sdst` after those are stable.
+- Add leading `SeedFamily::kFp8Bf8` 50-slice route-manifest count parity validation after the scale-paired tail batch, then keep the slice-local selector and manifest accounting exact.
+- Extend the remaining `SeedFamily::kFp8Bf8` tail with matching route-surface and manifest-accounting checks once the front-half batch is stable.
