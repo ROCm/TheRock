@@ -8690,6 +8690,29 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 2> kUnsupportedScalarBufferWideCompileOpcodes = {
+      "S_BUFFER_LOAD_DWORDX3",
+      "S_BUFFER_STORE_DWORDX3",
+  };
+  for (std::string_view opcode : kUnsupportedScalarBufferWideCompileOpcodes) {
+    std::vector<DecodedInstruction> compile_program = {
+        DecodedInstruction::ThreeOperand(opcode, InstructionOperand::Sgpr(4),
+                                         InstructionOperand::Sgpr(0),
+                                         InstructionOperand::Imm32(0)),
+    };
+    std::vector<CompiledInstruction> compiled_program;
+    if (!Expect(!interpreter.CompileProgram(compile_program, &compiled_program,
+                                            &error_message),
+                ("expected " + std::string(opcode) +
+                 " compile rejection")
+                    .c_str()) ||
+        !Expect(!error_message.empty(),
+                ("expected " + std::string(opcode) + " compile error")
+                    .c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 6> kUnsupportedScalarScratchOpcodes = {
       "S_SCRATCH_LOAD_DWORD",  "S_SCRATCH_LOAD_DWORDX2",
       "S_SCRATCH_LOAD_DWORDX4", "S_SCRATCH_STORE_DWORD",
@@ -8713,6 +8736,30 @@ int main() {
                     .c_str()) ||
         !Expect(!error_message.empty(),
                 ("expected " + std::string(opcode) + " execution error")
+                    .c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 6> kUnsupportedScalarScratchCompileOpcodes = {
+      "S_SCRATCH_LOAD_DWORD",  "S_SCRATCH_LOAD_DWORDX2",
+      "S_SCRATCH_LOAD_DWORDX4", "S_SCRATCH_STORE_DWORD",
+      "S_SCRATCH_STORE_DWORDX2", "S_SCRATCH_STORE_DWORDX4",
+  };
+  for (std::string_view opcode : kUnsupportedScalarScratchCompileOpcodes) {
+    std::vector<DecodedInstruction> compile_program = {
+        DecodedInstruction::ThreeOperand(opcode, InstructionOperand::Sgpr(4),
+                                         InstructionOperand::Sgpr(0),
+                                         InstructionOperand::Imm32(0)),
+    };
+    std::vector<CompiledInstruction> compiled_program;
+    if (!Expect(!interpreter.CompileProgram(compile_program, &compiled_program,
+                                            &error_message),
+                ("expected " + std::string(opcode) +
+                 " compile rejection")
+                    .c_str()) ||
+        !Expect(!error_message.empty(),
+                ("expected " + std::string(opcode) + " compile error")
                     .c_str())) {
       return 1;
     }
