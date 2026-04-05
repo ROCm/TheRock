@@ -135,6 +135,10 @@ execution path.
 
 - `opcode 564..613`: `0` instructions, `50` holes, `0` buckets, safe under current request `false`, covering no remaining VDS instructions.
 
+## Eleventh Follow-up 50-Slice Frontier Window
+
+- `opcode 614..663`: `0` instructions, `50` holes, `0` buckets, safe under current request `false`, covering no remaining VDS instructions.
+
 ## Remaining VDS Next-Risk Chain
 
 - `append_consume`: first `DS_APPEND`, last `DS_CONSUME`, `2` instructions, `24` remaining including this bucket, `22` remaining after it, next bucket `exchange_compare_store`, next blocking dimension `exchange_compare_store_semantics`, next instruction `DS_CONDXCHG32_RTN_B64`
