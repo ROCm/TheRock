@@ -2896,6 +2896,88 @@ int main() {
     return 1;
   }
 
+  const auto expect_support = [&](std::string_view opcode) {
+    const std::string message = "expected " + std::string(opcode) + " support";
+    return Expect(interpreter.Supports(opcode), message.c_str());
+  };
+
+  const std::array<std::string_view, 6> kFlatWideMemoryOpcodes = {
+      "FLAT_LOAD_DWORDX2",  "FLAT_LOAD_DWORDX3",  "FLAT_LOAD_DWORDX4",
+      "FLAT_STORE_DWORDX2", "FLAT_STORE_DWORDX3", "FLAT_STORE_DWORDX4",
+  };
+  for (std::string_view opcode : kFlatWideMemoryOpcodes) {
+    if (!expect_support(opcode)) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 6> kGlobalWideMemoryOpcodes = {
+      "GLOBAL_LOAD_DWORDX3", "GLOBAL_STORE_DWORDX3", "GLOBAL_LOAD_DWORDX2",
+      "GLOBAL_STORE_DWORDX2", "GLOBAL_LOAD_DWORDX4", "GLOBAL_STORE_DWORDX4",
+  };
+  for (std::string_view opcode : kGlobalWideMemoryOpcodes) {
+    if (!expect_support(opcode)) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 6> kBufferWideMemoryOpcodes = {
+      "BUFFER_LOAD_DWORDX2",  "BUFFER_LOAD_DWORDX3",  "BUFFER_LOAD_DWORDX4",
+      "BUFFER_STORE_DWORDX2", "BUFFER_STORE_DWORDX3", "BUFFER_STORE_DWORDX4",
+  };
+  for (std::string_view opcode : kBufferWideMemoryOpcodes) {
+    if (!expect_support(opcode)) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 16> kTypedBufferFormatOpcodes = {
+      "TBUFFER_LOAD_FORMAT_X",      "TBUFFER_LOAD_FORMAT_XY",
+      "TBUFFER_LOAD_FORMAT_XYZ",    "TBUFFER_LOAD_FORMAT_XYZW",
+      "TBUFFER_STORE_FORMAT_X",     "TBUFFER_STORE_FORMAT_XY",
+      "TBUFFER_STORE_FORMAT_XYZ",   "TBUFFER_STORE_FORMAT_XYZW",
+      "TBUFFER_LOAD_FORMAT_D16_X",  "TBUFFER_LOAD_FORMAT_D16_XY",
+      "TBUFFER_LOAD_FORMAT_D16_XYZ","TBUFFER_LOAD_FORMAT_D16_XYZW",
+      "TBUFFER_STORE_FORMAT_D16_X", "TBUFFER_STORE_FORMAT_D16_XY",
+      "TBUFFER_STORE_FORMAT_D16_XYZ","TBUFFER_STORE_FORMAT_D16_XYZW",
+  };
+  for (std::string_view opcode : kTypedBufferFormatOpcodes) {
+    if (!expect_support(opcode)) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 4> kFlatAtomicSupportOpcodes = {
+      "FLAT_ATOMIC_ADD", "FLAT_ATOMIC_SWAP", "FLAT_ATOMIC_CMPSWAP",
+      "FLAT_ATOMIC_ADD_X2",
+  };
+  for (std::string_view opcode : kFlatAtomicSupportOpcodes) {
+    if (!expect_support(opcode)) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 3> kBufferAtomicSupportOpcodes = {
+      "BUFFER_ATOMIC_ADD", "BUFFER_ATOMIC_CMPSWAP", "BUFFER_ATOMIC_ADD_X2",
+  };
+  for (std::string_view opcode : kBufferAtomicSupportOpcodes) {
+    if (!expect_support(opcode)) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 8> kGlobalAtomicSupportOpcodes = {
+      "GLOBAL_ATOMIC_ADD_F32", "GLOBAL_ATOMIC_PK_ADD_F16",
+      "GLOBAL_ATOMIC_ADD_F64", "GLOBAL_ATOMIC_MIN_F64",
+      "GLOBAL_ATOMIC_MAX_F64", "GLOBAL_ATOMIC_PK_ADD_BF16",
+      "GLOBAL_ATOMIC_SWAP_X2", "GLOBAL_ATOMIC_CMPSWAP_X2",
+  };
+  for (std::string_view opcode : kGlobalAtomicSupportOpcodes) {
+    if (!expect_support(opcode)) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 18> kExtendedDsOpcodes = {
       "DS_SUB_U32", "DS_RSUB_U32", "DS_INC_U32", "DS_DEC_U32",
       "DS_MIN_I32", "DS_MAX_I32",  "DS_MIN_U32", "DS_MAX_U32",
