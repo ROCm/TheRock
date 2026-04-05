@@ -8744,6 +8744,57 @@ int main() {
     return 1;
   }
 
+  const std::array<std::string_view, 2> kUnsupportedScalarMemoryWideOpcodes = {
+      "S_LOAD_DWORDX3",
+      "S_STORE_DWORDX3",
+  };
+  for (std::string_view opcode : kUnsupportedScalarMemoryWideOpcodes) {
+    if (!Expect(!interpreter.Supports(opcode),
+                ("expected " + std::string(opcode) + " unsupported")
+                    .c_str())) {
+      return 1;
+    }
+    const std::vector<DecodedInstruction> unsupported_program = {
+        DecodedInstruction::ThreeOperand(opcode, InstructionOperand::Sgpr(4),
+                                         InstructionOperand::Sgpr(0),
+                                         InstructionOperand::Imm32(0)),
+    };
+    if (!Expect(!interpreter.ExecuteProgram(unsupported_program,
+                                            &unsupported_state,
+                                            &error_message),
+                ("expected " + std::string(opcode) +
+                 " execution rejection")
+                    .c_str()) ||
+        !Expect(!error_message.empty(),
+                ("expected " + std::string(opcode) + " execution error")
+                    .c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 2> kUnsupportedScalarMemoryWideCompileOpcodes = {
+      "S_LOAD_DWORDX3",
+      "S_STORE_DWORDX3",
+  };
+  for (std::string_view opcode : kUnsupportedScalarMemoryWideCompileOpcodes) {
+    std::vector<DecodedInstruction> compile_program = {
+        DecodedInstruction::ThreeOperand(opcode, InstructionOperand::Sgpr(4),
+                                         InstructionOperand::Sgpr(0),
+                                         InstructionOperand::Imm32(0)),
+    };
+    std::vector<CompiledInstruction> compiled_program;
+    if (!Expect(!interpreter.CompileProgram(compile_program, &compiled_program,
+                                            &error_message),
+                ("expected " + std::string(opcode) +
+                 " compile rejection")
+                    .c_str()) ||
+        !Expect(!error_message.empty(),
+                ("expected " + std::string(opcode) + " compile error")
+                    .c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 2> kUnsupportedScalarBufferWideExecutionOpcodes = {
       "S_BUFFER_LOAD_DWORDX3",
       "S_BUFFER_STORE_DWORDX3",
