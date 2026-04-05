@@ -8667,6 +8667,11 @@ int main() {
       "S_BUFFER_STORE_DWORDX3",
   };
   for (std::string_view opcode : kUnsupportedScalarBufferWideExecutionOpcodes) {
+    if (!Expect(!interpreter.Supports(opcode),
+                ("expected " + std::string(opcode) + " unsupported")
+                    .c_str())) {
+      return 1;
+    }
     const std::vector<DecodedInstruction> unsupported_program = {
         DecodedInstruction::ThreeOperand(opcode, InstructionOperand::Sgpr(4),
                                          InstructionOperand::Sgpr(0),
@@ -8691,6 +8696,11 @@ int main() {
       "S_SCRATCH_STORE_DWORDX2", "S_SCRATCH_STORE_DWORDX4",
   };
   for (std::string_view opcode : kUnsupportedScalarScratchOpcodes) {
+    if (!Expect(!interpreter.Supports(opcode),
+                ("expected " + std::string(opcode) + " unsupported")
+                    .c_str())) {
+      return 1;
+    }
     const std::vector<DecodedInstruction> scratch_program = {
         DecodedInstruction::ThreeOperand(opcode, InstructionOperand::Sgpr(4),
                                          InstructionOperand::Sgpr(0),
