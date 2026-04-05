@@ -800,6 +800,63 @@ bool Vop3pLeadingBatchRouteManifestCountParityMatchesSeedCatalog() {
   return true;
 }
 
+bool Vop3pTailBatchRouteManifestCountParityMatchesSeedCatalog() {
+  const auto seeded_instructions = GetSeededInstructionNames(SeedFamily::kVop3p);
+  if (seeded_instructions.size() != 62 ||
+      seeded_instructions[50] != "V_WMMA_F32_16X16X64_BF8_BF8_w32" ||
+      seeded_instructions[51] != "V_WMMA_F32_16X16X64_BF8_FP8_w32" ||
+      seeded_instructions[52] != "V_WMMA_F32_16X16X64_FP8_BF8_w32" ||
+      seeded_instructions[53] != "V_WMMA_F32_16X16X64_FP8_FP8_w32" ||
+      seeded_instructions[54] != "V_WMMA_F32_32X16X128_F4_w32" ||
+      seeded_instructions[55] != "V_WMMA_I32_16X16X64_IU8_w32" ||
+      seeded_instructions[56] != "V_WMMA_LD_SCALE16_PAIRED_B64" ||
+      seeded_instructions[57] != "V_WMMA_LD_SCALE_PAIRED_B32" ||
+      seeded_instructions[58] != "V_WMMA_SCALE16_F32_16X16X128_F8F6F4" ||
+      seeded_instructions[59] != "V_WMMA_SCALE16_F32_32X16X128_F4_w32" ||
+      seeded_instructions[60] != "V_WMMA_SCALE_F32_16X16X128_F8F6F4" ||
+      seeded_instructions[61] != "V_WMMA_SCALE_F32_32X16X128_F4_w32") {
+    return false;
+  }
+
+  const StubDecoderRouteManifest* manifest =
+      FindStubDecoderRouteManifest(StubDecoderRoute::kVop3p);
+  if (manifest == nullptr ||
+      manifest->instruction_count !=
+          CountSeededInstructionsForRoute(StubDecoderRoute::kVop3p) ||
+      manifest->instruction_count !=
+          GetStubDecoderRouteInstructions(StubDecoderRoute::kVop3p).size() ||
+      manifest->xml_backed_count !=
+          CountXmlBackedSeededInstructionsForRoute(StubDecoderRoute::kVop3p) ||
+      manifest->llvm_only_count !=
+          CountLlvmOnlySeededInstructionsForRoute(StubDecoderRoute::kVop3p) ||
+      manifest->target_specific_count !=
+          CountTargetSpecificSeededInstructionsForRoute(
+              StubDecoderRoute::kVop3p)) {
+    return false;
+  }
+
+  for (std::size_t i = 50; i < seeded_instructions.size(); ++i) {
+    const std::string_view instruction_name = seeded_instructions[i];
+    const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
+    if (seed == nullptr) {
+      return false;
+    }
+
+    const StubDecoderRoute expected_route =
+        ExpectedRouteForDecodeHint(seed->decode_hint);
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
+    if (expected_route != StubDecoderRoute::kVop3p || route_info == nullptr ||
+        route_info->route != expected_route ||
+        SelectStubDecoderRoute(instruction_name) != expected_route ||
+        !Contains(expected_route, instruction_name) ||
+        !MatchesSeedCatalogParity(*route_info, *seed)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 int main() {
@@ -994,6 +1051,10 @@ int main() {
   }
   if (!Expect(Vop3pLeadingBatchRouteManifestCountParityMatchesSeedCatalog(),
               "expected VOP3P family to keep exact route-manifest count parity across the leading 50-seed batch")) {
+    return 1;
+  }
+  if (!Expect(Vop3pTailBatchRouteManifestCountParityMatchesSeedCatalog(),
+              "expected VOP3P family to keep exact route-manifest count parity across the remaining tail batch")) {
     return 1;
   }
   for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
