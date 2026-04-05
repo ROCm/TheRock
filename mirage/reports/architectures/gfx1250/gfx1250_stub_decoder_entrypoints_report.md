@@ -100,6 +100,7 @@
   - exact WMMA family route-surface validation now covers the routed `SeedFamily::kWmma` follow-on slice: the routed `V_WMMA_*` / `V_SWMMAC_*` forms and the tensor-memory anchors keep exact route-keyed parity, selector/manifest consistency, manifest-count parity, and local operand-layout / descriptor exactness
   - exact WMMA follow-on batch validation now pins the routed `SeedFamily::kWmma` slice with route-info payload parity, exact route-manifest count parity, and helper-name coverage across the routed matrix and tensor anchors
   - exact WMMA route-manifest count parity validation now pins the routed `SeedFamily::kWmma` slice against per-route instruction totals across the routed matrix and tensor anchors
+  - exact VOP3P leading 50-slice route-manifest count parity validation now pins the routed packed BF16, SWMMAC, and early WMMA forms against per-route instruction totals across the routed family set
 
 - `VOP3P` packed BF16 slice:
   - `V_PK_ADD_BF16`
@@ -111,6 +112,8 @@
   - route-wide exact operand-layout-to-record consistency checks across the current packed BF16 seeds
   - route-wide exact descriptor-to-slot parity checks across the current packed BF16 seeds
   - route-wide exact top-level flag composition checks across the current packed BF16 seeds
+- `VOP3P` leading 50-slice route-manifest count parity:
+  - route-wide exact route-manifest count parity checks across the leading `SeedFamily::kVop3p` 50-slice batch
 - `VOP3P` WMMA / SWMMAC slice:
   - `V_WMMA_F32_16X16X4_F32_w32`
   - `V_WMMA_F32_16X16X128_FP8_FP8_w32`

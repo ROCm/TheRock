@@ -1118,6 +1118,54 @@ bool GlobalRouteInfoSequenceMatchesRouteInstructionLists() {
   return route_info_index == route_infos.size();
 }
 
+bool Vop3pLeadingBatchRouteManifestCountParityMatchesSeedCatalog() {
+  const auto seeded_instructions = GetSeededInstructionNames(SeedFamily::kVop3p);
+  if (seeded_instructions.size() != 62 ||
+      seeded_instructions.front() != "V_PK_ADD_BF16" ||
+      seeded_instructions[49] != "V_WMMA_F32_16X16X4_F32_w32" ||
+      seeded_instructions[50] != "V_WMMA_F32_16X16X64_BF8_BF8_w32" ||
+      seeded_instructions.back() != "V_WMMA_SCALE_F32_32X16X128_F4_w32") {
+    return false;
+  }
+
+  const StubDecoderRouteManifest* manifest =
+      FindStubDecoderRouteManifest(StubDecoderRoute::kVop3p);
+  if (manifest == nullptr ||
+      manifest->instruction_count != CountRouteInfosForRoute(
+                                         StubDecoderRoute::kVop3p) ||
+      manifest->instruction_count !=
+          GetStubDecoderRouteInstructions(StubDecoderRoute::kVop3p).size()) {
+    return false;
+  }
+
+  for (std::size_t i = 0; i < 50; ++i) {
+    const std::string_view instruction_name = seeded_instructions[i];
+    const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
+    if (seed == nullptr) {
+      return false;
+    }
+
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
+    if (route_info == nullptr || route_info->route != StubDecoderRoute::kVop3p ||
+        route_info->instruction_name != seed->instruction_name ||
+        route_info->route_name != manifest->route_name ||
+        route_info->route_priority != manifest->route_priority ||
+        route_info->decode_hint != seed->decode_hint ||
+        route_info->rdna4_encoding_name != seed->rdna4_encoding_name ||
+        route_info->rdna4_opcode != seed->rdna4_opcode ||
+        route_info->rdna4_operand_count != seed->rdna4_operand_count ||
+        route_info->appears_in_rdna4_xml != seed->appears_in_rdna4_xml ||
+        route_info->is_target_specific != seed->is_target_specific ||
+        SelectStubDecoderRoute(instruction_name) != StubDecoderRoute::kVop3p ||
+        !IsInstructionListedForRoute(StubDecoderRoute::kVop3p,
+                                     instruction_name)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool RouteInfoLookupMatchesSequenceEntries() {
   for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
     if (FindStubDecoderRouteInfo(route_info.instruction_name) != &route_info) {
@@ -8007,6 +8055,10 @@ int main() {
                 "expected VOP3P batch instruction to keep exact helper-name parity and coverage")) {
       return 1;
     }
+  }
+  if (!Expect(Vop3pLeadingBatchRouteManifestCountParityMatchesSeedCatalog(),
+              "expected VOP3P family to keep exact route-manifest count parity across the leading 50-seed batch")) {
+    return 1;
   }
 
   for (std::size_t i = 50; i < vop3p_seeded_instructions.size(); ++i) {

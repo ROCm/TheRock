@@ -758,6 +758,48 @@ bool WmmaFamilyRouteManifestCountParityMatchesSeedCatalog() {
   return true;
 }
 
+bool Vop3pLeadingBatchRouteManifestCountParityMatchesSeedCatalog() {
+  const auto seeded_instructions = GetSeededInstructionNames(SeedFamily::kVop3p);
+  if (seeded_instructions.size() != 62 ||
+      seeded_instructions.front() != "V_PK_ADD_BF16" ||
+      seeded_instructions[49] != "V_WMMA_F32_16X16X4_F32_w32" ||
+      seeded_instructions[50] != "V_WMMA_F32_16X16X64_BF8_BF8_w32" ||
+      seeded_instructions.back() != "V_WMMA_SCALE_F32_32X16X128_F4_w32") {
+    return false;
+  }
+
+  const StubDecoderRouteManifest* manifest =
+      FindStubDecoderRouteManifest(StubDecoderRoute::kVop3p);
+  if (manifest == nullptr ||
+      manifest->instruction_count !=
+          GetStubDecoderRouteInstructions(StubDecoderRoute::kVop3p).size() ||
+      manifest->instruction_count !=
+          CountSeededInstructionsForRoute(StubDecoderRoute::kVop3p)) {
+    return false;
+  }
+
+  for (std::size_t i = 0; i < 50; ++i) {
+    const std::string_view instruction_name = seeded_instructions[i];
+    const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
+    if (seed == nullptr) {
+      return false;
+    }
+
+    const StubDecoderRoute expected_route =
+        ExpectedRouteForDecodeHint(seed->decode_hint);
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
+    if (expected_route != StubDecoderRoute::kVop3p || route_info == nullptr ||
+        route_info->route != expected_route ||
+        SelectStubDecoderRoute(instruction_name) != expected_route ||
+        !Contains(expected_route, instruction_name) ||
+        !MatchesSeedCatalogParity(*route_info, *seed)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 int main() {
@@ -948,6 +990,10 @@ int main() {
   }
   if (!Expect(WmmaFamilyRouteManifestCountParityMatchesSeedCatalog(),
               "expected WMMA family to keep exact route-manifest count parity across the routed tensor and WMMA follow-on batch")) {
+    return 1;
+  }
+  if (!Expect(Vop3pLeadingBatchRouteManifestCountParityMatchesSeedCatalog(),
+              "expected VOP3P family to keep exact route-manifest count parity across the leading 50-seed batch")) {
     return 1;
   }
   for (const StubDecoderRouteManifest& manifest : GetStubDecoderRouteManifests()) {
