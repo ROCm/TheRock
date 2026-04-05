@@ -3764,6 +3764,35 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 6>
+      kUnsupportedBufferFormatWideSupportOpcodes = {
+      "BUFFER_LOAD_FORMAT_D16_HI_XY",   "BUFFER_LOAD_FORMAT_D16_HI_XYZ",
+      "BUFFER_LOAD_FORMAT_D16_HI_XYZW", "BUFFER_STORE_FORMAT_D16_HI_XY",
+      "BUFFER_STORE_FORMAT_D16_HI_XYZ", "BUFFER_STORE_FORMAT_D16_HI_XYZW",
+  };
+  for (std::string_view opcode : kUnsupportedBufferFormatWideSupportOpcodes) {
+    const std::string message =
+        "expected " + std::string(opcode) + " to remain unsupported";
+    if (!Expect(!interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 8>
+      kUnsupportedTypedBufferFormatWideSupportOpcodes = {
+      "TBUFFER_LOAD_FORMAT_D16_HI_X",   "TBUFFER_LOAD_FORMAT_D16_HI_XY",
+      "TBUFFER_LOAD_FORMAT_D16_HI_XYZ",  "TBUFFER_LOAD_FORMAT_D16_HI_XYZW",
+      "TBUFFER_STORE_FORMAT_D16_HI_X",   "TBUFFER_STORE_FORMAT_D16_HI_XY",
+      "TBUFFER_STORE_FORMAT_D16_HI_XYZ", "TBUFFER_STORE_FORMAT_D16_HI_XYZW",
+  };
+  for (std::string_view opcode : kUnsupportedTypedBufferFormatWideSupportOpcodes) {
+    const std::string message =
+        "expected " + std::string(opcode) + " to remain unsupported";
+    if (!Expect(!interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 32> kBufferAtomicOpcodes = {
       "BUFFER_ATOMIC_SWAP",      "BUFFER_ATOMIC_CMPSWAP",
       "BUFFER_ATOMIC_ADD",       "BUFFER_ATOMIC_SUB",
@@ -8841,6 +8870,70 @@ int main() {
                     .c_str()) ||
         !Expect(!error_message.empty(),
                 ("expected " + std::string(opcode) + " compile error")
+                    .c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 6>
+      kUnsupportedBufferFormatWideExecutionOpcodes = {
+      "BUFFER_LOAD_FORMAT_D16_HI_XY",   "BUFFER_LOAD_FORMAT_D16_HI_XYZ",
+      "BUFFER_LOAD_FORMAT_D16_HI_XYZW", "BUFFER_STORE_FORMAT_D16_HI_XY",
+      "BUFFER_STORE_FORMAT_D16_HI_XYZ", "BUFFER_STORE_FORMAT_D16_HI_XYZW",
+  };
+  for (std::string_view opcode : kUnsupportedBufferFormatWideExecutionOpcodes) {
+    if (!Expect(!interpreter.Supports(opcode),
+                ("expected " + std::string(opcode) + " unsupported")
+                    .c_str())) {
+      return 1;
+    }
+    const std::vector<DecodedInstruction> unsupported_program = {
+        DecodedInstruction::FiveOperand(
+            opcode, InstructionOperand::Vgpr(4), InstructionOperand::Vgpr(0),
+            InstructionOperand::Sgpr(2), InstructionOperand::Imm32(0),
+            InstructionOperand::Imm32(0)),
+    };
+    if (!Expect(!interpreter.ExecuteProgram(unsupported_program,
+                                            &unsupported_state,
+                                            &error_message),
+                ("expected " + std::string(opcode) +
+                 " execution rejection")
+                    .c_str()) ||
+        !Expect(!error_message.empty(),
+                ("expected " + std::string(opcode) + " execution error")
+                    .c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 8>
+      kUnsupportedTypedBufferFormatWideExecutionOpcodes = {
+      "TBUFFER_LOAD_FORMAT_D16_HI_X",   "TBUFFER_LOAD_FORMAT_D16_HI_XY",
+      "TBUFFER_LOAD_FORMAT_D16_HI_XYZ",  "TBUFFER_LOAD_FORMAT_D16_HI_XYZW",
+      "TBUFFER_STORE_FORMAT_D16_HI_X",   "TBUFFER_STORE_FORMAT_D16_HI_XY",
+      "TBUFFER_STORE_FORMAT_D16_HI_XYZ", "TBUFFER_STORE_FORMAT_D16_HI_XYZW",
+  };
+  for (std::string_view opcode : kUnsupportedTypedBufferFormatWideExecutionOpcodes) {
+    if (!Expect(!interpreter.Supports(opcode),
+                ("expected " + std::string(opcode) + " unsupported")
+                    .c_str())) {
+      return 1;
+    }
+    const std::vector<DecodedInstruction> unsupported_program = {
+        DecodedInstruction::SevenOperand(
+            opcode, InstructionOperand::Vgpr(4), InstructionOperand::Vgpr(0),
+            InstructionOperand::Sgpr(2), InstructionOperand::Imm32(0),
+            InstructionOperand::Imm32(0), InstructionOperand::Imm32(10),
+            InstructionOperand::Imm32(4)),
+    };
+    if (!Expect(!interpreter.ExecuteProgram(unsupported_program,
+                                            &unsupported_state,
+                                            &error_message),
+                ("expected " + std::string(opcode) +
+                 " execution rejection")
+                    .c_str()) ||
+        !Expect(!error_message.empty(),
+                ("expected " + std::string(opcode) + " execution error")
                     .c_str())) {
       return 1;
     }

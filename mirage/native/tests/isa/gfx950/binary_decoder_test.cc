@@ -6941,11 +6941,11 @@ int main() {
       return 1;
     }
 
-    for (std::size_t index = 0; index < kTypedBufferFormatOpcodes.size();
-         ++index) {
-      const auto& instruction = decoded_program[index];
-      const bool use_lane_offset = index != 0u;
-      const bool use_soffset_register =
+  for (std::size_t index = 0; index < kTypedBufferFormatOpcodes.size();
+       ++index) {
+    const auto& instruction = decoded_program[index];
+    const bool use_lane_offset = index != 0u;
+    const bool use_soffset_register =
           index + 1u == kTypedBufferFormatOpcodes.size();
       if (!Expect(instruction.opcode == kTypedBufferFormatOpcodes[index],
                   "expected typed buffer format opcode decode") ||
@@ -6983,6 +6983,39 @@ int main() {
         std::cerr << kTypedBufferFormatOpcodes[index] << '\n';
         return 1;
       }
+    }
+  }
+
+  const std::array<std::string_view, 6> kUnsupportedBufferFormatWideOpcodes = {
+      "BUFFER_LOAD_FORMAT_D16_HI_XY",   "BUFFER_LOAD_FORMAT_D16_HI_XYZ",
+      "BUFFER_LOAD_FORMAT_D16_HI_XYZW", "BUFFER_STORE_FORMAT_D16_HI_XY",
+      "BUFFER_STORE_FORMAT_D16_HI_XYZ", "BUFFER_STORE_FORMAT_D16_HI_XYZW",
+  };
+  for (std::string_view opcode_name : kUnsupportedBufferFormatWideOpcodes) {
+    const std::optional<std::uint32_t> opcode_value =
+        FindDefaultEncodingOpcode(opcode_name, "ENC_MUBUF");
+    if (!Expect(!opcode_value.has_value(),
+                ("expected no default encoding opcode for " +
+                 std::string(opcode_name))
+                    .c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 8> kUnsupportedTypedBufferFormatWideOpcodes = {
+      "TBUFFER_LOAD_FORMAT_D16_HI_X",   "TBUFFER_LOAD_FORMAT_D16_HI_XY",
+      "TBUFFER_LOAD_FORMAT_D16_HI_XYZ",  "TBUFFER_LOAD_FORMAT_D16_HI_XYZW",
+      "TBUFFER_STORE_FORMAT_D16_HI_X",   "TBUFFER_STORE_FORMAT_D16_HI_XY",
+      "TBUFFER_STORE_FORMAT_D16_HI_XYZ", "TBUFFER_STORE_FORMAT_D16_HI_XYZW",
+  };
+  for (std::string_view opcode_name : kUnsupportedTypedBufferFormatWideOpcodes) {
+    const std::optional<std::uint32_t> opcode_value =
+        FindDefaultEncodingOpcode(opcode_name, "ENC_MTBUF");
+    if (!Expect(!opcode_value.has_value(),
+                ("expected no default encoding opcode for " +
+                 std::string(opcode_name))
+                    .c_str())) {
+      return 1;
     }
   }
 
