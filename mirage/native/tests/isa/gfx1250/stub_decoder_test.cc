@@ -7770,7 +7770,8 @@ int main() {
     }
     return false;
   };
-  // Exact validation for the routed post-pair-load 50-seed tail.
+  // Exact validation for the routed post-pair-load 50-seed tail, including
+  // route-manifest count parity on the routed slice.
   for (std::size_t i = 2; i < scale_paired_seeded_instructions.size(); ++i) {
     const std::string_view instruction_name =
         scale_paired_seeded_instructions[i];
@@ -7816,9 +7817,13 @@ int main() {
                 route_manifest->route == route_info->route &&
                 route_manifest->route_name == route_info->route_name &&
                 route_manifest->route_priority == route_info->route_priority &&
+                route_manifest->instruction_count ==
+                    CountRouteInfosForRoute(route_info->route) &&
+                route_manifest->instruction_count ==
+                    GetStubDecoderRouteInstructions(route_info->route).size() &&
                 route_contains_instruction(route_info->route, instruction_name) &&
                 SelectStubDecoderRoute(instruction_name) == route_info->route,
-            "expected routed scale-paired tail batch instruction to preserve exact route-keyed parity, selector/manifest consistency, and local operand surfaces")) {
+            "expected routed scale-paired tail batch instruction to preserve exact route-keyed parity, selector/manifest consistency, route-manifest count parity, and local operand surfaces")) {
       return 1;
     }
 

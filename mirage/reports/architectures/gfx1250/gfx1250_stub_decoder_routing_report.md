@@ -102,7 +102,7 @@
 ## Scale Paired Follow-On
 
 - Priority: routed through `kVop3p` after the paired-load helpers
-- Description: post-pair-load scale conversion and scale WMMA follow-on slice
+- Description: post-pair-load scale conversion and scale WMMA follow-on slice with tail route-manifest count parity
 - Focus instruction count: `52`
 - Route-keyed exactness split:
   - Routed paired-load helpers:
@@ -142,6 +142,8 @@
     - `V_WMMA_SCALE16_F32_16X16X128_F8F6F4`
     - `V_WMMA_SCALE_F32_32X16X128_F4_w32`
     - `V_WMMA_SCALE16_F32_32X16X128_F4_w32`
+  - Route-manifest count parity:
+    - route-wide exact route-manifest count parity checks across the routed post-pair-load 50-seed tail
 
 ## Deferred Seed Hints
 
