@@ -642,6 +642,32 @@
     "last_instruction_name": "",
     "safe_under_current_request": false
   },
+  "next_vds_50_slice_window_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup": {
+    "start_opcode": 714,
+    "end_opcode": 763,
+    "opcode_span_width": 50,
+    "instruction_count": 0,
+    "opcode_hole_count": 50,
+    "bucket_count": 0,
+    "bucket_names": [],
+    "instruction_names": [],
+    "first_instruction_name": "",
+    "last_instruction_name": "",
+    "safe_under_current_request": false
+  },
+  "next_vds_50_slice_window_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup": {
+    "start_opcode": 764,
+    "end_opcode": 813,
+    "opcode_span_width": 50,
+    "instruction_count": 0,
+    "opcode_hole_count": 50,
+    "bucket_count": 0,
+    "bucket_names": [],
+    "instruction_names": [],
+    "first_instruction_name": "",
+    "last_instruction_name": "",
+    "safe_under_current_request": false
+  },
   "remaining_vds_instruction_statuses": [
     {
       "instruction_name": "DS_APPEND",
@@ -1219,6 +1245,6 @@
     "The boundary report now also carries an exact next-risk step chain with first and last instruction names, cumulative remaining counts, and explicit next-bucket handoff metadata for the unresolved VDS tail.",
     "The first unsafe ENC_VDS bucket is now expanded inline with its blocking dimension and exact instruction list.",
     "The boundary report now also carries a denormalized per-op remaining-VDS status list with bucket, blocking dimension, bucket risk rank, tail ordinal, bucket ordinal, and safe flag.",
-    "The next 50-slice frontier window beyond the twelfth empty layer is opcode 714..763 and remains empty, so the current continuation remains metadata-only."
+    "The thirteenth empty layer is opcode 714..763 and remains empty, and the next 50-slice frontier window is opcode 764..813 and remains empty, so the current continuation remains metadata-only."
   ]
 }
