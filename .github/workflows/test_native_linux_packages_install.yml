@@ -140,11 +140,11 @@ jobs:
           if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
             apt update
             apt install -y \
-              python3 \
+              bash \
               wget \
               curl \
               ca-certificates \
-              git \
+              gpg \
               lsb-release
             if [ "$TEST_TYPE" = "full" ]; then
               echo "Extra OS packages for --test-type full (e.g. rdhc): pciutils, kmod, apt-utils"
@@ -154,11 +154,11 @@ jobs:
             # SLES prerequisites (uses BCI base - zypper)
             zypper refresh
             zypper install -y \
-              python3 \
+              bash \
               wget \
               curl \
               ca-certificates \
-              git \
+              gpg2 \
               lsb-release \
               update-alternatives
             if [ "$TEST_TYPE" = "full" ]; then
@@ -168,11 +168,11 @@ jobs:
           else
             # rpm (non-SLES, e.g. rhel10): RHEL UBI 9.4; Use --allowerasing to handle curl-minimal conflict on RHEL UBI 9.4
             dnf install -y --allowerasing \
-              python3 \
+              bash \
               wget \
               curl \
               ca-certificates \
-              git \
+              gnupg2 \
               dnf-plugins-core
             if [ "$TEST_TYPE" = "full" ]; then
               echo "Extra OS packages for --test-type full (e.g. rdhc): pciutils, kmod"
@@ -185,7 +185,7 @@ jobs:
 
       - name: Setup Python and install runtime
         run: |
-          python3 build_tools/packaging/linux/setup_python_cmd.py \
+          bash build_tools/packaging/linux/setup_python_cmd.sh \
             --os-profile "${{ inputs.os_profile }}" \
             --install-runtime \
             --output-format github >> $GITHUB_ENV
