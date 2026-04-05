@@ -15807,6 +15807,9 @@ int main() {
                                        InstructionOperand::Sgpr(0),
                                        InstructionOperand::Imm32(4)),
       DecodedInstruction::Nullary("BUFFER_WBL2"),
+      DecodedInstruction::ThreeOperand("S_LOAD_DWORDX4", InstructionOperand::Sgpr(16),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x30)),
       DecodedInstruction::ThreeOperand("S_STORE_DWORD", InstructionOperand::Sgpr(4),
                                        InstructionOperand::Sgpr(0),
                                        InstructionOperand::Sgpr(2)),
@@ -15849,6 +15852,10 @@ int main() {
     memory.WriteU32(0x100u, 0x11223344u);
     memory.WriteU32(0x104u, 0x55667788u);
     memory.WriteU32(0x108u, 0x99aabbccu);
+    memory.WriteU32(0x130u, 0x33330000u);
+    memory.WriteU32(0x134u, 0x33330001u);
+    memory.WriteU32(0x138u, 0x33330002u);
+    memory.WriteU32(0x13cu, 0x33330003u);
     memory.WriteU32(0x120u, 0xdeadc0deu);
     memory.WriteU32(0x140u, 0xfeedfaceu);
     memory.WriteU32(0x1a0u, 0x2468ace0u);
@@ -15897,6 +15904,13 @@ int main() {
                       (std::string(mode) +
                        " scalar memory maintenance s_load_dwordx2 result")
                           .c_str()) &&
+               Expect(state.sgprs[16] == 0x33330000u &&
+                          state.sgprs[17] == 0x33330001u &&
+                          state.sgprs[18] == 0x33330002u &&
+                          state.sgprs[19] == 0x33330003u,
+                      (std::string(mode) +
+                       " scalar memory maintenance s_load_dwordx4 result")
+                          .c_str()) &&
                Expect(state.sgprs[9] == 0x88888888u &&
                           state.sgprs[14] == 0x13579bdfu &&
                           state.sgprs[15] == 0x2468ace0u &&
@@ -15943,6 +15957,22 @@ int main() {
                Expect(value == 0x99aabbccu,
                       (std::string(mode) +
                        " scalar memory maintenance x2 high source preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x130u, &value),
+                      (std::string(mode) +
+                       " scalar memory maintenance source read")
+                          .c_str()) &&
+               Expect(value == 0x33330000u,
+                      (std::string(mode) +
+                       " scalar memory maintenance x4 source preserved")
+                          .c_str()) &&
+               Expect(memory.ReadU32(0x13cu, &value),
+                      (std::string(mode) +
+                       " scalar memory maintenance source read")
+                          .c_str()) &&
+               Expect(value == 0x33330003u,
+                      (std::string(mode) +
+                       " scalar memory maintenance x4 tail source preserved")
                           .c_str()) &&
                Expect(memory.ReadU32(0x120u, &value),
                       (std::string(mode) +
