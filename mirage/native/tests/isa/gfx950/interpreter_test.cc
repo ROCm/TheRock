@@ -3535,12 +3535,12 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 6> kUnsupportedScalarScratchOpcodes = {
+  const std::array<std::string_view, 6> kUnsupportedScalarScratchExecutionOpcodes = {
       "S_SCRATCH_LOAD_DWORD",  "S_SCRATCH_LOAD_DWORDX2",
       "S_SCRATCH_LOAD_DWORDX4", "S_SCRATCH_STORE_DWORD",
       "S_SCRATCH_STORE_DWORDX2", "S_SCRATCH_STORE_DWORDX4",
   };
-  for (std::string_view opcode : kUnsupportedScalarScratchOpcodes) {
+  for (std::string_view opcode : kUnsupportedScalarScratchExecutionOpcodes) {
     const std::string message =
         "expected " + std::string(opcode) + " to remain unsupported";
     if (!Expect(!interpreter.Supports(opcode), message.c_str())) {
@@ -8648,6 +8648,29 @@ int main() {
               "expected malformed buffer opcode to fail") ||
       !Expect(!error_message.empty(), "expected malformed buffer opcode error")) {
     return 1;
+  }
+
+  const std::array<std::string_view, 6> kUnsupportedScalarScratchOpcodes = {
+      "S_SCRATCH_LOAD_DWORD",  "S_SCRATCH_LOAD_DWORDX2",
+      "S_SCRATCH_LOAD_DWORDX4", "S_SCRATCH_STORE_DWORD",
+      "S_SCRATCH_STORE_DWORDX2", "S_SCRATCH_STORE_DWORDX4",
+  };
+  for (std::string_view opcode : kUnsupportedScalarScratchOpcodes) {
+    const std::vector<DecodedInstruction> scratch_program = {
+        DecodedInstruction::ThreeOperand(opcode, InstructionOperand::Sgpr(4),
+                                         InstructionOperand::Sgpr(0),
+                                         InstructionOperand::Imm32(0)),
+    };
+    if (!Expect(!interpreter.ExecuteProgram(scratch_program, &unsupported_state,
+                                            &error_message),
+                ("expected " + std::string(opcode) +
+                 " execution rejection")
+                    .c_str()) ||
+        !Expect(!error_message.empty(),
+                ("expected " + std::string(opcode) + " execution error")
+                    .c_str())) {
+      return 1;
+    }
   }
 
   const std::vector<DecodedInstruction> ds_program = {
