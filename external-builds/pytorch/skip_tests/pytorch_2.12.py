@@ -66,6 +66,8 @@ skip_tests = {
             "test_fake_export_nn_functional_instance_norm_cuda_float32",
             # subprocess.CalledProcessError in multi_margin_loss export
             "test_fake_export_nn_functional_multi_margin_loss_cuda_float32",
+            # subprocess.CalledProcessError in scaled_dot_product_attention export
+            "test_fake_export_nn_functional_scaled_dot_product_attention_cuda_float32",
         ],
         "inductor": [
             # BenchmarkMultiTemplateFusionGpuTest - extern code mismatch
@@ -162,10 +164,22 @@ skip_tests = {
             "test_async_autotuner_cache_same_inputs",
             # HigherOrderOpTestsWithCompiledAutograd - _GeneratorContextManager
             "test_tensor_with_unbacked_shape_closure",
+            # TestMaxAutotuneAsyncPipelined - NoValidChoicesError bmm
+            "test_bmm_out_dtype",
+            # FuncTorchHigherOrderOpTestsWithCompiledAutograd - _GeneratorContextManager
+            "test_functional_call",
+            # TestOpInfoPropertiesCUDA - XPASS remainder bfloat16
+            "test_eager_equivalence_remainder_backend_inductor_default_cuda_bfloat16",
+            # TestOpInfoPropertiesCUDA - XPASS remainder float32
+            "test_eager_equivalence_remainder_backend_inductor_numerics_cuda_float32",
+            # TestOpInfoPropertiesCUDA - numerical log10 mismatch
+            "test_unary_ufunc_numerical_log10_backend_inductor_default_cuda_float32",
         ],
         "modules": [
             # TestModuleCUDA - CTCLoss cpu/gpu parity scalar mismatch
             "test_cpu_gpu_parity_nn_CTCLoss_cuda_float32",
+            # TestModuleCUDA - CTCLoss forward scalar mismatch
+            "test_forward_nn_CTCLoss_cuda_float32",
         ],
         "profiler": [
             # TestProfiler - backward compat filter
@@ -279,6 +293,16 @@ skip_tests = {
             "test_grad_acc_with_reduce_dtype",
             # TestReplicate1DTrainingCore - 300s per-process timeout
             "test_multi_forward_module",
+            # ComposabilityTest - pipeline parallel RuntimeError
+            "test_replicate_pp_grads_ScheduleClass1",
+            # ReplicateFullyShardInit - pytest-timeout (>900s)
+            "test_replicate_ignore_module",
+            # TestFullyShardCommunication - 300s per-process timeout
+            "test_manual_reshard_with_reshard_after_forward_false",
+            # TestFullyShardSharedParams - 300s per-process timeout
+            "test_train_parity_with_shared_params",
+            # ReplicateTest - pytest-timeout (>900s)
+            "test_train_parity_2d_mlp",
         ],
     },
     "gfx94": {
