@@ -861,11 +861,6 @@ function(therock_cmake_subproject_activate target_name)
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
   list(APPEND _fprint_files "${_cmake_project_init_file}")
 
-  # Transform build and run deps from target form (i.e. 'ROCR-Runtime' to a dependency
-  # on the stage.stamp file). These are a dependency for configure.
-  set(_configure_dep_stamps)
-  _therock_cmake_subproject_deps_to_stamp(_configure_dep_stamps stage.stamp ${_build_deps} ${_runtime_deps})
-
   # Target flags.
   set(_all_option)
   if(NOT _exclude_from_all)
@@ -902,6 +897,10 @@ function(therock_cmake_subproject_activate target_name)
     # marker file (which may just be a stamp file or may contain a unique hash
     # for this part of the build).
     message(STATUS "  DISABLING BUILD: Marked as pre-built")
+    # For prebuilt artifacts, we need runtime deps staged before copying from them.
+    set(_runtime_dep_stamps)
+    _therock_cmake_subproject_deps_to_stamp(_runtime_dep_stamps stage.stamp ${_runtime_deps})
+
     add_custom_command(
       OUTPUT "${_configure_stamp_file}"
       COMMAND "${CMAKE_COMMAND}" -E touch "${_configure_stamp_file}"
@@ -920,9 +919,15 @@ function(therock_cmake_subproject_activate target_name)
       DEPENDS
         "${_prebuilt_file}"
         "${_fileset_tool}"
+        ${_runtime_dep_stamps}
     )
   else()
     # Not pre-built: normal configure/build/stage install.
+    # Transform build and run deps from target form (i.e. 'ROCR-Runtime') to a dependency
+    # on the stage.stamp file. These are a dependency for configure.
+    set(_configure_dep_stamps)
+    _therock_cmake_subproject_deps_to_stamp(_configure_dep_stamps stage.stamp ${_build_deps} ${_runtime_deps})
+
     # configure target
     if(THEROCK_VERBOSE)
       message(STATUS "  CONFIGURE_DEPENDS: ${_transitive_configure_depend_files} ")
