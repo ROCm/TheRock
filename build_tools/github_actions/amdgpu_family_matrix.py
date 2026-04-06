@@ -73,8 +73,7 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             # TODO: Remove alternative weight once we get dedicated set of machines
-            # As we are bringing back up mi325
-            # Dual-label configuration for load balancing across runner labels
+            # As we are bringing back up mi325, we are using a dual-label configuration to distribute load
             "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
             "test-runs-on-alternate": "linux-gfx942-1gpu-ccs-ossci-rocm",
             "test-runs-on-alternate-weight": 0.35,  # 35% chance of using alternate

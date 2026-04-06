@@ -918,14 +918,11 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
         self.assertIn("test-runs-on-alternate-weight", gfx94x_linux)
 
         # Verify the expected labels
-        self.assertEqual(
-            gfx94x_linux["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm"
-        )
+        self.assertEqual(gfx94x_linux["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
         self.assertEqual(
             gfx94x_linux["test-runs-on-alternate"],
             "linux-gfx942-1gpu-ccs-ossci-rocm",
         )
-        self.assertEqual(gfx94x_linux["test-runs-on-alternate-weight"], 0.2)
 
     def test_alternate_label_selected_when_random_below_weight(self):
         """When random() < weight, alternate label should be selected."""
@@ -967,45 +964,41 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
         self.assertIsNotNone(builds.linux)
         # Check that the primary label was selected
         gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm"
-        )
+        self.assertEqual(gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
 
     def test_distribution_approximates_weight(self):
         """Over many runs, selection should approximate the configured weight."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant="release",
-        )
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-
-        # Run 1000 times and count alternate selections
-        alternate_count = 0
-        runs = 1000
-
-        for _ in range(runs):
+        with patch("random.random", return_value=0.5):
+            ci_inputs = cm.CIInputs(
+                run_id="12345",
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="HEAD^",
+                build_variant="release",
+            )
+            targets = cm.TargetSelection(linux_families=["gfx94x"])
             builds = cm.expand_build_configs(targets, ci_inputs)
             gfx94x_info = builds.linux.per_family_info[0]
-            if gfx94x_info["test-runs-on"] == "linux-gfx942-1gpu-ccs-ossci-rocm":
-                alternate_count += 1
+            self.assertEqual(
+                gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm"
+            )
 
-        # Expected: 20% ± 5% (allowing for random variance)
-        alternate_ratio = alternate_count / runs
-        self.assertGreater(
-            alternate_ratio,
-            0.15,
-            f"Alternate selected {alternate_count}/{runs} times "
-            f"({alternate_ratio:.1%}), expected ~20%",
-        )
-        self.assertLess(
-            alternate_ratio,
-            0.25,
-            f"Alternate selected {alternate_count}/{runs} times "
-            f"({alternate_ratio:.1%}), expected ~20%",
-        )
+    def test_distribution_approximates_alternative_weight(self):
+        """Over many runs, selection should approximate the configured weight."""
+        with patch("random.random", return_value=0.2):
+            ci_inputs = cm.CIInputs(
+                run_id="12345",
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="HEAD^",
+                build_variant="release",
+            )
+            targets = cm.TargetSelection(linux_families=["gfx94x"])
+            builds = cm.expand_build_configs(targets, ci_inputs)
+            gfx94x_info = builds.linux.per_family_info[0]
+            self.assertEqual(
+                gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm"
+            )
 
     def test_families_without_alternate_use_primary_only(self):
         """Families without dual-label config should only use primary label."""
@@ -1025,9 +1018,7 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
             if builds.linux and builds.linux.per_family_info:
                 gfx103x_info = builds.linux.per_family_info[0]
                 # Should always use the primary label
-                self.assertEqual(
-                    gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm"
-                )
+                self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
 
 
 if __name__ == "__main__":

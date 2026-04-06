@@ -763,12 +763,7 @@ def _expand_build_config_for_platform(
         test_runs_on = platform_info["test-runs-on"]
 
         # Handle dual-label configuration with weighted random selection.
-        # Some families (e.g. gfx94x) have multiple runner pools available.
-        # To distribute load proportionally across pools with different capacities,
-        # we use weighted random selection based on the alternate-weight field.
-        # Example: gfx94x has 136 primary runners and 32 CCS runners. With weight=0.2,
-        # 20% of CI runs use the CCS pool, 80% use the primary pool, distributing
-        # load proportionally to capacity (~27 jobs on CCS, ~109 on primary).
+        # Some families (e.g. gfx94x) have multiple runner labels available.
         if "test-runs-on-alternate" in platform_info:
             alternate_label = platform_info["test-runs-on-alternate"]
             alternate_weight = platform_info.get("test-runs-on-alternate-weight", 0.5)

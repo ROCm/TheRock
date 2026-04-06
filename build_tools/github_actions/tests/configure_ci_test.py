@@ -545,7 +545,9 @@ class ConfigureCITest(unittest.TestCase):
             )
 
         # Find the gfx94X entry
-        gfx94x_entries = [e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"]
+        gfx94x_entries = [
+            e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"
+        ]
         self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
         entry = gfx94x_entries[0]
         # Should select the alternate CCS label
@@ -556,7 +558,7 @@ class ConfigureCITest(unittest.TestCase):
         base_args = {"build_variant": "release"}
         build_families = {"amdgpu_families": "gfx94X"}
 
-        # Mock random.random() to return 0.5 (>= 0.2 weight)
+        # Mock random.random() to return 0.5 (>= 0.35 weight)
         with patch("random.random", return_value=0.5):
             linux_target_output, _ = configure_ci.matrix_generator(
                 is_pull_request=True,
@@ -569,7 +571,9 @@ class ConfigureCITest(unittest.TestCase):
             )
 
         # Find the gfx94X entry
-        gfx94x_entries = [e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"]
+        gfx94x_entries = [
+            e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"
+        ]
         self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
         entry = gfx94x_entries[0]
         # Should select the primary label
