@@ -84,22 +84,25 @@ install_python_runtime() {
         # Non-interactive apt (CI containers); avoids debconf prompts
         export DEBIAN_FRONTEND=noninteractive
         # Refresh package index so install sees current repos; -qq reduces log noise
-        apt-get update -qq
+        # Redirect to stderr to avoid polluting stdout (which may go to GITHUB_ENV)
+        apt-get update -qq >&2
         apt-get install -y --no-install-recommends \
             python3.12 \
             python3.12-venv \
-            python3-pip
+            python3-pip >&2
     elif [[ "$os_profile" == sles* ]]; then
         # zypper refresh ~= apt update (metadata before install)
-        zypper --non-interactive refresh
+        # Redirect to stderr to avoid polluting stdout (which may go to GITHUB_ENV)
+        zypper --non-interactive refresh >&2
         zypper --non-interactive install -y \
             python313 \
-            python313-pip
+            python313-pip >&2
     else
         # RHEL UBI: --allowerasing resolves curl vs curl-minimal style conflicts when pulling deps
+        # Redirect to stderr to avoid polluting stdout (which may go to GITHUB_ENV)
         dnf install -y --allowerasing \
             python3.12 \
-            python3.12-pip
+            python3.12-pip >&2
     fi
 }
 
