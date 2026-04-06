@@ -13,8 +13,8 @@ TEST_TYPE: Test category to run - one of "quick", "standard", "comprehensive", o
 AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
 
 Command-line arguments:
---multigpu: Enable multi-GPU testing mode. Requires MIN_GPU_COUNT GPUs (default 2).
-    Sets HIP_VISIBLE_DEVICES to available GPUs and exits gracefully if insufficient GPUs.
+--multigpu: Enable multi-GPU testing mode. Uses multi_gpu test category and 8 GPUs.
+    Requires at least 2 GPUs and exits gracefully if insufficient GPUs found.
 
 The script discovers GPU-specific labels via ctest --print-labels and runs the appropriate tests for the current GPU architecture.
 """
@@ -39,7 +39,7 @@ args = parser.parse_args()
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
+VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full", "multi_gpu"}
 TEST_TYPE = os.getenv("TEST_TYPE", "quick")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
@@ -106,27 +106,20 @@ if args.multigpu:
     sys.path.insert(0, str(SCRIPT_DIR.parent))
     from github_actions_api import get_visible_gpu_count
 
-    # Configurable GPU requirements
-    MIN_GPU_COUNT = int(os.getenv("MIN_GPU_COUNT", "2"))
-    MAX_GPU_COUNT = int(os.getenv("MAX_GPU_COUNT", "8"))
-
     gpu_count = get_visible_gpu_count(env=environ_vars, therock_bin_dir=THEROCK_BIN_DIR)
-    logging.info(
-        f"Multi-GPU mode: {gpu_count} GPUs visible, minimum required: {MIN_GPU_COUNT}"
-    )
+    logging.info(f"Multi-GPU mode: {gpu_count} GPUs visible")
 
+    # Safety check - need at least 2 GPUs for multi-GPU tests
+    MIN_GPU_COUNT = 2
     if gpu_count < MIN_GPU_COUNT:
         logging.error(
             f"Insufficient GPUs for multi-GPU testing: {gpu_count} < {MIN_GPU_COUNT}"
         )
         sys.exit(0)  # Exit gracefully (not an error)
 
-    # Configure HIP_VISIBLE_DEVICES
-    gpus_to_use = min(gpu_count, MAX_GPU_COUNT)
-    environ_vars["HIP_VISIBLE_DEVICES"] = ",".join(str(i) for i in range(gpus_to_use))
-    logging.info(
-        f"Using {gpus_to_use} GPUs: HIP_VISIBLE_DEVICES={environ_vars['HIP_VISIBLE_DEVICES']}"
-    )
+    # Use 8 GPUs for multi-GPU tests
+    environ_vars["HIP_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+    logging.info(f"Using 8 GPUs: HIP_VISIBLE_DEVICES={environ_vars['HIP_VISIBLE_DEVICES']}")
 
 ##############################################
 
@@ -241,6 +234,7 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
         ]
     )
 
+
     if gpu_arch.lower() in ["generic", "none", ""]:
         # For generic/unspecified GPU, exclude all GPU-specific suite tests
         cmd.extend(["-LE", "ex_gpu"])
@@ -263,15 +257,19 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
 
 
 def main():
-    category = TEST_TYPE.lower() if TEST_TYPE else "quick"
-    if category not in VALID_TEST_CATEGORIES:
-        print(
-            f"ERROR: Invalid TEST_TYPE '{TEST_TYPE}'. "
-            f"Must be one of: {', '.join(sorted(VALID_TEST_CATEGORIES))}. "
-            f"Falling back to 'quick'.",
-            file=sys.stderr,
-        )
-        category = "quick"
+    # Use multi_gpu category when --multigpu flag is set, otherwise use TEST_TYPE
+    if args.multigpu:
+        category = "multi_gpu"
+    else:
+        category = TEST_TYPE.lower() if TEST_TYPE else "quick"
+        if category not in VALID_TEST_CATEGORIES:
+            print(
+                f"ERROR: Invalid TEST_TYPE '{TEST_TYPE}'. "
+                f"Must be one of: {', '.join(sorted(VALID_TEST_CATEGORIES))}. "
+                f"Falling back to 'quick'.",
+                file=sys.stderr,
+            )
+            category = "quick"
 
     # Use AMDGPU_FAMILIES from environment variable, extract gfx<xxx> part
     gpu_arch = ""
