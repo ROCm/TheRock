@@ -35,6 +35,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         lib/rocm_sysdeps/lib
       INTERFACE_PKG_CONFIG_DIRS
         lib/rocm_sysdeps/lib/pkgconfig
+      INTERFACE_INCLUDE_DIRS
+        lib/rocm_sysdeps/include
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
@@ -80,6 +82,7 @@ add_custom_target(
   COMMAND
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
+      --libdir "${CMAKE_INSTALL_PREFIX}/lib"
       --disable-static
   COMMAND
     make -j "${PAR_JOBS}" V=1

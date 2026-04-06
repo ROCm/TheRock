@@ -24,8 +24,8 @@ override_dh_strip:
 
 	mkdir -p debian/.llvm-tools
 	# Unprefixed names
-	ln -sf "$(shell command -v llvm-strip)"   debian/.llvm-tools/strip
-	ln -sf "$(shell command -v llvm-objcopy)" debian/.llvm-tools/objcopy
+	ln -sf "$(shell command -v llvm-strip-20)"   debian/.llvm-tools/strip
+	ln -sf "$(shell command -v llvm-objcopy-20)" debian/.llvm-tools/objcopy
 	PATH="$(CURDIR)/debian/.llvm-tools:$(PATH)" dh_strip -X.a
 {% endif %}
 

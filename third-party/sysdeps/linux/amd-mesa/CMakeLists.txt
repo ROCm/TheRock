@@ -48,6 +48,9 @@ if(NOT PATCHELF OR NOT MESON_BUILD)
   message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
 endif()
 
+include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
+therock_get_meson_compiler_env(_meson_cc _meson_cxx)
+
 set(PATCH_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../patch_source")
 
 add_custom_target(
@@ -63,6 +66,8 @@ add_custom_target(
     # This is required before patching because patch_source.sh modifies files in the libva subproject
     "${CMAKE_COMMAND}" -E env
       "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "CC=${_meson_cc}"
+      "CXX=${_meson_cxx}"
       --
       "${MESON_BUILD}" setup
         --reconfigure
@@ -85,6 +90,8 @@ add_custom_target(
     # This ensures the build system uses the modified source files
     "${CMAKE_COMMAND}" -E env
       "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "CC=${_meson_cc}"
+      "CXX=${_meson_cxx}"
       --
       "${MESON_BUILD}" setup
         --reconfigure

@@ -441,9 +441,6 @@ amdgpu_family_info_matrix_all = {
                     "run_tests": False,
                     "runs_on": {},
                     "fetch-gfx-targets": [],
-                    # TODO(#1926): Resolve bgemm kernel hip file generation error,
-                    # to enable PyTorch builds
-                    "expect_pytorch_failure": True,
                 },
                 "release": {
                     "push_on_success": False,
