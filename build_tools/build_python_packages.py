@@ -22,6 +22,7 @@ Example
 
 import argparse
 import functools
+import json
 from pathlib import Path
 import sys
 
@@ -29,12 +30,38 @@ from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, build_packages
 
 
+def load_therock_manifest(artifact_dir: Path) -> dict:
+    """Load therock_manifest.json from the base_lib_generic artifact."""
+    manifest_path = (
+        artifact_dir
+        / "base_lib_generic"
+        / "base"
+        / "aux-overlay"
+        / "stage"
+        / "share"
+        / "therock"
+        / "therock_manifest.json"
+    )
+    if not manifest_path.exists():
+        raise FileNotFoundError(
+            f"therock_manifest.json not found at {manifest_path}. "
+            f"Is base_lib_generic present in {artifact_dir}?"
+        )
+    return json.loads(manifest_path.read_text())
+
+
 def run(args: argparse.Namespace):
+    manifest = load_therock_manifest(args.artifact_dir)
+    kpack_split = manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False)
+    if kpack_split:
+        print("::: Detected KPACK_SPLIT_ARTIFACTS — producing host + device wheels")
+
     params = Parameters(
         dest_dir=args.dest_dir,
         version=args.version,
         version_suffix=args.version_suffix,
         artifacts=ArtifactCatalog(args.artifact_dir),
+        kpack_split=kpack_split,
     )
 
     # Populate each target neutral library package.
@@ -47,6 +74,90 @@ def run(args: argparse.Namespace):
             excludes=["**/cmake/**"],
         ),
     )
+
+    if kpack_split:
+        _run_kpack_split(args, params, core)
+    else:
+        _run_legacy(args, params, core)
+
+    print(
+        f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
+    )
+
+
+def _run_kpack_split(
+    args: argparse.Namespace, params: Parameters, core: PopulatedDistPackage
+):
+    """Kpack-split mode: arch-neutral host libraries + per-ISA device wheels."""
+
+    # Single arch-neutral libraries wheel from generic artifacts only.
+    lib = PopulatedDistPackage(params, logical_name="libraries", target_family=None)
+    lib.rpath_dep(core, "lib")
+    lib.rpath_dep(core, "lib/rocm_sysdeps/lib")
+    lib.rpath_dep(core, "lib/host-math/lib")
+    lib.populate_runtime_files(
+        params.filter_artifacts(
+            filter=functools.partial(libraries_artifact_filter, "generic"),
+        )
+    )
+
+    # Build core + libraries wheels. The rocm, rocm-sdk-devel, and
+    # rocm-sdk-device staging dirs do not exist yet, so the default scan
+    # in build_packages will not accidentally include them.
+    if args.build_packages:
+        build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
+
+    # Per-ISA device wheels.
+    all_targets = sorted(params.all_target_families)
+    for target in all_targets:
+        dev = PopulatedDistPackage(params, logical_name="device", target_family=target)
+        dev.populate_device_files(
+            params.filter_artifacts(
+                filter=functools.partial(device_artifact_filter, target),
+            )
+        )
+        if args.build_packages:
+            build_packages(
+                args.dest_dir,
+                package_dirs=[dev.path],
+                wheel_compression=args.wheel_compression,
+            )
+
+    # Single generic meta sdist.
+    meta = PopulatedDistPackage(params, logical_name="meta", target_family=None)
+    if args.build_packages:
+        build_packages(
+            args.dest_dir,
+            package_dirs=[meta.path],
+            wheel_compression=args.wheel_compression,
+        )
+
+    # Single arch-neutral devel wheel. Exclude test component — in kpack-split
+    # mode the generic test binaries are host-only and can't run without device
+    # code. Tests will be reintroduced via a dedicated package later.
+    devel = PopulatedDistPackage(params, logical_name="devel", target_family=None)
+    devel.populate_devel_files(
+        addl_artifact_names=[
+            "prim",
+            "rocwmma",
+            "flatbuffers",
+            "nlohmann-json",
+        ],
+        exclude_components=["test"],
+        tarball_compression=args.devel_tarball_compression,
+    )
+    if args.build_packages:
+        build_packages(
+            args.dest_dir,
+            package_dirs=[devel.path],
+            wheel_compression=args.wheel_compression,
+        )
+
+
+def _run_legacy(
+    args: argparse.Namespace, params: Parameters, core: PopulatedDistPackage
+):
+    """Legacy mode: per-family libraries wheels with embedded device code."""
 
     # Populate each target-specific library package.
     for target_family in sorted(params.all_target_families):
@@ -131,10 +242,6 @@ def run(args: argparse.Namespace):
                 wheel_compression=args.wheel_compression,
             )
 
-    print(
-        f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
-    )
-
 
 def core_artifact_filter(an: ArtifactName) -> bool:
     core = an.name in [
@@ -194,6 +301,29 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
         and (an.target_family == target_family or an.target_family == "generic")
     )
     return libraries
+
+
+def device_artifact_filter(target: str, an: ArtifactName) -> bool:
+    """Selects per-ISA library artifacts for a specific GFX target.
+
+    Unlike libraries_artifact_filter, this only matches the specific ISA target
+    (no generic). Used in kpack-split mode for device wheel population.
+    """
+    return (
+        an.name
+        in [
+            "blas",
+            "fft",
+            "hipdnn",
+            "miopen",
+            "miopenprovider",
+            "hipblasltprovider",
+            "rand",
+            "rccl",
+        ]
+        and an.component == "lib"
+        and an.target_family == target
+    )
 
 
 def main(argv: list[str]):
