@@ -221,6 +221,7 @@ amdgpu_family_info_matrix_nightly = {
             "fetch-gfx-targets": ["gfx90a"],
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
