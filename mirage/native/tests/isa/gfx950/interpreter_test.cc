@@ -8979,6 +8979,32 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 6>
+      kUnsupportedBufferFormatWideCompileOpcodes = {
+      "BUFFER_LOAD_FORMAT_D16_HI_XY",   "BUFFER_LOAD_FORMAT_D16_HI_XYZ",
+      "BUFFER_LOAD_FORMAT_D16_HI_XYZW", "BUFFER_STORE_FORMAT_D16_HI_XY",
+      "BUFFER_STORE_FORMAT_D16_HI_XYZ", "BUFFER_STORE_FORMAT_D16_HI_XYZW",
+  };
+  for (std::string_view opcode : kUnsupportedBufferFormatWideCompileOpcodes) {
+    std::vector<DecodedInstruction> compile_program = {
+        DecodedInstruction::FiveOperand(
+            opcode, InstructionOperand::Vgpr(4), InstructionOperand::Vgpr(0),
+            InstructionOperand::Sgpr(2), InstructionOperand::Imm32(0),
+            InstructionOperand::Imm32(0)),
+    };
+    std::vector<CompiledInstruction> compiled_program;
+    if (!Expect(!interpreter.CompileProgram(compile_program, &compiled_program,
+                                            &error_message),
+                ("expected " + std::string(opcode) +
+                 " compile rejection")
+                    .c_str()) ||
+        !Expect(!error_message.empty(),
+                ("expected " + std::string(opcode) + " compile error")
+                    .c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 8>
       kUnsupportedTypedBufferFormatWideExecutionOpcodes = {
       "TBUFFER_LOAD_FORMAT_D16_HI_X",   "TBUFFER_LOAD_FORMAT_D16_HI_XY",
@@ -9007,6 +9033,34 @@ int main() {
                     .c_str()) ||
         !Expect(!error_message.empty(),
                 ("expected " + std::string(opcode) + " execution error")
+                    .c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 8>
+      kUnsupportedTypedBufferFormatWideCompileOpcodes = {
+      "TBUFFER_LOAD_FORMAT_D16_HI_X",   "TBUFFER_LOAD_FORMAT_D16_HI_XY",
+      "TBUFFER_LOAD_FORMAT_D16_HI_XYZ",  "TBUFFER_LOAD_FORMAT_D16_HI_XYZW",
+      "TBUFFER_STORE_FORMAT_D16_HI_X",   "TBUFFER_STORE_FORMAT_D16_HI_XY",
+      "TBUFFER_STORE_FORMAT_D16_HI_XYZ", "TBUFFER_STORE_FORMAT_D16_HI_XYZW",
+  };
+  for (std::string_view opcode : kUnsupportedTypedBufferFormatWideCompileOpcodes) {
+    std::vector<DecodedInstruction> compile_program = {
+        DecodedInstruction::SevenOperand(
+            opcode, InstructionOperand::Vgpr(4), InstructionOperand::Vgpr(0),
+            InstructionOperand::Sgpr(2), InstructionOperand::Imm32(0),
+            InstructionOperand::Imm32(0), InstructionOperand::Imm32(10),
+            InstructionOperand::Imm32(4)),
+    };
+    std::vector<CompiledInstruction> compiled_program;
+    if (!Expect(!interpreter.CompileProgram(compile_program, &compiled_program,
+                                            &error_message),
+                ("expected " + std::string(opcode) +
+                 " compile rejection")
+                    .c_str()) ||
+        !Expect(!error_message.empty(),
+                ("expected " + std::string(opcode) + " compile error")
                     .c_str())) {
       return 1;
     }
