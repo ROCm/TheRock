@@ -135,9 +135,17 @@ def upload_packages(
     if not package_files:
         raise FileNotFoundError(f"No package files found in {dist_dir}")
 
-    log(f"[INFO] Found {len(package_files)} package files in {dist_dir}:")
+    log(f"[INFO] Found {len(package_files)} top-level package files in {dist_dir}:")
     for f in package_files:
         log(f"  - {f.relative_to(dist_dir)}")
+
+    # Log all files that will actually be uploaded (including subdirectories).
+    all_files = sorted(
+        f for f in dist_dir.rglob("*") if f.is_file() and not f.is_symlink()
+    )
+    log(f"[INFO] Uploading {len(all_files)} total files to {packages_loc.s3_uri}:")
+    for f in all_files:
+        log(f"  {f.relative_to(dist_dir).as_posix()}")
 
     count = backend.upload_directory(dist_dir, packages_loc)
     log(f"[INFO] Uploaded {count} files")
