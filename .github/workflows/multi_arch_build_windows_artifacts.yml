@@ -168,13 +168,18 @@ jobs:
       # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
       # fall back to runner base credentials (therock-ci-artifacts-external).
       - name: Configure AWS Credentials
-        if: ${{ github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
+        if: ${{ always() && github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
           special-characters-workaround: true
 
+      # TODO(#3336): Attempt upload `always()`?
+      #   * If some part of the build failed, partial artifacts may be useful for debugging.
+      #   * This script fails if `build_dir / "artifacts"` does not exist. That's useful
+      #     if the build succeeded but did not produce artifacts. That's _not_ useful
+      #     if the workflow failed or was cancelled before the build even started though.
       - name: Push stage artifacts
         run: |
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
@@ -182,7 +187,7 @@ jobs:
             --build-dir="${BUILD_DIR}"
 
       - name: Upload stage logs
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         run: |
           python build_tools/github_actions/post_stage_upload.py \
             --run-id=${{ github.run_id }} \

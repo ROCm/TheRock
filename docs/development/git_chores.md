@@ -161,11 +161,18 @@ Using the CLR submodule as an example:
 
 ## Updating a third-party mirror
 
-Projects in [`third-party/`](../../third-party/) use sources mirrored to AWS
-so we maintain control over all build dependencies and can produce hermetic
-builds (requiring no network access) as needed.
+Projects in [`third-party/`](../../third-party/) use sources mirrored to AWS.
+This serves several purposes:
 
-These are declared like so:
+- **Supply chain integrity**: pinned, checksummed copies prevent sources
+  from changing outside of our control.
+- **Network performance**: dependencies are served over the same network
+  optimized for build machine access, so we're not at the mercy of third party
+  web servers.
+- **Hermetic builds**: by using a shared code path for all source fetching, we
+  can configure the build system to support zero-network-access source builds.
+
+Source fetches are declared like so:
 
 ```cmake
 therock_subproject_fetch(therock-msgpack-cxx-sources

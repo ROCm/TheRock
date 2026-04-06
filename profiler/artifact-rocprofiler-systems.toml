@@ -2,7 +2,7 @@
 [components.lib."profiler/rocprofiler-systems/stage"]
 include = [
   "libexec/rocprofiler-systems/**",
-  "share/rocprofiler-systems/**",
+  "lib/python/**",
 ]
 exclude = [
   "share/rocprofiler-systems/tests/**",
@@ -12,6 +12,7 @@ exclude = [
 include = [
   "bin/**",
   "share/rocprofiler-systems/**",
+  "share/modulefiles/rocprofiler-systems/**",
 ]
 exclude = [
   "share/rocprofiler-systems/tests/**",
