@@ -67,6 +67,7 @@ from github_actions_api import gha_append_step_summary, gha_set_output
 # Input parsing helpers
 # ---------------------------------------------------------------------------
 
+
 def _get_all_build_stages() -> list[str]:
     """Get all build stage names from BUILD_TOPOLOGY.toml.
 
