@@ -73,7 +73,7 @@ class GeneratePackageRepositoryUrlTest(unittest.TestCase):
         )
         self.assertEqual(
             url,
-            "https://therock-dev-packages.s3.amazonaws.com/v3/packages/deb/20260320-11111111",
+            "https://rocm.devreleases.amd.com/deb/20260320-11111111",
         )
 
     def test_empty_release_type_uses_ci(self):
@@ -153,7 +153,7 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
             rocm_version="8.1.0~dev20251203",
         )
         self.assertEqual(bucket, "therock-dev-packages")
-        self.assertEqual(prefix, "v3/packages/deb/20251203-12345678")
+        self.assertEqual(prefix, "deb/20251203-12345678")
         self.assertEqual(job_type, "dev")
 
     def test_nightly_release_type(self):
@@ -167,7 +167,7 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
             rocm_version="8.1.0~20251203",
         )
         self.assertEqual(bucket, "therock-nightly-packages")
-        self.assertEqual(prefix, "v3/packages/rpm/20251203-87654321")
+        self.assertEqual(prefix, "rpm/20251203-87654321")
         self.assertEqual(job_type, "nightly")
 
     def test_prerelease_release_type(self):
