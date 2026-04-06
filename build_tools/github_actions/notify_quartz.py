@@ -5,6 +5,15 @@
 
 Reads the GitHub Actions webhook event from GITHUB_EVENT_PATH and dispatches
 a structured payload to a Quartz ingest workflow via workflow_dispatch.
+
+Payload ``event_type`` values and top-level keys align with
+``quartz_ingest.ingest_dispatch`` in ROCm/Quartz-Tester:
+
+- ``workflow_run_requested`` / ``workflow_run_completed``: ``repository``,
+  ``workflow_run`` (GitHub run object plus optional ``jobs`` from the Actions API).
+- ``pull_request_event``: ``action``, ``pull_request``.
+- ``push_event``: push payload fields (``ref``, ``before``, ``after``, ``commits``, etc.).
+- ``workflow_dispatch_test``: manual connectivity check (ingest skips DB writes).
 """
 
 from __future__ import annotations
@@ -53,6 +62,37 @@ def _api_get(token: str, path: str) -> Any:
 
 def _api_post(token: str, path: str, body: dict[str, Any]) -> Any:
     return _api(token, "POST", path, body=body)
+
+
+def _workflow_job_dispatch_fields(job: dict[str, Any]) -> dict[str, Any]:
+    """Subset of GitHub job JSON sent to Quartz-Tester (ingest_dispatch / therock_workflow_jobs).
+
+    Quartz maps ``created_at`` / ``started_at`` / ``completed_at``, ``runner_name``, and
+    ``labels``; include them when the Actions jobs API provides them so ingest works even
+    if the Quartz side cannot re-fetch jobs.
+    """
+    row: dict[str, Any] = {
+        "id": job["id"],
+        "name": job["name"],
+        "status": job["status"],
+        "conclusion": job.get("conclusion"),
+    }
+    for key in ("created_at", "started_at", "completed_at", "runner_name"):
+        val = job.get(key)
+        if val is not None:
+            row[key] = val
+    labels = job.get("labels")
+    if labels:
+        # Hosted runners: list[str]. Some payloads use objects; normalize to strings.
+        normalized: list[str] = []
+        for lb in labels:
+            if isinstance(lb, str):
+                normalized.append(lb)
+            elif isinstance(lb, dict) and lb.get("name") is not None:
+                normalized.append(str(lb["name"]))
+        if normalized:
+            row["labels"] = normalized
+    return row
 
 
 def _paginate(token: str, path: str, *, key: str, per_page: int = 100) -> list:
@@ -105,15 +145,7 @@ def _build_workflow_run_payload(
                 f"/repos/{repo}/actions/runs/{wr['id']}/jobs",
                 key="jobs",
             )
-            jobs = [
-                {
-                    "id": j["id"],
-                    "name": j["name"],
-                    "status": j["status"],
-                    "conclusion": j.get("conclusion"),
-                }
-                for j in raw_jobs
-            ]
+            jobs = [_workflow_job_dispatch_fields(j) for j in raw_jobs]
         except Exception as exc:
             log.warning("Failed to fetch jobs: %s", exc)
 
