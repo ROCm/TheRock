@@ -944,8 +944,8 @@ def _build_argument_parser() -> ArgumentParser:
     parser.add_argument(
         "--release-type",
         type=str,
-        choices=["nightly", "prerelease"],
-        help="Type of release: 'nightly' or 'prerelease'",
+        choices=["dev", "nightly", "prerelease", "release", "ci"],
+        help="Type of release: 'dev', 'nightly', 'prerelease', 'release', or 'ci'",
     )
     parser.add_argument(
         "--install-prefix",
