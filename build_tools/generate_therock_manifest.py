@@ -7,18 +7,10 @@ import json
 import os
 from pathlib import Path
 import re
-import shlex
 import subprocess
 import sys
 
-
-def _run(cmd, cwd=None, check=True) -> str:
-    if isinstance(cmd, str):
-        cmd = shlex.split(cmd)
-    res = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False)
-    if check and res.returncode != 0:
-        raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{res.stderr}")
-    return res.stdout.strip()
+from github_actions.manifest_utils import capture, capture_optional, log
 
 
 def source_root() -> Path:
@@ -45,6 +37,35 @@ def has_git_metadata(repo_root: Path) -> bool:
         check=False,
     )
     return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+def _parse_submodule_config_output(output: str):
+    submodules_by_name = {}
+
+    # Output format: submodule.<name>.<key> <value>
+    # Example: submodule.half.path base/half
+    # The regex uses (.+) for name to handle submodule names containing dots.
+    # The explicit \.(path|url|branch) ensures we match the last occurrence,
+    # correctly extracting names like "foo.bar" from "submodule.foo.bar.path".
+    pattern = re.compile(r"^submodule\.(.+)\.(path|url|branch)\s+(.+)$")
+
+    for line in output.strip().splitlines():
+        match = pattern.match(line)
+        if match:
+            name, key, value = match.groups()
+            if name not in submodules_by_name:
+                submodules_by_name[name] = {
+                    "name": name,
+                    "path": None,
+                    "url": None,
+                    "branch": None,
+                }
+            submodules_by_name[name][key] = value
+
+    # Filter out entries without a path and sort by path
+    results = [r for r in submodules_by_name.values() if r["path"]]
+    results.sort(key=lambda r: r["path"])
+    return results
 
 
 def list_submodules_from_gitmodules_at_commit(repo_dir: Path, commit: str = "HEAD"):
@@ -85,32 +106,7 @@ def list_submodules_from_gitmodules_at_commit(repo_dir: Path, commit: str = "HEA
             raise RuntimeError(f"Git command failed: {' '.join(cmd)}\n{stderr}")
         return []
 
-    submodules_by_name = {}
-
-    # Output format: submodule.<name>.<key> <value>
-    # Example: submodule.half.path base/half
-    # The regex uses (.+) for name to handle submodule names containing dots.
-    # The explicit \.(path|url|branch) ensures we match the last occurrence,
-    # correctly extracting names like "foo.bar" from "submodule.foo.bar.path".
-    pattern = re.compile(r"^submodule\.(.+)\.(path|url|branch)\s+(.+)$")
-
-    for line in result.stdout.strip().splitlines():
-        match = pattern.match(line)
-        if match:
-            name, key, value = match.groups()
-            if name not in submodules_by_name:
-                submodules_by_name[name] = {
-                    "name": name,
-                    "path": None,
-                    "url": None,
-                    "branch": None,
-                }
-            submodules_by_name[name][key] = value
-
-    # Filter out entries without a path and sort by path
-    results = [r for r in submodules_by_name.values() if r["path"]]
-    results.sort(key=lambda r: r["path"])
-    return results
+    return _parse_submodule_config_output(result.stdout)
 
 
 def list_submodules_from_gitmodules_file(repo_dir: Path):
@@ -142,32 +138,7 @@ def list_submodules_from_gitmodules_file(repo_dir: Path):
             raise RuntimeError(f"Git command failed: {' '.join(cmd)}\n{stderr}")
         return []
 
-    submodules_by_name = {}
-
-    # Output format: submodule.<name>.<key> <value>
-    # Example: submodule.half.path base/half
-    # The regex uses (.+) for name to handle submodule names containing dots.
-    # The explicit \.(path|url|branch) ensures we match the last occurrence,
-    # correctly extracting names like "foo.bar" from "submodule.foo.bar.path".
-    pattern = re.compile(r"^submodule\.(.+)\.(path|url|branch)\s+(.+)$")
-
-    for line in result.stdout.strip().splitlines():
-        match = pattern.match(line)
-        if match:
-            name, key, value = match.groups()
-            if name not in submodules_by_name:
-                submodules_by_name[name] = {
-                    "name": name,
-                    "path": None,
-                    "url": None,
-                    "branch": None,
-                }
-            submodules_by_name[name][key] = value
-
-    # Filter out entries without a path and sort by path
-    results = [r for r in submodules_by_name.values() if r["path"]]
-    results.sort(key=lambda r: r["path"])
-    return results
+    return _parse_submodule_config_output(result.stdout)
 
 
 def submodule_pin(repo_dir: Path, commit: str, sub_path: str):
@@ -175,7 +146,7 @@ def submodule_pin(repo_dir: Path, commit: str, sub_path: str):
     Read the gitlink SHA for submodule `sub_path` at `commit`.
     Uses: git ls-tree <commit> -- <path>
     """
-    out = _run(["git", "ls-tree", commit, "--", sub_path], cwd=repo_dir, check=False)
+    out = capture_optional(["git", "ls-tree", commit, "--", sub_path], cwd=repo_dir)
     if not out:
         return None
     # Iterate over matching entries
@@ -204,6 +175,7 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
 def build_manifest_schema(
     repo_root: Path,
     the_rock_commit: str,
+    github_job: str | None = None,
     github_run_id: str | None = None,
     rocm_package_version: str | None = None,
 ) -> dict:
@@ -228,6 +200,9 @@ def build_manifest_schema(
         "the_rock_commit": the_rock_commit,
     }
 
+    if github_job:
+        manifest["github_job"] = github_job
+
     if github_run_id:
         manifest["github_run_id"] = github_run_id
 
@@ -240,6 +215,7 @@ def build_manifest_schema(
 
 def build_partial_manifest_schema(
     repo_root: Path,
+    github_job: str | None = None,
     github_run_id: str | None = None,
     rocm_package_version: str | None = None,
 ) -> dict:
@@ -263,6 +239,9 @@ def build_partial_manifest_schema(
     manifest = {
         "the_rock_commit": None,
     }
+
+    if github_job:
+        manifest["github_job"] = github_job
 
     if github_run_id:
         manifest["github_run_id"] = github_run_id
@@ -307,20 +286,23 @@ def main():
     args = ap.parse_args()
 
     repo_root = source_root()
+    github_job = os.getenv("GITHUB_JOB")
     github_run_id = os.getenv("GITHUB_RUN_ID")
     git_available = has_git_metadata(repo_root)
 
     if git_available:
-        the_rock_commit = _run(["git", "rev-parse", args.commit], cwd=repo_root)
+        the_rock_commit = capture(["git", "rev-parse", args.commit], cwd=repo_root)
         manifest = build_manifest_schema(
             repo_root,
             the_rock_commit,
+            github_job,
             github_run_id,
             args.rocm_package_version,
         )
     else:
         manifest = build_partial_manifest_schema(
             repo_root,
+            github_job,
             github_run_id,
             args.rocm_package_version,
         )
@@ -344,7 +326,7 @@ def main():
     # Write JSON
     write_manifest_json(out_path, manifest)
 
-    print(str(out_path))
+    log(str(out_path))
     return 0
 
 

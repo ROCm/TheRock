@@ -213,6 +213,13 @@ PackageEntry(
     required=False,
 )
 PackageEntry(
+    "device",
+    "rocm-sdk-device-{target_family}",
+    pure_py_package_name="rocm_sdk_device",
+    template_directory="rocm-sdk-device",
+    required=False,
+)
+PackageEntry(
     "devel",
     "rocm-sdk-devel",
     pure_py_package_name="rocm_sdk_devel",
@@ -235,6 +242,7 @@ LibraryEntry("amdhip64", "core", "libamdhip64.so*", "amdhip64*.dll")
 # If DLLs with no version suffix are later added we will need a different pattern.
 LibraryEntry("hiprtc", "core", "libhiprtc.so*", "hiprtc0*.dll")
 LibraryEntry("roctx64", "core", "libroctx64.so*", "")
+LibraryEntry("rocprofiler-sdk", "core", "librocprofiler-sdk.so*", "")
 LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so*", "")
 LibraryEntry("roctracer64", "core", "libroctracer64.so*", "")
 LibraryEntry(

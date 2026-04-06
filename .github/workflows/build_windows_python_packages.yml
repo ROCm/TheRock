@@ -7,17 +7,26 @@ on:
   workflow_dispatch:
     inputs:
       artifact_github_repo:
-        description: GitHub repository for artifact_run_id
+        description: "GitHub repository for artifact_run_id"
         type: string
         default: ROCm/TheRock
       artifact_run_id:
-        description: Workflow run ID to download artifacts from
+        description: "artifact_run_id to download artifacts from"
         type: string
         default: "17865324892" # TODO: default to the most recent successful run (using a script)
       artifact_group:
-        description: "The artifact group to build (ex: gfx94X-dcgpu, gfx101X-dgpu, gfx1151, gfx120X-all)"
+        description: "artifact_group to build (e.g. 'gfx94X-dcgpu' for single family builds, 'multi-arch-release' for multi-arch builds with 'amdgpu_families' set)"
         type: string
+      amdgpu_families:
+        description: "amdgpu_families for multi-arch builds as a semicolon-separated list (e.g. 'gfx94X-dcgpu;gfx120X-all'). Leave empty for single-family builds (those only use artifact_group)"
+        type: string
+        default: ""
+      multiarch_index:
+        description: "Enable multi-arch indexing (generates per-family indexes)"
+        type: boolean
+        default: false
       package_version:
+        description: "package_version to set on packages, e.g. '7.13.0.dev0+dbd7369489260265fc6ddfc9d0de1262a95fe974'"
         type: string
   workflow_call:
     inputs:
@@ -28,6 +37,12 @@ on:
         default: ""
       artifact_group:
         type: string
+      amdgpu_families:
+        type: string
+        default: ""
+      multiarch_index:
+        type: boolean
+        default: false
       package_version:
         type: string
     outputs:
@@ -77,11 +92,26 @@ jobs:
 
       - name: Fetch artifacts
         run: |
-          python ./build_tools/fetch_artifacts.py \
-            --run-github-repo="${{ inputs.artifact_github_repo }}" \
-            --run-id="${{ env.ARTIFACT_RUN_ID }}" \
-            --artifact-group="${{ inputs.artifact_group }}" \
-            --output-dir="${{ env.ARTIFACTS_DIR }}"
+          if [ -n "${{ inputs.amdgpu_families }}" ]; then
+            # Multi-arch mode: use artifact_manager.py to fetch all families
+            echo "Fetching artifacts for multiple families: ${{ inputs.amdgpu_families }}"
+            python ./build_tools/artifact_manager.py fetch \
+              --run-id="${{ env.ARTIFACT_RUN_ID }}" \
+              --stage=all \
+              --amdgpu-families="${{ inputs.amdgpu_families }}" \
+              --output-dir="${{ github.workspace }}"
+              # NOTE: artifact_manager.py appends /artifacts to --output-dir
+              # in non-flatten mode, so pass workspace root here so that
+              # artifacts land in ARTIFACTS_DIR ($workspace/artifacts).
+          else
+            # Single-family mode: use fetch_artifacts.py (backward compatible)
+            echo "Fetching artifacts for single family: ${{ inputs.artifact_group }}"
+            python ./build_tools/fetch_artifacts.py \
+              --run-github-repo="${{ inputs.artifact_github_repo }}" \
+              --run-id="${{ env.ARTIFACT_RUN_ID }}" \
+              --artifact-group="${{ inputs.artifact_group }}" \
+              --output-dir="${{ env.ARTIFACTS_DIR }}"
+          fi
 
       - name: Build Python packages
         run: |
@@ -109,4 +139,5 @@ jobs:
           python build_tools/github_actions/upload_python_packages.py \
             --input-packages-dir="${{ env.PACKAGES_DIR }}" \
             --artifact-group="${{ inputs.artifact_group }}" \
-            --run-id="${{ github.run_id }}"
+            --run-id="${{ github.run_id }}" \
+            ${{ inputs.multiarch_index && '--multiarch' || '' }}

@@ -339,12 +339,14 @@ endif(THEROCK_ENABLE_HIP_RUNTIME)
 # ocl-icd
 ################################################################################
 
-therock_cmake_subproject_declare(ocl-icd
+if(THEROCK_ENABLE_OCL_ICD)
+
+  therock_cmake_subproject_declare(ocl-icd
   USE_DIST_AMDGPU_TARGETS
   EXTERNAL_SOURCE_DIR
     "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/icd"
     "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/OpenCL-Headers"
-  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/opencl/icd"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ocl-icd"
   BACKGROUND_BUILD
   CMAKE_ARGS
     "-DOPENCL_ICD_LOADER_REQUIRE_WDK=OFF"
@@ -354,10 +356,22 @@ therock_cmake_subproject_declare(ocl-icd
     "lib"
   INTERFACE_INSTALL_RPATH_DIRS
     "lib"
-)
-therock_cmake_subproject_activate(ocl-icd)
+  )
+
+  therock_cmake_subproject_activate(ocl-icd)
+
+  therock_provide_artifact(core-ocl-icd
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-core-ocl-icd.toml
+    COMPONENTS
+      lib
+    SUBPROJECT_DEPS
+      ocl-icd
+  )
+endif(THEROCK_ENABLE_OCL_ICD)
 
 if(THEROCK_ENABLE_OCL_RUNTIME)
+
   set(OCL_CLR_CMAKE_ARGS)
   set(OCL_CLR_RUNTIME_DEPS)
   if(WIN32)

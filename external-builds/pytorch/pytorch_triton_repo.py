@@ -7,10 +7,14 @@
 This script runs after `pytorch_torch_repo.py` and checks out the proper triton
 repository based on pins in the torch repo.
 
+On Windows, uses triton-windows (https://github.com/triton-lang/triton-windows).
+The commit pin is stored in ci_commit_pins/triton-windows.txt.
+
 This procedure is adapted from `pytorch/.github/scripts/build_triton_wheel.py`
 """
 import argparse
 import json
+import platform
 from pathlib import Path
 import sys
 
@@ -18,6 +22,14 @@ import repo_management
 
 THIS_MAIN_REPO_NAME = "triton"
 THIS_DIR = Path(__file__).resolve().parent
+COMMIT_PINS_DIR = THIS_DIR / "ci_commit_pins"
+
+# Platform detection
+IS_WINDOWS = platform.system() == "Windows"
+
+# Repository URLs
+ROCM_TRITON_ORIGIN = "https://github.com/ROCm/triton.git"
+TRITON_WINDOWS_ORIGIN = "https://github.com/triton-lang/triton-windows.git"
 
 
 def get_triton_pin(torch_dir: Path) -> str:
@@ -30,30 +42,60 @@ def get_triton_version(torch_dir: Path) -> str:
     return version_file.read_text().strip()
 
 
+def get_triton_windows_pin() -> str | None:
+    pin_file = COMMIT_PINS_DIR / "triton-windows.txt"
+    if pin_file.exists():
+        return pin_file.read_text().strip()
+    return None
+
+
 def do_checkout(args: argparse.Namespace):
     repo_dir: Path = args.checkout_dir
     torch_dir: Path = args.torch_dir
-    if not torch_dir.exists():
-        raise ValueError(
-            f"Could not find torch dir: {torch_dir} (did you check out torch first)"
-        )
 
     build_env = {}
-    if args.repo_hashtag is None:
-        if args.release:
-            # Derive the commit pin based on --release.
-            pin_version = get_triton_version(torch_dir)
-            pin_major, pin_minor, *_ = pin_version.split(".")
-            args.repo_hashtag = f"release/{pin_major}.{pin_minor}.x"
-            print(f"Triton version pin: {args.triton_version} -> {args.repo_hashtag}")
-        else:
-            # Derive the commit pin base on ci commit.
-            args.repo_hashtag = get_triton_pin(torch_dir)
-            # Latest triton calculates its own git hash and TRITON_WHEEL_VERSION_SUFFIX
-            # goes after the "+". Older versions must supply their own "+". We just
-            # leave it out entirely to avoid version errors.
-            build_env["TRITON_WHEEL_VERSION_SUFFIX"] = ""
-            print(f"Triton CI commit pin: {args.repo_hashtag}")
+
+    if IS_WINDOWS:
+        print("Using triton-windows repository (Windows build)")
+
+        if args.gitrepo_origin == ROCM_TRITON_ORIGIN:
+            args.gitrepo_origin = TRITON_WINDOWS_ORIGIN
+
+        if args.repo_hashtag is None:
+            triton_windows_pin = get_triton_windows_pin()
+            if triton_windows_pin:
+                args.repo_hashtag = triton_windows_pin
+                print(f"Triton-windows commit pin: {args.repo_hashtag}")
+            else:
+                args.repo_hashtag = "main-windows"
+                print("No triton-windows pin found, using main-windows branch")
+
+        args.hipify = False
+    else:
+        print("Using ROCm/triton repository (Linux build)")
+
+        if not torch_dir.exists():
+            raise ValueError(
+                f"Could not find torch dir: {torch_dir} (did you check out torch first)"
+            )
+
+        if args.repo_hashtag is None:
+            if args.release:
+                # Derive the commit pin based on --release.
+                pin_version = get_triton_version(torch_dir)
+                pin_major, pin_minor, *_ = pin_version.split(".")
+                args.repo_hashtag = f"release/{pin_major}.{pin_minor}.x"
+                print(
+                    f"Triton version pin: {args.triton_version} -> {args.repo_hashtag}"
+                )
+            else:
+                # Derive the commit pin base on ci commit.
+                args.repo_hashtag = get_triton_pin(torch_dir)
+                # Latest triton calculates its own git hash and TRITON_WHEEL_VERSION_SUFFIX
+                # goes after the "+". Older versions must supply their own "+". We just
+                # leave it out entirely to avoid version errors.
+                build_env["TRITON_WHEEL_VERSION_SUFFIX"] = ""
+                print(f"Triton CI commit pin: {args.repo_hashtag}")
 
     def _do_hipify(args: argparse.Namespace):
         print("Applying local modifications...")
@@ -64,6 +106,13 @@ def do_checkout(args: argparse.Namespace):
 
 
 def main(cl_args: list[str]):
+    if IS_WINDOWS:
+        default_origin = TRITON_WINDOWS_ORIGIN
+        default_hipify = False
+    else:
+        default_origin = ROCM_TRITON_ORIGIN
+        default_hipify = True
+
     def add_common(command_parser: argparse.ArgumentParser):
         command_parser.add_argument(
             "--checkout-dir",
@@ -94,8 +143,8 @@ def main(cl_args: list[str]):
     )
     checkout_p.add_argument(
         "--gitrepo-origin",
-        default="https://github.com/ROCm/triton.git",
-        help="git repository url",
+        default=default_origin,
+        help=f"git repository url (default: {default_origin})",
     )
     checkout_p.add_argument(
         "--release",
@@ -108,7 +157,7 @@ def main(cl_args: list[str]):
     checkout_p.add_argument(
         "--hipify",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=default_hipify,
         help="Run hipify",
     )
     checkout_p.set_defaults(func=do_checkout)

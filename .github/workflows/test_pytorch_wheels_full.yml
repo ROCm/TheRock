@@ -15,7 +15,11 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-mi325-1gpu-ossci-rocm"
+        default: "linux-gfx942-1gpu-ossci-rocm"
+      test_runs_on_multi_gpu:
+        description: Runner label for multi-GPU test configs (e.g. distributed). Corresponds to test-runs-on-multi-gpu in amdgpu_family_matrix.py
+        type: string
+        default: "linux-gfx942-8gpu-ossci-rocm"
       package_index_url:
         description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
         required: true
@@ -33,8 +37,12 @@ on:
         description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.9")
         type: string
         default: "release/2.9"
+      test_configs:
+        description: Space-separated test configs to run (e.g. "default", "default distributed", "default distributed inductor")
+        type: string
+        default: "default distributed inductor"
       tests_to_include:
-        description: List of test suites to run
+        description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
         default: "test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd"
 
@@ -46,6 +54,9 @@ on:
       test_runs_on:
         required: true
         type: string
+      test_runs_on_multi_gpu:
+        type: string
+        default: "linux-gfx942-8gpu-ossci-rocm"
       package_index_url:
         required: true
         type: string
@@ -64,11 +75,13 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      test_configs:
+        type: string
+        default: "default distributed inductor"
       tests_to_include:
-        description: List of test suites to run
+        description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
         default: "test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd"
-
 
 permissions:
   contents: read
@@ -76,17 +89,31 @@ permissions:
 run-name: Test PyTorch Full (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}}, ${{ inputs.test_runs_on }})
 
 jobs:
+  prepare_matrix:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - id: generate
+        run: |
+          python external-builds/pytorch/generate_test_sharding_matrix.py \
+            --test-configs '${{ inputs.test_configs }}' \
+            --default-runner '${{ inputs.test_runs_on }}' \
+            --multi-gpu-runner '${{ inputs.test_runs_on_multi_gpu }}'
+
   test_wheels:
-    name: Test PyTorch Full | ${{ inputs.amdgpu_family }} (shard ${{ matrix.shard }}/${{ matrix.num_shards }})
-    runs-on: ${{ inputs.test_runs_on }}
+    needs: prepare_matrix
+    name: Test PyTorch Full | ${{ inputs.amdgpu_family }} / ${{ matrix.test_config }} (shard ${{ matrix.shard }}/${{ matrix.num_shards }})
+    runs-on: ${{ matrix.runs_on }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { shard: 1, num_shards: 4 }
-          - { shard: 2, num_shards: 4 }
-          - { shard: 3, num_shards: 4 }
-          - { shard: 4, num_shards: 4 }
+      matrix: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
       options: --ipc host
@@ -111,7 +138,7 @@ jobs:
       CI: "1"
       PYTORCH_TEST_WITH_ROCM: "1"
       PYTORCH_TESTING_DEVICE_ONLY_FOR: "cuda"
-      TEST_CONFIG: "default"
+      TEST_CONFIG: ${{ matrix.test_config }}
       TESTS_TO_INCLUDE: ${{ inputs.tests_to_include }}
 
     steps:

@@ -6,6 +6,12 @@ should use this module to compute paths.
 
 See docs/development/workflow_outputs.md for the full layout reference.
 
+Note: this file is NOT bundled into the Lambda deployment package (only
+storage_backend.py and storage_location.py are). Top-level imports here
+do not need to be Lambda-safe, but keep optional dependencies deferred
+(imported inside the function that needs them) so this module remains
+importable in environments where those packages are not installed.
+
 A "workflow output" is anything produced by a CI workflow run:
 - Build artifacts (.tar.xz, .tar.zst archives)
 - Logs (.log files, ninja_logs.tar.gz)
@@ -46,7 +52,6 @@ import platform as platform_module
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.storage_location import StorageLocation
-from github_actions.github_actions_api import gha_query_workflow_run_by_id
 
 
 def _log(*args, **kwargs):
@@ -117,6 +122,10 @@ class WorkflowOutputRoot:
             self.bucket, f"{self.prefix}/index-{artifact_group}.html"
         )
 
+    def root_index(self) -> StorageLocation:
+        """Location for the root artifact index HTML (server-side generated)."""
+        return StorageLocation(self.bucket, f"{self.prefix}/index.html")
+
     # -- Logs -------------------------------------------------------------------
     #
     # The log directory contains all build logs, reports, and profiling data
@@ -151,6 +160,29 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket, f"{self.prefix}/logs/{artifact_group}/index.html"
         )
+
+    def root_log_index(self) -> StorageLocation:
+        """Location for the root log index HTML (server-side generated)."""
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/index.html")
+
+    def stage_log_dir(
+        self, stage_name: str, amdgpu_family: str = ""
+    ) -> StorageLocation:
+        """Location for a multi-arch stage log directory.
+
+        Multi-arch CI uploads logs per stage (and optionally per GPU family)
+        rather than per artifact_group. Generic stages get a single directory;
+        per-arch stages (e.g., math-libs) get a subdirectory per family.
+
+        Args:
+            stage_name: Build stage (e.g., 'foundation', 'math-libs')
+            amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
+        """
+        if amdgpu_family:
+            return StorageLocation(
+                self.bucket, f"{self.prefix}/logs/{stage_name}/{amdgpu_family}"
+            )
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/{stage_name}")
 
     def build_observability(self, artifact_group: str) -> StorageLocation:
         """Location for build observability HTML (within log_dir())."""
@@ -295,8 +327,12 @@ def _retrieve_bucket_info(
         github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
         _log(f"  (implicit) github_repository: {github_repository}")
 
-    # Fetch workflow_run from API if not provided but workflow_run_id is set
+    # Fetch workflow_run from API if not provided but workflow_run_id is set.
+    # Deferred import: github_actions is an optional dependency not available in
+    # all environments (e.g. local dev without the GHA support package installed).
     if workflow_run is None and workflow_run_id is not None:
+        from github_actions.github_actions_api import gha_query_workflow_run_by_id
+
         workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
 
     # Extract metadata from workflow_run if available
