@@ -62,6 +62,19 @@ from github_actions_api import gha_append_step_summary, gha_set_output
 # Input parsing helpers
 # ---------------------------------------------------------------------------
 
+# All available build stages in dependency order
+ALL_BUILD_STAGES = [
+    "foundation",
+    "compiler-runtime",
+    "math-libs",
+    "comm-libs",
+    "debug-tools",
+    "dctools-core",
+    "profiler-apps",
+    "iree-compiler",
+    "fusilli-libs",
+]
+
 
 def _parse_comma_list(raw: str) -> list[str]:
     """Parse a comma-separated string into a list of stripped, lowercased, non-empty names.
@@ -69,6 +82,25 @@ def _parse_comma_list(raw: str) -> list[str]:
     Example: "gfx94X, gfx120X" → ["gfx94x", "gfx120x"]
     """
     return [name.strip().lower() for name in raw.split(",") if name.strip()]
+
+
+def _parse_prebuilt_stages(raw: str) -> list[str]:
+    """Parse prebuilt_stages input, expanding 'all' to all available stages.
+
+    Args:
+        raw: Comma-separated stage names, or "all" for all stages
+
+    Returns:
+        List of stage names
+
+    Example:
+        "foundation,compiler-runtime" → ["foundation", "compiler-runtime"]
+        "all" → ["foundation", "compiler-runtime", "math-libs", ...]
+    """
+    stages = _parse_comma_list(raw)
+    if "all" in stages:
+        return ALL_BUILD_STAGES
+    return stages
 
 
 # ---------------------------------------------------------------------------
@@ -552,7 +584,7 @@ def decide_jobs(
     # Parse explicit prebuilt stages from workflow_dispatch input.
     stage_decisions: dict[str, JobAction] = {}
     if ci_inputs.prebuilt_stages:
-        for stage in _parse_comma_list(ci_inputs.prebuilt_stages):
+        for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
             stage_decisions[stage] = JobAction.PREBUILT
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
