@@ -72,12 +72,12 @@ amdgpu_family_info_matrix dictionary fields:
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            # Dual-label configuration for load balancing across runner pools.
-            # Primary label has 136 runners, CCS label has 32 runners.
-            # Random selection weighted 80/20 to distribute load proportionally.
+            # TODO: Remove alternative weight once we get dedicated set of machines
+            # As we are bringing back up mi325
+            # Dual-label configuration for load balancing across runner labels
             "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
             "test-runs-on-alternate": "linux-gfx942-1gpu-ccs-ossci-rocm",
-            "test-runs-on-alternate-weight": 0.2,  # 20% chance of using alternate
+            "test-runs-on-alternate-weight": 0.35,  # 35% chance of using alternate
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
