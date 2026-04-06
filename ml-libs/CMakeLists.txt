@@ -234,9 +234,10 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
     BUILD_DEPS
       hipDNN
       therock-googletest
-      therock-nlohmann-json
     RUNTIME_DEPS
       hip-clr
+      therock-flatbuffers
+      therock-nlohmann-json
   )
   therock_cmake_subproject_glob_c_sources(hipdnn_integration_tests
   SUBDIRS
