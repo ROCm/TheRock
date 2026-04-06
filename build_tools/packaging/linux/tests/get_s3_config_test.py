@@ -32,14 +32,16 @@ class GeneratePackageRepositoryUrlTest(unittest.TestCase):
         )
 
     def test_nightly_url(self):
-        """Test nightly build URL format."""
+        """Test nightly build URL format (RPM includes /x86_64/)."""
         url = get_s3_config.generate_package_repository_url(
             release_type="nightly",
             pkg_type="rpm",
             yyyymmdd="20260320",
             artifact_id="87654321",
         )
-        self.assertEqual(url, "https://rocm.nightlies.amd.com/rpm/20260320-87654321")
+        self.assertEqual(
+            url, "https://rocm.nightlies.amd.com/rpm/20260320-87654321/x86_64/"
+        )
 
     def test_prerelease_url(self):
         """Test prerelease URL format with default OS profile (ubuntu2404 for deb)."""
@@ -52,14 +54,14 @@ class GeneratePackageRepositoryUrlTest(unittest.TestCase):
         self.assertEqual(url, "https://rocm.prereleases.amd.com/packages/ubuntu2404")
 
     def test_release_url(self):
-        """Test release URL format with default OS profile (rhel10 for rpm)."""
+        """Test release URL format with default OS profile (rhel10 for rpm includes /x86_64/)."""
         url = get_s3_config.generate_package_repository_url(
             release_type="release",
             pkg_type="rpm",
             yyyymmdd="20260320",
             artifact_id="12345678",
         )
-        self.assertEqual(url, "https://repo.amd.com/rocm/packages/rhel10")
+        self.assertEqual(url, "https://repo.amd.com/rocm/packages/rhel10/x86_64/")
 
     def test_dev_url(self):
         """Test dev build URL format."""
@@ -71,7 +73,7 @@ class GeneratePackageRepositoryUrlTest(unittest.TestCase):
         )
         self.assertEqual(
             url,
-            "https://therock-dev-packages.s3.amazonaws.com/v3/packages/deb/20260320-11111111",
+            "https://rocm.devreleases.amd.com/deb/20260320-11111111",
         )
 
     def test_empty_release_type_uses_ci(self):
@@ -151,7 +153,7 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
             rocm_version="8.1.0~dev20251203",
         )
         self.assertEqual(bucket, "therock-dev-packages")
-        self.assertEqual(prefix, "v3/packages/deb/20251203-12345678")
+        self.assertEqual(prefix, "deb/20251203-12345678")
         self.assertEqual(job_type, "dev")
 
     def test_nightly_release_type(self):
@@ -165,7 +167,7 @@ class DetermineS3ConfigReleaseTypeTest(unittest.TestCase):
             rocm_version="8.1.0~20251203",
         )
         self.assertEqual(bucket, "therock-nightly-packages")
-        self.assertEqual(prefix, "v3/packages/rpm/20251203-87654321")
+        self.assertEqual(prefix, "rpm/20251203-87654321")
         self.assertEqual(job_type, "nightly")
 
     def test_prerelease_release_type(self):
@@ -411,6 +413,114 @@ class PlatformValidationTest(unittest.TestCase):
         self.assertEqual(bucket, "therock-ci-artifacts")
         self.assertEqual(prefix, "12345678-linux/packages/deb")
         self.assertEqual(job_type, "ci")
+
+
+class PackageRepositoryUrlRpmArchTest(unittest.TestCase):
+    """Tests to ensure RPM URLs include /x86_64/ suffix."""
+
+    def test_nightly_rpm_includes_x86_64(self):
+        """Test nightly RPM URL includes /x86_64/ suffix."""
+        _, _, _, repo_url = get_s3_config.determine_s3_config(
+            release_type="nightly",
+            repository="ROCm/TheRock",
+            is_fork=False,
+            pkg_type="rpm",
+            artifact_id="12345678",
+            rocm_version="8.1.0~20251203",
+        )
+        self.assertTrue(repo_url.endswith("/x86_64/"))
+        self.assertIn("rpm/20251203-12345678/x86_64/", repo_url)
+
+    def test_nightly_deb_no_x86_64(self):
+        """Test nightly DEB URL does not include /x86_64/."""
+        _, _, _, repo_url = get_s3_config.determine_s3_config(
+            release_type="nightly",
+            repository="ROCm/TheRock",
+            is_fork=False,
+            pkg_type="deb",
+            artifact_id="12345678",
+            rocm_version="8.1.0~20251203",
+        )
+        self.assertNotIn("/x86_64/", repo_url)
+        self.assertIn("deb/20251203-12345678", repo_url)
+
+    def test_dev_rpm_includes_x86_64(self):
+        """Test dev RPM URL includes /x86_64/ suffix."""
+        _, _, _, repo_url = get_s3_config.determine_s3_config(
+            release_type="dev",
+            repository="ROCm/TheRock",
+            is_fork=False,
+            pkg_type="rpm",
+            artifact_id="12345678",
+            rocm_version="8.1.0~dev20251203",
+        )
+        self.assertTrue(repo_url.endswith("/x86_64/"))
+        self.assertIn("rpm/20251203-12345678/x86_64/", repo_url)
+
+    def test_ci_rpm_includes_x86_64(self):
+        """Test CI RPM URL includes /x86_64/ suffix."""
+        _, _, _, repo_url = get_s3_config.determine_s3_config(
+            release_type="ci",
+            repository="ROCm/TheRock",
+            is_fork=False,
+            pkg_type="rpm",
+            artifact_id="12345678",
+            rocm_version=None,
+        )
+        self.assertTrue(repo_url.endswith("/x86_64/"))
+        self.assertIn("packages/rpm/x86_64/", repo_url)
+
+    def test_ci_deb_no_x86_64(self):
+        """Test CI DEB URL does not include /x86_64/."""
+        _, _, _, repo_url = get_s3_config.determine_s3_config(
+            release_type="ci",
+            repository="ROCm/TheRock",
+            is_fork=False,
+            pkg_type="deb",
+            artifact_id="12345678",
+            rocm_version=None,
+        )
+        self.assertNotIn("/x86_64/", repo_url)
+        self.assertIn("packages/deb", repo_url)
+
+    def test_prerelease_rpm_includes_x86_64(self):
+        """Test prerelease RPM URL includes /x86_64/ suffix."""
+        _, _, _, repo_url = get_s3_config.determine_s3_config(
+            release_type="prerelease",
+            repository="ROCm/TheRock",
+            is_fork=False,
+            pkg_type="rpm",
+            artifact_id="12345678",
+            rocm_version="8.1.0~pre2",
+        )
+        self.assertTrue(repo_url.endswith("/x86_64/"))
+        self.assertIn("rhel10/x86_64/", repo_url)
+
+    def test_prerelease_deb_no_x86_64(self):
+        """Test prerelease DEB URL does not include /x86_64/."""
+        _, _, _, repo_url = get_s3_config.determine_s3_config(
+            release_type="prerelease",
+            repository="ROCm/TheRock",
+            is_fork=False,
+            pkg_type="deb",
+            artifact_id="12345678",
+            rocm_version="8.1.0~pre2",
+        )
+        self.assertNotIn("/x86_64/", repo_url)
+        self.assertIn("ubuntu2404", repo_url)
+
+    def test_release_rpm_includes_x86_64(self):
+        """Test release RPM URL includes /x86_64/ suffix."""
+        _, _, _, repo_url = get_s3_config.determine_s3_config(
+            release_type="release",
+            repository="ROCm/TheRock",
+            is_fork=False,
+            pkg_type="rpm",
+            artifact_id="12345678",
+            rocm_version="8.1.0",
+        )
+        self.assertTrue(repo_url.endswith("/x86_64/"))
+        self.assertIn("rhel10/x86_64/", repo_url)
 
 
 if __name__ == "__main__":

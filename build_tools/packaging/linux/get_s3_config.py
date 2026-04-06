@@ -118,28 +118,40 @@ def generate_package_repository_url(
         Public repository URL for package installation instructions
 
     Examples:
-        CI:         https://therock-ci-artifacts.s3.amazonaws.com/12345678-linux/packages/deb
-        Nightly:    https://rocm.nightlies.amd.com/deb/20260320-12345678
-        Prerelease: https://rocm.prereleases.amd.com/packages/ubuntu2404 (deb) or .../rhel10 (rpm)
-        Release:    https://repo.amd.com/rocm/packages/ubuntu2404 (deb) or .../rhel10 (rpm)
+        CI DEB:         https://therock-ci-artifacts.s3.amazonaws.com/12345678-linux/packages/deb
+        CI RPM:         https://therock-ci-artifacts.s3.amazonaws.com/12345678-linux/packages/rpm/x86_64/
+        Nightly DEB:    https://rocm.nightlies.amd.com/deb/20260320-12345678
+        Nightly RPM:    https://rocm.nightlies.amd.com/rpm/20260320-12345678/x86_64/
+        Prerelease DEB: https://rocm.prereleases.amd.com/packages/ubuntu2404
+        Prerelease RPM: https://rocm.prereleases.amd.com/packages/rhel10/x86_64/
+        Release DEB:    https://repo.amd.com/rocm/packages/ubuntu2404
+        Release RPM:    https://repo.amd.com/rocm/packages/rhel10/x86_64/
     """
     if release_type == "nightly":
         # Nightly packages use CDN domain
-        return f"https://rocm.nightlies.amd.com/{pkg_type}/{yyyymmdd}-{artifact_id}"
+        # RPM repos need /x86_64/ subdirectory for yum/dnf
+        url = f"https://rocm.nightlies.amd.com/{pkg_type}/{yyyymmdd}-{artifact_id}"
+        return f"{url}/x86_64/" if pkg_type == "rpm" else url
     elif release_type == "prerelease":
         # Prerelease packages use CDN domain with default OS profile
         os_profile = "ubuntu2404" if pkg_type == "deb" else "rhel10"
-        return f"https://rocm.prereleases.amd.com/packages/{os_profile}"
+        base = f"https://rocm.prereleases.amd.com/packages/{os_profile}"
+        return f"{base}/x86_64/" if pkg_type == "rpm" else base
     elif release_type == "release":
         # Release packages use official repo domain with default OS profile
         os_profile = "ubuntu2404" if pkg_type == "deb" else "rhel10"
-        return f"https://repo.amd.com/rocm/packages/{os_profile}"
+        base = f"https://repo.amd.com/rocm/packages/{os_profile}"
+        return f"{base}/x86_64/" if pkg_type == "rpm" else base
     elif release_type == "dev":
-        # Dev packages use S3 direct URL
-        return f"https://therock-dev-packages.s3.amazonaws.com/v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
+        # Dev packages use CloudFront CDN domain
+        # RPM repos need /x86_64/ subdirectory for yum/dnf
+        url = f"https://rocm.devreleases.amd.com/{pkg_type}/{yyyymmdd}-{artifact_id}"
+        return f"{url}/x86_64/" if pkg_type == "rpm" else url
     else:
         # CI builds (including empty release_type or 'ci')
-        return f"https://therock-ci-artifacts.s3.amazonaws.com/{artifact_id}-{platform}/packages/{pkg_type}"
+        # RPM repos need /x86_64/ subdirectory for yum/dnf
+        url = f"https://therock-ci-artifacts.s3.amazonaws.com/{artifact_id}-{platform}/packages/{pkg_type}"
+        return f"{url}/x86_64/" if pkg_type == "rpm" else url
 
 
 def determine_s3_config(
@@ -191,7 +203,7 @@ def determine_s3_config(
             print(f"✓ Using release-type bucket: {s3_bucket}", file=sys.stderr)
         else:
             # Dev/Nightly packages go to dated subfolder for versioning
-            s3_prefix = f"v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
+            s3_prefix = f"{pkg_type}/{yyyymmdd}-{artifact_id}"
             job_type = release_type
             print(f"✓ Using release-type bucket: {s3_bucket}", file=sys.stderr)
 
