@@ -87,12 +87,6 @@ def _parse_comma_list(raw: str) -> list[str]:
 def _parse_prebuilt_stages(raw: str) -> list[str]:
     """Parse prebuilt_stages input, expanding 'all' to all available stages.
 
-    Args:
-        raw: Comma-separated stage names, or "all" for all stages
-
-    Returns:
-        List of stage names
-
     Example:
         "foundation,compiler-runtime" → ["foundation", "compiler-runtime"]
         "all" → ["foundation", "compiler-runtime", "math-libs", ...]
