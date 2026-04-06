@@ -18,6 +18,12 @@ on:
         type: string
       rocm_package_version:
         type: string
+      rocm_deb_package_version:
+        type: string
+        description: ROCm DEB package version for native packages
+      rocm_rpm_package_version:
+        type: string
+        description: ROCm RPM package version for native packages
       test_type:
         type: string
       release_type:
@@ -115,6 +121,61 @@ jobs:
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
       release_type: ${{ inputs.release_type }}
+
+  build_native_deb_packages:
+    needs: [build_multi_arch_stages]
+    name: Build DEB Packages
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    with:
+      dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      artifact_run_id: ${{ github.run_id }}
+      rocm_version: ${{ inputs.rocm_deb_package_version }}
+      native_package_type: deb
+      release_type: ci
+    permissions:
+      contents: read
+      id-token: write
+
+  build_native_rpm_packages:
+    needs: [build_multi_arch_stages]
+    name: Build RPM Packages
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    with:
+      dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      artifact_run_id: ${{ github.run_id }}
+      rocm_version: ${{ inputs.rocm_rpm_package_version }}
+      native_package_type: rpm
+      release_type: ci
+    permissions:
+      contents: read
+      id-token: write
+
+  test_native_packages:
+    needs: [build_native_deb_packages, build_native_rpm_packages]
+    name: Test ${{ matrix.pkg_type }} Install - ${{ matrix.os_profile }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg_type: deb
+            os_profile: ubuntu2404
+            package_url: ${{ needs.build_native_deb_packages.outputs.package_repository_url }}
+          - pkg_type: rpm
+            os_profile: rhel10
+            package_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
+          - pkg_type: rpm
+            os_profile: sles16
+            package_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
+    uses: ./.github/workflows/test_native_linux_packages_install.yml
+    with:
+      package_install_url: ${{ matrix.package_url }}
+      release_type: ci
+      os_profile: ${{ matrix.os_profile }}
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      test_type: sanity
 
   build_python_packages:
     needs: [build_multi_arch_stages]
