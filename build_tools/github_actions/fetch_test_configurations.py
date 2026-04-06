@@ -85,6 +85,19 @@ test_matrix = {
             "windows": 6,
         },
     },
+    "rocblas-multigpu": {
+        "job_name": "rocblas-multigpu",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 90,  # Adjust based on actual test duration
+        "test_script": f"python {_get_script_path('test_runner.py')} --multigpu",
+        "platform": ["linux"],  # Multi-GPU runners only on Linux
+        "total_shards_dict": {
+            "linux": 1,  # Start with 1 shard, multi-GPU subset typically smaller
+        },
+        "multi_gpu": {
+            "linux": ["gfx94X-dcgpu"],  # Can expand to other architectures later
+        },
+    },
     "rocroller": {
         "job_name": "rocroller",
         "fetch_artifact_args": "--blas --tests",

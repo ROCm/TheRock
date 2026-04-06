@@ -12,6 +12,10 @@ TEST_TYPE: Test category to run - one of "quick", "standard", "comprehensive", o
     Defaults to "quick". Invalid values fall back to "quick" with an error message.
 AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
 
+Command-line arguments:
+--multigpu: Enable multi-GPU testing mode. Requires MIN_GPU_COUNT GPUs (default 2).
+    Sets HIP_VISIBLE_DEVICES to available GPUs and exits gracefully if insufficient GPUs.
+
 The script discovers GPU-specific labels via ctest --print-labels and runs the appropriate tests for the current GPU architecture.
 """
 
@@ -19,10 +23,18 @@ import sys
 import subprocess
 import re
 import os
+import argparse
 
 import logging
 import shlex
 from pathlib import Path
+
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description="Generic test runner for ROCm components")
+parser.add_argument(
+    "--multigpu", action="store_true", help="Enable multi-GPU testing mode"
+)
+args = parser.parse_args()
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -37,6 +49,7 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 COMPONENT_DIR_MAPPING = {
     "miopen": "MIOpen",
     "rocblas": "rocblas",
+    "rocblas-multigpu": "rocblas",  # Map multi-GPU variant to same component
     "rocrand": "rocRAND",
     "hiprand": "hipRAND",
     "rocthrust": "rocthrust",
@@ -86,6 +99,35 @@ ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
 logging.basicConfig(level=logging.INFO)
+
+# Multi-GPU setup (if --multigpu flag is set)
+if args.multigpu:
+    # Add parent directory to path for github_actions_api imports
+    sys.path.insert(0, str(SCRIPT_DIR.parent))
+    from github_actions_api import get_visible_gpu_count
+
+    # Configurable GPU requirements
+    MIN_GPU_COUNT = int(os.getenv("MIN_GPU_COUNT", "2"))
+    MAX_GPU_COUNT = int(os.getenv("MAX_GPU_COUNT", "8"))
+
+    gpu_count = get_visible_gpu_count(env=environ_vars, therock_bin_dir=THEROCK_BIN_DIR)
+    logging.info(
+        f"Multi-GPU mode: {gpu_count} GPUs visible, minimum required: {MIN_GPU_COUNT}"
+    )
+
+    if gpu_count < MIN_GPU_COUNT:
+        logging.error(
+            f"Insufficient GPUs for multi-GPU testing: {gpu_count} < {MIN_GPU_COUNT}"
+        )
+        sys.exit(0)  # Exit gracefully (not an error)
+
+    # Configure HIP_VISIBLE_DEVICES
+    gpus_to_use = min(gpu_count, MAX_GPU_COUNT)
+    environ_vars["HIP_VISIBLE_DEVICES"] = ",".join(str(i) for i in range(gpus_to_use))
+    logging.info(
+        f"Using {gpus_to_use} GPUs: HIP_VISIBLE_DEVICES={environ_vars['HIP_VISIBLE_DEVICES']}"
+    )
+
 ##############################################
 
 
