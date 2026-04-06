@@ -31,6 +31,12 @@ on:
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
+      rocm_deb_package_version:
+        description: ROCm DEB package version for native packages.
+        value: ${{ jobs.setup.outputs.rocm_deb_package_version }}
+      rocm_rpm_package_version:
+        description: ROCm RPM package version for native packages.
+        value: ${{ jobs.setup.outputs.rocm_rpm_package_version }}
 
 permissions:
   contents: read
@@ -46,6 +52,8 @@ jobs:
       linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+      rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
+      rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
     steps:
       - name: Checking out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
