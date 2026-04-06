@@ -73,6 +73,7 @@ ALL_BUILD_STAGES = [
     "profiler-apps",
     "iree-compiler",
     "fusilli-libs",
+    "media-libs"
 ]
 
 
