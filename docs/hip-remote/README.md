@@ -73,6 +73,35 @@ After this you will have two DLLs in the `build/` directory:
 - `amdhip64_7.dll` -- the HIP proxy
 - `hiprtc0702.dll` -- the hipRTC proxy
 
+### Worker (Windows)
+
+The worker can also run on Windows for local GPU access. All commands must
+run from a **VS x64 Developer Command Prompt** with the ROCm SDK clang-cl
+in PATH.
+
+```powershell
+$ROCM_ROOT = (rocm-sdk path --root)
+$env:PATH = "$ROCM_ROOT\lib\llvm\bin;$env:PATH"
+
+cd rocm-systems\projects\hip-remote-worker
+
+# Generate import library from the HIP DLL
+gendef "$ROCM_ROOT\..\\_rocm_sdk_core\bin\amdhip64_7.dll"
+llvm-dlltool -m i386:x86-64 -d amdhip64_7.def -l amdhip64_7.lib
+
+cmake -B build -G Ninja -DCMAKE_C_COMPILER=clang-cl ^
+    -DCMAKE_CXX_COMPILER=clang-cl ^
+    -DCMAKE_EXE_LINKER_FLAGS=/MANIFEST:NO ^
+    -DROCM_PATH=%ROCM_ROOT% .
+
+cmake --build build
+```
+
+Copy `zstd.dll` (or `libzstd.dll`) next to `hip-worker.exe` for COMGR
+metadata extraction from compressed code objects. Run with
+`_rocm_sdk_core/bin` in PATH so the worker finds `amdhip64_7.dll` and
+`amd_comgr0702.dll`.
+
 ### Client library (macOS)
 
 ```bash

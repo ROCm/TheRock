@@ -246,28 +246,36 @@ FP8 support issue specific to remote execution.
 ### Build & Test
 
 ```powershell
-# Build client (Windows, from VS x64 prompt):
-cmake -B build-hip-remote -S rocm-systems/projects/hip-remote-client -G Ninja \
-  -DCMAKE_C_COMPILER=clang-cl -DROCM_PATH=$(rocm-sdk path --root) \
-  -DHIP_REMOTE_PROXY_MODE=ON
-ninja -C build-hip-remote
+# Build client proxy DLL (Windows):
+cmake -B build-hip-remote -S rocm-systems/projects/hip-remote-client -G Ninja `
+  -DHIP_REMOTE_PROXY_MODE=ON -DROCM_PATH=$(rocm-sdk path --root)
+cmake --build build-hip-remote
 
-# Environment:
+# Build worker on Windows (from VS x64 Developer prompt, with
+# _rocm_sdk_devel/lib/llvm/bin in PATH for clang-cl):
+#   1. Generate import lib: gendef + llvm-dlltool from the real amdhip64_7.dll
+#   2. cmake -B build-hip-worker ... -DCMAKE_C_COMPILER=clang-cl
+#   3. Copy zstd.dll next to hip-worker.exe
+# See docs/hip-remote/README.md for full steps.
+
+# Environment (remote worker):
 $env:TF_WORKER_HOST = "149.28.118.43"
 $env:HIP_REMOTE_LIB_DIR = "D:\jam\temp\TheRock\build-hip-remote"
 $env:TRITON_LIBHIP_PATH = "D:\jam\temp\TheRock\build-hip-remote\amdhip64_7.dll"
+$env:HIP_REMOTE_CACHE = "1"   # content cache for fast model reload
+
+# Environment (local worker on Windows):
+$env:TF_WORKER_HOST = "localhost"
+# Start worker with _rocm_sdk_core/bin in PATH:
+# d:\...\build-hip-worker\hip-worker.exe
 
 # Worker (Linux): ssh jam@149.28.118.43
-pkill -9 hip-worker
-nohup ~/hip-remote/core/hip-remote-worker/build/hip-worker > /tmp/hip-worker.log 2>&1 &
-
-# Worker rebuild: copy protocol header + worker source, then:
-cd ~/hip-remote/core/hip-remote-worker/build && ninja
+HIP_REMOTE_CACHE=1 nohup ~/hip-remote/core/hip-remote-worker/build/hip-worker > /tmp/hip-worker.log 2>&1 &
 
 # Tests:
-python validate_pytorch_vroom.py  # SDPA, Conv2d, GEMM
 python test_gpt2.py               # GPT-2 generation
 python test_sdxl_cat.py           # SDXL image generation
+python test_sd15.py               # SD 1.5 (smaller/faster)
 ```
 
 ## Key Documentation
