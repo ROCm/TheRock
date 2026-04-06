@@ -192,8 +192,11 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
-          $PYTHON_CMD -m pip install --upgrade pip
-          $PYTHON_CMD -m pip install -r build_tools/packaging/linux/tests/requirements.txt
+          # Use venv for all distros for consistency and future-proofing (PEP 668)
+          $PYTHON_CMD -m venv /tmp/test-venv
+          /tmp/test-venv/bin/pip install --upgrade pip
+          /tmp/test-venv/bin/pip install -r build_tools/packaging/linux/tests/requirements.txt
+          echo "PYTHON_CMD=/tmp/test-venv/bin/python" >> $GITHUB_ENV
 
       - name: Package Installation Test
         id: install-test
