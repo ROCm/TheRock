@@ -2931,6 +2931,16 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 2> kBufferFormatHiSupportOpcodes = {
+      "BUFFER_LOAD_FORMAT_D16_HI_X",
+      "BUFFER_STORE_FORMAT_D16_HI_X",
+  };
+  for (std::string_view opcode : kBufferFormatHiSupportOpcodes) {
+    if (!expect_support(opcode)) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 16> kTypedBufferFormatOpcodes = {
       "TBUFFER_LOAD_FORMAT_X",      "TBUFFER_LOAD_FORMAT_XY",
       "TBUFFER_LOAD_FORMAT_XYZ",    "TBUFFER_LOAD_FORMAT_XYZW",
@@ -2951,7 +2961,28 @@ int main() {
       "FLAT_ATOMIC_ADD", "FLAT_ATOMIC_SWAP", "FLAT_ATOMIC_CMPSWAP",
       "FLAT_ATOMIC_ADD_X2",
   };
+  const std::array<std::string_view, 28> kAdditionalFlatAtomicSupportOpcodes = {
+      "FLAT_ATOMIC_SUB",        "FLAT_ATOMIC_SMIN",
+      "FLAT_ATOMIC_UMIN",       "FLAT_ATOMIC_SMAX",
+      "FLAT_ATOMIC_UMAX",       "FLAT_ATOMIC_AND",
+      "FLAT_ATOMIC_OR",         "FLAT_ATOMIC_XOR",
+      "FLAT_ATOMIC_INC",        "FLAT_ATOMIC_DEC",
+      "FLAT_ATOMIC_ADD_F32",    "FLAT_ATOMIC_PK_ADD_F16",
+      "FLAT_ATOMIC_ADD_F64",    "FLAT_ATOMIC_MIN_F64",
+      "FLAT_ATOMIC_MAX_F64",    "FLAT_ATOMIC_PK_ADD_BF16",
+      "FLAT_ATOMIC_SWAP_X2",    "FLAT_ATOMIC_CMPSWAP_X2",
+      "FLAT_ATOMIC_SUB_X2",     "FLAT_ATOMIC_SMIN_X2",
+      "FLAT_ATOMIC_UMIN_X2",    "FLAT_ATOMIC_SMAX_X2",
+      "FLAT_ATOMIC_UMAX_X2",    "FLAT_ATOMIC_AND_X2",
+      "FLAT_ATOMIC_OR_X2",      "FLAT_ATOMIC_XOR_X2",
+      "FLAT_ATOMIC_INC_X2",     "FLAT_ATOMIC_DEC_X2",
+  };
   for (std::string_view opcode : kFlatAtomicSupportOpcodes) {
+    if (!expect_support(opcode)) {
+      return 1;
+    }
+  }
+  for (std::string_view opcode : kAdditionalFlatAtomicSupportOpcodes) {
     if (!expect_support(opcode)) {
       return 1;
     }
@@ -2972,7 +3003,25 @@ int main() {
       "GLOBAL_ATOMIC_MAX_F64", "GLOBAL_ATOMIC_PK_ADD_BF16",
       "GLOBAL_ATOMIC_SWAP_X2", "GLOBAL_ATOMIC_CMPSWAP_X2",
   };
+  const std::array<std::string_view, 21> kAdditionalGlobalAtomicSupportOpcodes = {
+      "GLOBAL_ATOMIC_SUB",      "GLOBAL_ATOMIC_SMIN",
+      "GLOBAL_ATOMIC_UMIN",     "GLOBAL_ATOMIC_SMAX",
+      "GLOBAL_ATOMIC_UMAX",     "GLOBAL_ATOMIC_AND",
+      "GLOBAL_ATOMIC_OR",       "GLOBAL_ATOMIC_XOR",
+      "GLOBAL_ATOMIC_INC",      "GLOBAL_ATOMIC_DEC",
+      "GLOBAL_ATOMIC_ADD_X2",   "GLOBAL_ATOMIC_SUB_X2",
+      "GLOBAL_ATOMIC_SMIN_X2",  "GLOBAL_ATOMIC_UMIN_X2",
+      "GLOBAL_ATOMIC_SMAX_X2",  "GLOBAL_ATOMIC_UMAX_X2",
+      "GLOBAL_ATOMIC_AND_X2",   "GLOBAL_ATOMIC_OR_X2",
+      "GLOBAL_ATOMIC_XOR_X2",   "GLOBAL_ATOMIC_INC_X2",
+      "GLOBAL_ATOMIC_DEC_X2",
+  };
   for (std::string_view opcode : kGlobalAtomicSupportOpcodes) {
+    if (!expect_support(opcode)) {
+      return 1;
+    }
+  }
+  for (std::string_view opcode : kAdditionalGlobalAtomicSupportOpcodes) {
     if (!expect_support(opcode)) {
       return 1;
     }
