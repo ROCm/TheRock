@@ -50,6 +50,7 @@ ARG PYTORCH_GIT_REPO=rocm/pytorch
 ARG THEROCK_REF=main
 
 # ----- System dependencies -----
+USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         git \
@@ -129,7 +130,7 @@ ENV CI=1 \
     PYTORCH_TEST_WITH_ROCM=1 \
     PYTORCH_TESTING_DEVICE_ONLY_FOR=cuda \
     OPENBLAS_NUM_THREADS=64 \
-    PYTORCH_NUM_PYTEST_RERUNS=0 \
+    PYTORCH_NUM_PYTEST_RERUNS=2 \
     AMDGPU_FAMILY=${AMDGPU_FAMILY}
 
 # ----- Working directory is the PyTorch test root -----

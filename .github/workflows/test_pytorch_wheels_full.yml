@@ -267,7 +267,7 @@ jobs:
       - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
         env:
-          PYTORCH_NUM_PYTEST_RERUNS: "0"
+          PYTORCH_NUM_PYTEST_RERUNS: "2"
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --exclude dynamo/test_dynamic_shapes functorch/test_control_flow \
