@@ -6,7 +6,7 @@ name: Bump Submodule automation
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */12 * * *" # Runs every 12 hrs at 12AM and 12PM
+    - cron: "0 */12 * * 1-5" # Runs every 12 hrs at 12AM and 12PM UTC, Monday through Friday
   push:
     branches:
       - main
