@@ -47,6 +47,7 @@ Outputs (written to GITHUB_OUTPUT):
 import enum
 import json
 import os
+import random
 from dataclasses import asdict, dataclass, field, fields
 
 
@@ -760,6 +761,29 @@ def _expand_build_config_for_platform(
 
         # Determine test runner label.
         test_runs_on = platform_info["test-runs-on"]
+
+        # Handle dual-label configuration with weighted random selection.
+        # Some families (e.g. gfx94x) have multiple runner pools available.
+        # To distribute load proportionally across pools with different capacities,
+        # we use weighted random selection based on the alternate-weight field.
+        # Example: gfx94x has 136 primary runners and 32 CCS runners. With weight=0.2,
+        # 20% of CI runs use the CCS pool, 80% use the primary pool, distributing
+        # load proportionally to capacity (~27 jobs on CCS, ~109 on primary).
+        if "test-runs-on-alternate" in platform_info:
+            alternate_label = platform_info["test-runs-on-alternate"]
+            alternate_weight = platform_info.get("test-runs-on-alternate-weight", 0.5)
+            if random.random() < alternate_weight:
+                test_runs_on = alternate_label
+                print(
+                    f"  {family_name}: selected alternate runner (weight={alternate_weight}): "
+                    f"{test_runs_on}"
+                )
+            else:
+                print(
+                    f"  {family_name}: selected primary runner (weight={1-alternate_weight}): "
+                    f"{test_runs_on}"
+                )
+
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
         # this family (the default runner may not have the right kernel).
