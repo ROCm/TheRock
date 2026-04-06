@@ -2997,6 +2997,30 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 29>
+      kAdditionalBufferAtomicSupportOpcodes = {
+          "BUFFER_ATOMIC_SWAP",      "BUFFER_ATOMIC_SUB",
+          "BUFFER_ATOMIC_SMIN",      "BUFFER_ATOMIC_UMIN",
+          "BUFFER_ATOMIC_SMAX",      "BUFFER_ATOMIC_UMAX",
+          "BUFFER_ATOMIC_AND",       "BUFFER_ATOMIC_OR",
+          "BUFFER_ATOMIC_XOR",       "BUFFER_ATOMIC_INC",
+          "BUFFER_ATOMIC_DEC",       "BUFFER_ATOMIC_ADD_F32",
+          "BUFFER_ATOMIC_PK_ADD_F16", "BUFFER_ATOMIC_ADD_F64",
+          "BUFFER_ATOMIC_MIN_F64",    "BUFFER_ATOMIC_MAX_F64",
+          "BUFFER_ATOMIC_PK_ADD_BF16", "BUFFER_ATOMIC_SWAP_X2",
+          "BUFFER_ATOMIC_CMPSWAP_X2", "BUFFER_ATOMIC_SUB_X2",
+          "BUFFER_ATOMIC_SMIN_X2",   "BUFFER_ATOMIC_UMIN_X2",
+          "BUFFER_ATOMIC_SMAX_X2",   "BUFFER_ATOMIC_UMAX_X2",
+          "BUFFER_ATOMIC_AND_X2",    "BUFFER_ATOMIC_OR_X2",
+          "BUFFER_ATOMIC_XOR_X2",    "BUFFER_ATOMIC_INC_X2",
+          "BUFFER_ATOMIC_DEC_X2",
+  };
+  for (std::string_view opcode : kAdditionalBufferAtomicSupportOpcodes) {
+    if (!expect_support(opcode)) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 8> kGlobalAtomicSupportOpcodes = {
       "GLOBAL_ATOMIC_ADD_F32", "GLOBAL_ATOMIC_PK_ADD_F16",
       "GLOBAL_ATOMIC_ADD_F64", "GLOBAL_ATOMIC_MIN_F64",
