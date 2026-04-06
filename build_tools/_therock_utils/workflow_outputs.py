@@ -88,6 +88,17 @@ class WorkflowOutputRoot:
     platform: str
     """Platform name ('linux' or 'windows')."""
 
+    path_prefix: str = ""
+    """Optional storage path prefix prepended before all output paths.
+
+    When set (e.g. ``'v3/artifacts'``), all outputs for this run are placed
+    under ``{path_prefix}/{external_repo}{run_id}-{platform}/...`` instead of
+    the default ``{external_repo}{run_id}-{platform}/...``.
+
+    Useful for private workflows that need to co-locate outputs with other
+    content under a versioned directory on the same bucket.
+    """
+
     # -- Root -------------------------------------------------------------------
 
     @property
@@ -96,7 +107,10 @@ class WorkflowOutputRoot:
 
         This is the common root for all outputs from this run.
         """
-        return f"{self.external_repo}{self.run_id}-{self.platform}"
+        base = f"{self.external_repo}{self.run_id}-{self.platform}"
+        if self.path_prefix:
+            return f"{self.path_prefix}/{base}"
+        return base
 
     def root(self) -> StorageLocation:
         """Location for the run output root (where build artifacts live)."""
@@ -236,6 +250,8 @@ class WorkflowOutputRoot:
         github_repository: str | None = None,
         workflow_run: dict | None = None,
         lookup_workflow_run: bool = False,
+        bucket_override: str | None = None,
+        path_prefix: str = "",
     ) -> "WorkflowOutputRoot":
         """Create from CI workflow context.
 
@@ -255,6 +271,11 @@ class WorkflowOutputRoot:
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
+            bucket_override: When set, use this S3 bucket instead of the one
+                determined from the repository/fork/release_type heuristics.
+                Bucket permissions are enforced by AWS IAM, not by this code.
+            path_prefix: Optional storage path prefix for all outputs under this run
+                (e.g. ``'v3/artifacts'``).  See ``WorkflowOutputRoot.path_prefix``.
         """
         workflow_run_id = (
             run_id if lookup_workflow_run and workflow_run is None else None
@@ -264,11 +285,15 @@ class WorkflowOutputRoot:
             workflow_run_id=workflow_run_id,
             workflow_run=workflow_run,
         )
+        if bucket_override:
+            _log(f"  bucket_override: {bucket_override!r} (overrides {bucket!r})")
+            bucket = bucket_override
         return cls(
             bucket=bucket,
             external_repo=external_repo,
             run_id=run_id,
             platform=platform,
+            path_prefix=path_prefix,
         )
 
     @classmethod

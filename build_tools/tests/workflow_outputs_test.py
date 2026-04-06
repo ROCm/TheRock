@@ -506,5 +506,155 @@ class TestRetrieveBucketInfo(unittest.TestCase):
         self.assertEqual(bucket, "therock-ci-artifacts")
 
 
+# ---------------------------------------------------------------------------
+# StorageLocation — cdn_url
+# ---------------------------------------------------------------------------
+
+
+class TestStorageLocationCdnUrl(unittest.TestCase):
+    def test_cdn_url_no_prefixes(self):
+        """With no prefixes, cdn_url is just base_url + relative_path."""
+        loc = StorageLocation("my-bucket", "12345-linux/file.tar.xz")
+        self.assertEqual(
+            loc.cdn_url("https://cdn.example.com"),
+            "https://cdn.example.com/12345-linux/file.tar.xz",
+        )
+
+    def test_cdn_url_with_cdn_prefix_only(self):
+        """cdn_prefix is prepended to the path when strip_prefix is empty."""
+        loc = StorageLocation("my-bucket", "12345-linux/logs/group/index.html")
+        self.assertEqual(
+            loc.cdn_url("https://cdn.example.com", cdn_prefix="artifacts"),
+            "https://cdn.example.com/artifacts/12345-linux/logs/group/index.html",
+        )
+
+    def test_cdn_url_strips_prefix_and_adds_cdn_prefix(self):
+        """strip_prefix is stripped and cdn_prefix is prepended."""
+        loc = StorageLocation(
+            "my-bucket", "v3/artifacts/12345-linux/logs/group/index.html"
+        )
+        self.assertEqual(
+            loc.cdn_url(
+                "https://cdn.example.com",
+                strip_prefix="v3/artifacts",
+                cdn_prefix="artifacts",
+            ),
+            "https://cdn.example.com/artifacts/12345-linux/logs/group/index.html",
+        )
+
+    def test_cdn_url_prefix_not_matched(self):
+        """When strip_prefix does not match, relative_path is used as-is."""
+        loc = StorageLocation("my-bucket", "12345-linux/file.tar.xz")
+        self.assertEqual(
+            loc.cdn_url(
+                "https://cdn.example.com",
+                strip_prefix="v3/artifacts",
+                cdn_prefix="artifacts",
+            ),
+            "https://cdn.example.com/artifacts/12345-linux/file.tar.xz",
+        )
+
+    def test_cdn_url_partial_prefix_not_stripped(self):
+        """A partial prefix match (no trailing slash) must not be stripped."""
+        loc = StorageLocation("my-bucket", "v3/artifactsfoo/12345-linux/file.tar.xz")
+        result = loc.cdn_url("https://cdn.example.com", strip_prefix="v3/artifacts")
+        # 'v3/artifacts' without a '/' should not match 'v3/artifactsfoo/...'
+        self.assertIn("v3/artifactsfoo", result)
+
+
+# ---------------------------------------------------------------------------
+# WorkflowOutputRoot — path_prefix field
+# ---------------------------------------------------------------------------
+
+
+class TestWorkflowOutputRootPathPrefix(unittest.TestCase):
+    def test_prefix_with_path_prefix(self):
+        root = WorkflowOutputRoot(
+            bucket="b",
+            external_repo="",
+            run_id="12345",
+            platform="linux",
+            path_prefix="v3/artifacts",
+        )
+        self.assertEqual(root.prefix, "v3/artifacts/12345-linux")
+
+    def test_prefix_with_path_prefix_and_external_repo(self):
+        root = WorkflowOutputRoot(
+            bucket="b",
+            external_repo="Fork-TheRock/",
+            run_id="12345",
+            platform="linux",
+            path_prefix="v3/artifacts",
+        )
+        self.assertEqual(root.prefix, "v3/artifacts/Fork-TheRock/12345-linux")
+
+    def test_prefix_without_path_prefix_unchanged(self):
+        """Default path_prefix='' should not affect prefix."""
+        root = WorkflowOutputRoot(
+            bucket="b",
+            external_repo="",
+            run_id="12345",
+            platform="linux",
+        )
+        self.assertEqual(root.prefix, "12345-linux")
+
+    def test_artifact_location_includes_path_prefix(self):
+        root = WorkflowOutputRoot(
+            bucket="my-bucket",
+            external_repo="",
+            run_id="99",
+            platform="linux",
+            path_prefix="v3/artifacts",
+        )
+        loc = root.artifact("lib.tar.xz")
+        self.assertEqual(loc.relative_path, "v3/artifacts/99-linux/lib.tar.xz")
+        self.assertEqual(loc.s3_uri, "s3://my-bucket/v3/artifacts/99-linux/lib.tar.xz")
+
+
+# ---------------------------------------------------------------------------
+# WorkflowOutputRoot — from_workflow_run with bucket_override / path_prefix
+# ---------------------------------------------------------------------------
+
+
+class TestWorkflowOutputRootOverrides(unittest.TestCase):
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_bucket_override_replaces_resolved_bucket(self, mock_retrieve):
+        mock_retrieve.return_value = ("", "therock-ci-artifacts")
+        root = WorkflowOutputRoot.from_workflow_run(
+            run_id="12345", platform="linux", bucket_override="my-private-bucket"
+        )
+        self.assertEqual(root.bucket, "my-private-bucket")
+        self.assertEqual(root.external_repo, "")
+
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_bucket_override_none_uses_resolved_bucket(self, mock_retrieve):
+        mock_retrieve.return_value = ("", "therock-ci-artifacts")
+        root = WorkflowOutputRoot.from_workflow_run(
+            run_id="12345", platform="linux", bucket_override=None
+        )
+        self.assertEqual(root.bucket, "therock-ci-artifacts")
+
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_path_prefix_stored_on_root(self, mock_retrieve):
+        mock_retrieve.return_value = ("", "therock-ci-artifacts")
+        root = WorkflowOutputRoot.from_workflow_run(
+            run_id="12345", platform="linux", path_prefix="v3/artifacts"
+        )
+        self.assertEqual(root.path_prefix, "v3/artifacts")
+        self.assertEqual(root.prefix, "v3/artifacts/12345-linux")
+
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_bucket_override_and_path_prefix_together(self, mock_retrieve):
+        mock_retrieve.return_value = ("", "therock-ci-artifacts")
+        root = WorkflowOutputRoot.from_workflow_run(
+            run_id="12345",
+            platform="linux",
+            bucket_override="my-private-bucket",
+            path_prefix="v3/artifacts",
+        )
+        self.assertEqual(root.bucket, "my-private-bucket")
+        self.assertEqual(root.prefix, "v3/artifacts/12345-linux")
+
+
 if __name__ == "__main__":
     unittest.main()

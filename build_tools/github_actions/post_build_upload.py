@@ -227,7 +227,7 @@ def write_gha_build_summary(
         if summary_base_url:
             return loc.cdn_url(
                 base_url=summary_base_url,
-                s3_prefix=output_root.path_prefix,
+                strip_prefix=output_root.path_prefix,
                 cdn_prefix=summary_path,
             )
         return loc.https_url
@@ -359,7 +359,7 @@ if __name__ == "__main__":
         "--summary-path",
         type=str,
         default="",
-        help="CDN path prefix for summary links, corresponding to --path-prefix on S3 (e.g. 'artifacts').",
+        help="CDN path prefix for summary links, corresponding to --path-prefix in storage (e.g. 'artifacts').",
     )
     parser.add_argument(
         "--skip-manifest",

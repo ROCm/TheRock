@@ -28,12 +28,14 @@ def _make_output_root(
     platform="linux",
     bucket="therock-ci-artifacts",
     external_repo="",
+    path_prefix="",
 ):
     return WorkflowOutputRoot(
         bucket=bucket,
         external_repo=external_repo,
         run_id=run_id,
         platform=platform,
+        path_prefix=path_prefix,
     )
 
 
@@ -361,6 +363,101 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
         for call in calls:
             self.assertIn("therock-ci-artifacts-external", call)
             self.assertIn("Fork-TheRock/12345-linux", call)
+
+
+class TestWriteGhaBuildSummarySkipManifest(unittest.TestCase):
+    """Tests for --skip-manifest flag in write_gha_build_summary."""
+
+    @mock.patch("post_build_upload.gha_append_step_summary")
+    def test_skip_manifest_omits_summary_link(self, mock_summary):
+        """--skip-manifest suppresses the manifest link in the job summary."""
+        output_root = _make_output_root()
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            post_build_upload.write_gha_build_summary(
+                "gfx94X-dcgpu", build_dir, output_root, "success", skip_manifest=True
+            )
+
+        calls = [c[0][0] for c in mock_summary.call_args_list]
+        self.assertEqual(len(calls), 2)  # logs + artifacts only
+        for call in calls:
+            self.assertNotIn("manifest", call.lower())
+
+    @mock.patch("post_build_upload.gha_append_step_summary")
+    def test_manifest_present_by_default(self, mock_summary):
+        """Without --skip-manifest the manifest link is included."""
+        output_root = _make_output_root()
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            post_build_upload.write_gha_build_summary(
+                "gfx94X-dcgpu", build_dir, output_root, "success"
+            )
+
+        calls = [c[0][0] for c in mock_summary.call_args_list]
+        self.assertEqual(len(calls), 3)  # logs + artifacts + manifest
+        self.assertTrue(any("manifest" in c.lower() for c in calls))
+
+
+class TestWriteGhaBuildSummaryCdnUrl(unittest.TestCase):
+    """Tests for CDN URL substitution in write_gha_build_summary."""
+
+    @mock.patch("post_build_upload.gha_append_step_summary")
+    def test_cdn_url_replaces_s3_url(self, mock_summary):
+        """When summary_base_url is set, all links use the CDN URL."""
+        output_root = _make_output_root()
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            post_build_upload.write_gha_build_summary(
+                "gfx94X-dcgpu",
+                build_dir,
+                output_root,
+                "success",
+                summary_base_url="https://artifacts.example.com",
+            )
+
+        calls = [c[0][0] for c in mock_summary.call_args_list]
+        for call in calls:
+            self.assertIn("https://artifacts.example.com", call)
+            self.assertNotIn("s3.amazonaws.com", call)
+
+    @mock.patch("post_build_upload.gha_append_step_summary")
+    def test_cdn_url_with_path_prefix_remapping(self, mock_summary):
+        """strip_prefix is stripped and cdn_prefix prepended in summary URLs."""
+        output_root = _make_output_root(path_prefix="v3/artifacts")
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            post_build_upload.write_gha_build_summary(
+                "gfx94X-dcgpu",
+                build_dir,
+                output_root,
+                "success",
+                summary_base_url="https://artifacts.example.com",
+                summary_path="artifacts",
+            )
+
+        calls = [c[0][0] for c in mock_summary.call_args_list]
+        # Log index link should use the CDN path prefix, not the storage path prefix
+        self.assertIn(
+            "https://artifacts.example.com/artifacts/12345-linux/logs/gfx94X-dcgpu/index.html",
+            calls[0],
+        )
+        for call in calls:
+            self.assertNotIn("v3/artifacts", call)
+            self.assertNotIn("s3.amazonaws.com", call)
+
+    @mock.patch("post_build_upload.gha_append_step_summary")
+    def test_no_summary_base_url_uses_s3(self, mock_summary):
+        """Without summary_base_url, raw S3 URLs are used."""
+        output_root = _make_output_root()
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            post_build_upload.write_gha_build_summary(
+                "gfx94X-dcgpu", build_dir, output_root, "success"
+            )
+
+        calls = [c[0][0] for c in mock_summary.call_args_list]
+        for call in calls:
+            self.assertIn("s3.amazonaws.com", call)
 
 
 if __name__ == "__main__":

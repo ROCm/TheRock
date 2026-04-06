@@ -59,3 +59,38 @@ class StorageLocation:
             Full path: ``{staging_dir}/{relative_path}``
         """
         return staging_dir / self.relative_path
+
+    def cdn_url(
+        self,
+        base_url: str,
+        strip_prefix: str = "",
+        cdn_prefix: str = "",
+    ) -> str:
+        """CDN URL, optionally remapping the storage path prefix to a CDN prefix.
+
+        Strips ``strip_prefix`` from the start of ``relative_path`` (if present),
+        then prepends ``cdn_prefix``, and finally prepends ``base_url``.
+
+        This lets private workflows surface artifacts through a CDN whose path
+        layout differs from the storage key layout. For example, files stored under
+        ``v3/artifacts/{run_id}-linux/...`` may be served as
+        ``artifacts/{run_id}-linux/...`` on the CDN.
+
+        Args:
+            base_url: CDN base URL without trailing slash
+                (e.g. ``'https://artifacts.example.com'``).
+            strip_prefix: Path prefix to strip from ``relative_path``
+                (e.g. ``'v3/artifacts'``).  No-op if empty or not matched.
+            cdn_prefix: CDN path prefix to prepend after stripping
+                (e.g. ``'artifacts'``).  No-op if empty.
+
+        Returns:
+            Full CDN URL (e.g.
+            ``'https://artifacts.example.com/artifacts/12345-linux/file.tar.xz'``).
+        """
+        path = self.relative_path
+        if strip_prefix and path.startswith(f"{strip_prefix}/"):
+            path = path[len(strip_prefix) + 1 :]
+        if cdn_prefix:
+            path = f"{cdn_prefix}/{path}"
+        return f"{base_url}/{path}"
