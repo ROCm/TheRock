@@ -33,13 +33,19 @@ bin_dir = Path(THEROCK_BIN_DIR).resolve()
 lib_dir = bin_dir.parent / "lib"
 origami_test_dir = bin_dir / "origami"
 
-# The origami Python package is installed to lib/pythonX.Y/site-packages/origami/
-# Glob for the actual pythonX.Y directory to be robust across Python versions.
-python_dirs = sorted(lib_dir.glob("python*/site-packages"))
-if python_dirs:
-    site_packages_dir = python_dirs[-1]
-else:
-    raise RuntimeError(f"No site-packages directory found under {lib_dir}")
+# The origami Python extension is a CPython ABI-specific binary
+# (e.g. origami.cpython-312-x86_64-linux-gnu.so), so it can only be loaded
+# by the Python version running this script. Use that version directly rather
+# than globbing, since other components (e.g. rocprofiler-sdk) install
+# python3.10/python3.11/python3.12/python3.13 site-packages simultaneously
+# and a glob could resolve to the wrong version.
+python_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+site_packages_dir = lib_dir / python_version / "site-packages"
+if not (site_packages_dir / "origami").is_dir():
+    raise RuntimeError(
+        f"origami package not found in {site_packages_dir} -- "
+        f"was it built for {python_version}?"
+    )
 
 # LD_LIBRARY_PATH is needed for Python tests to find liborigami.so
 if not is_windows:
@@ -62,9 +68,6 @@ python_paths = [
     environ_vars.get("PYTHONPATH", ""),
 ]
 environ_vars["PYTHONPATH"] = os.pathsep.join(p for p in python_paths if p)
-
-logging.info(f"LD_LIBRARY_PATH: {environ_vars.get('LD_LIBRARY_PATH', '')}")
-logging.info(f"PYTHONPATH: {environ_vars.get('PYTHONPATH', '')}")
 
 # CTest runs both C++ (Catch2) tests and Python (pytest) tests
 cmd = [
