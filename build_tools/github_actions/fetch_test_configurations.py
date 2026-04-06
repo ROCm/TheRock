@@ -360,6 +360,18 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # hipDNN integration tests (unit tests for the integration test harness)
+    "hipdnn-integration-tests": {
+        "job_name": "hipdnn-integration-tests",
+        "fetch_artifact_args": "--hipdnn --hipdnn-integration-tests --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_hipdnn_integration_tests.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # hipDNN samples tests
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",

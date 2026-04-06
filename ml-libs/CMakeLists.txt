@@ -247,7 +247,7 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
   therock_cmake_subproject_activate(hipdnn_integration_tests)
 
-  therock_provide_artifact(hipdnn_integration_tests
+  therock_provide_artifact(hipdnn-integration-tests
     TARGET_NEUTRAL
     DESCRIPTOR artifact-hipdnn-integration-tests.toml
     COMPONENTS
