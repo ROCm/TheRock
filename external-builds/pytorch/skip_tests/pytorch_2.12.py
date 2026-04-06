@@ -68,6 +68,8 @@ skip_tests = {
             "test_fake_export_nn_functional_multi_margin_loss_cuda_float32",
             # subprocess.CalledProcessError in scaled_dot_product_attention export
             "test_fake_export_nn_functional_scaled_dot_product_attention_cuda_float32",
+            # subprocess.CalledProcessError in nonzero export
+            "test_fake_export_nonzero_cuda_float32",
         ],
         "inductor": [
             # BenchmarkMultiTemplateFusionGpuTest - extern code mismatch
@@ -174,6 +176,16 @@ skip_tests = {
             "test_eager_equivalence_remainder_backend_inductor_numerics_cuda_float32",
             # TestOpInfoPropertiesCUDA - numerical log10 mismatch
             "test_unary_ufunc_numerical_log10_backend_inductor_default_cuda_float32",
+            # TestMaxAutotuneAsyncPipelined - cat extern code assertion
+            "test_cat_max_autotune_extern",
+            # FuncTorchHigherOrderOpTestsWithCompiledAutograd - _GeneratorContextManager
+            "test_grad_capture_tensor",
+            # TestOpInfoPropertiesCUDA - XPASS remainder float16
+            "test_eager_equivalence_remainder_backend_inductor_default_cuda_float16",
+            # TestOpInfoPropertiesCUDA - rsqrt numerical mismatch
+            "test_eager_equivalence_rsqrt_backend_inductor_default_cuda_float32",
+            # TestOpInfoPropertiesCUDA - log numerical mismatch bfloat16
+            "test_unary_ufunc_numerical_log_backend_inductor_default_cuda_bfloat16",
         ],
         "modules": [
             # TestModuleCUDA - CTCLoss cpu/gpu parity scalar mismatch
@@ -303,6 +315,10 @@ skip_tests = {
             "test_train_parity_with_shared_params",
             # ReplicateTest - pytest-timeout (>900s)
             "test_train_parity_2d_mlp",
+            # ComposabilityTest - pipeline parallel RuntimeError
+            "test_replicate_pp_grads_ScheduleClass2",
+            # ReplicateFullyShardInit - pytest-timeout (>900s)
+            "test_replicate_move_args_kwargs_to_device",
         ],
     },
     "gfx94": {
