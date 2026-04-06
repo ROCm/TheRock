@@ -396,10 +396,11 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       rocprofiler-register
       ROCR-Runtime
     )
-    list(APPEND OCL_CLR_CMAKE_ARGS
-      "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
-    )
+
   endif()
+  list(APPEND OCL_CLR_CMAKE_ARGS
+      "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+  )
 
   therock_cmake_subproject_declare(ocl-clr
     USE_DIST_AMDGPU_TARGETS
