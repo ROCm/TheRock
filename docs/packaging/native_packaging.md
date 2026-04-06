@@ -89,6 +89,30 @@ Optional Fields
 - Provides: Indicates that a package provides the functionality of another package.
 - Replaces: Indicates that a package replaces another package.
 
+## S3 Configuration and Package Repository URLs
+
+The following table shows the S3 bucket configuration and public repository URLs for each release type. This configuration is used by `build_tools/packaging/linux/get_s3_config.py` and `build_tools/packaging/linux/upload_package_repo.py`.
+
+| Release Type | S3 Bucket | S3 Prefix | DEB Install URL | RPM Install URL |
+|-------------|-----------|-----------|-----------------|-----------------|
+| **dev** | `therock-dev-packages` | `{pkg_type}/{yyyymmdd}-{artifact_id}`<br>Example: `deb/20260406-12345678` | `https://rocm.devreleases.amd.com/deb/{yyyymmdd}-{artifact_id}` | `https://rocm.devreleases.amd.com/rpm/{yyyymmdd}-{artifact_id}/x86_64/` |
+| **nightly** | `therock-nightly-packages` | `{pkg_type}/{yyyymmdd}-{artifact_id}`<br>Example: `deb/20260406-12345678` | `https://rocm.nightlies.amd.com/deb/{yyyymmdd}-{artifact_id}` | `https://rocm.nightlies.amd.com/rpm/{yyyymmdd}-{artifact_id}/x86_64/` |
+| **prerelease** | `therock-prerelease-packages` | `v3/packages/{pkg_type}`<br>Example: `v3/packages/deb` | `https://rocm.prereleases.amd.com/packages/ubuntu2404` | `https://rocm.prereleases.amd.com/packages/rhel10/x86_64/` |
+| **release** | `therock-release-packages` | `v3/packages/{pkg_type}`<br>Example: `v3/packages/deb` | `https://repo.amd.com/rocm/packages/ubuntu2404` | `https://repo.amd.com/rocm/packages/rhel10/x86_64/` |
+| **ci** (ROCm/TheRock)<br>*DEFAULT* | `therock-ci-artifacts` | `{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `12345678-linux/packages/deb` | `https://therock-ci-artifacts.s3.amazonaws.com/{artifact_id}-{platform}/packages/deb` | `https://therock-ci-artifacts.s3.amazonaws.com/{artifact_id}-{platform}/packages/rpm/x86_64/` |
+| **ci** (Fork/External) | `therock-ci-artifacts-external` | `{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `12345678-linux/packages/deb` | `https://therock-ci-artifacts-external.s3.amazonaws.com/{artifact_id}-{platform}/packages/deb` | `https://therock-ci-artifacts-external.s3.amazonaws.com/{artifact_id}-{platform}/packages/rpm/x86_64/` |
+
+**Notes:**
+
+- RPM repositories always append `/x86_64/` subdirectory for yum/dnf compatibility
+- Both `get_s3_config.py` and `upload_package_repo.py` use matching S3 prefix formats
+- Default job type is `dev` when not specified
+- Variables:
+  - `{pkg_type}`: Package type (`deb` or `rpm`)
+  - `{yyyymmdd}`: Date in YYYYMMDD format
+  - `{artifact_id}`: GitHub Actions run ID or custom artifact identifier
+  - `{platform}`: Platform name (`linux` or `windows`)
+
 ## Building Packages
 
 ```bash

@@ -143,9 +143,9 @@ def generate_package_repository_url(
         base = f"https://repo.amd.com/rocm/packages/{os_profile}"
         return f"{base}/x86_64/" if pkg_type == "rpm" else base
     elif release_type == "dev":
-        # Dev packages use S3 direct URL
+        # Dev packages use CloudFront CDN domain
         # RPM repos need /x86_64/ subdirectory for yum/dnf
-        url = f"https://therock-dev-packages.s3.amazonaws.com/v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
+        url = f"https://rocm.devreleases.amd.com/{pkg_type}/{yyyymmdd}-{artifact_id}"
         return f"{url}/x86_64/" if pkg_type == "rpm" else url
     else:
         # CI builds (including empty release_type or 'ci')
@@ -203,7 +203,7 @@ def determine_s3_config(
             print(f"✓ Using release-type bucket: {s3_bucket}", file=sys.stderr)
         else:
             # Dev/Nightly packages go to dated subfolder for versioning
-            s3_prefix = f"v3/packages/{pkg_type}/{yyyymmdd}-{artifact_id}"
+            s3_prefix = f"{pkg_type}/{yyyymmdd}-{artifact_id}"
             job_type = release_type
             print(f"✓ Using release-type bucket: {s3_bucket}", file=sys.stderr)
 
