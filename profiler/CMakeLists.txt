@@ -173,7 +173,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       aqlprofile
       hip-clr
       rocprofiler-register
-      ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
       ${_openmpi_optional_dep}
@@ -296,7 +295,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
-        -DROCPROFSYS_BUILD_ELFUTILS=ON
         -DROCPROFSYS_BUILD_TBB=ON
         -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
