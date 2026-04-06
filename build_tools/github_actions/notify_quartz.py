@@ -298,7 +298,7 @@ def dispatch_to_quartz(
     owner, repo = quartz_repo.split("/")
     _api_post(
         token,
-        f"/repos/{quartz_repo}/actions/workflows/ingest_manual.yml/dispatches",
+        f"/repos/{quartz_repo}/actions/workflows/ingest.yml/dispatches",
         body={
             "ref": workflow_ref,
             "inputs": {
