@@ -47,8 +47,13 @@ Outputs (written to GITHUB_OUTPUT):
 import enum
 import json
 import os
+import sys
 from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
 
+# Add parent directory to path for _therock_utils imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _therock_utils.build_topology import BuildTopology
 
 from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
 from configure_ci_path_filters import (
@@ -62,19 +67,19 @@ from github_actions_api import gha_append_step_summary, gha_set_output
 # Input parsing helpers
 # ---------------------------------------------------------------------------
 
-# All available build stages in dependency order
-ALL_BUILD_STAGES = [
-    "foundation",
-    "compiler-runtime",
-    "math-libs",
-    "comm-libs",
-    "debug-tools",
-    "dctools-core",
-    "profiler-apps",
-    "iree-compiler",
-    "fusilli-libs",
-    "media-libs"
-]
+def _get_all_build_stages() -> list[str]:
+    """Get all build stage names from BUILD_TOPOLOGY.toml.
+
+    Returns:
+        List of stage names in the order they appear in the TOML file
+    """
+    # Path to BUILD_TOPOLOGY.toml relative to this script
+    script_dir = Path(__file__).resolve().parent
+    therock_dir = script_dir.parent.parent
+    topology_path = therock_dir / "BUILD_TOPOLOGY.toml"
+
+    topology = BuildTopology(str(topology_path))
+    return list(topology.build_stages.keys())
 
 
 def _parse_comma_list(raw: str) -> list[str]:
@@ -88,13 +93,15 @@ def _parse_comma_list(raw: str) -> list[str]:
 def _parse_prebuilt_stages(raw: str) -> list[str]:
     """Parse prebuilt_stages input, expanding 'all' to all available stages.
 
+    Reads stage names from BUILD_TOPOLOGY.toml when 'all' is specified.
+
     Example:
         "foundation,compiler-runtime" → ["foundation", "compiler-runtime"]
         "all" → ["foundation", "compiler-runtime", "math-libs", ...]
     """
     stages = _parse_comma_list(raw)
     if "all" in stages:
-        return ALL_BUILD_STAGES
+        return _get_all_build_stages()
     return stages
 
 
