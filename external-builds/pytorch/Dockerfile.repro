@@ -1,0 +1,142 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Reproducer image for PyTorch full test suite failures.
+#
+# This Dockerfile replays the same setup steps as the CI workflow so that
+# the resulting image is close to identical to the CI environment.  Users
+# can then `docker run` the image and immediately run individual failing
+# tests without any additional setup.
+#
+# Build (typically done by CI, see test_pytorch_wheels_full.yml):
+#
+#   docker build \
+#     --build-arg TORCH_VERSION=2.12.0a0+rocm7.13.0a20260325 \
+#     --build-arg PACKAGE_INDEX_URL=https://rocm.nightlies.amd.com/v2-staging \
+#     --build-arg AMDGPU_FAMILY=gfx94X-dcgpu \
+#     --build-arg PYTORCH_GIT_REF=nightly \
+#     --build-arg PYTORCH_GIT_REPO=rocm/pytorch \
+#     --build-arg THEROCK_REF=main \
+#     -f external-builds/pytorch/Dockerfile.repro \
+#     -t ghcr.io/rocm/therock-pytorch-repro:gfx942-latest .
+#
+# Run:
+#
+#   docker run --rm -it \
+#     --device=/dev/kfd --device=/dev/dri \
+#     --shm-size=10g --cap-add=SYS_PTRACE \
+#     --group-add video \
+#     ghcr.io/rocm/therock-pytorch-repro:gfx942-latest \
+#     python run_test.py -i inductor/test_torchinductor -k "test_something" -v
+#
+# Or drop into a shell:
+#
+#   docker run --rm -it \
+#     --device=/dev/kfd --device=/dev/dri \
+#     --shm-size=10g --cap-add=SYS_PTRACE \
+#     --group-add video \
+#     ghcr.io/rocm/therock-pytorch-repro:gfx942-latest \
+#     bash
+
+ARG BASE_IMAGE=ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
+FROM ${BASE_IMAGE}
+
+ARG PYTHON_VERSION=3.12
+ARG TORCH_VERSION
+ARG PACKAGE_INDEX_URL
+ARG AMDGPU_FAMILY
+ARG PYTORCH_GIT_REF=nightly
+ARG PYTORCH_GIT_REPO=rocm/pytorch
+ARG THEROCK_REF=main
+
+# ----- System dependencies -----
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+        python${PYTHON_VERSION} \
+        python${PYTHON_VERSION}-venv \
+        python${PYTHON_VERSION}-dev \
+        ca-certificates \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# ----- Workspace layout -----
+#   /workspace/therock    — TheRock repo (scripts, skip lists)
+#   /workspace/pytorch    — PyTorch source (tests)
+#   /workspace/.venv      — virtual environment
+WORKDIR /workspace
+
+# ----- Clone TheRock (scripts + skip lists) -----
+RUN git clone --depth 1 --branch ${THEROCK_REF} \
+        https://github.com/ROCm/TheRock.git therock
+
+# ----- Checkout PyTorch source -----
+RUN cd therock && \
+    python${PYTHON_VERSION} external-builds/pytorch/pytorch_torch_repo.py checkout \
+        --gitrepo-origin https://github.com/${PYTORCH_GIT_REPO}.git \
+        --repo-hashtag ${PYTORCH_GIT_REF} \
+        --no-hipify
+
+# ----- Create virtual environment & install torch -----
+RUN python${PYTHON_VERSION} -m venv /workspace/.venv
+ENV VIRTUAL_ENV=/workspace/.venv
+ENV PATH="/workspace/.venv/bin:${PATH}"
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+        torch==${TORCH_VERSION} \
+        --index-url=${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}
+
+# ----- Install ROCm devel packages & initialize SDK -----
+RUN pip install --no-cache-dir \
+        "rocm[devel]" \
+        --index-url=${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}
+
+# rocm-sdk init sets up the internal directory structure.  We then
+# capture its output paths into a script that the entrypoint sources.
+RUN rocm-sdk init && \
+    ROCM_HOME="$(rocm-sdk path --root)" && \
+    ROCM_BIN="$(rocm-sdk path --bin)" && \
+    ROCM_CMAKE="$(rocm-sdk path --cmake)" && \
+    ROCM_SYSDEPS="${ROCM_HOME}/lib/rocm_sysdeps" && \
+    { \
+      echo "export ROCM_PATH=${ROCM_HOME}"; \
+      echo "export ROCM_HOME=${ROCM_HOME}"; \
+      echo "export ROCM_SOURCE_DIR=${ROCM_HOME}"; \
+      echo "export ROCM_BIN=${ROCM_BIN}"; \
+      echo "export ROCM_CMAKE=${ROCM_CMAKE}"; \
+      echo "export CMAKE_PREFIX_PATH=${ROCM_CMAKE}:\${CMAKE_PREFIX_PATH:-}"; \
+      echo "export HIP_DEVICE_LIB_PATH=${ROCM_HOME}/lib/llvm/amdgcn/bitcode"; \
+      echo "export ROCM_DEVICE_LIB_PATH=${ROCM_HOME}/lib/llvm/amdgcn/bitcode"; \
+      echo "export CPLUS_INCLUDE_PATH=${ROCM_SYSDEPS}/include:\${CPLUS_INCLUDE_PATH:-}"; \
+      echo "export C_INCLUDE_PATH=${ROCM_SYSDEPS}/include:\${C_INCLUDE_PATH:-}"; \
+      echo "export PKG_CONFIG_PATH=${ROCM_SYSDEPS}/lib/pkgconfig:\${PKG_CONFIG_PATH:-}"; \
+      echo "export LD_LIBRARY_PATH=${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:\${LD_LIBRARY_PATH:-}"; \
+      echo "export LIBRARY_PATH=${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:\${LIBRARY_PATH:-}"; \
+      echo "export MAGMA_HOME=${ROCM_HOME}/magma"; \
+      echo "export USE_MSLK=0"; \
+      echo "export PATH=${ROCM_BIN}:\${PATH}"; \
+    } > /etc/profile.d/rocm-env.sh
+
+# ----- Install test requirements -----
+RUN pip install --no-cache-dir \
+        -r therock/external-builds/pytorch/requirements-test.txt && \
+    pip install --no-cache-dir \
+        -r therock/external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
+
+# ----- Static environment variables -----
+ENV CI=1 \
+    PYTORCH_TEST_WITH_ROCM=1 \
+    PYTORCH_TESTING_DEVICE_ONLY_FOR=cuda \
+    OPENBLAS_NUM_THREADS=64 \
+    PYTORCH_NUM_PYTEST_RERUNS=0 \
+    AMDGPU_FAMILY=${AMDGPU_FAMILY}
+
+# ----- Working directory is the PyTorch test root -----
+WORKDIR /workspace/therock/external-builds/pytorch/pytorch/test
+
+COPY external-builds/pytorch/repro-entrypoint.sh /usr/local/bin/repro-entrypoint.sh
+RUN chmod +x /usr/local/bin/repro-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/repro-entrypoint.sh"]
+CMD ["bash"]
