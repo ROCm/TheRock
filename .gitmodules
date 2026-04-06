@@ -9,7 +9,7 @@
 [submodule "llvm-project"]
 	path = compiler/amd-llvm
 	url = https://github.com/ROCm/llvm-project.git
-	branch = amd-mainline
+	branch = users/rsrimant/test-asan-aqlprofile-pr-4740
 [submodule "rocm-cmake"]
 	path = base/rocm-cmake
 	url = https://github.com/ROCm/rocm-cmake.git
