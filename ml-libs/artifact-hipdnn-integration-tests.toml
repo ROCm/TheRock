@@ -2,5 +2,10 @@
 [components.test."ml-libs/hipdnn_integration_tests/stage"]
 include = [
   "bin/hipdnn_integration_tests",
-  "bin/hipdnn_integration_tests_test_infra/**",
+  "bin/*hipdnn_*_test*"
+]
+[components.run."ml-libs/hipdnn_integration_tests/stage"]
+include = [
+  "bin/hipdnn_integration_tests",
+  "bin/*hipdnn_*_test*"
 ]

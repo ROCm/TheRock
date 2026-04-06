@@ -235,21 +235,32 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
       hipDNN
       therock-googletest
       therock-nlohmann-json
+    RUNTIME_DEPS
+      hip-clr
   )
   therock_cmake_subproject_glob_c_sources(hipdnn_integration_tests
   SUBDIRS
     .
   )
+
+  therock_cmake_subproject_provide_package(hipdnn_integration_tests hipdnn_integration_tests lib/cmake/hipdnn_integration_tests)
+
   therock_cmake_subproject_activate(hipdnn_integration_tests)
 
-  therock_provide_artifact(hipdnn-integration-tests
+  therock_provide_artifact(hipdnn_integration_tests
     TARGET_NEUTRAL
     DESCRIPTOR artifact-hipdnn-integration-tests.toml
     COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
       test
     SUBPROJECT_DEPS
       hipdnn_integration_tests
   )
+
 endif(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
 if(THEROCK_ENABLE_MIOPENPROVIDER)
