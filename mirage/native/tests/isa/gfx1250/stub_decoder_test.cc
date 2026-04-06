@@ -15,6 +15,7 @@ using mirage::sim::isa::gfx1250::DecodeVop3SdstStub;
 using mirage::sim::isa::gfx1250::DecodeVop3pStub;
 using mirage::sim::isa::gfx1250::DecoderSeedInfo;
 using mirage::sim::isa::gfx1250::FindDecoderSeedInfo;
+using mirage::sim::isa::gfx1250::FindSeedFamilyManifest;
 using mirage::sim::isa::gfx1250::FindStubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteInfo;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteManifest;
@@ -38,6 +39,7 @@ using mirage::sim::isa::gfx1250::StubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::StubDecoderRoute;
 using mirage::sim::isa::gfx1250::StubDecoderRouteInfo;
 using mirage::sim::isa::gfx1250::StubDecoderRouteManifest;
+using mirage::sim::isa::gfx1250::SeedFamilyManifest;
 using mirage::sim::isa::gfx1250::StubExecutionDomain;
 using mirage::sim::isa::gfx1250::StubOperandAccess;
 using mirage::sim::isa::gfx1250::StubFragmentKind;
@@ -1243,6 +1245,80 @@ bool Vop3pTailBatchRouteManifestCountParityMatchesSeedCatalog() {
         SelectStubDecoderRoute(instruction_name) != StubDecoderRoute::kVop3p ||
         !IsInstructionListedForRoute(StubDecoderRoute::kVop3p,
                                      instruction_name)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Fp8Bf8TailBatchManifestAccountingMatchesSeedCatalog() {
+  const auto seeded_instructions = GetSeededInstructionNames(SeedFamily::kFp8Bf8);
+  const SeedFamilyManifest* manifest =
+      FindSeedFamilyManifest(SeedFamily::kFp8Bf8);
+  if (manifest == nullptr ||
+      seeded_instructions.size() != 87 ||
+      seeded_instructions.front() != "V_CVT_F16_FP8" ||
+      seeded_instructions[49] != "V_CVT_SCALE_PK8_F16_FP8" ||
+      seeded_instructions[50] != "V_CVT_SCALE_PK8_F32_BF8" ||
+      seeded_instructions.back() != "V_WMMA_SCALE_F32_32X16X128_F4_w32" ||
+      manifest->seeded_instruction_count != 87 ||
+      manifest->xml_backed_count != 3 ||
+      manifest->llvm_only_count != 84 ||
+      manifest->target_specific_count != 84 ||
+      manifest->vop1_hint_count != 5 ||
+      manifest->vop3_hint_count != 52 ||
+      manifest->vop3p_hint_count != 30 ||
+      manifest->vop3_sdst_hint_count != 0 ||
+      manifest->mimg_tensor_hint_count != 0) {
+    return false;
+  }
+
+  for (std::size_t i = 50; i < seeded_instructions.size(); ++i) {
+    const std::string_view instruction_name = seeded_instructions[i];
+    const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
+    if (seed == nullptr) {
+      return false;
+    }
+
+    const StubDecoderRoute expected_route =
+        ExpectedRouteForDecodeHint(seed->decode_hint);
+    const StubDecoderRouteInfo* route_info =
+        FindStubDecoderRouteInfo(instruction_name);
+    if (expected_route == StubDecoderRoute::kUnsupported) {
+      if (SelectStubDecoderRoute(instruction_name) !=
+              StubDecoderRoute::kUnsupported ||
+          route_info != nullptr || IsInstructionListedForRoute(
+                                       StubDecoderRoute::kVop3p,
+                                       instruction_name) ||
+          IsInstructionListedForRoute(StubDecoderRoute::kMimgTensor,
+                                      instruction_name) ||
+          IsInstructionListedForRoute(StubDecoderRoute::kVop1,
+                                      instruction_name) ||
+          IsInstructionListedForRoute(StubDecoderRoute::kVop3Sdst,
+                                      instruction_name)) {
+        return false;
+      }
+      continue;
+    }
+
+    const StubDecoderRouteManifest* route_manifest =
+        FindStubDecoderRouteManifest(expected_route);
+    if (route_manifest == nullptr ||
+        route_manifest->instruction_count != CountRouteInfosForRoute(
+                                                 expected_route) ||
+        route_manifest->instruction_count !=
+            GetStubDecoderRouteInstructions(expected_route).size() ||
+        route_manifest->xml_backed_count !=
+            CountRouteInfosForRouteWithXmlFlag(expected_route, true) ||
+        route_manifest->llvm_only_count !=
+            CountRouteInfosForRouteWithXmlFlag(expected_route, false) ||
+        route_manifest->target_specific_count !=
+            CountRouteInfosForRouteWithTargetSpecificFlag(expected_route,
+                                                          true) ||
+        route_info == nullptr || route_info->route != expected_route ||
+        route_info->route_name != route_manifest->route_name ||
+        route_info->route_priority != route_manifest->route_priority ||
+        !IsInstructionListedForRoute(expected_route, instruction_name)) {
       return false;
     }
   }
@@ -8082,6 +8158,10 @@ int main() {
                 "expected trailing fp8/bf8 batch instruction to keep exact helper-name parity and coverage")) {
       return 1;
     }
+  }
+  if (!Expect(Fp8Bf8TailBatchManifestAccountingMatchesSeedCatalog(),
+              "expected fp8/bf8 family to keep exact manifest accounting across the remaining tail batch")) {
+    return 1;
   }
 
   const auto vop3p_seeded_instructions =

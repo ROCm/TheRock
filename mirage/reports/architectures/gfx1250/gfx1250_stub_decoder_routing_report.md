@@ -176,5 +176,5 @@
 
 ## Recommended Next Slice
 
-- Add remaining `SeedFamily::kFp8Bf8` tail route-manifest count parity validation after the leading-half layer, then keep the tail slice-local selector and manifest accounting exact.
-- Extend the remaining `SeedFamily::kFp8Bf8` tail with matching route-surface and manifest-accounting checks once the tail manifest-parity batch is stable.
+- Add the remaining `SeedFamily::kFp8Bf8` tail manifest-accounting layer after the route-manifest count parity batch, then keep the tail slice-local route-info lookup and provenance totals exact.
+- Extend the remaining `SeedFamily::kFp8Bf8` tail with matching route-surface and selector-consistency checks once the new manifest-accounting batch is stable.
