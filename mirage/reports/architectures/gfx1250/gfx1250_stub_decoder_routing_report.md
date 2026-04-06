@@ -176,5 +176,4 @@
 
 ## Recommended Next Slice
 
-- Add the remaining `SeedFamily::kFp8Bf8` tail manifest-accounting layer after the route-manifest count parity batch, then keep the tail slice-local route-info lookup and provenance totals exact.
-- Extend the remaining `SeedFamily::kFp8Bf8` tail with matching route-surface and selector-consistency checks once the new manifest-accounting batch is stable.
+- The fp8/bf8 tail now has manifest-accounting plus route-info fallback / near-miss coverage; any further useful work would need shared-layer or decoder-production changes outside the owned gfx1250-local files.

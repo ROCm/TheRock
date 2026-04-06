@@ -1325,6 +1325,147 @@ bool Fp8Bf8TailBatchManifestAccountingMatchesSeedCatalog() {
   return true;
 }
 
+bool Fp8Bf8TailBatchRouteInfoFallbackAndNearMissMatchesSeedCatalog() {
+  const auto seeded_instructions = GetSeededInstructionNames(SeedFamily::kFp8Bf8);
+  if (seeded_instructions.size() != 87 ||
+      seeded_instructions[49] != "V_CVT_SCALE_PK8_F16_FP8" ||
+      seeded_instructions[50] != "V_CVT_SCALE_PK8_F32_BF8" ||
+      seeded_instructions.back() != "V_WMMA_SCALE_F32_32X16X128_F4_w32") {
+    return false;
+  }
+
+  for (std::size_t i = 50; i < seeded_instructions.size(); ++i) {
+    const std::string_view instruction_name = seeded_instructions[i];
+    const DecoderSeedInfo* seed = FindDecoderSeedInfo(instruction_name);
+    if (seed == nullptr) {
+      return false;
+    }
+
+    const StubDecoderRoute expected_route =
+        ExpectedRouteForDecodeHint(seed->decode_hint);
+    if (expected_route != StubDecoderRoute::kUnsupported) {
+      continue;
+    }
+
+    const StubDecodedInstruction decoded = DecodeStubInstruction(instruction_name);
+    if (!Expect(MatchesUnsupportedSeedDecode(decoded, *seed) &&
+                    MatchesUnknownHelperSurface(decoded) &&
+                    MatchesUnsupportedInstructionDecode(decoded,
+                                                        instruction_name) &&
+                    SelectStubDecoderRoute(instruction_name) ==
+                        StubDecoderRoute::kUnsupported &&
+                    FindStubDecoderRouteInfo(instruction_name) == nullptr,
+                "expected deferred fp8/bf8 tail instruction to keep exact unsupported-seed parity")) {
+      return false;
+    }
+
+    for (const StubDecoderRouteManifest& manifest :
+         GetStubDecoderRouteManifests()) {
+      const StubDecodedInstruction via_entrypoint =
+          DecodeViaExplicitRouteEntrypoint(manifest.route, instruction_name);
+      if (!Expect(MatchesUnsupportedSeedDecode(via_entrypoint, *seed) &&
+                      MatchesUnknownHelperSurface(via_entrypoint) &&
+                      MatchesUnsupportedInstructionDecode(via_entrypoint,
+                                                          instruction_name),
+                  "expected deferred fp8/bf8 tail instruction to keep exact route-keyed unsupported parity")) {
+        return false;
+      }
+    }
+  }
+
+  for (std::string_view near_miss_instruction :
+       {"V_CVT_SR_BF8_F16_X",
+        "V_CVT_SR_FP8_F16_X",
+        "V_CVT_SR_FP8_F32_X",
+        "V_CVT_SR_FP8_F32_gfx12_X"}) {
+    const StubDecodedInstruction decoded =
+        DecodeStubInstruction(near_miss_instruction);
+    if (!Expect(MatchesUnknownDecode(decoded, near_miss_instruction) &&
+                    MatchesUnknownHelperSurface(decoded) &&
+                    SelectStubDecoderRoute(near_miss_instruction) ==
+                        StubDecoderRoute::kUnsupported &&
+                    FindStubDecoderRouteInfo(near_miss_instruction) == nullptr,
+                "expected fp8/bf8 tail near-miss instruction to keep exact unknown selector parity")) {
+      return false;
+    }
+
+    for (const StubDecoderRouteManifest& manifest :
+         GetStubDecoderRouteManifests()) {
+      const StubDecoderEntrypointManifest* entrypoint_manifest =
+          FindStubDecoderEntrypointManifest(manifest.route);
+      if (entrypoint_manifest == nullptr) {
+        return false;
+      }
+      const StubDecodedInstruction via_entrypoint =
+          DecodeViaExplicitRouteEntrypoint(manifest.route,
+                                           near_miss_instruction);
+      if (!Expect(MatchesUnknownDecode(via_entrypoint, near_miss_instruction) &&
+                      MatchesUnknownHelperSurface(via_entrypoint),
+                  "expected fp8/bf8 tail near-miss instruction to keep exact route-keyed unknown parity")) {
+        return false;
+      }
+
+      StubDecoderRouteInfo synthetic_near_miss{
+          near_miss_instruction,
+          manifest.route,
+          "kSyntheticFp8Bf8TailRouteInfoNearMiss",
+          manifest.route_priority + 300u,
+          DecodeSeedHint::kUnknown,
+          "SYNTHETIC_FP8_BF8_TAIL_ROUTE_INFO_NEAR_MISS",
+          3000u + manifest.route_priority,
+          30u + manifest.route_priority,
+          false,
+          false,
+      };
+      const StubDecodedInstruction via_synthetic =
+          DecodeStubInstruction(synthetic_near_miss);
+      if (!Expect(
+              MatchesRouteInfoPayload(via_synthetic, synthetic_near_miss) &&
+                  via_synthetic.entrypoint_name ==
+                      entrypoint_manifest->entrypoint_name &&
+                  MatchesUnknownHelperSurface(via_synthetic) &&
+                  MatchesTopLevelFlags(via_synthetic, false, false, false,
+                                       false) &&
+                  MatchesLayout(via_synthetic, ExpectedLayout{}) &&
+                  via_synthetic.operand_roles.binding_count == 0 &&
+                  via_synthetic.operand_slots.binding_count == 0 &&
+                  via_synthetic.operand_descriptors.descriptor_count == 0,
+              "expected fp8/bf8 tail near-miss route-info to preserve caller metadata while keeping empty unknown structure")) {
+        return false;
+      }
+
+      StubDecoderRouteInfo synthetic_near_miss_valid_wrong_hint =
+          synthetic_near_miss;
+      synthetic_near_miss_valid_wrong_hint.route_name =
+          "kSyntheticFp8Bf8TailRouteInfoNearMissValidWrongHint";
+      synthetic_near_miss_valid_wrong_hint.route_priority =
+          manifest.route_priority + 310u;
+      synthetic_near_miss_valid_wrong_hint.decode_hint =
+          AlternateDecodeHintForRoute(manifest.route);
+      const StubDecodedInstruction via_valid_wrong_hint =
+          DecodeStubInstruction(synthetic_near_miss_valid_wrong_hint);
+      if (!Expect(
+              MatchesRouteInfoPayload(via_valid_wrong_hint,
+                                      synthetic_near_miss_valid_wrong_hint) &&
+                  via_valid_wrong_hint.entrypoint_name ==
+                      entrypoint_manifest->entrypoint_name &&
+                  MatchesUnknownHelperSurface(via_valid_wrong_hint) &&
+                  MatchesTopLevelFlags(via_valid_wrong_hint, false, false,
+                                       false, false) &&
+                  MatchesLayout(via_valid_wrong_hint, ExpectedLayout{}) &&
+                  via_valid_wrong_hint.operand_roles.binding_count == 0 &&
+                  via_valid_wrong_hint.operand_slots.binding_count == 0 &&
+                  via_valid_wrong_hint.operand_descriptors
+                          .descriptor_count == 0,
+              "expected fp8/bf8 tail near-miss route-info to ignore valid mismatching caller decode-hint while keeping empty unknown structure")) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 bool RouteInfoLookupMatchesSequenceEntries() {
   for (const StubDecoderRouteInfo& route_info : GetStubDecoderRouteInfos()) {
     if (FindStubDecoderRouteInfo(route_info.instruction_name) != &route_info) {
@@ -8161,6 +8302,10 @@ int main() {
   }
   if (!Expect(Fp8Bf8TailBatchManifestAccountingMatchesSeedCatalog(),
               "expected fp8/bf8 family to keep exact manifest accounting across the remaining tail batch")) {
+    return 1;
+  }
+  if (!Expect(Fp8Bf8TailBatchRouteInfoFallbackAndNearMissMatchesSeedCatalog(),
+              "expected fp8/bf8 family to keep exact tail route-info fallback and near-miss parity across the remaining tail batch")) {
     return 1;
   }
 
