@@ -90,6 +90,22 @@ class GeneratePackageRepositoryUrlTest(unittest.TestCase):
             "https://therock-ci-artifacts.s3.amazonaws.com/99999999-linux/packages/deb",
         )
 
+    def test_external_repo_url(self):
+        """Test external repository URL includes repository name in path."""
+        url = get_s3_config.generate_package_repository_url(
+            release_type="ci",
+            pkg_type="deb",
+            yyyymmdd="20260320",
+            artifact_id="12345678",
+            platform="linux",
+            s3_bucket="therock-ci-artifacts-external",
+            repository="someone/fork",
+        )
+        self.assertEqual(
+            url,
+            "https://therock-ci-artifacts-external.s3.amazonaws.com/someone-fork/12345678-linux/packages/deb",
+        )
+
 
 class ExtractDateFromVersionTest(unittest.TestCase):
     """Tests for date extraction from ROCm package versions."""
@@ -231,7 +247,7 @@ class DetermineS3ConfigRepositoryTest(unittest.TestCase):
     """Tests for S3 config with different repositories."""
 
     def test_fork_pr(self):
-        """Test fork PR uses external bucket."""
+        """Test fork PR uses external bucket with repository prefix."""
         bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="",
             repository="ROCm/TheRock",
@@ -241,11 +257,11 @@ class DetermineS3ConfigRepositoryTest(unittest.TestCase):
             rocm_version="8.1.0~dev20251203",
         )
         self.assertEqual(bucket, "therock-ci-artifacts-external")
-        self.assertEqual(prefix, "12345678-linux/packages/rpm")
+        self.assertEqual(prefix, "ROCm-TheRock/12345678-linux/packages/rpm")
         self.assertEqual(job_type, "ci")
 
     def test_external_repository(self):
-        """Test external repository uses external bucket."""
+        """Test external repository uses external bucket with repository prefix."""
         bucket, prefix, job_type, _ = get_s3_config.determine_s3_config(
             release_type="",
             repository="someone/fork",
@@ -255,7 +271,7 @@ class DetermineS3ConfigRepositoryTest(unittest.TestCase):
             rocm_version="8.1.0~dev20251203",
         )
         self.assertEqual(bucket, "therock-ci-artifacts-external")
-        self.assertEqual(prefix, "12345678-linux/packages/deb")
+        self.assertEqual(prefix, "someone-fork/12345678-linux/packages/deb")
         self.assertEqual(job_type, "ci")
 
     def test_default_rocm_therock(self):

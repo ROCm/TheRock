@@ -103,6 +103,8 @@ def generate_package_repository_url(
     yyyymmdd: str,
     artifact_id: str,
     platform: str = "linux",
+    s3_bucket: Optional[str] = None,
+    repository: Optional[str] = None,
 ) -> str:
     """
     Generate the public repository URL for package installation.
@@ -113,6 +115,8 @@ def generate_package_repository_url(
         yyyymmdd: Date string in YYYYMMDD format
         artifact_id: Artifact/run ID
         platform: Platform name ('linux' or 'windows'), defaults to 'linux'
+        s3_bucket: S3 bucket name (for external repos), defaults to None
+        repository: Repository name (for external repos), defaults to None
 
     Returns:
         Public repository URL for package installation instructions
@@ -120,6 +124,7 @@ def generate_package_repository_url(
     Examples:
         CI DEB:         https://therock-ci-artifacts.s3.amazonaws.com/12345678-linux/packages/deb
         CI RPM:         https://therock-ci-artifacts.s3.amazonaws.com/12345678-linux/packages/rpm/x86_64/
+        External DEB:   https://therock-ci-artifacts-external.s3.amazonaws.com/user-fork/12345678-linux/packages/deb
         Nightly DEB:    https://rocm.nightlies.amd.com/deb/20260320-12345678
         Nightly RPM:    https://rocm.nightlies.amd.com/rpm/20260320-12345678/x86_64/
         Prerelease DEB: https://rocm.prereleases.amd.com/packages/ubuntu2404
@@ -149,8 +154,17 @@ def generate_package_repository_url(
         return f"{url}/x86_64/" if pkg_type == "rpm" else url
     else:
         # CI builds (including empty release_type or 'ci')
+        # Use provided bucket or default to therock-ci-artifacts
+        bucket = s3_bucket or "therock-ci-artifacts"
+
+        # For external repos, include repository name in path
+        if repository and bucket == "therock-ci-artifacts-external":
+            repo_name = repository.replace("/", "-")
+            url = f"https://{bucket}.s3.amazonaws.com/{repo_name}/{artifact_id}-{platform}/packages/{pkg_type}"
+        else:
+            url = f"https://{bucket}.s3.amazonaws.com/{artifact_id}-{platform}/packages/{pkg_type}"
+
         # RPM repos need /x86_64/ subdirectory for yum/dnf
-        url = f"https://therock-ci-artifacts.s3.amazonaws.com/{artifact_id}-{platform}/packages/{pkg_type}"
         return f"{url}/x86_64/" if pkg_type == "rpm" else url
 
 
@@ -210,7 +224,9 @@ def determine_s3_config(
     # Branch 2: Fork PRs or external repositories
     elif is_fork or repository != "ROCm/TheRock":
         s3_bucket = "therock-ci-artifacts-external"
-        s3_prefix = f"{artifact_id}-{platform}/packages/{pkg_type}"
+        # Include repository name in prefix to organize by repo
+        repo_name = repository.replace("/", "-")  # e.g., "ROCm-TheRock" or "user-fork"
+        s3_prefix = f"{repo_name}/{artifact_id}-{platform}/packages/{pkg_type}"
         job_type = "ci"
         print(f"✓ Using external bucket: {s3_bucket}", file=sys.stderr)
 
@@ -228,6 +244,8 @@ def determine_s3_config(
         yyyymmdd=yyyymmdd,
         artifact_id=artifact_id,
         platform=platform,
+        s3_bucket=s3_bucket,
+        repository=repository,
     )
 
     print(f"S3 bucket: {s3_bucket}", file=sys.stderr)
