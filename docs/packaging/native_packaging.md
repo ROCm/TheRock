@@ -100,7 +100,7 @@ The following table shows the S3 bucket configuration and public repository URLs
 | **prerelease** | `therock-prerelease-packages` | `v3/packages/{pkg_type}`<br>Example: `v3/packages/deb` | `https://rocm.prereleases.amd.com/packages/ubuntu2404` | `https://rocm.prereleases.amd.com/packages/rhel10/x86_64/` |
 | **release** | `therock-release-packages` | `v3/packages/{pkg_type}`<br>Example: `v3/packages/deb` | `https://repo.amd.com/rocm/packages/ubuntu2404` | `https://repo.amd.com/rocm/packages/rhel10/x86_64/` |
 | **ci** (ROCm/TheRock)<br>*DEFAULT* | `therock-ci-artifacts` | `{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `12345678-linux/packages/deb` | `https://therock-ci-artifacts.s3.amazonaws.com/{artifact_id}-{platform}/packages/deb` | `https://therock-ci-artifacts.s3.amazonaws.com/{artifact_id}-{platform}/packages/rpm/x86_64/` |
-| **ci** (Fork/External) | `therock-ci-artifacts-external` | `{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `12345678-linux/packages/deb` | `https://therock-ci-artifacts-external.s3.amazonaws.com/{artifact_id}-{platform}/packages/deb` | `https://therock-ci-artifacts-external.s3.amazonaws.com/{artifact_id}-{platform}/packages/rpm/x86_64/` |
+| **ci** (Fork/External) | `therock-ci-artifacts-external` | `{repo_name}/{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `someone-fork/12345678-linux/packages/deb` | `https://therock-ci-artifacts-external.s3.amazonaws.com/{repo_name}/{artifact_id}-{platform}/packages/deb` | `https://therock-ci-artifacts-external.s3.amazonaws.com/{repo_name}/{artifact_id}-{platform}/packages/rpm/x86_64/` |
 
 **Notes:**
 
@@ -112,6 +112,7 @@ The following table shows the S3 bucket configuration and public repository URLs
   - `{yyyymmdd}`: Date in YYYYMMDD format
   - `{artifact_id}`: GitHub Actions run ID or custom artifact identifier
   - `{platform}`: Platform name (`linux` or `windows`)
+  - `{repo_name}`: Repository name with `/` replaced by `-` (e.g., `ROCm-TheRock`, `someone-fork`)
 
 ## Building Packages
 

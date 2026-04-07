@@ -642,7 +642,11 @@ def main():
         dedupe = True
     elif args.job == "ci":
         # CI builds: <artifact_id>-<platform>/packages/<pkg_type>
-        prefix = f"{args.artifact_id}-{args.platform}/packages/{args.pkg_type}"
+        # For external bucket, include repository prefix (defaults to ROCm-TheRock)
+        if args.s3_bucket == "therock-ci-artifacts-external":
+            prefix = f"ROCm-TheRock/{args.artifact_id}-{args.platform}/packages/{args.pkg_type}"
+        else:
+            prefix = f"{args.artifact_id}-{args.platform}/packages/{args.pkg_type}"
         dedupe = True
     else:
         raise ValueError(f"Unknown job type: {args.job}")
