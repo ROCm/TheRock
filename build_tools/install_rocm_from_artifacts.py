@@ -392,7 +392,7 @@ def retrieve_artifacts_by_run_id(args):
         if args.hipdnn:
             extra_artifacts.append("hipdnn")
         if args.hipdnn_integration_tests:
-            extra_artifacts.append("hipdnn_integration_tests")
+            extra_artifacts.append("hipdnn-integration-tests")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.miopen:
