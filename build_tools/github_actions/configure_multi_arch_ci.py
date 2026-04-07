@@ -51,9 +51,9 @@ import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
-# Add parent directory to path for _therock_utils imports
+# Add parent directory to path for configure_stage imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from _therock_utils.build_topology import BuildTopology
+from configure_stage import get_topology
 
 from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
 from configure_ci_path_filters import (
@@ -74,12 +74,7 @@ def _get_all_build_stages() -> list[str]:
     Returns:
         List of stage names in the order they appear in the TOML file
     """
-    # Path to BUILD_TOPOLOGY.toml relative to this script
-    script_dir = Path(__file__).resolve().parent
-    therock_dir = script_dir.parent.parent
-    topology_path = therock_dir / "BUILD_TOPOLOGY.toml"
-
-    topology = BuildTopology(str(topology_path))
+    topology = get_topology()
     return list(topology.build_stages.keys())
 
 
