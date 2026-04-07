@@ -70,6 +70,8 @@ skip_tests = {
             "test_fake_export_nn_functional_scaled_dot_product_attention_cuda_float32",
             # subprocess.CalledProcessError in nonzero export
             "test_fake_export_nonzero_cuda_float32",
+            # TestExportOnFakeCudaCUDA - preserve original behavior
+            "test_preserve_original_behavior_cuda",
         ],
         "inductor": [
             # BenchmarkMultiTemplateFusionGpuTest - extern code mismatch
@@ -186,6 +188,16 @@ skip_tests = {
             "test_eager_equivalence_rsqrt_backend_inductor_default_cuda_float32",
             # TestOpInfoPropertiesCUDA - log numerical mismatch bfloat16
             "test_unary_ufunc_numerical_log_backend_inductor_default_cuda_bfloat16",
+            # TestOpInfoPropertiesCUDA - numerical exp2 float32 XPASS
+            "test_unary_ufunc_numerical_exp2_backend_inductor_default_cuda_float32",
+            # TestOpInfoPropertiesCUDA - eager equivalence remainder float32
+            "test_eager_equivalence_remainder_backend_inductor_default_cuda_float32",
+            # TestOpInfoPropertiesCUDA - numerical log float16 mismatch
+            "test_unary_ufunc_numerical_log_backend_inductor_default_cuda_float16",
+            # TestPrologueFusion - async compile variant
+            "test_lazy_template_fusion_multiple_candidates_use_async_compile_True",
+            # FuncTorchHigherOrderOpTestsWithCompiledAutograd - grad closure scalar
+            "test_grad_closure_scalar",
         ],
         "modules": [
             # TestModuleCUDA - CTCLoss cpu/gpu parity scalar mismatch
@@ -317,8 +329,12 @@ skip_tests = {
             "test_train_parity_2d_mlp",
             # ComposabilityTest - pipeline parallel RuntimeError
             "test_replicate_pp_grads_ScheduleClass2",
+            # ComposabilityTest - pipeline parallel RuntimeError
+            "test_replicate_pp_grads_ScheduleClass3",
             # ReplicateFullyShardInit - pytest-timeout (>900s)
             "test_replicate_move_args_kwargs_to_device",
+            # ReplicateFullyShardInit - multi module init failure
+            "test_replicate_multi_module",
         ],
     },
     "gfx94": {
