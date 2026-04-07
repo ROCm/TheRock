@@ -426,17 +426,17 @@ class GitHubActionsUtilsTest(unittest.TestCase):
     def setUp(self):
         # Save environment state
         self._saved_env = {}
-        for key in ["RELEASE_TYPE", "GITHUB_REPOSITORY", "IS_PR_FROM_FORK"]:
+        for key in ["RELEASE_TYPE", "GITHUB_REPOSITORY"]:
             if key in os.environ:
                 self._saved_env[key] = os.environ[key]
         # Clean environment for tests
-        for key in ["RELEASE_TYPE", "GITHUB_REPOSITORY", "IS_PR_FROM_FORK"]:
+        for key in ["RELEASE_TYPE", "GITHUB_REPOSITORY"]:
             if key in os.environ:
                 del os.environ[key]
 
     def tearDown(self):
         # Restore environment state
-        for key in ["RELEASE_TYPE", "GITHUB_REPOSITORY", "IS_PR_FROM_FORK"]:
+        for key in ["RELEASE_TYPE", "GITHUB_REPOSITORY"]:
             if key in os.environ:
                 del os.environ[key]
         for key, value in self._saved_env.items():
