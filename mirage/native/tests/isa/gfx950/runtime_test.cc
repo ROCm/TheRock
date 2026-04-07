@@ -284,6 +284,59 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  const std::vector<DecodedInstruction> atomic_x2_parity_program = {
+      DecodedInstruction::FourOperand("GLOBAL_ATOMIC_ADD_X2",
+                                      InstructionOperand::Vgpr(10),
+                                      InstructionOperand::Vgpr(12),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  LinearExecutionMemory atomic_x2_parity_memory(0x2000, 0);
+  WaveExecutionState atomic_x2_parity_state;
+  atomic_x2_parity_state.exec_mask = 1u;
+  atomic_x2_parity_state.sgprs[0] = 0u;
+  atomic_x2_parity_state.sgprs[1] = 0u;
+  SetLaneAddress(&atomic_x2_parity_state, 10, 0, 0x1800u);
+  atomic_x2_parity_state.vgprs[12][0] = 3u;
+  atomic_x2_parity_state.vgprs[13][0] = 0u;
+  if (!Expect(atomic_x2_parity_memory.WriteU32(0x1800u, 1000u),
+              "expected global atomic add_x2 seed write") ||
+      !Expect(atomic_x2_parity_memory.WriteU32(0x1804u, 0u),
+              "expected global atomic add_x2 seed write")) {
+    return 1;
+  }
+
+  std::string atomic_x2_parity_error_message;
+  std::vector<CompiledInstruction> compiled_atomic_x2_parity_program;
+  std::uint32_t atomic_x2_parity_readback = 0;
+  if (!Expect(interpreter.CompileProgram(atomic_x2_parity_program,
+                                         &compiled_atomic_x2_parity_program,
+                                         &atomic_x2_parity_error_message),
+              atomic_x2_parity_error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_atomic_x2_parity_program,
+                                         &atomic_x2_parity_state,
+                                         &atomic_x2_parity_memory,
+                                         &atomic_x2_parity_error_message),
+              atomic_x2_parity_error_message.c_str()) ||
+      !Expect(atomic_x2_parity_state.halted,
+              "expected atomic add_x2 parity program to halt") ||
+      !Expect(atomic_x2_parity_state.vgprs[12][0] == 3u &&
+                  atomic_x2_parity_state.vgprs[13][0] == 0u,
+              "expected global atomic add_x2 data preservation") ||
+      !Expect(atomic_x2_parity_memory.ReadU32(0x1800u,
+                                              &atomic_x2_parity_readback),
+              "expected global atomic add_x2 low readback") ||
+      !Expect(atomic_x2_parity_readback == 1003u,
+              "expected global atomic add_x2 low memory update") ||
+      !Expect(atomic_x2_parity_memory.ReadU32(0x1804u,
+                                              &atomic_x2_parity_readback),
+              "expected global atomic add_x2 high readback") ||
+      !Expect(atomic_x2_parity_readback == 0u,
+              "expected global atomic add_x2 high memory update")) {
+    return 1;
+  }
+
   const std::size_t total_iterations = kWarmupIterations + kTimedIterations;
   std::uint32_t atomic_lane0 = 0;
   std::uint32_t atomic_lane63 = 0;
