@@ -62,10 +62,14 @@ def run_tests(env):
     logging.info("=== Running TensileLite unit tests ===")
     result = run_command(
         [
-            "uv", "run", "pytest", "-v",
+            "uv",
+            "run",
+            "pytest",
+            "-v",
             "--junit-xml=tensilelite-unit-tests.xml",
             "--junit-prefix=tensilelite-unit",
-            "-n", "auto",
+            "-n",
+            "auto",
             "Tensile/Tests/unit",
         ],
         cwd=TENSILELITE_DIR,
@@ -73,17 +77,23 @@ def run_tests(env):
         check=False,
     )
     if result.returncode != 0:
-        logging.error(f"TensileLite unit tests failed with return code {result.returncode}")
+        logging.error(
+            f"TensileLite unit tests failed with return code {result.returncode}"
+        )
         failed = True
 
     # Run rocisa tests
     logging.info("=== Running rocisa tests ===")
     result = run_command(
         [
-            "uv", "run", "pytest", "-v",
+            "uv",
+            "run",
+            "pytest",
+            "-v",
             "--junit-xml=rocisa-tests.xml",
             "--junit-prefix=rocisa",
-            "-n", "auto",
+            "-n",
+            "auto",
             "rocisa/test",
         ],
         cwd=TENSILELITE_DIR,
