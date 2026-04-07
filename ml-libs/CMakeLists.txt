@@ -232,10 +232,10 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
-      hipDNN
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+      hipDNN
       therock-flatbuffers
       therock-nlohmann-json
   )
@@ -286,11 +286,11 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
       amd-hip
     BUILD_DEPS
       hipDNN
-      hipdnn_integration_tests
       therock-googletest
       therock-flatbuffers
       therock-nlohmann-json
     RUNTIME_DEPS
+      hipdnn_integration_tests
       MIOpen
   )
   therock_cmake_subproject_glob_c_sources(miopenprovider
@@ -331,13 +331,13 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
       amd-hip
     BUILD_DEPS
       hipDNN
-      hipdnn_integration_tests
       therock-googletest
       therock-flatbuffers
       therock-nlohmann-json
     RUNTIME_DEPS
       hipBLAS-common
       hipBLASLt
+      hipdnn_integration_tests
   )
   therock_cmake_subproject_glob_c_sources(hipblasltprovider
   SUBDIRS
