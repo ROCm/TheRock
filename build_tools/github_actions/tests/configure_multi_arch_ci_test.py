@@ -126,7 +126,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
-        self.assertEqual(inputs.linux_test_labels, "test:rocprim")
+        self.assertEqual(inputs.linux_test_labels, ["test:rocprim"])
         self.assertEqual(inputs.prebuilt_stages, "foundation,compiler-runtime")
         self.assertEqual(inputs.baseline_run_id, "12345")
 

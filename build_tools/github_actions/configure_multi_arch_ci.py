@@ -173,8 +173,10 @@ class CIInputs:
             windows_amdgpu_families=_parse_comma_list(
                 inputs.get("windows_amdgpu_families", "")
             ),
-            linux_test_labels=inputs.get("linux_test_labels", ""),
-            windows_test_labels=inputs.get("windows_test_labels", ""),
+            linux_test_labels=_parse_comma_list(inputs.get("linux_test_labels", "")),
+            windows_test_labels=_parse_comma_list(
+                inputs.get("windows_test_labels", "")
+            ),
             prebuilt_stages=inputs.get("prebuilt_stages", ""),
             baseline_run_id=inputs.get("baseline_run_id", ""),
         )
