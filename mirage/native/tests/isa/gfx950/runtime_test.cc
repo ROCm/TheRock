@@ -223,6 +223,67 @@ int main(int argc, char** argv) {
       static_cast<double>(elapsed_ns) /
       static_cast<double>(kTimedIterations * kInstructionsPerDispatch);
 
+  const std::vector<DecodedInstruction> atomic_parity_program = {
+      DecodedInstruction::FourOperand("GLOBAL_ATOMIC_SWAP",
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("GLOBAL_ATOMIC_CMPSWAP",
+                                      InstructionOperand::Vgpr(4),
+                                      InstructionOperand::Vgpr(6),
+                                      InstructionOperand::Vgpr(8),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  LinearExecutionMemory atomic_parity_memory(0x2000, 0);
+  WaveExecutionState atomic_parity_state;
+  atomic_parity_state.exec_mask = 1u;
+  atomic_parity_state.sgprs[0] = 0u;
+  atomic_parity_state.sgprs[1] = 0u;
+  SetLaneAddress(&atomic_parity_state, 0, 0, 0x1000u);
+  SetLaneAddress(&atomic_parity_state, 2, 0, 0x0u);
+  SetLaneAddress(&atomic_parity_state, 4, 0, 0x0u);
+  SetLaneAddress(&atomic_parity_state, 6, 0, 0x1400u);
+  SetLaneAddress(&atomic_parity_state, 8, 0, 0x0u);
+  atomic_parity_state.vgprs[2][0] = 0x11112222u;
+  atomic_parity_state.vgprs[8][0] = 0xbbbbbbbbu;
+  atomic_parity_state.vgprs[9][0] = 0x33334444u;
+  if (!Expect(atomic_parity_memory.WriteU32(0x1000u, 0xaaaa5555u),
+              "expected global atomic swap seed write") ||
+      !Expect(atomic_parity_memory.WriteU32(0x1400u, 0xbbbbbbbbu),
+              "expected global atomic cmpswap seed write")) {
+    return 1;
+  }
+
+  std::string atomic_parity_error_message;
+  std::vector<CompiledInstruction> compiled_atomic_parity_program;
+  std::uint32_t atomic_parity_readback = 0;
+  if (!Expect(interpreter.CompileProgram(atomic_parity_program,
+                                         &compiled_atomic_parity_program,
+                                         &atomic_parity_error_message),
+              atomic_parity_error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_atomic_parity_program,
+                                         &atomic_parity_state,
+                                         &atomic_parity_memory,
+                                         &atomic_parity_error_message),
+              atomic_parity_error_message.c_str()) ||
+      !Expect(atomic_parity_state.halted,
+              "expected atomic parity program to halt") ||
+      !Expect(atomic_parity_state.vgprs[4][0] == 0xbbbbbbbbu,
+              "expected global atomic cmpswap return value") ||
+      !Expect(atomic_parity_memory.ReadU32(0x1000u, &atomic_parity_readback),
+              "expected global atomic swap readback") ||
+      !Expect(atomic_parity_readback == 0x11112222u,
+              "expected global atomic swap memory update") ||
+      !Expect(atomic_parity_memory.ReadU32(0x1400u, &atomic_parity_readback),
+              "expected global atomic cmpswap readback") ||
+      !Expect(atomic_parity_readback == 0x33334444u,
+              "expected global atomic cmpswap memory update")) {
+    return 1;
+  }
+
   const std::size_t total_iterations = kWarmupIterations + kTimedIterations;
   std::uint32_t atomic_lane0 = 0;
   std::uint32_t atomic_lane63 = 0;
