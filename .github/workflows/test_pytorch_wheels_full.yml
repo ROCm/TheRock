@@ -92,7 +92,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 run-name: Test PyTorch Full (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}}, ${{ inputs.test_runs_on }})
 
@@ -344,60 +343,3 @@ jobs:
         run: |
           python external-builds/pytorch/summarize_test_results.py \
             --combined-dir artifacts
-
-  build_repro_image:
-    if: always()
-    needs: test_wheels
-    name: Build Reproducer Image
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
-
-      - name: Log in to ghcr.io
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push reproducer image
-        run: |
-          TAG="ghcr.io/${{ github.repository_owner }}/therock-pytorch-repro"
-          TAG_LOWER="$(echo "${TAG}" | tr '[:upper:]' '[:lower:]')"
-
-          AMDGPU_SHORT="$(echo '${{ inputs.amdgpu_family }}' | sed 's/-dcgpu//')"
-          IMAGE="${TAG_LOWER}:${AMDGPU_SHORT}-run${{ github.run_number }}"
-          IMAGE_LATEST="${TAG_LOWER}:${AMDGPU_SHORT}-latest"
-
-          docker build \
-            --build-arg TORCH_VERSION='${{ inputs.torch_version }}' \
-            --build-arg PACKAGE_INDEX_URL='${{ inputs.package_index_url }}' \
-            --build-arg AMDGPU_FAMILY='${{ inputs.amdgpu_family }}' \
-            --build-arg PYTORCH_GIT_REF='${{ inputs.pytorch_git_ref }}' \
-            --build-arg PYTORCH_GIT_REPO='${{ inputs.pytorch_git_repo }}' \
-            --build-arg PYTHON_VERSION='${{ inputs.python_version }}' \
-            --build-arg THEROCK_REF='${{ github.sha }}' \
-            -f external-builds/pytorch/Dockerfile.repro \
-            -t "${IMAGE}" \
-            -t "${IMAGE_LATEST}" \
-            .
-
-          docker push "${IMAGE}"
-          docker push "${IMAGE_LATEST}"
-
-          echo "### Reproducer Image" >> "${GITHUB_STEP_SUMMARY}"
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "Pushed \`${IMAGE}\`" >> "${GITHUB_STEP_SUMMARY}"
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo '```bash' >> "${GITHUB_STEP_SUMMARY}"
-          echo "docker run --rm -it \\" >> "${GITHUB_STEP_SUMMARY}"
-          echo "  --device=/dev/kfd --device=/dev/dri \\" >> "${GITHUB_STEP_SUMMARY}"
-          echo "  --shm-size=10g --cap-add=SYS_PTRACE \\" >> "${GITHUB_STEP_SUMMARY}"
-          echo "  --group-add video \\" >> "${GITHUB_STEP_SUMMARY}"
-          echo "  ${IMAGE} \\" >> "${GITHUB_STEP_SUMMARY}"
-          echo '  python run_test.py -i <test_module> -k "<test_name>" -v' >> "${GITHUB_STEP_SUMMARY}"
-          echo '```' >> "${GITHUB_STEP_SUMMARY}"
