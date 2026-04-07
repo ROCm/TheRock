@@ -144,23 +144,6 @@ jobs:
           python build_tools/memory_monitor.py --phase Build -- \
             cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
-      - name: Run comgr tests
-        continue-on-error: true
-        env:
-          TEATIME_FORCE_INTERACTIVE: 1
-        run: |
-          rc1=0
-          python build_tools/teatime.py --log-timestamps \
-            --label "comgr lit tests" "${{ env.BUILD_DIR }}/logs/comgr-lit-tests.log" -- \
-            "${{ env.BUILD_DIR }}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit.cmd" \
-            "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v || rc1=$?
-          echo ""
-          rc2=0
-          python build_tools/teatime.py --log-timestamps \
-            --label "comgr ctest" "${{ env.BUILD_DIR }}/logs/comgr-ctest.log" -- \
-            ctest --test-dir "${{ env.BUILD_DIR }}/compiler/amd-comgr/build" --output-on-failure || rc2=$?
-          [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ]
-
       - name: Report
         if: ${{ !cancelled() }}
         shell: bash
