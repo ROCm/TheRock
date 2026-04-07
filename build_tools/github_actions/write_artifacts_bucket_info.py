@@ -9,6 +9,10 @@ Used by .github/actions/configure_aws_artifacts_credentials/action.yml.
 
 import argparse
 import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from _therock_utils.s3_buckets import get_artifacts_bucket_config_for_workflow_run
 from github_actions_api import gha_set_output
