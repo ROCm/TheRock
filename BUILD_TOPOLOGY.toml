@@ -629,7 +629,7 @@ feature_group = "IREE_LIBS"
 [artifacts.fusilliprovider]
 artifact_group = "fusilli-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn", "iree-compiler"]
+artifact_deps = ["core-runtime", "core-hip", "hipdnn", "iree-compiler", "hipdnn-integration-tests"]
 disable_platforms = ["windows"]
 feature_group = "IREE_LIBS"
 
