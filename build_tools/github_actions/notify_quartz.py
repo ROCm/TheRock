@@ -7,7 +7,7 @@ Reads the GitHub Actions webhook event from GITHUB_EVENT_PATH and dispatches
 a structured payload to a Quartz ingest workflow via workflow_dispatch.
 
 Payload ``event_type`` values and top-level keys align with
-``quartz_ingest.ingest_dispatch`` in ROCm/Quartz-Tester:
+``quartz_ingest.ingest_dispatch`` in ROCm/Quartz:
 
 - ``workflow_run_requested`` / ``workflow_run_completed``: ``repository``,
   ``workflow_run`` (GitHub run object plus optional ``jobs`` from the Actions API).
@@ -65,12 +65,6 @@ def _api_post(token: str, path: str, body: dict[str, Any]) -> Any:
 
 
 def _workflow_job_dispatch_fields(job: dict[str, Any]) -> dict[str, Any]:
-    """Subset of GitHub job JSON sent to Quartz-Tester (ingest_dispatch / therock_workflow_jobs).
-
-    Quartz maps ``created_at`` / ``started_at`` / ``completed_at``, ``runner_name``, and
-    ``labels``; include them when the Actions jobs API provides them so ingest works even
-    if the Quartz side cannot re-fetch jobs.
-    """
     row: dict[str, Any] = {
         "id": job["id"],
         "name": job["name"],
