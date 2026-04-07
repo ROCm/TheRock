@@ -150,6 +150,13 @@ jobs:
             --amdgpu-families="${{ env.DIST_AMDGPU_FAMILIES }}" \
             --output-dir="${{ env.OUTPUT_DIR }}"
 
+      - name: Detect KPACK split artifacts
+        id: kpack_detection
+        run: |
+          python ./build_tools/packaging/linux/detect_kpack.py \
+            --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
+            --output-format github >> $GITHUB_OUTPUT
+
       - name: Build Packages
         id: build-packages
         run: |
@@ -162,7 +169,7 @@ jobs:
             --artifacts-dir "${{ env.ARTIFACTS_DIR }}"/artifacts/ \
             --pkg-type "${{ inputs.native_package_type }}" \
             --version-suffix "${{ env.ARTIFACT_RUN_ID }}" \
-            --enable_kpack=false
+            --enable_kpack=${{ steps.kpack_detection.outputs.enable_kpack }}
 
       - name: Configure AWS Credentials
         # Only assume OIDC role for authorized repositories (ROCm/TheRock, ROCm/rockrel).
