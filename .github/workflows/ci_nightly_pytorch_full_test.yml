@@ -7,10 +7,16 @@
 # TODO: Expand to additional GPU families (Radeon, gfx950, etc.) and Windows.
 #       Runner labels should eventually come from amdgpu_family_matrix.py /
 #       configure_target_run.py instead of being passed as inputs here.
+#       Encode "run full pytorch tests" in amdgpu_family_matrix.py /
+#       new_amdgpu_family_matrix.py for central tracking of what builds/tests
+#       we enable on each GPU and platform.
 # TODO: This schedule-based trigger assumes the nightly build has completed.
-#       Consider integrating into the existing build/release workflows
-#       (build_portable_linux_pytorch_wheels.yml / release_portable_linux_packages.yml)
-#       so tests only run after a successful build.
+#       Neither is guaranteed — the build could fail or take longer than
+#       expected, in which case this re-runs tests against the previous
+#       nightly. Consider integrating into the existing build/release
+#       workflows (build_portable_linux_pytorch_wheels.yml /
+#       release_portable_linux_packages.yml) so tests only run after a
+#       successful build, or use a workflow_dispatch trigger / Quartz.
 
 name: CI Nightly PyTorch Full Test
 
@@ -85,6 +91,8 @@ jobs:
           # --platform ensures this works even when the runner OS differs from
           # the target (e.g. querying Linux packages from an ubuntu runner that
           # might later be replaced by a Windows runner for cross-platform support).
+          # TODO: When adding Windows support, pass --platform win_amd64 for
+          # Windows targets or derive the platform from amdgpu_family/runner.
           TORCH_VERSION=$(pip index versions torch \
             --index-url "${INDEX_URL}" \
             --python-version "${PYTHON_VERSION}" \
