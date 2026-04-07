@@ -9,7 +9,7 @@
 # This post hook will be removed when the transition is done.
 if(TARGET rocm-debug-agent-test)
   # Use cmake_language(DEFER) to set RPATH after therock_global_post_subproject.cmake runs.
-  # This ensures our custom RPATH isn't overwritten by the automatic processing.
+  # This ensures our custom RPATH isn't overwritten by the automated processing.
   cmake_language(DEFER CALL set_target_properties rocm-debug-agent-test PROPERTIES
     INSTALL_RPATH "$ORIGIN/../lib/rocm_sysdeps/lib:$ORIGIN/../lib/llvm/lib:$ORIGIN/../lib:$ORIGIN/../../lib/rocm_sysdeps/lib:$ORIGIN/../../lib/llvm/lib:$ORIGIN/../../lib"
   )
