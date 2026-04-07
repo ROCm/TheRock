@@ -67,7 +67,6 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
       PACKAGES_DIR: "${{ github.workspace }}/packages"
-      IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
     defaults:
       run:
         shell: bash
