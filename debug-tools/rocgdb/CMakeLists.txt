@@ -198,15 +198,30 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
 
   # If we have a valid libpython_dir, adjust the LDFLAGS for this build
   # variant and add an extra RPATH entry for post-install patching.
+  #
+  # Skip this for system library directories (under /usr, excluding /usr/local).
+  # The linker already searches these by default, and explicitly adding them
+  # via -L pulls in unrelated system static archives (e.g. libiberty.a from
+  # libiberty-dev) that conflict with GDB's bundled copies. GDB's configure
+  # finds system libpython on its own via --with-python without needing -L.
+  # Non-system libpython (custom builds, /opt, /usr/local, etc.) still needs
+  # the explicit flags since those paths are not in the default search order.
+  # See https://github.com/ROCm/TheRock/issues/4223
   set(ALL_LDFLAGS ${LDFLAGS})
   set(LIBPYTHON_RPATH "")
   if(NOT "${libpython_dir}" STREQUAL "")
-    set(LIBPYTHON_LDFLAGS "-L${libpython_dir} -Wl,-rpath,${libpython_dir}")
-    string(APPEND ALL_LDFLAGS " ${LIBPYTHON_LDFLAGS}")
-    set(LIBPYTHON_RPATH ":${libpython_dir}")
+    cmake_path(IS_PREFIX "/usr" "${libpython_dir}" NORMALIZE _is_under_usr)
+    cmake_path(IS_PREFIX "/usr/local" "${libpython_dir}" NORMALIZE _is_under_usr_local)
+    if(_is_under_usr AND NOT _is_under_usr_local)
+      message(STATUS "-> Skipping extra LDFLAGS for system libpython dir: ${libpython_dir}")
+    else()
+      set(LIBPYTHON_LDFLAGS "-L${libpython_dir} -Wl,-rpath,${libpython_dir}")
+      string(APPEND ALL_LDFLAGS " ${LIBPYTHON_LDFLAGS}")
+      set(LIBPYTHON_RPATH ":${libpython_dir}")
 
-    message(STATUS "-> Extra LDFLAGS: ${LIBPYTHON_LDFLAGS}")
-    message(STATUS "-> Extra RPATH: ${LIBPYTHON_RPATH}")
+      message(STATUS "-> Extra LDFLAGS: ${LIBPYTHON_LDFLAGS}")
+      message(STATUS "-> Extra RPATH: ${LIBPYTHON_RPATH}")
+    endif()
   endif()
 
   # These directories are adjusted here so we don't have to escape
