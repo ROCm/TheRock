@@ -215,7 +215,7 @@ If you prefer to install tools manually, you will need:
 
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
 
-- nasm: https://www.nasm.us/, needed for BoringSSL which is a dependency of grpc (therock-grpc) 
+- nasm: https://www.nasm.us/, needed for BoringSSL which is a dependency of grpc (therock-grpc)
 
 > [!WARNING]
 > Prefer to install Python for the current user only and to a path
