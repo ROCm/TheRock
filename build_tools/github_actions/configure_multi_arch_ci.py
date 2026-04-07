@@ -780,11 +780,21 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
+        # TODO(#3433): Remove sandbox logic once ASAN tests are passing
+        # For ASAN builds, use sandbox runner to avoid impacting production
+        if build_variant == "asan" and "test-runs-on-sandbox" in platform_info:
+            test_runs_on = platform_info["test-runs-on-sandbox"]
+            print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
+
+        # Extract multi-GPU runner if available
+        test_runs_on_multi_gpu = platform_info.get("test-runs-on-multi-gpu", "")
+
         per_family_info.append(
             {
                 "amdgpu_family": platform_info["family"],
                 "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
                 "test-runs-on": test_runs_on,
+                "test-runs-on-multi-gpu": test_runs_on_multi_gpu,
                 "sanity_check_only_for_family": platform_info.get(
                     "sanity_check_only_for_family", False
                 ),
