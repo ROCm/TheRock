@@ -2,10 +2,16 @@
 """Runs the full PyTorch test suite on AMD GPUs via PyTorch's run_test.py,
 with TheRock ROCm-specific skip-test integration and sharding support.
 
-Mirrors how PyTorch CI's test.sh invokes test_python_shard():
+For the "default" and "distributed" configs, mirrors how PyTorch CI's
+test.sh invokes test_python_shard():
     python test/run_test.py \\
         --exclude-jit-executor --exclude-distributed-tests \\
         --exclude-quantization-tests --shard N M --verbose
+
+For the "inductor" config, mirrors test_inductor_shard() from test.sh
+with two separate run_test.py invocations:
+    1. Generic tests (test_modules, test_ops, …) with ``--inductor``
+    2. Inductor unit tests without ``--inductor`` (avoids nested dynamo)
 
 Usage examples:
 
@@ -20,6 +26,9 @@ Usage examples:
 
     # Run a few specific test files:
     python run_pytorch_tests_full.py --include test_nn test_torch test_cuda
+
+    # Run with the "inductor" config:
+    python run_pytorch_tests_full.py --test-config inductor --shard 1 --num-shards 2
 
     # Run with the "distributed" config on a multi-GPU runner:
     python run_pytorch_tests_full.py --test-config distributed
@@ -110,6 +119,23 @@ PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 # TODO: investigate the root cause and narrow the exclusions.
 EXCLUDED_TEST_MODULES: list[str] = [
     "nn/test_convolution",  # hangs for 5+ hours, see run 53 shards 7 & 10
+]
+
+# Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
+# The inductor config requires TWO separate run_test.py invocations:
+#   1. Generic tests run with --inductor (sets PYTORCH_TEST_WITH_INDUCTOR=1)
+#   2. Inductor unit tests run WITHOUT --inductor (avoids nested dynamo state)
+# See: https://github.com/pytorch/pytorch/blob/main/.ci/pytorch/test.sh
+INDUCTOR_GENERIC_TESTS = [
+    "test_modules",
+    "test_ops",
+    "test_ops_gradients",
+    "test_torch",
+]
+INDUCTOR_UNIT_TESTS = [
+    "inductor/test_torchinductor",
+    "inductor/test_torchinductor_opinfo",
+    "inductor/test_aot_inductor",
 ]
 
 
@@ -379,6 +405,95 @@ def build_run_test_cmd(
     return cmd
 
 
+def build_inductor_cmds(
+    args: argparse.Namespace,
+    tests_to_skip: str,
+    passthrough_args: list[str],
+) -> list[list[str]]:
+    """Build the two run_test.py commands for the inductor config.
+
+    Matches upstream ``test_inductor_shard()`` in ``.ci/pytorch/test.sh``:
+      1. Generic tests (test_modules, test_ops, …) with ``--inductor``
+      2. Inductor unit tests (inductor/test_torchinductor, …) *without*
+         ``--inductor`` to avoid nested dynamo state
+    """
+    run_test_path = str(args.pytorch_dir / "test" / "run_test.py")
+
+    extra = list(passthrough_args)
+    if not args.cache:
+        extra.extend(["-p", "no:cacheprovider"])
+    extra.extend(["--timeout", str(PYTEST_TIMEOUT_SECONDS)])
+
+    skip_args = ["-k", tests_to_skip] if tests_to_skip else []
+
+    def _base_cmd() -> list[str]:
+        cmd = [sys.executable, run_test_path]
+        cmd.extend(["--keep-going", "--verbose"])
+        if args.dry_run:
+            cmd.append("--dry-run")
+        if args.shard > 0 and args.num_shards > 0:
+            cmd.extend(["--shard", str(args.shard), str(args.num_shards)])
+        return cmd
+
+    # 1. Generic tests WITH --inductor (enables TorchInductor backend)
+    cmd1 = _base_cmd()
+    cmd1.append("--inductor")
+    cmd1.extend(["--include"] + INDUCTOR_GENERIC_TESTS)
+    cmd1.extend(skip_args)
+    cmd1.extend(extra)
+
+    # 2. Inductor unit tests WITHOUT --inductor (nested dynamo guard)
+    cmd2 = _base_cmd()
+    cmd2.extend(["--include"] + INDUCTOR_UNIT_TESTS)
+    cmd2.extend(skip_args)
+    cmd2.extend(extra)
+
+    return [cmd1, cmd2]
+
+
+def _run_inductor(
+    args: argparse.Namespace,
+    tests_to_skip: str,
+    passthrough_args: list[str],
+) -> int:
+    """Run the inductor test config as two run_test.py invocations.
+
+    Matches upstream ``test_inductor_shard()`` in ``.ci/pytorch/test.sh``.
+    Returns the worst (non-zero) return code from either invocation.
+    """
+    # Upstream runs verify_dynamo.py first as a quick smoke test.
+    verify_script = args.pytorch_dir / "tools" / "dynamo" / "verify_dynamo.py"
+    if verify_script.exists():
+        print("Running verify_dynamo.py …")
+        vr = subprocess.run(
+            [sys.executable, str(verify_script)], cwd=str(args.pytorch_dir)
+        )
+        if vr.returncode != 0:
+            print(f"verify_dynamo.py failed with return code {vr.returncode}")
+            return vr.returncode
+    else:
+        print(f"verify_dynamo.py not found at {verify_script}, skipping")
+
+    cmds = build_inductor_cmds(args, tests_to_skip, passthrough_args)
+    labels = [
+        "generic tests with --inductor",
+        "inductor unit tests (no --inductor)",
+    ]
+
+    worst_rc = 0
+    for label, cmd in zip(labels, cmds):
+        print(f"\n{'=' * 60}")
+        print(f"Inductor phase: {label}")
+        print(f"{'=' * 60}")
+        print(f"Executing: {' '.join(cmd)}")
+        result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
+        print(f"run_test.py [{label}] finished with return code: {result.returncode}")
+        if result.returncode != 0:
+            worst_rc = result.returncode
+
+    return worst_rc
+
+
 def main(argv: list[str]) -> int:
     args, passthrough_args = cmd_arguments(argv)
 
@@ -422,12 +537,14 @@ def main(argv: list[str]) -> int:
     )
     print_env()
 
-    cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)
-    print(f"Executing: {' '.join(cmd)}")
-
-    result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
-    return_code = result.returncode
-    print(f"run_test.py finished with return code: {return_code}")
+    if args.test_config == "inductor":
+        return_code = _run_inductor(args, tests_to_skip, passthrough_args)
+    else:
+        cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)
+        print(f"Executing: {' '.join(cmd)}")
+        result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
+        return_code = result.returncode
+        print(f"run_test.py finished with return code: {return_code}")
 
     # run_test.py with --keep-going may exit 0 even when individual test
     # cases fail.  Check JUnit XML reports for the ground truth.
