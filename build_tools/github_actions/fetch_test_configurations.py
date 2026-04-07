@@ -143,6 +143,16 @@ test_matrix = {
             "windows": 1,
         },
     },
+    "tensilelite": {
+        "job_name": "tensilelite",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 45,
+        "test_script": f"python {_get_script_path('test_tensilelite.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # SOLVER tests
     "hipsolver": {
         "job_name": "hipsolver",
