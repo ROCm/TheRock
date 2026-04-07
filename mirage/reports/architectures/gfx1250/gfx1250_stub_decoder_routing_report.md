@@ -176,4 +176,4 @@
 
 ## Recommended Next Slice
 
-- The fp8/bf8 tail now has manifest-accounting plus route-info fallback / near-miss coverage; any further useful work would need shared-layer or decoder-production changes outside the owned gfx1250-local files.
+- The fp8/bf8 tail now has manifest-accounting plus route-info fallback / near-miss coverage, and the leading fp8/bf8 batch now also has manifest-accounting parity; any further useful work would need shared-layer or decoder-production changes outside the owned gfx1250-local files.
