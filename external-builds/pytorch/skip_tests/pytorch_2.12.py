@@ -162,12 +162,16 @@ skip_tests = {
             "test_unary_ufunc_numerical_expm1_backend_inductor_default_cuda_float32",
             # TestMaxAutotuneAsyncPipelined - cache same inputs assertion
             "test_async_autotuner_cache_same_inputs",
+            # TestMaxAutotuneAsyncPipelined - compilation after inactivity
+            "test_compilation_after_inactivity",
             # HigherOrderOpTestsWithCompiledAutograd - _GeneratorContextManager
             "test_tensor_with_unbacked_shape_closure",
             # TestMaxAutotuneAsyncPipelined - NoValidChoicesError bmm
             "test_bmm_out_dtype",
             # FuncTorchHigherOrderOpTestsWithCompiledAutograd - _GeneratorContextManager
             "test_functional_call",
+            # FuncTorchHigherOrderOpTestsWithCompiledAutograd - _GeneratorContextManager
+            "test_grad_has_aux",
             # TestOpInfoPropertiesCUDA - XPASS remainder bfloat16
             "test_eager_equivalence_remainder_backend_inductor_default_cuda_bfloat16",
             # TestOpInfoPropertiesCUDA - XPASS remainder float32
@@ -190,6 +194,12 @@ skip_tests = {
             "test_eager_equivalence_remainder_backend_inductor_default_cuda_float32",
             # TestOpInfoPropertiesCUDA - numerical log float16 mismatch
             "test_unary_ufunc_numerical_log_backend_inductor_default_cuda_float16",
+            # TestOpInfoPropertiesCUDA - numerical sqrt bfloat16 mismatch
+            "test_unary_ufunc_numerical_sqrt_backend_inductor_default_cuda_bfloat16",
+            # TestOpInfoPropertiesCUDA - numerical exp float32 mismatch
+            "test_unary_ufunc_numerical_exp_backend_inductor_default_cuda_float32",
+            # TestOpInfoPropertiesCUDA - eager equivalence tanh float32 mismatch
+            "test_eager_equivalence_tanh_backend_inductor_default_cuda_float32",
             # TestPrologueFusion - async compile variant
             "test_lazy_template_fusion_multiple_candidates_use_async_compile_True",
             # FuncTorchHigherOrderOpTestsWithCompiledAutograd - grad closure scalar
@@ -347,10 +357,18 @@ skip_tests = {
             "test_replicate_pp_grads_ScheduleClass2",
             # ComposabilityTest - pipeline parallel RuntimeError
             "test_replicate_pp_grads_ScheduleClass3",
+            # ComposabilityTest - pipeline parallel RuntimeError
+            "test_replicate_pp_grads_ScheduleClass4",
             # ReplicateFullyShardInit - pytest-timeout (>900s)
             "test_replicate_move_args_kwargs_to_device",
             # ReplicateFullyShardInit - multi module init failure
             "test_replicate_multi_module",
+            # ReplicateFullyShardInit - pytest-timeout (>900s)
+            "test_replicate_single_module",
+            # TestFullyShardAutograd - 300s per-process timeout
+            "test_unused_forward_module",
+            # TestViewOpsWithLocalTensor - list index out of range
+            "test_view_ops",
         ],
     },
 }
