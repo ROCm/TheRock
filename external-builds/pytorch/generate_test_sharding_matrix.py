@@ -38,12 +38,14 @@ import os
 #     https://github.com/pytorch/pytorch/blob/1ace6e9e198f0221122a81efe39c11eef90b5d80/.github/workflows/trunk.yml#L283-L291
 #   inductor (2):
 #     https://github.com/pytorch/pytorch/blob/1ace6e9e198f0221122a81efe39c11eef90b5d80/.github/workflows/inductor-rocm-mi300.yml#L51-L52
-# Using 12/4 shards for default/inductor so every shard finishes within
-# the 6-hour GitHub Actions job limit while we iterate on the skip list.
+# Using 12 shards for default so every shard finishes within the 6-hour
+# GitHub Actions job limit while we iterate on the skip list.
+# Inductor is back to upstream (2) after fixing the invocation to match
+# test_inductor_shard() — only 7 test files now instead of the full suite.
 SHARDS_PER_CONFIG: dict[str, int] = {
     "default": 12,
     "distributed": 3,
-    "inductor": 4,
+    "inductor": 2,
 }
 DEFAULT_SHARDS = 4
 
