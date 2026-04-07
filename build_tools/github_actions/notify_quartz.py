@@ -292,33 +292,6 @@ def dispatch_to_quartz(
     owner, repo = quartz_repo.split("/")
     workflow_file = "ingest.yml"
 
-    # TEMP DEBUG (remove after 404 investigation):
-    # Log exactly what we are about to dispatch and probe workflow visibility.
-    log.info(
-        "Dispatch target: repo=%s ref=%s workflow=%s event_type=%s",
-        quartz_repo,
-        workflow_ref,
-        workflow_file,
-        payload.get("event_type"),
-    )
-    try:
-        wf = _api_get(token, f"/repos/{quartz_repo}/actions/workflows/{workflow_file}")
-        log.info(
-            "Workflow probe OK: id=%s path=%s state=%s",
-            wf.get("id"),
-            wf.get("path"),
-            wf.get("state"),
-        )
-    except HTTPError as exc:
-        log.error(
-            "Workflow probe failed for %s in %s: %s %s",
-            workflow_file,
-            quartz_repo,
-            exc.code,
-            exc.read().decode(),
-        )
-        raise
-
     _api_post(
         token,
         f"/repos/{quartz_repo}/actions/workflows/{workflow_file}/dispatches",
