@@ -375,7 +375,8 @@ class TestRetrieveBucketInfo(unittest.TestCase):
         self.env_patcher = mock.patch.dict(os.environ)
         self.env_patcher.start()
         os.environ.pop("GITHUB_REPOSITORY", None)
-        os.environ.pop("IS_PR_FROM_FORK", None)
+        os.environ.pop("GITHUB_EVENT_NAME", None)
+        os.environ.pop("GITHUB_EVENT_PATH", None)
         os.environ.pop("RELEASE_TYPE", None)
 
     def tearDown(self):
@@ -405,15 +406,31 @@ class TestRetrieveBucketInfo(unittest.TestCase):
         self.assertEqual(external_repo, "")
         self.assertEqual(bucket, "therock-ci-artifacts")
 
-    @mock.patch.dict(
-        os.environ,
-        {"GITHUB_REPOSITORY": "SomeUser/TheRock", "IS_PR_FROM_FORK": "true"},
-        clear=False,
-    )
     def test_fork_pr(self):
-        external_repo, bucket = self._call()
-        self.assertEqual(external_repo, "SomeUser-TheRock/")
-        self.assertEqual(bucket, "therock-ci-artifacts-external")
+        """Fork PR: head repo .fork is true in event payload."""
+        import json
+        import tempfile
+
+        event = {"pull_request": {"head": {"repo": {"fork": True}}}}
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(event, f)
+            event_path = f.name
+
+        try:
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "GITHUB_REPOSITORY": "ROCm/TheRock",
+                    "GITHUB_EVENT_NAME": "pull_request",
+                    "GITHUB_EVENT_PATH": event_path,
+                },
+                clear=False,
+            ):
+                external_repo, bucket = self._call()
+                self.assertEqual(external_repo, "ROCm-TheRock/")
+                self.assertEqual(bucket, "therock-ci-artifacts-external")
+        finally:
+            os.unlink(event_path)
 
     @mock.patch.dict(
         os.environ,
