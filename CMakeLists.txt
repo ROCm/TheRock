@@ -57,7 +57,6 @@ block(SCOPE_FOR VARIABLES)
       "--topology" "${CMAKE_CURRENT_SOURCE_DIR}/BUILD_TOPOLOGY.toml"
       "--output" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake"
     OUTPUT_VARIABLE _topology_output
-    ERROR_VARIABLE _topology_error
     COMMAND_ERROR_IS_FATAL ANY  # Fail on any error
   )
   message(STATUS "Generated build topology targets from BUILD_TOPOLOGY.toml")
@@ -370,6 +369,8 @@ set(THEROCK_BUNDLED_LIBBACKTRACE)
 set(THEROCK_BUNDLED_LIBCAP)
 set(THEROCK_BUNDLED_LIBDRM)
 set(THEROCK_BUNDLED_LIBLZMA)
+set(THEROCK_BUNDLED_LIBMNL)
+set(THEROCK_BUNDLED_LIBNL)
 set(THEROCK_BUNDLED_MPFR)
 set(THEROCK_BUNDLED_NCURSES)
 set(THEROCK_BUNDLED_NUMACTL)
@@ -395,6 +396,8 @@ if(THEROCK_BUNDLE_SYSDEPS)
     set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
+    set(THEROCK_BUNDLED_LIBMNL therock-libmnl)
+    set(THEROCK_BUNDLED_LIBNL therock-libnl)
     set(THEROCK_BUNDLED_MPFR therock-mpfr)
     set(THEROCK_BUNDLED_NCURSES therock-ncurses)
     set(THEROCK_BUNDLED_NUMACTL therock-numactl)

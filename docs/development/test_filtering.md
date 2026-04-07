@@ -5,10 +5,13 @@
 ## Types of filters
 
 - <b>quick</b>: A "sanity check" to ensure the system is fundamentally working
+
   - Runs on: pull requests (if ROCm non-component related change), push to main branch
   - Characteristics: Shallow validation, focus on critical paths, component runs properly
   - Execution time: < 5 min
-  - Example: pull request change to build system, main branch push change for CI
+  - Target: build system updates, CI system updates, non-component specific updates
+
+> Note: This label is not intended to run on component changes, this is for build/CI changes that impacts all components and need a quick sanity check
 
 <br/>
 
@@ -16,7 +19,7 @@
   - Runs on: pull requests, workflow dispatch, push to main branch (if ROCm component related change)
   - Characteristics: business-critical logic, covers functionality that would block users or cause major regressions, high signal-to-noise ratio
   - Execution time: < 30 min
-  - Example: submodule bump in TheRock (rocm-libraries), pull request change to hipblaslt runs hipblaslt and related subproject tests
+  - Target: component-specific core updates, submodule bumps
 
 <br/>
 
@@ -24,7 +27,7 @@
   - Runs on: nightly
   - Characteristics: deeper validation of edge cases, more expensive scenarios, more combinations of tests
   - Execution time: < 2 hours
-  - Example: daily scheduled GitHub Action run
+  - Target: daily scheduled run, on-demand PR label
 
 <br/>
 
@@ -32,7 +35,7 @@
   - Runs on: weekly, pre-major release
   - Characteristics: exhaustive scenarios, extreme edge cases, aim to eliminate unknown risks
   - Execution time: 2+ hours
-  - Example: pre-release test run
+  - Target: pre-release testing, weekly scheduled run, on-demand PR label
 
 ## Test filter implementation
 
