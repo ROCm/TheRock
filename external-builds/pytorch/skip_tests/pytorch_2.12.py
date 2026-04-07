@@ -198,6 +198,26 @@ skip_tests = {
             "test_lazy_template_fusion_multiple_candidates_use_async_compile_True",
             # FuncTorchHigherOrderOpTestsWithCompiledAutograd - grad closure scalar
             "test_grad_closure_scalar",
+            # FuncTorchHigherOrderOpTestsWithCompiledAutograd
+            "test_grad_freevar_python_scalar",
+            # TestCompiledAutogradOpInfoCUDA - inline asm
+            "test_hops_in_bwd_inline_asm_elementwise_simple_cuda_float32",
+            # TestOpInfoPropertiesCUDA - numerical fmod/remainder XPASS
+            "test_binary_ufunc_numerical_fmod_backend_inductor_default_cuda_float32",
+            "test_binary_ufunc_numerical_remainder_backend_inductor_default_cuda_float16",
+            "test_binary_ufunc_numerical_remainder_backend_inductor_default_cuda_bfloat16",
+            "test_binary_ufunc_numerical_remainder_backend_inductor_default_cuda_float32",
+            "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_float32",
+            "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_bfloat16",
+            "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_float16",
+        ],
+        "linalg": [
+            # TestLinalgCUDA - tunableop_rocm addmm relu
+            "test_addmm_relu_tunableop_rocm_cuda_float32",
+        ],
+        "scaled_matmul": [
+            # TestFP8MatmulCUDA - deepseek error messages
+            "test_scaled_mm_deepseek_error_messages_bfloat16_lhs_block_128_rhs_block_1_M_256_N_256_K_256_cuda",
         ],
         "modules": [
             # TestModuleCUDA - CTCLoss cpu/gpu parity scalar mismatch
@@ -335,30 +355,6 @@ skip_tests = {
             "test_replicate_move_args_kwargs_to_device",
             # ReplicateFullyShardInit - multi module init failure
             "test_replicate_multi_module",
-        ],
-    },
-    "gfx94": {
-        "inductor": [
-            # FuncTorchHigherOrderOpTestsWithCompiledAutograd
-            "test_grad_freevar_python_scalar",
-            # TestCompiledAutogradOpInfoCUDA - inline asm
-            "test_hops_in_bwd_inline_asm_elementwise_simple_cuda_float32",
-            # TestOpInfoPropertiesCUDA - numerical XPASS failures
-            "test_binary_ufunc_numerical_fmod_backend_inductor_default_cuda_float32",
-            "test_binary_ufunc_numerical_remainder_backend_inductor_default_cuda_float16",
-            "test_binary_ufunc_numerical_remainder_backend_inductor_default_cuda_bfloat16",
-            "test_binary_ufunc_numerical_remainder_backend_inductor_default_cuda_float32",
-            "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_float32",
-            "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_bfloat16",
-            "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_float16",
-        ],
-        "linalg": [
-            # TestLinalgCUDA - tunableop_rocm addmm relu
-            "test_addmm_relu_tunableop_rocm_cuda_float32",
-        ],
-        "scaled_matmul": [
-            # TestFP8MatmulCUDA - deepseek error messages
-            "test_scaled_mm_deepseek_error_messages_bfloat16_lhs_block_128_rhs_block_1_M_256_N_256_K_256_cuda",
         ],
     },
 }
