@@ -233,9 +233,10 @@ python run_pytorch_smoke_tests.py -- \
 ### Running full PyTorch tests
 
 We have a [`run_pytorch_tests.py`](run_pytorch_tests.py) script
-which runs PyTorch unit tests using pytest with additional test exclusion
-capabilities tailored for AMD ROCm GPUs. See the script for detailed
-instructions. Here are a few examples:
+which runs a curated subset of PyTorch unit tests using pytest with additional
+test exclusion capabilities tailored for AMD ROCm GPUs. This is the script used
+by the release-gating CI workflow. See the script for detailed instructions.
+Here are a few examples:
 
 ```bash
 # Basic usage (auto-detect everything, no extra args):
@@ -252,6 +253,34 @@ python run_pytorch_tests.py -k "test_nn and not test_dropout"
 
 # Explicit pytorch repo path (for test sources) and GPU family (for filtering)
 python run_pytorch_tests.py --pytorch-dir=/tmp/pytorch --amdgpu-family=gfx950
+```
+
+We also have a [`run_pytorch_tests_full.py`](run_pytorch_tests_full.py) script
+which runs the complete upstream PyTorch test suite via PyTorch's own
+`run_test.py` harness with sharding, `--keep-going`, and per-function timeouts
+(`pytest-timeout`). It supports `default`, `distributed`, and `inductor` test
+configs. The inductor config mirrors upstream's two-phase invocation pattern
+(generic tests with `--inductor`, then inductor unit tests without it). In CI
+this script is called by
+[`test_pytorch_wheels_full.yml`](../../.github/workflows/test_pytorch_wheels_full.yml)
+(reusable workflow for sharded test runs) and
+[`ci_nightly_pytorch_full_test.yml`](../../.github/workflows/ci_nightly_pytorch_full_test.yml)
+(scheduled nightly trigger). Here are a few examples:
+
+```bash
+# Run the full suite locally (requires a PyTorch checkout for test sources):
+python run_pytorch_tests_full.py \
+  --pytorch-dir=/path/to/pytorch \
+  --amdgpu-family=gfx94X-dcgpu \
+  --test-config=default \
+  --shard=1 --num-shards=1
+
+# Inductor config:
+python run_pytorch_tests_full.py \
+  --pytorch-dir=/path/to/pytorch \
+  --amdgpu-family=gfx94X-dcgpu \
+  --test-config=inductor \
+  --shard=1 --num-shards=1
 ```
 
 Tests can also be run by following the ROCm documentation at
