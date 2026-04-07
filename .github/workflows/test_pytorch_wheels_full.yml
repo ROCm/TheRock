@@ -313,33 +313,3 @@ jobs:
             echo "No run_pytorch_tests_exit_code.txt found"
             exit 1
           fi
-
-  test_summary:
-    if: always()
-    needs: test_wheels
-    name: Test Summary Summary
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
-          sparse-checkout: external-builds/pytorch/summarize_test_results.py
-
-      - name: Download all test report artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          path: artifacts
-          pattern: test-reports-*
-
-      - name: Generate combined summary
-        env:
-          AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
-          TORCH_VERSION: ${{ inputs.torch_version }}
-          PYTHON_VERSION: ${{ inputs.python_version }}
-          PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
-          PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
-        run: |
-          python external-builds/pytorch/summarize_test_results.py \
-            --combined-dir artifacts
