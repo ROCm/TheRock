@@ -12,7 +12,8 @@ name: CI Nightly
 on:
   # For AMD GPU families that expect_failure, we run builds and tests from this scheduled trigger
   schedule:
-    - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
+    # Runs at 02:00 AM UTC, which is 7:00 PM PST (UTC-8)
+    - cron: '0 02 * * *'
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:
