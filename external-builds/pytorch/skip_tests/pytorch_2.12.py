@@ -4,8 +4,6 @@
 skip_tests = {
     "common": {
         "cuda": [
-            # RuntimeError: Error building extension 'dummy_allocator'
-            "test_mempool_empty_cache_inactive",
             # RuntimeError: Error building extension 'dummy_allocator_v1'
             "test_mempool_limited_memory_with_allocator",
             # RuntimeError: Error building extension 'dummy_allocator_v3'
@@ -24,8 +22,6 @@ skip_tests = {
             "test_allocator_memory_fraction_setting",
             # AssertionError: False is not true (memory_plots)
             "test_memory_plots",
-            # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI cache
-            "test_memory_snapshot",
             # TestBlockStateAbsorption - ModuleNotFoundError: torchvision
             "test_resnet",
         ],

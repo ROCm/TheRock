@@ -46,7 +46,7 @@ on:
       pytorch_git_repo:
         description: "PyTorch git repo for test sources (Options: rocm/pytorch, pytorch/pytorch)"
         type: string
-        default: "rocm/pytorch"
+        default: "pytorch/pytorch"
       test_configs:
         description: "Space-separated test configs to run"
         type: string
@@ -59,7 +59,7 @@ on:
 permissions:
   contents: read
 
-run-name: CI Nightly PyTorch Full Test (${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }})
+run-name: CI Nightly PyTorch Full Test (${{ inputs.amdgpu_family }})
 
 jobs:
   resolve_torch_version:
@@ -70,9 +70,9 @@ jobs:
       - name: Resolve latest nightly torch version
         id: resolve
         run: |
-          AMDGPU_FAMILY="${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}"
-          PYTHON_VERSION="${{ inputs.python_version || '3.12' }}"
-          PACKAGE_INDEX_URL="${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}"
+          AMDGPU_FAMILY="${{ inputs.amdgpu_family }}"
+          PYTHON_VERSION="${{ inputs.python_version }}"
+          PACKAGE_INDEX_URL="${{ inputs.package_index_url }}"
           INDEX_URL="${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}"
 
           if [ -n "${{ inputs.torch_version }}" ]; then
@@ -104,13 +104,13 @@ jobs:
     needs: resolve_torch_version
     uses: ./.github/workflows/test_pytorch_wheels_full.yml
     with:
-      amdgpu_family: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
-      test_runs_on: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ossci-rocm' }}
-      test_runs_on_multi_gpu: ${{ inputs.test_runs_on_multi_gpu || 'linux-gfx942-8gpu-ossci-rocm' }}
-      package_index_url: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
-      python_version: ${{ inputs.python_version || '3.12' }}
+      amdgpu_family: ${{ inputs.amdgpu_family }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      test_runs_on_multi_gpu: ${{ inputs.test_runs_on_multi_gpu }}
+      package_index_url: ${{ inputs.package_index_url }}
+      python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.resolve_torch_version.outputs.torch_version }}
-      pytorch_git_repo: ${{ inputs.pytorch_git_repo || 'rocm/pytorch' }}
-      pytorch_git_ref: ${{ inputs.pytorch_git_ref || 'nightly' }}
-      test_configs: ${{ inputs.test_configs || 'default distributed inductor' }}
+      pytorch_git_repo: ${{ inputs.pytorch_git_repo }}
+      pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
+      test_configs: ${{ inputs.test_configs }}
       tests_to_include: ""
