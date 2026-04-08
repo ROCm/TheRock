@@ -323,6 +323,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
+        ${THEROCK_BUNDLED_BINUTILS}
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
         ${_openmpi_optional_dep}
