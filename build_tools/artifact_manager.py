@@ -201,7 +201,17 @@ class ExtractRequest:
 
 
 def download_artifact(request: DownloadRequest) -> Optional[Path]:
-    """Download a single artifact with retry logic."""
+    """Download a single artifact with retry logic.
+
+    Skips downloading if the file already exists in the download cache.
+    """
+    # TODO: Validate cached file integrity (e.g. compare size against S3
+    # object metadata). A partial download from a killed process would pass
+    # this check. Consider adding a --no-cache flag to bypass.
+    if request.dest_path.exists():
+        log(f"  == Cached {request.artifact_key}")
+        return request.dest_path
+
     MAX_RETRIES = 3
     BASE_DELAY_SECONDS = 2
 
@@ -352,7 +362,10 @@ def do_fetch(args: argparse.Namespace):
 
     # Build download requests
     output_dir = Path(args.output_dir)
-    download_dir = output_dir / ".download_cache"
+    shared_cache = args.download_cache_dir is not None
+    download_dir = (
+        args.download_cache_dir if shared_cache else output_dir / ".download_cache"
+    )
     download_dir.mkdir(parents=True, exist_ok=True)
 
     matched_filenames = find_available_artifacts(inbound, target_families, available)
@@ -441,8 +454,8 @@ def do_fetch(args: argparse.Namespace):
 
     log(f"\nDownloaded {downloaded_count} artifacts, extracted {extracted_count}")
 
-    # Cleanup download cache
-    if download_dir.exists() and not args.no_extract:
+    # Cleanup download cache (skip when using a shared cache dir)
+    if download_dir.exists() and not args.no_extract and not shared_cache:
         shutil.rmtree(download_dir)
 
     # Fail if any downloads failed
@@ -1033,6 +1046,14 @@ def main(argv: Optional[List[str]] = None):
         "--no-extract",
         action="store_true",
         help="Download only, do not extract",
+    )
+    fetch_parser.add_argument(
+        "--download-cache-dir",
+        type=Path,
+        default=None,
+        help="Shared download cache directory. When set, downloaded archives "
+        "are kept after extraction so subsequent fetches can reuse them. "
+        "Defaults to OUTPUT_DIR/.download_cache (cleaned up after extraction).",
     )
     fetch_parser.add_argument(
         "--download-concurrency",
