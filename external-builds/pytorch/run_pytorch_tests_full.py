@@ -396,7 +396,12 @@ def build_run_test_cmd(
 
     if args.include:
         cmd.extend(["--include"] + args.include)
-    excludes = list(EXCLUDED_TEST_MODULES)
+    test_dir = args.pytorch_dir / "test"
+    excludes = [
+        m
+        for m in EXCLUDED_TEST_MODULES
+        if (test_dir / (m + ".py")).exists()
+    ]
     if args.exclude:
         excludes.extend(args.exclude)
     if excludes:
