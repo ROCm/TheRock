@@ -443,6 +443,17 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # LLVM lit tests (check-llvm, check-clang, check-lld)
+    "llvm-lit": {
+        "job_name": "llvm-lit",
+        "fetch_artifact_args": "--llvm-lit",
+        "timeout_minutes": 120,
+        "test_script": f"python {_get_script_path('test_llvm_lit.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # libhipcxx hipcc tests
     "libhipcxx_hipcc": {
         "job_name": "libhipcxx_hipcc",

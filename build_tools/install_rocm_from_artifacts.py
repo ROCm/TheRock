@@ -40,6 +40,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
     [--libhipcxx | --no-libhipcxx]
+    [--llvm-lit | --no-llvm-lit]
     [--tests | --no-tests]
     [--base-only]
 
@@ -362,6 +363,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocrtst,
             args.rocwmma,
             args.libhipcxx,
+            args.llvm_lit,
         ]
     ):
         argv.extend(base_artifact_patterns)
@@ -451,6 +453,9 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("amd-llvm_dev")
             argv.append("amd-llvm_lib")
             argv.append("base_dev_generic")
+        if args.llvm_lit:
+            argv.append("amd-llvm_run")
+            argv.append("amd-llvm_test")
 
         # Fetch _lib (always) and _test (when --tests) for each artifact.
         # Some projects have self-contained _test archives (just test
@@ -792,6 +797,13 @@ def main(argv):
         "--libhipcxx",
         default=False,
         help="Include 'libhipcxx' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--llvm-lit",
+        default=False,
+        help="Include LLVM lit test artifacts (amd-llvm_run + amd-llvm_test)",
         action=argparse.BooleanOptionalAction,
     )
 

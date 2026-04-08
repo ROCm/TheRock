@@ -52,6 +52,22 @@ exclude = [
 [components.dev."compiler/amd-comgr/stage"]
 [components.doc."compiler/amd-comgr/stage"]
 
+# LLVM/Clang/LLD lit test configurations from the build tree.
+# These are the generated lit.site.cfg.py files that contain build-time
+# configuration values. On the runner, paths are fixed up by the test script.
+[components.test."compiler/amd-llvm/build"]
+include = [
+  "test/lit.site.cfg.py",
+  "test/lit.local.cfg",
+  "test/Unit/lit.site.cfg.py",
+  "tools/clang/test/lit.site.cfg.py",
+  "tools/clang/test/lit.local.cfg",
+  "tools/clang/test/Unit/lit.site.cfg.py",
+  "tools/lld/test/lit.site.cfg.py",
+  "tools/lld/test/lit.local.cfg",
+  "tools/lld/test/Unit/lit.site.cfg.py",
+]
+
 # hipcc
 [components.lib."compiler/hipcc/stage"]
 [components.run."compiler/hipcc/stage"]

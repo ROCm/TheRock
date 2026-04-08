@@ -46,6 +46,14 @@ if(THEROCK_ENABLE_COMPILER)
     message(STATUS "Using stable amd-llvm revision info: Repo='${LLVM_SMREV_REPO}', Revision='${LLVM_SMREV_REVISION}'")
   endif()
 
+  # clang-linker-wrapper is normally disabled on Windows, but check-clang
+  # depends on it unconditionally. Enable it when LLVM tests are requested.
+  if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_CONDITION_IS_NON_WINDOWS)
+    set(_clang_linker_wrapper_build ON)
+  else()
+    set(_clang_linker_wrapper_build OFF)
+  endif()
+
   therock_cmake_subproject_declare(amd-llvm
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
@@ -73,7 +81,7 @@ if(THEROCK_ENABLE_COMPILER)
       -DLIBCXXABI_ENABLE_STATIC=ON
 
       # Features
-      -DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}
+      -DLLVM_INCLUDE_TESTS=${THEROCK_BUILD_LLVM_TESTS}
       -DLLVM_ENABLE_ZLIB=FORCE_ON
       -DLLVM_ENABLE_Z3_SOLVER=OFF
       -DLLVM_ENABLE_LIBXML2=OFF
@@ -85,9 +93,9 @@ if(THEROCK_ENABLE_COMPILER)
       -DLLVM_BUILD_LLVM_C_DYLIB=OFF
 
       # Build optimizations
-      -DLLVM_BUILD_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
-      -DLLVM_INCLUDE_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
-      -DLLVM_TOOL_LLVM_JITLINK_BUILD=${THEROCK_ENABLE_LLVM_TESTS}
+      -DLLVM_BUILD_EXAMPLES=${THEROCK_BUILD_LLVM_TESTS}
+      -DLLVM_INCLUDE_EXAMPLES=${THEROCK_BUILD_LLVM_TESTS}
+      -DLLVM_TOOL_LLVM_JITLINK_BUILD=${THEROCK_BUILD_LLVM_TESTS}
 
       # Clang features.
       -DCLANG_ENABLE_ARCMT=OFF
@@ -95,7 +103,7 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_ENABLE_CLANGD=OFF
       -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
 
-      -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
+      -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${_clang_linker_wrapper_build}
       -DCLANG_TOOL_OFFLOAD_ARCH_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_NON_WINDOWS}
@@ -213,6 +221,7 @@ if(THEROCK_ENABLE_COMPILER)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS
       amd-llvm
       hipcc
