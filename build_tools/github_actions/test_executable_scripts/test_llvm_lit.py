@@ -19,6 +19,7 @@ The artifacts directory is expected to contain:
 
 import logging
 import os
+import platform
 import re
 import shlex
 import subprocess
@@ -26,6 +27,8 @@ import sys
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+IS_WINDOWS = platform.system() == "Windows"
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
@@ -38,7 +41,7 @@ if not OUTPUT_ARTIFACTS_DIR:
 ARTIFACTS_PATH = Path(OUTPUT_ARTIFACTS_DIR).resolve()
 LLVM_TOOLS_DIR = ARTIFACTS_PATH / "lib" / "llvm" / "bin"
 LLVM_LIBS_DIR = ARTIFACTS_PATH / "lib" / "llvm" / "lib"
-LLVM_LIT = LLVM_TOOLS_DIR / "llvm-lit"
+LLVM_LIT = LLVM_TOOLS_DIR / ("llvm-lit.py" if IS_WINDOWS else "llvm-lit")
 
 
 def run_cmd(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
@@ -207,14 +210,18 @@ def fixup_lit_site_cfg(
     )
 
     # Fix host compiler paths to use system defaults
+    if IS_WINDOWS:
+        host_cc, host_cxx = "cl", "cl"
+    else:
+        host_cc, host_cxx = "cc", "c++"
     content = re.sub(
         r'config\.host_cc\s*=\s*"[^"]*"',
-        'config.host_cc = "cc"',
+        f'config.host_cc = "{host_cc}"',
         content,
     )
     content = re.sub(
         r'config\.host_cxx\s*=\s*"[^"]*"',
-        'config.host_cxx = "c++"',
+        f'config.host_cxx = "{host_cxx}"',
         content,
     )
 
@@ -233,7 +240,10 @@ def run_lit_tests(test_dir: Path, label: str) -> int:
         logging.warning(f"No lit.site.cfg.py in {test_dir}, skipping {label}")
         return 0
 
-    cmd = [str(LLVM_LIT), str(test_dir), "-v", "--timeout=300"]
+    if IS_WINDOWS:
+        cmd = [sys.executable, str(LLVM_LIT), str(test_dir), "-v", "--timeout=300"]
+    else:
+        cmd = [str(LLVM_LIT), str(test_dir), "-v", "--timeout=300"]
     logging.info(f"=== Running {label} ===")
     result = run_cmd(cmd)
     logging.info(f"=== {label} exited with code {result.returncode} ===")
@@ -291,19 +301,24 @@ def main() -> int:
     )
 
     # Add llvm/utils/lit to PYTHONPATH so llvm-lit can find the lit package
+    path_sep = ";" if IS_WINDOWS else ":"
     lit_python_path = amd_llvm_dir / "llvm" / "utils" / "lit"
     if lit_python_path.exists():
         env_pythonpath = os.environ.get("PYTHONPATH", "")
         os.environ["PYTHONPATH"] = (
-            f"{lit_python_path}:{env_pythonpath}"
+            f"{lit_python_path}{path_sep}{env_pythonpath}"
             if env_pythonpath
             else str(lit_python_path)
         )
 
-    # Set LD_LIBRARY_PATH so tests can find shared libraries
-    ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-    os.environ["LD_LIBRARY_PATH"] = (
-        f"{LLVM_LIBS_DIR}:{ld_path}" if ld_path else str(LLVM_LIBS_DIR)
+    # Set library search path so tests can find shared libraries
+    if IS_WINDOWS:
+        lib_path_var = "PATH"
+    else:
+        lib_path_var = "LD_LIBRARY_PATH"
+    lib_path = os.environ.get(lib_path_var, "")
+    os.environ[lib_path_var] = (
+        f"{LLVM_LIBS_DIR}{path_sep}{lib_path}" if lib_path else str(LLVM_LIBS_DIR)
     )
 
     rc_llvm = run_lit_tests(llvm_test_dir, "check-llvm")

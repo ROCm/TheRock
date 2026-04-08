@@ -449,9 +449,10 @@ test_matrix = {
         "fetch_artifact_args": "--llvm-lit",
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_llvm_lit.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
+            "windows": 1,
         },
     },
     # libhipcxx hipcc tests
