@@ -19,9 +19,5 @@ therock_cmake_subproject_declare(therock-tbb
     -DTBB_TEST=OFF
 )
 
-set_target_properties(therock-tbb PROPERTIES
-  ARG_DISABLE_AMDGPU_TARGETS ON
-)
-
 therock_cmake_subproject_provide_package(therock-tbb TBB lib/cmake)
 therock_cmake_subproject_activate(therock-tbb)
