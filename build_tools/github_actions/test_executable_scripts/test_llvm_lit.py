@@ -48,7 +48,11 @@ def run_cmd(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 
 
 def sparse_checkout_submodule() -> Path:
-    """Sparse-checkout the amd-llvm submodule to get source test directories.
+    """Sparse-checkout the amd-llvm source to get test directories.
+
+    Uses a direct sparse clone of the llvm-project repo (rather than git
+    submodule update) so we can set up sparse-checkout patterns before any
+    blobs are fetched.
 
     Returns the path to the checked-out amd-llvm directory.
     """
@@ -58,20 +62,53 @@ def sparse_checkout_submodule() -> Path:
         logging.info("amd-llvm source already present, skipping checkout")
         return amd_llvm_dir
 
-    logging.info("Sparse-checking out amd-llvm submodule for test sources...")
+    logging.info("Sparse-checking out amd-llvm source for test files...")
 
-    run_cmd(
-        ["git", "submodule", "init", "compiler/amd-llvm"],
+    # Read the submodule URL from .gitmodules
+    result = run_cmd(
+        [
+            "git",
+            "config",
+            "-f",
+            ".gitmodules",
+            "submodule.compiler/amd-llvm.url",
+        ],
         cwd=THEROCK_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    submodule_url = result.stdout.strip()
+    logging.info(f"Submodule URL: {submodule_url}")
+
+    # Get the pinned commit from the superproject tree
+    result = run_cmd(
+        ["git", "ls-tree", "HEAD", "compiler/amd-llvm"],
+        cwd=THEROCK_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    target_commit = result.stdout.split()[2]
+    logging.info(f"Target commit: {target_commit}")
+
+    # Clone without checkout (partial + sparse), fetching only tree objects
+    run_cmd(
+        [
+            "git",
+            "clone",
+            "--no-checkout",
+            "--depth",
+            "1",
+            "--filter=blob:none",
+            "--sparse",
+            submodule_url,
+            str(amd_llvm_dir),
+        ],
         check=True,
     )
 
-    run_cmd(
-        ["git", "-C", str(amd_llvm_dir), "sparse-checkout", "init", "--cone"],
-        cwd=THEROCK_DIR,
-        check=False,
-    )
-
+    # Configure which directories to include in the sparse checkout
     run_cmd(
         [
             "git",
@@ -90,21 +127,25 @@ def sparse_checkout_submodule() -> Path:
             "lld/include",
             "third-party/unittest",
         ],
-        cwd=THEROCK_DIR,
         check=True,
     )
 
+    # Fetch the exact commit pinned by TheRock and check it out
     run_cmd(
         [
             "git",
-            "submodule",
-            "update",
+            "-C",
+            str(amd_llvm_dir),
+            "fetch",
             "--depth",
             "1",
-            "--filter=blob:none",
-            "compiler/amd-llvm",
+            "origin",
+            target_commit,
         ],
-        cwd=THEROCK_DIR,
+        check=True,
+    )
+    run_cmd(
+        ["git", "-C", str(amd_llvm_dir), "checkout", target_commit],
         check=True,
     )
 
