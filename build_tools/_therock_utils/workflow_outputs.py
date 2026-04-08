@@ -6,6 +6,12 @@ should use this module to compute paths.
 
 See docs/development/workflow_outputs.md for the full layout reference.
 
+Note: this file is NOT bundled into the Lambda deployment package (only
+storage_backend.py and storage_location.py are). Top-level imports here
+do not need to be Lambda-safe, but keep optional dependencies deferred
+(imported inside the function that needs them) so this module remains
+importable in environments where those packages are not installed.
+
 A "workflow output" is anything produced by a CI workflow run:
 - Build artifacts (.tar.xz, .tar.zst archives)
 - Logs (.log files, ninja_logs.tar.gz)
@@ -38,7 +44,6 @@ Usage::
 import os
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 import platform as platform_module
 
@@ -46,7 +51,6 @@ import platform as platform_module
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.storage_location import StorageLocation
-from github_actions.github_actions_api import gha_query_workflow_run_by_id
 
 
 def _log(*args, **kwargs):
@@ -117,6 +121,10 @@ class WorkflowOutputRoot:
             self.bucket, f"{self.prefix}/index-{artifact_group}.html"
         )
 
+    def root_index(self) -> StorageLocation:
+        """Location for the root artifact index HTML (server-side generated)."""
+        return StorageLocation(self.bucket, f"{self.prefix}/index.html")
+
     # -- Logs -------------------------------------------------------------------
     #
     # The log directory contains all build logs, reports, and profiling data
@@ -151,6 +159,29 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket, f"{self.prefix}/logs/{artifact_group}/index.html"
         )
+
+    def root_log_index(self) -> StorageLocation:
+        """Location for the root log index HTML (server-side generated)."""
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/index.html")
+
+    def stage_log_dir(
+        self, stage_name: str, amdgpu_family: str = ""
+    ) -> StorageLocation:
+        """Location for a multi-arch stage log directory.
+
+        Multi-arch CI uploads logs per stage (and optionally per GPU family)
+        rather than per artifact_group. Generic stages get a single directory;
+        per-arch stages (e.g., math-libs) get a subdirectory per family.
+
+        Args:
+            stage_name: Build stage (e.g., 'foundation', 'math-libs')
+            amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
+        """
+        if amdgpu_family:
+            return StorageLocation(
+                self.bucket, f"{self.prefix}/logs/{stage_name}/{amdgpu_family}"
+            )
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/{stage_name}")
 
     def build_observability(self, artifact_group: str) -> StorageLocation:
         """Location for build observability HTML (within log_dir())."""
@@ -267,9 +298,33 @@ class WorkflowOutputRoot:
 # Bucket selection logic
 # ---------------------------------------------------------------------------
 
-# Cutover date for bucket naming change (TheRock #2046).
-# Workflows before this date used therock-artifacts; after, therock-ci-artifacts.
-_BUCKET_CUTOVER_DATE = datetime.fromisoformat("2025-11-11T16:18:48+00:00")
+
+def _is_current_run_pr_from_fork() -> bool:
+    """Check if the current workflow run is a pull request from a fork.
+
+    Reads the GitHub event payload to check the .fork property on the
+    head repo, matching the behavior of the GitHub Actions expression
+    ``github.event.pull_request.head.repo.fork``.
+
+    Returns False for non-pull_request events or if the event payload
+    is not available (e.g. local development).
+    """
+    import json
+
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+    if event_name != "pull_request":
+        return False
+
+    event_path = os.environ.get("GITHUB_EVENT_PATH")
+    if not event_path:
+        return False
+
+    with open(event_path) as f:
+        event = json.load(f)
+
+    return bool(
+        event.get("pull_request", {}).get("head", {}).get("repo", {}).get("fork", False)
+    )
 
 
 def _retrieve_bucket_info(
@@ -295,26 +350,24 @@ def _retrieve_bucket_info(
         github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
         _log(f"  (implicit) github_repository: {github_repository}")
 
-    # Fetch workflow_run from API if not provided but workflow_run_id is set
+    # Fetch workflow_run from API if not provided but workflow_run_id is set.
+    # Deferred import: github_actions is an optional dependency not available in
+    # all environments (e.g. local dev without the GHA support package installed).
     if workflow_run is None and workflow_run_id is not None:
+        from github_actions.github_actions_api import gha_query_workflow_run_by_id
+
         workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
 
     # Extract metadata from workflow_run if available
-    curr_commit_dt = None
     if workflow_run is not None:
         _log(f"  workflow_run_id             : {workflow_run['id']}")
         head_github_repository = workflow_run["head_repository"]["full_name"]
         is_pr_from_fork = head_github_repository != github_repository
         _log(f"  head_github_repository      : {head_github_repository}")
         _log(f"  is_pr_from_fork             : {is_pr_from_fork}")
-
-        curr_commit_dt = datetime.strptime(
-            workflow_run["updated_at"], "%Y-%m-%dT%H:%M:%SZ"
-        )
-        curr_commit_dt = curr_commit_dt.replace(tzinfo=timezone.utc)
     else:
-        is_pr_from_fork = os.environ.get("IS_PR_FROM_FORK", "false") == "true"
-        _log(f"  (implicit) is_pr_from_fork  : {is_pr_from_fork}")
+        is_pr_from_fork = _is_current_run_pr_from_fork()
+        _log(f"  is_pr_from_fork             : {is_pr_from_fork}")
 
     owner, repo_name = github_repository.split("/")
     external_repo = (
@@ -336,12 +389,8 @@ def _retrieve_bucket_info(
     else:
         if external_repo == "":
             bucket = "therock-ci-artifacts"
-            if curr_commit_dt and curr_commit_dt <= _BUCKET_CUTOVER_DATE:
-                bucket = "therock-artifacts"
         else:
             bucket = "therock-ci-artifacts-external"
-            if curr_commit_dt and curr_commit_dt <= _BUCKET_CUTOVER_DATE:
-                bucket = "therock-artifacts-external"
 
     _log("Retrieved bucket info:")
     _log(f"  external_repo: {external_repo}")

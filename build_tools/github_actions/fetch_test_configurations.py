@@ -15,6 +15,7 @@ Required environment variables:
   - RUNNER_OS (https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#detecting-the-operating-system)
 """
 
+import ast
 import json
 import logging
 import os
@@ -149,13 +150,15 @@ test_matrix = {
     "rocsolver": {
         "job_name": "rocsolver",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
+        # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
+        # 24 mins + 20% margin = 30 mins => ~40 mins (considering gpu delays and lags)
+        "timeout_minutes": 40,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 2,
+            "windows": 2,
         },
     },
     # PRIM tests
@@ -184,7 +187,7 @@ test_matrix = {
     "rocgdb": {
         "job_name": "rocgdb",
         "fetch_artifact_args": "--debug-tools --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 45,
         "test_script": f"python {_get_script_path('test_rocgdb.py')}",
         "platform": ["linux"],
         "total_shards": 1,
@@ -320,6 +323,21 @@ test_matrix = {
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
     },
+    # rocprofiler-sdk tests
+    "rocprofiler-sdk": {
+        "job_name": "rocprofiler-sdk",
+        "fetch_artifact_args": "--tests",
+        "timeout_minutes": 15,
+        "additional_requirements_files": [
+            "share/rocprofiler-sdk/tests/requirements.txt",
+        ],
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')}",
+        "platform": ["linux"],
+        "container_options": "--cap-add=SYS_PTRACE",
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # hipDNN tests
     "hipdnn": {
         "job_name": "hipdnn",
@@ -359,7 +377,7 @@ test_matrix = {
     "miopenprovider": {
         "job_name": "miopenprovider",
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 20,
         "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -458,6 +476,10 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        # rocdecode requires FFmpeg dev libraries (libavcodec-dev, libavformat-dev,
+        # libavutil-dev) for test builds. These are not bundled in TheRock
+        # artifacts and are provided via the specialized media image.
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
     },
     "rocjpeg": {
         "job_name": "rocjpeg",
@@ -501,7 +523,7 @@ def run():
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "full")
-    test_labels = json.loads(os.getenv("TEST_LABELS") or "[]")
+    test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
     run_functional_tests = str2bool(os.getenv("RUN_FUNCTIONAL_TESTS", "false"))
 

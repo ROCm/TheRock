@@ -52,7 +52,6 @@ class TestUploadArtifacts(unittest.TestCase):
             (artifacts / "core_lib_gfx94X.tar.xz.sha256sum").write_text("abc")
             (artifacts / "some_dir").mkdir()
             (artifacts / "some_dir" / "file.txt").write_text("ignore")
-            (artifacts / "index.html").write_text("<html></html>")
 
             backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_artifacts(
@@ -68,9 +67,9 @@ class TestUploadArtifacts(unittest.TestCase):
                     staging_dir / "12345-linux" / "core_lib_gfx94X.tar.xz.sha256sum"
                 ).is_file()
             )
-            # index.html goes to the artifact index path
-            self.assertTrue(
-                (staging_dir / "12345-linux" / "index-gfx94X-dcgpu.html").is_file()
+            # index.html is generated server-side — not uploaded from upload_artifacts
+            self.assertFalse(
+                (staging_dir / "12345-linux" / "index-gfx94X-dcgpu.html").exists()
             )
             # Non-matching files should NOT be uploaded
             self.assertFalse(
@@ -89,7 +88,6 @@ class TestUploadArtifacts(unittest.TestCase):
             artifacts = build_dir / "artifacts"
             artifacts.mkdir()
             (artifacts / "lib.tar.xz").write_bytes(b"data")
-            (artifacts / "index.html").write_text("<html></html>")
 
             backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_artifacts(
@@ -117,7 +115,7 @@ class TestUploadLogs(unittest.TestCase):
     """Tests for upload_logs()."""
 
     def test_uploads_log_files(self):
-        """Verify log files end up at the correct paths."""
+        """Verify log files end up at the correct paths; raw ccache excluded."""
         output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
@@ -126,6 +124,10 @@ class TestUploadLogs(unittest.TestCase):
             log_dir.mkdir()
             (log_dir / "build.log").write_text("build output")
             (log_dir / "ninja_logs.tar.gz").write_bytes(b"gzip")
+            (log_dir / "ccache_logs.tar.zst").write_bytes(b"compressed")
+            ccache_dir = log_dir / "ccache"
+            ccache_dir.mkdir()
+            (ccache_dir / "ccache.log").write_text("verbose trace")
 
             backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_logs(
@@ -135,6 +137,8 @@ class TestUploadLogs(unittest.TestCase):
             base = staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu"
             self.assertTrue((base / "build.log").is_file())
             self.assertTrue((base / "ninja_logs.tar.gz").is_file())
+            self.assertTrue((base / "ccache_logs.tar.zst").is_file())
+            self.assertFalse((base / "ccache" / "ccache.log").exists())
 
     def test_build_observability_uploaded(self):
         """Verify build_observability.html ends up in the log directory."""

@@ -69,6 +69,8 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
       RUNTIME_DEPS
         rocm-core
         ${THEROCK_BUNDLED_LIBDRM}
+        ${THEROCK_BUNDLED_LIBMNL}
+        ${THEROCK_BUNDLED_LIBNL}
       INSTALL_RPATH_DIRS
         lib
       INTERFACE_INSTALL_RPATH_DIRS
@@ -186,7 +188,9 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "-DUSE_PROF_API=OFF"
       "-D__HIP_ENABLE_PCH=OFF"
       "-DROCCLR_ENABLE_PAL=1"
-      "-DROCCLR_ENABLE_HSA=0"
+      "-DROCCLR_ENABLE_HSA=1"
+      "-D__HIP_ENABLE_RTC=1"
+      "-DROCR_DLL_LOAD=0"
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
     )
   else()
@@ -339,12 +343,14 @@ endif(THEROCK_ENABLE_HIP_RUNTIME)
 # ocl-icd
 ################################################################################
 
-therock_cmake_subproject_declare(ocl-icd
+if(THEROCK_ENABLE_OCL_ICD)
+
+  therock_cmake_subproject_declare(ocl-icd
   USE_DIST_AMDGPU_TARGETS
   EXTERNAL_SOURCE_DIR
     "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/icd"
     "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/OpenCL-Headers"
-  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/opencl/icd"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ocl-icd"
   BACKGROUND_BUILD
   CMAKE_ARGS
     "-DOPENCL_ICD_LOADER_REQUIRE_WDK=OFF"
@@ -354,10 +360,22 @@ therock_cmake_subproject_declare(ocl-icd
     "lib"
   INTERFACE_INSTALL_RPATH_DIRS
     "lib"
-)
-therock_cmake_subproject_activate(ocl-icd)
+  )
+
+  therock_cmake_subproject_activate(ocl-icd)
+
+  therock_provide_artifact(core-ocl-icd
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-core-ocl-icd.toml
+    COMPONENTS
+      lib
+    SUBPROJECT_DEPS
+      ocl-icd
+  )
+endif(THEROCK_ENABLE_OCL_ICD)
 
 if(THEROCK_ENABLE_OCL_RUNTIME)
+
   set(OCL_CLR_CMAKE_ARGS)
   set(OCL_CLR_RUNTIME_DEPS)
   if(WIN32)
@@ -368,9 +386,10 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       "-DUSE_PROF_API=OFF"
       "-D__HIP_ENABLE_PCH=OFF"
       "-DROCCLR_ENABLE_PAL=ON"
-      "-DROCCLR_ENABLE_HSA=OFF"
+      "-DROCCLR_ENABLE_HSA=ON"
       "-DROCCLR_ENABLE_HSAIL=ON"
       "-DROCCLR_ENABLE_LC=ON"
+      "-DROCR_DLL_LOAD=OFF"
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
     )
   else()
