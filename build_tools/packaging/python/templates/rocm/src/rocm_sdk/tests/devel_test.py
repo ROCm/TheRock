@@ -66,6 +66,42 @@ class ROCmDevelTest(unittest.TestCase):
         bin_path = path / "bin"
         self.assertTrue(bin_path.exists(), msg=f"Expected bin path {bin_path} to exist")
 
+    def testCLIUsesDevelRootPath(self):
+        root_path_output = (
+            utils.run_command(
+                [sys.executable, "-m", "rocm_sdk", "path", "--root"], capture=True
+            )
+            .decode()
+            .strip()
+        )
+        root_path = Path(root_path_output)
+
+        # CLI scripts by default run from _rocm_sdk_core.
+        # When the devel package is installed they should run from _rocm_sdk_devel.
+        rocmpath_output = (
+            utils.run_command(["hipconfig", "--rocmpath"], capture=True)
+            .decode()
+            .strip()
+        )
+        rocmpath = Path(rocmpath_output)
+        self.assertTrue(
+            root_path.is_dir(), msg=f"Expected root path {root_path} to exist"
+        )
+        self.assertTrue(
+            rocmpath.is_dir(),
+            msg=f"Expected `hipconfig --rocmpath` directory {rocmpath} to exist",
+        )
+        # On Linux, RHEL-like venvs often have lib64 -> lib; root_path may spell
+        # lib64 while rocmpath realpaths to lib. Use samefile for this reason.
+        self.assertTrue(
+            os.path.samefile(root_path, rocmpath),
+            msg=(
+                "Expected `hipconfig --rocmpath` and `rocm_sdk path --root` to refer to the "
+                f"same directory; got {root_path} vs {rocmpath} "
+                f"(resolved: {root_path.resolve()} vs {rocmpath.resolve()})"
+            ),
+        )
+
     @unittest.skipIf(
         platform.system() == "Windows", "root LLVM symlink only exists on Linux"
     )

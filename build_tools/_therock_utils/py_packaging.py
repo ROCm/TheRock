@@ -74,23 +74,48 @@ class Parameters:
         version: str,
         version_suffix: str,
         artifacts: ArtifactCatalog,
+        kpack_split: bool = False,
     ):
         self.dest_dir = dest_dir
         self.version = version
         self.version_suffix = version_suffix
         self.artifacts = artifacts
+        self.kpack_split = kpack_split
         self.all_target_families = artifacts.all_target_families
-        self.default_target_family = sorted(self.all_target_families)[0]
-        self.files = PopulatedFiles()
+        _sorted_families = sorted(self.all_target_families)
+        self.default_target_family: str | None = (
+            _sorted_families[0] if _sorted_families else None
+        )
+        self.populated_packages: list["PopulatedDistPackage"] = []
         self.runtime_artifact_names: set[str] = set()
 
         # Load and interpolate the _dist_info.py template.
-        dist_info_contents = DIST_INFO_PATH.read_text()
-        dist_info_contents += f"__version__ = '{version}'\n"
-        dist_info_contents += f"PY_PACKAGE_SUFFIX_NONCE = '{version_suffix}'\n"
-        dist_info_contents += (
-            f"DEFAULT_TARGET_FAMILY = '{self.default_target_family}'\n"
-        )
+        # Base: version and nonce only — no family lines. Used as the starting
+        # point for restrict_families packages so they can write clean family
+        # content without a .clear() dance.
+        dist_info_base = DIST_INFO_PATH.read_text()
+        dist_info_base += f"__version__ = '{version}'\n"
+        dist_info_base += f"PY_PACKAGE_SUFFIX_NONCE = '{version_suffix}'\n"
+        self.dist_info_base_contents = dist_info_base
+
+        # Full: base extended with all families. Used by most packages and by
+        # the dynamically loaded self.dist_info module below.
+        dist_info_contents = dist_info_base
+
+        # In kpack-split mode, the libraries package is arch-neutral (no family
+        # suffix). Override its dist_package_template so that
+        # get_py_package_name(target_family=None) works for both the libraries
+        # wheel itself and the device wheel overlay.
+        if kpack_split:
+            dist_info_contents += (
+                'ALL_PACKAGES["libraries"].dist_package_template = '
+                '"rocm-sdk-libraries"\n'
+            )
+
+        if self.default_target_family is not None:
+            dist_info_contents += (
+                f"DEFAULT_TARGET_FAMILY = '{self.default_target_family}'\n"
+            )
         for target_family in self.all_target_families:
             dist_info_contents += (
                 f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
@@ -127,6 +152,7 @@ class PopulatedDistPackage:
         *,
         logical_name: str,
         target_family: str | None = None,
+        restrict_families: bool = False,
     ):
         self.params = params
         self.logical_name = logical_name
@@ -139,13 +165,44 @@ class PopulatedDistPackage:
             )
 
         self.rpath_deps: list[tuple["PopulatedDistPackage", str]] = []
+        self.files = PopulatedFiles()
 
-        # Augment the dist_info with THIS_TARGET_FAMILY and THIS_PACKAGE_ENTRY
-        dist_info_contents = self.params.dist_info_contents
+        # restrict_families packages start from the base (no family lines) so
+        # the per-family overrides below write clean content without a .clear()
+        # dance. All other packages start from the full dist_info_contents.
+        if restrict_families and target_family is not None:
+            dist_info_contents = self.params.dist_info_base_contents
+        else:
+            dist_info_contents = self.params.dist_info_contents
         dist_info_contents += f"THIS_TARGET_FAMILY = {repr(target_family)}\n"
         dist_info_contents += (
             f"THIS_PACKAGE_ENTRY = ALL_PACKAGES[{repr(logical_name)}]\n"
         )
+
+        # For per-family packages (e.g. meta/rocm in multi-arch builds), restrict
+        # DEFAULT_TARGET_FAMILY and AVAILABLE_TARGET_FAMILIES to only this family
+        # so that determine_target_family() at install time only resolves to this
+        # family's packages. No .clear() needed — the base has an empty list.
+        if restrict_families and target_family is not None:
+            dist_info_contents += f"DEFAULT_TARGET_FAMILY = '{target_family}'\n"
+            dist_info_contents += (
+                f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
+            )
+
+        # Device packages need to know the libraries package name so their
+        # setup.py can declare the correct install_requires and overlay dir.
+        if logical_name == "device":
+            libraries_entry = self.params.dist_info.ALL_PACKAGES["libraries"]
+            libraries_dist_name = libraries_entry.get_dist_package_name(
+                target_family=None
+            )
+            libraries_py_package_name = libraries_entry.get_py_package_name(
+                target_family=None
+            )
+            dist_info_contents += f"LIBRARIES_DIST_NAME = {repr(libraries_dist_name)}\n"
+            dist_info_contents += (
+                f"LIBRARIES_PY_PACKAGE_NAME = {repr(libraries_py_package_name)}\n"
+            )
 
         # Populate from template.
         self.path = self._copy_package_template(
@@ -156,9 +213,21 @@ class PopulatedDistPackage:
             dest_name=self.entry.get_dist_package_name(target_family=target_family),
         )
 
-        self._platform_dir = (
-            self.path / "platform" / self.entry.get_py_package_name(self.target_family)
-        )
+        # Device packages overlay into the libraries package's platform dir
+        # so .kpack files land alongside host .so files in site-packages.
+        if logical_name == "device":
+            libraries_entry = self.params.dist_info.ALL_PACKAGES["libraries"]
+            self._platform_dir = (
+                self.path
+                / "platform"
+                / libraries_entry.get_py_package_name(target_family=None)
+            )
+        else:
+            self._platform_dir = (
+                self.path
+                / "platform"
+                / self.entry.get_py_package_name(self.target_family)
+            )
 
     @property
     def pure_dir(self) -> Path:
@@ -237,10 +306,9 @@ class PopulatedDistPackage:
             # This will be used later to restrict devel packages to only these.
             self.params.runtime_artifact_names.add(an.name)
 
-        files = self.params.files
         package_dest_dir = self.platform_dir
         for relpath, dir_entry in artifacts.pm.matches():
-            if files.has(relpath):
+            if self.files.has(relpath):
                 continue
             dest_path = package_dest_dir / relpath
             if dir_entry.is_symlink():
@@ -259,10 +327,47 @@ class PopulatedDistPackage:
                                 relpath, dest_path, dir_entry, resolve_src=True
                             )
                         else:
-                            self.params.files.soname_aliases[relpath] = soname
+                            self.files.soname_aliases[relpath] = soname
                         continue
                 # Otherwise, just copy the file.
                 self._populate_file(relpath, dest_path, dir_entry, resolve_src=True)
+        self.params.populated_packages.append(self)
+        return self
+
+    def populate_device_files(
+        self, artifacts: ArtifactCatalog
+    ) -> "PopulatedDistPackage":
+        """Populates device files (.kpack, kernel DBs) into the platform directory.
+
+        Unlike populate_runtime_files(), this does a straight copy with no
+        RPATH patching, soname resolution, or symlink chasing. Device files
+        are binary data (.kpack archives, .co/.dat/.hsaco kernels, MIOpen DBs),
+        not ELF shared libraries.
+        """
+        log(
+            f"::: Populating device files {self.logical_name}[{self.target_family}]: "
+            f"{self.path}"
+        )
+        for an, an_path in artifacts.artifact_basedirs:
+            log(f"  + {an}: {an_path}")
+
+        package_dest_dir = self.platform_dir
+        for relpath, dir_entry in artifacts.pm.matches():
+            if self.files.has(relpath):
+                continue
+            dest_path = package_dest_dir / relpath
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            if dir_entry.is_dir():
+                dest_path.mkdir(parents=True, exist_ok=True)
+                continue
+            if dest_path.exists():
+                dest_path.unlink()
+            src_path = Path(dir_entry.path)
+            if src_path.is_symlink():
+                src_path = src_path.resolve()
+            shutil.copy2(src_path, dest_path)
+            self.files.mark_populated(self, relpath, dest_path)
+        self.params.populated_packages.append(self)
         return self
 
     def _populate_runtime_symlink(
@@ -284,7 +389,7 @@ class PopulatedDistPackage:
             if soname == src_entry.name:
                 self._populate_file(relpath, dest_path, src_entry, resolve_src=True)
             else:
-                self.params.files.soname_aliases[relpath] = soname
+                self.files.soname_aliases[relpath] = soname
             return
         # Case 3: Executable.
         if file_type == "exe":
@@ -292,7 +397,7 @@ class PopulatedDistPackage:
             raw_link_target = os.readlink(src_entry.path)
             log(f"  EXESTUB: {relpath} (from {raw_link_target})", vlog=2)
             generate_exe_link_stub(dest_path, raw_link_target)
-            self.params.files.mark_populated(self, relpath, dest_path)
+            self.files.mark_populated(self, relpath, dest_path)
             return
         # Case 4: Copy.
         self._populate_file(relpath, dest_path, src_entry, resolve_src=True)
@@ -322,10 +427,10 @@ class PopulatedDistPackage:
         # We have to patch many files, so we do not hard-link: always copy.
         log(f"  MATERIALIZE: {relpath} (from {src_path})", vlog=2)
         shutil.copy2(src_path, dest_path)
-        if self.params.files.has(relpath):
+        if self.files.has(relpath):
             log(f"WARNING: Path already materialized: {relpath}")
         else:
-            self.params.files.mark_populated(self, relpath, dest_path)
+            self.files.mark_populated(self, relpath, dest_path)
 
         if not is_windows:
             # Update RPATHs on Linux.
@@ -388,6 +493,7 @@ class PopulatedDistPackage:
         self,
         *,
         addl_artifact_names: Sequence[str] = (),
+        exclude_components: Sequence[str] = (),
         tarball_compression: bool = True,
     ):
         """Populates all files that have not yet been materialized and symlink the rest."""
@@ -396,6 +502,7 @@ class PopulatedDistPackage:
         # any emitted runtime artifacts plus additional requested.
         devel_artifact_names = set(self.params.runtime_artifact_names)
         devel_artifact_names.update(addl_artifact_names)
+        excluded = set(exclude_components)
         log(f":: Devel artifact inclusions: {devel_artifact_names}")
 
         def _devel_artifact_filter(an: ArtifactName) -> bool:
@@ -403,11 +510,10 @@ class PopulatedDistPackage:
                 # We didn't generate a runtime artifact for it, so no devel
                 # artifact.
                 return False
-            if (
-                an.target_family != "generic"
-                and an.target_family != self.params.default_target_family
-            ):
-                # We only materialize the default target family for devel packages.
+            if an.component in excluded:
+                return False
+            if an.target_family != "generic" and an.target_family != self.target_family:
+                # Only include artifacts for this devel package's target family.
                 return False
             return True
 
@@ -440,6 +546,46 @@ class PopulatedDistPackage:
                     tf.add(file_path, arcname=arcname, recursive=False)
         shutil.rmtree(package_path)
 
+    def _find_populated(
+        self, relpath: str
+    ) -> "tuple[PopulatedDistPackage, Path] | None":
+        """Search all populated runtime packages for a materialized relpath.
+
+        When this devel package is target-family-specific, skip runtime packages
+        that belong to a different (non-None) target family so that symlinks point
+        into the correct arch's libraries package.
+        """
+        for pkg in self.params.populated_packages:
+            if not pkg.files.has(relpath):
+                continue
+            if (
+                self.target_family is not None
+                and pkg.target_family is not None
+                and pkg.target_family != self.target_family
+            ):
+                continue
+            return pkg.files.materialized_relpaths[relpath]
+        return None
+
+    def _find_soname_alias(self, relpath: str) -> "str | None":
+        """Search all populated runtime packages for a soname alias.
+
+        When this devel package is target-family-specific, skip runtime packages
+        that belong to a different (non-None) target family.
+        """
+        for pkg in self.params.populated_packages:
+            alias = pkg.files.soname_aliases.get(relpath)
+            if alias is None:
+                continue
+            if (
+                self.target_family is not None
+                and pkg.target_family is not None
+                and pkg.target_family != self.target_family
+            ):
+                continue
+            return alias
+        return None
+
     def _populate_devel_file(
         self, relpath: str, dest_path: Path, src_entry: os.DirEntry[str]
     ):
@@ -448,18 +594,17 @@ class PopulatedDistPackage:
             return
 
         # Re-add soname aliases.
-        soname_alias = self.params.files.soname_aliases.get(relpath)
+        soname_alias = self._find_soname_alias(relpath)
         if soname_alias is not None:
             # This file is an alias to the proper soname. Just emit a relative
             # link.
             dest_path.symlink_to(soname_alias)
             return
 
-        if self.params.files.has(relpath):
+        populated = self._find_populated(relpath)
+        if populated is not None:
             # Already materialized: Link to it.
-            populated_package, populated_path = self.params.files.materialized_relpaths[
-                relpath
-            ]
+            populated_package, populated_path = populated
             # Materialize as a symlink to the original placement. This is tricky
             # because the symlink needs to be correct with respect to the install
             # placement, which is something like:
@@ -558,13 +703,22 @@ def get_soname(sofile: Path) -> str:
     )
 
 
-def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
-    dist_dir = dest_dir / "dist"
-    for child_path in dest_dir.iterdir():
-        if not child_path.is_dir():
-            continue
-        if not (child_path / "pyproject.toml").exists():
-            continue
+def build_packages(
+    dest_dir: Path,
+    *,
+    wheel_compression: bool = True,
+    package_dirs: list[Path] | None = None,
+    dist_dir: Path | None = None,
+):
+    effective_dist_dir = dist_dir or (dest_dir / "dist")
+    effective_dist_dir.mkdir(parents=True, exist_ok=True)
+    if package_dirs is None:
+        package_dirs = [
+            p
+            for p in dest_dir.iterdir()
+            if p.is_dir() and (p / "pyproject.toml").exists()
+        ]
+    for child_path in package_dirs:
         child_name = child_path.name
 
         # Some of our packages build as sdists and some as wheels.
@@ -572,7 +726,6 @@ def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
         # because the "build frontends" have an impossible compatibility matrix
         # and opinions about how to pass arguments to the backends. So we skip
         # the frontends for such a closed case as this.
-        build_args = [sys.executable, "-m", "build", "-v", "--outdir", str(dist_dir)]
         setuppy_path = child_path / "setup.py"
         build_args = [
             sys.executable,
@@ -589,7 +742,7 @@ def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
             [
                 "-v",
                 "--dist-dir",
-                str(dist_dir.resolve()),
+                str(effective_dist_dir.resolve()),
             ]
         )
 
