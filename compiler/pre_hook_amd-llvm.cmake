@@ -76,7 +76,13 @@ if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR THEROCK_BUILD_COMGR_T
   # Install llvm-lit script and the lit Python module for running LIT tests.
   # LLVM_INSTALL_UTILS only installs C++ utilities (FileCheck, not, etc.),
   # but llvm-lit is a Python script that requires separate handling.
-  install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bin/llvm-lit" DESTINATION bin)
+  # On Windows, llvm-lit is generated as llvm-lit.py (+ llvm-lit.cmd wrapper).
+  if(WIN32)
+    install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bin/llvm-lit.py" DESTINATION bin)
+    install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bin/llvm-lit.cmd" DESTINATION bin)
+  else()
+    install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bin/llvm-lit" DESTINATION bin)
+  endif()
 
   # Install the lit Python module. This is needed for llvm-lit to function.
   # We install it to a lib/python subdirectory and set PYTHONPATH in llvm-lit.
@@ -87,22 +93,24 @@ if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR THEROCK_BUILD_COMGR_T
     PATTERN "*.pyc" EXCLUDE
   )
 
-  # Create a wrapper script that sets PYTHONPATH before invoking the real llvm-lit
-  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper" [=[#!/usr/bin/env bash
+  if(NOT WIN32)
+    # Create a wrapper script that sets PYTHONPATH before invoking the real llvm-lit
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper" [=[#!/usr/bin/env bash
 # Wrapper script for llvm-lit that sets up PYTHONPATH
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}/../lib/python:${PYTHONPATH}"
 exec "${SCRIPT_DIR}/llvm-lit.real" "$@"
 ]=])
-  # Install the wrapper and rename the original
-  install(CODE "
-    # Rename the original llvm-lit to llvm-lit.real
-    file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit.real\" )
-    # Install the wrapper script as llvm-lit
-    file(COPY \"${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/bin\")
-    file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit-wrapper\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\")
-    file(CHMOD \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
-  ")
+    # Install the wrapper and rename the original
+    install(CODE "
+      # Rename the original llvm-lit to llvm-lit.real
+      file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit.real\" )
+      # Install the wrapper script as llvm-lit
+      file(COPY \"${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/bin\")
+      file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit-wrapper\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\")
+      file(CHMOD \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    ")
+  endif()
 endif()
 # we have never enabled benchmarks,
 # disabling more explicitly after a bug fix enabled.
