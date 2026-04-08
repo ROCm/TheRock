@@ -152,7 +152,7 @@ def fixup_lit_site_cfg(
 
     for var_name, new_value in path_map.items():
         pattern = (
-            rf'(config\.{re.escape(var_name)}\s*=\s*)'
+            rf"(config\.{re.escape(var_name)}\s*=\s*)"
             rf'(?:lit_config\.substitute\()?path\(r"[^"]*"\)\)?'
         )
         replacement = rf'\g<1>r"{new_value}"'
@@ -254,7 +254,9 @@ def main() -> int:
     if lit_python_path.exists():
         env_pythonpath = os.environ.get("PYTHONPATH", "")
         os.environ["PYTHONPATH"] = (
-            f"{lit_python_path}:{env_pythonpath}" if env_pythonpath else str(lit_python_path)
+            f"{lit_python_path}:{env_pythonpath}"
+            if env_pythonpath
+            else str(lit_python_path)
         )
 
     # Set LD_LIBRARY_PATH so tests can find shared libraries
