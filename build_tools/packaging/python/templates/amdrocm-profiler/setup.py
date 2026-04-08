@@ -18,7 +18,7 @@ THIS_DIR = Path(__file__).resolve().parent
 
 def _load_local_dist_info():
     """Load the per-wheel _dist_info.py generated into this template at build time."""
-    dist_info_path = THIS_DIR / "_dist_info.py"
+    dist_info_path = THIS_DIR / "src" / "amdrocm_profiler" / "_dist_info.py"
     if not dist_info_path.exists():
         raise ImportError(f"Cannot find local _dist_info.py at: {dist_info_path}")
 
