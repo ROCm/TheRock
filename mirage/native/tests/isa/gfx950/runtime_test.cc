@@ -337,6 +337,134 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  const std::vector<DecodedInstruction> buffer_parity_program = {
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_DWORDX4",
+                                      InstructionOperand::Vgpr(20),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_DWORDX2",
+                                      InstructionOperand::Vgpr(24),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x40)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_DWORDX4",
+                                      InstructionOperand::Vgpr(20),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_DWORDX2",
+                                      InstructionOperand::Vgpr(24),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x60)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  LinearExecutionMemory buffer_parity_memory(0x2000, 0);
+  WaveExecutionState buffer_parity_state{};
+  buffer_parity_state.exec_mask = 1u;
+  buffer_parity_state.sgprs[8] = 0x200u;
+  buffer_parity_state.sgprs[9] = 0u;
+  buffer_parity_state.sgprs[10] = 0x400u;
+  buffer_parity_state.sgprs[11] = 0u;
+  buffer_parity_state.sgprs[30] = 0x12345678u;
+  buffer_parity_state.sgprs[31] = 0x9abcdef0u;
+  buffer_parity_state.vgprs[40][0] = 0x11111111u;
+  buffer_parity_state.vgprs[40][1] = 0x22222222u;
+  buffer_parity_state.vgprs[40][2] = 0x33333333u;
+  buffer_parity_state.vgprs[40][3] = 0x44444444u;
+  buffer_parity_state.vgprs[41][0] = 0x55555555u;
+  buffer_parity_state.vgprs[41][1] = 0x66666666u;
+  buffer_parity_state.vgprs[41][2] = 0x77777777u;
+  buffer_parity_state.vgprs[41][3] = 0x88888888u;
+  for (std::uint32_t dword_index = 0; dword_index < 4u; ++dword_index) {
+    if (!Expect(buffer_parity_memory.WriteU32(0x200u + dword_index * 4u,
+                                              0x33330000u + dword_index),
+                "expected buffer parity seed write") ||
+        !Expect(buffer_parity_memory.WriteU32(0x220u + dword_index * 4u, 0u),
+                "expected buffer parity store seed write")) {
+      return 1;
+    }
+  }
+  for (std::uint32_t dword_index = 0; dword_index < 2u; ++dword_index) {
+    if (!Expect(buffer_parity_memory.WriteU32(0x240u + dword_index * 4u,
+                                              0x44440000u + dword_index),
+                "expected buffer parity x2 seed write") ||
+        !Expect(buffer_parity_memory.WriteU32(0x260u + dword_index * 4u, 0u),
+                "expected buffer parity x2 store seed write")) {
+      return 1;
+    }
+  }
+  std::string buffer_parity_error_message;
+  std::vector<CompiledInstruction> compiled_buffer_parity_program;
+  if (!Expect(interpreter.CompileProgram(buffer_parity_program,
+                                         &compiled_buffer_parity_program,
+                                         &buffer_parity_error_message),
+              buffer_parity_error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_buffer_parity_program,
+                                         &buffer_parity_state,
+                                         &buffer_parity_memory,
+                                         &buffer_parity_error_message),
+              buffer_parity_error_message.c_str()) ||
+      !Expect(buffer_parity_state.halted,
+              "expected buffer parity program to halt") ||
+      !Expect(buffer_parity_state.vgprs[20][0] == 0x33330000u &&
+                  buffer_parity_state.vgprs[21][0] == 0x33330001u &&
+                  buffer_parity_state.vgprs[22][0] == 0x33330002u &&
+                  buffer_parity_state.vgprs[23][0] == 0x33330003u,
+              "expected buffer parity load result")) {
+    return 1;
+  }
+  if (!Expect(buffer_parity_state.vgprs[24][0] == 0x44440000u &&
+                  buffer_parity_state.vgprs[25][0] == 0x44440001u,
+              "expected buffer parity x2 load result") ||
+      !Expect(buffer_parity_state.vgprs[28][0] == 0x0u &&
+                  buffer_parity_state.vgprs[29][0] == 0x0u &&
+                  buffer_parity_state.vgprs[30][0] == 0x0u,
+              "expected unused buffer parity x3 registers to remain clear")) {
+    return 1;
+  }
+
+  std::uint32_t buffer_parity_readback = 0;
+  if (!Expect(buffer_parity_state.sgprs[8] == 0x200u &&
+                  buffer_parity_state.sgprs[9] == 0u &&
+                  buffer_parity_state.sgprs[10] == 0x400u &&
+                  buffer_parity_state.sgprs[11] == 0u &&
+                  buffer_parity_state.sgprs[30] == 0x12345678u &&
+                  buffer_parity_state.sgprs[31] == 0x9abcdef0u,
+              "expected buffer parity sgpr preservation") ||
+      !Expect(buffer_parity_state.vgprs[40][0] == 0x11111111u &&
+                  buffer_parity_state.vgprs[40][1] == 0x22222222u &&
+                  buffer_parity_state.vgprs[40][2] == 0x33333333u &&
+                  buffer_parity_state.vgprs[40][3] == 0x44444444u &&
+                  buffer_parity_state.vgprs[41][0] == 0x55555555u &&
+                  buffer_parity_state.vgprs[41][1] == 0x66666666u &&
+                  buffer_parity_state.vgprs[41][2] == 0x77777777u &&
+                  buffer_parity_state.vgprs[41][3] == 0x88888888u,
+              "expected buffer parity vgpr preservation") ||
+      !Expect(buffer_parity_memory.ReadU32(0x220u, &buffer_parity_readback) &&
+                  buffer_parity_readback == 0x33330000u &&
+                  buffer_parity_memory.ReadU32(0x224u, &buffer_parity_readback) &&
+                  buffer_parity_readback == 0x33330001u &&
+                  buffer_parity_memory.ReadU32(0x228u, &buffer_parity_readback) &&
+                  buffer_parity_readback == 0x33330002u &&
+                  buffer_parity_memory.ReadU32(0x22cu, &buffer_parity_readback) &&
+                  buffer_parity_readback == 0x33330003u,
+              "expected buffer parity store readback")) {
+    return 1;
+  }
+  if (!Expect(buffer_parity_memory.ReadU32(0x260u, &buffer_parity_readback) &&
+                  buffer_parity_readback == 0x44440000u &&
+                  buffer_parity_memory.ReadU32(0x264u, &buffer_parity_readback) &&
+                  buffer_parity_readback == 0x44440001u,
+              "expected buffer parity x2 store readback")) {
+    return 1;
+  }
+
   const std::vector<DecodedInstruction> flat_atomic_parity_program = {
       DecodedInstruction::ThreeOperand("FLAT_ATOMIC_ADD",
                                        InstructionOperand::Vgpr(14),
