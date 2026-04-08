@@ -18,6 +18,7 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zlib" "${CMAKE_CURRENT_B
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zstd" "${CMAKE_CURRENT_BINARY_DIR}/zstd")
 
 # System deps that depend on the above.
+add_subdirectory(tbb)
 add_subdirectory(elfutils)
 # MPFR depends on GMP.
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/mpfr" "${CMAKE_CURRENT_BINARY_DIR}/mpfr")
@@ -39,6 +40,7 @@ therock_provide_artifact(sysdeps
     run
   SUBPROJECT_DEPS
     therock-bzip2
+    therock-tbb
     therock-elfutils
     therock-libbacktrace
     therock-libcap
