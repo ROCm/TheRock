@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 cmd = [
     "ctest",
     "--test-dir",
-    f"{THEROCK_BIN_DIR}/integration_tests",
+    f"{THEROCK_BIN_DIR}/hipdnn_integration_tests_ctest",
     "--output-on-failure",
     "--parallel",
     "8",

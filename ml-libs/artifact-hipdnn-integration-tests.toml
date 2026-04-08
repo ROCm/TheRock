@@ -3,7 +3,7 @@
 include = [
   "bin/hipdnn_integration_tests",
   "bin/*hipdnn_*_test*",
-  "bin/integration_tests/CTestTestfile.cmake",
+  "bin/hipdnn_integration_tests_ctest/CTestTestfile.cmake",
 ]
 [components.run."ml-libs/hipdnn_integration_tests/stage"]
 include = [
