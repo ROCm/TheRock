@@ -156,10 +156,15 @@ class TestGetArtifactsBucketConfigForWorkflowRun(unittest.TestCase):
         self.assertEqual(config.name, "therock-ci-artifacts")
 
     def _write_event(self, event: dict) -> str:
-        f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-        json.dump(event, f)
-        f.close()
-        return f.name
+        """Write a synthetic GitHub event payload to a temp file.
+
+        Returns the path. Caller must os.unlink() after use.
+        Uses delete=False because NamedTemporaryFile(delete=True) holds an
+        exclusive lock on Windows, preventing the code under test from reading.
+        """
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(event, f)
+            return f.name
 
     def test_fork_pr_from_event_payload(self):
         """Fork PR detected via event payload (no workflow_run dict)."""
