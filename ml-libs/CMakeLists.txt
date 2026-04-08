@@ -218,6 +218,7 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
   ##############################################################################
 
   therock_cmake_subproject_declare(hipdnn_integration_tests
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/integration-tests"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipdnn_integration_tests"
     BACKGROUND_BUILD
@@ -253,9 +254,6 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
     DESCRIPTOR artifact-hipdnn-integration-tests.toml
     COMPONENTS
       dbg
-      dev
-      doc
-      lib
       run
       test
     SUBPROJECT_DEPS
