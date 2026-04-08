@@ -13,6 +13,10 @@ include = [
 ]
 [components.lib."third-party/sysdeps/linux/bzip2/build/stage"]
 
+# binutils
+[components.lib."third-party/sysdeps/linux/binutils/build/stage"]
+[components.dev."third-party/sysdeps/linux/binutils/build/stage"]
+
 # elfutils
 [components.lib."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.dev."third-party/sysdeps/linux/elfutils/build/stage"]

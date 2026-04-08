@@ -298,7 +298,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DHIP_PLATFORM=amd
         -DROCPROFSYS_BUILD_ELFUTILS=ON
         -DROCPROFSYS_BUILD_TBB=ON
-        -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
         -DROCPROFSYS_BUILD_FOR_THEROCK=ON # TODO: Will be deprecated
@@ -325,6 +324,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
+        ${THEROCK_BUNDLED_BINUTILS}
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
         ${_openmpi_optional_dep}
