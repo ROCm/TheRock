@@ -295,7 +295,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
-        -DROCPROFSYS_BUILD_TBB=ON
         -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
@@ -327,6 +326,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
         ${_openmpi_optional_dep}
+        therock-tbb
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems
       SUBDIRS .
