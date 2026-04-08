@@ -16,6 +16,7 @@ ROCM_SYSTEMS_FILES = [
     ".github/workflows/therock-ci-windows.yml",
     ".github/workflows/therock-rccl-ci-linux.yml",
     ".github/workflows/therock-rccl-test-packages-multi-node.yml",
+    ".github/workflows/therock-rccl-test-packages-single-node.yml",
     ".github/workflows/therock-test-component.yml",
     ".github/workflows/therock-test-packages.yml",
 ]
