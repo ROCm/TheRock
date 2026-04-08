@@ -1,7 +1,7 @@
 ---
-author: Liam Berry (LiamfBerry), Saad Rahim (saadrahim)
-created: 2025-11-14
-modified: 2026-01-12
+author:Saad Rahim (saadrahim)
+created: 2026-04-08
+modified: 2026-04-08
 status: draft
 ---
 
@@ -9,14 +9,25 @@ status: draft
 
 ## Overview
 
-ROCm software ecosystem spans the ROCm Core SDK, expansions like ROCm-DS, the AMD GPU driver and standalone projects like RVS. Software packaging for this ecosystem needs a well defined hierarchy reflected in the package distribution folder structure on repo.amd.com.
+repo.amd.com's open source software release publications need standardization. In scope is the ROCm software ecosystem which spans the ROCm Core SDK, expansions like ROCm-DS, and standalone projects like RVS. Software packaging for this ecosystem needs a well defined hierarchy reflected in the package distribution folder structure. As software is published on repo.amd.com, the planned hierarchy must be extensible by other software ecosystem published by AMD. As a result, this proposal includes the ability to add the AMD GPU driver to this structure in the future.
+
+## Definitions
+
+*
+* nightly - nightly builds from the develop branch
+* prerelease - builds from the release candidate branches
+* stable - GA releases of ROCm with a short term support lifecycle, tagged as ROCm releases.
+* lts - Future long term stability (LTS) releases
+* expansions - SDK built with dependencies on the ROCm Core SDK
+* pyindex - folder name for a central repository for python packages
 
 ## Repository Structure
 
-`builds.amd.com` / `repo.amd.com` will have the following folder structure:
+`repo.amd.com` will have the following folder structure:
 
 - **amdgpu** *(reserved for future use)*  
-- **archives** *(unmaintained, for reference only)*  
+- **archives** *(unmaintained releasees, for reference only)*
+- **rocm** (current rocm folder with non production releases, move to archives in 6 months)
 - **rocm-ecosystem**
   - **nightly** *(Retention policy: 30 dev, 120 nightly — builds.amd.com)*
     - **pyindex** *(central nightly wheel repository for all ROCm components)*
