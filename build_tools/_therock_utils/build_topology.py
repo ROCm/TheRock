@@ -13,6 +13,32 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 
+def get_topology(topology_path: Optional[Path] = None) -> "BuildTopology":
+    """Load the BUILD_TOPOLOGY.toml from the default or specified location.
+
+    Args:
+        topology_path: Path to topology file. If None, uses default location
+                      (BUILD_TOPOLOGY.toml in repository root).
+
+    Returns:
+        BuildTopology instance loaded from the specified or default path.
+
+    Raises:
+        FileNotFoundError: If the topology file doesn't exist.
+    """
+    if topology_path is None:
+        # Default: BUILD_TOPOLOGY.toml in repository root
+        # This module is at build_tools/_therock_utils/build_topology.py
+        script_dir = Path(__file__).parent
+        repo_root = script_dir.parent.parent
+        topology_path = repo_root / "BUILD_TOPOLOGY.toml"
+
+    if not topology_path.exists():
+        raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {topology_path}")
+
+    return BuildTopology(str(topology_path))
+
+
 @dataclass
 class Submodule:
     """Represents a git submodule with checkout configuration.

@@ -51,9 +51,9 @@ import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
-# Add parent directory to path for configure_stage imports
+# Add parent directory to path for _therock_utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from configure_stage import get_topology
+from _therock_utils.build_topology import get_topology
 
 from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
 from configure_ci_path_filters import (
