@@ -334,11 +334,12 @@ def retrieve_artifacts_by_run_id(args):
         "core-ocl_dev",
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
-        "core-cov-tests_test",
     ]
 
     if args.base_only:
         argv.extend(base_artifact_patterns)
+        if args.tests:
+            argv.append("core-cov-tests_test")
     elif any(
         [
             args.aqlprofile,
@@ -460,6 +461,7 @@ def retrieve_artifacts_by_run_id(args):
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
         if args.tests:
             extra_artifact_patterns.extend([f"{a}_test" for a in extra_artifacts])
+            extra_artifact_patterns.append("core-cov-tests_test")
 
         argv.extend(extra_artifact_patterns)
     else:
