@@ -60,6 +60,8 @@ set(EXTRA_CPPFLAGS)
 string(APPEND EXTRA_CPPFLAGS " -fPIC")
 message(STATUS "EXTRA_CPPFLAGS=${EXTRA_CPPFLAGS}")
 
+message(STATUS "aleks: CMAKE_INSTALL_PREFIX is ${CMAKE_INSTALL_PREFIX}")
+
 add_custom_target(
   build ALL
   # We cannot set WORKING_DIRECTORY to ${CMAKE_CURRENT_BINARY_DIR}/s
@@ -90,9 +92,9 @@ add_custom_target(
   COMMAND
     cd "${CMAKE_CURRENT_BINARY_DIR}/s" &&
     make -j "${PAR_JOBS}" V=1
-  COMMAND
-    cd "${CMAKE_CURRENT_BINARY_DIR}/s" &&
-    make install
+  # COMMAND
+  #   cd "${CMAKE_CURRENT_BINARY_DIR}/s" &&
+  #   make install
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"
