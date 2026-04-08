@@ -143,8 +143,8 @@ function(therock_subproject_fetch target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
     "CMAKE_PROJECT"
-    "SOURCE_DIR;PREFIX;EXCLUDE_FROM_ALL"
-    "TOUCH"
+    "SOURCE_DIR;PREFIX;EXCLUDE_FROM_ALL;PATCH_DIR"
+    ""
   )
 
   if(NOT DEFINED ARG_EXCLUDE_FROM_ALL)
@@ -158,19 +158,37 @@ function(therock_subproject_fetch target_name)
   endif()
 
   set(_extra)
-  # In order to interop with therock_cmake_subproject_declare, the CMakeLists.txt
-  # file must exist so we mark this as a by-product. This serves as the dependency
-  # anchor and causes proper ordering of fetch->configure.
-  if(ARG_CMAKE_PROJECT)
-    list(APPEND ARG_TOUCH "${ARG_SOURCE_DIR}/CMakeLists.txt")
+  set(_smrev_contents "${ARG_UNPARSED_ARGUMENTS}")
+  if(THEROCK_VERBOSE_FPRINT)
+    message(STATUS "  FETCH ${target_name}: ARG_UNPARSED_ARGUMENTS = ${ARG_UNPARSED_ARGUMENTS}")
   endif()
-  if(ARG_TOUCH)
+  # In order to interop with therock_cmake_subproject_declare, there are two ways:
+  # 1. TheExternalProject_Add generates a step target for download
+  #    therock_cmake_subproject_declare can use that target
+  #    in its EXTRA_DEPENDS. The target name is ${target_name}-download
+  #
+  # 2. If, ARG_CMAKE_PROJECT is given, a CMakeLists.txt will be generated in the source dir
+  #    and the subproject can depend on that as a file dependency.
+
+  if(ARG_CMAKE_PROJECT)
     list(APPEND _extra
-      BUILD_COMMAND "${CMAKE_COMMAND}" -E touch ${ARG_TOUCH}
-      BUILD_BYPRODUCTS ${ARG_TOUCH}
+      BUILD_COMMAND "${CMAKE_COMMAND}" -E touch "${ARG_SOURCE_DIR}/CMakeLists.txt"
+      BUILD_BYPRODUCTS "${ARG_SOURCE_DIR}/CMakeLists.txt"
     )
   else()
-    list(APPEND _extra "BUILD_COMMAND" "")
+    list(APPEND _extra
+      BUILD_COMMAND "")
+  endif()
+  if(ARG_PATCH_DIR)
+    list(APPEND _extra
+      PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py "${ARG_PATCH_DIR}"
+    )
+    set(_patch_files)
+    file(GLOB _patch_files "${ARG_PATCH_DIR}/*")
+    list(APPEND _patch_files "${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py")
+    set(_patch_fprint)
+    _therock_subproject_fprint_files(_patch_fprint "${_patch_files}")
+    list(APPEND _smrev_contents "${_patch_fprint}")
   endif()
 
   ExternalProject_Add(
@@ -185,6 +203,7 @@ function(therock_subproject_fetch target_name)
     CONFIGURE_COMMAND ""
     INSTALL_COMMAND ""
     TEST_COMMAND ""
+    STEP_TARGETS download
     ${_extra}
     ${ARG_UNPARSED_ARGUMENTS}
   )
@@ -192,10 +211,12 @@ function(therock_subproject_fetch target_name)
   # Write a .smrev file that is used to compute fingerprints. This matches the
   # logic for the source code control system when it is providing a stable hash
   # for patched source checkouts.
+  # ARG_UNPARSED_ARGUMENTS will include the URL and URL_HASH which
+  # seem sufficient for fingerprinting the dependency
   cmake_path(GET ARG_SOURCE_DIR PARENT_PATH _source_parent)
   cmake_path(GET ARG_SOURCE_DIR FILENAME _source_basename)
   set(_smrev_file "${_source_parent}/.${_source_basename}.smrev")
-  file(WRITE "${_smrev_file}" "${_extra};${ARG_UNPARSED_ARGUMENTS}")
+  file(WRITE "${_smrev_file}" "${_smrev_contents}")
 endfunction()
 
 # therock_cmake_subproject_declare
@@ -757,7 +778,7 @@ function(therock_cmake_subproject_activate target_name)
         list(APPEND _fprint_content "DEP ${_dep_target}=${_dep_fprint}")
       else()
         set(_fprint_is_valid FALSE)
-        if(THEROCK_VERBOSE)
+        if(THEROCK_VERBOSE_FPRINT)
           message(STATUS "  DEP FPRINT INVALID: ${_dep_target}")
         endif()
       endif()
@@ -897,11 +918,64 @@ function(therock_cmake_subproject_activate target_name)
     set(_fileset_verbose_arg --verbose)
   endif()
 
+  # Compute fingerprint early so we can validate prebuilt artifacts
+  # (fingerprint calculation moved from end of function)
+  _therock_subproject_fprint_files(_fprint_content "${_fprint_files}")
+
+  set(_stage_destination_dir "${_stage_dir}")
+  if(_install_destination)
+    cmake_path(APPEND _stage_destination_dir "${_install_destination}")
+  endif()
+
+  # Finger-print vital configure content.
+  cmake_path(RELATIVE_PATH _stage_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_dir)
+  cmake_path(RELATIVE_PATH _stage_destination_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_destination_dir)
+  cmake_path(RELATIVE_PATH _cmake_source_dir BASE_DIRECTORY "${THEROCK_SOURCE_DIR}" OUTPUT_VARIABLE _rel_cmake_source_dir)
+  list(APPEND _fprint_content
+    "CONFIGURE"
+    "CMAKE_BUILD_TYPE=${_cmake_build_type}"
+    "CMAKE_SOURCE_DIR=${_rel_cmake_source_dir}"
+    "STAGE_DIR=${_rel_stage_dir}"
+    "STAGE_DESTINATION_DIR=${_rel_stage_destination_dir}"
+  )
+
+  set(_fprint)
+  if(_fprint_is_valid)
+    string(SHA256 _fprint "${_fprint_content}")
+  endif()
+  if(THEROCK_VERBOSE_FPRINT)
+    message(STATUS "  FPRINT = ${_fprint}")
+    message(STATUS "  FPRINT CONTENT = ${_fprint_content}")
+  endif()
+
+  # Validate prebuilt fingerprint if prebuilt file exists
+  set(_use_prebuilt FALSE)
   if(EXISTS "${_prebuilt_file}")
+    # Validate the prebuilt fingerprint
+    _therock_validate_prebuilt_fingerprint(_prebuilt_valid "${target_name}" "${_prebuilt_file}" "${_fprint}")
+
+    if(_prebuilt_valid)
+      # Fingerprint valid - use prebuilt
+      set(_use_prebuilt TRUE)
+      message(STATUS "  USING PREBUILT: Fingerprint validated")
+    else()
+      # Fingerprint invalid - behavior depends on THEROCK_REBUILD_ON_FPRINT_MISMATCH
+      if(THEROCK_REBUILD_ON_FPRINT_MISMATCH)
+        # Delete marker and rebuild
+        message(STATUS "  REBUILDING: Prebuilt fingerprint mismatch, removing .prebuilt marker")
+        file(REMOVE "${_prebuilt_file}")
+      else()
+        # Skip the build - use prebuilt despite mismatch
+        message(WARNING "  SKIPPING BUILD: Prebuilt fingerprint mismatch but THEROCK_REBUILD_ON_FPRINT_MISMATCH=OFF")
+        set(_use_prebuilt TRUE)
+      endif()
+    endif()
+  endif()
+
+  if(_use_prebuilt)
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
     # marker file (which may just be a stamp file or may contain a unique hash
     # for this part of the build).
-    message(STATUS "  DISABLING BUILD: Marked as pre-built")
     add_custom_command(
       OUTPUT "${_configure_stamp_file}"
       COMMAND "${CMAKE_COMMAND}" -E touch "${_configure_stamp_file}"
@@ -940,27 +1014,11 @@ function(therock_cmake_subproject_activate target_name)
       set(_build_terminal_option JOB_POOL "${_build_pool}")
       set(_build_comment_suffix " (in background)")
     endif()
-    set(_stage_destination_dir "${_stage_dir}")
-    if(_install_destination)
-      cmake_path(APPEND _stage_destination_dir "${_install_destination}")
-    endif()
     set(_compile_commands_file "${PROJECT_BINARY_DIR}/compile_commands_fragment_${target_name}.json")
     therock_subproject_log_command(_configure_log_prefix
       LOG_FILE "${target_name}_configure.log"
       LABEL "${target_name} configure"
       OUTPUT_ON_FAILURE "${_output_on_failure}"
-    )
-
-    # Finger-print vital configure content.
-    cmake_path(RELATIVE_PATH _stage_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_dir)
-    cmake_path(RELATIVE_PATH _stage_destination_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_destination_dir)
-    cmake_path(RELATIVE_PATH _cmake_source_dir BASE_DIRECTORY "${THEROCK_SOURCE_DIR}" OUTPUT_VARIABLE _rel_cmake_source_dir)
-    list(APPEND _fprint_content
-      "CONFIGURE"
-      "CMAKE_BUILD_TYPE=${_cmake_build_type}"
-      "CMAKE_SOURCE_DIR=${_rel_cmake_source_dir}"
-      "STAGE_DIR=${_rel_stage_dir}"
-      "STAGE_DESTINATION_DIR=${_rel_stage_destination_dir}"
     )
 
     # Configure command.
@@ -1124,19 +1182,10 @@ function(therock_cmake_subproject_activate target_name)
   )
   add_dependencies(therock-expunge "${target_name}+expunge")
 
-  # Process fingerprints.
-  _therock_subproject_fprint_files(_fprint_content "${_fprint_files}")
-  set(_fprint)
-  if(_fprint_is_valid)
-    string(SHA256 _fprint "${_fprint_content}")
-  endif()
+  # Store fingerprint in target property (fingerprint was computed earlier)
   set_target_properties("${target_name}" PROPERTIES
     THEROCK_FPRINT "${_fprint}"
   )
-  if(THEROCK_VERBOSE)
-    message(STATUS "  FPRINT = ${_fprint}")
-    message(STATUS "  FPRINT CONTENT = ${_fprint_content}")
-  endif()
 endfunction()
 
 # therock_cmake_subproject_glob_c_sources
@@ -1613,6 +1662,65 @@ function(_therock_cmake_subproject_setup_toolchain
 endfunction()
 
 
+# Validates a prebuilt fingerprint against the expected fingerprint.
+# Returns TRUE if the prebuilt is valid and can be used, FALSE if it should be rebuilt.
+# Handles edge cases:
+#   - Empty .prebuilt file (old format): Trust it, return TRUE
+#   - "UNKNOWN" content: Trust it, return TRUE
+#   - Valid fingerprint match: Return TRUE
+#   - Fingerprint mismatch: Return FALSE
+#   - Missing expected fingerprint: Return TRUE (can't validate, trust prebuilt)
+function(_therock_validate_prebuilt_fingerprint out_valid target_name prebuilt_file expected_fprint)
+  set(_is_valid TRUE)
+
+  if(NOT EXISTS "${prebuilt_file}")
+    # File doesn't exist, not a prebuilt
+    set(_is_valid FALSE)
+  else()
+    # Read the prebuilt fingerprint
+    file(READ "${prebuilt_file}" _prebuilt_fprint)
+    string(STRIP "${_prebuilt_fprint}" _prebuilt_fprint)
+
+    # Handle edge cases
+    if(NOT _prebuilt_fprint)
+      # Empty file - backwards compatibility, trust it
+      if(THEROCK_VERBOSE_FPRINT)
+        message(STATUS "  ${target_name}: Prebuilt fingerprint empty (old format), trusting prebuilt")
+      endif()
+      set(_is_valid TRUE)
+    elseif(_prebuilt_fprint STREQUAL "UNKNOWN")
+      # Unknown fingerprint - trust it
+      if(THEROCK_VERBOSE_FPRINT)
+        message(STATUS "  ${target_name}: Prebuilt fingerprint UNKNOWN, trusting prebuilt")
+      endif()
+      set(_is_valid TRUE)
+    elseif(NOT expected_fprint)
+      # No expected fingerprint to compare - trust prebuilt
+      if(THEROCK_VERBOSE_FPRINT)
+        message(STATUS "  ${target_name}: No expected fingerprint, trusting prebuilt")
+      endif()
+      set(_is_valid TRUE)
+    else()
+      # Compare fingerprints
+      if(_prebuilt_fprint STREQUAL expected_fprint)
+        if(THEROCK_VERBOSE_FPRINT)
+          message(STATUS "  ${target_name}: Prebuilt fingerprint matches (${_prebuilt_fprint})")
+        endif()
+        set(_is_valid TRUE)
+      else()
+        message(WARNING "${target_name}: Prebuilt fingerprint mismatch, will rebuild")
+        if(THEROCK_VERBOSE_FPRINT)
+          message(STATUS "  Expected: ${expected_fprint}")
+          message(STATUS "  Actual:   ${_prebuilt_fprint}")
+        endif()
+        set(_is_valid FALSE)
+      endif()
+    endif()
+  endif()
+
+  set("${out_valid}" "${_is_valid}" PARENT_SCOPE)
+endfunction()
+
 # Fingerprints a source directory. If the source directory is considered dirty
 # then the output fingerprint will be the empty string (invalid).
 function(_therock_subproject_fprint_source_dir out_fprint dir)
@@ -1625,6 +1733,10 @@ function(_therock_subproject_fprint_source_dir out_fprint dir)
     # The source control system has hard-coded a stable fingerprint that should
     # be taken verbatim.
     file(READ "${_smrev_file}" fprint)
+    if(THEROCK_VERBOSE_FPRINT)
+      message(STATUS "  FPRINT: Using smrev file ${_smrev_file}")
+      message(STATUS "  FPRINT: smrev contents:\n${fprint}")
+    endif()
   endif()
 
   # Determine if a git repo.
@@ -1656,8 +1768,11 @@ function(_therock_subproject_fprint_source_dir out_fprint dir)
       )
       if(GIT_HASH_RESULT EQUAL 0)
         set(fprint "${GIT_COMMIT_HASH}")
+        if(THEROCK_VERBOSE_FPRINT)
+          message(STATUS "  FPRINT: Using git commit hash: ${GIT_COMMIT_HASH}")
+        endif()
       else()
-        if(THEROCK_VERBOSE)
+        if(THEROCK_VERBOSE_FPRINT)
           message(STATUS "  FPRINT: Could not read git commit")
         endif()
         set(fprint)
@@ -1675,14 +1790,14 @@ function(_therock_subproject_fprint_source_dir out_fprint dir)
     )
 
     if(NOT GIT_DIFF_RESULT EQUAL 0)
-        if(THEROCK_VERBOSE)
+        if(THEROCK_VERBOSE_FPRINT)
           message(STATUS "  FPRINT: Git directory is dirty: ${dir}")
         endif()
       set(fprint)
     endif()
   endif()
 
-  if(THEROCK_VERBOSE)
+  if(THEROCK_VERBOSE_FPRINT)
     message(STATUS "  FPRINT: '${fprint}'")
   endif()
   set("${out_fprint}" "${fprint}" PARENT_SCOPE)
@@ -1691,8 +1806,12 @@ endfunction()
 function(_therock_subproject_fprint_files out_content files)
   set(content "${${out_content}}")
   foreach(file ${files})
-    file(SHA256 "${file}" fprint)
     cmake_path(GET file FILENAME basename)
+    file(READ "${file}" file_contents)
+    if(THEROCK_VERBOSE_FPRINT)
+      message(STATUS "    FPRINT FILE: ${file} contents:\n${file_contents}")
+    endif()
+    file(SHA256 "${file}" fprint)
     list(APPEND content "${basename}=${fprint}")
   endforeach()
   set("${out_content}" "${content}" PARENT_SCOPE)

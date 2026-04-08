@@ -4,14 +4,12 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-    set(_download_stamp "${_source_dir}/download.stamp")
 
     therock_subproject_fetch(therock-mpfr-sources
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: https://www.mpfr.org/mpfr-current/mpfr-4.2.2.tar.xz
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/mpfr-4.2.2.tar.xz"
       URL_HASH "SHA512=eb9e7f51b5385fb349cc4fba3a45ffdf0dd53be6dfc74932dc01258158a10514667960c530c47dd9dfc5aa18be2bd94859d80499844c5713710581e6ac6259a9"
-      TOUCH "${_download_stamp}"
       # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
       # of the extracted sources, otherwise the build system will notice
       # changes and will try to re-run autotools, causing issues.
@@ -42,7 +40,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       INTERFACE_PKG_CONFIG_DIRS
         lib/rocm_sysdeps/lib/pkgconfig
       EXTRA_DEPENDS
-        "${_download_stamp}"
+        therock-mpfr-sources-download
     )
     therock_cmake_subproject_provide_package(therock-mpfr mpfr lib/rocm_sysdeps/lib/cmake/mpfr)
     therock_cmake_subproject_activate(therock-mpfr)

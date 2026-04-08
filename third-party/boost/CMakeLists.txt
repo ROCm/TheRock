@@ -12,7 +12,6 @@
 #   Multithreaded
 # See cmake_project/CMakeLists.txt for details.
 set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-set(_download_stamp "${_source_dir}/download.stamp")
 
 therock_subproject_fetch(boost-sources
   SOURCE_DIR "${_source_dir}"
@@ -20,7 +19,6 @@ therock_subproject_fetch(boost-sources
   # with `libs\wave\test\testwave\testfiles\utf8-test*` removed.
   URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/boost_1_87_0-1.tar.bz2"
   URL_HASH "SHA256=0ba4085a0beb3b9c57fa617d09110c79e977a9944750cd93fb17d82807a8c64c"
-  TOUCH "${_download_stamp}"
 )
 
 therock_cmake_subproject_declare(therock-boost
@@ -34,7 +32,7 @@ therock_cmake_subproject_declare(therock-boost
     "-DBOOST_SOURCE_DIR=${_source_dir}"
     "-DTHEROCK_BOOST_LIBRARIES=atomic,filesystem,multi_index,system"
   EXTRA_DEPENDS
-    "${_download_stamp}"
+    boost-sources-download
 )
 # Important: Version number here must match the version downloaded above.
 # Check the install directory if in doubt (i.e. run `ninja therock-boost` and

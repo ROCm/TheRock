@@ -1,13 +1,11 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-    set(_download_stamp "${_source_dir}/download.stamp")
 
     therock_subproject_fetch(therock-openmpi-sources
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: "https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-5.0.9.tar.bz2"
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/openmpi-5.0.9.tar.bz2"
       URL_HASH "SHA256=dfb72762531170847af3e4a0f21d77d7b23cf36f67ce7ce9033659273677d80b"
-      TOUCH "${_download_stamp}"
     )
 
     therock_cmake_subproject_declare(therock-openmpi
@@ -25,7 +23,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         BINARY_DIR
           build
         EXTRA_DEPENDS
-          "${_download_stamp}"
+          therock-openmpi-sources-download
     )
 
     therock_cmake_subproject_provide_package(therock-openmpi MPI lib/cmake/openmpi)

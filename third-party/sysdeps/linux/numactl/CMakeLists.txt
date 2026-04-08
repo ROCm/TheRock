@@ -4,14 +4,12 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-    set(_download_stamp "${_source_dir}/download.stamp")
 
     therock_subproject_fetch(therock-numactl-sources
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: "https://github.com/numactl/numactl/releases/download/v2.0.19/numactl-2.0.19.tar.gz"
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/numactl-2.0.19.tar.gz"
       URL_HASH "SHA256=f2672a0381cb59196e9c246bf8bcc43d5568bc457700a697f1a1df762b9af884"
-      TOUCH "${_download_stamp}"
     )
 
     therock_cmake_subproject_declare(therock-numactl
@@ -38,7 +36,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       INTERFACE_INCLUDE_DIRS
         lib/rocm_sysdeps/include
       EXTRA_DEPENDS
-        "${_download_stamp}"
+        therock-numactl-sources-download
     )
     therock_cmake_subproject_provide_package(therock-numactl NUMA lib/rocm_sysdeps/lib/cmake/NUMA)
     therock_cmake_subproject_activate(therock-numactl)

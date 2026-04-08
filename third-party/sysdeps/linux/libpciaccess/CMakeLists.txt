@@ -3,14 +3,12 @@
 
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-    set(_download_stamp "${_source_dir}/download.stamp")
 
     therock_subproject_fetch(therock-libpciaccess-sources
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: "https://www.x.org/releases/individual/lib/libpciaccess-0.18.1.tar.xz"
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/libpciaccess-0.18.1.tar.xz"
       URL_HASH "SHA256=4af43444b38adb5545d0ed1c2ce46d9608cc47b31c2387fc5181656765a6fa76"
-      TOUCH "${_download_stamp}"
       DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
@@ -37,7 +35,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       INTERFACE_PKG_CONFIG_DIRS
         lib/rocm_sysdeps/lib/pkgconfig
       EXTRA_DEPENDS
-        "${_download_stamp}"
+        therock-libpciaccess-sources-download
     )
     therock_cmake_subproject_activate(therock-libpciaccess)
 

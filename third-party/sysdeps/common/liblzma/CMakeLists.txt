@@ -4,7 +4,6 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-    set(_download_stamp "${_source_dir}/download.stamp")
 
     # Originally mirrored from: https://github.com/tukaani-project/xz/releases/download/v5.8.1/xz-5.8.1.tar.bz2
     set(_xz_url "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/xz-5.8.1.tar.bz2")
@@ -12,7 +11,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       SOURCE_DIR "${_source_dir}"
       URL "${_xz_url}"
       URL_HASH SHA256=5965c692c4c8800cd4b33ce6d0f6ac9ac9d6ab227b17c512b6561bce4f08d47e
-      TOUCH "${_download_stamp}"
     )
 
     # extract version from url
@@ -44,7 +42,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       INTERFACE_PKG_CONFIG_DIRS
         lib/rocm_sysdeps/lib/pkgconfig
       EXTRA_DEPENDS
-        "${_download_stamp}"
+        therock-liblzma-sources-download
     )
     therock_cmake_subproject_provide_package(therock-liblzma liblzma lib/rocm_sysdeps/lib/cmake/liblzma)
     therock_cmake_subproject_activate(therock-liblzma)

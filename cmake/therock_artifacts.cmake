@@ -150,16 +150,30 @@ function(therock_provide_artifact slice_name)
   set(_fprint_is_valid TRUE)
   foreach(_subproject_dep ${ARG_SUBPROJECT_DEPS})
     get_target_property(_subproject_fprint "${_subproject_dep}" THEROCK_FPRINT)
-    if(_subproject_fprint)
-      list(APPEND _fprint_content "${_subproject_dep}=${_subproject_fprint}")
+    get_target_property(_subproject_stage_dir "${_subproject_dep}" THEROCK_STAGE_DIR)
+
+    if(_subproject_fprint AND _subproject_stage_dir)
+      # Compute relative path from THEROCK_BINARY_DIR to stage directory
+      # This allows the fprint file to indicate where stage.prebuilt should be extracted
+      cmake_path(RELATIVE_PATH _subproject_stage_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _relative_stage_path)
+      list(APPEND _fprint_content "${_subproject_dep}=${_relative_stage_path}/${_subproject_fprint}")
     else()
-      message(STATUS "Cannot compute fprint for artifact ${slice_name} (no fprint for ${_subproject_dep})")
+      if(NOT _subproject_fprint)
+        message(STATUS "Cannot compute fprint for artifact ${slice_name} (no fprint for ${_subproject_dep})")
+      endif()
+      if(NOT _subproject_stage_dir)
+        message(STATUS "Cannot compute stage path for artifact ${slice_name} (no stage dir for ${_subproject_dep})")
+      endif()
       set(_fprint_is_valid FALSE)
     endif()
   endforeach()
   set(_fprint)
   if(_fprint_is_valid)
     string(SHA256 _fprint "${_fprint_content}")
+  endif()
+  if(THEROCK_VERBOSE_FPRINT)
+    message(STATUS "  ARTIFACT FPRINT (${slice_name}) = ${_fprint}")
+    message(STATUS "  ARTIFACT FPRINT CONTENT = ${_fprint_content}")
   endif()
 
   # Populate commands.
@@ -339,6 +353,36 @@ function(therock_provide_artifact slice_name)
   set(_archive_sha_files)
   set(_artifacts_dir "${THEROCK_BINARY_DIR}/artifacts")
   file(MAKE_DIRECTORY "${_artifacts_dir}")
+
+  # Write fingerprint file for the artifact slice.
+  # This is written at the artifact level (not per-component) since the
+  # fingerprint represents the composite of all subproject dependencies.
+  # The file contains key=value pairs (one per line) for each subproject
+  # fingerprint, allowing each subproject to validate its own fingerprint
+  # during bootstrap.
+  #
+  # Format:
+  #   ARTIFACT={slice_name}
+  #   DESCRIPTOR={descriptor_hash}
+  #   {subproject_name}={relative_stage_path}/{subproject_fprint}
+  #   ...
+  #
+  # The relative_stage_path indicates where stage.prebuilt should be extracted
+  # relative to THEROCK_BINARY_DIR (e.g., "compiler/amd-llvm/stage")
+  set(_slice_fprint_file "${_artifacts_dir}/${slice_name}.fprint")
+  if(_fprint_is_valid)
+    # Convert CMake list to newline-separated content
+    list(JOIN _fprint_content "\n" _slice_fprint_value)
+  else()
+    # Write INVALID marker so prebuilt validation knows fingerprint couldn't be computed
+    set(_slice_fprint_value "INVALID")
+  endif()
+
+  # Write the fingerprint file at configure time since we have all the data.
+  # The file is regenerated on reconfigure, which happens when dependencies change.
+  file(WRITE "${_slice_fprint_file}" "${_slice_fprint_value}\n")
+  list(APPEND _archive_files "${_slice_fprint_file}")
+
   if(_should_split)
     message(STATUS "Skipping archive generation for split artifact: ${slice_name}")
   endif()
@@ -347,12 +391,6 @@ function(therock_provide_artifact slice_name)
       continue()
     endif()
     set(_component_dir "${_artifacts_dir}/${slice_name}_${_component}${_bundle_suffix}")
-    set(_fprint_file "${_component_dir}.fprint")
-    if(_fprint_is_valid)
-      file(WRITE "${_fprint_file}" "${_fprint}")
-    elseif(EXISTS "${_fprint_file}")
-      file(REMOVE "${_fprint_file}")
-    endif()
     set(_manifest_file "${_component_dir}/artifact_manifest.txt")
     set(_archive_file "${_component_dir}${THEROCK_ARTIFACT_ARCHIVE_SUFFIX}.tar.xz")
     list(APPEND _archive_files "${_archive_file}")

@@ -18,7 +18,6 @@ set(SIMDE_VERSION "0.8.2")
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   # Fetch the simde source tarball
   set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-  set(_download_stamp "${_source_dir}/download.stamp")
 
   therock_subproject_fetch(therock-simde-sources
     SOURCE_DIR "${_source_dir}"
@@ -26,7 +25,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # NOTE: Version must match SIMDE_VERSION variable above
     URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/simde-${SIMDE_VERSION}.tar.gz
     URL_HASH SHA256=ed2a3268658f2f2a9b5367628a85ccd4cf9516460ed8604eed369653d49b25fb
-    TOUCH "${_download_stamp}"
   )
 
   # Declare the sub-project (uses this same CMakeLists.txt as sub-build)
@@ -44,7 +42,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     INTERFACE_PKG_CONFIG_DIRS
       lib/pkgconfig
     EXTRA_DEPENDS
-      "${_download_stamp}"
+      therock-simde-sources-download
   )
   therock_cmake_subproject_activate(therock-simde)
 
