@@ -44,6 +44,11 @@ on:
         type: string
         required: true
         description: "ROCm package version string"
+      build_variant_cmake_preset:
+        type: string
+        required: false
+        default: ""
+        description: "CMake preset name for this build variant (optional)"
 
 jobs:
   build_stage:
@@ -122,6 +127,7 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
