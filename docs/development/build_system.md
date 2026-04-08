@@ -153,10 +153,8 @@ Each sub-project, by default, uses a standard directory layout for its build:
 
 ### `THEROCK_DEV_PROJECTS`
 
-Semicolon-separated list of subproject names (e.g. `amd-llvm;amd-comgr`) whose
-inner build is always invoked, letting the inner ninja determine what needs
-rebuilding. Use this during local development on large subprojects
-where source file globbing is impractical.
+Subprojects that opt in to source file globbing even when otherwise skipped
+(e.g. `-DTHEROCK_DEV_PROJECTS=amd-llvm`).
 
 ## Developer Cookbook
 
