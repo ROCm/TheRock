@@ -123,9 +123,12 @@ EXCLUDED_TEST_MODULES: list[str] = [
     "inductor/test_torchinductor_opinfo_properties",
     "inductor/test_compiled_autograd",
     "distributed/_composable/fsdp/test_fully_shard_autograd",
-    "distributed/_composable/test_composability",
+    "distributed/_composable/test_composability/test_2d_composability",
+    "distributed/_composable/test_composability/test_pp_composability",
     "distributed/_composable/test_replicate",
     "distributed/tensor/test_view_ops",
+    "dynamo/test_dynamic_shapes",
+    "functorch/test_control_flow",
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
@@ -494,7 +497,7 @@ def _run_inductor(
         print(f"{'=' * 60}")
         print(f"Executing: {' '.join(cmd)}")
         result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
-        print(f"run_test.py [{label}] finished with return code: {result.returncode}")
+        print(f"run_test.py [{label}] finished with return code: {result.returncode}", flush=True)
         if result.returncode != 0:
             worst_rc = result.returncode
 

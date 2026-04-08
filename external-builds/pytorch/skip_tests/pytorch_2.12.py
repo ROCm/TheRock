@@ -20,8 +20,6 @@ skip_tests = {
             "test_cuda_graph_tensor_item_not_allowed",
             # AssertionError: CalledProcessError not raised
             "test_allocator_memory_fraction_setting",
-            # AssertionError: False is not true (memory_plots)
-            "test_memory_plots",
             # TestBlockStateAbsorption - ModuleNotFoundError: torchvision
             "test_resnet",
         ],

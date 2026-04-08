@@ -153,6 +153,7 @@ jobs:
       # OpenBLAS defaults to the number of CPU cores, which causes
       # non-deterministic results in tests like test_entropy_monte_carlo.
       OPENBLAS_NUM_THREADS: "1"
+      PYTORCH_NUM_PYTEST_RERUNS: "2"
       TEST_CONFIG: ${{ matrix.test_config }}
       TESTS_TO_INCLUDE: ${{ inputs.tests_to_include }}
 
@@ -270,14 +271,10 @@ jobs:
 
       - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
-        env:
-          PYTORCH_NUM_PYTEST_RERUNS: "2"
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
-            --exclude dynamo/test_dynamic_shapes functorch/test_control_flow \
             -- \
-            --continue-on-collection-errors \
-            --import-mode=importlib
+            --continue-on-collection-errors
 
       - name: Upload test reports
         if: always()

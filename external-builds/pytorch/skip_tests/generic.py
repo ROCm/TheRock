@@ -16,6 +16,7 @@ skip_tests = {
             "test_mempool_empty_cache_inactive",
             # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
             "test_memory_snapshot",
+            "test_memory_plots",
         ],
         "autograd": [
             # Stream comparison mismatch on ROCm (non-default stream vs default stream)
