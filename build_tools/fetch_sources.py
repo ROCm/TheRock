@@ -15,6 +15,7 @@
 #   This is the original behavior and is still supported.
 
 import argparse
+import concurrent.futures
 import hashlib
 from pathlib import Path
 import platform
@@ -24,6 +25,8 @@ import subprocess
 import sys
 from typing import List
 import os
+
+from _therock_utils.git_mirrors import MIRROR_DIR_ENV, url_to_mirror_relpath
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
@@ -48,6 +51,209 @@ def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = 
 
     full_env = {**os.environ, **(env or {})}
     subprocess.check_call(args, cwd=str(cwd), env=full_env, stdin=subprocess.DEVNULL)
+
+
+def resolve_reference_dir(args: argparse.Namespace) -> Path | None:
+    """Resolve the git mirror/reference directory from args or environment.
+
+    Returns None if no reference directory is configured, which means
+    submodule updates proceed with normal network fetches (unchanged behavior).
+    """
+    ref_dir = args.reference_dir
+    if ref_dir is None:
+        env_val = os.environ.get(MIRROR_DIR_ENV)
+        if env_val:
+            ref_dir = Path(env_val)
+    if ref_dir is None:
+        return None
+    ref_dir = Path(ref_dir).resolve()
+    if not ref_dir.is_dir():
+        log(
+            f"WARNING: Reference directory {ref_dir} does not exist. "
+            f"Proceeding without reference repos."
+        )
+        return None
+    return ref_dir
+
+
+def _resolve_mirror_path(reference_dir: Path, url: str) -> Path | None:
+    """Find the local mirror for a submodule URL, or None if not available."""
+    mirror = reference_dir / url_to_mirror_relpath(url)
+    if mirror.is_dir():
+        return mirror
+    return None
+
+
+def _get_submodule_url_map() -> dict[str, str]:
+    """Build a mapping from submodule path to remote URL from .gitmodules."""
+    result = subprocess.run(
+        [
+            "git",
+            "config",
+            "--file",
+            ".gitmodules",
+            "--get-regexp",
+            r"submodule\..*\.url",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(THEROCK_DIR),
+    )
+    if result.returncode != 0:
+        return {}
+
+    path_to_url: dict[str, str] = {}
+    for line in result.stdout.strip().split("\n"):
+        if not line.strip():
+            continue
+        key, url = line.split(None, 1)
+        name = key.split(".")[1]
+        try:
+            path = get_submodule_path(name)
+            path_to_url[path] = url
+        except subprocess.CalledProcessError:
+            continue
+    return path_to_url
+
+
+def _submodule_is_initialized(submodule_path: str) -> bool:
+    """Check whether a submodule directory has been cloned/initialized."""
+    git_marker = THEROCK_DIR / submodule_path / ".git"
+    return git_marker.exists()
+
+
+def _update_one_submodule(
+    submodule_path: str,
+    update_args: list[str],
+    mirror: Path | None,
+) -> None:
+    """Fetch/clone a single already-registered submodule.
+
+    Callers must run ``git submodule init`` before invoking this function
+    so that the submodule URL is already recorded in ``.git/config``.
+    Separating init (serial) from update (parallel) avoids lock contention
+    on ``.git/config`` when multiple updates run concurrently.
+
+    If the --reference clone fails, retries automatically without --reference.
+    """
+    cmd: list[str | Path] = ["git", "submodule", "update"]
+    if mirror:
+        cmd += ["--reference", str(mirror)]
+        log(f"  {submodule_path}: using reference {mirror}")
+    else:
+        log(f"  {submodule_path}: no mirror found, fetching from network")
+    cmd += update_args + ["--", submodule_path]
+
+    try:
+        run_command(cmd, cwd=THEROCK_DIR)
+    except subprocess.CalledProcessError:
+        if mirror:
+            log(
+                f"  WARNING: --reference clone failed for {submodule_path}, "
+                f"retrying without reference..."
+            )
+            fallback_cmd: list[str | Path] = (
+                [
+                    "git",
+                    "submodule",
+                    "update",
+                ]
+                + update_args
+                + ["--", submodule_path]
+            )
+            run_command(fallback_cmd, cwd=THEROCK_DIR)
+        else:
+            raise
+
+
+def _update_submodules_with_reference(
+    submodule_paths: list[str],
+    update_args: list[str],
+    reference_dir: Path,
+    jobs: int,
+) -> None:
+    """Update submodules using local mirror repos as git reference clones.
+
+    For uninitialized submodules the work is split into two phases to avoid
+    Git lock contention when running in parallel:
+
+      Phase 1 (serial): ``git submodule init`` registers all submodule URLs
+      in ``.git/config`` in a single command -- this is the step that takes
+      the ``.git/config`` lock.
+
+      Phase 2 (parallel): ``git submodule update --reference <mirror>`` is
+      run per-submodule, bounded by *jobs*.  Each invocation clones into a
+      separate directory so there is no shared-lock contention.
+
+    Already-initialized submodules are batch-updated in a single git command
+    to preserve --jobs parallelism for the (typically fast) delta fetch.
+
+    If a --reference clone fails, the submodule is retried without --reference
+    as an automatic fallback.
+    """
+    path_to_url = _get_submodule_url_map()
+
+    needs_init: list[str] = []
+    already_init: list[str] = []
+    for sp in submodule_paths:
+        if _submodule_is_initialized(sp):
+            already_init.append(sp)
+        else:
+            needs_init.append(sp)
+
+    if needs_init:
+        log(
+            f"Initializing {len(needs_init)} submodule(s) with reference repos "
+            f"(jobs={jobs})..."
+        )
+
+        # Phase 1: Register submodule URLs in .git/config (single serial
+        # command so there is no lock contention on .git/config).
+        run_command(
+            ["git", "submodule", "init", "--"] + needs_init,
+            cwd=THEROCK_DIR,
+        )
+
+        # Phase 2: Clone/fetch each submodule in parallel.  Each targets a
+        # separate directory so concurrent git processes don't contend.
+        update_tasks: list[tuple[str, Path | None]] = []
+        for sp in needs_init:
+            url = path_to_url.get(sp)
+            mirror = _resolve_mirror_path(reference_dir, url) if url else None
+            update_tasks.append((sp, mirror))
+
+        if jobs <= 1:
+            for sp, mirror in update_tasks:
+                _update_one_submodule(sp, update_args, mirror)
+        else:
+            errors: list[Exception] = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+                futures = {
+                    pool.submit(_update_one_submodule, sp, update_args, mirror): sp
+                    for sp, mirror in update_tasks
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    sp = futures[future]
+                    try:
+                        future.result()
+                    except (
+                        subprocess.CalledProcessError,
+                        OSError,
+                    ) as exc:
+                        log(f"  ERROR: submodule update failed for {sp}: {exc}")
+                        errors.append(exc)
+            if errors:
+                raise errors[0]
+
+    if already_init:
+        log(f"Updating {len(already_init)} already-initialized submodule(s)...")
+        run_command(
+            ["git", "submodule", "update", "--init"]
+            + update_args
+            + ["--"]
+            + already_init,
+            cwd=THEROCK_DIR,
+        )
 
 
 def get_projects_from_topology(stage: str) -> List[str]:
@@ -167,13 +373,23 @@ def run(args):
     if args.remote:
         update_args += ["--remote"]
     if args.update_submodules:
-        run_command(
-            ["git", "submodule", "update", "--init"]
-            + update_args
-            + ["--"]
-            + submodule_paths,
-            cwd=THEROCK_DIR,
-        )
+        reference_dir = resolve_reference_dir(args)
+        if reference_dir:
+            log(f"Using reference directory: {reference_dir}")
+            _update_submodules_with_reference(
+                submodule_paths,
+                update_args,
+                reference_dir,
+                jobs=args.jobs if args.jobs is not None else 4,
+            )
+        else:
+            run_command(
+                ["git", "submodule", "update", "--init"]
+                + update_args
+                + ["--"]
+                + submodule_paths,
+                cwd=THEROCK_DIR,
+            )
     if args.dvc_projects:
         pull_large_files(args.dvc_projects, projects)
 
@@ -303,7 +519,7 @@ def apply_patches(args, projects):
         )
 
 
-# Gets the the relative path to a submodule given its name.
+# Gets the relative path to a submodule given its name.
 # Raises an exception on failure.
 def get_submodule_path(name: str, cwd=THEROCK_DIR) -> str:
     relpath = (
@@ -324,7 +540,7 @@ def get_submodule_path(name: str, cwd=THEROCK_DIR) -> str:
     return relpath
 
 
-# Gets the the relative path to a submodule given its name.
+# Gets the URL for a submodule given its name.
 # Raises an exception on failure.
 def get_submodule_url(name: str) -> str:
     relpath = (
@@ -378,6 +594,19 @@ def main(argv):
         "--list-stages",
         action="store_true",
         help="List available build stages and their submodules, then exit",
+    )
+
+    # Reference repos for faster submodule clones
+    parser.add_argument(
+        "--reference-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a directory of bare git mirrors (created by "
+            "setup_git_mirrors.py). Submodule clones will use --reference "
+            "to read objects locally instead of over the network. "
+            f"Also reads from ${MIRROR_DIR_ENV} environment variable."
+        ),
     )
 
     # Legacy options
