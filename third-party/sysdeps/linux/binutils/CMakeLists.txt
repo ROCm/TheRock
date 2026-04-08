@@ -62,42 +62,30 @@ message(STATUS "EXTRA_CPPFLAGS=${EXTRA_CPPFLAGS}")
 
 add_custom_target(
   build ALL
-  # We cannot set WORKING_DIRECTORY to ${CMAKE_CURRENT_BINARY_DIR}/s
-  # because that directory may not exist yet.
-  # WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  WORKING_DIRECTORY "${SOURCE_DIR}"
   COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${CMAKE_CURRENT_BINARY_DIR}/s"
-  COMMAND
-    # We have to patch the sources so make a fresh copy.
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
-  COMMAND
-    # At this point, directory ${CMAKE_CURRENT_BINARY_DIR}/s has been created, so
-    # we cd into it before executing configure.
-    cd "${CMAKE_CURRENT_BINARY_DIR}/s" &&
     "${CMAKE_COMMAND}" -E env
       "CFLAGS=${EXTRA_CFLAGS}"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
-      --prefix "${CMAKE_INSTALL_PREFIX}"
+      --prefix "${CMAKE_CURRENT_BINARY_DIR}"
       --enable-install-libiberty
       --enable-shared
       --disable-static
-      --libdir="${CMAKE_INSTALL_PREFIX}/lib"
       --includedir="${CMAKE_INSTALL_PREFIX}/include"
       --disable-nls
       --disable-werror
   COMMAND
-    cd "${CMAKE_CURRENT_BINARY_DIR}/s" &&
     make -j "${PAR_JOBS}" V=1
   COMMAND
-    cd "${CMAKE_CURRENT_BINARY_DIR}/s" &&
     make install
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"
       "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
-      "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
+      "Python3_EXECUTABLE=${Python3_EXECUTABLE}"
+      --
     "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
 
   DEPENDS
