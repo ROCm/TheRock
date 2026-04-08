@@ -143,6 +143,8 @@ jobs:
         run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
+        env:
+          ROCM_BUILD_ID: ${{ github.sha }}
         run: |
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             --preset=${{ inputs.build_variant_cmake_preset }} \

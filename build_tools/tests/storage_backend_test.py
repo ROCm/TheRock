@@ -113,6 +113,52 @@ class TestLocalStorageBackendUploadFile(unittest.TestCase):
             self.assertTrue(target.is_file())
             self.assertEqual(target.read_text(), "content")
 
+    def test_skips_identical_existing_file(self):
+        with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
+            staging_dir = Path(staging)
+            src_dir = Path(src)
+
+            # Create existing file with same content
+            target = staging_dir / "run-1" / "hello.txt"
+            target.parent.mkdir(parents=True)
+            target.write_text("content")
+
+            # Try to upload identical file
+            source = src_dir / "hello.txt"
+            source.write_text("content")
+
+            dest = StorageLocation("bucket", "run-1/hello.txt")
+            backend = LocalStorageBackend(staging_dir)
+            backend.upload_file(source, dest)  # Should not raise
+
+            # Content should still be the same
+            self.assertEqual(target.read_text(), "content")
+
+    def test_raises_on_conflicting_file(self):
+        with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
+            staging_dir = Path(staging)
+            src_dir = Path(src)
+
+            # Create existing file with different content
+            target = staging_dir / "run-1" / "hello.txt"
+            target.parent.mkdir(parents=True)
+            target.write_text("old content")
+
+            # Try to upload file with different content
+            source = src_dir / "hello.txt"
+            source.write_text("new content")
+
+            dest = StorageLocation("bucket", "run-1/hello.txt")
+            backend = LocalStorageBackend(staging_dir)
+
+            with self.assertRaises(ValueError) as ctx:
+                backend.upload_file(source, dest)
+
+            self.assertIn("File conflict", str(ctx.exception))
+            self.assertIn("different content", str(ctx.exception))
+            # Original content should be preserved
+            self.assertEqual(target.read_text(), "old content")
+
     def test_creates_parent_dirs(self):
 
         with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
@@ -254,7 +300,9 @@ class TestLocalStorageBackendUploadDirectory(unittest.TestCase):
             backend = LocalStorageBackend(staging_dir)
 
             with self.assertRaises(FileNotFoundError):
-                backend.upload_directory(Path("/nonexistent"), dest)
+                backend.upload_directory(
+                    Path("/tmp/this_directory_definitely_does_not_exist_12345"), dest
+                )
 
     def test_dry_run_does_not_copy(self):
 
@@ -403,6 +451,8 @@ class TestS3StorageBackendUploadFile(unittest.TestCase):
     def test_calls_boto3_upload_file(self):
         backend = S3StorageBackend()
         mock_client = mock.MagicMock()
+        # Simulate file not existing (404 error)
+        mock_client.head_object.side_effect = Exception("404 Not Found")
         backend._s3_client = mock_client
 
         source = Path("/tmp/build.log")
@@ -419,6 +469,8 @@ class TestS3StorageBackendUploadFile(unittest.TestCase):
     def test_content_type_for_html(self):
         backend = S3StorageBackend()
         mock_client = mock.MagicMock()
+        # Simulate file not existing
+        mock_client.head_object.side_effect = Exception("404 Not Found")
         backend._s3_client = mock_client
 
         source = Path("/tmp/index.html")
@@ -432,38 +484,99 @@ class TestS3StorageBackendUploadFile(unittest.TestCase):
             ExtraArgs={"ContentType": "text/html"},
         )
 
+    def test_skips_identical_existing_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source_path = Path(tmpdir) / "test.txt"
+            source_path.write_text("content")
+
+            backend = S3StorageBackend()
+            mock_client = mock.MagicMock()
+
+            # Simulate file exists
+            mock_client.head_object.return_value = {"ContentLength": 7}
+
+            # Mock download_file to create identical temp file
+            def mock_download(bucket, key, target_path):
+                Path(target_path).write_text("content")
+
+            mock_client.download_file.side_effect = mock_download
+            backend._s3_client = mock_client
+
+            dest = StorageLocation("bucket", "run-1/test.txt")
+            backend.upload_file(source_path, dest)
+
+            # Should not call upload_file since content is identical
+            mock_client.upload_file.assert_not_called()
+
+    def test_raises_on_conflicting_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source_path = Path(tmpdir) / "test.txt"
+            source_path.write_text("new content")
+
+            backend = S3StorageBackend()
+            mock_client = mock.MagicMock()
+
+            # Simulate file exists
+            mock_client.head_object.return_value = {"ContentLength": 11}
+
+            # Mock download_file to create different temp file
+            def mock_download(bucket, key, target_path):
+                Path(target_path).write_text("old content")
+
+            mock_client.download_file.side_effect = mock_download
+            backend._s3_client = mock_client
+
+            dest = StorageLocation("bucket", "run-1/test.txt")
+
+            with self.assertRaises(ValueError) as ctx:
+                backend.upload_file(source_path, dest)
+
+            self.assertIn("File conflict", str(ctx.exception))
+            self.assertIn("different content", str(ctx.exception))
+            mock_client.upload_file.assert_not_called()
+
     def test_retries_on_failure(self):
-        backend = S3StorageBackend()
-        mock_client = mock.MagicMock()
-        mock_client.upload_file.side_effect = [
-            Exception("transient"),
-            None,  # succeeds on second attempt
-        ]
-        backend._s3_client = mock_client
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source = Path(tmpdir) / "data.json"
+            source.write_text("{}")
 
-        source = Path("/tmp/data.json")
-        dest = StorageLocation("bucket", "run-1/data.json")
+            backend = S3StorageBackend()
+            mock_client = mock.MagicMock()
+            # File doesn't exist
+            mock_client.head_object.side_effect = Exception("404 Not Found")
+            mock_client.upload_file.side_effect = [
+                Exception("transient"),
+                None,  # succeeds on second attempt
+            ]
+            backend._s3_client = mock_client
 
-        with mock.patch("_therock_utils.storage_backend.time.sleep"):
-            backend.upload_file(source, dest)
+            dest = StorageLocation("bucket", "run-1/data.json")
 
-        self.assertEqual(mock_client.upload_file.call_count, 2)
-
-    def test_raises_after_max_retries(self):
-        backend = S3StorageBackend()
-        mock_client = mock.MagicMock()
-        mock_client.upload_file.side_effect = Exception("persistent")
-        backend._s3_client = mock_client
-
-        source = Path("/tmp/data.json")
-        dest = StorageLocation("bucket", "run-1/data.json")
-
-        with mock.patch("_therock_utils.storage_backend.time.sleep"):
-            with self.assertRaises(RuntimeError) as ctx:
+            with mock.patch("_therock_utils.storage_backend.time.sleep"):
                 backend.upload_file(source, dest)
 
-        self.assertIn("3 attempts", str(ctx.exception))
-        self.assertEqual(mock_client.upload_file.call_count, 3)
+            self.assertEqual(mock_client.upload_file.call_count, 2)
+
+    def test_raises_after_max_retries(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source = Path(tmpdir) / "data.json"
+            source.write_text("{}")
+
+            backend = S3StorageBackend()
+            mock_client = mock.MagicMock()
+            # File doesn't exist
+            mock_client.head_object.side_effect = Exception("404 Not Found")
+            mock_client.upload_file.side_effect = Exception("persistent")
+            backend._s3_client = mock_client
+
+            dest = StorageLocation("bucket", "run-1/data.json")
+
+            with mock.patch("_therock_utils.storage_backend.time.sleep"):
+                with self.assertRaises(RuntimeError) as ctx:
+                    backend.upload_file(source, dest)
+
+            self.assertIn("3 attempts", str(ctx.exception))
+            self.assertEqual(mock_client.upload_file.call_count, 3)
 
     def test_dry_run_does_not_call_boto3(self):
         backend = S3StorageBackend(dry_run=True)
@@ -565,19 +678,27 @@ class TestLocalStorageBackendUploadFiles(unittest.TestCase):
 
 class TestS3StorageBackendUploadFiles(unittest.TestCase):
     def test_uploads_all_files_in_parallel(self):
-        backend = S3StorageBackend()
-        mock_client = mock.MagicMock()
-        backend._s3_client = mock_client
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            (tmppath / "a.log").write_text("a")
+            (tmppath / "b.log").write_text("b")
+            (tmppath / "c.log").write_text("c")
 
-        files = [
-            (Path("/tmp/a.log"), StorageLocation("bucket", "run-1/a.log")),
-            (Path("/tmp/b.log"), StorageLocation("bucket", "run-1/b.log")),
-            (Path("/tmp/c.log"), StorageLocation("bucket", "run-1/c.log")),
-        ]
-        count = backend.upload_files(files)
+            backend = S3StorageBackend()
+            mock_client = mock.MagicMock()
+            # File doesn't exist in S3
+            mock_client.head_object.side_effect = Exception("404 Not Found")
+            backend._s3_client = mock_client
 
-        self.assertEqual(count, 3)
-        self.assertEqual(mock_client.upload_file.call_count, 3)
+            files = [
+                (tmppath / "a.log", StorageLocation("bucket", "run-1/a.log")),
+                (tmppath / "b.log", StorageLocation("bucket", "run-1/b.log")),
+                (tmppath / "c.log", StorageLocation("bucket", "run-1/c.log")),
+            ]
+            count = backend.upload_files(files)
+
+            self.assertEqual(count, 3)
+            self.assertEqual(mock_client.upload_file.call_count, 3)
 
     def test_empty_list_returns_zero(self):
         backend = S3StorageBackend()
@@ -590,22 +711,28 @@ class TestS3StorageBackendUploadFiles(unittest.TestCase):
 
     def test_single_file_skips_thread_pool(self):
         """A single file should not use a thread pool (no overhead)."""
-        backend = S3StorageBackend()
-        mock_client = mock.MagicMock()
-        backend._s3_client = mock_client
+        with tempfile.TemporaryDirectory() as tmpdir:
+            only_file = Path(tmpdir) / "only.log"
+            only_file.write_text("log")
 
-        files = [
-            (Path("/tmp/only.log"), StorageLocation("bucket", "run-1/only.log")),
-        ]
+            backend = S3StorageBackend()
+            mock_client = mock.MagicMock()
+            # File doesn't exist in S3
+            mock_client.head_object.side_effect = Exception("404 Not Found")
+            backend._s3_client = mock_client
 
-        with mock.patch(
-            "_therock_utils.storage_backend.concurrent.futures.ThreadPoolExecutor"
-        ) as mock_pool:
-            count = backend.upload_files(files)
+            files = [
+                (only_file, StorageLocation("bucket", "run-1/only.log")),
+            ]
 
-        self.assertEqual(count, 1)
-        mock_pool.assert_not_called()
-        mock_client.upload_file.assert_called_once()
+            with mock.patch(
+                "_therock_utils.storage_backend.concurrent.futures.ThreadPoolExecutor"
+            ) as mock_pool:
+                count = backend.upload_files(files)
+
+            self.assertEqual(count, 1)
+            mock_pool.assert_not_called()
+            mock_client.upload_file.assert_called_once()
 
     def test_dry_run_skips_thread_pool(self):
         backend = S3StorageBackend(dry_run=True)
@@ -629,27 +756,35 @@ class TestS3StorageBackendUploadFiles(unittest.TestCase):
 
     def test_error_propagation(self):
         """If a file fails after retries, upload_files raises RuntimeError."""
-        backend = S3StorageBackend()
-        mock_client = mock.MagicMock()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            (tmppath / "good.log").write_text("good")
+            (tmppath / "bad.log").write_text("bad")
 
-        # Second file always fails (after _s3_retry exhausts retries)
-        def upload_side_effect(filename, bucket, key, **kwargs):
-            if "bad" in key:
-                raise Exception("persistent failure")
+            backend = S3StorageBackend()
+            mock_client = mock.MagicMock()
 
-        mock_client.upload_file.side_effect = upload_side_effect
-        backend._s3_client = mock_client
+            # File doesn't exist in S3
+            mock_client.head_object.side_effect = Exception("404 Not Found")
 
-        files = [
-            (Path("/tmp/good.log"), StorageLocation("bucket", "run-1/good.log")),
-            (Path("/tmp/bad.log"), StorageLocation("bucket", "run-1/bad.log")),
-        ]
+            # Second file always fails (after _s3_retry exhausts retries)
+            def upload_side_effect(filename, bucket, key, **kwargs):
+                if "bad" in key:
+                    raise Exception("persistent failure")
 
-        with mock.patch("_therock_utils.storage_backend.time.sleep"):
-            with self.assertRaises(RuntimeError) as ctx:
-                backend.upload_files(files)
+            mock_client.upload_file.side_effect = upload_side_effect
+            backend._s3_client = mock_client
 
-        self.assertIn("bad.log", str(ctx.exception))
+            files = [
+                (tmppath / "good.log", StorageLocation("bucket", "run-1/good.log")),
+                (tmppath / "bad.log", StorageLocation("bucket", "run-1/bad.log")),
+            ]
+
+            with mock.patch("_therock_utils.storage_backend.time.sleep"):
+                with self.assertRaises(RuntimeError) as ctx:
+                    backend.upload_files(files)
+
+            self.assertIn("bad.log", str(ctx.exception))
 
     def test_concurrency_param_wired_through(self):
         backend = S3StorageBackend(upload_concurrency=5)

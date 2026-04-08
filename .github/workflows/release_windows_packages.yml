@@ -237,6 +237,7 @@ jobs:
           amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
           package_version: "ADHOCBUILD"
           extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          ROCM_BUILD_ID: ${{ github.sha }}
         run: |
           python3 build_tools/github_actions/build_configure.py
 

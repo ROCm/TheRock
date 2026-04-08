@@ -73,6 +73,7 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
         "EXTRA_CXX_COMPILER_LAUNCHER",
         "THEROCK_BUILD_PROF_LOG_DIR",
         "MANYLINUX",
+        "ROCM_BUILD_ID",
     ]
     for var in passthrough_env_vars:
         if var in os.environ:

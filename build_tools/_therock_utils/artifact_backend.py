@@ -17,12 +17,83 @@ Environment-based switching:
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import logging
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import List, Optional
 import os
 import shutil
 
+from .hash_util import calculate_hash
 from .workflow_outputs import WorkflowOutputRoot
+
+logger = logging.getLogger(__name__)
+
+
+class ArtifactConflictError(Exception):
+    """Raised when an artifact would overwrite an existing one with different content.
+
+    When uploading an artifact that already exists, the SHA256 checksums are compared.
+    If they differ, it indicates a potential build system problem - either the artifact
+    should have a different name/version, or an unexpected change occurred.
+    """
+
+    pass
+
+
+def _parse_sha256sum_content(content: str) -> str:
+    """Parse a sha256sum file and return the hash.
+
+    The format is: {hash}  {filename}
+    (two spaces between hash and filename)
+
+    Args:
+        content: The content of the sha256sum file.
+
+    Returns:
+        The SHA256 hash from the file.
+
+    Raises:
+        ValueError: If the content cannot be parsed.
+    """
+    content = content.strip()
+    if not content:
+        raise ValueError("Empty sha256sum content")
+    # Format is: hash  filename (two spaces)
+    parts = content.split("  ", 1)
+    if len(parts) < 1 or not parts[0]:
+        raise ValueError(f"Invalid sha256sum format: {content!r}")
+    return parts[0].strip()
+
+
+def _read_local_sha256sum(source_path: Path) -> Optional[str]:
+    """Read the SHA256 hash from a local artifact's companion .sha256sum file.
+
+    Args:
+        source_path: Path to the artifact file.
+
+    Returns:
+        The SHA256 hash if the sha256sum file exists, None otherwise.
+    """
+    sha_path = source_path.parent / f"{source_path.name}.sha256sum"
+    if not sha_path.exists():
+        return None
+    try:
+        return _parse_sha256sum_content(sha_path.read_text())
+    except (ValueError, OSError) as e:
+        logger.warning("Failed to read local sha256sum %s: %s", sha_path, e)
+        return None
+
+
+def _compute_file_sha256(file_path: Path) -> str:
+    """Compute SHA256 hash of a file.
+
+    Args:
+        file_path: Path to the file.
+
+    Returns:
+        Hexadecimal SHA256 hash string.
+    """
+    return calculate_hash(file_path, "sha256").hexdigest()
 
 
 @dataclass
@@ -68,12 +139,32 @@ class ArtifactBackend(ABC):
         pass
 
     @abstractmethod
-    def upload_artifact(self, source_path: Path, artifact_key: str) -> None:
+    def upload_artifact(
+        self,
+        source_path: Path,
+        artifact_key: str,
+        sha256sum_path: Path | None = None,
+    ) -> None:
         """Upload/copy a local artifact to the backend.
 
+        Implementations must perform conflict detection: if an artifact already
+        exists with different content, raise ``ArtifactConflictError``. If it
+        exists with identical content, skip the upload. This prevents silent
+        overwrites that could mask build system problems.
+
+        If sha256sum_path is provided and exists, it is also uploaded as a
+        companion file (artifact_key + ".sha256sum").
+
         Args:
-            source_path: Local path of the artifact to upload
-            artifact_key: The artifact filename to use in the backend
+            source_path: Local path of the artifact to upload.
+            artifact_key: The artifact filename to use in the backend.
+            sha256sum_path: Optional path to local sha256sum file. If provided,
+                used for efficient conflict detection without computing hash,
+                and also uploaded alongside the artifact.
+
+        Raises:
+            ArtifactConflictError: If the artifact already exists with
+                different content (different SHA256 or file contents).
         """
         pass
 
@@ -158,17 +249,101 @@ class LocalDirectoryBackend(ArtifactBackend):
         if sha_src.exists():
             shutil.copy2(sha_src, dest_path.parent / f"{artifact_key}.sha256sum")
 
-    def upload_artifact(self, source_path: Path, artifact_key: str) -> None:
-        """Copy artifact from source to staging."""
+    def upload_artifact(
+        self,
+        source_path: Path,
+        artifact_key: str,
+        sha256sum_path: Path | None = None,
+    ) -> None:
+        """Copy artifact from source to staging.
+
+        Performs SHA256 conflict detection to prevent silent overwrites of
+        existing artifacts with different content. If the artifact already
+        exists with the same SHA256, the upload is skipped.
+
+        Args:
+            source_path: Local path of the artifact to upload.
+            artifact_key: The artifact filename to use in the backend.
+            sha256sum_path: Optional path to local sha256sum file for efficient
+                conflict detection.
+
+        Raises:
+            FileNotFoundError: If source_path does not exist.
+            ArtifactConflictError: If the artifact already exists with a
+                different SHA256 checksum.
+        """
         if not source_path.exists():
             raise FileNotFoundError(f"Source artifact not found: {source_path}")
+
+        # Check for SHA conflicts if artifact already exists
         dest = self._artifact_path(artifact_key)
+        if dest.exists():
+            existing_sha_path = self._artifact_path(f"{artifact_key}.sha256sum")
+            existing_sha: Optional[str] = None
+
+            # Try to get existing SHA from .sha256sum file
+            if existing_sha_path.exists():
+                try:
+                    existing_sha = _parse_sha256sum_content(
+                        existing_sha_path.read_text()
+                    )
+                except (ValueError, OSError) as e:
+                    logger.warning(
+                        "Failed to read existing sha256sum for %s: %s. "
+                        "Will compute from file contents.",
+                        artifact_key,
+                        e,
+                    )
+
+            # If no sha256sum file, compute hash from the existing artifact
+            if existing_sha is None:
+                logger.info(
+                    "Artifact %s exists but has no sha256sum file. "
+                    "Computing hash from file contents.",
+                    artifact_key,
+                )
+                existing_sha = _compute_file_sha256(dest)
+
+            # Get local SHA: prefer provided path, then sibling, then compute
+            local_sha: Optional[str] = None
+            if sha256sum_path is not None and sha256sum_path.exists():
+                try:
+                    local_sha = _parse_sha256sum_content(sha256sum_path.read_text())
+                except (ValueError, OSError) as e:
+                    logger.warning(
+                        "Failed to read provided sha256sum %s: %s",
+                        sha256sum_path,
+                        e,
+                    )
+            if local_sha is None:
+                local_sha = _read_local_sha256sum(source_path)
+            if local_sha is None:
+                local_sha = _compute_file_sha256(source_path)
+
+            if existing_sha == local_sha:
+                logger.info(
+                    "Skipping upload of %s: identical artifact "
+                    "already exists (SHA256: %s)",
+                    artifact_key,
+                    existing_sha[:16] + "...",
+                )
+                return
+            else:
+                raise ArtifactConflictError(
+                    f"Artifact {artifact_key} already exists "
+                    f"with different content.\n"
+                    f"  Existing SHA256: {existing_sha}\n"
+                    f"  Local SHA256:    {local_sha}\n"
+                    f"This indicates a potential build system problem."
+                )
+
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, dest)
-        # Also copy sha256sum if it exists
-        sha_src = source_path.parent / f"{source_path.name}.sha256sum"
-        if sha_src.exists():
-            shutil.copy2(sha_src, self._artifact_path(f"{artifact_key}.sha256sum"))
+        # Also copy sha256sum if provided
+        if sha256sum_path is not None and sha256sum_path.exists():
+            shutil.copy2(
+                sha256sum_path, self._artifact_path(f"{artifact_key}.sha256sum")
+            )
 
     def copy_artifact(
         self, artifact_key: str, source_backend: "ArtifactBackend"
@@ -257,6 +432,52 @@ class S3Backend(ArtifactBackend):
     def base_uri(self) -> str:
         return self.output_root.root().s3_uri
 
+    def _fetch_sha256sum(self, sha_key: str) -> str:
+        """Fetch and parse a sha256sum file from S3.
+
+        Args:
+            sha_key: The sha256sum filename (e.g., 'artifact.tar.zst.sha256sum')
+
+        Returns:
+            The SHA256 hash from the file.
+
+        Raises:
+            ValueError: If the content cannot be parsed.
+            Exception: If the S3 download fails.
+        """
+        import io
+
+        loc = self.output_root.artifact(sha_key)
+        buffer = io.BytesIO()
+        self.s3_client.download_fileobj(self.bucket, loc.relative_path, buffer)
+        content = buffer.getvalue().decode("utf-8")
+        return _parse_sha256sum_content(content)
+
+    def _compute_remote_sha256(self, artifact_key: str) -> str:
+        """Download artifact from S3 and compute its SHA256 hash.
+
+        This is used when the .sha256sum file is missing and we need to
+        compare file contents directly.
+
+        Args:
+            artifact_key: The artifact filename.
+
+        Returns:
+            Hexadecimal SHA256 hash string.
+        """
+        import tempfile
+
+        loc = self.output_root.artifact(artifact_key)
+        # Use delete=False to allow S3 client to write to the file on Windows
+        # (NamedTemporaryFile with delete=True keeps the file open exclusively)
+        tmp = tempfile.NamedTemporaryFile(delete=False)
+        try:
+            tmp.close()  # Close so S3 client can write to it
+            self.s3_client.download_file(self.bucket, loc.relative_path, tmp.name)
+            return _compute_file_sha256(Path(tmp.name))
+        finally:
+            os.unlink(tmp.name)
+
     def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
         """List S3 artifacts."""
         paginator = self.s3_client.get_paginator("list_objects_v2")
@@ -290,10 +511,97 @@ class S3Backend(ArtifactBackend):
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         self.s3_client.download_file(self.bucket, loc.relative_path, str(dest_path))
 
-    def upload_artifact(self, source_path: Path, artifact_key: str) -> None:
-        """Upload to S3."""
+    def upload_artifact(
+        self,
+        source_path: Path,
+        artifact_key: str,
+        sha256sum_path: Path | None = None,
+    ) -> None:
+        """Upload artifact to S3.
+
+        Performs SHA256 conflict detection to prevent silent overwrites of
+        existing artifacts with different content. If the artifact already
+        exists with the same SHA256, the upload is skipped.
+
+        Args:
+            source_path: Local path of the artifact to upload.
+            artifact_key: The artifact filename to use in the backend.
+            sha256sum_path: Optional path to local sha256sum file for efficient
+                conflict detection.
+
+        Raises:
+            ArtifactConflictError: If the artifact already exists with a
+                different SHA256 checksum.
+            RuntimeError: If there's a network error during the existence check.
+        """
+        # Check for SHA conflicts if artifact already exists
+        if self.artifact_exists(artifact_key):
+            # Get existing SHA: prefer remote sha256sum file, fall back to download
+            existing_sha: Optional[str] = None
+            sha_key = f"{artifact_key}.sha256sum"
+            if self.artifact_exists(sha_key):
+                try:
+                    existing_sha = self._fetch_sha256sum(sha_key)
+                except (ValueError, OSError) as e:
+                    logger.warning(
+                        "Failed to fetch existing sha256sum for %s: %s. "
+                        "Will compute from file contents.",
+                        artifact_key,
+                        e,
+                    )
+
+            if existing_sha is None:
+                # No sha256sum file or failed to read - download and compute
+                logger.info(
+                    "Artifact %s exists but has no readable sha256sum file. "
+                    "Computing hash from file contents.",
+                    artifact_key,
+                )
+                existing_sha = self._compute_remote_sha256(artifact_key)
+
+            # Get local SHA: prefer provided path, then sibling, then compute
+            local_sha: Optional[str] = None
+            if sha256sum_path is not None and sha256sum_path.exists():
+                try:
+                    local_sha = _parse_sha256sum_content(sha256sum_path.read_text())
+                except (ValueError, OSError) as e:
+                    logger.warning(
+                        "Failed to read provided sha256sum %s: %s",
+                        sha256sum_path,
+                        e,
+                    )
+            if local_sha is None:
+                local_sha = _read_local_sha256sum(source_path)
+            if local_sha is None:
+                local_sha = _compute_file_sha256(source_path)
+
+            if existing_sha == local_sha:
+                logger.info(
+                    "Skipping upload of %s: identical artifact "
+                    "already exists in S3 (SHA256: %s)",
+                    artifact_key,
+                    existing_sha[:16] + "...",
+                )
+                return
+            else:
+                raise ArtifactConflictError(
+                    f"Artifact {artifact_key} already exists "
+                    f"in S3 with different content.\n"
+                    f"  Existing SHA256: {existing_sha}\n"
+                    f"  Local SHA256:    {local_sha}\n"
+                    f"  S3 location:     s3://{self.bucket}/"
+                    f"{self.output_root.artifact(artifact_key).relative_path}\n"
+                    f"This indicates a potential build system problem."
+                )
+
         loc = self.output_root.artifact(artifact_key)
         self.s3_client.upload_file(str(source_path), self.bucket, loc.relative_path)
+        # Also upload sha256sum if provided
+        if sha256sum_path is not None and sha256sum_path.exists():
+            sha_loc = self.output_root.artifact(f"{artifact_key}.sha256sum")
+            self.s3_client.upload_file(
+                str(sha256sum_path), self.bucket, sha_loc.relative_path
+            )
 
     def copy_artifact(
         self, artifact_key: str, source_backend: "ArtifactBackend"

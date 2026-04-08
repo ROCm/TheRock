@@ -21,10 +21,12 @@ Usage::
 """
 
 import concurrent.futures
+import filecmp
 import logging
 import mimetypes
 import os
 import shutil
+import tempfile
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -287,6 +289,53 @@ class S3StorageBackend(StorageBackend):
             logger.info("[DRY RUN] %s -> %s (%s)", source, dest.s3_uri, content_type)
             return
 
+        # Check if the file exists in S3 and compare contents
+        file_exists = False
+        try:
+            # Try to get existing object metadata to see if it exists
+            # Don't use _s3_retry here - 404 is expected and not transient
+            self.s3_client.head_object(
+                Bucket=dest.bucket,
+                Key=dest.relative_path,
+            )
+            file_exists = True
+        except Exception as exc:
+            # File doesn't exist (404) or other error
+            exc_str = str(exc).lower()
+            if "404" in exc_str or "not found" in exc_str:
+                # File doesn't exist, proceed with upload
+                file_exists = False
+            else:
+                # Some other error occurred during head check
+                raise
+
+        if file_exists:
+            # File exists - download and compare
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+            try:
+                _s3_retry(
+                    "download",
+                    dest.s3_uri,
+                    self.s3_client.download_file,
+                    dest.bucket,
+                    dest.relative_path,
+                    str(tmp_path),
+                )
+                if filecmp.cmp(source, tmp_path, shallow=False):
+                    logger.info(
+                        "File %s already exists with identical content. Skipping upload.",
+                        dest.s3_uri,
+                    )
+                    return
+                else:
+                    raise ValueError(
+                        f"File conflict: {dest.s3_uri} already exists with different content. "
+                        f"Refusing to overwrite."
+                    )
+            finally:
+                tmp_path.unlink(missing_ok=True)
+
         logger.debug("upload %s -> %s (%s)", source, dest.s3_uri, content_type)
         _s3_retry(
             "upload",
@@ -335,6 +384,20 @@ class LocalStorageBackend(StorageBackend):
         if self._dry_run:
             logger.info("[DRY RUN] %s -> %s", source, target)
             return
+
+        # Check if file exists and compare contents
+        if target.exists():
+            if filecmp.cmp(source, target, shallow=False):
+                logger.info(
+                    "File %s already exists with identical content. Skipping upload.",
+                    target,
+                )
+                return
+            else:
+                raise ValueError(
+                    f"File conflict: {target} already exists with different content. "
+                    f"Refusing to overwrite."
+                )
 
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
