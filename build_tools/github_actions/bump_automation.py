@@ -318,7 +318,7 @@ def main():
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
     args = parser.parse_args()
-    run (
+    run(
         [
             "git",
             "-c",
