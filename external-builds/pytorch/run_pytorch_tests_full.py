@@ -75,24 +75,15 @@ THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 # listed here (e.g. gfx1151, Windows targets) fall back to
 # ROCM_BUILD_ENVIRONMENT_DEFAULT.  Falling back to mi300 timings still gives
 # reasonably balanced shards since relative test durations are similar across
-# GPU types.  Once pytorch/pytorch#176445 lands, we can match on the GPU SKU
-# suffix for a more robust lookup.
+# GPU types.  Since pytorch/pytorch#176445, each GPU gets its own key with
+# inductor timings included, so a single map suffices for all configs.
 AMDGPU_FAMILY_TO_BUILD_ENV = {
     "gfx90X-dcgpu": "linux-jammy-rocm-py3.10-mi200",
     "gfx94X-dcgpu": "linux-noble-rocm-py3.12-mi300",
-    "gfx950-dcgpu": "linux-jammy-rocm-py3.10-mi355",
+    "gfx950-dcgpu": "linux-noble-rocm-py3.12-mi355",
     "gfx110X-all": "linux-jammy-rocm-py3.10-navi31",
 }
 ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
-
-# WORKAROUND: Upstream PyTorch uses a separate BUILD_ENVIRONMENT for the inductor config
-# (e.g. inductor-rocm-mi300.yml vs rocm-mi300.yml), so test-times.json stores
-# inductor timings under different keys.
-# This workaround should not be required once https://github.com/pytorch/pytorch/pull/176445 merges.
-AMDGPU_FAMILY_TO_INDUCTOR_BUILD_ENV = {
-    "gfx94X-dcgpu": "rocm-py3.12-inductor-mi300",
-    "gfx950-dcgpu": "rocm-py3.12-inductor-mi355",
-}
 
 THEROCK_ENV_VARS = [
     "CI",
@@ -170,17 +161,9 @@ def has_junit_failures(reports_dir: Path) -> bool:
 
 def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
     os.environ.setdefault("CI", "1")
-    if test_config == "inductor":
-        build_env = AMDGPU_FAMILY_TO_INDUCTOR_BUILD_ENV.get(
-            amdgpu_family,
-            AMDGPU_FAMILY_TO_BUILD_ENV.get(
-                amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
-            ),
-        )
-    else:
-        build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
-            amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
-        )
+    build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
+        amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
+    )
     os.environ.setdefault("BUILD_ENVIRONMENT", build_env)
     os.environ.setdefault("PYTORCH_TEST_WITH_ROCM", "1")
     os.environ.setdefault("PYTORCH_TESTING_DEVICE_ONLY_FOR", "cuda")

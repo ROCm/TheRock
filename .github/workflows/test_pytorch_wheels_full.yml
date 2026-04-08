@@ -301,7 +301,6 @@ jobs:
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py -- \
             --continue-on-collection-errors \
-            --import-mode=importlib \
             -v
 
       - name: (Windows) Read and propagate exit code
