@@ -47,6 +47,7 @@ Outputs (written to GITHUB_OUTPUT):
 import enum
 import json
 import os
+import random
 from dataclasses import asdict, dataclass, field, fields
 
 
@@ -173,8 +174,10 @@ class CIInputs:
             windows_amdgpu_families=_parse_comma_list(
                 inputs.get("windows_amdgpu_families", "")
             ),
-            linux_test_labels=inputs.get("linux_test_labels", ""),
-            windows_test_labels=inputs.get("windows_test_labels", ""),
+            linux_test_labels=_parse_comma_list(inputs.get("linux_test_labels", "")),
+            windows_test_labels=_parse_comma_list(
+                inputs.get("windows_test_labels", "")
+            ),
             prebuilt_stages=inputs.get("prebuilt_stages", ""),
             baseline_run_id=inputs.get("baseline_run_id", ""),
         )
@@ -760,6 +763,24 @@ def _expand_build_config_for_platform(
 
         # Determine test runner label.
         test_runs_on = platform_info["test-runs-on"]
+
+        # Handle dual-label configuration with weighted random selection.
+        # Some families (e.g. gfx94x) have multiple runner labels available.
+        if "test-runs-on-alternate" in platform_info:
+            alternate_label = platform_info["test-runs-on-alternate"]
+            alternate_weight = platform_info.get("test-runs-on-alternate-weight", 0.5)
+            if random.random() < alternate_weight:
+                test_runs_on = alternate_label
+                print(
+                    f"  {family_name}: selected alternate runner (weight={alternate_weight}): "
+                    f"{test_runs_on}"
+                )
+            else:
+                print(
+                    f"  {family_name}: selected primary runner (weight={1-alternate_weight}): "
+                    f"{test_runs_on}"
+                )
+
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
         # this family (the default runner may not have the right kernel).

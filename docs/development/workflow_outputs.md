@@ -171,11 +171,6 @@ ROCm/TheRock (not fork)? ──Yes──> therock-ci-artifacts
        No
        │
        └──> therock-ci-artifacts-external
-
-Legacy (pre-cutover):
-  Runs before 2025-11-11 (TheRock #2046) use the old bucket names:
-    therock-ci-artifacts          → therock-artifacts
-    therock-ci-artifacts-external → therock-artifacts-external
 ```
 
 Valid `RELEASE_TYPE` values are `dev`, `nightly`, and `prerelease`.

@@ -188,7 +188,9 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "-DUSE_PROF_API=OFF"
       "-D__HIP_ENABLE_PCH=OFF"
       "-DROCCLR_ENABLE_PAL=1"
-      "-DROCCLR_ENABLE_HSA=0"
+      "-DROCCLR_ENABLE_HSA=1"
+      "-D__HIP_ENABLE_RTC=1"
+      "-DROCR_DLL_LOAD=0"
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
     )
   else()
@@ -384,9 +386,10 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       "-DUSE_PROF_API=OFF"
       "-D__HIP_ENABLE_PCH=OFF"
       "-DROCCLR_ENABLE_PAL=ON"
-      "-DROCCLR_ENABLE_HSA=OFF"
+      "-DROCCLR_ENABLE_HSA=ON"
       "-DROCCLR_ENABLE_HSAIL=ON"
       "-DROCCLR_ENABLE_LC=ON"
+      "-DROCR_DLL_LOAD=OFF"
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
     )
   else()
