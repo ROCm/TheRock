@@ -123,6 +123,8 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      # SYS_PTRACE is required by PyTorch's test infra which uses gdb to
+      # collect stack traces on segfaults and hangs (torch/testing/_internal).
       options: --shm-size=10g
         --cap-add=SYS_PTRACE
         --group-add video
@@ -146,7 +148,10 @@ jobs:
       CI: "1"
       PYTORCH_TEST_WITH_ROCM: "1"
       PYTORCH_TESTING_DEVICE_ONLY_FOR: "cuda"
-      OPENBLAS_NUM_THREADS: "64"
+      # Pin OpenBLAS threads to 1 for deterministic reductions; without this,
+      # OpenBLAS defaults to the number of CPU cores, which causes
+      # non-deterministic results in tests like test_entropy_monte_carlo.
+      OPENBLAS_NUM_THREADS: "1"
       TEST_CONFIG: ${{ matrix.test_config }}
       TESTS_TO_INCLUDE: ${{ inputs.tests_to_include }}
 
