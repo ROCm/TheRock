@@ -270,12 +270,51 @@ $env:TF_WORKER_HOST = "localhost"
 # d:\...\build-hip-worker\hip-worker.exe
 
 # Worker (Linux): ssh jam@149.28.118.43
-HIP_REMOTE_CACHE=1 nohup ~/hip-remote/core/hip-remote-worker/build/hip-worker > /tmp/hip-worker.log 2>&1 &
+HIP_VISIBLE_DEVICES=1 nohup ~/hip-remote/core/hip-remote-worker/build/hip-worker > /tmp/hip-worker.log 2>&1 &
 
 # Tests:
 python test_gpt2.py               # GPT-2 generation
 python test_sdxl_cat.py           # SDXL image generation
 python test_sd15.py               # SD 1.5 (smaller/faster)
+```
+
+### Worker Lifecycle and GPU Cleanup
+
+**IMPORTANT:** Always stop the worker with `pkill hip-worker` (SIGTERM), never
+`pkill -9` (SIGKILL). SIGTERM triggers the cleanup handler which frees all GPU
+allocations and unloads modules. SIGKILL cannot be caught and leaves orphaned
+VRAM on the GPU, corrupting GPU 0 for subsequent runs.
+
+```bash
+# Correct: graceful shutdown (frees GPU resources)
+pkill hip-worker
+
+# WRONG: kills without cleanup, corrupts GPU state
+pkill -9 hip-worker  # AVOID THIS
+```
+
+On client disconnect, the worker automatically cleans up GPU resources (frees
+allocations, unloads modules, calls `hipDeviceSynchronize`). The cleanup is
+logged:
+```
+[HIP-Worker] Cleanup: freed 19 allocations, unloaded 24 modules
+[HIP-Worker] Client disconnected (GPU resources cleaned up)
+```
+
+If GPU 0 becomes corrupted (from a prior `pkill -9`), use `HIP_VISIBLE_DEVICES=1`
+to run on a different GPU, or reboot the server to clear GPU 0.
+
+### Eager Flush (localhost optimization)
+
+When `TF_WORKER_HOST` is `localhost` or `127.0.0.1`, the client automatically
+enables eager flushing (sends FnF data to the worker every 64 requests instead
+of only at sync points). This reduces GPU starvation during cold start.
+
+For remote workers over high-latency links, eager flush is auto-disabled because
+frequent small TCP sends hurt throughput. Override with:
+```powershell
+$env:HIP_REMOTE_EAGER_FLUSH = "64"   # force enable (N requests per flush)
+$env:HIP_REMOTE_EAGER_FLUSH = "0"    # force disable
 ```
 
 ## Key Documentation
