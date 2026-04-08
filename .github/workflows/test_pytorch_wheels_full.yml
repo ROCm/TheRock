@@ -169,11 +169,6 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
-      - name: Install system dependencies
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          apt-get update && apt-get install -y build-essential
-
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
         run: |
@@ -239,6 +234,11 @@ jobs:
           echo "LD_LIBRARY_PATH=${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:${LD_LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
           echo "LIBRARY_PATH=${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:${LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
           echo "USE_MSLK=0" >> "${GITHUB_ENV}"
+
+          # Use ROCm's clang for JIT C++ compilation (torch.utils.cpp_extension)
+          # instead of requiring gcc/build-essential.
+          echo "CC=${ROCM_HOME}/lib/llvm/bin/clang" >> "${GITHUB_ENV}"
+          echo "CXX=${ROCM_HOME}/lib/llvm/bin/clang++" >> "${GITHUB_ENV}"
 
       # export_test_times.py must run from the PyTorch repo root with
       # PYTHONPATH=. because it imports internal PyTorch modules (e.g.
