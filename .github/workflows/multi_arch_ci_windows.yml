@@ -135,6 +135,22 @@ jobs:
       contents: read
       id-token: write
 
+  test_python_packages_per_family:
+    needs: [build_python_packages]
+    name: Test Python ${{ matrix.family_info.amdgpu_family }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
+    uses: ./.github/workflows/test_rocm_wheels.yml
+    with:
+      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
+      test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      package_find_links_url: "${{ needs.build_python_packages.outputs.package_find_links_url }}/${{ matrix.family_info.amdgpu_family }}/index.html"
+      python_version: "3.12"
+      rocm_version: ${{ inputs.rocm_package_version }}
+
   # NOTE: Per-family PyTorch builds — each family gets its own wheel built
   # against that family's ROCm package index slice.
   # TODO(future): Consider adding a combined multi-arch pytorch build job

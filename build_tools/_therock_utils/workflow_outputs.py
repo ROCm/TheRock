@@ -44,7 +44,6 @@ Usage::
 import os
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 import platform as platform_module
 
@@ -299,9 +298,33 @@ class WorkflowOutputRoot:
 # Bucket selection logic
 # ---------------------------------------------------------------------------
 
-# Cutover date for bucket naming change (TheRock #2046).
-# Workflows before this date used therock-artifacts; after, therock-ci-artifacts.
-_BUCKET_CUTOVER_DATE = datetime.fromisoformat("2025-11-11T16:18:48+00:00")
+
+def _is_current_run_pr_from_fork() -> bool:
+    """Check if the current workflow run is a pull request from a fork.
+
+    Reads the GitHub event payload to check the .fork property on the
+    head repo, matching the behavior of the GitHub Actions expression
+    ``github.event.pull_request.head.repo.fork``.
+
+    Returns False for non-pull_request events or if the event payload
+    is not available (e.g. local development).
+    """
+    import json
+
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+    if event_name != "pull_request":
+        return False
+
+    event_path = os.environ.get("GITHUB_EVENT_PATH")
+    if not event_path:
+        return False
+
+    with open(event_path) as f:
+        event = json.load(f)
+
+    return bool(
+        event.get("pull_request", {}).get("head", {}).get("repo", {}).get("fork", False)
+    )
 
 
 def _retrieve_bucket_info(
@@ -336,21 +359,15 @@ def _retrieve_bucket_info(
         workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
 
     # Extract metadata from workflow_run if available
-    curr_commit_dt = None
     if workflow_run is not None:
         _log(f"  workflow_run_id             : {workflow_run['id']}")
         head_github_repository = workflow_run["head_repository"]["full_name"]
         is_pr_from_fork = head_github_repository != github_repository
         _log(f"  head_github_repository      : {head_github_repository}")
         _log(f"  is_pr_from_fork             : {is_pr_from_fork}")
-
-        curr_commit_dt = datetime.strptime(
-            workflow_run["updated_at"], "%Y-%m-%dT%H:%M:%SZ"
-        )
-        curr_commit_dt = curr_commit_dt.replace(tzinfo=timezone.utc)
     else:
-        is_pr_from_fork = os.environ.get("IS_PR_FROM_FORK", "false") == "true"
-        _log(f"  (implicit) is_pr_from_fork  : {is_pr_from_fork}")
+        is_pr_from_fork = _is_current_run_pr_from_fork()
+        _log(f"  is_pr_from_fork             : {is_pr_from_fork}")
 
     owner, repo_name = github_repository.split("/")
     external_repo = (
@@ -372,12 +389,8 @@ def _retrieve_bucket_info(
     else:
         if external_repo == "":
             bucket = "therock-ci-artifacts"
-            if curr_commit_dt and curr_commit_dt <= _BUCKET_CUTOVER_DATE:
-                bucket = "therock-artifacts"
         else:
             bucket = "therock-ci-artifacts-external"
-            if curr_commit_dt and curr_commit_dt <= _BUCKET_CUTOVER_DATE:
-                bucket = "therock-artifacts-external"
 
     _log("Retrieved bucket info:")
     _log(f"  external_repo: {external_repo}")

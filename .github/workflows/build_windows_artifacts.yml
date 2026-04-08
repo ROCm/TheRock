@@ -74,7 +74,6 @@ jobs:
       CCACHE_CONFIGPATH: "${{github.workspace}}/.ccache/ccache.conf"
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
-      IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

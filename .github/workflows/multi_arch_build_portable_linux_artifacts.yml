@@ -63,7 +63,6 @@ jobs:
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       TEATIME_FORCE_INTERACTIVE: 0
-      IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
     steps:
       - name: Checkout Repository
