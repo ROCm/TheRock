@@ -28,22 +28,22 @@ class S3BucketConfig:
     region: str = field(default="us-east-2")
     """Region in S3 (e.g. 'us-east-2')"""
 
+    iam_account: str | None = field(default="692859939525")
+    """IAM account for write_access_iam_role"""
+
     iam_role: str | None = field(default=None)
     """IAM role name that grants write access to this bucket (e.g. 'therock-ci'), if any"""
-
-    iam_namespace: str | None = field(default="arn:aws:iam::692859939525:role")
-    """Namespace for write_access_iam_role (e.g. 'arn:aws:iam::692859939525:role')"""
 
     @property
     def write_access_iam_role(self) -> str | None:
         """IAM role granting write access to the bucket"""
         if not self.iam_role:
             return None
-        if not self.iam_namespace:
+        if not self.iam_account:
             raise ValueError(
-                f"Bucket {self.name!r} has iam_role={self.iam_role!r} but no iam_namespace"
+                f"Bucket {self.name!r} has iam_role={self.iam_role!r} but no iam_account"
             )
-        return f"{self.iam_namespace}/{self.iam_role}"
+        return f"arn:aws:iam::{self.iam_account}:role/{self.iam_role}"
 
 
 s3_bucket_configs = [
