@@ -68,7 +68,7 @@ add_custom_target(
       "CFLAGS=${EXTRA_CFLAGS}"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
-    "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
+    "configure"
       --prefix "${CMAKE_CURRENT_BINARY_DIR}"
       --enable-install-libiberty
       --enable-shared
