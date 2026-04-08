@@ -388,11 +388,7 @@ def build_run_test_cmd(
     if args.include:
         cmd.extend(["--include"] + args.include)
     test_dir = args.pytorch_dir / "test"
-    excludes = [
-        m
-        for m in EXCLUDED_TEST_MODULES
-        if (test_dir / (m + ".py")).exists()
-    ]
+    excludes = [m for m in EXCLUDED_TEST_MODULES if (test_dir / (m + ".py")).exists()]
     if args.exclude:
         excludes.extend(args.exclude)
     if excludes:
@@ -493,7 +489,10 @@ def _run_inductor(
         print(f"{'=' * 60}")
         print(f"Executing: {' '.join(cmd)}")
         result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
-        print(f"run_test.py [{label}] finished with return code: {result.returncode}", flush=True)
+        print(
+            f"run_test.py [{label}] finished with return code: {result.returncode}",
+            flush=True,
+        )
         if result.returncode != 0:
             worst_rc = result.returncode
 

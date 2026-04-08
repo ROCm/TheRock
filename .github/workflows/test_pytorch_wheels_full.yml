@@ -56,7 +56,7 @@ on:
         required: true
         type: string
       test_runs_on:
-        required: true
+        required: false
         type: string
         default: "linux-gfx942-1gpu-ossci-rocm"
       test_runs_on_multi_gpu:
