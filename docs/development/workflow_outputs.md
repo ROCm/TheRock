@@ -10,12 +10,12 @@ Every CI workflow run produces a set of outputs (build artifacts, logs,
 manifests, python packages) that are uploaded to S3. Three modules in
 `_therock_utils` handle the path computation and I/O:
 
-| Module             | Role                         | Key types                                                   |
-| ------------------ | ---------------------------- | ----------------------------------------------------------- |
-| `storage_location` | Backend-agnostic location    | `StorageLocation`                                           |
-| `workflow_outputs` | CI path computation (no I/O) | `WorkflowOutputRoot`                                        |
-| `storage_backend`  | Upload I/O (write)           | `StorageBackend`, `S3StorageBackend`, `LocalStorageBackend` |
-| `artifact_backend` | Download I/O (read)          | `ArtifactBackend`, `S3Backend`, `LocalDirectoryBackend`     |
+| Module             | Role                         | Key types                                                              |
+| ------------------ | ---------------------------- | ---------------------------------------------------------------------- |
+| `storage_location` | Backend-agnostic location    | `StorageLocation`                                                      |
+| `workflow_outputs` | CI path computation (no I/O) | `WorkflowOutputRoot`                                                   |
+| `storage_backend`  | Upload I/O (write)           | `StorageBackend`, `S3StorageBackend`, `LocalStorageBackend`            |
+| `artifact_backend` | Download I/O (read)          | `ArtifactBackend`, `S3Backend`, `LocalDirectoryBackend`, `HTTPBackend` |
 
 `StorageLocation` is the bridge between path computation and I/O.
 `WorkflowOutputRoot` produces `StorageLocation` instances; backends consume them.
@@ -194,6 +194,30 @@ loc.https_url  # "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/file
 loc.local_path(Path("/tmp/staging"))  # Path("/tmp/staging/12345-linux/file.tar.xz")
 ```
 
+#### HTTPS URL Override
+
+To use a custom HTTPS URL pattern for a specific bucket, set an environment
+variable with the bucket name (dashes replaced with underscores):
+
+```bash
+THEROCK_HTTPS_URL_<bucket_name>=<base_url>
+```
+
+Example for rocm-npi-dev:
+
+```bash
+export THEROCK_HTTPS_URL_therock_dev_tarball=https://different_domain_altogether.com/tarball
+export THEROCK_HTTPS_URL_therock_dev_artifacts=https://different_domain_altogether.com/artifacts
+export THEROCK_HTTPS_URL_therock_dev_python=https://different_domain_altogether.com/whl
+```
+
+The `relative_path` is appended to the base URL:
+
+```python
+loc = StorageLocation("therock-dev-tarball", "12345-linux/file.tar.xz")
+loc.https_url  # → "https://different_domain_altogether.com/tarball/12345-linux/file.tar.xz"
+```
+
 ### WorkflowOutputRoot
 
 A frozen dataclass that computes `StorageLocation` for every output type.
@@ -252,6 +276,34 @@ backend.upload_directory(source_dir, dest_location, include=["*.tar.xz*"])
 
 Content-type is inferred from file extension — callers don't need to specify it.
 
+### ArtifactBackend
+
+An abstract base class for downloading artifacts from S3, local directories, or HTTP servers.
+Use `create_backend_from_env()` to get the right implementation based on environment variables.
+
+```python
+from _therock_utils.artifact_backend import create_backend_from_env
+
+# With S3 credentials → S3Backend
+backend = create_backend_from_env(gfx_families=["gfx94X-dcgpu"])
+
+# With THEROCK_LOCAL_STAGING_DIR → LocalDirectoryBackend
+os.environ["THEROCK_LOCAL_STAGING_DIR"] = "/tmp/staging"
+backend = create_backend_from_env(gfx_families=["gfx94X-dcgpu"])
+
+# With THEROCK_AMDGPU_FAMILIES (no S3 credentials) → HTTPBackend (read-only)
+os.environ["THEROCK_AMDGPU_FAMILIES"] = "gfx94X-dcgpu,gfx1200"
+backend = create_backend_from_env()
+
+# Download artifact
+backend.download_artifact("blas_lib_gfx94X.tar.zst", Path("/tmp/blas.tar.zst"))
+```
+
+The HTTPBackend downloads artifacts via public HTTPS URLs using `StorageLocation.https_url`:
+
+- Example: `https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/blas_lib_gfx94X.tar.zst`
+- Fork prefixes, bucket selection, and all path logic handled automatically via `WorkflowOutputRoot`
+
 ### Adding new output types
 
 To add a new output type:
@@ -278,5 +330,5 @@ To add a new output type:
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | [`fetch_artifacts.py`](/build_tools/fetch_artifacts.py)                     | `WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True)` + `S3Backend` |
 | [`find_artifacts_for_commit.py`](/build_tools/find_artifacts_for_commit.py) | `WorkflowOutputRoot.from_workflow_run(workflow_run=...)` for bucket/prefix     |
-| [`artifact_backend.py`](/build_tools/_therock_utils/artifact_backend.py)    | `WorkflowOutputRoot` for `S3Backend` construction                              |
-| [`artifact_manager.py`](/build_tools/artifact_manager.py)                   | Via `create_backend_from_env()`                                                |
+| [`artifact_backend.py`](/build_tools/_therock_utils/artifact_backend.py)    | `WorkflowOutputRoot` for `S3Backend`/`HTTPBackend` construction                |
+| [`artifact_manager.py`](/build_tools/artifact_manager.py)                   | Via `create_backend_from_env()` (supports S3, Local, and HTTP backends)        |
