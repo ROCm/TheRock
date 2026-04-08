@@ -89,6 +89,10 @@ def get_all_jax_wheel_versions(
     else:
         raise FileNotFoundError("Did not find jax_rocm7_pjrt wheel")
 
+    # Assumption: the jax_rocm7_plugin version (e.g. "0.9.1+rocmXY") shares the
+    # same base version as the upstream `jax` / `jaxlib` PyPI packages.  If the
+    # plugin version scheme ever diverges, this fallback will silently produce a
+    # wrong jax_version and will need an explicit override.
     base_version_source = jaxlib_version or jax_plugin_version
     all_versions = all_versions | {"jax_version": base_version_source.split("+")[0]}
 
