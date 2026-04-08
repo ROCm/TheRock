@@ -582,9 +582,9 @@ def run():
             # https://github.com/ROCm/TheRock/issues/3587
             if key == "hip-tests" and platform == "windows":
                 base = selected_matrix[key]
-                total_shards = (
-                    1  # TODO if test_type == "quick" else base["total_shards"]
-                )
+                total_shards = base.get("total_shards_dict", {}).get(platform, 1)
+                if test_type == "quick":
+                    total_shards = 1
                 shard_arr = list(range(1, total_shards + 1))
 
                 pal_entry = {
