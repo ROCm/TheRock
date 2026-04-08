@@ -337,6 +337,371 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  const std::vector<DecodedInstruction> scalar_memory_parity_program = {
+      DecodedInstruction::ThreeOperand("S_LOAD_DWORDX4",
+                                       InstructionOperand::Sgpr(8),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::ThreeOperand("S_LOAD_DWORDX8",
+                                       InstructionOperand::Sgpr(16),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x40)),
+      DecodedInstruction::ThreeOperand("S_LOAD_DWORDX16",
+                                       InstructionOperand::Sgpr(32),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x80)),
+      DecodedInstruction::ThreeOperand("S_STORE_DWORDX2",
+                                       InstructionOperand::Sgpr(16),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Sgpr(2)),
+      DecodedInstruction::ThreeOperand("S_STORE_DWORDX4",
+                                       InstructionOperand::Sgpr(8),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Sgpr(3)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  LinearExecutionMemory scalar_memory_parity_memory(0x600, 0);
+  WaveExecutionState scalar_memory_parity_state{};
+  scalar_memory_parity_state.exec_mask = 0b1011ULL;
+  scalar_memory_parity_state.sgprs[0] = 0x100u;
+  scalar_memory_parity_state.sgprs[1] = 0u;
+  scalar_memory_parity_state.sgprs[2] = 0x140u;
+  scalar_memory_parity_state.sgprs[3] = 0x160u;
+  scalar_memory_parity_state.sgprs[96] = 0x13572468u;
+  scalar_memory_parity_state.sgprs[97] = 0x24681357u;
+  scalar_memory_parity_state.vgprs[18][0] = 0x10203040u;
+  scalar_memory_parity_state.vgprs[18][1] = 0x50607080u;
+  scalar_memory_parity_state.vgprs[18][2] = 0x90a0b0c0u;
+  scalar_memory_parity_state.vgprs[18][3] = 0xd0e0f000u;
+  for (std::uint32_t index = 0; index < 4u; ++index) {
+    if (!Expect(scalar_memory_parity_memory.WriteU32(
+                    0x120u + static_cast<std::uint64_t>(index) * 4u,
+                    0x100u + index),
+                "expected scalar memory x4 seed write")) {
+      return 1;
+    }
+  }
+  for (std::uint32_t index = 0; index < 8u; ++index) {
+    if (!Expect(scalar_memory_parity_memory.WriteU32(
+                    0x140u + static_cast<std::uint64_t>(index) * 4u,
+                    0x200u + index),
+                "expected scalar memory x8 seed write")) {
+      return 1;
+    }
+  }
+  for (std::uint32_t index = 0; index < 16u; ++index) {
+    if (!Expect(scalar_memory_parity_memory.WriteU32(
+                    0x180u + static_cast<std::uint64_t>(index) * 4u,
+                    0x300u + index),
+                "expected scalar memory x16 seed write")) {
+      return 1;
+    }
+  }
+  if (!Expect(scalar_memory_parity_memory.WriteU32(0x2f0u, 0x89abcdefu),
+              "expected scalar memory unrelated seed write")) {
+    return 1;
+  }
+
+  std::string scalar_memory_parity_error_message;
+  std::vector<CompiledInstruction> compiled_scalar_memory_parity_program;
+  if (!Expect(interpreter.CompileProgram(scalar_memory_parity_program,
+                                         &compiled_scalar_memory_parity_program,
+                                         &scalar_memory_parity_error_message),
+              scalar_memory_parity_error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_scalar_memory_parity_program,
+                                         &scalar_memory_parity_state,
+                                         &scalar_memory_parity_memory,
+                                         &scalar_memory_parity_error_message),
+              scalar_memory_parity_error_message.c_str()) ||
+      !Expect(scalar_memory_parity_state.halted,
+              "expected scalar memory parity program to halt") ||
+      !Expect(scalar_memory_parity_state.exec_mask == 0b1011ULL,
+              "expected scalar memory parity to preserve exec") ||
+      !Expect(scalar_memory_parity_state.sgprs[0] == 0x100u &&
+                  scalar_memory_parity_state.sgprs[1] == 0u &&
+                  scalar_memory_parity_state.sgprs[2] == 0x140u &&
+                  scalar_memory_parity_state.sgprs[3] == 0x160u,
+              "expected scalar memory parity to preserve controls") ||
+      !Expect(scalar_memory_parity_state.sgprs[96] == 0x13572468u &&
+                  scalar_memory_parity_state.sgprs[97] == 0x24681357u,
+              "expected scalar memory parity to preserve unrelated sgprs") ||
+      !Expect(scalar_memory_parity_state.vgprs[18][0] == 0x10203040u &&
+                  scalar_memory_parity_state.vgprs[18][1] == 0x50607080u &&
+                  scalar_memory_parity_state.vgprs[18][2] == 0x90a0b0c0u &&
+                  scalar_memory_parity_state.vgprs[18][3] == 0xd0e0f000u,
+              "expected scalar memory parity to preserve vgprs")) {
+    return 1;
+  }
+  for (std::uint32_t index = 0; index < 4u; ++index) {
+    if (!Expect(scalar_memory_parity_state.sgprs[8 + index] == 0x100u + index,
+                "expected s_load_dwordx4 result")) {
+      return 1;
+    }
+  }
+  for (std::uint32_t index = 0; index < 8u; ++index) {
+    if (!Expect(scalar_memory_parity_state.sgprs[16 + index] == 0x200u + index,
+                "expected s_load_dwordx8 result")) {
+      return 1;
+    }
+  }
+  for (std::uint32_t index = 0; index < 16u; ++index) {
+    if (!Expect(scalar_memory_parity_state.sgprs[32 + index] == 0x300u + index,
+                "expected s_load_dwordx16 result")) {
+      return 1;
+    }
+  }
+  std::uint32_t scalar_memory_parity_readback = 0;
+  for (std::uint32_t index = 0; index < 2u; ++index) {
+    if (!Expect(scalar_memory_parity_memory.ReadU32(
+                    0x240u + static_cast<std::uint64_t>(index) * 4u,
+                    &scalar_memory_parity_readback),
+                "expected scalar memory x2 store readback") ||
+        !Expect(scalar_memory_parity_readback == 0x200u + index,
+                "expected scalar memory x2 store result")) {
+      return 1;
+    }
+  }
+  for (std::uint32_t index = 0; index < 4u; ++index) {
+    if (!Expect(scalar_memory_parity_memory.ReadU32(
+                    0x260u + static_cast<std::uint64_t>(index) * 4u,
+                    &scalar_memory_parity_readback),
+                "expected scalar memory x4 store readback") ||
+        !Expect(scalar_memory_parity_readback == 0x100u + index,
+                "expected scalar memory x4 store result")) {
+      return 1;
+    }
+  }
+  if (!Expect(scalar_memory_parity_memory.ReadU32(0x120u,
+                                                  &scalar_memory_parity_readback) &&
+                  scalar_memory_parity_readback == 0x100u,
+              "expected scalar memory first source preserved") ||
+      !Expect(scalar_memory_parity_memory.ReadU32(0x15cu,
+                                                  &scalar_memory_parity_readback) &&
+                  scalar_memory_parity_readback == 0x200u + 7u,
+              "expected scalar memory x8 tail source preserved") ||
+      !Expect(scalar_memory_parity_memory.ReadU32(0x1bcu,
+                                                  &scalar_memory_parity_readback) &&
+                  scalar_memory_parity_readback == 0x300u + 15u,
+              "expected scalar memory x16 tail source preserved") ||
+      !Expect(scalar_memory_parity_memory.ReadU32(0x2f0u,
+                                                  &scalar_memory_parity_readback) &&
+                  scalar_memory_parity_readback == 0x89abcdefu,
+              "expected scalar memory unrelated memory preserved")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> scalar_buffer_parity_program = {
+      DecodedInstruction::ThreeOperand("S_BUFFER_LOAD_DWORD",
+                                       InstructionOperand::Sgpr(4),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x0)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_LOAD_DWORDX2",
+                                       InstructionOperand::Sgpr(8),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x10)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_LOAD_DWORDX4",
+                                       InstructionOperand::Sgpr(16),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_LOAD_DWORDX8",
+                                       InstructionOperand::Sgpr(24),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x40)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_LOAD_DWORDX16",
+                                       InstructionOperand::Sgpr(40),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x80)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_STORE_DWORD",
+                                       InstructionOperand::Sgpr(4),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x200)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_STORE_DWORDX2",
+                                       InstructionOperand::Sgpr(8),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x210)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_STORE_DWORDX4",
+                                       InstructionOperand::Sgpr(16),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Sgpr(72)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  LinearExecutionMemory scalar_buffer_parity_memory(0x700, 0);
+  WaveExecutionState scalar_buffer_parity_state{};
+  scalar_buffer_parity_state.exec_mask = 0b0101ULL;
+  scalar_buffer_parity_state.sgprs[0] = 0x100u;
+  scalar_buffer_parity_state.sgprs[1] = 0u;
+  scalar_buffer_parity_state.sgprs[2] = 0x400u;
+  scalar_buffer_parity_state.sgprs[3] = 0u;
+  scalar_buffer_parity_state.sgprs[72] = 0x220u;
+  scalar_buffer_parity_state.sgprs[96] = 0x11223344u;
+  scalar_buffer_parity_state.sgprs[97] = 0x55667788u;
+  scalar_buffer_parity_state.vgprs[18][0] = 0x01010101u;
+  scalar_buffer_parity_state.vgprs[18][1] = 0x02020202u;
+  scalar_buffer_parity_state.vgprs[18][2] = 0x03030303u;
+  scalar_buffer_parity_state.vgprs[18][3] = 0x04040404u;
+  if (!Expect(scalar_buffer_parity_memory.WriteU32(0x100u, 0x11110000u),
+              "expected scalar buffer seed write")) {
+    return 1;
+  }
+  for (std::uint32_t index = 0; index < 2u; ++index) {
+    if (!Expect(scalar_buffer_parity_memory.WriteU32(
+                    0x110u + static_cast<std::uint64_t>(index) * 4u,
+                    0x22220000u + index),
+                "expected scalar buffer x2 seed write")) {
+      return 1;
+    }
+  }
+  for (std::uint32_t index = 0; index < 4u; ++index) {
+    if (!Expect(scalar_buffer_parity_memory.WriteU32(
+                    0x120u + static_cast<std::uint64_t>(index) * 4u,
+                    0x33330000u + index),
+                "expected scalar buffer x4 seed write")) {
+      return 1;
+    }
+  }
+  for (std::uint32_t index = 0; index < 8u; ++index) {
+    if (!Expect(scalar_buffer_parity_memory.WriteU32(
+                    0x140u + static_cast<std::uint64_t>(index) * 4u,
+                    0x44440000u + index),
+                "expected scalar buffer x8 seed write")) {
+      return 1;
+    }
+  }
+  for (std::uint32_t index = 0; index < 16u; ++index) {
+    if (!Expect(scalar_buffer_parity_memory.WriteU32(
+                    0x180u + static_cast<std::uint64_t>(index) * 4u,
+                    0x55550000u + index),
+                "expected scalar buffer x16 seed write")) {
+      return 1;
+    }
+  }
+  if (!Expect(scalar_buffer_parity_memory.WriteU32(0x300u, 0u),
+              "expected scalar buffer store seed write") ||
+      !Expect(scalar_buffer_parity_memory.WriteU32(0x310u, 0u),
+              "expected scalar buffer x2 store seed write") ||
+      !Expect(scalar_buffer_parity_memory.WriteU32(0x320u, 0u),
+              "expected scalar buffer x4 store seed write")) {
+    return 1;
+  }
+
+  std::string scalar_buffer_parity_error_message;
+  std::vector<CompiledInstruction> compiled_scalar_buffer_parity_program;
+  if (!Expect(interpreter.CompileProgram(scalar_buffer_parity_program,
+                                         &compiled_scalar_buffer_parity_program,
+                                         &scalar_buffer_parity_error_message),
+              scalar_buffer_parity_error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_scalar_buffer_parity_program,
+                                         &scalar_buffer_parity_state,
+                                         &scalar_buffer_parity_memory,
+                                         &scalar_buffer_parity_error_message),
+              scalar_buffer_parity_error_message.c_str()) ||
+      !Expect(scalar_buffer_parity_state.halted,
+              "expected scalar buffer parity program to halt") ||
+      !Expect(scalar_buffer_parity_state.exec_mask == 0b0101ULL,
+              "expected scalar buffer parity to preserve exec") ||
+      !Expect(scalar_buffer_parity_state.sgprs[0] == 0x100u &&
+                  scalar_buffer_parity_state.sgprs[1] == 0u &&
+                  scalar_buffer_parity_state.sgprs[2] == 0x400u &&
+                  scalar_buffer_parity_state.sgprs[3] == 0u &&
+                  scalar_buffer_parity_state.sgprs[72] == 0x220u &&
+                  scalar_buffer_parity_state.sgprs[96] == 0x11223344u &&
+                  scalar_buffer_parity_state.sgprs[97] == 0x55667788u,
+              "expected scalar buffer parity to preserve sgprs") ||
+      !Expect(scalar_buffer_parity_state.vgprs[18][0] == 0x01010101u &&
+                  scalar_buffer_parity_state.vgprs[18][1] == 0x02020202u &&
+                  scalar_buffer_parity_state.vgprs[18][2] == 0x03030303u &&
+                  scalar_buffer_parity_state.vgprs[18][3] == 0x04040404u,
+              "expected scalar buffer parity to preserve vgprs")) {
+    return 1;
+  }
+  if (!Expect(scalar_buffer_parity_state.sgprs[4] == 0x11110000u,
+              "expected s_buffer_load_dword result") ||
+      !Expect(scalar_buffer_parity_state.sgprs[8] == 0x22220000u &&
+                  scalar_buffer_parity_state.sgprs[9] == 0x22220001u,
+              "expected s_buffer_load_dwordx2 result") ||
+      !Expect(scalar_buffer_parity_state.sgprs[16] == 0x33330000u &&
+                  scalar_buffer_parity_state.sgprs[17] == 0x33330001u &&
+                  scalar_buffer_parity_state.sgprs[18] == 0x33330002u &&
+                  scalar_buffer_parity_state.sgprs[19] == 0x33330003u,
+              "expected s_buffer_load_dwordx4 result")) {
+    return 1;
+  }
+  if (!Expect(scalar_buffer_parity_state.sgprs[24] == 0x44440000u &&
+                  scalar_buffer_parity_state.sgprs[25] == 0x44440001u &&
+                  scalar_buffer_parity_state.sgprs[26] == 0x44440002u &&
+                  scalar_buffer_parity_state.sgprs[27] == 0x44440003u &&
+                  scalar_buffer_parity_state.sgprs[28] == 0x44440004u &&
+                  scalar_buffer_parity_state.sgprs[29] == 0x44440005u &&
+                  scalar_buffer_parity_state.sgprs[30] == 0x44440006u &&
+                  scalar_buffer_parity_state.sgprs[31] == 0x44440007u,
+              "expected s_buffer_load_dwordx8 result") ||
+      !Expect(scalar_buffer_parity_state.sgprs[40] == 0x55550000u &&
+                  scalar_buffer_parity_state.sgprs[41] == 0x55550001u &&
+                  scalar_buffer_parity_state.sgprs[42] == 0x55550002u &&
+                  scalar_buffer_parity_state.sgprs[43] == 0x55550003u &&
+                  scalar_buffer_parity_state.sgprs[44] == 0x55550004u &&
+                  scalar_buffer_parity_state.sgprs[45] == 0x55550005u &&
+                  scalar_buffer_parity_state.sgprs[46] == 0x55550006u &&
+                  scalar_buffer_parity_state.sgprs[47] == 0x55550007u &&
+                  scalar_buffer_parity_state.sgprs[48] == 0x55550008u &&
+                  scalar_buffer_parity_state.sgprs[49] == 0x55550009u &&
+                  scalar_buffer_parity_state.sgprs[50] == 0x5555000au &&
+                  scalar_buffer_parity_state.sgprs[51] == 0x5555000bu &&
+                  scalar_buffer_parity_state.sgprs[52] == 0x5555000cu &&
+                  scalar_buffer_parity_state.sgprs[53] == 0x5555000du &&
+                  scalar_buffer_parity_state.sgprs[54] == 0x5555000eu &&
+                  scalar_buffer_parity_state.sgprs[55] == 0x5555000fu,
+              "expected s_buffer_load_dwordx16 result")) {
+    return 1;
+  }
+  std::uint32_t scalar_buffer_parity_readback = 0;
+  if (!Expect(scalar_buffer_parity_memory.ReadU32(0x300u,
+                                                  &scalar_buffer_parity_readback),
+              "expected scalar buffer dword store readback") ||
+      !Expect(scalar_buffer_parity_readback == 0x11110000u,
+              "expected scalar buffer dword store result") ||
+      !Expect(scalar_buffer_parity_memory.ReadU32(0x310u,
+                                                  &scalar_buffer_parity_readback),
+              "expected scalar buffer x2 store readback") ||
+      !Expect(scalar_buffer_parity_readback == 0x22220000u,
+              "expected scalar buffer x2 low store result") ||
+      !Expect(scalar_buffer_parity_memory.ReadU32(0x314u,
+                                                  &scalar_buffer_parity_readback),
+              "expected scalar buffer x2 store readback") ||
+      !Expect(scalar_buffer_parity_readback == 0x22220001u,
+              "expected scalar buffer x2 high store result") ||
+      !Expect(scalar_buffer_parity_memory.ReadU32(0x320u,
+                                                  &scalar_buffer_parity_readback),
+              "expected scalar buffer x4 store readback") ||
+      !Expect(scalar_buffer_parity_readback == 0x33330000u,
+              "expected scalar buffer x4 store result") ||
+      !Expect(scalar_buffer_parity_memory.ReadU32(0x32cu,
+                                                  &scalar_buffer_parity_readback),
+              "expected scalar buffer x4 store readback") ||
+      !Expect(scalar_buffer_parity_readback == 0x33330003u,
+              "expected scalar buffer x4 tail store result")) {
+    return 1;
+  }
+  if (!Expect(scalar_buffer_parity_memory.ReadU32(0x100u,
+                                                  &scalar_buffer_parity_readback) &&
+                  scalar_buffer_parity_readback == 0x11110000u &&
+                  scalar_buffer_parity_memory.ReadU32(0x114u,
+                                                  &scalar_buffer_parity_readback) &&
+                  scalar_buffer_parity_readback == 0x22220001u &&
+                  scalar_buffer_parity_memory.ReadU32(0x12cu,
+                                                  &scalar_buffer_parity_readback) &&
+                  scalar_buffer_parity_readback == 0x33330003u,
+              "expected scalar buffer source preservation") ||
+      !Expect(scalar_buffer_parity_memory.ReadU32(0x15cu,
+                                                  &scalar_buffer_parity_readback) &&
+                  scalar_buffer_parity_readback == 0x44440007u &&
+                  scalar_buffer_parity_memory.ReadU32(0x1bcu,
+                                                  &scalar_buffer_parity_readback) &&
+                  scalar_buffer_parity_readback == 0x5555000fu,
+              "expected scalar buffer tail preservation")) {
+    return 1;
+  }
+
   const std::vector<DecodedInstruction> buffer_parity_program = {
       DecodedInstruction::FiveOperand("BUFFER_LOAD_DWORDX4",
                                       InstructionOperand::Vgpr(20),
