@@ -337,6 +337,106 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  const std::vector<DecodedInstruction> flat_atomic_parity_program = {
+      DecodedInstruction::ThreeOperand("FLAT_ATOMIC_ADD",
+                                       InstructionOperand::Vgpr(14),
+                                       InstructionOperand::Vgpr(20),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_ATOMIC_SWAP",
+                                       InstructionOperand::Vgpr(16),
+                                       InstructionOperand::Vgpr(21),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_ATOMIC_CMPSWAP",
+                                       InstructionOperand::Vgpr(18),
+                                       InstructionOperand::Vgpr(22),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_ATOMIC_ADD_X2",
+                                       InstructionOperand::Vgpr(24),
+                                       InstructionOperand::Vgpr(26),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  LinearExecutionMemory flat_atomic_parity_memory(0x2000, 0);
+  WaveExecutionState flat_atomic_parity_state;
+  flat_atomic_parity_state.exec_mask = 1u;
+  SetLaneAddress(&flat_atomic_parity_state, 14, 0, 0x520u);
+  SetLaneAddress(&flat_atomic_parity_state, 16, 0, 0x530u);
+  SetLaneAddress(&flat_atomic_parity_state, 18, 0, 0x540u);
+  SetLaneAddress(&flat_atomic_parity_state, 24, 0, 0x560u);
+  flat_atomic_parity_state.vgprs[20][0] = 1u;
+  flat_atomic_parity_state.vgprs[21][0] = 500u;
+  flat_atomic_parity_state.vgprs[22][0] = 100u;
+  flat_atomic_parity_state.vgprs[23][0] = 700u;
+  flat_atomic_parity_state.vgprs[26][0] = 3u;
+  flat_atomic_parity_state.vgprs[27][0] = 0u;
+  flat_atomic_parity_state.vgprs[40][0] = 0xaaaab001u;
+  flat_atomic_parity_state.vgprs[41][0] = 0xbbbbc001u;
+  if (!Expect(flat_atomic_parity_memory.WriteU32(0x520u, 10u),
+              "expected flat atomic add seed write") ||
+      !Expect(flat_atomic_parity_memory.WriteU32(0x530u, 50u),
+              "expected flat atomic swap seed write") ||
+      !Expect(flat_atomic_parity_memory.WriteU32(0x540u, 100u),
+              "expected flat atomic cmpswap seed write") ||
+      !Expect(flat_atomic_parity_memory.WriteU32(0x560u, 1000u) &&
+                  flat_atomic_parity_memory.WriteU32(0x564u, 0u),
+              "expected flat atomic add_x2 seed write")) {
+    return 1;
+  }
+
+  std::string flat_atomic_parity_error_message;
+  std::vector<CompiledInstruction> compiled_flat_atomic_parity_program;
+  if (!Expect(interpreter.CompileProgram(flat_atomic_parity_program,
+                                         &compiled_flat_atomic_parity_program,
+                                         &flat_atomic_parity_error_message),
+              flat_atomic_parity_error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_flat_atomic_parity_program,
+                                         &flat_atomic_parity_state,
+                                         &flat_atomic_parity_memory,
+                                         &flat_atomic_parity_error_message),
+              flat_atomic_parity_error_message.c_str()) ||
+      !Expect(flat_atomic_parity_state.halted,
+              "expected flat atomic parity program to halt")) {
+    return 1;
+  }
+
+  std::uint32_t flat_atomic_readback = 0;
+  std::uint32_t flat_atomic_high_readback = 0;
+  if (!Expect(flat_atomic_parity_memory.ReadU32(0x520u, &flat_atomic_readback),
+              "expected flat atomic add readback") ||
+      !Expect(flat_atomic_readback == 11u,
+              "expected flat atomic add memory update") ||
+      !Expect(flat_atomic_parity_memory.ReadU32(0x530u, &flat_atomic_readback),
+              "expected flat atomic swap readback") ||
+      !Expect(flat_atomic_readback == 500u,
+              "expected flat atomic swap memory update") ||
+      !Expect(flat_atomic_parity_memory.ReadU32(0x540u, &flat_atomic_readback),
+              "expected flat atomic cmpswap readback") ||
+      !Expect(flat_atomic_readback == 700u,
+              "expected flat atomic cmpswap memory update") ||
+      !Expect(flat_atomic_parity_memory.ReadU32(0x560u, &flat_atomic_readback),
+              "expected flat atomic add_x2 low readback") ||
+      !Expect(flat_atomic_readback == 1003u,
+              "expected flat atomic add_x2 low memory update") ||
+      !Expect(flat_atomic_parity_memory.ReadU32(0x564u,
+                                               &flat_atomic_high_readback),
+              "expected flat atomic add_x2 high readback") ||
+      !Expect(flat_atomic_high_readback == 0u,
+              "expected flat atomic add_x2 high memory update")) {
+    return 1;
+  }
+  if (!Expect(flat_atomic_parity_state.vgprs[20][0] == 1u &&
+                  flat_atomic_parity_state.vgprs[21][0] == 500u &&
+                  flat_atomic_parity_state.vgprs[22][0] == 100u &&
+                  flat_atomic_parity_state.vgprs[23][0] == 700u &&
+                  flat_atomic_parity_state.vgprs[26][0] == 3u &&
+                  flat_atomic_parity_state.vgprs[27][0] == 0u,
+              "expected flat atomic parity source preservation") ||
+      !Expect(flat_atomic_parity_state.vgprs[40][0] == 0xaaaab001u &&
+                  flat_atomic_parity_state.vgprs[41][0] == 0xbbbbc001u,
+              "expected flat atomic parity unrelated preservation")) {
+    return 1;
+  }
+
   const std::size_t total_iterations = kWarmupIterations + kTimedIterations;
   std::uint32_t atomic_lane0 = 0;
   std::uint32_t atomic_lane63 = 0;
