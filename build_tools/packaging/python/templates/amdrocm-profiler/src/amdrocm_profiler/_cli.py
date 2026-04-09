@@ -22,9 +22,7 @@ def _find_platform_root() -> Path:
     pkg_dir = Path(__file__).resolve().parent
     children = list(pkg_dir.iterdir())
     direct_candidates: list[Path] = [
-        child
-        for child in children
-        if child.is_dir() and (child / "bin").is_dir()
+        child for child in children if child.is_dir() and (child / "bin").is_dir()
     ]
     if len(direct_candidates) == 1:
         return direct_candidates[0]
