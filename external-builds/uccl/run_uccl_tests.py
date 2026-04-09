@@ -45,9 +45,7 @@ def detect_gpu_count() -> int:
     Runs a small script that imports torch and queries device_count()
     without initializing CUDA in the current process.
     """
-    query_script = (
-        "import torch; print(torch.cuda.device_count() if torch.cuda.is_available() else 0)"
-    )
+    query_script = "import torch; print(torch.cuda.device_count() if torch.cuda.is_available() else 0)"
     try:
         result = subprocess.run(
             [sys.executable, "-c", query_script],
