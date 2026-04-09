@@ -117,6 +117,10 @@ def sparse_checkout_submodule() -> Path:
             "llvm/test",
             "llvm/utils/lit",
             "clang/test",
+            "clang/utils",
+            "clang/include",
+            "clang/lib/Sema",
+            "clang/docs/tools",
             "lld/test",
             "lld/ELF",
             "lld/COFF",
@@ -307,6 +311,18 @@ def main() -> int:
     os.environ[lib_path_var] = (
         f"{LLVM_LIBS_DIR}{path_sep}{lib_path}" if lib_path else str(LLVM_LIBS_DIR)
     )
+
+    # Remove Unit test site configs -- we don't ship unit test binaries, and
+    # these configs contain builder-relative paths that can't be fixed up
+    # meaningfully on the runner.
+    for unit_cfg in [
+        llvm_test_dir / "Unit" / "lit.site.cfg.py",
+        clang_test_dir / "Unit" / "lit.site.cfg.py",
+        lld_test_dir / "Unit" / "lit.site.cfg.py",
+    ]:
+        if unit_cfg.exists():
+            unit_cfg.unlink()
+            logging.info(f"Removed Unit test config: {unit_cfg}")
 
     rc_llvm = run_lit_tests(llvm_test_dir, "check-llvm")
     rc_clang = run_lit_tests(clang_test_dir, "check-clang")

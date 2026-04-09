@@ -454,6 +454,7 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("amd-llvm_lib")
             argv.append("base_dev_generic")
         if args.llvm_lit:
+            argv.append("amd-llvm_lib")
             argv.append("amd-llvm_run")
             argv.append("amd-llvm_test")
 
