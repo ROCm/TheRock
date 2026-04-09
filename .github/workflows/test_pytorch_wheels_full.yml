@@ -24,7 +24,7 @@ on:
         description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/v2"
+        default: "https://rocm.nightlies.amd.com/v2-staging"
       python_version:
         required: true
         type: string
@@ -36,7 +36,11 @@ on:
       pytorch_git_ref:
         description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.9")
         type: string
-        default: "release/2.9"
+        default: "nightly"
+      pytorch_git_repo:
+        description: "PyTorch git repo to checkout test sources from. (Options: rocm/pytorch, pytorch/pytorch)"
+        type: string
+        default: "pytorch/pytorch"
       test_configs:
         description: Space-separated test configs to run (e.g. "default", "default distributed", "default distributed inductor")
         type: string
@@ -44,7 +48,7 @@ on:
       tests_to_include:
         description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
-        default: "test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd"
+        default: ""
 
   workflow_call:
     inputs:
@@ -52,8 +56,9 @@ on:
         required: true
         type: string
       test_runs_on:
-        required: true
+        required: false
         type: string
+        default: "linux-gfx942-1gpu-ossci-rocm"
       test_runs_on_multi_gpu:
         type: string
         default: "linux-gfx942-8gpu-ossci-rocm"
@@ -68,7 +73,10 @@ on:
         type: string
       pytorch_git_ref:
         type: string
-        default: "release/2.9"
+        default: "nightly"
+      pytorch_git_repo:
+        type: string
+        default: "pytorch/pytorch"
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -81,7 +89,7 @@ on:
       tests_to_include:
         description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
-        default: "test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd"
+        default: ""
 
 permissions:
   contents: read
@@ -116,7 +124,10 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
-      options: --ipc host
+      # SYS_PTRACE is required by PyTorch's test infra which uses gdb to
+      # collect stack traces on segfaults and hangs (torch/testing/_internal).
+      options: --shm-size=10g
+        --cap-add=SYS_PTRACE
         --group-add video
         --device /dev/kfd
         --device /dev/dri
@@ -138,6 +149,11 @@ jobs:
       CI: "1"
       PYTORCH_TEST_WITH_ROCM: "1"
       PYTORCH_TESTING_DEVICE_ONLY_FOR: "cuda"
+      # Pin OpenBLAS threads to 1 for deterministic reductions; without this,
+      # OpenBLAS defaults to the number of CPU cores, which causes
+      # non-deterministic results in tests like test_entropy_monte_carlo.
+      OPENBLAS_NUM_THREADS: "1"
+      PYTORCH_NUM_PYTEST_RERUNS: "2"
       TEST_CONFIG: ${{ matrix.test_config }}
       TESTS_TO_INCLUDE: ${{ inputs.tests_to_include }}
 
@@ -153,15 +169,6 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
-      # TODO: also upload and reference test report together with this logging?
-      - name: Summarize workflow inputs
-        run: |
-          python build_tools/github_actions/summarize_test_pytorch_workflow.py \
-            --torch-version=${{ inputs.torch_version }} \
-            --pytorch-git-ref=${{ inputs.pytorch_git_ref }} \
-            --index-url=${{ inputs.package_index_url }} \
-            --index-subdir=${{ inputs.amdgpu_family }}
-
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
         run: |
@@ -172,19 +179,10 @@ jobs:
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
       # to run HIPIFY or apply any patches, so we skip those steps to save time.
-      - name: Checkout PyTorch Source Repos from nightly branch
-        if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
+      - name: Checkout PyTorch Source
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/pytorch/pytorch.git \
-            --repo-hashtag nightly \
-            --no-hipify
-
-      - name: Checkout PyTorch Source Repos from stable branch
-        if: ${{ (inputs.pytorch_git_ref != 'nightly') }}
-        run: |
-          python external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/ROCm/pytorch.git \
+            --gitrepo-origin https://github.com/${{ inputs.pytorch_git_repo }}.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
             --no-hipify
 
@@ -195,6 +193,52 @@ jobs:
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
+
+      - name: Install ROCm devel packages
+        run: |
+          pip install "rocm[devel]" \
+            --index-url=${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
+
+      - name: Initialize ROCm SDK and configure environment
+        run: |
+          rocm-sdk init
+
+          ROCM_HOME="$(rocm-sdk path --root)"
+          ROCM_BIN="$(rocm-sdk path --bin)"
+          ROCM_CMAKE_PREFIX="$(rocm-sdk path --cmake)"
+
+          echo "ROCM_HOME=${ROCM_HOME}"
+          echo "ROCM_BIN=${ROCM_BIN}"
+          echo "ROCM_CMAKE_PREFIX=${ROCM_CMAKE_PREFIX}"
+
+          ROCM_SYSDEPS="${ROCM_HOME}/lib/rocm_sysdeps"
+          ROCM_SYSDEPS_INCLUDE="${ROCM_SYSDEPS}/include"
+          ROCM_SYSDEPS_PKGCONFIG="${ROCM_SYSDEPS}/lib/pkgconfig"
+
+          # Add ROCm bin to PATH for all subsequent steps
+          echo "${ROCM_BIN}" >> "${GITHUB_PATH}"
+
+          # Persist ROCm env vars across workflow steps (mirrors install_rocm.sh)
+          echo "ROCM_PATH=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "ROCM_HOME=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "ROCM_SOURCE_DIR=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "ROCM_BIN=${ROCM_BIN}" >> "${GITHUB_ENV}"
+          echo "ROCM_CMAKE=${ROCM_CMAKE_PREFIX}" >> "${GITHUB_ENV}"
+          echo "CMAKE_PREFIX_PATH=${ROCM_CMAKE_PREFIX}:${CMAKE_PREFIX_PATH:-}" >> "${GITHUB_ENV}"
+          echo "HIP_DEVICE_LIB_PATH=${ROCM_HOME}/lib/llvm/amdgcn/bitcode" >> "${GITHUB_ENV}"
+          echo "ROCM_DEVICE_LIB_PATH=${ROCM_HOME}/lib/llvm/amdgcn/bitcode" >> "${GITHUB_ENV}"
+          echo "ROCM_SYSDEPS_INCLUDE=${ROCM_SYSDEPS_INCLUDE}" >> "${GITHUB_ENV}"
+          echo "CPLUS_INCLUDE_PATH=${ROCM_SYSDEPS_INCLUDE}:${CPLUS_INCLUDE_PATH:-}" >> "${GITHUB_ENV}"
+          echo "C_INCLUDE_PATH=${ROCM_SYSDEPS_INCLUDE}:${C_INCLUDE_PATH:-}" >> "${GITHUB_ENV}"
+          echo "PKG_CONFIG_PATH=${ROCM_SYSDEPS_PKGCONFIG}:${PKG_CONFIG_PATH:-}" >> "${GITHUB_ENV}"
+          echo "LD_LIBRARY_PATH=${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:${LD_LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
+          echo "LIBRARY_PATH=${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:${LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
+          echo "USE_MSLK=0" >> "${GITHUB_ENV}"
+
+          # Use ROCm's clang for JIT C++ compilation (torch.utils.cpp_extension)
+          # instead of requiring gcc/build-essential.
+          echo "CC=${ROCM_HOME}/lib/llvm/bin/clang" >> "${GITHUB_ENV}"
+          echo "CXX=${ROCM_HOME}/lib/llvm/bin/clang++" >> "${GITHUB_ENV}"
 
       # export_test_times.py must run from the PyTorch repo root with
       # PYTHONPATH=. because it imports internal PyTorch modules (e.g.
@@ -228,9 +272,18 @@ jobs:
       - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests_full.py -- \
-            --continue-on-collection-errors \
-            --import-mode=importlib
+          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            -- \
+            --continue-on-collection-errors
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-reports-${{ matrix.test_config }}-${{ matrix.shard }}-${{ matrix.num_shards }}
+          path: external-builds/pytorch/pytorch/test/test-reports/
+          if-no-files-found: ignore
+          retention-days: 30
 
       # Windows testing is a recent addition and is being enabled incrementally.
       # See https://github.com/ROCm/TheRock/issues/2258.
@@ -248,7 +301,6 @@ jobs:
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py -- \
             --continue-on-collection-errors \
-            --import-mode=importlib \
             -v
 
       - name: (Windows) Read and propagate exit code
