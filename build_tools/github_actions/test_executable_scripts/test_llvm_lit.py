@@ -67,15 +67,10 @@ def sparse_checkout_submodule() -> Path:
 
     logging.info("Sparse-checking out amd-llvm source for test files...")
 
-    # Read the submodule URL from .gitmodules
+    # Read the submodule URL from .gitmodules.
+    # The submodule name ("llvm-project") differs from the path ("compiler/amd-llvm").
     result = run_cmd(
-        [
-            "git",
-            "config",
-            "-f",
-            ".gitmodules",
-            "submodule.compiler/amd-llvm.url",
-        ],
+        ["git", "config", "-f", ".gitmodules", "submodule.llvm-project.url"],
         cwd=THEROCK_DIR,
         capture_output=True,
         text=True,
