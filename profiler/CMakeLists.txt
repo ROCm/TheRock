@@ -327,8 +327,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
         rocprofiler-sdk
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
-        ${_openmpi_optional_dep}
         ${THEROCK_BUNDLED_TBB}
+        ${_openmpi_optional_dep}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems
       SUBDIRS .

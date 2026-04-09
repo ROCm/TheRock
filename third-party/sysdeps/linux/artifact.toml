@@ -13,10 +13,6 @@ include = [
 ]
 [components.lib."third-party/sysdeps/linux/bzip2/build/stage"]
 
-# tbb
-[components.lib."third-party/sysdeps/linux/tbb/build/stage"]
-[components.dev."third-party/sysdeps/linux/tbb/build/stage"]
-
 # elfutils
 [components.lib."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.dev."third-party/sysdeps/linux/elfutils/build/stage"]
@@ -56,6 +52,10 @@ include = [
 # sqlite3
 [components.lib."third-party/sysdeps/linux/sqlite3/build/stage"]
 [components.dev."third-party/sysdeps/linux/sqlite3/build/stage"]
+
+# tbb
+[components.lib."third-party/sysdeps/linux/tbb/build/stage"]
+[components.dev."third-party/sysdeps/linux/tbb/build/stage"]
 
 # zlib
 [components.lib."third-party/sysdeps/linux/zlib/build/stage"]
