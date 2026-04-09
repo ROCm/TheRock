@@ -23,9 +23,6 @@ inputs:
     required: true
   FETCH_ARTIFACT_ARGS:
     description: (string) Extra arguments to install_rocm_from_artifacts.py (e.g. `--blas --tests`)
-  IS_PR_FROM_FORK:
-    description: (boolean) True if this workflow run is from a PR on a fork (often `github.event.pull_request.head.repo.fork`)
-    default: false
 
 runs:
   using: "composite"
@@ -74,7 +71,6 @@ runs:
         ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         GITHUB_TOKEN: ${{ github.token }}
-        IS_PR_FROM_FORK: ${{ inputs.IS_PR_FROM_FORK }}
       run: |
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \

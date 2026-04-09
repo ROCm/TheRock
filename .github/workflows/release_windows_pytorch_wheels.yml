@@ -96,7 +96,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        pytorch_git_ref: ["release/2.9", "release/2.10", "nightly"]
+        pytorch_git_ref: ["release/2.9", "release/2.10", "release/2.11", "nightly"]
         # redefine arch as inputs.x vars are not available in matrix context
         arch: ["${{ inputs.amdgpu_family }}"]
         exclude:
