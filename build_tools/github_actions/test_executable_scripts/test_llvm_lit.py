@@ -41,7 +41,7 @@ if not OUTPUT_ARTIFACTS_DIR:
 ARTIFACTS_PATH = Path(OUTPUT_ARTIFACTS_DIR).resolve()
 LLVM_TOOLS_DIR = ARTIFACTS_PATH / "lib" / "llvm" / "bin"
 LLVM_LIBS_DIR = ARTIFACTS_PATH / "lib" / "llvm" / "lib"
-LLVM_LIT = LLVM_TOOLS_DIR / ("llvm-lit.py" if IS_WINDOWS else "llvm-lit")
+LLVM_LIT = LLVM_TOOLS_DIR / ("llvm-lit.py" if IS_WINDOWS else "llvm-lit.real")
 
 
 def run_cmd(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
@@ -171,12 +171,6 @@ def fixup_lit_site_cfg(
 
     content = cfg_path.read_text()
 
-    old_path_func = (
-        "def path(p):\n"
-        "    if not p: return ''\n"
-        "    return os.path.join(os.path.dirname(os.path.abspath(__file__)), p)"
-    )
-
     path_map = {
         "llvm_src_root": str(llvm_src_root),
         "llvm_obj_root": str(cfg_path.parent.parent),
@@ -235,10 +229,7 @@ def run_lit_tests(test_dir: Path, label: str) -> int:
         logging.warning(f"No lit.site.cfg.py in {test_dir}, skipping {label}")
         return 0
 
-    if IS_WINDOWS:
-        cmd = [sys.executable, str(LLVM_LIT), str(test_dir), "-v", "--timeout=300"]
-    else:
-        cmd = [str(LLVM_LIT), str(test_dir), "-v", "--timeout=300"]
+    cmd = [sys.executable, str(LLVM_LIT), str(test_dir), "-v", "--timeout=300"]
     logging.info(f"=== Running {label} ===")
     result = run_cmd(cmd)
     logging.info(f"=== {label} exited with code {result.returncode} ===")
@@ -290,6 +281,7 @@ def main() -> int:
         llvm_libs_dir=LLVM_LIBS_DIR,
         extra_replacements={
             "lld_obj_root": str(lld_test_dir.parent),
+            "lld_src_root": str(lld_src),
             "lld_libs_dir": str(LLVM_LIBS_DIR),
             "lld_tools_dir": str(LLVM_TOOLS_DIR),
         },
