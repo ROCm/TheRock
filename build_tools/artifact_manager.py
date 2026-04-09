@@ -342,6 +342,7 @@ def do_fetch(args: argparse.Namespace):
     # Create backend
     backend = create_backend_from_env(
         run_id=args.run_id,
+        github_repository=args.run_github_repo,
         platform=args.platform,
     )
     log(f"Using backend: {backend.base_uri}")
@@ -588,6 +589,7 @@ def do_push(args: argparse.Namespace):
     # Create backend
     backend = create_backend_from_env(
         run_id=args.run_id,
+        github_repository=args.run_github_repo,
         platform=args.platform,
     )
     log(f"Using backend: {backend.base_uri}")
@@ -983,6 +985,13 @@ def _add_backend_args(parser: argparse.ArgumentParser):
         type=str,
         default=os.getenv("THEROCK_PLATFORM", platform_module.system().lower()),
         help="Platform name (default: current platform)",
+    )
+    parser.add_argument(
+        "--run-github-repo",
+        type=str,
+        default=None,
+        help="GitHub repository for --run-id in 'owner/repo' format (e.g. 'ROCm/TheRock'). "
+        "Defaults to GITHUB_REPOSITORY env var or 'ROCm/TheRock'",
     )
     parser.add_argument(
         "--local-staging-dir",

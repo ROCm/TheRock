@@ -10,6 +10,10 @@ on:
         type: string
         description: "Run ID to fetch artifacts from (defaults to current run)"
         default: ""
+      artifact_github_repo:
+        description: "GitHub repository for artifact_run_id"
+        type: string
+        default: ROCm/TheRock
       amdgpu_families:
         description: "amdgpu_families as a semicolon-separated list (e.g. 'gfx94X-dcgpu;gfx120X-all')"
         type: string
@@ -24,6 +28,9 @@ on:
   workflow_call:
     inputs:
       artifact_run_id:
+        type: string
+        default: ""
+      artifact_github_repo:
         type: string
         default: ""
       amdgpu_families:
@@ -63,6 +70,7 @@ jobs:
         run: |
           python ./build_tools/artifact_manager.py fetch \
             --run-id="${{ env.ARTIFACT_RUN_ID }}" \
+            --run-github-repo="${{ inputs.artifact_github_repo }}" \
             --stage=all \
             --amdgpu-families="${{ inputs.amdgpu_families }}" \
             --platform="${{ env.PLATFORM }}" \

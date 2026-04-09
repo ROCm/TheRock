@@ -87,6 +87,7 @@ jobs:
             echo "Fetching artifacts for multiple families: ${{ inputs.amdgpu_families }}"
             python ./build_tools/artifact_manager.py fetch \
               --run-id="${{ env.ARTIFACT_RUN_ID }}" \
+              --run-github-repo="${{ inputs.artifact_github_repo }}" \
               --stage=all \
               --amdgpu-families="${{ inputs.amdgpu_families }}" \
               --output-dir="${{ github.workspace }}"
