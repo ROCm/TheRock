@@ -37,7 +37,7 @@ on:
       prebuilt_stages:
         type: string
         default: ""
-        description: "Comma-separated build stages to skip; artifacts are copied from baseline_run_id instead"
+        description: "Comma-separated build stages to skip (or 'all' for all stages); artifacts are copied from baseline_run_id instead"
       baseline_run_id:
         type: string
         default: ""

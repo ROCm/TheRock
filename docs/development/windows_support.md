@@ -209,6 +209,8 @@ If you prefer to install tools manually, you will need:
 
 - gfortran, recommended from Strawberry Perl: https://strawberryperl.com/
 
+- nasm, recommended from Strawberry Perl: https://strawberryperl.com/
+
 - patch, available in Strawberry Perl or Git.
 
 - dvc: https://dvc.org/doc/install/windows
@@ -367,6 +369,13 @@ files now exist.
 Errors like this indicate that the value of `-DTHEROCK_AMDGPU_FAMILIES=` or
 `-DTHEROCK_AMDGPU_TARGETS=` is currently unsupported by one or more libraries.
 
+#### `lld-link: m.lib does not exist`
+
+Since msvc 14+, m.lib has become an implicit dependency and should not be linked
+(it does not exist). TheRock does not link it, but `cmake` could decide on its own to try
+and link it because it found a libm.a in the path, coming from leftover installs on the
+build machine, like a w64devkit or msys2 install.
+
 #### `lld-link: error: duplicate symbol`
 
 Several developers have reported link errors in rocBLAS and rocSPARSE like
@@ -390,6 +399,22 @@ Several developers have reported link errors in rocBLAS and rocSPARSE like
 ```
 
 These have been worked around by disabling ccache.
+
+### `pyYAML cannot be found by cmake`
+
+It is recommended to build TheRock using the `.venv` python3 virtual environment.
+The build steps explain that you must do a `pip install -r requirements.txt` that
+installs PyYAML in the venv so maybe this step was not done.
+
+The problem can also be that you have another python install available in your path
+and that cmake chose to use it. Make sure to check `which python` points to the python
+in your .venv
+
+### `gfortran cannot be found by cmake`
+
+If you have installed strawberry perl as recommended but gfortran cannot be found by
+cmake, you can create a `FC` environment variable pointing to where `gfortran.exe` is
+located.
 
 ## Other notes
 
