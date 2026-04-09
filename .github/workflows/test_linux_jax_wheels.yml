@@ -224,7 +224,7 @@ jobs:
           # Use versions passed from the build workflow when available.
           # For manual workflow_dispatch, compute the version suffix using
           # compute_jax_package_version.py (matches rocm-jax ci_build format).
-          if [ -n "${{ inputs.jaxlib_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
+          if [ -n "${{ inputs.jax_plugin_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
             echo "Using versions passed from build workflow"
             echo "JAXLIB_VERSION=${{ inputs.jaxlib_version }}" >> "$GITHUB_ENV"
             echo "JAX_VERSION=${{ inputs.jax_version }}" >> "$GITHUB_ENV"

@@ -194,6 +194,7 @@ jobs:
             dist_wheels
 
       - name: Generate JAX manifest
+        if: ${{ inputs.build_jaxlib }}
         working-directory: build_tools
         run: |
           python3 -m github_actions.generate_jax_manifest \
@@ -231,7 +232,7 @@ jobs:
           python3 -m pip install boto3
 
       - name: Upload JAX manifest to artifacts S3
-        if: ${{ github.repository_owner == 'ROCm' }}
+        if: ${{ github.repository_owner == 'ROCm' && inputs.build_jaxlib }}
         working-directory: build_tools
         run: |
           python3 -m github_actions.upload_jax_manifest \
