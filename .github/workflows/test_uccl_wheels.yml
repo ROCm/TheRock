@@ -1,0 +1,151 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Test UCCL Wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      amdgpu_family:
+        description: GPU family to test
+        required: true
+        type: string
+        default: "gfx94X-dcgpu"
+      test_runs_on:
+        description: Runner label to use (must have multiple GPUs for intranode tests)
+        required: true
+        type: string
+        default: "linux-gfx942-8gpu-ossci-rocm"
+      package_index_url:
+        description: Base Python package index URL (without GPU family subdir)
+        required: true
+        type: string
+        default: "https://rocm.nightlies.amd.com/v2"
+      python_version:
+        required: true
+        type: string
+        default: "3.12"
+      uccl_version:
+        description: uccl package version to install (e.g. "0.0.1.post4")
+        required: true
+        type: string
+      torch_version:
+        description: torch package version to install (e.g. "2.7.1+rocm7.10.0a20251120")
+        required: true
+        type: string
+      uccl_git_ref:
+        description: UCCL ref to checkout test sources from (e.g. "main")
+        type: string
+        default: "main"
+
+  workflow_call:
+    inputs:
+      amdgpu_family:
+        required: true
+        type: string
+      test_runs_on:
+        required: true
+        type: string
+      package_index_url:
+        required: true
+        type: string
+      python_version:
+        required: true
+        type: string
+      uccl_version:
+        required: true
+        type: string
+      torch_version:
+        required: true
+        type: string
+      uccl_git_ref:
+        type: string
+        default: "main"
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
+
+permissions:
+  contents: read
+
+run-name: Test UCCL (${{ inputs.amdgpu_family }}, ${{ inputs.uccl_version }}, ${{ inputs.test_runs_on }})
+
+jobs:
+  test_wheels:
+    name: Test UCCL | ${{ inputs.amdgpu_family }}
+    runs-on: ${{ inputs.test_runs_on }}
+    container:
+      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      options: --ipc host
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 992
+        --group-add 110
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --user 0:0
+    defaults:
+      run:
+        shell: bash
+    env:
+      VENV_DIR: ${{ github.workspace }}/.venv
+      AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+
+    steps:
+      - name: Checkout TheRock
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Set git options
+        run: |
+          git config --global core.longpaths true
+
+      - name: Checkout UCCL source (for test files)
+        run: |
+          python external-builds/uccl/uccl_repo.py checkout \
+            --repo-hashtag ${{ inputs.uccl_git_ref }}
+
+      - name: Set up virtual environment
+        run: |
+          python build_tools/setup_venv.py ${VENV_DIR} \
+            --packages \
+              torch==${{ inputs.torch_version }} \
+              uccl==${{ inputs.uccl_version }} \
+            --index-url=${{ inputs.package_index_url }} \
+            --index-subdir=${{ inputs.amdgpu_family }} \
+            --activate-in-future-github-actions-steps
+
+      - name: Install test requirements
+        run: |
+          python -m pip install -r external-builds/uccl/requirements-test.txt
+          pip freeze
+
+      - name: Runner health status
+        run: |
+          ./build_tools/health_status.py
+
+      - name: Run rocm-sdk sanity tests
+        run: |
+          rocm-sdk test
+
+      - name: Run UCCL smoke tests
+        run: |
+          python ./external-builds/uccl/run_uccl_smoke_tests.py -- \
+            --log-cli-level=INFO \
+            -v
+
+      - name: Run UCCL intranode EP tests
+        timeout-minutes: 30
+        run: |
+          python ./external-builds/uccl/run_uccl_tests.py \
+            --uccl-dir external-builds/uccl/uccl
