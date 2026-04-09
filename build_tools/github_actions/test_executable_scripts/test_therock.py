@@ -76,8 +76,10 @@ def _generate_ctest_custom(
 ) -> str:
     """Generate CTestCustom.cmake: settings and configure/build commands.
 
-    Uses four namespaces (script, configure, build, test). Commands run from
-    source dir so literal "build" and "." match test_rocprofiler_sdk.
+    Uses four namespaces (script, configure, build, test). For
+    ``CTEST_CONFIGURE_COMMAND``, CMake runs the command with cwd set to the
+    *binary* directory; pass ``cmake -S <src> -B <build>`` with absolute paths
+    (or ``test_rocprofiler_sdk.get_cmake_config_cmd()``).
 
     Args:
         cmake_cmd: Path or command name for the CMake executable.
@@ -94,12 +96,14 @@ def _generate_ctest_custom(
 
     # Configure cmake commands and ctest arguments
     if configure_cmd is None:
+        # Must use explicit -S/-B: CTest runs this with cwd=binary dir (CMake 3.14+).
         configure_cmd = (
-            f"{cmake_cmd} -B {BINARY_DIR} -G Ninja "
+            f"{cmake_cmd} -S {SOURCE_DIR} -B {BINARY_DIR} --fresh -G Ninja "
             f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_SYSDEPS_PATH} "
             f"-DCMAKE_HIP_COMPILER={THEROCK_CLANG_PLUS_PATH} "
             f"-DCMAKE_C_COMPILER={THEROCK_CLANG_PATH} "
-            f"-DCMAKE_CXX_COMPILER={THEROCK_CLANG_PLUS_PATH} {SOURCE_DIR}"
+            f"-DCMAKE_CXX_COMPILER={THEROCK_CLANG_PLUS_PATH} "
+            f"-DPython3_EXECUTABLE={sys.executable}"
         )
     if build_cmd is None:
         build_cmd = f'{cmake_cmd} --build {BINARY_DIR} -j'
