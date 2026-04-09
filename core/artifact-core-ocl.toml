@@ -5,9 +5,9 @@ include = [
 ]
 # ocltst libs/dlls belong to ocl_test package
 exclude = [
-  "bin/*oclgl*",
-  "bin/*oclperf*",
-  "bin/*oclruntime*",
+  "lib/*oclgl*",
+  "lib/*oclperf*",
+  "lib/*oclruntime*",
 ]
 [components.run."core/ocl-clr/stage"]
 include = [
@@ -19,7 +19,7 @@ include = [
 [components.test."core/ocl-clr/stage"]
 include = [
   "bin/ocltst*",
-  "bin/*oclgl*",
-  "bin/*oclperf*",
-  "bin/*oclruntime*",
+  "lib/*oclgl*",
+  "lib/*oclperf*",
+  "lib/*oclruntime*",
 ]
