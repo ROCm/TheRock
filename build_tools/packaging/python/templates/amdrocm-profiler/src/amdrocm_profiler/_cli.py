@@ -20,28 +20,40 @@ def _find_platform_root() -> Path:
     This function finds it dynamically to avoid hard-coding the exact platform tag.
     """
     pkg_dir = Path(__file__).resolve().parent
+    children = list(pkg_dir.iterdir())
+    direct_candidates: list[Path] = [
+        child
+        for child in children
+        if child.is_dir() and (child / "bin").is_dir()
+    ]
+    if len(direct_candidates) == 1:
+        return direct_candidates[0]
+    if len(direct_candidates) > 1:
+        raise RuntimeError(
+            "Ambiguous packaged ROCm profiler binaries: found multiple direct "
+            f"candidates with bin/: {sorted(str(p) for p in direct_candidates)}"
+        )
 
-    candidates: list[Path] = []
-    for child in pkg_dir.iterdir():
-        if child.is_dir() and (child / "bin").is_dir():
-            candidates.append(child)
-
-    if len(candidates) == 1:
-        return candidates[0]
-
-    for child in pkg_dir.iterdir():
+    nested_candidates: list[Path] = []
+    for child in children:
         if not child.is_dir():
             continue
         for grand in child.iterdir():
             if grand.is_dir() and (grand / "bin").is_dir():
-                candidates.append(grand)
+                nested_candidates.append(grand)
 
-    if len(candidates) == 1:
-        return candidates[0]
+    if len(nested_candidates) == 1:
+        return nested_candidates[0]
+    if len(nested_candidates) > 1:
+        raise RuntimeError(
+            "Ambiguous packaged ROCm profiler binaries: found multiple nested "
+            f"candidates with bin/: {sorted(str(p) for p in nested_candidates)}"
+        )
 
     raise FileNotFoundError(
         "Could not locate packaged ROCm profiler binaries. "
-        "Expected a directory containing `bin/` under the installed amdrocm_profiler package."
+        "Expected a directory containing `bin/` under the installed "
+        "amdrocm_profiler package."
     )
 
 
