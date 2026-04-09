@@ -20,7 +20,7 @@ on:
         description: Base Python package index URL (without GPU family subdir)
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/v2"
+        default: "https://rocm.prereleases.amd.com/whl"
       python_version:
         required: true
         type: string
