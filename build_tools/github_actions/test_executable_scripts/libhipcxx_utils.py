@@ -24,11 +24,9 @@ def get_gpu_architecture_portable(therock_build_dir):
         str: The gfx architecture of the running system, or None if not available.
     """
     therock_build_dir = str(therock_build_dir)
+    file_ending = ".exe" if platform.system() == "Windows" else ""
     try:
-        if platform.system() == "Windows":
-            executable = therock_build_dir + "/lib/llvm/bin/offload-arch.exe"
-        else:
-            executable = therock_build_dir + "/bin/rocm_agent_enumerator"
+        executable = therock_build_dir + f"/lib/llvm/bin/offload-arch{file_ending}"
         result = subprocess.run(
             [executable], capture_output=True, text=True, check=True
         )
