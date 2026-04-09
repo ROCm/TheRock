@@ -213,6 +213,13 @@ PackageEntry(
     required=False,
 )
 PackageEntry(
+    "device",
+    "rocm-sdk-device-{target_family}",
+    pure_py_package_name="rocm_sdk_device",
+    template_directory="rocm-sdk-device",
+    required=False,
+)
+PackageEntry(
     "devel",
     "rocm-sdk-devel",
     pure_py_package_name="rocm_sdk_devel",

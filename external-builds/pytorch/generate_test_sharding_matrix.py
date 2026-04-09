@@ -32,12 +32,7 @@ import argparse
 import json
 import os
 
-# Shard counts mirror the parallelism used by upstream PyTorch CI for the
-# corresponding ROCm test configurations.  Chosen to keep each shard under
-# ~3 h on gfx942 1-GPU runners (default/inductor) and gfx942 8-GPU runners
-# (distributed).
-#
-# Upstream references (as of March 2026):
+# Shard counts match upstream PyTorch CI:
 #   default (6) & distributed (3):
 #     https://github.com/pytorch/pytorch/blob/1ace6e9e198f0221122a81efe39c11eef90b5d80/.github/workflows/trunk.yml#L283-L291
 #   inductor (2):
