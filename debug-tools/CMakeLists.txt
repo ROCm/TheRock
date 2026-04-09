@@ -139,6 +139,8 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-debug-agent/test"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent-tests"
+      INSTALL_RPATH_EXECUTABLE_DIR
+        "tests/rocm-debug-agent"
       CMAKE_ARGS
         "-DHIP_PLATFORM=amd"
       COMPILER_TOOLCHAIN

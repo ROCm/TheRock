@@ -2,10 +2,16 @@
 """Runs the full PyTorch test suite on AMD GPUs via PyTorch's run_test.py,
 with TheRock ROCm-specific skip-test integration and sharding support.
 
-Mirrors how PyTorch CI's test.sh invokes test_python_shard():
+For the "default" and "distributed" configs, mirrors how PyTorch CI's
+test.sh invokes test_python_shard():
     python test/run_test.py \\
         --exclude-jit-executor --exclude-distributed-tests \\
         --exclude-quantization-tests --shard N M --verbose
+
+For the "inductor" config, mirrors test_inductor_shard() from test.sh
+with two separate run_test.py invocations:
+    1. Generic tests (test_modules, test_ops, …) with ``--inductor``
+    2. Inductor unit tests without ``--inductor`` (avoids nested dynamo)
 
 Usage examples:
 
@@ -20,6 +26,9 @@ Usage examples:
 
     # Run a few specific test files:
     python run_pytorch_tests_full.py --include test_nn test_torch test_cuda
+
+    # Run with the "inductor" config:
+    python run_pytorch_tests_full.py --test-config inductor --shard 1 --num-shards 2
 
     # Run with the "distributed" config on a multi-GPU runner:
     python run_pytorch_tests_full.py --test-config distributed
@@ -44,6 +53,7 @@ import platform
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from skip_tests.create_skip_tests import get_tests
@@ -66,12 +76,12 @@ THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 # listed here (e.g. gfx1151, Windows targets) fall back to
 # ROCM_BUILD_ENVIRONMENT_DEFAULT.  Falling back to mi300 timings still gives
 # reasonably balanced shards since relative test durations are similar across
-# GPU types.  Once pytorch/pytorch#176445 lands, we can match on the GPU SKU
-# suffix for a more robust lookup.
+# GPU types.  Since pytorch/pytorch#176445, each GPU gets its own key with
+# inductor timings included, so a single map suffices for all configs.
 AMDGPU_FAMILY_TO_BUILD_ENV = {
     "gfx90X-dcgpu": "linux-jammy-rocm-py3.10-mi200",
     "gfx94X-dcgpu": "linux-noble-rocm-py3.12-mi300",
-    "gfx950-dcgpu": "linux-jammy-rocm-py3.10-mi355",
+    "gfx950-dcgpu": "linux-noble-rocm-py3.12-mi355",
     "gfx110X-all": "linux-jammy-rocm-py3.10-navi31",
 }
 ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
@@ -91,6 +101,63 @@ THEROCK_ENV_VARS = [
     "NUM_TEST_SHARDS",
     "TESTS_TO_INCLUDE",
 ]
+
+
+PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
+
+# Test modules excluded at the run_test.py level (--exclude).  These are
+# modules that hang or crash the subprocess in ways that pytest-timeout
+# cannot catch (e.g. hanging during import or in C extensions).
+# TODO: investigate the root cause and narrow the exclusions.
+EXCLUDED_TEST_MODULES: list[str] = [
+    "nn/test_convolution",  # hangs for 5+ hours, see run 53 shards 7 & 10
+    "inductor/test_max_autotune",
+    "inductor/test_torchinductor_opinfo_properties",
+    "inductor/test_compiled_autograd",
+    "distributed/_composable/fsdp/test_fully_shard_autograd",
+    "distributed/_composable/test_composability/test_2d_composability",
+    "distributed/_composable/test_composability/test_pp_composability",
+    "distributed/_composable/test_replicate",
+    "distributed/tensor/test_view_ops",
+    "dynamo/test_dynamic_shapes",
+    "functorch/test_control_flow",
+]
+
+# Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
+# The inductor config requires TWO separate run_test.py invocations:
+#   1. Generic tests run with --inductor (sets PYTORCH_TEST_WITH_INDUCTOR=1)
+#   2. Inductor unit tests run WITHOUT --inductor (avoids nested dynamo state)
+# See: https://github.com/pytorch/pytorch/blob/main/.ci/pytorch/test.sh
+INDUCTOR_GENERIC_TESTS = [
+    "test_modules",
+    "test_ops",
+    "test_ops_gradients",
+    "test_torch",
+]
+INDUCTOR_UNIT_TESTS = [
+    "inductor/test_torchinductor",
+    "inductor/test_torchinductor_opinfo",
+    "inductor/test_aot_inductor",
+]
+
+
+def has_junit_failures(reports_dir: Path) -> bool:
+    """Scan JUnit XML reports for any test failures or errors."""
+    if not reports_dir.is_dir():
+        return False
+    for xml_file in reports_dir.rglob("*.xml"):
+        try:
+            tree = ET.parse(xml_file)
+        except ET.ParseError:
+            continue
+        root = tree.getroot()
+        suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+        for suite in suites:
+            failures = int(suite.get("failures", 0))
+            errors = int(suite.get("errors", 0))
+            if failures > 0 or errors > 0:
+                return True
+    return False
 
 
 def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
@@ -304,6 +371,8 @@ def build_run_test_cmd(
         cmd.append("--exclude-jit-executor")
     if args.exclude_distributed and args.test_config != "distributed":
         cmd.append("--exclude-distributed-tests")
+    if args.test_config == "distributed":
+        cmd.append("--distributed-tests")
     if args.exclude_quantization:
         cmd.append("--exclude-quantization-tests")
 
@@ -318,8 +387,12 @@ def build_run_test_cmd(
 
     if args.include:
         cmd.extend(["--include"] + args.include)
+    test_dir = args.pytorch_dir / "test"
+    excludes = [m for m in EXCLUDED_TEST_MODULES if (test_dir / (m + ".py")).exists()]
     if args.exclude:
-        cmd.extend(["--exclude"] + args.exclude)
+        excludes.extend(args.exclude)
+    if excludes:
+        cmd.extend(["--exclude"] + excludes)
 
     if tests_to_skip:
         cmd.extend(["-k", tests_to_skip])
@@ -328,8 +401,102 @@ def build_run_test_cmd(
         passthrough_args.append("-p")
         passthrough_args.append("no:cacheprovider")
 
+    passthrough_args.extend(["--timeout", str(PYTEST_TIMEOUT_SECONDS)])
+
     cmd.extend(passthrough_args)
     return cmd
+
+
+def build_inductor_cmds(
+    args: argparse.Namespace,
+    tests_to_skip: str,
+    passthrough_args: list[str],
+) -> list[list[str]]:
+    """Build the two run_test.py commands for the inductor config.
+
+    Matches upstream ``test_inductor_shard()`` in ``.ci/pytorch/test.sh``:
+      1. Generic tests (test_modules, test_ops, …) with ``--inductor``
+      2. Inductor unit tests (inductor/test_torchinductor, …) *without*
+         ``--inductor`` to avoid nested dynamo state
+    """
+    run_test_path = str(args.pytorch_dir / "test" / "run_test.py")
+
+    extra = list(passthrough_args)
+    if not args.cache:
+        extra.extend(["-p", "no:cacheprovider"])
+    extra.extend(["--timeout", str(PYTEST_TIMEOUT_SECONDS)])
+
+    skip_args = ["-k", tests_to_skip] if tests_to_skip else []
+
+    def _base_cmd() -> list[str]:
+        cmd = [sys.executable, run_test_path]
+        cmd.extend(["--keep-going", "--verbose"])
+        if args.dry_run:
+            cmd.append("--dry-run")
+        if args.shard > 0 and args.num_shards > 0:
+            cmd.extend(["--shard", str(args.shard), str(args.num_shards)])
+        return cmd
+
+    # 1. Generic tests WITH --inductor (enables TorchInductor backend)
+    cmd1 = _base_cmd()
+    cmd1.append("--inductor")
+    cmd1.extend(["--include"] + INDUCTOR_GENERIC_TESTS)
+    cmd1.extend(skip_args)
+    cmd1.extend(extra)
+
+    # 2. Inductor unit tests WITHOUT --inductor (nested dynamo guard)
+    cmd2 = _base_cmd()
+    cmd2.extend(["--include"] + INDUCTOR_UNIT_TESTS)
+    cmd2.extend(skip_args)
+    cmd2.extend(extra)
+
+    return [cmd1, cmd2]
+
+
+def _run_inductor(
+    args: argparse.Namespace,
+    tests_to_skip: str,
+    passthrough_args: list[str],
+) -> int:
+    """Run the inductor test config as two run_test.py invocations.
+
+    Matches upstream ``test_inductor_shard()`` in ``.ci/pytorch/test.sh``.
+    Returns the worst (non-zero) return code from either invocation.
+    """
+    # Upstream runs verify_dynamo.py first as a quick smoke test.
+    verify_script = args.pytorch_dir / "tools" / "dynamo" / "verify_dynamo.py"
+    if verify_script.exists():
+        print("Running verify_dynamo.py …")
+        vr = subprocess.run(
+            [sys.executable, str(verify_script)], cwd=str(args.pytorch_dir)
+        )
+        if vr.returncode != 0:
+            print(f"verify_dynamo.py failed with return code {vr.returncode}")
+            return vr.returncode
+    else:
+        print(f"verify_dynamo.py not found at {verify_script}, skipping")
+
+    cmds = build_inductor_cmds(args, tests_to_skip, passthrough_args)
+    labels = [
+        "generic tests with --inductor",
+        "inductor unit tests (no --inductor)",
+    ]
+
+    worst_rc = 0
+    for label, cmd in zip(labels, cmds):
+        print(f"\n{'=' * 60}")
+        print(f"Inductor phase: {label}")
+        print(f"{'=' * 60}")
+        print(f"Executing: {' '.join(cmd)}")
+        result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
+        print(
+            f"run_test.py [{label}] finished with return code: {result.returncode}",
+            flush=True,
+        )
+        if result.returncode != 0:
+            worst_rc = result.returncode
+
+    return worst_rc
 
 
 def main(argv: list[str]) -> int:
@@ -378,12 +545,27 @@ def main(argv: list[str]) -> int:
     )
     print_env()
 
-    cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)
-    print(f"Executing: {' '.join(cmd)}")
+    if args.test_config == "inductor":
+        return_code = _run_inductor(args, tests_to_skip, passthrough_args)
+    else:
+        cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)
+        print(f"Executing: {' '.join(cmd)}")
+        result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
+        return_code = result.returncode
+        print(f"run_test.py finished with return code: {return_code}")
 
-    result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
-    print(f"run_test.py finished with return code: {result.returncode}")
-    return result.returncode
+    # run_test.py with --keep-going may exit 0 even when individual test
+    # cases fail.  Check JUnit XML reports for the ground truth.
+    reports_dir = args.pytorch_dir / "test" / "test-reports"
+    if return_code == 0 and has_junit_failures(reports_dir):
+        print("JUnit XML reports contain failures — overriding exit code to 1")
+        return_code = 1
+
+    # Force-exit immediately.  PyTorch's run_test.py is known to hang after
+    # all test files complete due to leaked daemon threads or orphan child
+    # processes (https://github.com/ROCm/TheRock/issues/999).  os._exit()
+    # terminates without waiting for threads or running atexit handlers.
+    os._exit(return_code if return_code >= 0 else 1)
 
 
 if __name__ == "__main__":

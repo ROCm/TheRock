@@ -49,17 +49,8 @@ jobs:
       - name: Install artifact manager dependencies
         run: pip install boto3
 
-      # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
-      # fall back to runner base credentials (therock-ci-artifacts-external).
-      #
-      # This is just needed for write access to the current run's bucket,
-      # all possible source run buckets have public read access.
-      - name: Configure AWS Credentials
-        if: ${{ github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+      - name: Configure AWS credentials for artifact uploads
+        uses: ./.github/actions/configure_aws_artifacts_credentials
 
       - name: Copy prebuilt stage artifacts
         env:
@@ -98,7 +89,7 @@ jobs:
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
     uses: ./.github/workflows/test_artifacts_structure.yml
     with:
-      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: windows
 
   test_artifacts_per_family:
@@ -134,6 +125,22 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  test_python_packages_per_family:
+    needs: [build_python_packages]
+    name: Test Python ${{ matrix.family_info.amdgpu_family }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
+    uses: ./.github/workflows/test_rocm_wheels.yml
+    with:
+      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
+      test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      package_find_links_url: "${{ needs.build_python_packages.outputs.package_find_links_url }}/${{ matrix.family_info.amdgpu_family }}/index.html"
+      python_version: "3.12"
+      rocm_version: ${{ inputs.rocm_package_version }}
 
   # NOTE: Per-family PyTorch builds — each family gets its own wheel built
   # against that family's ROCm package index slice.

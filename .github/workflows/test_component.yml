@@ -115,7 +115,6 @@ jobs:
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
-          IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
@@ -155,6 +154,14 @@ jobs:
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
+          RETRY_THIS_STEP: "true"
+          RETRY_COUNT: "1"
+          RETRY_DELAY: "7"
+          STEP_NAME: >-
+            Test ${{ fromJSON(inputs.component).job_name }}
+            (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
+            (${{ inputs.amdgpu_families }})
+            ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
         run: |
           python ./build_tools/memory_monitor.py --phase "Test ${{ fromJSON(inputs.component).job_name }}" -- \
             bash -c '${{ fromJSON(inputs.component).test_script }}'
