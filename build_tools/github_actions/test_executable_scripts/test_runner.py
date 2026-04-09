@@ -86,6 +86,59 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
+# Component-specific overrides applied on top of defaults.
+# - test_dir_from_rocm: path parts relative to ROCM_PATH to override the test directory
+# - env_prepend: env var name -> list of path-part lists (each relative to ROCM_PATH)
+#                to prepend to the existing value
+# - env_prepend_from_therock: same as env_prepend but paths are relative to THEROCK_DIR
+COMPONENT_OVERRIDES = {
+    "rocroller": {
+        "env_prepend_from_therock": {
+            "LD_LIBRARY_PATH": [
+                ["build", "core", "clr", "dist", "lib"],
+                ["build", "core", "clr", "dist", "lib", "llvm", "lib"],
+                ["build", "math-libs", "BLAS", "rocRoller", "dist", "lib"],
+                [
+                    "build",
+                    "math-libs",
+                    "BLAS",
+                    "rocRoller",
+                    "dist",
+                    "lib",
+                    "host-math",
+                    "lib",
+                ],
+            ],
+        },
+    },
+}
+
+
+def _prepend_env_paths(env, base_path, prepend_dict):
+    """Prepend paths (relative to base_path) to environment variables."""
+    for env_key, path_parts_list in prepend_dict.items():
+        new_paths = [str(base_path.joinpath(*parts)) for parts in path_parts_list]
+        existing = env.get(env_key, "")
+        env[env_key] = ":".join(filter(None, new_paths + [existing]))
+
+
+def apply_component_overrides(job_name, therock_dir, test_dir, env):
+    """Apply component-specific overrides for test_dir and environment variables."""
+    overrides = COMPONENT_OVERRIDES.get(job_name)
+    if not overrides:
+        return test_dir
+
+    _prepend_env_paths(env, therock_dir, overrides.get("env_prepend_from_therock", {}))
+
+    return test_dir
+
+
+TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
+TEST_DIR = apply_component_overrides(
+    test_component_job_name, THEROCK_DIR, TEST_DIR, environ_vars
+)
+
+
 logging.basicConfig(level=logging.INFO)
 ##############################################
 
