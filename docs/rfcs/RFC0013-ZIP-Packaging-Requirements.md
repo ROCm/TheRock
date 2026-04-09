@@ -9,6 +9,8 @@ status: draft
 
 ZIP packages must provide a portable file-tree representation of a Windows ROCm installation.
 
+Loose Files Package (ZIP): ZIP archive containing a directory tree identical to the MSI-installed layout, intended for power users, CI, or offline deployment
+
 ZIP archive layout must match the labelled directory layout:
 
 ```
@@ -24,3 +26,5 @@ ZIP packages:
 - Must remain suitable for CI, offline deployment, and advanced users
 
 Tools and scripts inside ZIP packages should function correctly when the extracted directory is used directly as an SDK root.
+
+AMD Official Repository (repo.amd.com/rocm/windows) hosts ZIP archives for Winget ingestion or internal automation.
