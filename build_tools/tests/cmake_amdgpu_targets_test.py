@@ -20,9 +20,7 @@ class ParseAmdgpuTargetsCmakeTest(unittest.TestCase):
     def _parse(self, cmake_text: str) -> list[AmdgpuTargetInfo]:
         import tempfile
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".cmake", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cmake", delete=False) as f:
             f.write(textwrap.dedent(cmake_text))
             tmp_path = Path(f.name)
         try:
@@ -108,7 +106,6 @@ class BuildFamilyToTargetsTest(unittest.TestCase):
         ]
         mapping = build_family_to_targets(infos)
         self.assertEqual(mapping["gfx942"].count("gfx942"), 1)
-
 
 
 if __name__ == "__main__":
