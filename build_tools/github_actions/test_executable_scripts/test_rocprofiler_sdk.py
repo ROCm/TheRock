@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import argparse
 import logging
 import os
 import platform
@@ -147,6 +148,12 @@ def get_cmake_config_cmd() -> list[str]:
     working directory set to the *binary* directory (CMake 3.14+); a relative
     ``cmake -B build`` would then treat the build tree as the source tree and fail.
     ``--fresh`` avoids stale cache / generator mismatches when switching generators.
+
+    Do not add global ``-DCMAKE_*_FLAGS=--coverage`` here: the test suite builds
+    OpenMP GPU offload targets (e.g. ``openmp-target``), and mixing ``--coverage``
+    with those link steps triggers lld errors (LLVM profile bitcode mismatch).
+    For gcov/CDash coverage, instrument selected targets in upstream CMake or pass
+    custom flags via ``--configure-cmd`` on ``test_therock.py``.
     """
     tests_dir = ROCPROFILER_SDK_TESTS_PATH
     build_dir = tests_dir / "build"
@@ -209,6 +216,8 @@ def run_test_therock_cdash(
     cmake_config_cmd: list[str],
     cmake_build_cmd: list[str],
     ctest_cmd: list[str],
+    *,
+    ctest_coverage: bool = False,
 ) -> None:
     """Run test_therock.py with the same configure, build, and ctest arguments as this script.
 
@@ -226,6 +235,8 @@ def run_test_therock_cdash(
         "--ctest-args",
         shlex.join(ctest_args),
     ]
+    if ctest_coverage:
+        argv.append("--ctest-coverage")
     logging.info(f"++ Exec [{_REPO_ROOT}]$ {shlex.join(argv)}")
     subprocess.run(
         argv,
@@ -279,9 +290,23 @@ def execute_tests():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="ROCProfiler SDK tests against a TheRock install (CMake, ctest, optional CDash via test_therock).",
+    )
+    parser.add_argument(
+        "--ctest-coverage",
+        action="store_true",
+        help=(
+            "Pass --ctest-coverage to test_therock.py to run ctest_coverage and "
+            "submit Coverage to CDash. Does not add global --coverage CMake flags "
+            "(incompatible with OpenMP offload links in this test tree)."
+        ),
+    )
+    args = parser.parse_args()
     setup_env()
     run_test_therock_cdash(
         get_cmake_config_cmd(),
         get_cmake_build_cmd(),
         get_ctest_cmd(),
+        ctest_coverage=args.ctest_coverage,
     )
