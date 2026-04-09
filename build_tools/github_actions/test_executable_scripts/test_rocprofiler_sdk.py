@@ -10,13 +10,29 @@ from pathlib import Path
 import sys
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+_REPO_ROOT = SCRIPT_DIR.parent.parent.parent
+sys.path.append(str(_REPO_ROOT / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
 
+_DEFAULT_ROCM_BIN = _REPO_ROOT / "build" / "dist" / "rocm" / "bin"
+
+
+def _resolve_therock_bin_dir() -> Path:
+    env = os.getenv("THEROCK_BIN_DIR")
+    if env:
+        return Path(env).resolve()
+    if _DEFAULT_ROCM_BIN.is_dir():
+        return _DEFAULT_ROCM_BIN.resolve()
+    raise SystemExit(
+        "THEROCK_BIN_DIR is not set and "
+        f"{_DEFAULT_ROCM_BIN} does not exist. "
+        "Set THEROCK_BIN_DIR to your TheRock install bin directory "
+        "(e.g. build/dist/rocm/bin)."
+    )
+
+
 # Base Paths
-THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
-THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
+THEROCK_BIN_PATH = _resolve_therock_bin_dir()
 THEROCK_PATH = THEROCK_BIN_PATH.parent
 
 # LIB Paths
@@ -106,72 +122,15 @@ def setup_env():
 
     old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
     environ_vars["LD_LIBRARY_PATH"] = ":".join(ld_lib_paths + old_ld_lib_path)
+    environ_vars["THEROCK_BIN_DIR"] = str(THEROCK_BIN_PATH)
 
     # Avoid conflicting agent visibility; HIP_VISIBLE_DEVICES supersedes.
     if environ_vars.get("HIP_VISIBLE_DEVICES"):
         environ_vars.pop("GPU_DEVICE_ORDINAL", None)
 
-#--------------------------------------------------
 
-#test_therock.py
-test_therock_cmd = [
-    sys.executable,
-    str(SCRIPT_DIR / "test_therock.py"),
-    # "--source-dir",
-    # ROCPROFILER_SDK_TESTS_DIRECTORY,
-    # "--binary-dir",
-    # str(Path(ROCPROFILER_SDK_TESTS_DIRECTORY) / "build"),
-
-    # "--",  # Separator for arguments corresponding to cmake_config_cmd
-
-    # "-B",
-    # "build",
-    # "-G",
-    # "Ninja",
-    # f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps",
-    # f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
-    # f"-DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang",
-    # f"-DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
-
-    # "--",  # Separator for arguments corresponding to cmake_build_cmd
-
-    # "--build",
-    # "build",
-    # "-j",
-
-    # '--', # Separator for arguments corresponding to ctest_cmd
-
-    # "--test-dir",
-    # "build",
-    # "--output-on-failure",
-    # "-j",
-    # str(os.cpu_count() or 1),
-]
-
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(test_therock_cmd)}")
-subprocess.run(
-    test_therock_cmd, 
-    cwd=THEROCK_DIR, 
-    check=True,
-    env=environ_vars,)
-sys.exit(0)
-
-#--------------------------------------------------
-
-# CMake Configuration
-cmake_config_cmd = [
-    "cmake",
-    "-B",
-    "build",
-    "-G",
-    "Ninja",
-    f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps",
-    f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
-    f"-DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang",
-    f"-DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
-]
-
-def cmake_config():
+def get_cmake_config_cmd() -> list[str]:
+    """Configure command used for rocprofiler-sdk tests (matches local cmake_config)."""
     cmake_config_cmd = [
         "cmake",
         "-B",
@@ -192,6 +151,69 @@ def cmake_config():
             f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV=LD_PRELOAD={asan_runtime_library}",
             f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV_VALUE={asan_runtime_library}",
         ]
+    return cmake_config_cmd
+
+
+def get_cmake_build_cmd() -> list[str]:
+    """Build command used for rocprofiler-sdk tests (matches local cmake_build)."""
+    return [
+        "cmake",
+        "--build",
+        "build",
+        "--parallel",
+        "8",
+    ]
+
+
+def get_ctest_cmd() -> list[str]:
+    """CTest invocation used for rocprofiler-sdk tests (matches local execute_tests)."""
+    ctest_cmd = [
+        "ctest",
+        "--test-dir",
+        "build",
+        "--parallel",
+        "8",
+        "--output-on-failure",
+    ]
+    if is_asan():
+        # Exclude tests known to fail/hang in the ASan configuration.
+        exclude_regex = "|".join(ASAN_EXCLUDED_TESTS)
+        ctest_cmd += ["--exclude-regex", exclude_regex]
+    return ctest_cmd
+
+
+def run_test_therock_cdash(
+    cmake_config_cmd: list[str],
+    cmake_build_cmd: list[str],
+    ctest_cmd: list[str],
+) -> None:
+    """Run test_therock.py with the same configure, build, and ctest arguments as this script.
+
+    Passes shell-joined command lines so test_therock can set CTEST_CONFIGURE_COMMAND,
+    CTEST_BUILD_COMMAND, and CMAKE_CTEST_ARGUMENTS consistently with local runs.
+    """
+    ctest_args = ctest_cmd[1:] if ctest_cmd and ctest_cmd[0] == "ctest" else list(ctest_cmd)
+    argv = [
+        sys.executable,
+        str(SCRIPT_DIR / "test_therock.py"),
+        "--configure-cmd",
+        shlex.join(cmake_config_cmd),
+        "--build-cmd",
+        shlex.join(cmake_build_cmd),
+        "--ctest-args",
+        shlex.join(ctest_args),
+    ]
+    logging.info(f"++ Exec [{_REPO_ROOT}]$ {shlex.join(argv)}")
+    subprocess.run(
+        argv,
+        cwd=_REPO_ROOT,
+        check=True,
+        env=environ_vars,
+    )
+
+
+def cmake_config():
+    cmake_config_cmd = get_cmake_config_cmd()
 
     logging.info(
         f"++ Exec [{ROCPROFILER_SDK_TESTS_PATH}]$ {shlex.join(cmake_config_cmd)}"
@@ -204,17 +226,11 @@ def cmake_config():
     )
 
 
-# CTest
-import os
-
-ctest_cmd = [
-    "ctest",
-    "--test-dir",
-    "build",
-    "--output-on-failure",
-    "-j",
-    str(os.cpu_count() or 1),
-]
+# SDK requires test binaries to be built on the gfx architecture being tested on
+# Certain tests are enabled/disabled based on the GPU architecture.
+# Ensuring that these tests build properly against an install is also part of the overall test coverage for SDK (emulates tool developers building tools with rocprofiler-sdk)
+def cmake_build():
+    cmake_build_cmd = get_cmake_build_cmd()
 
     logging.info(
         f"++ Exec [{ROCPROFILER_SDK_TESTS_PATH}]$ {shlex.join(cmake_build_cmd)}"
@@ -228,18 +244,7 @@ ctest_cmd = [
 
 
 def execute_tests():
-    ctest_cmd = [
-        "ctest",
-        "--test-dir",
-        "build",
-        "--parallel",
-        "8",
-        "--output-on-failure",
-    ]
-    if is_asan():
-        # Exclude tests known to fail/hang in the ASan configuration.
-        exclude_regex = "|".join(ASAN_EXCLUDED_TESTS)
-        ctest_cmd += ["--exclude-regex", exclude_regex]
+    ctest_cmd = get_ctest_cmd()
 
     logging.info(f"++ Exec [{ROCPROFILER_SDK_TESTS_PATH}]$ {shlex.join(ctest_cmd)}")
     subprocess.run(
@@ -252,6 +257,8 @@ def execute_tests():
 
 if __name__ == "__main__":
     setup_env()
-    cmake_config()
-    cmake_build()
-    execute_tests()
+    run_test_therock_cdash(
+        get_cmake_config_cmd(),
+        get_cmake_build_cmd(),
+        get_ctest_cmd(),
+    )
