@@ -68,11 +68,12 @@ add_custom_target(
       "CFLAGS=${EXTRA_CFLAGS}"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
-    "configure"
-      --prefix "${CMAKE_CURRENT_BINARY_DIR}"
+    "./configure"
+      --prefix "${CMAKE_INSTALL_PREFIX}"
       --enable-install-libiberty
       --enable-shared
       --disable-static
+      --libdir="${CMAKE_INSTALL_PREFIX}/lib"
       --includedir="${CMAKE_INSTALL_PREFIX}/include"
       --disable-nls
       --disable-werror
