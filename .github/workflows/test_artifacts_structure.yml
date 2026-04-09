@@ -6,13 +6,13 @@ name: Test Artifact Structure
 on:
   workflow_dispatch:
     inputs:
-      artifact_group:
-        type: string
-        description: "Artifact group (e.g. gfx94X-dcgpu, gfx110X-all)"
-        required: true
       artifact_run_id:
         type: string
         description: "Run ID to fetch artifacts from (defaults to current run)"
+        default: ""
+      amdgpu_families:
+        description: "amdgpu_families as a semicolon-separated list (e.g. 'gfx94X-dcgpu;gfx120X-all')"
+        type: string
         default: ""
       platform:
         type: choice
@@ -23,10 +23,10 @@ on:
         default: "linux"
   workflow_call:
     inputs:
-      artifact_group:
-        type: string
-        required: true
       artifact_run_id:
+        type: string
+        default: ""
+      amdgpu_families:
         type: string
         default: ""
       platform:
@@ -38,13 +38,12 @@ permissions:
 
 jobs:
   test_artifact_structure:
-    name: "Validate artifact structure (${{ inputs.artifact_group }})"
+    name: "Validate artifact structure"
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       PLATFORM: ${{ inputs.platform }}
-      ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
+      THEROCK_ARTIFACTS_DIR: ${{ github.workspace }}/.download_cache
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -62,16 +61,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python ./build_tools/fetch_artifacts.py \
-            --run-id=${ARTIFACT_RUN_ID} \
-            --artifact-group=${ARTIFACT_GROUP} \
-            --platform=${PLATFORM} \
-            --output-dir=${ARTIFACTS_DIR} \
+          python ./build_tools/artifact_manager.py fetch \
+            --run-id="${{ env.ARTIFACT_RUN_ID }}" \
+            --stage=all \
+            --amdgpu-families="${{ inputs.amdgpu_families }}" \
+            --platform="${{ env.PLATFORM }}" \
+            --output-dir="${{ github.workspace }}" \
             --no-extract
+          # NOTE: artifact_manager.py appends /.download_cache to --output-dir
+          # in --no-extract mode, so pass workspace root here so that
+          # artifacts land in THEROCK_ARTIFACTS_DIR ($workspace/.download_cache).
 
       - name: Validate artifact structure
-        env:
-          THEROCK_ARTIFACTS_DIR: ${{ env.ARTIFACTS_DIR }}
         run: |
           python -m pytest tests/test_artifact_structure.py \
             -v --log-cli-level=info --timeout=300

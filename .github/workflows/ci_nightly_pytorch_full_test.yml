@@ -1,0 +1,124 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Runs the full PyTorch unit-test suite against nightly wheels from v2-staging.
+#
+# Current scope: Linux gfx94X-dcgpu only.
+# TODO: Expand to additional GPU families (Radeon, gfx950, etc.) and Windows.
+#       Runner labels should eventually come from amdgpu_family_matrix.py /
+#       configure_target_run.py instead of being passed as inputs here.
+#       Encode "run full pytorch tests" in amdgpu_family_matrix.py /
+#       new_amdgpu_family_matrix.py for central tracking of what builds/tests
+#       we enable on each GPU and platform.
+# TODO: This schedule-based trigger assumes the nightly build has completed.
+#       Neither is guaranteed — the build could fail or take longer than
+#       expected, in which case this re-runs tests against the previous
+#       nightly. Consider integrating into the existing build/release
+#       workflows (build_portable_linux_pytorch_wheels.yml /
+#       release_portable_linux_packages.yml) so tests only run after a
+#       successful build, or use a workflow_dispatch trigger / Quartz.
+
+name: CI Nightly PyTorch Full Test
+
+on:
+  schedule:
+    - cron: "0 12 * * *" # 12:00 UTC, after nightly builds (~04:00 UTC) have completed
+  workflow_dispatch:
+    inputs:
+      amdgpu_family:
+        description: GPU family to test
+        type: string
+        default: "gfx94X-dcgpu"
+      test_runs_on:
+        description: Runner label for single-GPU test configs
+        type: string
+        default: "linux-gfx942-1gpu-ossci-rocm"
+      test_runs_on_multi_gpu:
+        description: Runner label for multi-GPU test configs (e.g. distributed)
+        type: string
+        default: "linux-gfx942-8gpu-ossci-rocm"
+      package_index_url:
+        description: "Base package index URL (without GPU family subdir)"
+        type: string
+        default: "https://rocm.nightlies.amd.com/v2-staging"
+      torch_version:
+        description: "Torch version to test (leave empty to auto-detect latest nightly)"
+        type: string
+        default: ""
+      pytorch_git_ref:
+        description: "PyTorch git ref for test sources"
+        type: string
+        default: "nightly"
+      pytorch_git_repo:
+        description: "PyTorch git repo for test sources (Options: rocm/pytorch, pytorch/pytorch)"
+        type: string
+        default: "pytorch/pytorch"
+      test_configs:
+        description: "Space-separated test configs to run"
+        type: string
+        default: "default distributed inductor"
+      python_version:
+        description: "Python version"
+        type: string
+        default: "3.12"
+
+permissions:
+  contents: read
+
+run-name: CI Nightly PyTorch Full Test (${{ inputs.amdgpu_family }}, ${{ inputs.pytorch_git_ref }})
+
+jobs:
+  resolve_torch_version:
+    runs-on: ubuntu-24.04
+    outputs:
+      torch_version: ${{ steps.resolve.outputs.torch_version }}
+    steps:
+      - name: Resolve latest nightly torch version
+        id: resolve
+        run: |
+          AMDGPU_FAMILY="${{ inputs.amdgpu_family }}"
+          PYTHON_VERSION="${{ inputs.python_version }}"
+          PACKAGE_INDEX_URL="${{ inputs.package_index_url }}"
+          INDEX_URL="${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}"
+
+          if [ -n "${{ inputs.torch_version }}" ]; then
+            echo "torch_version=${{ inputs.torch_version }}" >> "$GITHUB_OUTPUT"
+            echo "Using provided torch_version: ${{ inputs.torch_version }}"
+            exit 0
+          fi
+
+          pip install packaging
+          # --platform ensures this works even when the runner OS differs from
+          # the target (e.g. querying Linux packages from an ubuntu runner that
+          # might later be replaced by a Windows runner for cross-platform support).
+          # TODO: When adding Windows support, pass --platform win_amd64 for
+          # Windows targets or derive the platform from amdgpu_family/runner.
+          TORCH_VERSION=$(pip index versions torch \
+            --index-url "${INDEX_URL}" \
+            --python-version "${PYTHON_VERSION}" \
+            --platform linux_x86_64 2>/dev/null \
+            | head -1 \
+            | sed 's/torch (\(.*\))/\1/')
+
+          if [ -z "${TORCH_VERSION}" ]; then
+            echo "::error::Failed to resolve torch version from ${INDEX_URL}"
+            exit 1
+          fi
+
+          echo "torch_version=${TORCH_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved torch_version: ${TORCH_VERSION}"
+
+  run_full_tests:
+    needs: resolve_torch_version
+    uses: ./.github/workflows/test_pytorch_wheels_full.yml
+    with:
+      amdgpu_family: ${{ inputs.amdgpu_family }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      test_runs_on_multi_gpu: ${{ inputs.test_runs_on_multi_gpu }}
+      package_index_url: ${{ inputs.package_index_url }}
+      python_version: ${{ inputs.python_version }}
+      torch_version: ${{ needs.resolve_torch_version.outputs.torch_version }}
+      pytorch_git_repo: ${{ inputs.pytorch_git_repo }}
+      pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
+      test_configs: ${{ inputs.test_configs }}
+      tests_to_include: ""
