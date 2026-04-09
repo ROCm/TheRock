@@ -245,7 +245,7 @@ test_matrix = {
         # GHA step timeout: max category timeout in hipsparselt should be 6 hours / 6 shards = 60 min per shard
         # 60 min + 20% margin = 72 min
         "timeout_minutes": 72,
-        "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 6,
