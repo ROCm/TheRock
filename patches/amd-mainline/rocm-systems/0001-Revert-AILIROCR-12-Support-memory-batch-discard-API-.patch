@@ -1,0 +1,906 @@
+From fc554b798959a89e5390fd8bf8331288a9f580b6 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Thu, 9 Apr 2026 13:57:13 +0200
+Subject: [PATCH] Revert "AILIROCR-12 Support memory batch discard API (#4481)"
+
+This reverts commit 32809215c06ee14efae094b5c147c468d88debd7.
+---
+ projects/rocprofiler-sdk/VERSION              |   2 +-
+ .../rocprofiler-sdk/cxx/enum_string.hpp       |   5 -
+ .../rocprofiler-sdk/hsa/amd_ext_api_id.h      |   3 -
+ .../include/rocprofiler-sdk/hsa/api_args.h    |  11 -
+ .../source/lib/rocprofiler-sdk/hsa/abi.cpp    |   5 -
+ .../lib/rocprofiler-sdk/hsa/hsa.def.cpp       |  12 -
+ .../rocrtst/suites/functional/svm_memory.cc   | 314 ------------------
+ .../rocrtst/suites/functional/svm_memory.h    |   5 +-
+ .../rocrtst/suites/test_common/main.cc        |  10 -
+ .../core/common/hsa_table_interface.cpp       |   6 -
+ .../hsa-runtime/core/inc/hsa_ext_amd_impl.h   |   5 -
+ .../runtime/hsa-runtime/core/inc/runtime.h    |   4 -
+ .../core/runtime/hsa_api_trace.cpp            |   3 +-
+ .../hsa-runtime/core/runtime/hsa_ext_amd.cpp  |  27 --
+ .../hsa-runtime/core/runtime/runtime.cpp      | 153 ---------
+ .../runtime/hsa-runtime/hsacore.so.def        |   1 -
+ .../runtime/hsa-runtime/inc/hsa_api_trace.h   |   1 -
+ .../hsa-runtime/inc/hsa_api_trace_version.h   |   2 +-
+ .../runtime/hsa-runtime/inc/hsa_ext_amd.h     |  50 +--
+ 19 files changed, 5 insertions(+), 614 deletions(-)
+
+diff --git a/projects/rocprofiler-sdk/VERSION b/projects/rocprofiler-sdk/VERSION
+index 0495c4a88c..23aa839063 100644
+--- a/projects/rocprofiler-sdk/VERSION
++++ b/projects/rocprofiler-sdk/VERSION
+@@ -1 +1 @@
+-1.2.3
++1.2.2
+diff --git a/projects/rocprofiler-sdk/source/include/rocprofiler-sdk/cxx/enum_string.hpp b/projects/rocprofiler-sdk/source/include/rocprofiler-sdk/cxx/enum_string.hpp
+index 6187f228f1..8d81426706 100644
+--- a/projects/rocprofiler-sdk/source/include/rocprofiler-sdk/cxx/enum_string.hpp
++++ b/projects/rocprofiler-sdk/source/include/rocprofiler-sdk/cxx/enum_string.hpp
+@@ -407,9 +407,6 @@ ROCPROFILER_ENUM_LABEL(ROCPROFILER_HSA_AMD_EXT_API_ID_hsa_amd_memory_async_batch
+ #    if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x0B
+ ROCPROFILER_ENUM_LABEL(ROCPROFILER_HSA_AMD_EXT_API_ID_hsa_amd_agent_preload);
+ #    endif
+-#    if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x0C
+-ROCPROFILER_ENUM_LABEL(ROCPROFILER_HSA_AMD_EXT_API_ID_hsa_amd_svm_discard_batch_async);
+-#    endif
+ #endif
+ 
+ #if HSA_AMD_EXT_API_TABLE_MAJOR_VERSION == 0x01
+@@ -439,8 +436,6 @@ static_assert(ROCPROFILER_HSA_AMD_EXT_API_ID_LAST == 78);
+ static_assert(ROCPROFILER_HSA_AMD_EXT_API_ID_LAST == 79);
+ #    elif HSA_AMD_EXT_API_TABLE_STEP_VERSION == 0x0B
+ static_assert(ROCPROFILER_HSA_AMD_EXT_API_ID_LAST == 80);
+-#    elif HSA_AMD_EXT_API_TABLE_STEP_VERSION == 0x0C
+-static_assert(ROCPROFILER_HSA_AMD_EXT_API_ID_LAST == 81);
+ #    else
+ #        if !defined(ROCPROFILER_UNSAFE_NO_VERSION_CHECK) &&                                       \
+             (defined(ROCPROFILER_CI) && ROCPROFILER_CI > 0)
+diff --git a/projects/rocprofiler-sdk/source/include/rocprofiler-sdk/hsa/amd_ext_api_id.h b/projects/rocprofiler-sdk/source/include/rocprofiler-sdk/hsa/amd_ext_api_id.h
+index 1461f7a804..67b0c4e490 100644
+--- a/projects/rocprofiler-sdk/source/include/rocprofiler-sdk/hsa/amd_ext_api_id.h
++++ b/projects/rocprofiler-sdk/source/include/rocprofiler-sdk/hsa/amd_ext_api_id.h
+@@ -135,9 +135,6 @@ typedef enum rocprofiler_hsa_amd_ext_api_id_t  // NOLINT(performance-enum-size)
+ #    if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x0B
+     ROCPROFILER_HSA_AMD_EXT_API_ID_hsa_amd_agent_preload,
+ #    endif
+-#    if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x0C
+-    ROCPROFILER_HSA_AMD_EXT_API_ID_hsa_amd_svm_discard_batch_async,
+-#    endif
+ #endif
+ 
+     ROCPROFILER_HSA_AMD_EXT_API_ID_LAST,
+diff --git a/projects/rocprofiler-sdk/source/include/rocprofiler-sdk/hsa/api_args.h b/projects/rocprofiler-sdk/source/include/rocprofiler-sdk/hsa/api_args.h
+index 0314845b0a..e04844466f 100644
+--- a/projects/rocprofiler-sdk/source/include/rocprofiler-sdk/hsa/api_args.h
++++ b/projects/rocprofiler-sdk/source/include/rocprofiler-sdk/hsa/api_args.h
+@@ -1496,17 +1496,6 @@ typedef union rocprofiler_hsa_api_args_t
+         uint64_t    flags;
+     } hsa_amd_agent_preload;
+ #    endif
+-#    if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x0C
+-    struct
+-    {
+-        void**              ptrs;
+-        size_t*             sizes;
+-        uint32_t            count;
+-        uint32_t            num_dep_signals;
+-        const hsa_signal_t* dep_signals;
+-        hsa_signal_t        completion_signal;
+-    } hsa_amd_svm_discard_batch_async;
+-#    endif
+ #endif
+ } rocprofiler_hsa_api_args_t;
+ 
+diff --git a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/hsa/abi.cpp b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/hsa/abi.cpp
+index c3fe00701d..693fee1f51 100644
+--- a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/hsa/abi.cpp
++++ b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/hsa/abi.cpp
+@@ -65,8 +65,6 @@ ROCP_SDK_ENFORCE_ABI_VERSIONING(::AmdExtTable, 79);
+ ROCP_SDK_ENFORCE_ABI_VERSIONING(::AmdExtTable, 80);
+ #elif HSA_AMD_EXT_API_TABLE_STEP_VERSION == 0x0B
+ ROCP_SDK_ENFORCE_ABI_VERSIONING(::AmdExtTable, 81);
+-#elif HSA_AMD_EXT_API_TABLE_STEP_VERSION == 0x0C
+-ROCP_SDK_ENFORCE_ABI_VERSIONING(::AmdExtTable, 82);
+ #else
+ INTERNAL_CI_ROCP_SDK_ENFORCE_ABI_VERSIONING(::AmdExtTable, 0);
+ #endif
+@@ -317,9 +315,6 @@ ROCP_SDK_ENFORCE_ABI(::AmdExtTable, hsa_amd_memory_async_batch_copy_fn, 79);
+ #if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x0B
+ ROCP_SDK_ENFORCE_ABI(::AmdExtTable, hsa_amd_agent_preload_fn, 80);
+ #endif
+-#if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x0C
+-ROCP_SDK_ENFORCE_ABI(::AmdExtTable, hsa_amd_svm_discard_batch_async_fn, 81);
+-#endif
+ 
+ ROCP_SDK_ENFORCE_ABI(::ImageExtTable, hsa_ext_image_get_capability_fn, 1);
+ ROCP_SDK_ENFORCE_ABI(::ImageExtTable, hsa_ext_image_data_get_info_fn, 2);
+diff --git a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/hsa/hsa.def.cpp b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/hsa/hsa.def.cpp
+index 473df06c1f..bdbe311660 100644
+--- a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/hsa/hsa.def.cpp
++++ b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/hsa/hsa.def.cpp
+@@ -554,18 +554,6 @@ HSA_API_INFO_DEFINITION_V(ROCPROFILER_HSA_TABLE_ID_AmdExt,
+                           agent,
+                           flags)
+ #        endif
+-#        if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x0C
+-HSA_API_INFO_DEFINITION_V(ROCPROFILER_HSA_TABLE_ID_AmdExt,
+-                          ROCPROFILER_HSA_AMD_EXT_API_ID_hsa_amd_svm_discard_batch_async,
+-                          hsa_amd_svm_discard_batch_async,
+-                          hsa_amd_svm_discard_batch_async_fn,
+-                          ptrs,
+-                          sizes,
+-                          count,
+-                          num_dep_signals,
+-                          dep_signals,
+-                          completion_signal)
+-#        endif
+ #    endif
+ 
+ #elif defined(ROCPROFILER_LIB_ROCPROFILER_HSA_ASYNC_COPY_CPP_IMPL) &&                              \
+diff --git a/projects/rocr-runtime/rocrtst/suites/functional/svm_memory.cc b/projects/rocr-runtime/rocrtst/suites/functional/svm_memory.cc
+index be55d5b854..577867d2aa 100644
+--- a/projects/rocr-runtime/rocrtst/suites/functional/svm_memory.cc
++++ b/projects/rocr-runtime/rocrtst/suites/functional/svm_memory.cc
+@@ -51,8 +51,6 @@
+ #include <vector>
+ #include <memory>
+ #include <sys/socket.h>
+-#include <chrono>
+-#include <thread>
+ 
+ #include "suites/functional/svm_memory.h"
+ #include "common/base_rocr_utils.h"
+@@ -367,78 +365,6 @@ void SvmMemoryTestBasic::TestSVMPrefetch(void) {
+   }
+ }
+ 
+-void SvmMemoryTestBasic::TestSVMBatchDiscard(void) {
+-  // Check if SVM is supported by the ROCr runtime
+-  bool svm_supported = false;
+-  hsa_status_t err = hsa_system_get_info(HSA_AMD_SYSTEM_INFO_SVM_SUPPORTED, &svm_supported);
+-  
+-  if (err != HSA_STATUS_SUCCESS || !svm_supported) {
+-    std::cout << "  *** SVM is not supported - skipping SVMBatchDiscard test ***" << std::endl;
+-    return;
+-  }
+-
+-  // Check if XNACK is enabled
+-  bool xnack_enabled = false;
+-  err = hsa_system_get_info(HSA_AMD_SYSTEM_INFO_XNACK_ENABLED, &xnack_enabled);
+-  if (err != HSA_STATUS_SUCCESS || !xnack_enabled) {
+-    std::cout << "  *** XNACK not enabled - skipping SVMBatchDiscard test ***" << std::endl;
+-    return;
+-  }
+-
+-  std::vector<std::shared_ptr<rocrtst::agent_pools_t>> agent_pools;
+-
+-  if (verbosity() > 0) {
+-    PrintMemorySubtestHeader("SVMBatchDiscard Test");
+-  }
+-
+-  ASSERT_SUCCESS(rocrtst::GetAgentPools(&agent_pools));
+-  for (auto a : agent_pools) {
+-    for (auto p : a->pools) {
+-      TestSVMBatchDiscard(a->agent, p);
+-    }
+-  }
+-
+-  if (verbosity() > 0) {
+-    std::cout << "    Subtest finished" << std::endl;
+-    std::cout << kSubTestSeparator << std::endl;
+-  }
+-}
+-
+-void SvmMemoryTestBasic::TestSVMDiscardNegative() {
+-  // Check if SVM is supported by the runtime
+-  bool svm_supported = false;
+-  hsa_status_t err = hsa_system_get_info(HSA_AMD_SYSTEM_INFO_SVM_SUPPORTED, &svm_supported);
+-  
+-  if (err != HSA_STATUS_SUCCESS || !svm_supported) {
+-    std::cout << "  *** SVM is not supported - skipping TestSVMDiscardNegative test ***" << std::endl;
+-    return;
+-  }
+-
+-  // Check if XNACK is enabled
+-  bool xnack_enabled = false;
+-  err = hsa_system_get_info(HSA_AMD_SYSTEM_INFO_XNACK_ENABLED, &xnack_enabled);
+-  if (err != HSA_STATUS_SUCCESS || !xnack_enabled) {
+-    std::cout << "  *** XNACK not enabled - skipping TestSVMDiscardNegative test ***" << std::endl;
+-    return;
+-  }
+-
+-  std::vector<std::shared_ptr<rocrtst::agent_pools_t>> agent_pools;
+-
+-  if (verbosity() > 0) {
+-    PrintMemorySubtestHeader("TestSVMDiscardNegative Test");
+-  }
+-
+-  ASSERT_SUCCESS(rocrtst::GetAgentPools(&agent_pools));
+-  for (auto a : agent_pools) {
+-    TestSVMDiscardNegative(a->agent);
+-  }
+-
+-  if (verbosity() > 0) {
+-    std::cout << "    Subtest finished" << std::endl;
+-    std::cout << kSubTestSeparator << std::endl;
+-  }
+-}
+-
+ void SvmMemoryTestBasic::SetUp(void) {
+   hsa_status_t err;
+ 
+@@ -578,243 +504,3 @@ void SvmMemoryTestBasic::TestSVMPrefetch(hsa_agent_t agent, hsa_amd_memory_pool_
+   }
+ 
+ }
+-
+-void SvmMemoryTestBasic::TestSVMBatchDiscard(hsa_agent_t agent, hsa_amd_memory_pool_t pool) {
+-  hsa_device_type_t ag_type;
+-  hsa_agent_t cpu_agent;
+-  rocrtst::pool_info_t pool_i;
+-
+-  ASSERT_SUCCESS(hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &ag_type));
+-  if (ag_type != HSA_DEVICE_TYPE_GPU) return;
+-
+-  ASSERT_SUCCESS(rocrtst::AcquirePoolInfo(pool, &pool_i));
+-  if(!pool_i.alloc_allowed) return;
+-
+-  ASSERT_SUCCESS(hsa_agent_get_info(agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_NEAREST_CPU, &cpu_agent));
+-
+-  static const int kNumRegions = 4;
+-  static const size_t kRegionSize = 1024;
+-
+-  struct Region {
+-    void* ptr;
+-    size_t size;
+-  };
+-  std::vector<Region> regions;
+-  std::vector<void*> ptrs(kNumRegions);
+-  std::vector<size_t> sizes(kNumRegions);
+-
+-  // reserve memory for all regions
+-  for (int i = 0; i < kNumRegions; i++) {
+-    void* addr = nullptr;
+-    ASSERT_SUCCESS(hsa_amd_vmem_address_reserve(&addr, kRegionSize, 0, HSA_AMD_VMEM_ADDRESS_NO_REGISTER));
+-    ASSERT_NE(addr, nullptr);
+-
+-    regions.push_back({addr, kRegionSize});
+-    ptrs[i] = addr;
+-    sizes[i] = kRegionSize;
+-
+-    if (verbosity() > 0) {
+-      std::cout << "Reserved SVM region " << i << " at " << addr << std::endl;
+-    }
+-
+-    std::vector<hsa_amd_svm_attribute_pair_t> dev_attrs;
+-    dev_attrs.push_back({HSA_AMD_SVM_ATTRIB_PREFERRED_LOCATION, agent.handle});
+-    dev_attrs.push_back({HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE, agent.handle});
+-
+-    ASSERT_SUCCESS(hsa_amd_svm_attributes_set(ptrs[i], sizes[i], dev_attrs.data(), dev_attrs.size()));
+-  }
+-
+-  /* Launch a kernel to write to the 4 svm memory regions which 
+-  would trigger migration from host memory to device memory */
+-  hsa_queue_t* queue = nullptr;  // command queue
+-  uint32_t queue_size = 0;
+-
+-  ASSERT_SUCCESS(hsa_agent_get_info(agent, HSA_AGENT_INFO_QUEUE_MAX_SIZE, &queue_size));
+-  ASSERT_SUCCESS(hsa_queue_create(agent, queue_size, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &queue));
+-
+-  // Find kernarg pool
+-  hsa_amd_memory_pool_t kernarg_pool;
+-  ASSERT_SUCCESS(hsa_amd_agent_iterate_memory_pools(cpu_agent, rocrtst::GetKernArgMemoryPool, &kernarg_pool));
+-
+-  // Load kernel for writing
+-  set_kernel_file_name("gpuReadWrite_kernels.hsaco");
+-  set_kernel_name("gpuReadWrite");
+-  ASSERT_SUCCESS(rocrtst::LoadKernelFromObjFile(this, &agent));
+-
+-  // completion signal for kernel dispatch
+-  hsa_signal_t completion = {0};
+-  ASSERT_SUCCESS(hsa_signal_create(1, 0, NULL, &completion));
+-
+-  typedef struct __attribute__((aligned(16))) args_t {
+-    int* a;
+-    int* b;
+-    int* c;
+-  } args;
+-
+-  for (int i = 0; i < kNumRegions; i++) {
+-    // allocate kernel arguments
+-    args* kernArgs = nullptr;
+-    ASSERT_SUCCESS(hsa_amd_memory_pool_allocate(kernarg_pool, sizeof(args), 0,
+-                                                reinterpret_cast<void**>(&kernArgs)));
+-    ASSERT_SUCCESS(hsa_amd_agents_allow_access(1, &agent, NULL, kernArgs));
+-
+-    // setup kernel args to write to this region
+-    int* pRegion = static_cast<int*>(regions[i].ptr);
+-    // store the same region pointer in all of these
+-    kernArgs->a = pRegion; 
+-    kernArgs->b = pRegion; 
+-    kernArgs->c = pRegion;
+-    
+-    // Create and initialize AQL packet
+-    hsa_kernel_dispatch_packet_t aql;
+-    memset(&aql, 0, sizeof(aql));
+-
+-    aql.workgroup_size_x = 256;
+-    aql.workgroup_size_y = 1;
+-    aql.workgroup_size_z = 1;
+-    aql.grid_size_x = kRegionSize / sizeof(int); // number of elements in the region
+-    aql.grid_size_y = 1;
+-    aql.grid_size_z = 1;
+-    aql.private_segment_size = 0;
+-    aql.group_segment_size = 0;
+-    aql.kernel_object = kernel_object();
+-    aql.kernarg_address = kernArgs;
+-    aql.completion_signal = completion;
+-    
+-    const uint32_t queue_mask = queue->size - 1;
+-
+-    // write to command queue
+-    uint64_t index = hsa_queue_load_write_index_relaxed(queue);
+-    hsa_queue_store_write_index_relaxed(queue, index + 1);
+-    rocrtst::WriteAQLToQueueLoc(queue, index, &aql);
+-
+-    hsa_kernel_dispatch_packet_t* q_base_addr =
+-      reinterpret_cast<hsa_kernel_dispatch_packet_t*>(queue->base_address);
+-    rocrtst::AtomicSetPacketHeader(
+-        (HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE) |
+-            (1 << HSA_PACKET_HEADER_BARRIER) |
+-            (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
+-            (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE),
+-        (1 << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS),
+-        reinterpret_cast<hsa_kernel_dispatch_packet_t*>(&q_base_addr[index & queue_mask]));
+-
+-    // Ring doorbell
+-    hsa_signal_store_relaxed(queue->doorbell_signal, index);
+-
+-    // wait for kernel execution to finish
+-    while (hsa_signal_wait_scacquire(completion, HSA_SIGNAL_CONDITION_LT, 1, (uint64_t)-1,
+-                                   HSA_WAIT_STATE_ACTIVE)) {}
+-
+-    // reset completion signal for next iteration
+-    hsa_signal_store_relaxed(completion, 1);
+-
+-    if (verbosity() > 0) {
+-      std::cout << "Kernel executed for SVM region " << i << ", memory allocation completed." << std::endl;
+-    }
+-
+-    // free kernel args
+-    hsa_amd_memory_pool_free(kernArgs);
+-  }
+-
+-  // Create multiple dependency signals
+-  static const int kNumDepSignals = 3;
+-  hsa_signal_t dep_signals[kNumDepSignals];
+-  for (int i = 0; i < kNumDepSignals; i++) {
+-    ASSERT_SUCCESS(hsa_signal_create(1, 0, NULL, &dep_signals[i]));
+-  }
+-
+-  // Check if this memory is on gpu
+-  for (int i = 0; i < kNumRegions; ++i) {    
+-    hsa_amd_svm_attribute_pair_t attr;
+-    attr.attribute = HSA_AMD_SVM_ATTRIB_PREFERRED_LOCATION;
+-    attr.value = 0;
+-    ASSERT_SUCCESS(hsa_amd_svm_attributes_get(regions[i].ptr, kRegionSize, &attr, 1));
+-    ASSERT_EQ(attr.value, agent.handle);
+-  }
+-
+-  // reset completion signal for discard
+-  hsa_signal_store_relaxed(completion, 1);
+-  
+-  // Discard all of the above 4 regions
+-  ASSERT_SUCCESS(hsa_amd_svm_discard_batch_async(ptrs.data(), sizes.data(), ptrs.size(), kNumDepSignals, dep_signals, completion));
+-
+-  /* Confirm that memory is still on GPU until discard completes, which is 
+-  supposed to only execute once all dependency signals are 0. */
+-  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+-  for (int i = 0; i < kNumRegions; ++i) {    
+-    hsa_amd_svm_attribute_pair_t attr;
+-    attr.attribute = HSA_AMD_SVM_ATTRIB_PREFERRED_LOCATION;
+-    attr.value = 0;
+-    ASSERT_SUCCESS(hsa_amd_svm_attributes_get(regions[i].ptr, kRegionSize, &attr, 1));
+-    ASSERT_EQ(attr.value, agent.handle);
+-  }
+-
+-  // Resolve all dependency signals with 1ms delay
+-  for (int i = 0; i < kNumDepSignals; i++) {
+-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+-    hsa_signal_store_screlease(dep_signals[i], 0);
+-  }
+-
+-  while (hsa_signal_wait_scacquire(completion, HSA_SIGNAL_CONDITION_LT, 1, (uint64_t)-1,
+-                                 HSA_WAIT_STATE_ACTIVE)) {}
+-
+-  for (int i = 0; i < kNumRegions; ++i) {    
+-    // After discard, memory should have been prefetched to CPU agent
+-    hsa_amd_svm_attribute_pair_t attr;
+-    attr.attribute = HSA_AMD_SVM_ATTRIB_PREFETCH_LOCATION;
+-    attr.value = 0;
+-    ASSERT_SUCCESS(hsa_amd_svm_attributes_get(regions[i].ptr, kRegionSize, &attr, 1));
+-    ASSERT_EQ(attr.value, cpu_agent.handle);
+-
+-    // Verify pointer is valid after discard operation 
+-    hsa_amd_pointer_info_t ptrInfo = {};
+-    ptrInfo.size = sizeof(ptrInfo);
+-    ASSERT_SUCCESS(hsa_amd_pointer_info(regions[i].ptr, &ptrInfo, nullptr, nullptr, nullptr));
+-    ASSERT_EQ(ptrInfo.type, HSA_EXT_POINTER_TYPE_RESERVED_ADDR);
+-  }
+-
+-  // Cleanup
+-  if (completion.handle) {
+-    hsa_signal_destroy(completion);
+-  }
+-  
+-  for (int i = 0; i < kNumDepSignals; i++) {
+-    hsa_signal_destroy(dep_signals[i]);
+-  }
+-
+-  // Free reserved SVM regions
+-  for (int i = 0; i < kNumRegions; i++) {
+-    hsa_amd_vmem_address_free(regions[i].ptr, regions[i].size);
+-  }
+-
+-  if (queue) {
+-    hsa_queue_destroy(queue);
+-  }
+-
+-  if (verbosity() > 0) {
+-    std::cout << "    Batch discard test completed successfully" << std::endl;
+-  }
+-}
+-
+-void SvmMemoryTestBasic::TestSVMDiscardNegative(hsa_agent_t agent) {
+-  hsa_device_type_t ag_type;
+-  ASSERT_SUCCESS(hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &ag_type));
+-  if (ag_type != HSA_DEVICE_TYPE_GPU) return;
+-
+-  hsa_status_t err;
+-
+-  // Stack memory pointers passed to svm discard api should return error
+-  {
+-    char buf[4096];
+-    void* ptrs[1] = {buf};
+-    size_t sizes[1] = {sizeof(buf)};
+-    hsa_signal_t null_signal = {0};
+-
+-    err = hsa_amd_svm_discard_batch_async(ptrs, sizes, 1, 0, nullptr, null_signal);
+-    ASSERT_EQ(err, HSA_STATUS_ERROR_INVALID_ARGUMENT);
+-
+-    if (verbosity() > 0) {
+-      std::cout << "    Stack memory discard rejected as expected" << std::endl;
+-    }
+-  }
+-}
+\ No newline at end of file
+diff --git a/projects/rocr-runtime/rocrtst/suites/functional/svm_memory.h b/projects/rocr-runtime/rocrtst/suites/functional/svm_memory.h
+index 47cde89769..90c5076dc0 100644
+--- a/projects/rocr-runtime/rocrtst/suites/functional/svm_memory.h
++++ b/projects/rocr-runtime/rocrtst/suites/functional/svm_memory.h
+@@ -75,14 +75,11 @@ class SvmMemoryTestBasic : public TestBase {
+ 
+   void TestCreateDestroy(void);
+   void TestSVMPrefetch(void);
+-  void TestSVMBatchDiscard(void);
+-  void TestSVMDiscardNegative(void);
+   
+  private:
+   void TestCreateDestroy(hsa_agent_t agent, hsa_amd_memory_pool_t pool);
+   void TestSVMPrefetch(hsa_agent_t agent, hsa_amd_memory_pool_t pool);
+-  void TestSVMBatchDiscard(hsa_agent_t agent, hsa_amd_memory_pool_t pool);
+-  void TestSVMDiscardNegative(hsa_agent_t agent);
++
+ };
+ 
+ #endif  // ROCRTST_SUITES_FUNCTIONAL_SVM_MEMORY_H_
+diff --git a/projects/rocr-runtime/rocrtst/suites/test_common/main.cc b/projects/rocr-runtime/rocrtst/suites/test_common/main.cc
+index e1c2864e24..271f70c680 100644
+--- a/projects/rocr-runtime/rocrtst/suites/test_common/main.cc
++++ b/projects/rocr-runtime/rocrtst/suites/test_common/main.cc
+@@ -530,16 +530,6 @@ TEST(rocrtstFunc, SvmMemory_Basic_Test) {
+     RunCustomTestProlog(&smt);
+     smt.TestCreateDestroy();
+     smt.TestSVMPrefetch();
+-    smt.TestSVMBatchDiscard();
+-    RunCustomTestEpilog(&smt);
+-  );
+-}
+-
+-TEST(rocrtstFunc, SvmMemory_Negative_Test) {
+-  RUN_IF_NOT_EMU_MODE(
+-    SvmMemoryTestBasic smt;
+-    RunCustomTestProlog(&smt);
+-    smt.TestSVMDiscardNegative();
+     RunCustomTestEpilog(&smt);
+   );
+ }
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/common/hsa_table_interface.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/common/hsa_table_interface.cpp
+index b3fd559971..6b364e5b04 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/common/hsa_table_interface.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/common/hsa_table_interface.cpp
+@@ -1373,12 +1373,6 @@ hsa_status_t HSA_API hsa_amd_counted_queue_release(hsa_queue_t* queue) {
+   return amdExtTable->hsa_amd_counted_queue_release_fn(queue);
+ }
+ 
+-hsa_status_t HSA_API hsa_amd_svm_discard_batch_async(void** ptrs, size_t* sizes, uint32_t count, uint32_t num_dep_signals,
+-                          const hsa_signal_t* dep_signals, hsa_signal_t completion_signal) {
+-  return amdExtTable->hsa_amd_svm_discard_batch_async_fn(ptrs, sizes, count, num_dep_signals, dep_signals,
+-                                                   completion_signal);
+-}
+-
+ // Tools only table interfaces.
+ namespace rocr {
+ 
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/inc/hsa_ext_amd_impl.h b/projects/rocr-runtime/runtime/hsa-runtime/core/inc/hsa_ext_amd_impl.h
+index a7a8b1950a..36f798d09e 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/inc/hsa_ext_amd_impl.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/inc/hsa_ext_amd_impl.h
+@@ -400,11 +400,6 @@ hsa_status_t HSA_API hsa_amd_counted_queue_acquire(hsa_agent_t agent, hsa_queue_
+ // Mirrors Amd Extension Apis
+ hsa_status_t HSA_API hsa_amd_counted_queue_release(hsa_queue_t* queue);
+ 
+-// Mirrors Amd Extension Apis
+-hsa_status_t HSA_API hsa_amd_svm_discard_batch_async(void** ptrs, size_t* sizes, uint32_t count,
+-                                               uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
+-                                               hsa_signal_t completion_signal);
+-
+ // Mirrors Amd Extension Apis
+ hsa_status_t HSA_API hsa_amd_enable_logging(uint8_t* flags, void* file);
+ 
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/inc/runtime.h b/projects/rocr-runtime/runtime/hsa-runtime/core/inc/runtime.h
+index aa03f839f0..5929003bb6 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/inc/runtime.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/inc/runtime.h
+@@ -383,10 +383,6 @@ class Runtime {
+   hsa_status_t SvmPrefetch(void* ptr, size_t size, hsa_agent_t agent, uint32_t num_dep_signals,
+                            const hsa_signal_t* dep_signals, hsa_signal_t completion_signal);
+ 
+-  hsa_status_t SvmBatchDiscard(void** ptrs, size_t* sizes, uint32_t count,
+-                                        uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
+-                                        hsa_signal_t completion_signal);
+-
+   hsa_status_t DmaBufExport(const void* ptr, size_t size, int* dmabuf,
+                                             uint64_t* offset, uint64_t flags);
+ 
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/hsa_api_trace.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/hsa_api_trace.cpp
+index 1f6dc413ae..0d2a0cbbf4 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/hsa_api_trace.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/hsa_api_trace.cpp
+@@ -87,7 +87,7 @@ void HsaApiTable::Init() {
+   // they can add preprocessor macros on the new functions
+ 
+   constexpr size_t expected_core_api_table_size = 1016;
+-  constexpr size_t expected_amd_ext_table_size = 664;
++  constexpr size_t expected_amd_ext_table_size = 656;
+   constexpr size_t expected_image_ext_table_size = 128;
+   constexpr size_t expected_finalizer_ext_table_size = 64;
+   constexpr size_t expected_tools_table_size = 64;
+@@ -478,7 +478,6 @@ void HsaApiTable::UpdateAmdExts() {
+   amd_ext_api.hsa_amd_ais_file_read_fn = AMD::hsa_amd_ais_file_read;
+   amd_ext_api.hsa_amd_counted_queue_acquire_fn = AMD::hsa_amd_counted_queue_acquire;
+   amd_ext_api.hsa_amd_counted_queue_release_fn = AMD::hsa_amd_counted_queue_release;
+-  amd_ext_api.hsa_amd_svm_discard_batch_async_fn = AMD::hsa_amd_svm_discard_batch_async;
+   amd_ext_api.hsa_amd_signal_wait_all_fn = AMD::hsa_amd_signal_wait_all;
+   amd_ext_api.hsa_amd_memory_get_preferred_copy_engine_fn = AMD::hsa_amd_memory_get_preferred_copy_engine;
+   amd_ext_api.hsa_amd_portable_export_dmabuf_v2_fn = AMD::hsa_amd_portable_export_dmabuf_v2;
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/hsa_ext_amd.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/hsa_ext_amd.cpp
+index 7d70c597c8..f5ff374a95 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/hsa_ext_amd.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/hsa_ext_amd.cpp
+@@ -1865,33 +1865,6 @@ hsa_amd_counted_queue_release(hsa_queue_t* queue) {
+   CATCH;
+ }
+ 
+-hsa_status_t HSA_API hsa_amd_svm_discard_batch_async(void** ptrs, size_t* sizes, uint32_t count,
+-                                               uint32_t num_dep_signals,
+-                                               const hsa_signal_t* dep_signals,
+-                                               hsa_signal_t completion_signal) {
+-  TRY;
+-  IS_OPEN();
+-  IS_BAD_PTR(ptrs);
+-  IS_BAD_PTR(sizes);
+-  IS_ZERO(count);
+-  
+-  if (!core::Runtime::runtime_singleton_->XnackEnabled()) {
+-    return static_cast<hsa_status_t>(HSA_STATUS_ERROR_XNACK_DISABLED);
+-  }
+-
+-  // Check if dep_signals and num_dep_signals are consistent
+-  if ((num_dep_signals == 0 && dep_signals != nullptr) || 
+-      (num_dep_signals > 0 && dep_signals == nullptr)) {
+-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+-  }
+-
+-  return core::Runtime::runtime_singleton_->SvmBatchDiscard(ptrs, sizes, count, 
+-                                                num_dep_signals, dep_signals,
+-                                                completion_signal);
+-
+-  CATCH;                                       
+-}
+-
+ hsa_status_t hsa_amd_enable_logging(uint8_t* flags, void *file) {
+   TRY;
+   return core::Runtime::runtime_singleton_->EnableLogging(flags, file);
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
+index 7de0d085a0..da094bfbb9 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
+@@ -3427,159 +3427,6 @@ Agent* Runtime::GetSVMPrefetchAgent(void* ptr, size_t size) {
+   return agents_by_node_[prefetch_node][0];
+ }
+ 
+-hsa_status_t Runtime::SvmBatchDiscard(void** ptrs, size_t* sizes, uint32_t count,
+-                                      uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
+-                                      hsa_signal_t completion_signal) {
+-
+-  const size_t kPageSize = os::PageSize();
+-  
+-  // Get a CPU agent for migration target
+-  if (cpu_agents().empty()) return HSA_STATUS_ERROR;
+-
+-  // Validate the pointers
+-  for (int i = 0; i < count; i++) {
+-    hsa_amd_pointer_info_t ptr_info = {};
+-    ptr_info.size = sizeof(ptr_info);
+-    hsa_status_t status = PtrInfo(ptrs[i], &ptr_info, nullptr, nullptr, nullptr);
+-    if (status != HSA_STATUS_SUCCESS) {
+-      debug_warning(false && "Retrieving SVM pointer information failed");
+-      return status;
+-    }
+-    
+-    // Only SVM allocations that were reserved using hsa_amd_vmem_address_reserve are valid for discard
+-    if (ptr_info.type != HSA_EXT_POINTER_TYPE_RESERVED_ADDR || ptr_info.registered) {
+-      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+-    }
+-  }
+-
+-  // Discard operation context
+-  struct DiscardOp {
+-    std::vector<uint32_t> target_cpus;
+-    std::vector<std::pair<void*, size_t>> regions;
+-    std::atomic<uint32_t> remaining_deps;
+-    hsa_signal_t completion;
+-  };
+-
+-  DiscardOp* op = new DiscardOp();
+-  MAKE_NAMED_SCOPE_GUARD(OpGuard, [&]() { delete op; });
+-  
+-  // Prepare memory regions with page alignment and store target cpu agent for each region
+-  op->regions.reserve(count);
+-  op->target_cpus.reserve(count);
+-  op->completion = completion_signal;
+-
+-  for (uint32_t i = 0; i < count; i++) {
+-    uint8_t* base = AlignDown((uint8_t*)ptrs[i], kPageSize);
+-    uint8_t* end = AlignUp((uint8_t*)ptrs[i] + sizes[i], kPageSize);
+-    size_t len = end - base;
+-
+-    op->regions.emplace_back(std::make_pair(reinterpret_cast<void*>(base), len));
+-
+-    // Query the nearest cpu agent for the region
+-    HSA_SVM_ATTRIBUTE attr;
+-    attr.type = HSA_SVM_ATTR_PREFERRED_LOC;
+-    attr.value = 0;
+-
+-    AMD::CpuAgent* cpu = nullptr;
+-    HSAKMT_STATUS status = HSAKMT_CALL(hsaKmtSVMGetAttr(base, len, 1, &attr));
+-
+-    if (status == HSAKMT_STATUS_SUCCESS && 
+-        (attr.value != 0xFFFFFFFF && attr.value != INVALID_NODEID)) {
+-      core::Agent* agent = agents_by_node_[attr.value][0];
+-      
+-      if (agent->device_type() == core::Agent::kAmdCpuDevice) {
+-        // Already on a CPU agent; skip prefetch for this region
+-        op->target_cpus.push_back(UINT32_MAX);
+-        continue;
+-      } else if (agent->device_type() == core::Agent::kAmdGpuDevice) {
+-        AMD::GpuAgent* gpu = static_cast<AMD::GpuAgent*>(agent);
+-        cpu = static_cast<AMD::CpuAgent*>(gpu->GetNearestCpuAgent());
+-      }
+-    }
+-
+-    if (!cpu) {
+-      // Fallback to use first available CPU agent when nearest fails
+-      cpu = static_cast<AMD::CpuAgent*>(cpu_agents_[0]);
+-    }
+-    op->target_cpus.push_back(cpu->node_id());
+-  }
+-
+-  // Dependancy signals already at 0 need not be monitored.
+-  std::vector<hsa_signal_t> pending_deps;
+-  pending_deps.reserve(num_dep_signals);
+-  for (int i = 0; i < num_dep_signals; i++) {
+-    if (Signal::Convert(dep_signals[i])->LoadRelaxed() != 0) {
+-      pending_deps.push_back(dep_signals[i]);
+-    }
+-  }
+-
+-  /* Function to discard all memory regions once dependencies are cleared.
+-  For every region, prefetch to target cpu (if not already on cpu), then discard pages */
+-  static auto discard_all = [](DiscardOp* op) {
+-    for (size_t i = 0; i < op->regions.size(); i++) {
+-      void* base = op->regions[i].first;
+-      size_t size = op->regions[i].second;
+-      uint32_t target_cpu = op->target_cpus[i];
+-
+-      if (target_cpu != UINT32_MAX) {
+-        HSA_SVM_ATTRIBUTE attr;
+-        attr.type = HSA_SVM_ATTR_PREFETCH_LOC;
+-        attr.value = target_cpu;
+-
+-        HSAKMT_STATUS err = HSAKMT_CALL(hsaKmtSVMSetAttr(base, size, 1, &attr));
+-        if (err != HSAKMT_STATUS_SUCCESS) {
+-          debug_warning(false && "hsaKmtSVMSetAttr prefetch failed in SvmBatchDiscard");
+-        }
+-      }
+-
+-      int res = madvise(base, size, MADV_FREE);
+-      if (res != 0) {
+-        debug_warning(false && "madvise MADV_FREE failed in SvmBatchDiscard");
+-      }
+-    }
+-
+-    // Signal completion and cleanup after all regions have been discarded
+-    if (op->completion.handle != 0) {
+-      Signal::Convert(op->completion)->SubRelaxed(1);
+-    }
+-    delete op;
+-  };
+-
+-  /* Each pending dep signal calls this handler when it reaches 0. 
+-  The last one to decrement remaining_deps to 0 will triggers the discard. */
+-  static hsa_amd_signal_handler signal_handler = [](hsa_signal_value_t value, void* arg) {
+-    DiscardOp* op = reinterpret_cast<DiscardOp*>(arg);
+-
+-    if (op->remaining_deps.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+-      discard_all(op);
+-    }
+-    return false;
+-  };
+-
+-  // Dispatch discard call directly if there are no pending deps
+-  if (pending_deps.empty()) {
+-    op->remaining_deps.store(1, std::memory_order_release);
+-    auto no_dependencies = [](void* arg) { signal_handler(0, arg); };
+-    hsa_status_t err = AMD::hsa_amd_async_function(no_dependencies, op);
+-    if (err != HSA_STATUS_SUCCESS) {
+-      throw AMD::hsa_exception(err, "Failed to schedule async discard operation");
+-    }
+-  } else {
+-    // Set signal handlers for all pending dependencies
+-    op->remaining_deps.store(static_cast<uint32_t>(pending_deps.size()),
+-                             std::memory_order_release);
+-    for (size_t i = 0; i < pending_deps.size(); i++) {
+-      /* SetAsyncSignalHandler currently always returns HSA_STATUS_SUCCESS. If it is modified to 
+-      return errors in the future, we need to handle the possibility of use-after-free and double deletion 
+-      of op if this call fails midway and leaves some handlers set but not others. */
+-      SetAsyncSignalHandler(pending_deps[i], HSA_SIGNAL_CONDITION_EQ, 0, signal_handler, op);
+-    }
+-  }
+-
+-  OpGuard.Dismiss();
+-  return HSA_STATUS_SUCCESS;  
+-}
+-
+ hsa_status_t Runtime::DmaBufExport(const void* ptr, size_t size, int* dmabuf, uint64_t* offset,
+                                    uint64_t flags) {
+   std::shared_lock<std::shared_mutex> lock(memory_lock_);
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/hsacore.so.def b/projects/rocr-runtime/runtime/hsa-runtime/hsacore.so.def
+index e098236219..de52991545 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/hsacore.so.def
++++ b/projects/rocr-runtime/runtime/hsa-runtime/hsacore.so.def
+@@ -270,7 +270,6 @@ global:
+ 	hsa_ext_image_destroy_v2;
+ 	hsa_amd_counted_queue_acquire;
+ 	hsa_amd_counted_queue_release;
+-	hsa_amd_svm_discard_batch_async;
+ local:
+     *;
+ };
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_api_trace.h b/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_api_trace.h
+index ffac96504f..cb42993cae 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_api_trace.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_api_trace.h
+@@ -277,7 +277,6 @@ struct AmdExtTable {
+   decltype(hsa_amd_counted_queue_release)* hsa_amd_counted_queue_release_fn;
+   decltype(hsa_amd_memory_async_batch_copy)* hsa_amd_memory_async_batch_copy_fn;
+   decltype(hsa_amd_agent_preload) *hsa_amd_agent_preload_fn;
+-  decltype(hsa_amd_svm_discard_batch_async)* hsa_amd_svm_discard_batch_async_fn;
+ };
+ 
+ // Table to export HSA Core Runtime Apis
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_api_trace_version.h b/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_api_trace_version.h
+index c26a6315bc..d04b3ede99 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_api_trace_version.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_api_trace_version.h
+@@ -58,7 +58,7 @@
+ // Step Ids of the Api tables exported by Hsa Core Runtime
+ #define HSA_API_TABLE_STEP_VERSION                  0x01
+ #define HSA_CORE_API_TABLE_STEP_VERSION             0x00
+-#define HSA_AMD_EXT_API_TABLE_STEP_VERSION          0x0C
++#define HSA_AMD_EXT_API_TABLE_STEP_VERSION          0x0B
+ #define HSA_FINALIZER_API_TABLE_STEP_VERSION        0x00
+ #define HSA_IMAGE_API_TABLE_STEP_VERSION            0x01
+ // Rocprofiler just checks HSA_MAGE_EXT_API_TABLE_STEP_VERSION
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_ext_amd.h b/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_ext_amd.h
+index ab07935037..1ea46cbc25 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_ext_amd.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/inc/hsa_ext_amd.h
+@@ -70,10 +70,9 @@
+  * - 1.17 - hsa_amd_memory_async_batch_copy
+  * - 1.18 - hsa_amd_pointer_info: Added alloc_flags field to hsa_amd_pointer_info_t
+  * - 1.19 - hsa_amd_agent_preload
+- * - 1.20 - Memory batch discard API: hsa_amd_svm_discard_batch_async
+  */
+ #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
+-#define HSA_AMD_INTERFACE_VERSION_MINOR 20
++#define HSA_AMD_INTERFACE_VERSION_MINOR 19
+ 
+ #ifdef __cplusplus
+ extern "C" {
+@@ -465,12 +464,6 @@ enum {
+    * Request is not supported by this system
+    */
+   HSA_STATUS_ERROR_NOT_SUPPORTED = 47,
+-
+-  /**
+-   * Xnack is disabled on this system, but required 
+-   * by the requested operation.
+-   */
+-  HSA_STATUS_ERROR_XNACK_DISABLED = 48,
+ };
+ 
+ /** @} */
+@@ -3472,47 +3465,6 @@ hsa_status_t hsa_amd_svm_prefetch_async(void* ptr, size_t size, hsa_agent_t agen
+                                         uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
+                                         hsa_signal_t completion_signal);
+ 
+-/**
+- * @brief Discards a batch of SVM memory ranges asynchronously.
+- *
+- * Schedules the discard of multiple SVM ranges in a single batched operation.
+- * The physical pages backing the virtual address ranges may be released and reclaimed
+- * by the system under memory pressure. The discard will be scheduled when all @p dep_signals
+- * have been resolved.
+- *
+- * Only pointers allocated using ::hsa_amd_vmem_address_reserve can be discarded.
+- *
+- * 
+- * @param[in] ptrs Array of @p count pointers to SVM memory ranges to discard.
+- * Must not be NULL.
+- *
+- * @param[in] sizes Array of @p ptr sizes, specifying the length of each memory range
+- * to discard. Must not be NULL.
+- *
+- * @param[in] count Number of memory ranges in the @p ptrs and @p sizes arrays. Must not be 0.
+- *
+- * @param[in] num_dep_signals Number of dependent signals. Can be 0.
+- *
+- * @param[in] dep_signals List of dependency signals to wait for before the discard operation
+- * starts. Can be NULL.
+- *
+- * @param[in] completion_signal Signal used to indicate completion of the discard operation.
+- * May be a NULL signal if no completion signal is required.
+- *
+- * @retval ::HSA_STATUS_SUCCESS Discard operation was successfully scheduled.
+- *
+- * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED HSA runtime has not been initialized.
+- *
+- * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p ptrs is NULL, @p sizes is
+- * NULL, @p count is 0, @p dep_signals and @p num_dep_signals are inconsistent.
+- *
+- * @retval ::HSA_STATUS_ERROR_XNACK_DISABLED Cannot run this API on a system with XNACK disabled.
+- */
+-hsa_status_t HSA_API hsa_amd_svm_discard_batch_async(void** ptrs, size_t* sizes, uint32_t count,
+-                                                     uint32_t num_dep_signals,
+-                                                     const hsa_signal_t* dep_signals,
+-                                                     hsa_signal_t completion_signal);
+-
+ /** @} */
+ 
+ /** \addtogroup profile Profiling
+-- 
+2.51.0
+
