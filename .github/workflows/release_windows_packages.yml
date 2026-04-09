@@ -214,11 +214,9 @@ jobs:
           python ./build_tools/health_status.py
 
       - name: Setup ccache
-        env:
-          CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
         run: |
           python ./build_tools/setup_ccache.py \
-            --config-preset "github-oss-${{ env.CI_TYPE }}" \
+            --release-type "${{ env.RELEASE_TYPE }}" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache" \
             --log-dir "${BUILD_DIR}/logs/ccache"

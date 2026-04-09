@@ -89,7 +89,6 @@ jobs:
           ADDITIONAL_LABEL_OPTIONS: ${{ github.event.inputs.additional_label_options }}
           BUILD_VARIANT: ${{ inputs.build_variant }}
           MULTI_ARCH: ${{ inputs.multi_arch }}
-          IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: ./build_tools/github_actions/configure_ci.py
 
       - name: Compute package version
