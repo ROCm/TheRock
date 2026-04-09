@@ -25,14 +25,11 @@ on:
         required: true
         type: string
         default: "3.12"
-      uccl_version:
-        description: uccl package version to install (e.g. "0.0.1.post4")
-        required: true
-        type: string
       torch_version:
-        description: torch package version to install (e.g. "2.7.1+rocm7.10.0a20251120")
-        required: true
+        description: "torch version to install (e.g. '2.7.1+rocm7.10.0a20251120'). Leave empty for latest."
+        required: false
         type: string
+        default: ""
       uccl_git_ref:
         description: UCCL ref to checkout test sources from (e.g. "main")
         type: string
@@ -52,12 +49,10 @@ on:
       python_version:
         required: true
         type: string
-      uccl_version:
-        required: true
-        type: string
       torch_version:
-        required: true
+        required: false
         type: string
+        default: ""
       uccl_git_ref:
         type: string
         default: "main"
@@ -71,7 +66,7 @@ on:
 permissions:
   contents: read
 
-run-name: Test UCCL (${{ inputs.amdgpu_family }}, ${{ inputs.uccl_version }}, ${{ inputs.test_runs_on }})
+run-name: Test UCCL (${{ inputs.amdgpu_family }}, ${{ inputs.uccl_git_ref }}, ${{ inputs.test_runs_on }})
 
 jobs:
   test_wheels:
@@ -110,20 +105,35 @@ jobs:
         run: |
           git config --global core.longpaths true
 
-      - name: Checkout UCCL source (for test files)
+      - name: Checkout UCCL source
         run: |
           python external-builds/uccl/uccl_repo.py checkout \
             --repo-hashtag ${{ inputs.uccl_git_ref }}
 
+      - name: Build UCCL wheel from source
+        run: |
+          python external-builds/uccl/build_prod_wheels.py \
+            --output-dir ${{ github.workspace }}/uccl-wheels \
+            --python-version ${{ inputs.python_version }} \
+            --index-url ${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
+
       - name: Set up virtual environment
         run: |
+          TORCH_PKG="torch"
+          if [ -n "${{ inputs.torch_version }}" ]; then
+            TORCH_PKG="torch==${{ inputs.torch_version }}"
+          fi
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages \
-              torch==${{ inputs.torch_version }} \
-              uccl==${{ inputs.uccl_version }} \
+              "${TORCH_PKG}" \
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
+
+      - name: Install UCCL wheel
+        run: |
+          pip install --extra-index-url ${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }} \
+            "$(ls ${{ github.workspace }}/uccl-wheels/uccl-*.whl)[rocm]"
 
       - name: Install test requirements
         run: |
