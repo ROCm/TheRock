@@ -90,8 +90,10 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx110x": {
         "linux": {
             # TODO(#3298): Re-enable machine once HSA_STATUS_ERROR_OUT_OF_RESOURCES issues are resolved
-            # Label is linux-gfx110X-gpu-rocm, fetch-gfx-targets should be ["gfx1100"]
-            "test-runs-on": "",
+            # Composite label matches TheRock-Infra update_orchestrai_runner_labels.sh (pool: gpu_navi3x).
+            # fetch-gfx-targets should be ["gfx1100"] when split artifacts are available on this runner.
+            "test-runs-on": "linux-gfx110X-gpu-rocm",
+            "nightly_check_only_for_family": True,
             "family": "gfx110X-all",
             "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
@@ -108,7 +110,10 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx1151": {
         "linux": {
+            # igpu_stxh runners get both *-gfx115X-* and *-gfx1151-* from TheRock-Infra
+            # update_orchestrai_runner_labels.sh; use OSSCI-style gfx1151 for matrix / benchmarks.
             "test-runs-on": "linux-gfx1151-gpu-rocm",
+            "nightly_check_only_for_family": True,
             "test-runs-on-kernel": {
                 "oem": "linux-strix-halo-gpu-rocm-oem",
             },
@@ -132,8 +137,9 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx120x": {
         "linux": {
             # TODO(#2683): Re-enable label once stable
-            # Label is linux-gfx120X-gpu-rocm
-            "test-runs-on": "",
+            # Composite label matches TheRock-Infra update_orchestrai_runner_labels.sh (pool: gpu_navi4x).
+            "test-runs-on": "linux-gfx120X-gpu-rocm",
+            "nightly_check_only_for_family": True,
             "family": "gfx120X-all",
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
@@ -142,8 +148,9 @@ amdgpu_family_info_matrix_presubmit = {
         },
         "windows": {
             # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-            # Label is windows-gfx120X-gpu-rocm, fetch-gfx-targets should be ["gfx1200", "gfx1201"]
-            "test-runs-on": "",
+            # fetch-gfx-targets should be ["gfx1200", "gfx1201"] when artifacts are available.
+            "test-runs-on": "windows-gfx120X-gpu-rocm",
+            "nightly_check_only_for_family": True,
             "family": "gfx120X-all",
             "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
