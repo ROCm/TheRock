@@ -228,9 +228,9 @@ PackageEntry(
 )
 PackageEntry(
     "profiler",
-    "amdrocm-profiler",
-    pure_py_package_name="amdrocm_profiler",
-    template_directory="amdrocm-profiler",
+    "rocm-profiler",
+    pure_py_package_name="rocm_profiler",
+    template_directory="rocm-profiler",
     required=False,
 )
 
