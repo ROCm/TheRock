@@ -51,6 +51,7 @@
 import json
 import os
 from pathlib import Path
+import random
 import sys
 from typing import Iterable, List, Optional
 import string
@@ -404,6 +405,25 @@ def matrix_generator(
                 if build_variant_suffix:
                     artifact_group += f"-{build_variant_suffix}"
                 matrix_row["artifact_group"] = artifact_group
+
+                # Handle dual-label configuration with weighted random selection.
+                # Some families (e.g. gfx94x) have multiple runner labels available.
+                if "test-runs-on-alternate" in platform_info:
+                    alternate_label = platform_info["test-runs-on-alternate"]
+                    alternate_weight = platform_info.get(
+                        "test-runs-on-alternate-weight", 0.5
+                    )
+                    if random.random() < alternate_weight:
+                        matrix_row["test-runs-on"] = alternate_label
+                        print(
+                            f"  {target_name}: selected alternate runner (weight={alternate_weight}): "
+                            f"{alternate_label}"
+                        )
+                    else:
+                        print(
+                            f"  {target_name}: selected primary runner (weight={1-alternate_weight}): "
+                            f"{matrix_row['test-runs-on']}"
+                        )
 
                 # We retrieve labels from both PR and workflow_dispatch to customize the build and test jobs
                 label_options = []
