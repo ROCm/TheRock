@@ -31,12 +31,12 @@ def _load_local_dist_info():
     return module
 
 
-dist_info = _load_local_dist_info()
+version = os.environ.get("ROCM_SDK_VERSION")
+if version is None:
+    dist_info = _load_local_dist_info()
+    version = dist_info.__version__
 
-version = os.environ.get("ROCM_SDK_VERSION", dist_info.__version__)
 if version == "DEFAULT":
-    # Fallback used for standalone template builds during Phase 2 testing.
-    # The packaging pipeline will always provide ROCM_SDK_VERSION.
     version = "0.0.0.dev0"
 
 
