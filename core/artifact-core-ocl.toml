@@ -19,6 +19,9 @@ include = [
 [components.test."core/ocl-clr/stage"]
 include = [
   "bin/ocltst*",
+  "bin/*oclgl*",
+  "bin/*oclperf*",
+  "bin/*oclruntime*",
   "lib/*oclgl*",
   "lib/*oclperf*",
   "lib/*oclruntime*",
