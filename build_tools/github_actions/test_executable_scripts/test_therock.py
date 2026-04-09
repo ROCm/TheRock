@@ -26,10 +26,20 @@ _DEFAULT_BASE_URL = "my.cdash.org"
 # Define paths to output artifacts directory and script directory
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = SCRIPT_DIR.parent.parent.parent
+_DEFAULT_ROCM_BIN = _REPO_ROOT / "build" / "dist" / "rocm" / "bin"
 
-# Define paths to TheRock build and source directories
-THEROCK_BIN_DIR = r'/home/tester/TheRock/therock-build/bin'
-THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+# Define paths to TheRock build and source directories (install prefix .../rocm/bin)
+THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+if not THEROCK_BIN_DIR and _DEFAULT_ROCM_BIN.is_dir():
+    THEROCK_BIN_DIR = str(_DEFAULT_ROCM_BIN)
+if not THEROCK_BIN_DIR:
+    raise SystemExit(
+        "THEROCK_BIN_DIR is not set and "
+        f"{_DEFAULT_ROCM_BIN} does not exist. "
+        "Set THEROCK_BIN_DIR to your TheRock install bin directory "
+        "(e.g. build/dist/rocm/bin)."
+    )
 THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 THEROCK_PATH = THEROCK_BIN_PATH.parent
 THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
@@ -71,7 +81,13 @@ def _which_ctest() -> str:
     return shutil.which("ctest") or "ctest"
 
 
-def _generate_ctest_custom(cmake_cmd: str) -> str:
+def _generate_ctest_custom(
+    cmake_cmd: str,
+    *,
+    configure_cmd: str | None = None,
+    build_cmd: str | None = None,
+    ctest_args_str: str | None = None,
+) -> str:
     """Generate CTestCustom.cmake: settings and configure/build commands.
 
     Uses four namespaces (script, configure, build, test). Commands run from
@@ -79,21 +95,30 @@ def _generate_ctest_custom(cmake_cmd: str) -> str:
 
     Args:
         cmake_cmd: Path or command name for the CMake executable.
+        configure_cmd: Full configure shell command; if None, built from cmake_cmd.
+        build_cmd: Full build shell command; if None, built from cmake_cmd.
+        ctest_args_str: Arguments for ctest (CMAKE_CTEST_ARGUMENTS); if None, default.
 
     Returns:
         CMake script content for CTestCustom.cmake.
     """
 
+    def _esc(s: str) -> str:
+        return s.replace("\\", "\\\\").replace('"', '\\"')
+
     # Configure cmake commands and ctest arguments
-    configure_cmd = (
-        f"{cmake_cmd} -B {BINARY_DIR} -G Ninja "
-        f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps "
-        f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ "
-        f"-DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang "
-        f"-DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ {SOURCE_DIR}"
-    )
-    build_cmd = f'{cmake_cmd} --build {BINARY_DIR} -j'
-    ctest_args_str = f'--test-dir {BINARY_DIR} --output-on-failure -j {os.cpu_count() or 1}'
+    if configure_cmd is None:
+        configure_cmd = (
+            f"{cmake_cmd} -B {BINARY_DIR} -G Ninja "
+            f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps "
+            f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ "
+            f"-DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang "
+            f"-DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ {SOURCE_DIR}"
+        )
+    if build_cmd is None:
+        build_cmd = f'{cmake_cmd} --build {BINARY_DIR} -j'
+    if ctest_args_str is None:
+        ctest_args_str = f'--test-dir {BINARY_DIR} --output-on-failure -j {os.cpu_count() or 1}'
 
     # Specify CDash submission information. Include a unique run ID in the build
     # name so each run appears as a separate build on the dashboard.
@@ -121,7 +146,7 @@ set(CTEST_GIT_INIT_SUBMODULES FALSE)
 
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
 set(CTEST_USE_LAUNCHERS TRUE)
-set(CMAKE_CTEST_ARGUMENTS "{ctest_args_str}")
+set(CMAKE_CTEST_ARGUMENTS "{_esc(ctest_args_str)}")
 
 set(CTEST_CUSTOM_MAXIMUM_NUMBER_OF_ERRORS "100")
 set(CTEST_CUSTOM_MAXIMUM_NUMBER_OF_WARNINGS "100")
@@ -138,8 +163,8 @@ set(CTEST_BUILD_NAME "{NAME}")
 set(CTEST_SOURCE_DIRECTORY "{SOURCE_DIR}")
 set(CTEST_BINARY_DIRECTORY "{BINARY_DIR}")
 
-set(CTEST_CONFIGURE_COMMAND "{configure_cmd}")
-set(CTEST_BUILD_COMMAND "{build_cmd}")
+set(CTEST_CONFIGURE_COMMAND "{_esc(configure_cmd)}")
+set(CTEST_BUILD_COMMAND "{_esc(build_cmd)}")
 set(CTEST_COVERAGE_COMMAND "{shutil.which('gcov') or 'gcov'}")
 """
 
@@ -233,20 +258,46 @@ def main(argv: list[str] | None = None) -> int:
     runs ctest -S to configure, build, test, and submit to CDash.
 
     Args:
-        argv: Optional command-line arguments (currently unused; for future CLI).
+        argv: Optional command-line arguments. When passed from test_rocprofiler_sdk,
+            use --configure-cmd, --build-cmd, and --ctest-args (shell-joined strings).
 
     Returns:
         Exit code from ctest (0 on success).
     """
+
+    parser = argparse.ArgumentParser(
+        description="CDash dashboard run for ROCProfiler SDK tests in TheRock.",
+    )
+    parser.add_argument(
+        "--configure-cmd",
+        metavar="CMD",
+        help="Full configure command line (CTEST_CONFIGURE_COMMAND), shell form",
+    )
+    parser.add_argument(
+        "--build-cmd",
+        metavar="CMD",
+        help="Full build command line (CTEST_BUILD_COMMAND), shell form",
+    )
+    parser.add_argument(
+        "--ctest-args",
+        metavar="ARGS",
+        help="Arguments for ctest (CMAKE_CTEST_ARGUMENTS), without leading 'ctest'",
+    )
+    args = parser.parse_args(argv)
 
     # Get path to cmake executable
     cmake_cmd = _which_cmake()
 
     # Create binary directory if it doesn't exist
     os.makedirs(BINARY_DIR, exist_ok=True)
-    
+
     # Generate CTestCustom.cmake and dashboard.cmake scripts
-    ctest_custom = _generate_ctest_custom(cmake_cmd)
+    ctest_custom = _generate_ctest_custom(
+        cmake_cmd,
+        configure_cmd=args.configure_cmd,
+        build_cmd=args.build_cmd,
+        ctest_args_str=args.ctest_args,
+    )
     dashboard = _generate_dashboard(cmake_cmd)
 
     # Write CTestCustom.cmake and dashboard.cmake scripts to binary directory
