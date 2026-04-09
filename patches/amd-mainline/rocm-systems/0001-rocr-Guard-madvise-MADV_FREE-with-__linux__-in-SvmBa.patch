@@ -1,0 +1,35 @@
+From 2e1b871c936ad44aeba1d1527ffaf6e167f5e422 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Thu, 9 Apr 2026 14:46:21 +0200
+Subject: [PATCH] rocr: Guard madvise MADV_FREE with __linux__ in
+ SvmBatchDiscard
+
+madvise and MADV_FREE are POSIX-only and not available on Windows,
+breaking the Windows build introduced by #4481. Guard the call the
+same way MADV_HUGEPAGE is already guarded elsewhere in this file.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ .../rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp   | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
+index 7de0d085a0..e49e1f5076 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
+@@ -3532,10 +3532,12 @@ hsa_status_t Runtime::SvmBatchDiscard(void** ptrs, size_t* sizes, uint32_t count
+         }
+       }
+ 
++#if defined(__linux__)
+       int res = madvise(base, size, MADV_FREE);
+       if (res != 0) {
+         debug_warning(false && "madvise MADV_FREE failed in SvmBatchDiscard");
+       }
++#endif
+     }
+ 
+     // Signal completion and cleanup after all regions have been discarded
+-- 
+2.51.0
+
