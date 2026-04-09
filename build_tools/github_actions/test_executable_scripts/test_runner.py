@@ -101,6 +101,14 @@ COMPONENT_OVERRIDES = {
 }
 
 
+def _prepend_env_paths(env, base_path, prepend_dict):
+    """Prepend paths (relative to base_path) to environment variables."""
+    for env_key, path_parts_list in prepend_dict.items():
+        new_paths = [str(base_path.joinpath(*parts)) for parts in path_parts_list]
+        existing = env.get(env_key, "")
+        env[env_key] = ":".join(filter(None, new_paths + [existing]))
+
+
 def apply_component_overrides(job_name, rocm_path, test_dir, env):
     """Apply component-specific overrides for test_dir and environment variables."""
     overrides = COMPONENT_OVERRIDES.get(job_name)
@@ -110,11 +118,7 @@ def apply_component_overrides(job_name, rocm_path, test_dir, env):
     if "test_dir_from_rocm" in overrides:
         test_dir = str(rocm_path.joinpath(*overrides["test_dir_from_rocm"]))
 
-    for env_key, path_parts_list in overrides.get("env_prepend", {}).items():
-        new_paths = [str(rocm_path.joinpath(*parts)) for parts in path_parts_list]
-        existing = env.get(env_key, "")
-        env[env_key] = ":".join(filter(None, new_paths + [existing]))
-
+    _prepend_env_paths(env, rocm_path, overrides.get("env_prepend", {}))
     return test_dir
 
 
