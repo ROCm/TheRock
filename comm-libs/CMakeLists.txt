@@ -27,6 +27,7 @@ if(THEROCK_ENABLE_RCCL)
   set(_rccl_subproject_names)
 
   therock_cmake_subproject_declare(rccl
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl"
     # High latency LTO link of a single library.
@@ -98,7 +99,12 @@ if(THEROCK_ENABLE_RCCL)
     list(APPEND _rccl_subproject_names rccl-tests)
   endif(THEROCK_BUILD_TESTING)
 
+  # target-neutral: built once for all dist targets in a single generic CI stage.
+  # RCCL contains HIP device code compiled per-architecture; USE_DIST_AMDGPU_TARGETS
+  # embeds all dist targets into a single artifact, avoiding per-family CI sharding.
+  # Remains target-specific in BUILD_TOPOLOGY.toml to preserve kpack splitting support.
   therock_provide_artifact(rccl
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-rccl.toml
     COMPONENTS
       dbg

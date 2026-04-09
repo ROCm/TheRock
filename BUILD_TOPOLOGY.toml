@@ -153,9 +153,8 @@ artifact_groups = ["math-libs", "ml-libs"]
 type = "per-arch"
 
 [build_stages.comm-libs]
-description = "Communication libraries per architecture (can run parallel to math-libs)"
+description = "Communication libraries (can run parallel to math-libs)"
 artifact_groups = ["comm-libs"]
-type = "per-arch"
 
 [build_stages.debug-tools]
 description = "ROCm debug tools"
@@ -268,7 +267,7 @@ source_sets = ["rocm-libraries", "ml-frameworks"]
 
 [artifact_groups.comm-libs]
 description = "Communication libraries"
-type = "per-arch"
+type = "generic"
 artifact_group_deps = ["hip-runtime"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
 source_sets = ["comm-libs", "rocm-systems"]
@@ -658,7 +657,7 @@ artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps", "sysdeps-amd-mes
 feature_group = "MEDIA_LIBS" # Controlled by THEROCK_ENABLE_MEDIA_LIBS
 disable_platforms = ["windows"]
 
-# --- Communication Libraries (per-arch) ---
+# --- Communication Libraries ---
 
 [artifacts.rccl]
 artifact_group = "comm-libs"
