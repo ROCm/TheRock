@@ -220,6 +220,12 @@ class WorkflowOutputRoot:
         suffix = f"/{artifact_group}" if artifact_group else ""
         return StorageLocation(self.bucket, f"{self.prefix}/python{suffix}")
 
+    # -- Tarballs ---------------------------------------------------------------
+
+    def tarballs(self) -> StorageLocation:
+        """Location for the tarballs directory."""
+        return StorageLocation(self.bucket, f"{self.prefix}/tarballs")
+
     # -- Factories --------------------------------------------------------------
 
     @classmethod
