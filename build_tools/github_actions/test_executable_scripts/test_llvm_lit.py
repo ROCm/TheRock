@@ -151,6 +151,14 @@ def sparse_checkout_submodule() -> Path:
         check=True,
     )
 
+    # Remove source-tree Unit lit configs so lit doesn't try to discover
+    # unit test suites during traversal (we don't ship unit test binaries).
+    for unit_dir in ["llvm/test/Unit", "clang/test/Unit", "lld/test/Unit"]:
+        unit_lit_cfg = amd_llvm_dir / unit_dir / "lit.cfg.py"
+        if unit_lit_cfg.exists():
+            unit_lit_cfg.unlink()
+            logging.info(f"Removed source Unit config: {unit_lit_cfg}")
+
     return amd_llvm_dir
 
 
@@ -161,13 +169,18 @@ def fixup_lit_site_cfg(
     llvm_tools_dir: Path,
     llvm_libs_dir: Path,
     extra_replacements: dict[str, str] | None = None,
+    load_config_src_root: str | None = None,
 ) -> None:
     """Fix up a lit.site.cfg.py to use correct absolute paths on the runner.
 
     The generated lit.site.cfg.py files contain relative paths (via the path()
     helper) computed on the builder machine. On the runner, the directory layout
-    is different, so we replace the path() function with one that uses a
-    path-mapping table to redirect known directories to their runner locations.
+    is different, so we replace config variable assignments that use path() with
+    correct absolute paths.
+
+    If load_config_src_root is given, also fix inline path() calls in the
+    lit_config.load_config() invocation (needed when the template uses a raw
+    path() call instead of a config variable, as LLD does).
     """
     if not cfg_path.exists():
         logging.warning(f"lit site config not found: {cfg_path}")
@@ -217,6 +230,16 @@ def fixup_lit_site_cfg(
         f'config.host_cxx = "{host_cxx}"',
         content,
     )
+
+    # Some templates (e.g. LLD) use an inline path() call in the
+    # lit_config.load_config() invocation rather than a config variable.
+    # Replace that path() with the correct source root.
+    if load_config_src_root:
+        content = re.sub(
+            r"(os\.path\.join\()path\(r\"[^\"]*\"\)",
+            rf'\g<1>r"{load_config_src_root}"',
+            content,
+        )
 
     cfg_path.write_text(content)
     logging.info(f"Fixed up: {cfg_path}")
@@ -285,10 +308,10 @@ def main() -> int:
         llvm_libs_dir=LLVM_LIBS_DIR,
         extra_replacements={
             "lld_obj_root": str(lld_test_dir.parent),
-            "lld_src_root": str(lld_src),
             "lld_libs_dir": str(LLVM_LIBS_DIR),
             "lld_tools_dir": str(LLVM_TOOLS_DIR),
         },
+        load_config_src_root=str(lld_src),
     )
 
     # Add llvm/utils/lit to PYTHONPATH so llvm-lit can find the lit package
