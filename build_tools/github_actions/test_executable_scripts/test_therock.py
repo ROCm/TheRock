@@ -8,6 +8,7 @@
 import argparse
 import multiprocessing
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -55,6 +56,45 @@ old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
 environ_vars["LD_LIBRARY_PATH"] = ":".join(
     [str(THEROCK_LIB_PATH), str(THEROCK_SYSDEPS_LIB_PATH)] + old_ld_lib_path
 )
+
+
+def _cdash_build_name() -> str:
+    """CDash build name: ``PR_<n>_<label> [<id>]`` (e.g. CI matrix labels).
+
+    * ``THEROCK_CDASH_BUILD_NAME`` — if set, returned verbatim (full override).
+    * PR number from ``GITHUB_REF`` (``refs/pull/N/merge``).
+    * Label from ``THEROCK_CDASH_LABEL``, else ``GITHUB_REPOSITORY`` (``owner/repo``).
+    * Bracket id from ``GITHUB_RUN_ID``, ``THEROCK_RUN_ID``, or a random 32-char hex id.
+
+    Example::
+
+        PR_4847_ROCm/rocm-systems-ubuntu-22.04-mi325-core [9fd6600e372d464d95dd200c1c77850d]
+
+    Set ``THEROCK_CDASH_LABEL=ROCm/rocm-systems-ubuntu-22.04-mi325-core`` in CI to match
+    the middle segment when the workflow matrix is not the repo name alone.
+    """
+    override = os.getenv("THEROCK_CDASH_BUILD_NAME")
+    if override:
+        return override
+    ref = os.getenv("GITHUB_REF", "")
+    m = re.match(r"refs/pull/(\d+)/", ref)
+    prefix = f"PR_{m.group(1)}_" if m else ""
+    if not prefix:
+        refname = os.getenv("GITHUB_REF_NAME", "").strip()
+        if refname:
+            safe = re.sub(r"[^\w.\-]+", "-", refname).strip("-")
+            prefix = f"{safe}_" if safe else "local_"
+        else:
+            prefix = "local_"
+    label = os.getenv("THEROCK_CDASH_LABEL") or os.getenv(
+        "GITHUB_REPOSITORY", "ROCm/TheRock"
+    )
+    run_key = (
+        os.getenv("GITHUB_RUN_ID")
+        or os.getenv("THEROCK_RUN_ID")
+        or uuid.uuid4().hex
+    )
+    return f"{prefix}{label} [{run_key}]"
 
 
 def _which_cmake() -> str:
@@ -110,12 +150,8 @@ def _generate_ctest_custom(
     if ctest_args_str is None:
         ctest_args_str = f'--test-dir {BINARY_DIR} --output-on-failure -j {os.cpu_count() or 1}'
 
-    # Specify CDash submission information. Include a unique run ID in the build
-    # name so each run appears as a separate build on the dashboard.
-    run_id = os.getenv("GITHUB_RUN_ID") or os.getenv("THEROCK_RUN_ID")
-    if not run_id:
-        run_id = f"[{uuid.uuid4().hex}]"
-    NAME = f"ROCProfiler SDK Tests {run_id}"
+    # CDash build name: PR_<n>_<label> [<run id>] (see _cdash_build_name).
+    NAME = _cdash_build_name()
 
     #Specify dashboard URL and site/host name for CDash submission
     URL = f'https://{_DEFAULT_BASE_URL}/submit.php?project={_DEFAULT_PROJECT_NAME}'
@@ -148,7 +184,7 @@ set(CTEST_MEMORYCHECK_SUPPRESSIONS_FILE "")
 set(CTEST_MEMORYCHECK_SANITIZER_OPTIONS "")
 
 set(CTEST_SITE "{SITE}")
-set(CTEST_BUILD_NAME "{NAME}")
+set(CTEST_BUILD_NAME "{_esc(NAME)}")
 
 set(CTEST_SOURCE_DIRECTORY "{SOURCE_DIR}")
 set(CTEST_BINARY_DIRECTORY "{BINARY_DIR}")
