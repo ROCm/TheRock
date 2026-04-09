@@ -233,6 +233,7 @@ include = [
   # Clients benchmarks
   "bin/hipsparselt-bench*",
   # Clients tests
+  "bin/hipsparselt/**",
   "bin/hipsparselt-test*",
   "bin/hipsparselt_gtest.data",
   "bin/hipsparselt_gentest.py",
