@@ -74,7 +74,7 @@ description = "TheRock artifact-based build topology"
 
 [source_sets.base]
 description = "Base infrastructure submodules"
-submodules = ["half", "rocm-cmake", "amdsmi"]
+submodules = ["half", "rocm-cmake"]
 
 [source_sets.compilers]
 description = "Compiler toolchain submodules"
