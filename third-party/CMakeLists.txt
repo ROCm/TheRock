@@ -13,7 +13,6 @@ add_custom_target(therock-third-party)
 add_subdirectory(boost)
 add_subdirectory(Catch2)
 add_subdirectory(eigen)
-add_subdirectory(elfio)
 add_subdirectory(fftw3)
 add_subdirectory(flatbuffers)
 add_subdirectory(fmt)
@@ -31,6 +30,11 @@ add_subdirectory(frugally-deep)
 # spdlog depends on fmt and amd-llvm toolchain.
 if(THEROCK_ENABLE_SPDLOG)
   add_subdirectory(spdlog)
+endif()
+
+# elfio depends on amd-llvm toolchain.
+if(THEROCK_ENABLE_ELFIO)
+  add_subdirectory(elfio)
 endif()
 
 # Host math libraries.
