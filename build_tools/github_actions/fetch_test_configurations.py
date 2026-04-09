@@ -251,6 +251,21 @@ test_matrix = {
             "linux": 6,
             "windows": 1,
         },
+        "exclude_family": {
+            # hipsparselt does not plan to support Linux and Windows gfx115X architectures
+            "linux": [
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+            ],
+            "windows": [
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+            ],
+        },
     },
     # RAND tests
     "rocrand": {
