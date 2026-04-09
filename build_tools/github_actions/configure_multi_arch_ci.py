@@ -47,8 +47,14 @@ Outputs (written to GITHUB_OUTPUT):
 import enum
 import json
 import os
+import sys
+import random
 from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
 
+# Add parent directory to path for _therock_utils imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _therock_utils.build_topology import get_topology
 
 from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
 from configure_ci_path_filters import (
@@ -63,12 +69,37 @@ from github_actions_api import gha_append_step_summary, gha_set_output
 # ---------------------------------------------------------------------------
 
 
+def _get_all_build_stages() -> list[str]:
+    """Get all build stage names from BUILD_TOPOLOGY.toml.
+
+    Returns:
+        List of stage names in the order they appear in the TOML file
+    """
+    topology = get_topology()
+    return list(topology.build_stages.keys())
+
+
 def _parse_comma_list(raw: str) -> list[str]:
     """Parse a comma-separated string into a list of stripped, lowercased, non-empty names.
 
     Example: "gfx94X, gfx120X" → ["gfx94x", "gfx120x"]
     """
     return [name.strip().lower() for name in raw.split(",") if name.strip()]
+
+
+def _parse_prebuilt_stages(raw: str) -> list[str]:
+    """Parse prebuilt_stages input, expanding 'all' to all available stages.
+
+    Reads stage names from BUILD_TOPOLOGY.toml when 'all' is specified.
+
+    Example:
+        "foundation,compiler-runtime" → ["foundation", "compiler-runtime"]
+        "all" → ["foundation", "compiler-runtime", "math-libs", ...]
+    """
+    stages = _parse_comma_list(raw)
+    if "all" in stages:
+        return _get_all_build_stages()
+    return stages
 
 
 # ---------------------------------------------------------------------------
@@ -554,7 +585,7 @@ def decide_jobs(
     # Parse explicit prebuilt stages from workflow_dispatch input.
     stage_decisions: dict[str, JobAction] = {}
     if ci_inputs.prebuilt_stages:
-        for stage in _parse_comma_list(ci_inputs.prebuilt_stages):
+        for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
             stage_decisions[stage] = JobAction.PREBUILT
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
@@ -762,6 +793,24 @@ def _expand_build_config_for_platform(
 
         # Determine test runner label.
         test_runs_on = platform_info["test-runs-on"]
+
+        # Handle dual-label configuration with weighted random selection.
+        # Some families (e.g. gfx94x) have multiple runner labels available.
+        if "test-runs-on-alternate" in platform_info:
+            alternate_label = platform_info["test-runs-on-alternate"]
+            alternate_weight = platform_info.get("test-runs-on-alternate-weight", 0.5)
+            if random.random() < alternate_weight:
+                test_runs_on = alternate_label
+                print(
+                    f"  {family_name}: selected alternate runner (weight={alternate_weight}): "
+                    f"{test_runs_on}"
+                )
+            else:
+                print(
+                    f"  {family_name}: selected primary runner (weight={1-alternate_weight}): "
+                    f"{test_runs_on}"
+                )
+
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
         # this family (the default runner may not have the right kernel).

@@ -207,13 +207,10 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
-      # Set up ccache with a custom configuration.
       - name: Setup ccache
-        env:
-          CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
         run: |
           ./build_tools/setup_ccache.py \
-            --config-preset "github-oss-${{ env.CI_TYPE }}" \
+            --release-type "${{ env.RELEASE_TYPE }}" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CCACHE_DIR"
 
