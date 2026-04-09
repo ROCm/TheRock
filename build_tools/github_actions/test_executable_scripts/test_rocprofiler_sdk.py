@@ -141,11 +141,22 @@ def setup_env():
 
 
 def get_cmake_config_cmd() -> list[str]:
-    """Configure command used for rocprofiler-sdk tests (matches local cmake_config)."""
+    """Configure command used for rocprofiler-sdk tests (matches local cmake_config).
+
+    Uses absolute -S/-B paths because CTest runs CTEST_CONFIGURE_COMMAND with the
+    working directory set to the *binary* directory (CMake 3.14+); a relative
+    ``cmake -B build`` would then treat the build tree as the source tree and fail.
+    ``--fresh`` avoids stale cache / generator mismatches when switching generators.
+    """
+    tests_dir = ROCPROFILER_SDK_TESTS_PATH
+    build_dir = tests_dir / "build"
     cmake_config_cmd = [
         "cmake",
+        "-S",
+        str(tests_dir),
         "-B",
-        "build",
+        str(build_dir),
+        "--fresh",
         "-G",
         "Ninja",
         f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_SYSDEPS_PATH}",
@@ -167,10 +178,11 @@ def get_cmake_config_cmd() -> list[str]:
 
 def get_cmake_build_cmd() -> list[str]:
     """Build command used for rocprofiler-sdk tests (matches local cmake_build)."""
+    build_dir = ROCPROFILER_SDK_TESTS_PATH / "build"
     return [
         "cmake",
         "--build",
-        "build",
+        str(build_dir),
         "--parallel",
         "8",
     ]
