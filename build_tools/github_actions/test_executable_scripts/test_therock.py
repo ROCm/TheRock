@@ -14,8 +14,20 @@ import subprocess
 import sys
 import uuid
 from pathlib import Path
-from types import SimpleNamespace
 import logging
+
+# Paths match test_rocprofiler_sdk.py (resolved from THEROCK_BIN_DIR / default install).
+from test_rocprofiler_sdk import (
+    ROCPROFILER_SDK_PATH,
+    ROCPROFILER_SDK_TESTS_PATH,
+    THEROCK_BIN_PATH,
+    THEROCK_CLANG_PATH,
+    THEROCK_CLANG_PLUS_PATH,
+    THEROCK_LIB_PATH,
+    THEROCK_SYSDEPS_LIB_PATH,
+    THEROCK_SYSDEPS_PATH,
+    THEROCK_PATH,
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -25,50 +37,24 @@ _DEFAULT_BASE_URL = "my.cdash.org"
 
 # Define paths to output artifacts directory and script directory
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
-SCRIPT_DIR = Path(__file__).resolve().parent
-_REPO_ROOT = SCRIPT_DIR.parent.parent.parent
-_DEFAULT_ROCM_BIN = _REPO_ROOT / "build" / "dist" / "rocm" / "bin"
-
-# Define paths to TheRock build and source directories (install prefix .../rocm/bin)
-THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
-if not THEROCK_BIN_DIR and _DEFAULT_ROCM_BIN.is_dir():
-    THEROCK_BIN_DIR = str(_DEFAULT_ROCM_BIN)
-if not THEROCK_BIN_DIR:
-    raise SystemExit(
-        "THEROCK_BIN_DIR is not set and "
-        f"{_DEFAULT_ROCM_BIN} does not exist. "
-        "Set THEROCK_BIN_DIR to your TheRock install bin directory "
-        "(e.g. build/dist/rocm/bin)."
-    )
-THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
-THEROCK_PATH = THEROCK_BIN_PATH.parent
-THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
-
-# Define paths to ROCProfiler SDK and tests directories
-ROCPROFILER_SDK_DIRECTORY = f"{THEROCK_PATH}/share/rocprofiler-sdk"
-ROCPROFILER_SDK_TESTS_DIRECTORY = f"{ROCPROFILER_SDK_DIRECTORY}/tests"
 
 # Defaults; overridden by --source-dir/--binary-dir when provided
-SOURCE_DIR = ROCPROFILER_SDK_TESTS_DIRECTORY
-BINARY_DIR = f"{ROCPROFILER_SDK_TESTS_DIRECTORY}/build"
+SOURCE_DIR = str(ROCPROFILER_SDK_TESTS_PATH)
+BINARY_DIR = str(ROCPROFILER_SDK_TESTS_PATH / "build")
 
 # Set up environment variables
 environ_vars = os.environ.copy()
 environ_vars["ROCM_PATH"] = os.path.realpath(str(THEROCK_PATH))
 environ_vars["HIP_PATH"] = os.path.realpath(str(THEROCK_PATH))
+environ_vars["ROCPROFILER_METRICS_PATH"] = str(ROCPROFILER_SDK_PATH)
 environ_vars["HIP_PLATFORM"] = "amd"
+environ_vars["THEROCK_BIN_DIR"] = str(THEROCK_BIN_PATH)
 
-# Set up LD_LIBRARY_PATH
-old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "")
-sysdeps_path = f"{THEROCK_LIB_PATH}/rocm_sysdeps/lib"
-
-# Set up LD_LIBRARY_PATH. Add THEROCK_LIB_PATH, sysdeps_path, and old_ld_lib_path.
-if old_ld_lib_path:
-    environ_vars["LD_LIBRARY_PATH"] = (
-        f"{THEROCK_LIB_PATH}:{sysdeps_path}:{old_ld_lib_path}"
-    )
-else:
-    environ_vars["LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}"
+# Set up LD_LIBRARY_PATH (same layout as test_rocprofiler_sdk.setup_env).
+old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
+environ_vars["LD_LIBRARY_PATH"] = ":".join(
+    [str(THEROCK_LIB_PATH), str(THEROCK_SYSDEPS_LIB_PATH)] + old_ld_lib_path
+)
 
 
 def _which_cmake() -> str:
@@ -110,10 +96,10 @@ def _generate_ctest_custom(
     if configure_cmd is None:
         configure_cmd = (
             f"{cmake_cmd} -B {BINARY_DIR} -G Ninja "
-            f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps "
-            f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ "
-            f"-DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang "
-            f"-DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ {SOURCE_DIR}"
+            f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_SYSDEPS_PATH} "
+            f"-DCMAKE_HIP_COMPILER={THEROCK_CLANG_PLUS_PATH} "
+            f"-DCMAKE_C_COMPILER={THEROCK_CLANG_PATH} "
+            f"-DCMAKE_CXX_COMPILER={THEROCK_CLANG_PLUS_PATH} {SOURCE_DIR}"
         )
     if build_cmd is None:
         build_cmd = f'{cmake_cmd} --build {BINARY_DIR} -j'

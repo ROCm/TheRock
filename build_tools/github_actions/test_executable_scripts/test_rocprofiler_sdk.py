@@ -128,6 +128,17 @@ def setup_env():
     if environ_vars.get("HIP_VISIBLE_DEVICES"):
         environ_vars.pop("GPU_DEVICE_ORDINAL", None)
 
+    # Paths for test_therock.py (single source of truth; subprocess inherits these).
+    environ_vars["THEROCK_PATH"] = str(THEROCK_PATH)
+    environ_vars["THEROCK_LIB_PATH"] = str(THEROCK_LIB_PATH)
+    environ_vars["THEROCK_SYSDEPS_PATH"] = str(THEROCK_SYSDEPS_PATH)
+    environ_vars["THEROCK_SYSDEPS_LIB_PATH"] = str(THEROCK_SYSDEPS_LIB_PATH)
+    environ_vars["THEROCK_LLVM_BIN_PATH"] = str(THEROCK_LLVM_BIN_PATH)
+    environ_vars["THEROCK_CLANG_PATH"] = str(THEROCK_CLANG_PATH)
+    environ_vars["THEROCK_CLANG_PLUS_PATH"] = str(THEROCK_CLANG_PLUS_PATH)
+    environ_vars["ROCPROFILER_SDK_PATH"] = str(ROCPROFILER_SDK_PATH)
+    environ_vars["ROCPROFILER_SDK_TESTS_PATH"] = str(ROCPROFILER_SDK_TESTS_PATH)
+
 
 def get_cmake_config_cmd() -> list[str]:
     """Configure command used for rocprofiler-sdk tests (matches local cmake_config)."""
