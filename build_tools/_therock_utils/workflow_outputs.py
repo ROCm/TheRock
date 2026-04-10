@@ -106,18 +106,8 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/{filename}")
 
-    def artifact_index(self, artifact_group: str) -> StorageLocation:
-        """Location for the per-group artifact index HTML.
-
-        Args:
-            artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
-        """
-        return StorageLocation(
-            self.bucket, f"{self.prefix}/index-{artifact_group}.html"
-        )
-
-    def artifact_root_index(self) -> StorageLocation:
-        """Location for the root artifact index HTML (server-side generated)."""
+    def artifact_index(self) -> StorageLocation:
+        """Location for the artifact index HTML (server-side generated)."""
         return StorageLocation(self.bucket, f"{self.prefix}/index.html")
 
     # -- Logs -------------------------------------------------------------------

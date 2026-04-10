@@ -190,7 +190,7 @@ def _append_build_rocm(
             run_id=ci_inputs.run_id, platform=platform_name
         )
         log_url = output_root.log_root_index().https_url
-        artifact_url = output_root.artifact_root_index().https_url
+        artifact_url = output_root.artifact_index().https_url
         lines.append(f"{platform_name.capitalize()} | {log_url} | {artifact_url}")
 
 

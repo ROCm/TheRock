@@ -108,8 +108,8 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
         self._assert_relative_path(loc, "99999-linux/blas_lib_gfx94X.tar.xz.sha256sum")
 
     def test_artifact_index(self):
-        loc = self.root.artifact_index("gfx94X-dcgpu")
-        self._assert_relative_path(loc, "99999-linux/index-gfx94X-dcgpu.html")
+        loc = self.root.artifact_index()
+        self._assert_relative_path(loc, "99999-linux/index.html")
 
     # -- Logs --
 
