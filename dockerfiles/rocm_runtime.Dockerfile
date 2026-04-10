@@ -40,6 +40,7 @@
 # - VERSION          : Full version string (e.g., 7.11.0a20251211, 7.10.0)
 # - AMDGPU_FAMILY    : AMD GPU family (e.g., gfx110X-all, gfx94X-dcgpu)
 # - RELEASE_TYPE     : Release type (default: nightlies). Options: prereleases, devreleases, stable
+#                      Note: devreleases is only supported with INSTALL_METHOD=tarball.
 # - INSTALL_METHOD   : Installation method (default: tarball). Options: tarball, packages
 #
 # Build examples (tarball, default):

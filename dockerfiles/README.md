@@ -119,9 +119,10 @@ See the header comments in [`rocm_runtime.Dockerfile`](rocm_runtime.Dockerfile)
 for supported base images, build arguments, and build/run examples.
 
 The installation method is selected via the `INSTALL_METHOD` build argument:
+
 - `tarball` (default): Downloads and extracts a prebuilt ROCm tarball.
 - `packages`: Configures the AMD package repository and installs ROCm via
-  apt/dnf/zypper.
+  apt/dnf/tdnf/zypper.
 
 Supporting scripts:
 

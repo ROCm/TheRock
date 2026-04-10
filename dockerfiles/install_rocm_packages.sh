@@ -21,7 +21,7 @@
 #   ./install_rocm_packages.sh 7.12.0 gfx94x prereleases
 #   ./install_rocm_packages.sh 7.11.0 gfx110x stable
 
-set -eu
+set -euo pipefail
 
 # Parse arguments
 VERSION="${1:?Error: VERSION is required}"
@@ -32,7 +32,7 @@ RELEASE_TYPE="${3:-nightlies}"
 # Helper: extract MAJOR.MINOR from VERSION (e.g., 7.13.0a20260322 → 7.13)
 # ---------------------------------------------------------------------------
 extract_major_minor() {
-    echo "$1" | grep -oP '^\d+\.\d+'
+    echo "$1" | grep -oE '^[0-9]+\.[0-9]+'
 }
 
 # ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ normalize_gpu_target() {
 #   7.13.0a20260322 → 20260322
 # ---------------------------------------------------------------------------
 extract_date_from_version() {
-    echo "$1" | grep -oP '\d{8}$' || echo ""
+    echo "$1" | grep -oE '[0-9]{8}' | tail -1 || echo ""
 }
 
 # ---------------------------------------------------------------------------
@@ -78,8 +78,9 @@ map_distro_to_repo() {
 
     case "$id" in
         ubuntu)
-            # 24.04 → ubuntu2404, 22.04 → ubuntu2204
-            REPO_DISTRO="ubuntu$(echo "$ver" | tr -d '.')"
+            # 24.04 → ubuntu2404, 22.04 → ubuntu2204 (strip patch version if present)
+            local major_minor="${ver%.*}"
+            REPO_DISTRO="ubuntu$(echo "$major_minor" | tr -d '.')"
             PKG_TYPE="deb"
             PKG_MGR="apt"
             ;;
@@ -129,7 +130,7 @@ resolve_nightly_build_dir() {
     echo "Searching for nightly build directory matching date ${date_str}..." >&2
 
     local build_dir
-    build_dir=$(curl -fsSL "$listing_url" | grep -oP "${date_str}-\d+" | head -1) || true
+    build_dir=$(curl -fsSL "$listing_url" | grep -oE "${date_str}-[0-9]+" | head -1) || true
 
     if [ -z "$build_dir" ]; then
         echo "Error: No nightly build found for date ${date_str}" >&2
@@ -273,10 +274,10 @@ REPOEOF
         echo "Installing ${meta_package}..."
         tdnf install -y "$meta_package"
     else
-        # dnf: use --allowerasing for RHEL UBI curl-minimal conflicts
+        # dnf: --allowerasing needed for RHEL UBI images where curl-minimal conflicts with curl
         dnf clean all
         echo "Installing ${meta_package}..."
-        dnf install -y --setopt=install_weak_deps=False --allowerasing "$meta_package"
+        dnf install -y --allowerasing "$meta_package"
         dnf clean all
     fi
 }
@@ -375,9 +376,9 @@ case "$PKG_MGR" in
         ;;
 esac
 
-# Create compatibility symlinks
-# Packages install to /opt/rocm/core-{MAJOR.MINOR}/ but tarball uses /opt/rocm/bin etc.
-# Create symlinks so both layouts work with ROCM_PATH=/opt/rocm
+# Create compatibility symlinks (fallback)
+# Recent deb/rpm packages create symlinks via update-alternatives automatically.
+# This fallback handles older packages or missing symlinks (e.g., share/).
 CORE_DIR="/opt/rocm/core-${MAJOR_MINOR}"
 if [ -d "$CORE_DIR" ]; then
     echo "Creating compatibility symlinks from /opt/rocm/ to ${CORE_DIR}/..."
@@ -392,20 +393,27 @@ fi
 # Verify installation
 echo "=============================================="
 echo "Verifying installation..."
+missing_required=0
 for dir in bin lib include; do
     if [ -d "/opt/rocm/${dir}" ]; then
         echo "ROCm ${dir} found at /opt/rocm/${dir}"
     else
-        echo "Warning: /opt/rocm/${dir} not found"
+        echo "Error: /opt/rocm/${dir} not found" >&2
+        missing_required=1
     fi
 done
 
 if [ -x /opt/rocm/bin/hipcc ]; then
     echo "hipcc found at /opt/rocm/bin/hipcc"
 else
-    echo "Warning: hipcc not found at /opt/rocm/bin/hipcc"
+    echo "Error: hipcc not found at /opt/rocm/bin/hipcc" >&2
+    missing_required=1
 fi
 
 echo "=============================================="
+if [ "$missing_required" -ne 0 ]; then
+    echo "ROCm package installation verification failed" >&2
+    exit 1
+fi
 echo "ROCm package installation complete"
 echo "=============================================="
