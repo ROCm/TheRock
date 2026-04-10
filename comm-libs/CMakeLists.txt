@@ -72,6 +72,7 @@ if(THEROCK_ENABLE_RCCL)
     endif()
 
     therock_cmake_subproject_declare(rccl-tests
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl-tests"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl-tests"
       BACKGROUND_BUILD
