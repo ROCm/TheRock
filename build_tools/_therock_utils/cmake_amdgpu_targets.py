@@ -35,6 +35,12 @@ def parse_amdgpu_targets_cmake(cmake_path: Path) -> list[AmdgpuTargetInfo]:
     content = cmake_path.read_text()
     results: list[AmdgpuTargetInfo] = []
 
+    # Each therock_add_amdgpu_target() call has the form:
+    #   therock_add_amdgpu_target(gfx900 "Vega 10 / MI25" FAMILY dgpu-all gfx900-dgpu)
+    # Parsing extracts:
+    #   tokens[0]                    -> gfx target  (e.g. "gfx900")
+    #   tokens[1]                    -> product name (e.g. "Vega 10 / MI25")
+    #   tokens after FAMILY keyword  -> families list (e.g. ["dgpu-all", "gfx900-dgpu"])
     for call_body in re.findall(
         r"therock_add_amdgpu_target\((.*?)\)", content, re.DOTALL
     ):

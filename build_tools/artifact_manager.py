@@ -155,24 +155,24 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
     Returns a list starting with "generic", extended with any families and
     individual targets from the args.
     """
-    target_families = ["generic"]
+    output_families = ["generic"]
     if args.generic_only:
         log("Using generic (host) artifacts only")
     else:
         if args.amdgpu_families:
-            families = args.amdgpu_families.split(";")
-            target_families.extend(families)
-            if getattr(args, "expand_family_to_targets", False):
+            input_families = args.amdgpu_families.split(";")
+            output_families.extend(input_families)
+            if args.expand_family_to_targets:
                 family_map = _get_family_to_targets()
-                for family in families:
-                    for target in family_map.get(family, []):
-                        if target not in target_families:
-                            target_families.append(target)
+                for input_family in input_families:
+                    for target in family_map.get(input_family, []):
+                        if target not in output_families:
+                            output_families.append(target)
         if args.amdgpu_targets:
-            target_families.extend(
+            output_families.extend(
                 t.strip() for t in args.amdgpu_targets.split(",") if t.strip()
             )
-    return target_families
+    return output_families
 
 
 def find_available_artifacts(
