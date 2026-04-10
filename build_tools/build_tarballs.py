@@ -131,6 +131,13 @@ def main(argv=None):
     )
     parser.add_argument("--run-id", required=True, help="Workflow run ID to fetch from")
     parser.add_argument(
+        "--run-github-repo",
+        type=str,
+        default=None,
+        help="GitHub repository for --run-id in 'owner/repo' format. "
+        "Defaults to GITHUB_REPOSITORY env var or 'ROCm/TheRock'",
+    )
+    parser.add_argument(
         "--dist-amdgpu-families",
         required=True,
         help="Semicolon-separated GPU families (e.g. 'gfx94X-dcgpu;gfx110X-all')",
@@ -151,13 +158,6 @@ def main(argv=None):
         type=Path,
         required=True,
         help="Output directory for tarballs",
-    )
-    parser.add_argument(
-        "--run-github-repo",
-        type=str,
-        default=None,
-        help="GitHub repository for --run-id in 'owner/repo' format. "
-        "Defaults to GITHUB_REPOSITORY env var or 'ROCm/TheRock'",
     )
     args = parser.parse_args(argv)
     # Normalize empty string to None (workflow inputs default to "")
