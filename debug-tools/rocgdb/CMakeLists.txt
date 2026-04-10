@@ -50,6 +50,12 @@ project(rocgdb C CXX)
 include(ExternalProject)
 include(ProcessorCount)
 
+# Allow external rocgdb source directory.
+if(NOT ROCGDB_SOURCE_DIR)
+  set(ROCGDB_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/source")
+endif()
+message(STATUS "ROCgdb source directory: ${ROCGDB_SOURCE_DIR}")
+
 # Function to extract a single path that matches a given regex pattern
 # from a list of paths.
 #
@@ -229,7 +235,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
         "LDFLAGS=${ALL_LDFLAGS}"
       --
       # The actual configure command.
-      ${CMAKE_CURRENT_SOURCE_DIR}/source/configure
+      ${ROCGDB_SOURCE_DIR}/configure
         "--prefix=${ROCGDB_INTERMEDIATE_INSTALL_DIR}"
         --program-prefix=roc
         "--program-transform-name=${ROCGDB_PROGRAM_TRANSFORM_STR}"
@@ -290,7 +296,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
     COMMAND
       ${CMAKE_COMMAND} -E make_directory ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc
     COMMAND
-      ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/source/gdb/NOTICES.txt ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc/
+      ${CMAKE_COMMAND} -E copy ${ROCGDB_SOURCE_DIR}/gdb/NOTICES.txt ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc/
     # Rename rocgcore to rocgcore-py<python version>.
     COMMAND
       ${CMAKE_COMMAND} -E rename ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/bin/rocgcore ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/bin/rocgcore-py${minor_version}
@@ -604,7 +610,7 @@ if(BUILD_TESTING)
     # Get the directory part of the file.
     get_filename_component(file_dir ${rocgdb_file} DIRECTORY)
 
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/source/${rocgdb_file}
+    install(FILES ${ROCGDB_SOURCE_DIR}/${rocgdb_file}
       DESTINATION tests/rocgdb/${file_dir}
       COMPONENT tests)
   endforeach()
@@ -613,7 +619,7 @@ if(BUILD_TESTING)
     # Get the directory part of the file.
     get_filename_component(file_dir ${rocgdb_file} DIRECTORY)
 
-    install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/source/${rocgdb_file}
+    install(PROGRAMS ${ROCGDB_SOURCE_DIR}/${rocgdb_file}
       DESTINATION tests/rocgdb/${file_dir}
       COMPONENT tests)
   endforeach()
@@ -626,7 +632,7 @@ if(BUILD_TESTING)
   )
 
   foreach(rocgdb_testsuite_dir ${ROCGDB_TESTSUITE_DIRS})
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/source/${rocgdb_testsuite_dir}
+    install(DIRECTORY ${ROCGDB_SOURCE_DIR}/${rocgdb_testsuite_dir}
       DESTINATION tests/rocgdb/gdb
       COMPONENT tests
       USE_SOURCE_PERMISSIONS)
