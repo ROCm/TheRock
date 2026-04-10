@@ -88,6 +88,7 @@ def fetch_and_flatten(
         f"--run-id={run_id}",
         "--stage=all",
         f"--amdgpu-families={families_str}",
+        "--expand-family-to-targets",
         f"--platform={platform}",
         f"--output-dir={output_dir}",
         "--flatten",
