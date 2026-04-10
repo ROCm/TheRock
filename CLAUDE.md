@@ -304,14 +304,33 @@ logged:
 If GPU 0 becomes corrupted (from a prior `pkill -9`), use `HIP_VISIBLE_DEVICES=1`
 to run on a different GPU, or reboot the server to clear GPU 0.
 
-### Eager Flush (localhost optimization)
+### Shared Memory IPC Transport (localhost)
 
 When `TF_WORKER_HOST` is `localhost` or `127.0.0.1`, the client automatically
-enables eager flushing (sends FnF data to the worker every 64 requests instead
-of only at sync points). This reduces GPU starvation during cold start.
+uses shared memory (SHM) instead of TCP for communication with the worker.
+This eliminates all TCP syscall overhead, replacing `send()`/`recv()` with
+`memcpy` + atomic signaling via a lock-free SPSC ring buffer.
 
-For remote workers over high-latency links, eager flush is auto-disabled because
-frequent small TCP sends hurt throughput. Override with:
+The SHM region (~20MB) contains:
+- **FnF ring buffer** (4MB): kernel launches, mallocs, memcpy -- lock-free
+- **Sync request slot** (16MB): module loads, device queries -- request/response
+- **Sync response slot** (256KB): worker responses
+
+Connection bootstrap: TCP is used only for the init handshake (to exchange
+the SHM region name). All subsequent traffic uses shared memory.
+
+Override the auto-detection:
+```powershell
+$env:HIP_REMOTE_TRANSPORT = "shm"   # force shared memory
+$env:HIP_REMOTE_TRANSPORT = "tcp"   # force TCP (e.g., for debugging)
+```
+
+### Eager Flush (TCP optimization)
+
+When using TCP transport, the client flushes the FnF write buffer every 64
+requests on localhost to reduce GPU starvation. For remote workers over
+high-latency links, eager flush is auto-disabled because frequent small TCP
+sends hurt throughput. Override with:
 ```powershell
 $env:HIP_REMOTE_EAGER_FLUSH = "64"   # force enable (N requests per flush)
 $env:HIP_REMOTE_EAGER_FLUSH = "0"    # force disable

@@ -216,6 +216,8 @@ python your_script.py
 | `HIP_REMOTE_CACHE_SIZE_MB` | Worker only: max cache size in MB (default: 33% of VRAM) |
 | `TRITON_LIBHIP_PATH`   | For Triton: set to the same `amdhip64_7.dll` path as `HIP_REMOTE_LIB_DIR` |
 | `HIP_REMOTE_LIB_DIR`  | Directory containing `amdhip64_7.dll` proxy     |
+| `HIP_REMOTE_TRANSPORT` | `shm` (shared memory) or `tcp`. Auto-detected: SHM for localhost, TCP for remote. |
+| `HIP_REMOTE_EAGER_FLUSH` | TCP only: flush FnF buffer every N requests (default: 64 for localhost, 0 for remote) |
 | `MIOPEN_SYSTEM_DB_PATH`| Path to MIOpen TunaNet models. Use `rocm-sdk path --bin`. |
 
 ### 3. Verify
@@ -240,7 +242,12 @@ The proxy uses several optimisations to minimise network overhead:
 - **Virtual address allocation**: `hipMalloc` assigns opaque handles locally
   instead of round-tripping to the worker. The worker maps virtual addresses
   to real GPU pointers.
-- **Write coalescing**: A 64 KB buffer accumulates fire-and-forget requests
+- **Shared memory IPC**: When client and worker are on the same machine
+  (`TF_WORKER_HOST=localhost`), communication automatically switches from TCP
+  to a shared memory ring buffer, eliminating all syscall overhead. A 4 MB
+  lock-free SPSC ring carries fire-and-forget traffic; a separate slot handles
+  synchronous request/response. Override with `HIP_REMOTE_TRANSPORT=tcp`.
+- **Write coalescing**: A 256 KB buffer accumulates fire-and-forget requests
   and flushes them in bulk at sync points.
 - **COMGR-guided arg translation**: Kernel argument pointers are identified
   via COMGR `value_kind` metadata, with a blind-scan fallback for assembly
