@@ -1,6 +1,15 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Google Benchmark's try_run() regex detection fails under sanitizer builds
+# because the test binaries require LD_PRELOAD for the sanitizer runtime,
+# which CMake's try_run() does not provide.
+if(THEROCK_SANITIZER)
+  set(_THEROCK_BUILD_BENCHMARK OFF)
+else()
+  set(_THEROCK_BUILD_BENCHMARK ${THEROCK_BUILD_TESTING})
+endif()
+
 if(THEROCK_ENABLE_RAND)
   ##############################################################################
   # rocRAND
@@ -16,7 +25,7 @@ if(THEROCK_ENABLE_RAND)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
-      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${_THEROCK_BUILD_BENCHMARK}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -151,7 +160,7 @@ if(THEROCK_ENABLE_PRIM)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
-      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${_THEROCK_BUILD_BENCHMARK}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
