@@ -677,6 +677,29 @@ class TestCreateBackendFromEnv(unittest.TestCase):
             self.assertEqual(backend.bucket, "test-bucket")
             self.assertIn("s3-run-id", backend.s3_prefix)
 
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_s3_backend_with_github_repository_override(self, mock_retrieve):
+        """Test that explicit github_repository overrides GITHUB_REPOSITORY env var.
+
+        When running on a fork (GITHUB_REPOSITORY=SomeUser/TheRock), passing
+        github_repository="ROCm/TheRock" should use the main repo's bucket.
+        """
+        mock_retrieve.return_value = ("", "therock-ci-artifacts")
+        with mock.patch.dict(
+            os.environ,
+            {
+                "THEROCK_RUN_ID": "s3-run-id",
+                "GITHUB_REPOSITORY": "SomeUser/TheRock",
+            },
+            clear=True,
+        ):
+            backend = create_backend_from_env(github_repository="ROCm/TheRock")
+
+            self.assertIsInstance(backend, S3Backend)
+            self.assertEqual(backend.bucket, "therock-ci-artifacts")
+            # ROCm/TheRock has no external_repo prefix
+            self.assertNotIn("SomeUser", backend.s3_prefix)
+
 
 if __name__ == "__main__":
     unittest.main()
