@@ -258,22 +258,9 @@ jobs:
             pip install jax==${JAX_VERSION} jaxlib==${JAX_VERSION}
           fi
 
-      - name: Verify JAX ROCm plugin loads
-        run: |
-          python3 -c "
-          import importlib, traceback
-          for pkg in ['jax_rocm7_plugin', 'jax_rocm60_plugin', 'jaxlib.rocm']:
-              try:
-                  ext = importlib.import_module(f'{pkg}.rocm_plugin_extension')
-                  print(f'OK: {pkg}.rocm_plugin_extension loaded from {ext.__file__}')
-                  break
-              except Exception as e:
-                  print(f'FAIL: {pkg}.rocm_plugin_extension')
-                  traceback.print_exc()
-          "
-
       - name: Run JAX tests
         env:
+          JAX_PLATFORMS: rocm
           HIP_DEVICE_LIB_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
           JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
           JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH: /opt/rocm/lib/llvm/bin
