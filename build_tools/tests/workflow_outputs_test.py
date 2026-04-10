@@ -108,8 +108,8 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
         self._assert_relative_path(loc, "99999-linux/blas_lib_gfx94X.tar.xz.sha256sum")
 
     def test_artifact_index(self):
-        loc = self.root.artifact_index("gfx94X-dcgpu")
-        self._assert_relative_path(loc, "99999-linux/index-gfx94X-dcgpu.html")
+        loc = self.root.artifact_index()
+        self._assert_relative_path(loc, "99999-linux/index.html")
 
     # -- Logs --
 
@@ -139,16 +139,16 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
 
     # -- Stage logs (multi-arch CI) --
 
-    def test_stage_log_dir_per_arch(self):
-        loc = self.root.stage_log_dir("math-libs", "gfx1151")
+    def test_log_stage_dir_per_arch(self):
+        loc = self.root.log_stage_dir("math-libs", "gfx1151")
         self._assert_relative_path(loc, "99999-linux/logs/math-libs/gfx1151")
 
-    def test_stage_log_dir_generic(self):
-        loc = self.root.stage_log_dir("foundation")
+    def test_log_stage_dir_generic(self):
+        loc = self.root.log_stage_dir("foundation")
         self._assert_relative_path(loc, "99999-linux/logs/foundation")
 
-    def test_stage_log_dir_generic_empty_string(self):
-        loc = self.root.stage_log_dir("compiler-runtime", "")
+    def test_log_stage_dir_generic_empty_string(self):
+        loc = self.root.log_stage_dir("compiler-runtime", "")
         self._assert_relative_path(loc, "99999-linux/logs/compiler-runtime")
 
     # -- Manifests --
