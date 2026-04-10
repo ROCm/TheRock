@@ -11,10 +11,16 @@ Expected environment variables:
   OUTPUT_ARTIFACTS_DIR  - directory where artifacts were extracted (e.g. ./build)
 
 The artifacts directory is expected to contain:
-  lib/llvm/bin/         - LLVM tool binaries (llvm-lit, FileCheck, opt, etc.)
-  test/lit.site.cfg.py  - LLVM lit site config (from build tree)
-  tools/clang/test/lit.site.cfg.py - Clang lit site config
-  tools/lld/test/lit.site.cfg.py   - LLD lit site config
+  lib/llvm/bin/         - LLVM tool binaries, examples (from amd-llvm_run)
+  lib/llvm/lib/         - LLVM shared libraries (from amd-llvm_lib)
+  test/                 - LLVM lit configs including Unit/ (from amd-llvm_test)
+  tools/clang/test/     - Clang lit configs including Unit/
+  tools/lld/test/       - LLD lit configs including Unit/
+  bin/                  - Fuzzers, test tools (from amd-llvm_test build tree)
+  lib/                  - Plugin .so files (from amd-llvm_test build tree)
+  unittests/            - LLVM gtest binaries
+  tools/clang/unittests/ - Clang gtest binaries
+  tools/lld/unittests/  - LLD gtest binaries
 """
 
 import logging
@@ -22,6 +28,7 @@ import os
 import platform
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -152,14 +159,6 @@ def sparse_checkout_submodule() -> Path:
         ["git", "-C", str(amd_llvm_dir), "checkout", target_commit],
         check=True,
     )
-
-    # Remove source-tree Unit lit configs so lit doesn't try to discover
-    # unit test suites during traversal (we don't ship unit test binaries).
-    for unit_dir in ["llvm/test/Unit", "clang/test/Unit", "lld/test/Unit"]:
-        unit_lit_cfg = amd_llvm_dir / unit_dir / "lit.cfg.py"
-        if unit_lit_cfg.exists():
-            unit_lit_cfg.unlink()
-            logging.info(f"Removed source Unit config: {unit_lit_cfg}")
 
     return amd_llvm_dir
 
@@ -305,11 +304,6 @@ def main() -> int:
         llvm_src_root=llvm_src,
         llvm_tools_dir=LLVM_TOOLS_DIR,
         llvm_libs_dir=LLVM_LIBS_DIR,
-        config_overrides={
-            "include_examples": "False",
-            "has_plugins": "False",
-            "linked_bye_extension": "False",
-        },
     )
 
     fixup_lit_site_cfg(
@@ -324,9 +318,6 @@ def main() -> int:
             "clang_lib_dir": str(LLVM_LIBS_DIR),
             "llvm_external_lit": "",
         },
-        config_overrides={
-            "has_plugins": "False",
-        },
     )
 
     fixup_lit_site_cfg(
@@ -340,6 +331,46 @@ def main() -> int:
             "lld_tools_dir": str(LLVM_TOOLS_DIR),
         },
         load_config_src_root=str(lld_src),
+    )
+
+    # Fix up Unit test (gtest) lit.site.cfg.py files.  The key difference vs
+    # the main configs is that *_obj_root must point to where the unit test
+    # binaries were extracted (relative to ARTIFACTS_PATH), not to cfg_path's
+    # parent like the default path_map assumes.
+    fixup_lit_site_cfg(
+        llvm_test_dir / "Unit" / "lit.site.cfg.py",
+        llvm_src_root=llvm_src,
+        llvm_tools_dir=LLVM_TOOLS_DIR,
+        llvm_libs_dir=LLVM_LIBS_DIR,
+        extra_replacements={
+            "llvm_obj_root": str(ARTIFACTS_PATH),
+            "shlibdir": str(LLVM_LIBS_DIR),
+        },
+    )
+
+    fixup_lit_site_cfg(
+        clang_test_dir / "Unit" / "lit.site.cfg.py",
+        llvm_src_root=llvm_src,
+        llvm_tools_dir=LLVM_TOOLS_DIR,
+        llvm_libs_dir=LLVM_LIBS_DIR,
+        extra_replacements={
+            "llvm_obj_root": str(ARTIFACTS_PATH),
+            "clang_obj_root": str(ARTIFACTS_PATH / "tools" / "clang"),
+            "shlibdir": str(LLVM_LIBS_DIR),
+        },
+        load_config_src_root=str(clang_src),
+    )
+
+    fixup_lit_site_cfg(
+        lld_test_dir / "Unit" / "lit.site.cfg.py",
+        llvm_src_root=llvm_src,
+        llvm_tools_dir=LLVM_TOOLS_DIR,
+        llvm_libs_dir=LLVM_LIBS_DIR,
+        extra_replacements={
+            "lld_obj_root": str(ARTIFACTS_PATH / "tools" / "lld"),
+            "lld_src_dir": str(lld_src),
+            "shlibdir": str(LLVM_LIBS_DIR),
+        },
     )
 
     # Add llvm/utils/lit to PYTHONPATH so llvm-lit can find the lit package
@@ -363,17 +394,35 @@ def main() -> int:
         f"{LLVM_LIBS_DIR}{path_sep}{lib_path}" if lib_path else str(LLVM_LIBS_DIR)
     )
 
-    # Remove Unit test site configs -- we don't ship unit test binaries, and
-    # these configs contain builder-relative paths that can't be fixed up
-    # meaningfully on the runner.
-    for unit_cfg in [
-        llvm_test_dir / "Unit" / "lit.site.cfg.py",
-        clang_test_dir / "Unit" / "lit.site.cfg.py",
-        lld_test_dir / "Unit" / "lit.site.cfg.py",
-    ]:
-        if unit_cfg.exists():
-            unit_cfg.unlink()
-            logging.info(f"Removed Unit test config: {unit_cfg}")
+    # Symlink build-tree test binaries (fuzzers, test tools) into the LLVM
+    # tools directory so that lit can find them alongside installed tools.
+    build_bin_dir = ARTIFACTS_PATH / "bin"
+    if build_bin_dir.is_dir():
+        for entry in build_bin_dir.iterdir():
+            if not entry.is_file():
+                continue
+            dest = LLVM_TOOLS_DIR / entry.name
+            if not dest.exists():
+                try:
+                    os.symlink(entry, dest)
+                except OSError:
+                    shutil.copy2(entry, dest)
+                logging.info(f"Linked test tool: {entry.name}")
+
+    # Symlink build-tree plugin shared libraries into the LLVM libs directory
+    # so that %shlibdir substitution in lit tests resolves correctly.
+    build_lib_dir = ARTIFACTS_PATH / "lib"
+    if build_lib_dir.is_dir():
+        for entry in build_lib_dir.iterdir():
+            if not entry.is_file():
+                continue
+            dest = LLVM_LIBS_DIR / entry.name
+            if not dest.exists():
+                try:
+                    os.symlink(entry, dest)
+                except OSError:
+                    shutil.copy2(entry, dest)
+                logging.info(f"Linked plugin: {entry.name}")
 
     rc_llvm = run_lit_tests(llvm_test_dir, "check-llvm")
 

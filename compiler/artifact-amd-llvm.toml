@@ -52,11 +52,13 @@ exclude = [
 [components.dev."compiler/amd-comgr/stage"]
 [components.doc."compiler/amd-comgr/stage"]
 
-# LLVM/Clang/LLD lit test configurations from the build tree.
-# These are the generated lit.site.cfg.py files that contain build-time
-# configuration values. On the runner, paths are fixed up by the test script.
+# LLVM/Clang/LLD lit test configurations, test tool binaries, plugin shared
+# libraries, and unit test (gtest) binaries from the build tree.
+# Lit site configs contain build-time paths fixed up by the test script.
+# Example binaries are installed to stage/bin/ and shipped by amd-llvm_run.
 [components.test."compiler/amd-llvm/build"]
 include = [
+  # Lit site configs
   "test/lit.site.cfg.py",
   "test/lit.local.cfg",
   "test/Unit/lit.site.cfg.py",
@@ -66,6 +68,28 @@ include = [
   "tools/lld/test/lit.site.cfg.py",
   "tools/lld/test/lit.local.cfg",
   "tools/lld/test/Unit/lit.site.cfg.py",
+
+  # Fuzzers and test tools (no install rules in upstream LLVM)
+  "bin/llvm-isel-fuzzer*",
+  "bin/llvm-opt-fuzzer*",
+  "bin/apinotes-test*",
+  "bin/clang-import-test*",
+  "bin/clang-fuzzer*",
+
+  # Plugin shared libraries (MODULE targets, not installed by default)
+  "lib/Bye.*",
+  "lib/ExampleIRTransforms.*",
+  "lib/PrintFunctionNames.*",
+  "lib/LLVMPrintFunctionNames.*",
+  "lib/AnnotateFunctions.*",
+  "lib/Attribute.*",
+  "lib/CallSuperAttribute.*",
+  "lib/PluginsOrder.*",
+
+  # Unit test binaries (gtest)
+  "unittests/**",
+  "tools/clang/unittests/**",
+  "tools/lld/unittests/**",
 ]
 
 # hipcc
