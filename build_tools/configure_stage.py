@@ -97,6 +97,33 @@ def get_stage_features(
     return features
 
 
+def _filter_dist_families_for_stage(
+    topology: BuildTopology, stage_name: str, dist_amdgpu_families: str
+) -> str:
+    """Filter dist_amdgpu_families based on artifact group restrictions.
+
+    If any artifact group in the stage has a restrict_dist_families_regex,
+    only families matching that regex are included. Groups without a
+    restriction contribute no filter (all families pass through for them).
+    Multiple restricted groups are OR-ed together.
+    """
+    import re
+
+    stage = topology.build_stages.get(stage_name)
+    if not stage or not dist_amdgpu_families:
+        return dist_amdgpu_families
+    patterns = [
+        g.restrict_dist_families_regex
+        for name in stage.artifact_groups
+        if (g := topology.artifact_groups.get(name)) and g.restrict_dist_families_regex
+    ]
+    if not patterns:
+        return dist_amdgpu_families
+    combined = "|".join(f"({p})" for p in patterns)
+    families = [f for f in dist_amdgpu_families.split(";") if f]
+    return ";".join(f for f in families if re.search(combined, f))
+
+
 def generate_cmake_args(
     stage_name: str,
     amdgpu_families: str,
@@ -132,10 +159,14 @@ def generate_cmake_args(
     if amdgpu_families:
         args.append(f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}")
 
-    # GPU families for dist targets (all architectures in the distribution)
-    # Quote the value since it contains semicolons (CMake list separator)
-    if dist_amdgpu_families:
-        args.append(f'-DTHEROCK_DIST_AMDGPU_FAMILIES="{dist_amdgpu_families}"')
+    # GPU families for dist targets (all architectures in the distribution).
+    # Filtered by any restrict_dist_families_regex on artifact groups in this
+    # stage. Quote the value since it contains semicolons (CMake list separator).
+    filtered_dist = _filter_dist_families_for_stage(
+        topology, stage_name, dist_amdgpu_families
+    )
+    if filtered_dist:
+        args.append(f'-DTHEROCK_DIST_AMDGPU_FAMILIES="{filtered_dist}"')
 
     # Manylinux Python executables for per-Python-version builds
     # Quote values since they contain semicolons (CMake list separator)

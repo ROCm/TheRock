@@ -322,6 +322,22 @@ test_matrix = {
         },
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
+        # rccl is only built for Instinct/CDNA GPUs; exclude RDNA families to
+        # avoid test failures when those runners gain full test coverage.
+        # TODO: Consider replacing with an include_family mechanism once this
+        # mechanism is supported.
+        "exclude_family": {
+            "linux": [
+                "gfx101X-dgpu",
+                "gfx103X-dgpu",
+                "gfx110X-all",
+                "gfx120X-all",
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+            ]
+        },
     },
     # rocprofiler-sdk tests
     "rocprofiler-sdk": {

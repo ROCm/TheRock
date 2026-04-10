@@ -79,6 +79,7 @@ class ArtifactGroup:
     type: str  # "generic" or "per-arch"
     artifact_group_deps: List[str] = field(default_factory=list)
     source_sets: List[str] = field(default_factory=list)
+    restrict_dist_families_regex: Optional[str] = None
 
 
 @dataclass
@@ -167,6 +168,9 @@ class BuildTopology:
                 type=group_data.get("type", "generic"),
                 artifact_group_deps=group_data.get("artifact_group_deps", []),
                 source_sets=group_data.get("source_sets", []),
+                restrict_dist_families_regex=group_data.get(
+                    "restrict_dist_families_regex"
+                ),
             )
 
         # Parse artifacts

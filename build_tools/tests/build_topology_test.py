@@ -116,6 +116,29 @@ class BuildTopologyTest(unittest.TestCase):
         runtime = topology.artifact_groups["runtime"]
         self.assertEqual(runtime.artifact_group_deps, ["base"])
 
+    def test_parse_artifact_group_restrict_dist_families_regex(self):
+        """Test parsing restrict_dist_families_regex on artifact groups."""
+        self.write_topology(
+            """
+            [artifact_groups.comm-libs]
+            description = "Communication libraries"
+            type = "generic"
+            restrict_dist_families_regex = "dcgpu|^gfx9"
+
+            [artifact_groups.math-libs]
+            description = "Math libraries"
+            type = "per-arch"
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        comm = topology.artifact_groups["comm-libs"]
+        self.assertEqual(comm.restrict_dist_families_regex, "dcgpu|^gfx9")
+
+        math = topology.artifact_groups["math-libs"]
+        self.assertIsNone(math.restrict_dist_families_regex)
+
     def test_parse_artifacts(self):
         """Test parsing artifacts."""
         self.write_topology(
