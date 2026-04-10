@@ -9,6 +9,15 @@ skip_tests = {
         }
     },
     "common": {
+        "cuda": [
+            # RuntimeError: Error building extension 'dummy_allocator'
+            # Skipped across all PyTorch versions; the hipblas.h include error
+            # persists in the ROCm SDK environment.
+            "test_mempool_empty_cache_inactive",
+            # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
+            "test_memory_snapshot",
+            "test_memory_plots",
+        ],
         "autograd": [
             # Stream comparison mismatch on ROCm (non-default stream vs default stream)
             #   AssertionError: <torch.cuda.Stream ...> != <torch.cuda.Stream cuda_stream=0x0>
