@@ -3,21 +3,29 @@
 # SPDX-License-Identifier: MIT
 
 """
-TensileLite Python unit test runner for TheRock CI.
+TensileLite Python test runner for TheRock CI.
 
-Runs TensileLite and rocisa Python unit tests using uv for environment
-management. Unlike other TheRock test scripts that execute compiled gtest
-binaries from build artifacts, this script sets up a Python environment
-from the rocm-libraries source checkout and runs pytest.
+Runs TensileLite unit tests, rocisa tests, and GPU-dependent integration
+tests using uv for environment management. Unlike other TheRock test scripts
+that execute compiled gtest binaries from build artifacts, this script sets
+up a Python environment from the rocm-libraries source checkout, builds the
+tensilelite-client, and runs pytest.
 
 Required environment:
   - uv (installed by setup_test_environment action)
   - rocm-libraries checked out at ./rocm-libraries/
   - Build artifacts unpacked at ./build/ (provides ROCM_PATH for rocisa build)
+
+Environment variables used:
+  AMDGPU_FAMILIES: GPU architecture string (e.g., "gfx94X-dcgpu")
+  TEST_TYPE: "smoke", "quick", or "full" (default: "full")
+  THEROCK_BIN_DIR: Path to test binaries (default: "./build/bin")
+  OUTPUT_ARTIFACTS_DIR: Path to unpacked build artifacts (default: "./build")
 """
 
 import logging
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -28,34 +36,115 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-# Paths
+# Paths — rocm-libraries is checked out alongside TheRock in CI
 ROCM_LIBRARIES_DIR = THEROCK_DIR / "rocm-libraries"
 TENSILELITE_DIR = ROCM_LIBRARIES_DIR / "projects" / "hipblaslt" / "tensilelite"
+HIPBLASLT_DIR = ROCM_LIBRARIES_DIR / "projects" / "hipblaslt"
 
-# Build artifacts provide the ROCm SDK (amdclang++, HIP headers) needed to
-# compile the rocisa C++ extension during `uv sync`.
-BUILD_DIR = Path(os.getenv("THEROCK_BUILD_DIR", THEROCK_DIR / "build"))
-THEROCK_DIST_DIR = BUILD_DIR / "core" / "clr" / "dist"
+# Build artifacts — derive ROCM_PATH the same way as other test scripts
+# (test_runner.py, test_rocroller.py): parent of THEROCK_BIN_DIR or
+# OUTPUT_ARTIFACTS_DIR.
+THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR", "")
+OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR", "")
 
-# Test type (quick vs full) -- currently both run all unit tests since the
-# test suite is small. This hook is here for future test filtering.
+if THEROCK_BIN_DIR:
+    ROCM_PATH = str(Path(THEROCK_BIN_DIR).resolve().parent)
+elif OUTPUT_ARTIFACTS_DIR:
+    ROCM_PATH = str(Path(OUTPUT_ARTIFACTS_DIR).resolve())
+else:
+    ROCM_PATH = "/opt/rocm"
+
+# Client build output directory
+CLIENT_BUILD_DIR = TENSILELITE_DIR / "build_tmp"
+CLIENT_BINARY = CLIENT_BUILD_DIR / "tensilelite" / "client" / "tensilelite-client"
+
+# CI environment
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES", "")
 TEST_TYPE = os.getenv("TEST_TYPE", "full").lower()
+platform = os.getenv("RUNNER_OS", "linux").lower()
+
+# Set up env with ROCM_PATH
+env = os.environ.copy()
+env["ROCM_PATH"] = ROCM_PATH
+logging.info(f"Using ROCM_PATH: {ROCM_PATH}")
+
+# Extract GPU architecture from AMDGPU_FAMILIES (e.g., "gfx94X-dcgpu" -> "gfx94X")
+gpu_arch = ""
+if AMDGPU_FAMILIES:
+    match = re.search(r"gfx[0-9a-zA-Z]+", AMDGPU_FAMILIES)
+    if match:
+        gpu_arch = match.group(0)
+    else:
+        logging.warning(
+            f"Could not extract GPU architecture from AMDGPU_FAMILIES='{AMDGPU_FAMILIES}'"
+        )
 
 
-def run_command(cmd, cwd=None, env=None, check=True):
+def run_command(cmd, cwd=None, check=True):
     """Run a command with logging."""
     logging.info(f"++ Exec [{cwd or '.'}]$ {shlex.join(cmd)}")
     return subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=check, env=env)
 
 
-def setup_python_environment(env):
-    """Install Python 3.13 and sync dependencies using uv."""
-    run_command(["uv", "python", "install", "3.13"], cwd=TENSILELITE_DIR, env=env)
-    run_command(["uv", "sync", "--group", "dev"], cwd=TENSILELITE_DIR, env=env)
+def build_client():
+    """Build the tensilelite-client binary for integration tests."""
+    logging.info(f"=== Building tensilelite-client for {gpu_arch} ===")
+
+    compiler = os.path.join(ROCM_PATH, "bin", "amdclang++")
+
+    build_dir = str(CLIENT_BUILD_DIR)
+    os.makedirs(build_dir, exist_ok=True)
+
+    # Configure using the tensilelite CMake preset
+    run_command(
+        [
+            "cmake",
+            "--preset",
+            "tensilelite",
+            "-S",
+            str(HIPBLASLT_DIR),
+            "-B",
+            build_dir,
+            f"-DCMAKE_CXX_COMPILER={compiler}",
+            f"-DCMAKE_PREFIX_PATH={ROCM_PATH}",
+            "-DCMAKE_BUILD_TYPE=Release",
+            f"-DGPU_TARGETS={gpu_arch}",
+        ],
+        cwd=TENSILELITE_DIR,
+    )
+
+    # Build
+    run_command(
+        ["cmake", "--build", build_dir, "--parallel"],
+        cwd=TENSILELITE_DIR,
+    )
+
+    if not CLIENT_BINARY.exists():
+        logging.error(f"Client binary not found at {CLIENT_BINARY}")
+        return False
+
+    logging.info(f"Client built successfully: {CLIENT_BINARY}")
+    return True
 
 
-def run_tests(env):
-    """Run TensileLite unit tests and rocisa tests via pytest."""
+def main():
+    if not TENSILELITE_DIR.is_dir():
+        raise FileNotFoundError(
+            f"TensileLite source not found at {TENSILELITE_DIR}. "
+            "Ensure rocm-libraries is checked out at ./rocm-libraries/"
+        )
+
+    logging.info(
+        f"# AMDGPU_FAMILIES: {AMDGPU_FAMILIES} -> GPU Architecture: {gpu_arch}"
+    )
+    logging.info(f"# TEST_TYPE: {TEST_TYPE}")
+    logging.info(f"# Platform: {platform}")
+    logging.info("")
+
+    # Set up Python environment with uv
+    run_command(["uv", "python", "install", "3.13"], cwd=TENSILELITE_DIR)
+    run_command(["uv", "sync", "--group", "dev"], cwd=TENSILELITE_DIR)
+
     failed = False
 
     # Run TensileLite unit tests
@@ -73,7 +162,6 @@ def run_tests(env):
             "Tensile/Tests/unit",
         ],
         cwd=TENSILELITE_DIR,
-        env=env,
         check=False,
     )
     if result.returncode != 0:
@@ -97,42 +185,46 @@ def run_tests(env):
             "rocisa/test",
         ],
         cwd=TENSILELITE_DIR,
-        env=env,
         check=False,
     )
     if result.returncode != 0:
         logging.error(f"rocisa tests failed with return code {result.returncode}")
         failed = True
 
-    return failed
-
-
-def main():
-    if not TENSILELITE_DIR.is_dir():
-        raise FileNotFoundError(
-            f"TensileLite source not found at {TENSILELITE_DIR}. "
-            "Ensure rocm-libraries is checked out at ./rocm-libraries/"
-        )
-
-    env = os.environ.copy()
-
-    # Set ROCM_PATH from build artifacts so rocisa's cmake build can find
-    # amdclang++ and HIP headers.
-    if THEROCK_DIST_DIR.is_dir():
-        env["ROCM_PATH"] = str(THEROCK_DIST_DIR)
-        logging.info(f"Using ROCM_PATH from artifacts: {THEROCK_DIST_DIR}")
+    # Build client and run integration tests (GPU required)
+    if gpu_arch:
+        client_built = build_client()
+        if client_built:
+            logging.info("=== Running TensileLite integration tests ===")
+            result = run_command(
+                [
+                    "uv",
+                    "run",
+                    "pytest",
+                    "-v",
+                    "--junit-xml=tensilelite-integration-tests.xml",
+                    "--junit-prefix=tensilelite-integration",
+                    f"--prebuilt-client={CLIENT_BINARY}",
+                    "-n",
+                    "auto",
+                    "Tensile/Tests/common",
+                ],
+                cwd=TENSILELITE_DIR,
+                check=False,
+            )
+            if result.returncode != 0:
+                logging.error(
+                    f"TensileLite integration tests failed with return code {result.returncode}"
+                )
+                failed = True
+        else:
+            logging.error("Skipping integration tests: client build failed")
+            failed = True
     else:
-        logging.warning(
-            f"TheRock dist directory not found at {THEROCK_DIST_DIR}. "
-            "rocisa build may fail if ROCM_PATH is not set."
-        )
+        logging.warning("Skipping integration tests: no GPU architecture specified")
 
-    setup_python_environment(env)
-    failed = run_tests(env)
-
-    if failed:
-        sys.exit(1)
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
