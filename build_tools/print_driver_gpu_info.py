@@ -175,6 +175,15 @@ def run_sanity(os_name: str) -> int:
             extra_command_search_paths=[bin_dir],
         )
 
+        # Print loaded GPU firmware versions (useful for debugging hangs)
+        firmware_info = Path("/sys/kernel/debug/dri/0/amdgpu_firmware_info")
+        if firmware_info.exists():
+            log(f"\n=== amdgpu firmware info ===")
+            try:
+                log(firmware_info.read_text().rstrip())
+            except PermissionError:
+                log("(permission denied - need root/debugfs access)")
+
         # WSL kernel releases look like "6.6.87.2-microsoft-standard-WSL2"
         # (containers share the host kernel).
         if "microsoft" in platform.release().lower():
