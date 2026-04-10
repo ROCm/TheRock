@@ -90,6 +90,53 @@ class TestROCmSanity:
     @pytest.mark.skipif(
         is_asan(), reason="hipcc test fails with ASAN build, see TheRock#3313"
     )
+    def test_hip_simple(self):
+        """Minimal kernel without printf to isolate gfx1150 hang (TheRock#3199)."""
+        platform_executable_suffix = ".exe" if is_windows() else ""
+        offload_arch_path = (
+            THEROCK_BIN_DIR
+            / ".."
+            / "lib"
+            / "llvm"
+            / "bin"
+            / f"offload-arch{platform_executable_suffix}"
+        ).resolve()
+        process = run_command([str(offload_arch_path)])
+        offload_arch = None
+        for line in process.stdout.splitlines():
+            if "gfx" in line:
+                offload_arch = line
+                break
+        assert (
+            offload_arch is not None
+        ), f"Expected offload-arch to return gfx####, got:\n{process.stdout}"
+
+        executable = f"hip_simple_check{platform_executable_suffix}"
+        run_command(
+            [
+                f"{THEROCK_BIN_DIR}/hipcc",
+                str(THIS_DIR / "hip_simple_check.cpp"),
+                "-Xlinker",
+                f"-rpath={THEROCK_BIN_DIR}/../lib/",
+                f"--offload-arch={offload_arch}",
+                "-o",
+                executable,
+            ],
+            cwd=str(THEROCK_BIN_DIR),
+        )
+
+        platform_executable_prefix = "./" if not is_windows() else ""
+        process = run_command(
+            [f"{platform_executable_prefix}{executable}"],
+            cwd=str(THEROCK_BIN_DIR),
+            capture=False,
+        )
+        check.equal(process.returncode, 0)
+
+    # TODO(#3313): Re-enable once hipcc test is fixed for ASAN builds
+    @pytest.mark.skipif(
+        is_asan(), reason="hipcc test fails with ASAN build, see TheRock#3313"
+    )
     def test_hip_printf(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
 
