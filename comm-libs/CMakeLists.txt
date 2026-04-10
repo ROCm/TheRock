@@ -71,8 +71,13 @@ if(THEROCK_ENABLE_RCCL)
       set(_rccl_tests_optional_deps "therock-openmpi")
     endif()
 
+    # rccl-tests does not use USE_TEST_AMDGPU_TARGETS (which would default to
+    # all available targets) because it is bundled into the same artifact as
+    # rccl. Using USE_DIST_AMDGPU_TARGETS keeps both consistent and ensures the
+    # artifact only contains device code for Instinct/CDNA families, matching
+    # the restrict_dist_families_regex on the comm-libs artifact group.
     therock_cmake_subproject_declare(rccl-tests
-      USE_TEST_AMDGPU_TARGETS
+      USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl-tests"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl-tests"
       BACKGROUND_BUILD
