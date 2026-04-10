@@ -8,16 +8,17 @@ Uploads all .tar.gz files from the input directory to the tarballs/
 subdirectory of the workflow output root in S3.
 
 Usage:
-    upload_tarballs.py --input-tarballs-dir TARBALLS_DIR --run-id RUN_ID
+    upload_tarballs.py --input-tarballs-dir TARBALLS_DIR --run-id RUN_ID [--platform PLATFORM]
 
 Manual testing:
     # Test with local output (no S3 credentials needed):
     python build_tools/github_actions/upload_tarballs.py \\
         --input-tarballs-dir /tmp/tarballs \\
         --run-id 12345 \\
+        --platform linux \\
         --output-dir /tmp/upload-test
 
-    # Verify: /tmp/upload-test/12345-{platform}/tarballs/*.tar.gz
+    # Verify: /tmp/upload-test/12345-linux/tarballs/*.tar.gz
 
     # Dry run (prints plan without uploading):
     python build_tools/github_actions/upload_tarballs.py \\
@@ -27,7 +28,7 @@ Manual testing:
 """
 
 import argparse
-import platform
+import platform as platform_module
 import sys
 from pathlib import Path
 
@@ -36,8 +37,6 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
-
-PLATFORM = platform.system().lower()
 
 
 def log(*args):
@@ -66,6 +65,13 @@ def main():
         help="Output to local directory instead of S3",
     )
     parser.add_argument(
+        "--platform",
+        type=str,
+        default=platform_module.system().lower(),
+        choices=["linux", "windows"],
+        help="Platform for the upload path (default: current system)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print what would happen without uploading",
@@ -82,14 +88,14 @@ def main():
 
     log(f"[INFO] Tarballs directory: {tarballs_dir}")
     log(f"[INFO] Run ID: {args.run_id}")
-    log(f"[INFO] Platform: {PLATFORM}")
+    log(f"[INFO] Platform: {args.platform}")
     log(f"[INFO] Found {len(tarball_files)} tarballs:")
     for f in tarball_files:
         size_mb = f.stat().st_size / (1024 * 1024)
         log(f"  {f.name} ({size_mb:.1f} MB)")
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=args.run_id, platform=PLATFORM
+        run_id=args.run_id, platform=args.platform
     )
     tarballs_loc = output_root.tarballs()
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
