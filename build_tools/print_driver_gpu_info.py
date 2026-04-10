@@ -130,15 +130,14 @@ def run_sanity(os_name: str) -> None:
             args=["-r"],
             extra_command_search_paths=[bin_dir],
         )
-
-        # Print loaded GPU firmware versions (useful for debugging hangs)
-        firmware_info = Path("/sys/kernel/debug/dri/0/amdgpu_firmware_info")
-        if firmware_info.exists():
-            log(f"\n=== amdgpu firmware info ===")
-            try:
-                log(firmware_info.read_text().rstrip())
-            except PermissionError:
-                log("(permission denied - need root/debugfs access)")
+        # Print per-component firmware versions (useful for debugging hangs)
+        if AMDGPU_FAMILIES not in unsupported_amdsmi_families:
+            run_command_with_search(
+                label="amd-smi firmware",
+                command="amd-smi",
+                args=["firmware"],
+                extra_command_search_paths=[bin_dir],
+            )
 
     log("\n=== End of sanity check ===")
 
