@@ -126,6 +126,21 @@ class TestROCmSanity:
             cwd=str(THEROCK_BIN_DIR),
         )
 
+        # Dump dmesg before running to capture pre-existing GPU firmware
+        # errors that may cause all subsequent kernel launches to stall.
+        try:
+            dmesg_before = subprocess.run(
+                ["dmesg", "--level=err,warn", "-T"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            logger.info("=== dmesg (err+warn) before hip_simple_check ===")
+            for line in dmesg_before.stdout.splitlines()[-50:]:
+                logger.info(line)
+        except Exception as e:
+            logger.warning(f"dmesg failed: {e}")
+
         # Run with a 30s grace period; if it hangs, attach gdb to get
         # userspace backtraces for all threads (TheRock#3199).
         # The container has --cap-add SYS_PTRACE for this purpose.
@@ -142,6 +157,21 @@ class TestROCmSanity:
             proc.wait(timeout=hang_timeout)
         except subprocess.TimeoutExpired:
             logger.error(f"hip_simple_check hung for {hang_timeout}s — attaching gdb")
+
+            # Dump dmesg again to see if new GPU errors appeared during hang
+            try:
+                dmesg_after = subprocess.run(
+                    ["dmesg", "-T"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                logger.info("=== dmesg (last 100 lines) after hang ===")
+                for line in dmesg_after.stdout.splitlines()[-100:]:
+                    logger.info(line)
+            except Exception as e:
+                logger.warning(f"dmesg failed: {e}")
+
             # Install gdb (container runs as root, image is Ubuntu 24.04)
             try:
                 subprocess.run(
