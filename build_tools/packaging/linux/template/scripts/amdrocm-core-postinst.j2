@@ -61,10 +61,11 @@ do_update_alternatives(){
     update-alternatives --install "/opt/rocm/lib" "rocm-lib" "$PKG_INSTALL_PREFIX/lib" "$altscore"
     update-alternatives --install "/opt/rocm/include" "rocm-include" "$PKG_INSTALL_PREFIX/include" "$altscore"
 
-    # Install /opt/rocm/llvm, /opt/rocm/amdgcn, and /opt/rocm/libexec soft links
+    # Install /opt/rocm/llvm, /opt/rocm/amdgcn, /opt/rocm/libexec, and /opt/rocm/share soft links
     update-alternatives --install "/opt/rocm/llvm" "rocm-llvm" "$PKG_INSTALL_PREFIX/llvm" "$altscore"
     update-alternatives --install "/opt/rocm/amdgcn" "rocm-amdgcn" "$PKG_INSTALL_PREFIX/amdgcn" "$altscore"
     update-alternatives --install "/opt/rocm/libexec" "rocm-libexec" "$PKG_INSTALL_PREFIX/libexec" "$altscore"
+    update-alternatives --install "/opt/rocm/share" "rocm-share" "$PKG_INSTALL_PREFIX/share" "$altscore"
 
     for i in "${binaries[@]}"
     do
