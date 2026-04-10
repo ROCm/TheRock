@@ -115,10 +115,12 @@ def sparse_checkout_submodule() -> Path:
             "sparse-checkout",
             "set",
             "llvm/test",
-            "llvm/utils/lit",
+            "llvm/include",
+            "llvm/utils",
             "clang/test",
             "clang/utils",
             "clang/include",
+            "clang/lib/Headers",
             "clang/lib/Sema",
             "clang/docs/tools",
             "lld/test",
@@ -170,6 +172,7 @@ def fixup_lit_site_cfg(
     llvm_libs_dir: Path,
     extra_replacements: dict[str, str] | None = None,
     load_config_src_root: str | None = None,
+    config_overrides: dict[str, str] | None = None,
 ) -> None:
     """Fix up a lit.site.cfg.py to use correct absolute paths on the runner.
 
@@ -181,6 +184,10 @@ def fixup_lit_site_cfg(
     If load_config_src_root is given, also fix inline path() calls in the
     lit_config.load_config() invocation (needed when the template uses a raw
     path() call instead of a config variable, as LLD does).
+
+    If config_overrides is given, override boolean/string config values that
+    were set on the builder but don't apply on the runner (e.g. features for
+    tools we don't ship in artifacts).
     """
     if not cfg_path.exists():
         logging.warning(f"lit site config not found: {cfg_path}")
@@ -241,11 +248,22 @@ def fixup_lit_site_cfg(
             content,
         )
 
+    # Override config values that don't match the runner environment.
+    if config_overrides:
+        for var_name, new_value in config_overrides.items():
+            pattern = rf"(config\.{re.escape(var_name)}\s*=\s*).*"
+            replacement = rf"\g<1>{new_value}"
+            content = re.sub(pattern, replacement, content)
+
     cfg_path.write_text(content)
     logging.info(f"Fixed up: {cfg_path}")
 
 
-def run_lit_tests(test_dir: Path, label: str) -> int:
+def run_lit_tests(
+    test_dir: Path,
+    label: str,
+    extra_args: list[str] | None = None,
+) -> int:
     """Run llvm-lit on a test directory and return the exit code."""
     if not test_dir.exists():
         logging.warning(f"Test directory not found: {test_dir}, skipping {label}")
@@ -257,6 +275,8 @@ def run_lit_tests(test_dir: Path, label: str) -> int:
         return 0
 
     cmd = [sys.executable, str(LLVM_LIT), str(test_dir), "-v", "--timeout=300"]
+    if extra_args:
+        cmd.extend(extra_args)
     logging.info(f"=== Running {label} ===")
     result = run_cmd(cmd)
     logging.info(f"=== {label} exited with code {result.returncode} ===")
@@ -285,6 +305,11 @@ def main() -> int:
         llvm_src_root=llvm_src,
         llvm_tools_dir=LLVM_TOOLS_DIR,
         llvm_libs_dir=LLVM_LIBS_DIR,
+        config_overrides={
+            "include_examples": "False",
+            "has_plugins": "False",
+            "linked_bye_extension": "False",
+        },
     )
 
     fixup_lit_site_cfg(
@@ -298,6 +323,9 @@ def main() -> int:
             "clang_tools_dir": str(LLVM_TOOLS_DIR),
             "clang_lib_dir": str(LLVM_LIBS_DIR),
             "llvm_external_lit": "",
+        },
+        config_overrides={
+            "has_plugins": "False",
         },
     )
 
@@ -348,7 +376,15 @@ def main() -> int:
             logging.info(f"Removed Unit test config: {unit_cfg}")
 
     rc_llvm = run_lit_tests(llvm_test_dir, "check-llvm")
-    rc_clang = run_lit_tests(clang_test_dir, "check-clang")
+
+    # The build targets AMDGPU;X86 only (CLANG_ENABLE_HLSL is off) so hlsl.h
+    # is not installed.  Skip .hlsl tests to avoid ~500 false failures.
+    rc_clang = run_lit_tests(
+        clang_test_dir,
+        "check-clang",
+        extra_args=["--filter-out", r"\.hlsl"],
+    )
+
     rc_lld = run_lit_tests(lld_test_dir, "check-lld")
 
     logging.info(
