@@ -29,50 +29,23 @@ def is_windows():
     return "windows" == platform.system().lower()
 
 
-def run_command(command: list[str], cwd=None, timeout=None):
+def run_command(command: list[str], cwd=None, capture=True):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
-    if timeout is not None:
-        # Stream output so we can see HIP trace/debug logs even if process hangs
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            cwd=cwd,
-            shell=is_windows(),
-            text=True,
-        )
-        try:
-            stdout, _ = process.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            logger.error(f"Command timed out after {timeout}s, partial output:")
-            # Read whatever is buffered
-            process.kill()
-            stdout, _ = process.communicate()
-            for line in stdout.splitlines():
-                logger.error(line)
-            raise
-        if process.returncode != 0:
-            logger.error(f"Command failed!")
-            for line in stdout.splitlines():
-                logger.error(line)
-            raise Exception(
-                f"Command failed: `{shlex.join(command)}`, see output above"
-            )
-        # Return a result compatible with subprocess.run
-        return subprocess.CompletedProcess(
-            command, process.returncode, stdout=stdout, stderr=""
-        )
     process = subprocess.run(
-        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
+        command,
+        capture_output=capture,
+        cwd=cwd,
+        shell=is_windows(),
+        text=True,
     )
     if process.returncode != 0:
-        logger.error(f"Command failed!")
-        logger.error("command stdout:")
-        for line in process.stdout.splitlines():
-            logger.error(line)
-        logger.error("command stderr:")
-        for line in process.stderr.splitlines():
-            logger.error(line)
+        if capture:
+            logger.error("command stdout:")
+            for line in process.stdout.splitlines():
+                logger.error(line)
+            logger.error("command stderr:")
+            for line in process.stderr.splitlines():
+                logger.error(line)
         raise Exception(f"Command failed: `{shlex.join(command)}`, see output above")
     return process
 
@@ -170,12 +143,13 @@ class TestROCmSanity:
             cwd=str(THEROCK_BIN_DIR),
         )
 
-        # Running and checking the executable (120s timeout to capture debug
-        # output if it hangs, see TheRock#3199)
+        # Running and checking the executable.
+        # capture=False so HIP debug output streams directly to the log
+        # if the process hangs (see TheRock#3199).
         platform_executable_prefix = "./" if not is_windows() else ""
         hipcc_check_executable = f"{platform_executable_prefix}hipcc_check"
         process = run_command(
-            [hipcc_check_executable], cwd=str(THEROCK_BIN_DIR), timeout=120
+            [hipcc_check_executable], cwd=str(THEROCK_BIN_DIR), capture=False
         )
         check.equal(process.returncode, 0)
         check.greater(
