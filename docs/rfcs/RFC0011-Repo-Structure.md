@@ -33,6 +33,8 @@ repo.amd.com's open source software release publications need standardization. I
     - **pyindex** *(central nightly wheel repository for all ROCm components)*
     - **core**
       - tarball
+      - zip
+      
       - whl
       - packages
     - **Linux Distros [a–z]**
