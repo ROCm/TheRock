@@ -92,7 +92,7 @@ Optional Fields
 ## Building Packages
 
 ```bash
-./build_package.py \
+./build_tools/packaging/linux/build_package.py \
    --artifacts-dir ./ARTIFACTS_DIR \
    --target gfx94X-dcgpu \
    --dest-dir ./OUTPUT_PKG \
@@ -111,25 +111,26 @@ To install locally built packages
 ### Configuring your Python Project Dependencies
 
 Python version required : python 3.12 or above<br>
-Almalinux:<br>
-dnf install rpm-build<br>
-dnf install llvm<br>
-pip install -r requirements.txt<br>
-
-Ubuntu:<br>
+Ubuntu(24.04):<br>
 apt update<br>
-apt install -y python3<br>
-apt install -y python3-pip<br>
+apt install -y python3 python3-venv python3-pip git<br>
 apt install -y debhelper<br>
+apt install -y rpm<br>
 apt install -y llvm-20<br>
-pip install -r requirements.txt<br>
+
+# Clone the repository
+
+git clone https://github.com/ROCm/TheRock.git
+cd TheRock
+python3 -m venv .venv && source .venv/bin/activate<br>
+pip install -r build_tools/packaging/linux/requirements.txt<br>
 
 ### Usage
 
 RPM package:<br>
 
 ```bash
-./build_package.py \
+./build_tools/packaging/linux/build_package.py \
    --artifacts-dir ./ARTIFACTS_DIR \
    --target gfx94X-dcgpu \
    --dest-dir ./OUTPUT_PKG \
@@ -141,7 +142,7 @@ RPM package:<br>
 Debian package:<br>
 
 ```bash
-./build_package.py \
+./build_tools/packaging/linux/build_package.py \
    --artifacts-dir ./ARTIFACTS_DIR \
    --target gfx94X-dcgpu \
    --dest-dir ./OUTPUT_PKG \
@@ -153,7 +154,7 @@ Debian package:<br>
 Debian RPATH package:<br>
 
 ```bash
-./build_package.py \
+./build_tools/packaging/linux/build_package.py \
    --artifacts-dir ./ARTIFACTS_DIR \
    --target gfx94X-dcgpu \
    --dest-dir ./OUTPUT_PKG \

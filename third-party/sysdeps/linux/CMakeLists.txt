@@ -9,6 +9,8 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/libbacktrace" "${CMAKE_C
 add_subdirectory(libcap)
 add_subdirectory(libdrm)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/liblzma" "${CMAKE_CURRENT_BINARY_DIR}/liblzma")
+add_subdirectory(libmnl)
+add_subdirectory(libnl)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/ncurses" "${CMAKE_CURRENT_BINARY_DIR}/ncurses")
 add_subdirectory(numactl)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/sqlite3" "${CMAKE_CURRENT_BINARY_DIR}/sqlite3")
@@ -42,6 +44,8 @@ therock_provide_artifact(sysdeps
     therock-libcap
     therock-libdrm
     therock-liblzma
+    therock-libmnl
+    therock-libnl
     therock-numactl
     therock-sqlite3
     therock-zlib
