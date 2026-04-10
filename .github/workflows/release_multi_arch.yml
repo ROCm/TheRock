@@ -1,0 +1,108 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# This workflow is the entry point for multi-arch releases.
+#
+# For manual dev releases, trigger via workflow_dispatch on TheRock.
+# For scheduled nightly releases, rockrel will call this via workflow_call
+# (TODO: pass required inputs through to setup job explicitly as needed).
+#
+# If we want per-platform status badges, independent retryability, or
+# isolation from cross-platform runner queue issues, we can switch to
+# dispatching each platform job via workflow_dispatch. That will also
+# let us have this pre-trigger job freeze commits/versions so re-runs use
+# consistent values, see https://github.com/ROCm/TheRock/issues/1236.
+
+name: Release Multi-Arch
+
+on:
+  workflow_call:
+    inputs:
+      release_type:
+        description: 'Release type: "dev", "nightly", or "prerelease".'
+        type: string
+        required: true
+      linux_amdgpu_families:
+        description: "Comma-separated list of Linux GPU families. Empty = all families."
+        type: string
+        default: ""
+      windows_amdgpu_families:
+        description: "Comma-separated list of Windows GPU families. Empty = all families."
+        type: string
+        default: ""
+      s3_subdir:
+        description: "Subdirectory for release artifacts in S3"
+        type: string
+        default: "v3"
+      prerelease_version:
+        description: "(Optional) Prerelease version number"
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the ref that triggered the workflow."
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type: "dev", "nightly", or "prerelease". All developer-triggered jobs should use "dev"!'
+        type: choice
+        options:
+          - dev
+          - nightly
+          - prerelease
+        default: dev
+      linux_amdgpu_families:
+        description: "Comma-separated list of Linux GPU families. Empty = all families."
+        type: string
+        default: ""
+      windows_amdgpu_families:
+        description: "Comma-separated list of Windows GPU families. Empty = all families."
+        type: string
+        default: ""
+      s3_subdir:
+        description: "Subdirectory for release artifacts in S3"
+        type: string
+        default: "v3"
+      prerelease_version:
+        description: "(Optional) Prerelease version number"
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+run-name: >-
+  Multi-Arch Release (Linux ${{
+    inputs.linux_amdgpu_families || 'all families'
+  }}, ${{ inputs.release_type }})
+
+jobs:
+  setup:
+    uses: ./.github/workflows/setup_multi_arch.yml
+    with:
+      build_variant: "release"
+      release_type: ${{ inputs.release_type }}
+      prerelease_version: ${{ inputs.prerelease_version }}
+
+  linux_release:
+    name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
+    needs: setup
+    if: ${{ needs.setup.outputs.linux_build_config != '' }}
+    uses: ./.github/workflows/release_multi_arch_linux.yml
+    secrets: inherit
+    with:
+      build_config: ${{ needs.setup.outputs.linux_build_config }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      test_type: ${{ needs.setup.outputs.test_type }}
+      release_type: ${{ inputs.release_type }}
+    permissions:
+      contents: read
+      actions: write
+      id-token: write
+
+  # TODO(#3334): release_multi_arch_windows.yml (and update run-name)

@@ -16,6 +16,10 @@ on:
           and package versioning.
         type: string
         default: ""
+      prerelease_version:
+        description: Prerelease version (typically a build number)
+        type: string
+        default: ""
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -85,4 +89,5 @@ jobs:
         id: rocm_package_version
         run: |
           python ./build_tools/compute_rocm_package_version.py \
-            --release-type=${{ inputs.release_type || 'dev' }}
+            --release-type=${{ inputs.release_type || 'dev' }} \
+            --prerelease-version=${{ inputs.prerelease_version }}
