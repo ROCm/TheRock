@@ -125,13 +125,44 @@ class TestROCmSanity:
             cwd=str(THEROCK_BIN_DIR),
         )
 
+        # Run under strace to capture the syscall where it hangs.
+        # Use subprocess.Popen with a 60s timeout so we can read the strace
+        # log even if the process hangs (TheRock#3199).
         platform_executable_prefix = "./" if not is_windows() else ""
-        process = run_command(
-            [f"{platform_executable_prefix}{executable}"],
+        exe = f"{platform_executable_prefix}{executable}"
+        strace_log = str(THEROCK_BIN_DIR / "strace_hip_simple.log")
+        strace_cmd = [
+            "strace",
+            "-f",
+            "-tt",
+            "-e",
+            "trace=ioctl,futex,write,openat",
+            "-o",
+            strace_log,
+            exe,
+        ]
+        logger.info(f"++ Run [{THEROCK_BIN_DIR}]$ {shlex.join(strace_cmd)}")
+        proc = subprocess.Popen(
+            strace_cmd,
             cwd=str(THEROCK_BIN_DIR),
-            capture=False,
         )
-        check.equal(process.returncode, 0)
+        try:
+            proc.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            logger.error("hip_simple_check hung for 60s, killing")
+            proc.kill()
+            proc.wait()
+
+        # Print last 100 lines of strace log to see where it hung
+        try:
+            with open(strace_log) as f:
+                lines = f.readlines()
+                logger.info("=== strace tail (last 100 lines) ===")
+                for line in lines[-100:]:
+                    logger.info(line.rstrip())
+        except Exception as e:
+            logger.error(f"Failed to read strace log: {e}")
+        check.equal(proc.returncode, 0)
 
     # TODO(#3313): Re-enable once hipcc test is fixed for ASAN builds
     @pytest.mark.skipif(
