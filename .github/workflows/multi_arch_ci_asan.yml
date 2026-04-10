@@ -4,10 +4,6 @@
 name: Multi-Arch CI ASAN
 
 on:
-  push:
-    # testing
-    branches:
-      - users/geomin12/asan-multi-arch-conversion
   schedule:
     # Runs at 02:00 AM UTC, which is 7:00 PM PST (UTC-8)
     - cron: '0 02 * * *'
