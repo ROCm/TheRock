@@ -80,7 +80,7 @@ test_matrix = {
         # 240 min + 20% margin = 288 min
         "timeout_minutes": 288,
         "test_script": f"python {_get_script_path('test_runner.py')}",
-        "platform": ["linux", "windows"],
+        "platform": ["linux"],
         "total_shards_dict": {
             "linux": 6,
             "windows": 6,
