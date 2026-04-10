@@ -31,6 +31,10 @@ GFX_GENERIC = "gfx_generic"
 # versioned_pkg - Used to indicate versioned or non versioned packages
 # enable_kpack - To enable multi-architecture support
 # gfxarch_list - List of all architectures for multi-arch mode
+#
+# frozen=True makes this dataclass immutable (hashable and thread-safe).
+# Note: gfxarch_list uses tuple instead of list because frozen dataclasses
+# require all fields to be immutable types (tuples are immutable, lists are not).
 @dataclass(frozen=True)
 class PackageConfig:
     artifacts_dir: Path
