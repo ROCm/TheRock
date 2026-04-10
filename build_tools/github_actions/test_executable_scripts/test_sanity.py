@@ -17,6 +17,11 @@ env = os.environ.copy()
 # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
 # Note: ROCM_KPACK_DEBUG is set for all components by test_component.yml.
 env["AMD_LOG_LEVEL"] = "4"
+# Extra HIP/HSA diagnostics for debugging gfx1150 hang (TheRock#3199)
+env["HIP_TRACE_API"] = "1"
+env["HIP_LAUNCH_BLOCKING"] = "1"
+env["AMD_SERIALIZE_KERNEL"] = "3"
+env["AMD_SERIALIZE_COPY"] = "3"
 
 # The sanity checks run tools like 'offload-arch' which may search for DLLs on
 # multiple search paths (PATH, CWD, system32, etc.).
