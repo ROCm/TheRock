@@ -215,13 +215,13 @@ root = WorkflowOutputRoot.for_local(run_id="local", platform="linux")
 # Location methods — each returns an StorageLocation
 root.root()
 root.artifact(filename="blas_lib_gfx94X.tar.xz")
-root.artifact_index(artifact_group="gfx94X-dcgpu")
+root.artifact_index()
 root.log_dir(artifact_group="gfx94X-dcgpu")
+root.log_stage_dir(stage_name="math-libs", amdgpu_family="gfx1151")
+root.log_stage_dir(stage_name="foundation")  # generic stage, no family
 root.log_file(artifact_group="gfx94X-dcgpu", filename="build.log")
 root.log_index(artifact_group="gfx94X-dcgpu")
 root.build_observability(artifact_group="gfx94X-dcgpu")
-root.stage_log_dir(stage_name="math-libs", amdgpu_family="gfx1151")
-root.stage_log_dir(stage_name="foundation")  # generic stage, no family
 root.manifest_dir(artifact_group="gfx94X-dcgpu")
 root.manifest(artifact_group="gfx94X-dcgpu")
 root.python_packages(artifact_group="gfx110X-all")
