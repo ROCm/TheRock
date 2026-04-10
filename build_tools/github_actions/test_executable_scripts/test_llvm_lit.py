@@ -124,6 +124,7 @@ def sparse_checkout_submodule() -> Path:
             "llvm/test",
             "llvm/include",
             "llvm/utils",
+            "llvm/unittests/DebugInfo",
             "llvm/lib/Target/X86",
             "llvm/lib/Analysis/models",
             "llvm/tools/opt-viewer",
@@ -135,6 +136,7 @@ def sparse_checkout_submodule() -> Path:
             "clang/lib/Sema",
             "clang/docs/tools",
             "lld/test",
+            "lld/unittests/AsLibELF",
             "lld/ELF",
             "lld/COFF",
             "lld/MachO",
@@ -388,6 +390,15 @@ def main() -> int:
             else str(lit_python_path)
         )
 
+    # Remove the pip-installed lit package so that nested llvm-lit invocations
+    # (e.g. inside update_cc_test_checks tests) import the source tree's lit
+    # from PYTHONPATH instead of an older pip version that may lack attributes
+    # such as LitConfig.update_tests.
+    run_cmd(
+        [sys.executable, "-m", "pip", "uninstall", "-y", "lit"],
+        check=False,
+    )
+
     # Set library search path so tests can find shared libraries.
     # Include rocm_sysdeps/lib for tests that copy binaries to temp dirs
     # (e.g. lld COFF tests) where RPATH $ORIGIN resolution breaks.
@@ -444,14 +455,44 @@ def main() -> int:
                     shutil.copy2(entry, dest)
                 logging.info(f"Linked plugin: {entry.name}")
 
-    rc_llvm = run_lit_tests(llvm_test_dir, "check-llvm")
+    # Prevent the Clang driver from auto-discovering ROCm in the artifacts
+    # layout.  Without this, driver tests that rely on --sysroot or
+    # --rocm-path for self-contained discovery pick up libamdhip64.so from
+    # the runner's merged install prefix instead.
+    for var in [
+        "ROCM_PATH",
+        "HIP_PATH",
+        "ROCM_DIR",
+        "HIP_DIR",
+        "HIP_CLANG_PATH",
+    ]:
+        os.environ.pop(var, None)
+
+    # TestExecuteEmptyEnvironment spawns a child with a completely empty env
+    # which means no LD_LIBRARY_PATH.  Since the gtest binary's RPATH points
+    # to the builder's path (not the runner's), the child cannot load
+    # libLLVM.so.  This is inherent to out-of-tree execution with dynamic
+    # linking and cannot be fixed without patching RPATH on every binary.
+    rc_llvm = run_lit_tests(
+        llvm_test_dir,
+        "check-llvm",
+        extra_args=["--filter-out", "ProgramEnvTest"],
+    )
 
     # The build targets AMDGPU;X86 only (CLANG_ENABLE_HLSL is off) so hlsl.h
     # is not installed.  Skip .hlsl tests to avoid ~500 false failures.
+    # Also filter out Driver tests that are sensitive to the installed layout:
+    # the Clang binary finds ROCm relative to its install prefix, which in
+    # the merged artifacts tree differs from an in-tree build.
     rc_clang = run_lit_tests(
         clang_test_dir,
         "check-clang",
-        extra_args=["--filter-out", r"\.hlsl"],
+        extra_args=[
+            "--filter-out",
+            r"\.hlsl|Driver/A\+A\.c|Driver/rocm-detect\.hip"
+            r"|Driver/hip-runtime-libs-linux\.hip"
+            r"|Driver/rocm-not-found\.cl",
+        ],
     )
 
     rc_lld = run_lit_tests(lld_test_dir, "check-lld")
