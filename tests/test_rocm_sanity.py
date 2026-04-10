@@ -11,6 +11,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -125,43 +126,83 @@ class TestROCmSanity:
             cwd=str(THEROCK_BIN_DIR),
         )
 
-        # Run under strace to capture the syscall where it hangs.
-        # Use subprocess.Popen with a 60s timeout so we can read the strace
-        # log even if the process hangs (TheRock#3199).
+        # Run with /proc polling to capture kernel stack if it hangs.
+        # strace is not available in the CI container, so we poll
+        # /proc/PID/stack, /proc/PID/syscall, and /proc/PID/wchan
+        # to identify where the process blocks (TheRock#3199).
         platform_executable_prefix = "./" if not is_windows() else ""
         exe = f"{platform_executable_prefix}{executable}"
-        strace_log = str(THEROCK_BIN_DIR / "strace_hip_simple.log")
-        strace_cmd = [
-            "strace",
-            "-f",
-            "-tt",
-            "-e",
-            "trace=ioctl,futex,write,openat",
-            "-o",
-            strace_log,
-            exe,
-        ]
-        logger.info(f"++ Run [{THEROCK_BIN_DIR}]$ {shlex.join(strace_cmd)}")
+        logger.info(f"++ Run [{THEROCK_BIN_DIR}]$ {exe}")
         proc = subprocess.Popen(
-            strace_cmd,
+            [exe],
             cwd=str(THEROCK_BIN_DIR),
         )
-        try:
-            proc.wait(timeout=60)
-        except subprocess.TimeoutExpired:
-            logger.error("hip_simple_check hung for 60s, killing")
+
+        timeout = 60
+        poll_interval = 5
+        elapsed = 0
+        last_stack = None
+        while elapsed < timeout:
+            ret = proc.poll()
+            if ret is not None:
+                break
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+
+            # Read /proc info for the hanging process
+            pid = proc.pid
+            for proc_file in ["stack", "syscall", "wchan", "status"]:
+                path = f"/proc/{pid}/task/{pid}/{proc_file}"
+                try:
+                    with open(path) as f:
+                        content = f.read().strip()
+                    if proc_file == "stack":
+                        if content != last_stack:
+                            logger.info(
+                                f"=== /proc/{pid}/{proc_file} (t={elapsed}s) ==="
+                            )
+                            for line in content.splitlines():
+                                logger.info(line)
+                            last_stack = content
+                        else:
+                            logger.info(
+                                f"=== /proc/{pid}/{proc_file} (t={elapsed}s) === (unchanged)"
+                            )
+                    else:
+                        logger.info(
+                            f"/proc/{pid}/{proc_file} (t={elapsed}s): {content}"
+                        )
+                except Exception as e:
+                    logger.warning(f"Cannot read /proc/{pid}/{proc_file}: {e}")
+
+            # Also dump stacks for all threads
+            try:
+                task_dir = Path(f"/proc/{pid}/task")
+                tids = sorted(task_dir.iterdir())
+                if len(tids) > 1:
+                    logger.info(
+                        f"=== Thread stacks ({len(tids)} threads, t={elapsed}s) ==="
+                    )
+                    for tid_path in tids:
+                        tid = tid_path.name
+                        if tid == str(pid):
+                            continue
+                        try:
+                            stack = (tid_path / "stack").read_text().strip()
+                            wchan = (tid_path / "wchan").read_text().strip()
+                            logger.info(f"--- TID {tid} (wchan={wchan}) ---")
+                            for line in stack.splitlines():
+                                logger.info(line)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        if proc.poll() is None:
+            logger.error(f"hip_simple_check hung for {timeout}s, killing")
             proc.kill()
             proc.wait()
 
-        # Print last 100 lines of strace log to see where it hung
-        try:
-            with open(strace_log) as f:
-                lines = f.readlines()
-                logger.info("=== strace tail (last 100 lines) ===")
-                for line in lines[-100:]:
-                    logger.info(line.rstrip())
-        except Exception as e:
-            logger.error(f"Failed to read strace log: {e}")
         check.equal(proc.returncode, 0)
 
     # TODO(#3313): Re-enable once hipcc test is fixed for ASAN builds
