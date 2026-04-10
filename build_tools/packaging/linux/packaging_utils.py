@@ -11,7 +11,7 @@ import re
 import shutil
 import sys
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 
@@ -31,7 +31,11 @@ GFX_GENERIC = "gfx_generic"
 # versioned_pkg - Used to indicate versioned or non versioned packages
 # enable_kpack - To enable multi-architecture support
 # gfxarch_list - List of all architectures for multi-arch mode
-@dataclass
+#
+# frozen=True makes this dataclass immutable (hashable and thread-safe).
+# Note: gfxarch_list uses tuple instead of list because frozen dataclasses
+# require all fields to be immutable types (tuples are immutable, lists are not).
+@dataclass(frozen=True)
 class PackageConfig:
     artifacts_dir: Path
     dest_dir: Path
@@ -40,10 +44,10 @@ class PackageConfig:
     version_suffix: str
     install_prefix: str
     gfx_arch: str
-    enable_rpath: bool = field(default=False)
-    versioned_pkg: bool = field(default=True)
-    enable_kpack: bool = field(default=False)
-    gfxarch_list: list = field(default_factory=list)
+    enable_rpath: bool = False
+    versioned_pkg: bool = True
+    enable_kpack: bool = False
+    gfxarch_list: tuple = field(default_factory=tuple)
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -414,11 +418,10 @@ def expand_metapackage_to_all_archs(pkg_name, gfxarch_list, config: PackageConfi
     Returns: List of architecture-specific package names
     """
     arch_specific_packages = []
-    local_config = copy.deepcopy(config)
-    local_config.versioned_pkg = True
 
     for gfx_arch in gfxarch_list:
-        local_config.gfx_arch = gfx_arch
+        # Create new config for each arch with versioned_pkg=True
+        local_config = replace(config, versioned_pkg=True, gfx_arch=gfx_arch)
         # update_package_name will append version and gfx_arch
         arch_pkg = update_package_name(pkg_name, local_config)
         arch_specific_packages.append(arch_pkg)
@@ -521,12 +524,14 @@ def convert_to_versiondependency(
     # This function is to add Version dependency
     # Make sure the flag is set to True
 
-    local_config = copy.deepcopy(config)
-    local_config.versioned_pkg = True
-    # In multi-arch mode, dependencies should always point to generic packages
-    # UNLESS preserve_arch is True (for arch-specific metapackages)
+    # Create config with versioned_pkg=True and conditionally override gfx_arch
     if config.enable_kpack and not preserve_arch:
-        local_config.gfx_arch = GFX_GENERIC
+        # In multi-arch mode, dependencies point to generic packages
+        # UNLESS preserve_arch is True (for arch-specific metapackages)
+        local_config = replace(config, versioned_pkg=True, gfx_arch=GFX_GENERIC)
+    else:
+        local_config = replace(config, versioned_pkg=True)
+
     pkg_list, skipped_list = get_package_list(config.artifacts_dir)
 
     filtered_deps = []
