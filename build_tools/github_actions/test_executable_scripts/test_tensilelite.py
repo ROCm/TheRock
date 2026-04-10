@@ -6,24 +6,15 @@
 TensileLite Python unit test runner for TheRock CI.
 
 Runs TensileLite and rocisa Python unit tests using uv for environment
-management. Unlike other TheRock test scripts that execute compiled gtest
-binaries from build artifacts, this script sets up a Python environment
-from the rocm-libraries source checkout and runs pytest.
-
-This requires rocm-libraries to be checked out alongside TheRock in CI
-(via therock-test-component.yml) because the tests are Python source
-files, not compiled binaries.
-
-Required environment:
-  - uv (installed by setup_test_environment action)
-  - rocm-libraries checked out at ./rocm-libraries/
-  - Build artifacts unpacked at ./build/ (provides ROCM_PATH for rocisa build)
+management. The Python source tree (Tensile/, rocisa/, pyproject.toml,
+uv.lock) is bundled as a test artifact during the build via CMake
+install rules and staged into share/tensilelite-tests/.
 
 Environment variables used:
   AMDGPU_FAMILIES: GPU architecture string (e.g., "gfx94X-dcgpu"), logged only
   TEST_TYPE: "smoke", "quick", or "full" (default: "full"), reserved for future filtering
-  THEROCK_BIN_DIR: Path to test binaries (default: "./build/bin")
-  OUTPUT_ARTIFACTS_DIR: Path to unpacked build artifacts (default: "./build")
+  THEROCK_BIN_DIR: Path to test binaries (e.g., "./build/bin")
+  OUTPUT_ARTIFACTS_DIR: Path to unpacked build artifacts (e.g., "./build")
 """
 
 import logging
@@ -39,12 +30,6 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-# Paths — rocm-libraries is checked out alongside TheRock in CI
-ROCM_LIBRARIES_DIR = THEROCK_DIR / "rocm-libraries"
-TENSILELITE_DIR = ROCM_LIBRARIES_DIR / "projects" / "hipblaslt" / "tensilelite"
-
-# Build artifacts — derive ROCM_PATH the same way as other test scripts
-# (test_runner.py, test_rocroller.py): parent of THEROCK_BIN_DIR.
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR", "")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR", "")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES", "")
@@ -57,6 +42,13 @@ elif OUTPUT_ARTIFACTS_DIR:
     ROCM_PATH = str(Path(OUTPUT_ARTIFACTS_DIR).resolve())
 else:
     ROCM_PATH = "/opt/rocm"
+
+OUTPUT_ARTIFACTS_PATH = (
+    Path(OUTPUT_ARTIFACTS_DIR).resolve() if OUTPUT_ARTIFACTS_DIR else Path(ROCM_PATH)
+)
+
+# TensileLite Python sources are staged to share/tensilelite-tests/ by CMake install rules.
+TENSILELITE_DIR = OUTPUT_ARTIFACTS_PATH / "share" / "tensilelite-tests"
 
 # Set up env with ROCM_PATH so rocisa's cmake build can find
 # amdclang++ and HIP headers during `uv sync`.
@@ -73,10 +65,11 @@ def run_command(cmd, cwd=None, check=True):
 def main():
     if not TENSILELITE_DIR.is_dir():
         raise FileNotFoundError(
-            f"TensileLite source not found at {TENSILELITE_DIR}. "
-            "Ensure rocm-libraries is checked out at ./rocm-libraries/"
+            f"TensileLite test sources not found at {TENSILELITE_DIR}. "
+            "Ensure the blas test artifact is unpacked."
         )
 
+    logging.info(f"# TENSILELITE_DIR: {TENSILELITE_DIR}")
     logging.info(f"# ROCM_PATH: {ROCM_PATH}")
     logging.info(f"# AMDGPU_FAMILIES: {AMDGPU_FAMILIES}")
     logging.info(f"# TEST_TYPE: {TEST_TYPE}")
