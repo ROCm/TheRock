@@ -95,20 +95,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.10", "3.11", "3.12", "3.13"]
+        python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         pytorch_git_ref: ["release/2.8", "release/2.9", "release/2.10", "release/2.11", "nightly"]
         # redefine arch as inputs.x vars are not available in matrix context
         arch: ["${{ inputs.amdgpu_family }}"]
-        include:
-          - pytorch_git_ref: release/2.9
-            python_version: "3.14"
-          - pytorch_git_ref: release/2.10
-            python_version: "3.14"
-          - pytorch_git_ref: release/2.11
-            python_version: "3.14"
-          - pytorch_git_ref: nightly
-            python_version: "3.14"
         exclude:
+        # Python 3.14 support was added in PyTorch 2.9
+        - pytorch_git_ref: "release/2.8"
+          python_version: "3.14"
         # gfx1153 support is only available in pytorch 2.10+
         # see https://github.com/ROCm/TheRock/issues/2723
         - arch: "gfx1153"

@@ -25,6 +25,7 @@ import subprocess
 import sys
 import traceback
 
+from dataclasses import replace
 from datetime import datetime, timezone
 from email.utils import format_datetime
 from jinja2 import Environment, FileSystemLoader, Template
@@ -82,22 +83,20 @@ def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
     Returns: None
     """
     print_function_name()
-    # Set versioned_pkg flag to False
-    config.versioned_pkg = False
+    # Create immutable config copy with versioned_pkg=False
+    build_config = replace(config, versioned_pkg=False)
 
-    package_dir = Path(config.dest_dir) / config.pkg_type / pkg_name
+    package_dir = Path(build_config.dest_dir) / build_config.pkg_type / pkg_name
     deb_dir = package_dir / "debian"
     # Create package directory and debian directory
     os.makedirs(deb_dir, exist_ok=True)
 
     pkg_info = get_package_info(pkg_name)
-    generate_changelog_file(pkg_info, deb_dir, config)
-    generate_rules_file(pkg_info, deb_dir, config)
-    generate_control_file(pkg_info, deb_dir, config)
+    generate_changelog_file(pkg_info, deb_dir, build_config)
+    generate_rules_file(pkg_info, deb_dir, build_config)
+    generate_control_file(pkg_info, deb_dir, build_config)
 
     package_with_dpkg_build(package_dir)
-    # Set the versioned_pkg flag to True
-    config.versioned_pkg = True
 
 
 def create_versioned_deb_package(pkg_name, config: PackageConfig):
@@ -117,9 +116,12 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     Returns: None
     """
     print_function_name()
-    config.versioned_pkg = True
+    # Explicitly ensure versioned_pkg=True
+    build_config = replace(config, versioned_pkg=True)
     package_dir = (
-        Path(config.dest_dir) / config.pkg_type / f"{pkg_name}{config.rocm_version}"
+        Path(build_config.dest_dir)
+        / build_config.pkg_type
+        / f"{pkg_name}{build_config.rocm_version}"
     )
     deb_dir = package_dir / "debian"
     # Create package directory and debian directory
@@ -127,21 +129,24 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
 
     pkg_info = get_package_info(pkg_name)
     is_meta = is_meta_package(pkg_info)
-    generate_changelog_file(pkg_info, deb_dir, config)
-    generate_rules_file(pkg_info, deb_dir, config)
-    generate_control_file(pkg_info, deb_dir, config)
+    generate_changelog_file(pkg_info, deb_dir, build_config)
+    generate_rules_file(pkg_info, deb_dir, build_config)
+    generate_control_file(pkg_info, deb_dir, build_config)
     if is_postinstallscripts_available(pkg_info):
-        generate_debian_postscripts(pkg_info, deb_dir, config)
+        generate_debian_postscripts(pkg_info, deb_dir, build_config)
 
     sourcedir_list = []
     dir_list = filter_components_fromartifactory(
-        pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_kpack
+        pkg_name,
+        build_config.artifacts_dir,
+        build_config.gfx_arch,
+        build_config.enable_kpack,
     )
     sourcedir_list.extend(dir_list)
 
     print(f"sourcedir_list:\n  {sourcedir_list}")
     if not sourcedir_list and not is_meta:
-        if config.enable_kpack:
+        if build_config.enable_kpack:
             print(
                 f"ERROR: {pkg_name}: Empty sourcedir_list and not a meta package, skipping"
             )
@@ -155,15 +160,15 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         print(f"{pkg_name} is a Meta package")
     else:
         # Copy package contents first
-        dest_dir = package_dir / Path(config.install_prefix).relative_to("/")
+        dest_dir = package_dir / Path(build_config.install_prefix).relative_to("/")
         for source_path in sourcedir_list:
             copy_package_contents(source_path, dest_dir)
 
-        if config.enable_rpath:
+        if build_config.enable_rpath:
             convert_runpath_to_rpath(package_dir)
 
         # Generate install file after copying, so we can check for hidden files
-        generate_install_file(pkg_info, deb_dir, config, dest_dir)
+        generate_install_file(pkg_info, deb_dir, build_config, dest_dir)
 
     package_with_dpkg_build(package_dir)
 
@@ -508,12 +513,12 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     Returns: None
     """
     print_function_name()
-    config.versioned_pkg = False
-    package_dir = Path(config.dest_dir) / config.pkg_type / pkg_name
+    # Create immutable config copy with versioned_pkg=False
+    build_config = replace(config, versioned_pkg=False)
+    package_dir = Path(build_config.dest_dir) / build_config.pkg_type / pkg_name
     specfile = package_dir / "specfile"
-    generate_spec_file(pkg_name, specfile, config)
+    generate_spec_file(pkg_name, specfile, build_config)
     package_with_rpmbuild(specfile)
-    config.versioned_pkg = True
 
 
 def create_versioned_rpm_package(pkg_name, config: PackageConfig):
@@ -531,12 +536,15 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     Returns: None
     """
     print_function_name()
-    config.versioned_pkg = True
+    # Explicitly ensure versioned_pkg=True
+    build_config = replace(config, versioned_pkg=True)
     package_dir = (
-        Path(config.dest_dir) / config.pkg_type / f"{pkg_name}{config.rocm_version}"
+        Path(build_config.dest_dir)
+        / build_config.pkg_type
+        / f"{pkg_name}{build_config.rocm_version}"
     )
     specfile = package_dir / "specfile"
-    generate_spec_file(pkg_name, specfile, config)
+    generate_spec_file(pkg_name, specfile, build_config)
     package_with_rpmbuild(specfile)
 
 
@@ -772,25 +780,37 @@ def normalize_target_list(targets: list[str]) -> list[str]:
     return [t.strip() for t in normalized if t.strip()]
 
 
-def run(args: argparse.Namespace):
-    # Set the global variables
-    dest_dir = Path(args.dest_dir).expanduser().resolve()
+def create_package_config(args: argparse.Namespace) -> PackageConfig:
+    """Create PackageConfig from command-line arguments.
 
-    # Normalize target list to handle various input formats
+    Parses and validates input arguments to build the configuration
+    object used throughout the packaging process.
+
+    Parameters:
+        args: Parsed command-line arguments
+
+    Returns:
+        PackageConfig: Fully populated configuration object
+
+    Raises:
+        ValueError: If version string is invalid or package type is unsupported
+    """
+    dest_dir = Path(args.dest_dir).expanduser().resolve()
     normalized_targets = normalize_target_list(args.target)
 
     # Configure architecture based on multi-arch mode
     if args.enable_kpack:
-        # Multi-arch mode: use generic default, targets for gfxarch packages
+        # Multi-arch: Build generic package + arch-specific packages for each target
+        # Example: amdrocm-runtime (generic) + amdrocm-runtime-gfx94x + amdrocm-runtime-gfx1100
         default_gfx_arch = GFX_GENERIC
         gfxarch_list = normalized_targets
     else:
-        # Single-arch mode: use first target as default, no additional arch list
+        # Single-arch: Build only one package for the specified target
+        # Example: amdrocm-runtime-gfx94x (no generic, no other variants)
         default_gfx_arch = normalized_targets[0]
         gfxarch_list = []
 
-    # Split version passed to use only major and minor version for prefix folder
-    # Split by dot and take first two components
+    # Parse version for install prefix (major.minor)
     parts = args.rocm_version.split(".")
     if len(parts) < 2:
         raise ValueError(
@@ -800,26 +820,36 @@ def run(args: argparse.Namespace):
     minor = re.match(r"^\d+", parts[1])
     modified_rocm_version = f"{major.group()}.{minor.group()}"
 
+    # Append version to default install prefix
     prefix = args.install_prefix
-
-    # Append rocm version to default install prefix
-    # TBD: Do we need to append rocm_version to other prefix?
     if prefix == DEFAULT_INSTALL_PREFIX:
         prefix = f"{prefix}-{modified_rocm_version}"
 
-    # Populate package config details from user arguments
-    config = PackageConfig(
+    # Validate package type
+    pkg_type = (args.pkg_type or "").lower()
+    valid_types = {"deb", "rpm"}
+    if pkg_type not in valid_types:
+        raise ValueError(
+            f"Invalid package type: {args.pkg_type}. Must be 'deb' or 'rpm'."
+        )
+
+    return PackageConfig(
         artifacts_dir=Path(args.artifacts_dir).resolve(),
-        dest_dir=Path(dest_dir),
-        pkg_type=args.pkg_type,
+        dest_dir=dest_dir,
+        pkg_type=pkg_type,
         rocm_version=args.rocm_version,
         version_suffix=args.version_suffix,
         install_prefix=prefix,
         gfx_arch=default_gfx_arch,
         enable_rpath=args.rpath_pkg,
         enable_kpack=args.enable_kpack,
-        gfxarch_list=gfxarch_list,
+        gfxarch_list=tuple(gfxarch_list),
     )
+
+
+def run(args: argparse.Namespace):
+    # Create configuration from arguments
+    config = create_package_config(args)
 
     # Clean the packaging build directories
     clean_package_build_dir(config)
@@ -827,13 +857,6 @@ def run(args: argparse.Namespace):
     pkg_list, skipped_list = parse_input_package_list(
         args.pkg_names, config.artifacts_dir
     )
-    # Create deb/rpm packages
-    valid_types = {"deb", "rpm"}
-    pkg_type = (config.pkg_type or "").lower()
-    if pkg_type not in valid_types:
-        raise ValueError(
-            f"Invalid package type: {config.pkg_type}. Must be 'deb' or 'rpm'."
-        )
 
     current_pkg_idx = 0
     try:
@@ -841,7 +864,7 @@ def run(args: argparse.Namespace):
         failed_pkglist = []
 
         for current_pkg_idx, pkg_name in enumerate(pkg_list):
-            print(f"Create {pkg_type} package.")
+            print(f"Create {config.pkg_type} package.")
 
             pkg_info = get_package_info(pkg_name)
             # Check the package is marked as gfxarch package OR meta package
@@ -849,18 +872,19 @@ def run(args: argparse.Namespace):
                 pkg_info
             ):
                 # Use all gfxarch values
-                loop_list = gfxarch_list + [default_gfx_arch]
+                loop_list = list(config.gfxarch_list) + [config.gfx_arch]
             else:
                 # Only use default architecture
-                loop_list = [default_gfx_arch]
+                loop_list = [config.gfx_arch]
 
             pkg_built = False
             for gfxarch in loop_list:
-                config.gfx_arch = gfxarch
-                if pkg_type == "rpm":
-                    output_list = create_rpm_package(pkg_name, config)
+                # Create new config with updated gfx_arch (config is immutable)
+                build_config = replace(config, gfx_arch=gfxarch)
+                if config.pkg_type == "rpm":
+                    output_list = create_rpm_package(pkg_name, build_config)
                 else:
-                    output_list = create_deb_package(pkg_name, config)
+                    output_list = create_deb_package(pkg_name, build_config)
 
                 if output_list:
                     built_pkglist.extend(output_list)
@@ -870,7 +894,7 @@ def run(args: argparse.Namespace):
                     # Add failed architecture variant to failed list
                     variant_name = (
                         f"{pkg_name}-{gfxarch}"
-                        if gfxarch != default_gfx_arch
+                        if gfxarch != config.gfx_arch
                         else pkg_name
                     )
                     failed_pkglist.append(variant_name)
