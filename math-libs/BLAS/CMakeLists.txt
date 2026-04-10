@@ -173,13 +173,14 @@ if(NOT WIN32)
   if(TARGET rocm_smi_lib)
     list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
   endif()
-elseif(THEROCK_BUILD_TESTING)
-  # Windows client tests use ILP64 reference BLAS (see cmake/finders/FindBLAS.cmake).
+endif()
+if(THEROCK_BUILD_TESTING)
+  # Client tests link ILP64 reference BLAS (see cmake/finders/FindBLAS.cmake + BLA_SIZEOF_INTEGER=8).
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas64)
 endif()
 
 set(rocBLAS_extra_cmake_args)
-if(WIN32 AND THEROCK_BUILD_TESTING)
+if(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_extra_cmake_args -DROCBLAS_CLIENTS_REFERENCE_ILP64=ON)
 endif()
 
