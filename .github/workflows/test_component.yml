@@ -22,6 +22,9 @@ on:
         type: string
       component:
         type: string
+      release_type:
+        type: string
+        default: ""
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
@@ -115,6 +118,7 @@ jobs:
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config

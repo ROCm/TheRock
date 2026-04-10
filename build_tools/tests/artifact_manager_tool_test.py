@@ -782,6 +782,79 @@ class TestFetchFlatten(ArtifactManagerTestBase):
         self.assertEqual(ctx.exception.code, 2)
 
 
+class TestFetchDownloadCache(ArtifactManagerTestBase):
+    """Tests for --download-cache-dir behavior."""
+
+    def test_shared_cache_skips_redownload(self):
+        """Second fetch with same --download-cache-dir skips already-cached archives.
+
+        Uses a FailingBackend for the second fetch — if the cache check in
+        download_artifact() works, the backend's download method is never
+        reached, so the failing backend won't cause errors. If the cache
+        check is removed, the second fetch hits the FailingBackend and fails.
+        """
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+
+        cache_dir = Path(self.temp_dir) / "shared-cache"
+        cache_dir.mkdir()
+
+        def mock_extract(request):
+            return request.output_dir
+
+        base_argv = [
+            "fetch",
+            "--stage",
+            "downstream-stage",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+            "--flatten",
+            "--download-cache-dir",
+            str(cache_dir),
+        ]
+
+        # First fetch — downloads to cache
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            artifact_manager.main(base_argv)
+
+        first_cached = list(cache_dir.glob("*.tar.zst"))
+        self.assertGreater(len(first_cached), 0)
+
+        # Second fetch with a FailingBackend. If the cache check works,
+        # download_artifact() returns early before calling the backend,
+        # so the failing backend is never hit.
+        failing_backend = FailingBackend(fail_downloads_after=0)
+        # Give it the same listing so artifact matching works
+        failing_backend.list_artifacts = lambda name_filter=None: [
+            f.name for f in first_cached
+        ]
+
+        second_output = Path(self.temp_dir) / "output2"
+        second_output.mkdir()
+        second_argv = base_argv.copy()
+        idx = second_argv.index("--output-dir") + 1
+        second_argv[idx] = str(second_output)
+
+        with (
+            mock.patch("artifact_manager.extract_artifact", mock_extract),
+            mock.patch(
+                "artifact_manager.create_backend_from_env",
+                return_value=failing_backend,
+            ),
+        ):
+            # Should succeed — cache hits bypass the failing backend
+            artifact_manager.main(second_argv)
+
+
 class TestCopy(ArtifactManagerTestBase):
     """Tests for the copy subcommand."""
 
