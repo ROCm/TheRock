@@ -187,12 +187,11 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    # TODO(#3199): Re-enable machine once it is stable
-                    "run_tests": False,
+                    "run_tests": True,
                     "runs_on": {
                         "test": "linux-gfx1150-gpu-rocm",
                     },
-                    "fetch-gfx-targets": [],
+                    "fetch-gfx-targets": ["gfx1150"],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {

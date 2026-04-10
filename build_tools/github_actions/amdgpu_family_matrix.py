@@ -270,11 +270,9 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx1150": {
         "linux": {
-            # TODO(#3199): Re-enable machine once it is stable
-            # Label is "linux-gfx1150-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1150-gpu-rocm",
             "family": "gfx1150",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1150"],
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
