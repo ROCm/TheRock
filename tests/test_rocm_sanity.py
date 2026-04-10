@@ -126,10 +126,9 @@ class TestROCmSanity:
             cwd=str(THEROCK_BIN_DIR),
         )
 
-        # Run with /proc polling to capture kernel stack if it hangs.
-        # strace is not available in the CI container, so we poll
-        # /proc/PID/stack, /proc/PID/syscall, and /proc/PID/wchan
-        # to identify where the process blocks (TheRock#3199).
+        # Run with a 30s grace period; if it hangs, attach gdb to get
+        # userspace backtraces for all threads (TheRock#3199).
+        # The container has --cap-add SYS_PTRACE for this purpose.
         platform_executable_prefix = "./" if not is_windows() else ""
         exe = f"{platform_executable_prefix}{executable}"
         logger.info(f"++ Run [{THEROCK_BIN_DIR}]$ {exe}")
@@ -138,68 +137,66 @@ class TestROCmSanity:
             cwd=str(THEROCK_BIN_DIR),
         )
 
-        timeout = 60
-        poll_interval = 5
-        elapsed = 0
-        last_stack = None
-        while elapsed < timeout:
-            ret = proc.poll()
-            if ret is not None:
-                break
-            time.sleep(poll_interval)
-            elapsed += poll_interval
-
-            # Read /proc info for the hanging process
-            pid = proc.pid
-            for proc_file in ["stack", "syscall", "wchan", "status"]:
-                path = f"/proc/{pid}/task/{pid}/{proc_file}"
-                try:
-                    with open(path) as f:
-                        content = f.read().strip()
-                    if proc_file == "stack":
-                        if content != last_stack:
-                            logger.info(
-                                f"=== /proc/{pid}/{proc_file} (t={elapsed}s) ==="
-                            )
-                            for line in content.splitlines():
-                                logger.info(line)
-                            last_stack = content
-                        else:
-                            logger.info(
-                                f"=== /proc/{pid}/{proc_file} (t={elapsed}s) === (unchanged)"
-                            )
-                    else:
-                        logger.info(
-                            f"/proc/{pid}/{proc_file} (t={elapsed}s): {content}"
-                        )
-                except Exception as e:
-                    logger.warning(f"Cannot read /proc/{pid}/{proc_file}: {e}")
-
-            # Also dump stacks for all threads
+        hang_timeout = 30
+        try:
+            proc.wait(timeout=hang_timeout)
+        except subprocess.TimeoutExpired:
+            logger.error(f"hip_simple_check hung for {hang_timeout}s — attaching gdb")
+            # Install gdb (container runs as root, image is Ubuntu 24.04)
             try:
-                task_dir = Path(f"/proc/{pid}/task")
-                tids = sorted(task_dir.iterdir())
-                if len(tids) > 1:
-                    logger.info(
-                        f"=== Thread stacks ({len(tids)} threads, t={elapsed}s) ==="
-                    )
-                    for tid_path in tids:
-                        tid = tid_path.name
-                        if tid == str(pid):
-                            continue
-                        try:
-                            stack = (tid_path / "stack").read_text().strip()
-                            wchan = (tid_path / "wchan").read_text().strip()
-                            logger.info(f"--- TID {tid} (wchan={wchan}) ---")
-                            for line in stack.splitlines():
-                                logger.info(line)
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+                subprocess.run(
+                    ["apt-get", "install", "-y", "-qq", "gdb"],
+                    capture_output=True,
+                    timeout=60,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to install gdb: {e}")
 
-        if proc.poll() is None:
-            logger.error(f"hip_simple_check hung for {timeout}s, killing")
+            # Attach gdb and dump backtraces for all threads
+            gdb_cmd = [
+                "gdb",
+                "-batch",
+                "-ex",
+                "thread apply all bt full",
+                "-ex",
+                "info registers",
+                "-ex",
+                "detach",
+                "-p",
+                str(proc.pid),
+            ]
+            try:
+                gdb_proc = subprocess.run(
+                    gdb_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                logger.info("=== gdb backtrace output ===")
+                for line in gdb_proc.stdout.splitlines():
+                    logger.info(line)
+                if gdb_proc.stderr:
+                    logger.info("=== gdb stderr ===")
+                    for line in gdb_proc.stderr.splitlines():
+                        logger.info(line)
+            except FileNotFoundError:
+                logger.error("gdb not found, falling back to /proc")
+                # Fallback: read /proc/PID/maps for address info
+                try:
+                    maps = Path(f"/proc/{proc.pid}/maps").read_text()
+                    logger.info(f"=== /proc/{proc.pid}/maps ===")
+                    for line in maps.splitlines():
+                        if (
+                            "libhsa" in line
+                            or "libamdhip" in line
+                            or "hip_simple" in line
+                        ):
+                            logger.info(line)
+                except Exception as e:
+                    logger.warning(f"Cannot read /proc maps: {e}")
+            except Exception as e:
+                logger.error(f"gdb failed: {e}")
+
             proc.kill()
             proc.wait()
 

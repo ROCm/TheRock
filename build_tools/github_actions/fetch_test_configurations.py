@@ -58,7 +58,7 @@ test_matrix = {
         },
         # Running docker with cap-add and -v /lib/modules, by recommendation of GitHub:
         # https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
-        "container_options": "--cap-add SYS_MODULE -v /lib/modules:/lib/modules",
+        "container_options": "--cap-add SYS_MODULE --cap-add SYS_PTRACE -v /lib/modules:/lib/modules",
     },
     # hip-tests
     "hip-tests": {
