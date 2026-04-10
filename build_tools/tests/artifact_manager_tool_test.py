@@ -1063,5 +1063,92 @@ class TestCopy(ArtifactManagerTestBase):
         )
 
 
+class ParseTargetFamiliesTest(unittest.TestCase):
+    """Unit tests for artifact_manager.parse_target_families."""
+
+    def setUp(self):
+        # Import here so sys.path is already set up.
+        import artifact_manager as am
+
+        self.am = am
+
+    def _make_args(
+        self,
+        amdgpu_families: str = "",
+        amdgpu_targets: str = "",
+        generic_only: bool = False,
+        expand_family_to_targets: bool = False,
+    ):
+        import argparse
+
+        return argparse.Namespace(
+            amdgpu_families=amdgpu_families,
+            amdgpu_targets=amdgpu_targets,
+            generic_only=generic_only,
+            expand_family_to_targets=expand_family_to_targets,
+        )
+
+    def test_generic_only(self):
+        args = self._make_args(generic_only=True)
+        result = self.am.parse_target_families(args)
+        self.assertEqual(result, ["generic"])
+
+    def test_family_no_expansion(self):
+        args = self._make_args(amdgpu_families="gfx110X-all")
+        result = self.am.parse_target_families(args)
+        self.assertEqual(result, ["generic", "gfx110X-all"])
+        # No per-target entries without the flag.
+        self.assertNotIn("gfx1100", result)
+
+    def test_family_with_expansion_multi_target(self):
+        fake_map = {"gfx110X-all": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"]}
+        with mock.patch.object(
+            self.am, "_get_family_to_targets", return_value=fake_map
+        ):
+            args = self._make_args(
+                amdgpu_families="gfx110X-all", expand_family_to_targets=True
+            )
+            result = self.am.parse_target_families(args)
+        self.assertIn("generic", result)
+        self.assertIn("gfx110X-all", result)
+        for t in ["gfx1100", "gfx1101", "gfx1102", "gfx1103"]:
+            self.assertIn(t, result)
+
+    def test_family_with_expansion_single_target(self):
+        # A single-target family: the target should appear once even though
+        # it also matches its own self-family name.
+        fake_map = {"gfx942": ["gfx942"], "gfx94X-dcgpu": ["gfx942"]}
+        with mock.patch.object(
+            self.am, "_get_family_to_targets", return_value=fake_map
+        ):
+            args = self._make_args(
+                amdgpu_families="gfx94X-dcgpu", expand_family_to_targets=True
+            )
+            result = self.am.parse_target_families(args)
+        self.assertEqual(result.count("gfx942"), 1)
+
+    def test_unknown_family_skipped(self):
+        # A family not in the cmake file should not crash; just the family name
+        # stays in the list.
+        fake_map = {}
+        with mock.patch.object(
+            self.am, "_get_family_to_targets", return_value=fake_map
+        ):
+            args = self._make_args(
+                amdgpu_families="custom-family", expand_family_to_targets=True
+            )
+            result = self.am.parse_target_families(args)
+        self.assertIn("custom-family", result)
+
+    def test_explicit_targets_still_added(self):
+        args = self._make_args(
+            amdgpu_families="gfx110X-all", amdgpu_targets="gfx1100,gfx1101"
+        )
+        result = self.am.parse_target_families(args)
+        self.assertIn("gfx110X-all", result)
+        self.assertIn("gfx1100", result)
+        self.assertIn("gfx1101", result)
+
+
 if __name__ == "__main__":
     unittest.main()
