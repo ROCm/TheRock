@@ -78,6 +78,7 @@ include = [
 
   # Plugin shared libraries (MODULE targets, not installed by default)
   "lib/Bye.*",
+  "lib/CGTestPlugin.*",
   "lib/ExampleIRTransforms.*",
   "lib/PrintFunctionNames.*",
   "lib/LLVMPrintFunctionNames.*",

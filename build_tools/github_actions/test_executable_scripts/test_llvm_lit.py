@@ -124,6 +124,10 @@ def sparse_checkout_submodule() -> Path:
             "llvm/test",
             "llvm/include",
             "llvm/utils",
+            "llvm/lib/Target/X86",
+            "llvm/lib/Analysis/models",
+            "llvm/tools/opt-viewer",
+            "llvm/docs/CommandGuide",
             "clang/test",
             "clang/utils",
             "clang/include",
@@ -384,14 +388,21 @@ def main() -> int:
             else str(lit_python_path)
         )
 
-    # Set library search path so tests can find shared libraries
+    # Set library search path so tests can find shared libraries.
+    # Include rocm_sysdeps/lib for tests that copy binaries to temp dirs
+    # (e.g. lld COFF tests) where RPATH $ORIGIN resolution breaks.
     if IS_WINDOWS:
         lib_path_var = "PATH"
     else:
         lib_path_var = "LD_LIBRARY_PATH"
+    rocm_sysdeps_lib = ARTIFACTS_PATH / "lib" / "rocm_sysdeps" / "lib"
+    extra_lib_dirs = [str(LLVM_LIBS_DIR)]
+    if rocm_sysdeps_lib.is_dir():
+        extra_lib_dirs.append(str(rocm_sysdeps_lib))
     lib_path = os.environ.get(lib_path_var, "")
+    new_lib_path = path_sep.join(extra_lib_dirs)
     os.environ[lib_path_var] = (
-        f"{LLVM_LIBS_DIR}{path_sep}{lib_path}" if lib_path else str(LLVM_LIBS_DIR)
+        f"{new_lib_path}{path_sep}{lib_path}" if lib_path else new_lib_path
     )
 
     # Symlink build-tree test binaries (fuzzers, test tools) into the LLVM
@@ -408,6 +419,15 @@ def main() -> int:
                 except OSError:
                     shutil.copy2(entry, dest)
                 logging.info(f"Linked test tool: {entry.name}")
+
+    # The installed llvm-lit is a bash wrapper that sets PYTHONPATH before
+    # calling llvm-lit.real.  Some tests (e.g. update_cc_test_checks) invoke
+    # ``python <llvm-lit>`` internally which fails because Python cannot parse
+    # the bash script.  Replace the wrapper with a copy of the real script.
+    llvm_lit_wrapper = LLVM_TOOLS_DIR / "llvm-lit"
+    if not IS_WINDOWS and LLVM_LIT.exists() and llvm_lit_wrapper.exists():
+        shutil.copy2(LLVM_LIT, llvm_lit_wrapper)
+        logging.info("Replaced llvm-lit bash wrapper with Python script")
 
     # Symlink build-tree plugin shared libraries into the LLVM libs directory
     # so that %shlibdir substitution in lit tests resolves correctly.
