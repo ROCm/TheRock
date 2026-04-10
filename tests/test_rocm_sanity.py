@@ -126,24 +126,58 @@ class TestROCmSanity:
             cwd=str(THEROCK_BIN_DIR),
         )
 
-        # Dump dmesg before running to capture pre-existing GPU firmware
-        # errors that may cause all subsequent kernel launches to stall.
-        try:
-            dmesg_before = subprocess.run(
-                ["dmesg", "--level=err,warn", "-T"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            logger.info("=== dmesg (err+warn) before hip_simple_check ===")
-            for line in dmesg_before.stdout.splitlines()[-50:]:
-                logger.info(line)
-        except Exception as e:
-            logger.warning(f"dmesg failed: {e}")
+        # Dump kernel log to capture GPU firmware errors that may cause
+        # all subsequent kernel launches to stall. Try /dev/kmsg first
+        # (bypasses dmesg_restrict), then fall back to dmesg.
+        def dump_kmsg(label, last_n=50):
+            # Try /dev/kmsg (non-blocking read of kernel ring buffer)
+            try:
+                with open("/dev/kmsg", "r", errors="replace") as f:
+                    import fcntl
 
-        # Run with a 30s grace period; if it hangs, attach gdb to get
-        # userspace backtraces for all threads (TheRock#3199).
-        # The container has --cap-add SYS_PTRACE for this purpose.
+                    # Set non-blocking so we don't hang
+                    fd = f.fileno()
+                    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+                    fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+                    lines = []
+                    try:
+                        while True:
+                            line = f.readline()
+                            if not line:
+                                break
+                            lines.append(line.rstrip())
+                    except (BlockingIOError, OSError):
+                        pass
+                    if lines:
+                        logger.info(f"=== {label} (last {last_n} from /dev/kmsg) ===")
+                        for line in lines[-last_n:]:
+                            logger.info(line)
+                        return
+            except (PermissionError, OSError):
+                pass
+
+            # Fallback: dmesg command
+            try:
+                result = subprocess.run(
+                    ["dmesg", "-T"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if result.stdout.strip():
+                    logger.info(f"=== {label} (last {last_n} from dmesg) ===")
+                    for line in result.stdout.splitlines()[-last_n:]:
+                        logger.info(line)
+                else:
+                    logger.warning(f"{label}: dmesg returned empty output")
+            except Exception as e:
+                logger.warning(f"{label}: dmesg failed: {e}")
+
+        dump_kmsg("kernel log before hip_simple_check", last_n=50)
+
+        # The C++ binary has a built-in SIGALRM watchdog at 20s that
+        # dumps backtrace + /proc/self/maps + /proc/self/stack to stderr
+        # and exits with code 2. No need for external gdb/strace.
         platform_executable_prefix = "./" if not is_windows() else ""
         exe = f"{platform_executable_prefix}{executable}"
         logger.info(f"++ Run [{THEROCK_BIN_DIR}]$ {exe}")
@@ -156,77 +190,8 @@ class TestROCmSanity:
         try:
             proc.wait(timeout=hang_timeout)
         except subprocess.TimeoutExpired:
-            logger.error(f"hip_simple_check hung for {hang_timeout}s — attaching gdb")
-
-            # Dump dmesg again to see if new GPU errors appeared during hang
-            try:
-                dmesg_after = subprocess.run(
-                    ["dmesg", "-T"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                logger.info("=== dmesg (last 100 lines) after hang ===")
-                for line in dmesg_after.stdout.splitlines()[-100:]:
-                    logger.info(line)
-            except Exception as e:
-                logger.warning(f"dmesg failed: {e}")
-
-            # Install gdb (container runs as root, image is Ubuntu 24.04)
-            try:
-                subprocess.run(
-                    ["apt-get", "install", "-y", "-qq", "gdb"],
-                    capture_output=True,
-                    timeout=60,
-                )
-            except Exception as e:
-                logger.warning(f"Failed to install gdb: {e}")
-
-            # Attach gdb and dump backtraces for all threads
-            gdb_cmd = [
-                "gdb",
-                "-batch",
-                "-ex",
-                "thread apply all bt full",
-                "-ex",
-                "info registers",
-                "-ex",
-                "detach",
-                "-p",
-                str(proc.pid),
-            ]
-            try:
-                gdb_proc = subprocess.run(
-                    gdb_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-                logger.info("=== gdb backtrace output ===")
-                for line in gdb_proc.stdout.splitlines():
-                    logger.info(line)
-                if gdb_proc.stderr:
-                    logger.info("=== gdb stderr ===")
-                    for line in gdb_proc.stderr.splitlines():
-                        logger.info(line)
-            except FileNotFoundError:
-                logger.error("gdb not found, falling back to /proc")
-                # Fallback: read /proc/PID/maps for address info
-                try:
-                    maps = Path(f"/proc/{proc.pid}/maps").read_text()
-                    logger.info(f"=== /proc/{proc.pid}/maps ===")
-                    for line in maps.splitlines():
-                        if (
-                            "libhsa" in line
-                            or "libamdhip" in line
-                            or "hip_simple" in line
-                        ):
-                            logger.info(line)
-                except Exception as e:
-                    logger.warning(f"Cannot read /proc maps: {e}")
-            except Exception as e:
-                logger.error(f"gdb failed: {e}")
-
+            logger.error(f"hip_simple_check hung for {hang_timeout}s, killing")
+            dump_kmsg("kernel log after hang", last_n=100)
             proc.kill()
             proc.wait()
 
