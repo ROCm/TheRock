@@ -29,6 +29,7 @@ import platform
 import re
 import shlex
 import shutil
+import site
 import subprocess
 import sys
 from pathlib import Path
@@ -390,14 +391,16 @@ def main() -> int:
             else str(lit_python_path)
         )
 
-    # Remove the pip-installed lit package so that nested llvm-lit invocations
+    # Remove any pip-installed lit package so that nested llvm-lit invocations
     # (e.g. inside update_cc_test_checks tests) import the source tree's lit
     # from PYTHONPATH instead of an older pip version that may lack attributes
-    # such as LitConfig.update_tests.
-    run_cmd(
-        [sys.executable, "-m", "pip", "uninstall", "-y", "lit"],
-        check=False,
-    )
+    # such as LitConfig.update_tests.  We remove the directory directly
+    # because the CI venv may not have pip installed.
+    for sp in site.getsitepackages() + [site.getusersitepackages()]:
+        stale_lit = Path(sp) / "lit"
+        if stale_lit.is_dir():
+            shutil.rmtree(stale_lit, ignore_errors=True)
+            logging.info(f"Removed stale pip lit from {stale_lit}")
 
     # Set library search path so tests can find shared libraries.
     # Include rocm_sysdeps/lib for tests that copy binaries to temp dirs
@@ -473,11 +476,11 @@ def main() -> int:
     # to the builder's path (not the runner's), the child cannot load
     # libLLVM.so.  This is inherent to out-of-tree execution with dynamic
     # linking and cannot be fixed without patching RPATH on every binary.
-    rc_llvm = run_lit_tests(
-        llvm_test_dir,
-        "check-llvm",
-        extra_args=["--filter-out", "ProgramEnvTest"],
-    )
+    # Lit's --filter-out doesn't work for gtest shards (tests are discovered
+    # as numeric indices like 150/416), so we use GTEST_FILTER instead.
+    os.environ["GTEST_FILTER"] = "-ProgramEnvTest.TestExecuteEmptyEnvironment"
+    rc_llvm = run_lit_tests(llvm_test_dir, "check-llvm")
+    os.environ.pop("GTEST_FILTER", None)
 
     # The build targets AMDGPU;X86 only (CLANG_ENABLE_HLSL is off) so hlsl.h
     # is not installed.  Skip .hlsl tests to avoid ~500 false failures.
