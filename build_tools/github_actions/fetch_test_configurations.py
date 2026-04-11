@@ -305,8 +305,8 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 4,
-            "windows": 4,
+            "linux": 12,
+            "windows": 12,
         },
     },
     # RCCL tests
