@@ -391,16 +391,22 @@ def main() -> int:
             else str(lit_python_path)
         )
 
-    # Remove any pip-installed lit package so that nested llvm-lit invocations
-    # (e.g. inside update_cc_test_checks tests) import the source tree's lit
-    # from PYTHONPATH instead of an older pip version that may lack attributes
-    # such as LitConfig.update_tests.  We remove the directory directly
-    # because the CI venv may not have pip installed.
-    for sp in site.getsitepackages() + [site.getusersitepackages()]:
-        stale_lit = Path(sp) / "lit"
-        if stale_lit.is_dir():
-            shutil.rmtree(stale_lit, ignore_errors=True)
-            logging.info(f"Removed stale pip lit from {stale_lit}")
+    # Replace any pip-installed lit package with the source tree's version so
+    # that nested llvm-lit invocations (e.g. inside update_cc_test_checks
+    # tests) get a lit that has attributes like LitConfig.update_tests.
+    # The installed llvm-lit.real has hardcoded builder paths that don't exist
+    # on the runner, so nested invocations rely on site-packages to find lit.
+    src_lit = lit_python_path / "lit" if lit_python_path.exists() else None
+    if src_lit and src_lit.is_dir():
+        for sp in site.getsitepackages() + [site.getusersitepackages()]:
+            stale_lit = Path(sp) / "lit"
+            if stale_lit.is_dir():
+                shutil.rmtree(stale_lit, ignore_errors=True)
+                try:
+                    os.symlink(src_lit, stale_lit)
+                except OSError:
+                    shutil.copytree(src_lit, stale_lit)
+                logging.info(f"Replaced pip lit in {sp} with source tree version")
 
     # Set library search path so tests can find shared libraries.
     # Include rocm_sysdeps/lib for tests that copy binaries to temp dirs
