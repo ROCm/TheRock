@@ -6,9 +6,9 @@
 TensileLite Python unit test runner for TheRock CI.
 
 Runs TensileLite and rocisa Python unit tests using uv for environment
-management. The Python source tree (Tensile/, rocisa/, pyproject.toml,
-uv.lock) is bundled as a test artifact during the build via CMake
-install rules and staged into share/tensilelite-tests/.
+management. The hipblaslt cmake root and Python source tree are bundled
+as test artifacts during the build via CMake install rules and staged
+into share/hipblaslt-test-src/.
 
 Environment variables used:
   AMDGPU_FAMILIES: GPU architecture string (e.g., "gfx94X-dcgpu"), logged only
@@ -28,7 +28,6 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 # repo + dirs
 SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR", "")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR", "")
@@ -47,13 +46,18 @@ OUTPUT_ARTIFACTS_PATH = (
     Path(OUTPUT_ARTIFACTS_DIR).resolve() if OUTPUT_ARTIFACTS_DIR else Path(ROCM_PATH)
 )
 
-# TensileLite Python sources are staged to share/tensilelite-tests/ by CMake install rules.
-TENSILELITE_DIR = OUTPUT_ARTIFACTS_PATH / "share" / "tensilelite-tests"
+# hipblaslt cmake root staged as a build artifact.
+HIPBLASLT_SOURCE_DIR = OUTPUT_ARTIFACTS_PATH / "share" / "hipblaslt-test-src"
+# TensileLite Python sources are staged under the hipblaslt source tree.
+TENSILELITE_DIR = HIPBLASLT_SOURCE_DIR / "tensilelite"
 
 # Set up env with ROCM_PATH so rocisa's cmake build can find
 # amdclang++ and HIP headers during `uv sync`.
 env = os.environ.copy()
 env["ROCM_PATH"] = ROCM_PATH
+# Tell rocisa/setup.py where the staged hipblaslt cmake root is,
+# so `cmake --preset rocisa -S<source_dir>` finds CMakePresets.json.
+env["HIPBLASLT_SOURCE_DIR"] = str(HIPBLASLT_SOURCE_DIR)
 
 
 def run_command(cmd, cwd=None, check=True):

@@ -98,8 +98,9 @@ include = [
   "bin/hipblaslt_gentest.py",
   "bin/hipblaslt_gtest.data",
   "bin/hipblaslt_*.yaml",
-  # TensileLite tests
-  "share/tensilelite-tests/**",
+  # TensileLite tests (Python sources + hipblaslt cmake + origami)
+  "share/hipblaslt-test-src/**",
+  "shared/origami/**",
   # hipblaslt-perf and python modules
   "bin/hipblaslt-perf",
   "share/hipblaslt/performance/**",
