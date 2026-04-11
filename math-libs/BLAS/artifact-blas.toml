@@ -226,6 +226,9 @@ optional = true
 include = [
   "**/*.cmake"
 ]
+exclude = [
+  "bin/hipsparselt/CTest*",
+]
 [components.doc."math-libs/BLAS/hipSPARSELt/stage"]
 optional = true
 [components.test."math-libs/BLAS/hipSPARSELt/stage"]
