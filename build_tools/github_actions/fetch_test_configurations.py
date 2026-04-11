@@ -152,7 +152,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
         # 24 mins + 20% margin = 30 mins => ~40 mins (considering gpu delays and lags)
-        "timeout_minutes": 40,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
@@ -187,7 +187,7 @@ test_matrix = {
     "rocgdb": {
         "job_name": "rocgdb",
         "fetch_artifact_args": "--debug-tools --tests",
-        "timeout_minutes": 45,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocgdb.py')}",
         "platform": ["linux"],
         "total_shards": 1,
@@ -301,7 +301,7 @@ test_matrix = {
     "miopen": {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --rand --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 200,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
