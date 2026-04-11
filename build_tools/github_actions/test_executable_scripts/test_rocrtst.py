@@ -22,7 +22,7 @@ environ_vars = os.environ.copy()
 # For shard indexes, we convert to 0th index.
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
-
+exclude_filter = ""
 cwd_dir = Path(THEROCK_BIN_DIR)
 cmd = ["./rocrtst64"]
 
