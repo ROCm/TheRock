@@ -48,11 +48,16 @@ DEFAULT_LOG_DIR = REPO_ROOT / "build" / "logs" / "ccache"
 # instead of REPO_ROOT/build/logs/ccache/ (C: drive).
 CONFIG_PRESETS_MAP = {
     "local": {},
-    "github-oss-presubmit": {
+    # Dev and release use separate cache servers to avoid cache pollution.
+    # We may later split these further into presubmit (PR) vs postsubmit
+    # (post-merge) presets — presubmit serves varied code at mixed trust
+    # levels while postsubmit serves a uniform stream of approved commits,
+    # so separating them improves both cache hit rates and data integrity.
+    "github-oss-dev": {
         "secondary_storage": CACHE_SRV_DEV,
         "max_size": "5G",
     },
-    "github-oss-postsubmit": {
+    "github-oss-release": {
         "secondary_storage": CACHE_SRV_REL,
         "max_size": "5G",
     },
@@ -215,11 +220,23 @@ def main(argv: list[str]):
         "--config-preset",
         type=str,
         default="local",
-        choices=["local", "github-oss-presubmit", "github-oss-postsubmit"],
-        help="Predefined set of configurations for ccache by enviroment.",
+        choices=list(CONFIG_PRESETS_MAP.keys()),
+        help="Predefined set of configurations for ccache by environment.",
+    )
+    preset_group.add_argument(
+        "--release-type",
+        type=str,
+        choices=["", "dev", "nightly", "prerelease"],
+        help='Shorthand for --config-preset: "" and "dev" map to github-oss-dev, '
+        "others map to github-oss-release.",
     )
 
     args = p.parse_args(argv)
+    if args.release_type is not None:
+        if args.release_type in ("", "dev"):
+            args.config_preset = "github-oss-dev"
+        else:
+            args.config_preset = "github-oss-release"
     run(args)
 
 

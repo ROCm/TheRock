@@ -59,8 +59,8 @@ on:
         type: string
   # Trigger on a schedule to build nightly release candidates.
   schedule:
-    # Runs at 04:00 AM UTC, which is 8:00 PM PST (UTC-8)
-    - cron: '0 04 * * *'
+    # Runs at 02:00 AM UTC, which is 7:00 PM PST (UTC-8)
+    - cron: '0 02 * * *'
 
 permissions:
   contents: read
@@ -207,13 +207,10 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
-      # Set up ccache with a custom configuration.
       - name: Setup ccache
-        env:
-          CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
         run: |
           ./build_tools/setup_ccache.py \
-            --config-preset "github-oss-${{ env.CI_TYPE }}" \
+            --release-type "${{ env.RELEASE_TYPE }}" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CCACHE_DIR"
 

@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 # Add build_tools to path so _therock_utils is importable.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
@@ -68,6 +69,14 @@ class TestSanitizeRefForFilename(unittest.TestCase):
         )
 
 
+# Override GITHUB_EVENT_NAME so _is_current_run_pr_from_fork() in
+# workflow_outputs.py returns False. Without this, tests that call main()
+# fail when run in a pull_request CI job because the real event payload
+# has fork=true, which changes the S3 prefix used for output paths.
+# TODO: These tests are brittle because they depend on the bucket selection
+# logic deep in workflow_outputs.py. Consider mocking at the
+# WorkflowOutputRoot level instead.
+@mock.patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push"})
 class TestMain(unittest.TestCase):
     """Tests for main() end-to-end with LocalStorageBackend."""
 

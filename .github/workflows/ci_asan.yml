@@ -1,11 +1,11 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Keeping this workflow for legacy reasons, but will be removed after legacy TheRock CI is retired
+
 name: CI ASAN
 
 on:
-  schedule:
-    - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:
