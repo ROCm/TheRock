@@ -1274,6 +1274,256 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  auto make_buffer_format_low_component_word3 = [](std::uint32_t data_format,
+                                                   std::uint32_t num_format) {
+    return (4u << 0) | (5u << 3) | (6u << 6) | (7u << 9) |
+           (data_format << 12) | (num_format << 19);
+  };
+
+  const std::vector<DecodedInstruction> buffer_low_component_parity_program = {
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_X",
+                                      InstructionOperand::Vgpr(70),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Sgpr(20),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_X",
+                                      InstructionOperand::Vgpr(30),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Sgpr(20),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_XY",
+                                      InstructionOperand::Vgpr(78),
+                                      InstructionOperand::Vgpr(1),
+                                      InstructionOperand::Sgpr(24),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_XY",
+                                      InstructionOperand::Vgpr(44),
+                                      InstructionOperand::Vgpr(1),
+                                      InstructionOperand::Sgpr(24),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x28)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_X",
+                                      InstructionOperand::Vgpr(86),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(32),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_X",
+                                      InstructionOperand::Vgpr(66),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(32),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x30)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  LinearExecutionMemory buffer_low_component_parity_memory(0x400, 0);
+  WaveExecutionState buffer_low_component_parity_state{};
+  buffer_low_component_parity_state.exec_mask = 0b1011ULL;
+  buffer_low_component_parity_state.sgprs[20] = 0x100u;
+  buffer_low_component_parity_state.sgprs[21] = 0u;
+  buffer_low_component_parity_state.sgprs[22] = 0x80u;
+  buffer_low_component_parity_state.sgprs[23] =
+      make_buffer_format_low_component_word3(1u, 4u);
+  buffer_low_component_parity_state.sgprs[24] = 0x140u;
+  buffer_low_component_parity_state.sgprs[25] = 0u;
+  buffer_low_component_parity_state.sgprs[26] = 0x80u;
+  buffer_low_component_parity_state.sgprs[27] =
+      make_buffer_format_low_component_word3(10u, 4u);
+  buffer_low_component_parity_state.sgprs[32] = 0x1c0u;
+  buffer_low_component_parity_state.sgprs[33] = 0u;
+  buffer_low_component_parity_state.sgprs[34] = 0x80u;
+  buffer_low_component_parity_state.sgprs[35] =
+      make_buffer_format_low_component_word3(5u, 4u);
+  buffer_low_component_parity_state.vgprs[0][0] = 0u;
+  buffer_low_component_parity_state.vgprs[0][1] = 4u;
+  buffer_low_component_parity_state.vgprs[0][2] = 0x0cu;
+  buffer_low_component_parity_state.vgprs[0][3] = 8u;
+  buffer_low_component_parity_state.vgprs[1][0] = 0u;
+  buffer_low_component_parity_state.vgprs[1][1] = 4u;
+  buffer_low_component_parity_state.vgprs[1][2] = 0x0cu;
+  buffer_low_component_parity_state.vgprs[1][3] = 8u;
+  buffer_low_component_parity_state.vgprs[2][0] = 0u;
+  buffer_low_component_parity_state.vgprs[2][1] = 4u;
+  buffer_low_component_parity_state.vgprs[2][2] = 0x0cu;
+  buffer_low_component_parity_state.vgprs[2][3] = 8u;
+  buffer_low_component_parity_state.vgprs[3][0] = 0u;
+  buffer_low_component_parity_state.vgprs[3][1] = 4u;
+  buffer_low_component_parity_state.vgprs[3][2] = 0x0cu;
+  buffer_low_component_parity_state.vgprs[3][3] = 8u;
+  buffer_low_component_parity_state.vgprs[30][0] = 0x55u;
+  buffer_low_component_parity_state.vgprs[30][1] = 0x66u;
+  buffer_low_component_parity_state.vgprs[30][2] = 0xdeadbeefu;
+  buffer_low_component_parity_state.vgprs[30][3] = 0x77u;
+  buffer_low_component_parity_state.vgprs[44][0] = 0x09u;
+  buffer_low_component_parity_state.vgprs[44][1] = 0x19u;
+  buffer_low_component_parity_state.vgprs[44][2] = 0xdeadbeefu;
+  buffer_low_component_parity_state.vgprs[44][3] = 0x29u;
+  buffer_low_component_parity_state.vgprs[45][0] = 0x0au;
+  buffer_low_component_parity_state.vgprs[45][1] = 0x1au;
+  buffer_low_component_parity_state.vgprs[45][2] = 0xdeadbeefu;
+  buffer_low_component_parity_state.vgprs[45][3] = 0x2au;
+  buffer_low_component_parity_state.vgprs[66][0] = 0x00001234u;
+  buffer_low_component_parity_state.vgprs[66][1] = 0x00005678u;
+  buffer_low_component_parity_state.vgprs[66][2] = 0xdeadbeefu;
+  buffer_low_component_parity_state.vgprs[66][3] = 0x00009abcu;
+  buffer_low_component_parity_state.vgprs[68][0] = 0x01020304u;
+  buffer_low_component_parity_state.vgprs[68][1] = 0x11121314u;
+  buffer_low_component_parity_state.vgprs[68][2] = 0x21222324u;
+  buffer_low_component_parity_state.vgprs[68][3] = 0x31323334u;
+  buffer_low_component_parity_state.vgprs[70][2] = 0xdeadbeefu;
+  buffer_low_component_parity_state.vgprs[78][2] = 0xdeadbeefu;
+  buffer_low_component_parity_state.vgprs[79][2] = 0xdeadbeefu;
+  buffer_low_component_parity_state.vgprs[86][2] = 0xdeadbeefu;
+  if (!Expect(WriteU8(&buffer_low_component_parity_memory, 0x100u, 0x7au),
+              "expected buffer low-component x seed write") ||
+      !Expect(WriteU8(&buffer_low_component_parity_memory, 0x104u, 0x6bu),
+              "expected buffer low-component x seed write") ||
+      !Expect(WriteU8(&buffer_low_component_parity_memory, 0x108u, 0x5cu),
+              "expected buffer low-component x seed write") ||
+      !Expect(WriteU8(&buffer_low_component_parity_memory, 0x140u, 0x01u),
+              "expected buffer low-component xy seed write") ||
+      !Expect(WriteU8(&buffer_low_component_parity_memory, 0x141u, 0x02u),
+              "expected buffer low-component xy seed write") ||
+      !Expect(WriteU8(&buffer_low_component_parity_memory, 0x144u, 0x11u),
+              "expected buffer low-component xy seed write") ||
+      !Expect(WriteU8(&buffer_low_component_parity_memory, 0x145u, 0x12u),
+              "expected buffer low-component xy seed write") ||
+      !Expect(WriteU8(&buffer_low_component_parity_memory, 0x148u, 0x21u),
+              "expected buffer low-component xy seed write") ||
+      !Expect(WriteU8(&buffer_low_component_parity_memory, 0x149u, 0x22u),
+              "expected buffer low-component xy seed write") ||
+      !Expect(WriteU16(&buffer_low_component_parity_memory, 0x1c0u, 0x1234u),
+              "expected buffer low-component d16 x seed write") ||
+      !Expect(WriteU16(&buffer_low_component_parity_memory, 0x1c4u, 0x5678u),
+              "expected buffer low-component d16 x seed write") ||
+      !Expect(WriteU16(&buffer_low_component_parity_memory, 0x1c8u, 0x9abcu),
+              "expected buffer low-component d16 x seed write")) {
+    return 1;
+  }
+
+  std::string buffer_low_component_parity_error_message;
+  std::vector<CompiledInstruction> compiled_buffer_low_component_parity_program;
+  std::uint8_t buffer_low_component_byte_readback = 0;
+  std::uint16_t buffer_low_component_short_readback = 0;
+  if (!Expect(interpreter.CompileProgram(buffer_low_component_parity_program,
+                                         &compiled_buffer_low_component_parity_program,
+                                         &buffer_low_component_parity_error_message),
+              buffer_low_component_parity_error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_buffer_low_component_parity_program,
+                                         &buffer_low_component_parity_state,
+                                         &buffer_low_component_parity_memory,
+                                         &buffer_low_component_parity_error_message),
+              buffer_low_component_parity_error_message.c_str()) ||
+      !Expect(buffer_low_component_parity_state.halted,
+              "expected buffer low-component parity program to halt") ||
+      !Expect(buffer_low_component_parity_state.exec_mask == 0b1011ULL,
+              "expected buffer low-component parity to preserve exec") ||
+      !Expect(buffer_low_component_parity_state.vgprs[70][0] == 0x7au &&
+                  buffer_low_component_parity_state.vgprs[70][1] == 0x6bu &&
+                  buffer_low_component_parity_state.vgprs[70][3] == 0x5cu,
+              "expected buffer low-component x load result") ||
+      !Expect(buffer_low_component_parity_state.vgprs[78][0] == 0x01u &&
+                  buffer_low_component_parity_state.vgprs[78][1] == 0x11u &&
+                  buffer_low_component_parity_state.vgprs[78][3] == 0x21u,
+              "expected buffer low-component xy low load result") ||
+      !Expect(buffer_low_component_parity_state.vgprs[79][0] == 0x02u &&
+                  buffer_low_component_parity_state.vgprs[79][1] == 0x12u &&
+                  buffer_low_component_parity_state.vgprs[79][3] == 0x22u,
+              "expected buffer low-component xy high load result") ||
+      !Expect(buffer_low_component_parity_state.vgprs[86][0] == 0x00001234u &&
+                  buffer_low_component_parity_state.vgprs[86][1] == 0x00005678u &&
+                  buffer_low_component_parity_state.vgprs[86][3] == 0x00009abcu,
+              "expected buffer low-component d16 x load result") ||
+      !Expect(buffer_low_component_parity_state.vgprs[70][2] == 0xdeadbeefu,
+              "expected buffer low-component x inactive lane preservation") ||
+      !Expect(buffer_low_component_parity_state.vgprs[78][2] == 0xdeadbeefu,
+              "expected buffer low-component xy low inactive lane preservation") ||
+      !Expect(buffer_low_component_parity_state.vgprs[79][2] == 0xdeadbeefu,
+              "expected buffer low-component xy high inactive lane preservation") ||
+      !Expect(buffer_low_component_parity_state.vgprs[86][2] == 0xdeadbeefu,
+              "expected buffer low-component d16 x inactive lane preservation") ||
+      !Expect(buffer_low_component_parity_memory.LoadU8(0x120u,
+                                                        &buffer_low_component_byte_readback),
+              "expected buffer low-component x store readback") ||
+      !Expect(buffer_low_component_byte_readback == 0x55u,
+              "expected buffer low-component x store result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU8(0x124u,
+                                                        &buffer_low_component_byte_readback),
+              "expected buffer low-component x store readback") ||
+      !Expect(buffer_low_component_byte_readback == 0x66u,
+              "expected buffer low-component x store result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU8(0x128u,
+                                                        &buffer_low_component_byte_readback),
+              "expected buffer low-component x store readback") ||
+      !Expect(buffer_low_component_byte_readback == 0x77u,
+              "expected buffer low-component x store result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU8(0x168u,
+                                                        &buffer_low_component_byte_readback),
+              "expected buffer low-component xy store lane 0 low read") ||
+      !Expect(buffer_low_component_byte_readback == 0x09u,
+              "expected buffer low-component xy store lane 0 low result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU8(0x169u,
+                                                        &buffer_low_component_byte_readback),
+              "expected buffer low-component xy store lane 0 high read") ||
+      !Expect(buffer_low_component_byte_readback == 0x0au,
+              "expected buffer low-component xy store lane 0 high result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU8(0x16cu,
+                                                        &buffer_low_component_byte_readback),
+              "expected buffer low-component xy store lane 1 low read") ||
+      !Expect(buffer_low_component_byte_readback == 0x19u,
+              "expected buffer low-component xy store lane 1 low result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU8(0x16du,
+                                                        &buffer_low_component_byte_readback),
+              "expected buffer low-component xy store lane 1 high read") ||
+      !Expect(buffer_low_component_byte_readback == 0x1au,
+              "expected buffer low-component xy store lane 1 high result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU8(0x170u,
+                                                        &buffer_low_component_byte_readback),
+              "expected buffer low-component xy store lane 3 low read") ||
+      !Expect(buffer_low_component_byte_readback == 0x29u,
+              "expected buffer low-component xy store lane 3 low result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU8(0x171u,
+                                                        &buffer_low_component_byte_readback),
+              "expected buffer low-component xy store lane 3 high read") ||
+      !Expect(buffer_low_component_byte_readback == 0x2au,
+              "expected buffer low-component xy store lane 3 high result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU16(0x1f0u,
+                                                         &buffer_low_component_short_readback),
+              "expected buffer low-component d16 x store lane 0 read") ||
+      !Expect(buffer_low_component_short_readback == 0x1234u,
+              "expected buffer low-component d16 x store lane 0 result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU16(0x1f4u,
+                                                         &buffer_low_component_short_readback),
+              "expected buffer low-component d16 x store lane 1 read") ||
+      !Expect(buffer_low_component_short_readback == 0x5678u,
+              "expected buffer low-component d16 x store lane 1 result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU16(0x1f8u,
+                                                         &buffer_low_component_short_readback),
+              "expected buffer low-component d16 x store lane 3 read") ||
+      !Expect(buffer_low_component_short_readback == 0x9abcu,
+              "expected buffer low-component d16 x store lane 3 result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU8(0x12cu,
+                                                        &buffer_low_component_byte_readback),
+              "expected buffer low-component inactive x store read") ||
+      !Expect(buffer_low_component_byte_readback == 0u,
+              "expected buffer low-component inactive x store result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU16(0x174u,
+                                                         &buffer_low_component_short_readback),
+              "expected buffer low-component inactive xy store read") ||
+      !Expect(buffer_low_component_short_readback == 0u,
+              "expected buffer low-component inactive xy store result") ||
+      !Expect(buffer_low_component_parity_memory.LoadU16(0x1fcu,
+                                                         &buffer_low_component_short_readback),
+              "expected buffer low-component inactive d16 x store read") ||
+      !Expect(buffer_low_component_short_readback == 0u,
+              "expected buffer low-component inactive d16 x store result")) {
+    return 1;
+  }
+
   const std::size_t total_iterations = kWarmupIterations + kTimedIterations;
   std::uint32_t atomic_lane0 = 0;
   std::uint32_t atomic_lane63 = 0;
