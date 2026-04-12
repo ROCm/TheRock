@@ -45,54 +45,47 @@ The worker binary is `build/hip-worker`.
 
 ### Client proxy DLL (Windows)
 
-**Important:** All commands must run from a **VS x64 Developer Command Prompt**
-(or after sourcing `vcvars64.bat`) so MSVC is on the PATH.
+The proxy can be built with GCC (Strawberry Perl, no elevation needed) or
+clang-cl (from the ROCm SDK, may require elevated permissions after a fresh
+SDK install).
 
 ```cmd
 cd rocm-systems\projects\hip-remote-client
 
-:: Configure with Ninja, proxy mode, and ROCm SDK headers
-:: ROCM_PATH enables the real hipDeviceProp_t struct from the SDK.
-:: Get it via: rocm-sdk path --root
+:: Configure with Ninja, proxy mode, and ROCm SDK headers.
+:: GCC from Strawberry Perl works out of the box:
 cmake -B build -G Ninja -DHIP_REMOTE_PROXY_MODE=ON ^
-    -DROCM_PATH=path\to\venv\Lib\site-packages\_rocm_sdk_devel .
+    -DROCM_PATH=path\to\venv\Lib\site-packages\_rocm_sdk_devel ^
+    -DCMAKE_C_COMPILER=C:/Strawberry/c/bin/gcc.exe ^
+    -DCMAKE_BUILD_TYPE=Release .
 
 :: Build the proxy DLL
-ninja -C build amdhip64
+cmake --build build
 
-:: Build the hipRTC proxy DLL (separate step)
-cd build
-cl /LD /Fe:hiprtc0702.dll /I..\include ..\src\hiprtc_proxy.c
+:: Copy with the non-versioned name that TRITON_LIBHIP_PATH expects
+copy build\amdhip64_7.dll build\amdhip64.dll
 ```
 
 If `ROCM_PATH` is omitted, the build uses a fallback struct that covers the
 most common fields. Setting it is recommended for full Triton compatibility.
 
-After this you will have two DLLs in the `build/` directory:
-
-- `amdhip64_7.dll` -- the HIP proxy
-- `hiprtc0702.dll` -- the hipRTC proxy
-
 ### Worker (Windows)
 
-The worker can also run on Windows for local GPU access. All commands must
-run from a **VS x64 Developer Command Prompt** with the ROCm SDK clang-cl
-in PATH.
+The worker can also run on Windows for local GPU access. GCC works here too:
 
-```powershell
-$ROCM_ROOT = (rocm-sdk path --root)
-$env:PATH = "$ROCM_ROOT\lib\llvm\bin;$env:PATH"
-
+```cmd
 cd rocm-systems\projects\hip-remote-worker
 
-# Generate import library from the HIP DLL
-gendef "$ROCM_ROOT\..\\_rocm_sdk_core\bin\amdhip64_7.dll"
-llvm-dlltool -m i386:x86-64 -d amdhip64_7.def -l amdhip64_7.lib
+:: Generate import library from the SDK HIP DLL
+gendef path\to\venv\Lib\site-packages\_rocm_sdk_core\bin\amdhip64_7.dll
+mkdir build
+dlltool -m i386:x86-64 -d amdhip64_7.def -l build\amdhip64_7.lib
 
-cmake -B build -G Ninja -DCMAKE_C_COMPILER=clang-cl ^
-    -DCMAKE_CXX_COMPILER=clang-cl ^
-    -DCMAKE_EXE_LINKER_FLAGS=/MANIFEST:NO ^
-    -DROCM_PATH=%ROCM_ROOT% .
+cmake -B build -G Ninja ^
+    -DCMAKE_C_COMPILER=C:/Strawberry/c/bin/gcc.exe ^
+    -DCMAKE_CXX_COMPILER=C:/Strawberry/c/bin/g++.exe ^
+    -DROCM_PATH=path\to\venv\Lib\site-packages\_rocm_sdk_devel ^
+    -DCMAKE_BUILD_TYPE=Release .
 
 cmake --build build
 ```
@@ -273,6 +266,12 @@ stderr is captured (`> /tmp/hip-worker.log 2>&1`).
 
 **`hipErrorNotInitialized`**: The client failed to connect to the worker.
 Check `TF_WORKER_HOST` and network connectivity.
+
+**Proxy not loading after PyTorch wheel reinstall**: Reinstalling PyTorch
+wheels overwrites `_rocm_init.py`, removing the `_setup_hip_remote()` function
+that loads the proxy DLL. Regenerate it from
+`external-builds/pytorch/build_prod_wheels.py` (the `get_rocm_init_contents`
+function). Update the `check_version` string to match the installed SDK version.
 
 **`WinError 127 - procedure not found`**: The proxy DLL is missing a symbol
 that an SDK library needs. Ensure `hip_api_stubs_gen.c` is compiled into the
