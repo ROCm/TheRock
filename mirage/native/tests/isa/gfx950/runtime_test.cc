@@ -1218,6 +1218,62 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  const std::vector<DecodedInstruction> buffer_d16_hi_parity_program = {
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_HI_X",
+                                      InstructionOperand::Vgpr(20),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_HI_X",
+                                      InstructionOperand::Vgpr(40),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  LinearExecutionMemory buffer_d16_hi_parity_memory(0x400, 0);
+  WaveExecutionState buffer_d16_hi_parity_state{};
+  buffer_d16_hi_parity_state.exec_mask = 1u;
+  buffer_d16_hi_parity_state.sgprs[8] = 0x100u;
+  buffer_d16_hi_parity_state.sgprs[9] = 0u;
+  buffer_d16_hi_parity_state.sgprs[10] = 0x80u;
+  buffer_d16_hi_parity_state.sgprs[11] =
+      make_buffer_format_descriptor_word3(2u, 4u);
+  buffer_d16_hi_parity_state.vgprs[0][0] = 0u;
+  buffer_d16_hi_parity_state.vgprs[40][0] = 0x55660000u;
+  if (!Expect(WriteU16(&buffer_d16_hi_parity_memory, 0x100u, 0xabcdu),
+              "expected buffer d16 hi parity seed write")) {
+    return 1;
+  }
+
+  std::string buffer_d16_hi_parity_error_message;
+  std::vector<CompiledInstruction> compiled_buffer_d16_hi_parity_program;
+  std::uint16_t buffer_d16_hi_parity_readback = 0;
+  if (!Expect(interpreter.CompileProgram(buffer_d16_hi_parity_program,
+                                         &compiled_buffer_d16_hi_parity_program,
+                                         &buffer_d16_hi_parity_error_message),
+              buffer_d16_hi_parity_error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_buffer_d16_hi_parity_program,
+                                         &buffer_d16_hi_parity_state,
+                                         &buffer_d16_hi_parity_memory,
+                                         &buffer_d16_hi_parity_error_message),
+              buffer_d16_hi_parity_error_message.c_str()) ||
+      !Expect(buffer_d16_hi_parity_state.halted,
+              "expected buffer d16 hi parity program to halt") ||
+      !Expect(buffer_d16_hi_parity_state.vgprs[20][0] == 0xabcd0000u,
+              "expected buffer d16 hi parity load result") ||
+      !Expect(buffer_d16_hi_parity_state.vgprs[40][0] == 0x55660000u,
+              "expected buffer d16 hi parity source preservation") ||
+      !Expect(buffer_d16_hi_parity_memory.LoadU16(0x120u,
+                                                  &buffer_d16_hi_parity_readback),
+              "expected buffer d16 hi parity store readback") ||
+      !Expect(buffer_d16_hi_parity_readback == 0x5566u,
+              "expected buffer d16 hi parity store result")) {
+    return 1;
+  }
+
   const std::size_t total_iterations = kWarmupIterations + kTimedIterations;
   std::uint32_t atomic_lane0 = 0;
   std::uint32_t atomic_lane63 = 0;
