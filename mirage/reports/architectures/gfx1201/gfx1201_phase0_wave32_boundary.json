@@ -798,6 +798,19 @@
     "last_instruction_name": "",
     "safe_under_current_request": false
   },
+  "next_vds_50_slice_window_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup": {
+    "start_opcode": 1564,
+    "end_opcode": 1613,
+    "opcode_span_width": 50,
+    "instruction_count": 0,
+    "opcode_hole_count": 50,
+    "bucket_count": 0,
+    "bucket_names": [],
+    "instruction_names": [],
+    "first_instruction_name": "",
+    "last_instruction_name": "",
+    "safe_under_current_request": false
+  },
   "remaining_vds_instruction_statuses": [
     {
       "instruction_name": "DS_APPEND",
@@ -1381,6 +1394,7 @@
     "The twenty-first empty layer is opcode 1114..1163 and remains empty, the twenty-second empty layer is opcode 1164..1213 and remains empty, and the next 50-slice frontier window is opcode 1214..1263 and remains empty, so the current continuation remains metadata-only.",
     "The twenty-third empty layer is opcode 1214..1263 and remains empty, the twenty-fourth empty layer is opcode 1264..1313 and remains empty, the twenty-fifth empty layer is opcode 1314..1363 and remains empty, the twenty-sixth empty layer is opcode 1364..1413 and remains empty, and the next 50-slice frontier window is opcode 1414..1463 and remains empty, so the current continuation remains metadata-only.",
     "The twenty-seventh empty layer is opcode 1414..1463 and remains empty, and the next 50-slice frontier window is opcode 1464..1513 and remains empty, so the current continuation remains metadata-only.",
-    "The twenty-eighth empty layer is opcode 1464..1513 and remains empty, and the twenty-ninth empty layer is opcode 1514..1563 and remains empty, so the current continuation remains metadata-only."
+    "The twenty-eighth empty layer is opcode 1464..1513 and remains empty, and the twenty-ninth empty layer is opcode 1514..1563 and remains empty, so the current continuation remains metadata-only.",
+    "The thirtieth empty layer is opcode 1564..1613 and remains empty, so the current continuation remains metadata-only."
   ]
 }
