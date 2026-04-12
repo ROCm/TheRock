@@ -1524,6 +1524,533 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  {
+  LinearExecutionMemory buffer_format_high_component_memory(0x400, 0);
+  if (!Expect(WriteU8(&buffer_format_high_component_memory, 0x140u, 0x01u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x141u, 0x02u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x142u, 0x03u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x143u, 0x04u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x144u, 0x11u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x145u, 0x12u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x146u, 0x13u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x147u, 0x14u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x148u, 0x21u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x149u, 0x22u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x14au, 0x23u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_high_component_memory, 0x14bu, 0x24u),
+              "expected buffer format high-component xyzw seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x180u,
+                                                          0x3fc00000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x184u,
+                                                          0xc0000000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x188u,
+                                                          0x3e800000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x18cu,
+                                                          0x40200000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x190u,
+                                                          0xbf800000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x194u,
+                                                          0x40400000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x1b0u,
+                                                          0x40a00000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x1b4u,
+                                                          0xbf000000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(buffer_format_high_component_memory.WriteU32(0x1b8u,
+                                                          0x41000000u),
+              "expected buffer format high-component xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x1c0u, 0x0011u),
+              "expected buffer format high-component d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x1c2u, 0x0022u),
+              "expected buffer format high-component d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x1c4u, 0x0055u),
+              "expected buffer format high-component d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x1c6u, 0x0066u),
+              "expected buffer format high-component d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x1c8u, 0x00aau),
+              "expected buffer format high-component d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x1cau, 0x00bbu),
+              "expected buffer format high-component d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x200u, 0x3c00u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x202u, 0x4000u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x204u, 0xc000u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x208u, 0x3400u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x20au, 0x3800u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x20cu, 0x3c00u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x210u, 0x4200u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x212u, 0x4400u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x214u, 0x4600u),
+              "expected buffer format high-component d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x280u, 0x3800u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x282u, 0x3c00u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x284u, 0x4000u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x286u, 0xc000u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x288u, 0x3400u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x28au, 0x3800u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x28cu, 0x3c00u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x28eu, 0x4000u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x290u, 0x4200u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x292u, 0x4400u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x294u, 0x4600u),
+              "expected buffer format high-component d16 xyzw seed write") ||
+      !Expect(WriteU16(&buffer_format_high_component_memory, 0x296u, 0x4800u),
+              "expected buffer format high-component d16 xyzw seed write")) {
+    return 1;
+  }
+
+  WaveExecutionState buffer_format_high_component_state{};
+  buffer_format_high_component_state.exec_mask = 0b1011ULL;
+  buffer_format_high_component_state.sgprs[24] = 0x140u;
+  buffer_format_high_component_state.sgprs[25] = 0u;
+  buffer_format_high_component_state.sgprs[26] = 0x80u;
+  buffer_format_high_component_state.sgprs[27] =
+      make_buffer_format_descriptor_word3(10u, 4u);
+  buffer_format_high_component_state.sgprs[28] = 0x180u;
+  buffer_format_high_component_state.sgprs[29] = 0u;
+  buffer_format_high_component_state.sgprs[30] = 0x80u;
+  buffer_format_high_component_state.sgprs[31] =
+      make_buffer_format_descriptor_word3(13u, 7u);
+  buffer_format_high_component_state.sgprs[32] = 0x1c0u;
+  buffer_format_high_component_state.sgprs[33] = 0u;
+  buffer_format_high_component_state.sgprs[34] = 0x80u;
+  buffer_format_high_component_state.sgprs[35] =
+      make_buffer_format_descriptor_word3(5u, 4u);
+  buffer_format_high_component_state.sgprs[36] = 0x200u;
+  buffer_format_high_component_state.sgprs[37] = 0u;
+  buffer_format_high_component_state.sgprs[38] = 0x80u;
+  buffer_format_high_component_state.sgprs[39] =
+      make_buffer_format_descriptor_word3(12u, 7u);
+  buffer_format_high_component_state.sgprs[44] = 0x280u;
+  buffer_format_high_component_state.sgprs[45] = 0u;
+  buffer_format_high_component_state.sgprs[46] = 0x80u;
+  buffer_format_high_component_state.sgprs[47] =
+      make_buffer_format_descriptor_word3(12u, 7u);
+  buffer_format_high_component_state.vgprs[0][0] = 0u;
+  buffer_format_high_component_state.vgprs[0][1] = 4u;
+  buffer_format_high_component_state.vgprs[0][2] = 0x0cu;
+  buffer_format_high_component_state.vgprs[0][3] = 8u;
+  buffer_format_high_component_state.vgprs[1][0] = 0u;
+  buffer_format_high_component_state.vgprs[1][1] = 0x0cu;
+  buffer_format_high_component_state.vgprs[1][2] = 0x24u;
+  buffer_format_high_component_state.vgprs[1][3] = 0x30u;
+  buffer_format_high_component_state.vgprs[2][0] = 0u;
+  buffer_format_high_component_state.vgprs[2][1] = 4u;
+  buffer_format_high_component_state.vgprs[2][2] = 0x0cu;
+  buffer_format_high_component_state.vgprs[2][3] = 8u;
+  buffer_format_high_component_state.vgprs[3][0] = 0u;
+  buffer_format_high_component_state.vgprs[3][1] = 8u;
+  buffer_format_high_component_state.vgprs[3][2] = 0x18u;
+  buffer_format_high_component_state.vgprs[3][3] = 0x10u;
+  buffer_format_high_component_state.vgprs[4][0] = 0u;
+  buffer_format_high_component_state.vgprs[4][1] = 8u;
+  buffer_format_high_component_state.vgprs[4][2] = 0x18u;
+  buffer_format_high_component_state.vgprs[4][3] = 0x10u;
+  buffer_format_high_component_state.vgprs[40][0] = 0x05u;
+  buffer_format_high_component_state.vgprs[40][1] = 0x15u;
+  buffer_format_high_component_state.vgprs[40][3] = 0x25u;
+  buffer_format_high_component_state.vgprs[41][0] = 0x06u;
+  buffer_format_high_component_state.vgprs[41][1] = 0x16u;
+  buffer_format_high_component_state.vgprs[41][3] = 0x26u;
+  buffer_format_high_component_state.vgprs[42][0] = 0x07u;
+  buffer_format_high_component_state.vgprs[42][1] = 0x17u;
+  buffer_format_high_component_state.vgprs[42][3] = 0x27u;
+  buffer_format_high_component_state.vgprs[43][0] = 0x08u;
+  buffer_format_high_component_state.vgprs[43][1] = 0x18u;
+  buffer_format_high_component_state.vgprs[43][3] = 0x28u;
+  buffer_format_high_component_state.vgprs[50][0] = 0x40200000u;
+  buffer_format_high_component_state.vgprs[50][1] = 0x3f800000u;
+  buffer_format_high_component_state.vgprs[50][3] = 0x40c00000u;
+  buffer_format_high_component_state.vgprs[51][0] = 0xbf800000u;
+  buffer_format_high_component_state.vgprs[51][1] = 0xc0000000u;
+  buffer_format_high_component_state.vgprs[51][3] = 0xbf000000u;
+  buffer_format_high_component_state.vgprs[52][0] = 0x40800000u;
+  buffer_format_high_component_state.vgprs[52][1] = 0x40400000u;
+  buffer_format_high_component_state.vgprs[52][3] = 0x41000000u;
+  buffer_format_high_component_state.vgprs[60][0] = 0x00220011u;
+  buffer_format_high_component_state.vgprs[60][1] = 0x00660055u;
+  buffer_format_high_component_state.vgprs[60][3] = 0x00bb00aau;
+  buffer_format_high_component_state.vgprs[61][0] = 0x40003c00u;
+  buffer_format_high_component_state.vgprs[61][1] = 0x38003400u;
+  buffer_format_high_component_state.vgprs[61][3] = 0x44004200u;
+  buffer_format_high_component_state.vgprs[62][0] = 0x0000c000u;
+  buffer_format_high_component_state.vgprs[62][1] = 0x00003c00u;
+  buffer_format_high_component_state.vgprs[62][3] = 0x00004600u;
+  buffer_format_high_component_state.vgprs[64][0] = 0x38003400u;
+  buffer_format_high_component_state.vgprs[64][1] = 0x3c003800u;
+  buffer_format_high_component_state.vgprs[64][3] = 0x44004200u;
+  buffer_format_high_component_state.vgprs[65][0] = 0x40003c00u;
+  buffer_format_high_component_state.vgprs[65][1] = 0x44004000u;
+  buffer_format_high_component_state.vgprs[65][3] = 0x48004600u;
+  buffer_format_high_component_state.vgprs[68][0] = 0x01020304u;
+  buffer_format_high_component_state.vgprs[68][1] = 0x11121314u;
+  buffer_format_high_component_state.vgprs[68][2] = 0x21222324u;
+  buffer_format_high_component_state.vgprs[68][3] = 0x31323334u;
+  buffer_format_high_component_state.vgprs[71][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[72][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[73][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[74][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[75][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[76][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[77][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[80][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[81][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[82][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[84][2] = 0xdeadbeefu;
+  buffer_format_high_component_state.vgprs[85][2] = 0xdeadbeefu;
+
+  const std::vector<DecodedInstruction> buffer_format_high_component_program = {
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_XYZW",
+                                      InstructionOperand::Vgpr(71),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Sgpr(24),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_XYZW",
+                                      InstructionOperand::Vgpr(40),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Sgpr(24),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_XYZ",
+                                      InstructionOperand::Vgpr(75),
+                                      InstructionOperand::Vgpr(1),
+                                      InstructionOperand::Sgpr(28),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_XYZ",
+                                      InstructionOperand::Vgpr(50),
+                                      InstructionOperand::Vgpr(1),
+                                      InstructionOperand::Sgpr(28),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_XY",
+                                      InstructionOperand::Vgpr(80),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(32),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_XY",
+                                      InstructionOperand::Vgpr(60),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(32),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_XYZ",
+                                      InstructionOperand::Vgpr(81),
+                                      InstructionOperand::Vgpr(3),
+                                      InstructionOperand::Sgpr(36),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_XYZ",
+                                      InstructionOperand::Vgpr(61),
+                                      InstructionOperand::Vgpr(3),
+                                      InstructionOperand::Sgpr(36),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_XYZW",
+                                      InstructionOperand::Vgpr(84),
+                                      InstructionOperand::Vgpr(4),
+                                      InstructionOperand::Sgpr(44),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_XYZW",
+                                      InstructionOperand::Vgpr(64),
+                                      InstructionOperand::Vgpr(4),
+                                      InstructionOperand::Sgpr(44),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  std::vector<CompiledInstruction> compiled_buffer_format_high_component_program;
+  std::string buffer_format_high_component_error_message;
+  if (!Expect(interpreter.CompileProgram(buffer_format_high_component_program,
+                                         &compiled_buffer_format_high_component_program,
+                                         &buffer_format_high_component_error_message),
+              buffer_format_high_component_error_message.c_str())) {
+    return 1;
+  }
+  const LinearExecutionMemory initial_buffer_format_high_component_memory =
+      buffer_format_high_component_memory;
+  const WaveExecutionState initial_buffer_format_high_component_state =
+      buffer_format_high_component_state;
+  const auto validate_buffer_format_high_component =
+      [&](const WaveExecutionState& state,
+          const LinearExecutionMemory& memory,
+          const char* mode) -> bool {
+    static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+    const auto expect_lane_values =
+        [&](std::uint16_t reg, const auto& expected, const char* label) {
+          for (std::size_t index = 0; index < kObservedLanes.size(); ++index) {
+            if (!Expect(state.vgprs[reg][kObservedLanes[index]] == expected[index],
+                        label)) {
+              return false;
+            }
+          }
+          return true;
+        };
+    const auto expect_inactive_lane_preserved = [&](std::uint16_t reg,
+                                                    const char* label) {
+      return Expect(state.vgprs[reg][2] == 0xdeadbeefu,
+                    (std::string(mode) + label).c_str());
+    };
+    const auto expect_sgprs_preserved =
+        [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+          for (std::uint16_t sgpr = begin; sgpr <= end; ++sgpr) {
+            if (state.sgprs[sgpr] !=
+                initial_buffer_format_high_component_state.sgprs[sgpr]) {
+              return Expect(false, (std::string(mode) + label).c_str());
+            }
+          }
+          return true;
+        };
+    const auto expect_vgpr_range_preserved =
+        [&](std::uint16_t begin, std::uint16_t end, const char* label) {
+          for (std::uint16_t vgpr = begin; vgpr <= end; ++vgpr) {
+            for (std::size_t lane = 0; lane < 4; ++lane) {
+              if (state.vgprs[vgpr][lane] !=
+                  initial_buffer_format_high_component_state.vgprs[vgpr][lane]) {
+                return Expect(false, (std::string(mode) + label).c_str());
+              }
+            }
+          }
+          return true;
+        };
+    const auto expect_u8_sequence =
+        [&](const auto& addresses, const auto& expected, const char* label) {
+          if (addresses.size() != expected.size()) {
+            return Expect(false, (std::string(mode) + label).c_str());
+          }
+          for (std::size_t i = 0; i < addresses.size(); ++i) {
+            std::uint8_t current = 0;
+            if (!Expect(memory.LoadU8(addresses[i], &current),
+                        (std::string(mode) + " buffer format store read").c_str()) ||
+                !Expect(current == expected[i], (std::string(mode) + label).c_str())) {
+              return false;
+            }
+          }
+          return true;
+        };
+    const auto expect_u16_sequence =
+        [&](const auto& addresses, const auto& expected, const char* label) {
+          if (addresses.size() != expected.size()) {
+            return Expect(false, (std::string(mode) + label).c_str());
+          }
+          for (std::size_t i = 0; i < addresses.size(); ++i) {
+            std::uint16_t current = 0;
+            if (!Expect(memory.LoadU16(addresses[i], &current),
+                        (std::string(mode) + " buffer format store read").c_str()) ||
+                !Expect(current == expected[i], (std::string(mode) + label).c_str())) {
+              return false;
+            }
+          }
+          return true;
+        };
+    const auto expect_u32_sequence =
+        [&](const auto& addresses, const auto& expected, const char* label) {
+          if (addresses.size() != expected.size()) {
+            return Expect(false, (std::string(mode) + label).c_str());
+          }
+          for (std::size_t i = 0; i < addresses.size(); ++i) {
+            std::uint32_t current = 0;
+            if (!Expect(memory.ReadU32(addresses[i], &current),
+                        (std::string(mode) + " buffer format store read").c_str()) ||
+                !Expect(current == expected[i], (std::string(mode) + label).c_str())) {
+              return false;
+            }
+          }
+          return true;
+        };
+    static constexpr std::array<std::uint32_t, 3> kLoadXyzwX = {0x01u, 0x11u, 0x21u};
+    static constexpr std::array<std::uint32_t, 3> kLoadXyzwY = {0x02u, 0x12u, 0x22u};
+    static constexpr std::array<std::uint32_t, 3> kLoadXyzwZ = {0x03u, 0x13u, 0x23u};
+    static constexpr std::array<std::uint32_t, 3> kLoadXyzwW = {0x04u, 0x14u, 0x24u};
+    static constexpr std::array<std::uint32_t, 3> kLoadXyzX = {0x3fc00000u, 0x40200000u, 0x40a00000u};
+    static constexpr std::array<std::uint32_t, 3> kLoadXyzY = {0xc0000000u, 0xbf800000u, 0xbf000000u};
+    static constexpr std::array<std::uint32_t, 3> kLoadXyzZ = {0x3e800000u, 0x40400000u, 0x41000000u};
+    static constexpr std::array<std::uint32_t, 3> kLoadD16Xy = {0x00220011u, 0x00660055u, 0x00bb00aau};
+    static constexpr std::array<std::uint32_t, 3> kLoadD16XyzXy = {0x40003c00u, 0x38003400u, 0x44004200u};
+    static constexpr std::array<std::uint32_t, 3> kLoadD16XyzZ = {0x0000c000u, 0x00003c00u, 0x00004600u};
+    static constexpr std::array<std::uint32_t, 3> kLoadD16XyzwXy = {0x3c003800u, 0x38003400u, 0x44004200u};
+    static constexpr std::array<std::uint32_t, 3> kLoadD16XyzwZw = {0xc0004000u, 0x40003c00u, 0x48004600u};
+    static constexpr std::array<std::uint64_t, 12> kXyzwSourceAddresses = {
+        0x140u, 0x141u, 0x142u, 0x143u, 0x144u, 0x145u, 0x146u, 0x147u,
+        0x148u, 0x149u, 0x14au, 0x14bu};
+    static constexpr std::array<std::uint8_t, 12> kXyzwSourceValues = {
+        0x01u, 0x02u, 0x03u, 0x04u, 0x11u, 0x12u, 0x13u, 0x14u,
+        0x21u, 0x22u, 0x23u, 0x24u};
+    static constexpr std::array<std::uint64_t, 9> kXyzSourceAddresses = {
+        0x180u, 0x184u, 0x188u, 0x18cu, 0x190u, 0x194u, 0x1b0u, 0x1b4u, 0x1b8u};
+    static constexpr std::array<std::uint32_t, 9> kXyzSourceValues = {
+        0x3fc00000u, 0xc0000000u, 0x3e800000u, 0x40200000u, 0xbf800000u,
+        0x40400000u, 0x40a00000u, 0xbf000000u, 0x41000000u};
+    static constexpr std::array<std::uint64_t, 6> kD16XySourceAddresses = {
+        0x1c0u, 0x1c2u, 0x1c4u, 0x1c6u, 0x1c8u, 0x1cau};
+    static constexpr std::array<std::uint16_t, 6> kD16XySourceValues = {
+        0x0011u, 0x0022u, 0x0055u, 0x0066u, 0x00aau, 0x00bbu};
+    static constexpr std::array<std::uint64_t, 9> kD16XyzSourceAddresses = {
+        0x200u, 0x202u, 0x204u, 0x208u, 0x20au, 0x20cu, 0x210u, 0x212u, 0x214u};
+    static constexpr std::array<std::uint16_t, 9> kD16XyzSourceValues = {
+        0x3c00u, 0x4000u, 0xc000u, 0x3400u, 0x3800u, 0x3c00u, 0x4200u,
+        0x4400u, 0x4600u};
+    static constexpr std::array<std::uint64_t, 12> kD16XyzwSourceAddresses = {
+        0x280u, 0x282u, 0x284u, 0x286u, 0x288u, 0x28au, 0x28cu, 0x28eu,
+        0x290u, 0x292u, 0x294u, 0x296u};
+    static constexpr std::array<std::uint16_t, 12> kD16XyzwSourceValues = {
+        0x3800u, 0x3c00u, 0x4000u, 0xc000u, 0x3400u, 0x3800u, 0x3c00u,
+        0x4000u, 0x4200u, 0x4400u, 0x4600u, 0x4800u};
+    static constexpr std::array<std::uint64_t, 12> kXyzwStoreAddresses = {
+        0x160u, 0x161u, 0x162u, 0x163u, 0x164u, 0x165u, 0x166u, 0x167u,
+        0x168u, 0x169u, 0x16au, 0x16bu};
+    static constexpr std::array<std::uint8_t, 12> kXyzwStoreValues = {
+        0x05u, 0x06u, 0x07u, 0x08u, 0x15u, 0x16u, 0x17u, 0x18u,
+        0x25u, 0x26u, 0x27u, 0x28u};
+    static constexpr std::array<std::uint64_t, 9> kXyzStoreAddresses = {
+        0x1a0u, 0x1a4u, 0x1a8u, 0x1acu, 0x1b0u, 0x1b4u, 0x1d0u, 0x1d4u, 0x1d8u};
+    static constexpr std::array<std::uint32_t, 9> kXyzStoreValues = {
+        0x40200000u, 0xbf800000u, 0x40800000u, 0x3f800000u, 0xc0000000u,
+        0x40400000u, 0x40c00000u, 0xbf000000u, 0x41000000u};
+    static constexpr std::array<std::uint64_t, 6> kD16XyStoreAddresses = {
+        0x1e0u, 0x1e2u, 0x1e4u, 0x1e6u, 0x1e8u, 0x1eau};
+    static constexpr std::array<std::uint16_t, 6> kD16XyStoreValues = {
+        0x0011u, 0x0022u, 0x0055u, 0x0066u, 0x00aau, 0x00bbu};
+    static constexpr std::array<std::uint64_t, 9> kD16XyzStoreAddresses = {
+        0x220u, 0x222u, 0x224u, 0x228u, 0x22au, 0x22cu, 0x230u, 0x232u, 0x234u};
+    static constexpr std::array<std::uint16_t, 9> kD16XyzStoreValues = {
+        0x3c00u, 0x4000u, 0xc000u, 0x3400u, 0x3800u, 0x3c00u, 0x4200u,
+        0x4400u, 0x4600u};
+    static constexpr std::array<std::uint64_t, 12> kD16XyzwStoreAddresses = {
+        0x2a0u, 0x2a2u, 0x2a4u, 0x2a6u, 0x2a8u, 0x2aau, 0x2acu, 0x2aeu,
+        0x2b0u, 0x2b2u, 0x2b4u, 0x2b6u};
+    static constexpr std::array<std::uint16_t, 12> kD16XyzwStoreValues = {
+        0x3400u, 0x3800u, 0x3c00u, 0x4000u, 0x3800u, 0x3c00u, 0x4000u,
+        0x4400u, 0x4200u, 0x4400u, 0x4600u, 0x4800u};
+    return Expect(state.halted,
+                  (std::string(mode) + " buffer format high-component program to halt").c_str()) &&
+           Expect(state.exec_mask == 0b1011ULL,
+                  (std::string(mode) + " buffer format high-component preserves exec").c_str()) &&
+           expect_sgprs_preserved(24u, 47u,
+                                  " buffer format high-component preserves descriptors") &&
+           expect_vgpr_range_preserved(0u, 4u,
+                                       " buffer format high-component preserves addresses") &&
+           expect_vgpr_range_preserved(40u, 43u,
+                                       " buffer format high-component preserves xyzw store sources") &&
+           expect_vgpr_range_preserved(50u, 52u,
+                                       " buffer format high-component preserves xyz store sources") &&
+           expect_vgpr_range_preserved(60u, 65u,
+                                       " buffer format high-component preserves d16 store sources") &&
+           expect_vgpr_range_preserved(68u, 68u,
+                                       " buffer format high-component preserves unrelated vgprs") &&
+           expect_lane_values(71, kLoadXyzwX,
+                              (std::string(mode) + " buffer format xyzw load x result").c_str()) &&
+           expect_lane_values(72, kLoadXyzwY,
+                              (std::string(mode) + " buffer format xyzw load y result").c_str()) &&
+           expect_lane_values(73, kLoadXyzwZ,
+                              (std::string(mode) + " buffer format xyzw load z result").c_str()) &&
+           expect_lane_values(74, kLoadXyzwW,
+                              (std::string(mode) + " buffer format xyzw load w result").c_str()) &&
+           expect_lane_values(75, kLoadXyzX,
+                              (std::string(mode) + " buffer format xyz load x result").c_str()) &&
+           expect_lane_values(76, kLoadXyzY,
+                              (std::string(mode) + " buffer format xyz load y result").c_str()) &&
+           expect_lane_values(77, kLoadXyzZ,
+                              (std::string(mode) + " buffer format xyz load z result").c_str()) &&
+           expect_lane_values(80, kLoadD16Xy,
+                              (std::string(mode) + " buffer format d16 xy load result").c_str()) &&
+           expect_lane_values(81, kLoadD16XyzXy,
+                              (std::string(mode) + " buffer format d16 xyz packed xy result").c_str()) &&
+           expect_lane_values(82, kLoadD16XyzZ,
+                              (std::string(mode) + " buffer format d16 xyz z result").c_str()) &&
+           expect_lane_values(84, kLoadD16XyzwXy,
+                              (std::string(mode) + " buffer format d16 xyzw packed xy result").c_str()) &&
+           expect_lane_values(85, kLoadD16XyzwZw,
+                              (std::string(mode) + " buffer format d16 xyzw packed zw result").c_str()) &&
+           expect_inactive_lane_preserved(71, " inactive buffer format xyzw lane remains untouched") &&
+           expect_inactive_lane_preserved(75, " inactive buffer format xyz lane remains untouched") &&
+           expect_inactive_lane_preserved(80, " inactive buffer format d16 xy lane remains untouched") &&
+           expect_inactive_lane_preserved(81, " inactive buffer format d16 xyz packed xy lane remains untouched") &&
+           expect_inactive_lane_preserved(82, " inactive buffer format d16 xyz z lane remains untouched") &&
+           expect_inactive_lane_preserved(84, " inactive buffer format d16 xyzw packed xy lane remains untouched") &&
+           expect_inactive_lane_preserved(85, " inactive buffer format d16 xyzw packed zw lane remains untouched") &&
+           expect_u8_sequence(kXyzwStoreAddresses,
+                              kXyzwStoreValues,
+                              " buffer format high-component xyzw store result") &&
+           expect_u32_sequence(kXyzStoreAddresses,
+                               kXyzStoreValues,
+                               " buffer format high-component xyz store result") &&
+           expect_u16_sequence(kD16XyStoreAddresses,
+                               kD16XyStoreValues,
+                               " buffer format high-component d16 xy store result") &&
+           expect_u16_sequence(kD16XyzStoreAddresses,
+                               kD16XyzStoreValues,
+                               " buffer format high-component d16 xyz store result") &&
+           expect_u16_sequence(kD16XyzwStoreAddresses,
+                               kD16XyzwStoreValues,
+                               " buffer format high-component d16 xyzw store result");
+  };
+  if (!Expect(interpreter.ExecuteProgram(buffer_format_high_component_program,
+                                         &buffer_format_high_component_state,
+                                         &buffer_format_high_component_memory,
+                                         &buffer_format_high_component_error_message),
+              buffer_format_high_component_error_message.c_str()) ||
+      !validate_buffer_format_high_component(buffer_format_high_component_state,
+                                             buffer_format_high_component_memory,
+                                             "decoded")) {
+    return 1;
+  }
+
+  LinearExecutionMemory compiled_buffer_format_high_component_memory =
+      initial_buffer_format_high_component_memory;
+  WaveExecutionState compiled_buffer_format_high_component_state =
+      initial_buffer_format_high_component_state;
+  if (!Expect(interpreter.ExecuteProgram(
+                  compiled_buffer_format_high_component_program,
+                  &compiled_buffer_format_high_component_state,
+                  &compiled_buffer_format_high_component_memory,
+                  &buffer_format_high_component_error_message),
+              buffer_format_high_component_error_message.c_str()) ||
+      !validate_buffer_format_high_component(
+          compiled_buffer_format_high_component_state,
+          compiled_buffer_format_high_component_memory, "compiled")) {
+    return 1;
+  }
+  }
+
   const std::size_t total_iterations = kWarmupIterations + kTimedIterations;
   std::uint32_t atomic_lane0 = 0;
   std::uint32_t atomic_lane63 = 0;
