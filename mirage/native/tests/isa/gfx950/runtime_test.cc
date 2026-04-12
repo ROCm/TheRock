@@ -1,5 +1,6 @@
 #include <array>
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -45,6 +46,14 @@ void SetLaneAddress(mirage::sim::isa::WaveExecutionState* state,
   state->vgprs[reg][lane_index] = static_cast<std::uint32_t>(address);
   state->vgprs[reg + 1][lane_index] =
       static_cast<std::uint32_t>(address >> 32);
+}
+
+bool WriteU8(mirage::sim::isa::LinearExecutionMemory* memory,
+             std::uint64_t address,
+             std::uint8_t value) {
+  std::array<std::byte, 1> bytes{std::byte{value}};
+  return memory->Store(address,
+                       std::span<const std::byte>(bytes.data(), bytes.size()));
 }
 
 std::optional<std::uint32_t> FindDefaultEncodingOpcode(
@@ -927,6 +936,143 @@ int main(int argc, char** argv) {
       !Expect(flat_atomic_parity_state.vgprs[40][0] == 0xaaaab001u &&
                   flat_atomic_parity_state.vgprs[41][0] == 0xbbbbc001u,
               "expected flat atomic parity unrelated preservation")) {
+    return 1;
+  }
+
+  auto make_buffer_format_descriptor_word3 = [](std::uint32_t data_format,
+                                                std::uint32_t num_format) {
+    return (4u << 0) | (5u << 3) | (6u << 6) | (7u << 9) |
+           (data_format << 12) | (num_format << 19);
+  };
+
+  const std::vector<DecodedInstruction> buffer_format_parity_program = {
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_XYZW",
+                                      InstructionOperand::Vgpr(20),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_XYZW",
+                                      InstructionOperand::Vgpr(40),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  LinearExecutionMemory buffer_format_parity_memory(0x400, 0);
+  WaveExecutionState buffer_format_parity_state{};
+  buffer_format_parity_state.exec_mask = 1u;
+  buffer_format_parity_state.sgprs[8] = 0x100u;
+  buffer_format_parity_state.sgprs[9] = 0u;
+  buffer_format_parity_state.sgprs[10] = 0x80u;
+  buffer_format_parity_state.sgprs[11] =
+      make_buffer_format_descriptor_word3(10u, 4u);
+  buffer_format_parity_state.vgprs[0][0] = 0u;
+  buffer_format_parity_state.vgprs[40][0] = 0x05u;
+  buffer_format_parity_state.vgprs[41][0] = 0x06u;
+  buffer_format_parity_state.vgprs[42][0] = 0x07u;
+  buffer_format_parity_state.vgprs[43][0] = 0x08u;
+  if (!Expect(WriteU8(&buffer_format_parity_memory, 0x100u, 0x01u) &&
+                  WriteU8(&buffer_format_parity_memory, 0x101u, 0x02u) &&
+                  WriteU8(&buffer_format_parity_memory, 0x102u, 0x03u) &&
+                  WriteU8(&buffer_format_parity_memory, 0x103u, 0x04u),
+              "expected buffer format parity seed writes")) {
+    return 1;
+  }
+
+  std::string buffer_format_parity_error_message;
+  std::vector<CompiledInstruction> compiled_buffer_format_parity_program;
+  std::uint32_t buffer_format_parity_readback = 0;
+  if (!Expect(interpreter.CompileProgram(buffer_format_parity_program,
+                                         &compiled_buffer_format_parity_program,
+                                         &buffer_format_parity_error_message),
+              buffer_format_parity_error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_buffer_format_parity_program,
+                                         &buffer_format_parity_state,
+                                         &buffer_format_parity_memory,
+                                         &buffer_format_parity_error_message),
+              buffer_format_parity_error_message.c_str()) ||
+      !Expect(buffer_format_parity_state.halted,
+              "expected buffer format parity program to halt") ||
+      !Expect(buffer_format_parity_state.vgprs[20][0] == 0x01u &&
+                  buffer_format_parity_state.vgprs[21][0] == 0x02u &&
+                  buffer_format_parity_state.vgprs[22][0] == 0x03u &&
+                  buffer_format_parity_state.vgprs[23][0] == 0x04u,
+              "expected buffer format parity load result") ||
+      !Expect(buffer_format_parity_memory.ReadU32(0x120u,
+                                                  &buffer_format_parity_readback),
+              "expected buffer format parity store readback") ||
+      !Expect(buffer_format_parity_readback == 0x08070605u,
+              "expected buffer format parity store result")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> typed_buffer_parity_program = {
+      DecodedInstruction::SevenOperand("TBUFFER_LOAD_FORMAT_XYZW",
+                                       InstructionOperand::Vgpr(20),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Sgpr(24),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(10),
+                                       InstructionOperand::Imm32(4)),
+      DecodedInstruction::SevenOperand("TBUFFER_STORE_FORMAT_XYZW",
+                                       InstructionOperand::Vgpr(40),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Sgpr(24),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(0x20),
+                                       InstructionOperand::Imm32(10),
+                                       InstructionOperand::Imm32(4)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  const std::uint32_t typed_buffer_dst_sel_word3 =
+      (4u << 0) | (5u << 3) | (6u << 6) | (7u << 9);
+  LinearExecutionMemory typed_buffer_parity_memory(0x400, 0);
+  WaveExecutionState typed_buffer_parity_state{};
+  typed_buffer_parity_state.exec_mask = 1u;
+  typed_buffer_parity_state.sgprs[24] = 0x200u;
+  typed_buffer_parity_state.sgprs[25] = 0u;
+  typed_buffer_parity_state.sgprs[26] = 0x80u;
+  typed_buffer_parity_state.sgprs[27] = typed_buffer_dst_sel_word3;
+  typed_buffer_parity_state.vgprs[0][0] = 0u;
+  typed_buffer_parity_state.vgprs[40][0] = 0xa1u;
+  typed_buffer_parity_state.vgprs[41][0] = 0xb2u;
+  typed_buffer_parity_state.vgprs[42][0] = 0xc3u;
+  typed_buffer_parity_state.vgprs[43][0] = 0xd4u;
+  if (!Expect(WriteU8(&typed_buffer_parity_memory, 0x200u, 0x11u) &&
+                  WriteU8(&typed_buffer_parity_memory, 0x201u, 0x22u) &&
+                  WriteU8(&typed_buffer_parity_memory, 0x202u, 0x33u) &&
+                  WriteU8(&typed_buffer_parity_memory, 0x203u, 0x44u),
+              "expected typed buffer parity seed writes")) {
+    return 1;
+  }
+
+  std::string typed_buffer_parity_error_message;
+  std::vector<CompiledInstruction> compiled_typed_buffer_parity_program;
+  std::uint32_t typed_buffer_parity_readback = 0;
+  if (!Expect(interpreter.CompileProgram(typed_buffer_parity_program,
+                                         &compiled_typed_buffer_parity_program,
+                                         &typed_buffer_parity_error_message),
+              typed_buffer_parity_error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_typed_buffer_parity_program,
+                                         &typed_buffer_parity_state,
+                                         &typed_buffer_parity_memory,
+                                         &typed_buffer_parity_error_message),
+              typed_buffer_parity_error_message.c_str()) ||
+      !Expect(typed_buffer_parity_state.halted,
+              "expected typed buffer parity program to halt") ||
+      !Expect(typed_buffer_parity_state.vgprs[20][0] == 0x11u &&
+                  typed_buffer_parity_state.vgprs[21][0] == 0x22u &&
+                  typed_buffer_parity_state.vgprs[22][0] == 0x33u &&
+                  typed_buffer_parity_state.vgprs[23][0] == 0x44u,
+              "expected typed buffer parity load result") ||
+      !Expect(typed_buffer_parity_memory.ReadU32(0x220u,
+                                                 &typed_buffer_parity_readback),
+              "expected typed buffer parity store readback") ||
+      !Expect(typed_buffer_parity_readback == 0xd4c3b2a1u,
+              "expected typed buffer parity store result")) {
     return 1;
   }
 
