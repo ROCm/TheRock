@@ -175,6 +175,7 @@ LINUX_LIBRARY_PRELOADS = [
     "hipdnn",
     "rocm_sysdeps_liblzma",
     "rocm-openblas",
+    "rocm_smi64",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py

@@ -577,6 +577,45 @@ def run():
             key == "sanity" or key in project_array or "*" in project_array
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
+
+            # Hip-tests on Windows run twice: PAL (pass/fail) and ROCR (informational)
+            # for parity tracking until ROCR is the pass/fail path. See:
+            # https://github.com/ROCm/TheRock/issues/3587
+            if key == "hip-tests" and platform == "windows":
+                base = selected_matrix[key]
+                total_shards = base.get("total_shards_dict", {}).get(platform, 1)
+                if test_type == "quick":
+                    total_shards = 1
+                shard_arr = list(range(1, total_shards + 1))
+
+                pal_entry = {
+                    "job_name": "hip-tests (PAL)",
+                    "fetch_artifact_args": base["fetch_artifact_args"],
+                    "timeout_minutes": base["timeout_minutes"],
+                    "test_script": base["test_script"],
+                    "platform": base["platform"],
+                    "total_shards": total_shards,
+                    "test_type": test_type,
+                    "shard_arr": shard_arr,
+                    "gpu_enable_pal": "1",
+                }
+                all_components.append(pal_entry)
+
+                rocr_entry = {
+                    "job_name": "hip-tests (ROCR)",
+                    "fetch_artifact_args": base["fetch_artifact_args"],
+                    "timeout_minutes": base["timeout_minutes"],
+                    "test_script": base["test_script"],
+                    "platform": base["platform"],
+                    "total_shards": total_shards,
+                    "test_type": test_type,
+                    "shard_arr": shard_arr,
+                    "expect_failure": True,
+                    "gpu_enable_pal": "0",
+                }
+                all_components.append(rocr_entry)
+                continue
+
             job_config_data = selected_matrix[key]
             job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
