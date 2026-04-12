@@ -1,6 +1,7 @@
 #include <array>
 #include <chrono>
 #include <cstddef>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -52,6 +53,15 @@ bool WriteU8(mirage::sim::isa::LinearExecutionMemory* memory,
              std::uint64_t address,
              std::uint8_t value) {
   std::array<std::byte, 1> bytes{std::byte{value}};
+  return memory->Store(address,
+                       std::span<const std::byte>(bytes.data(), bytes.size()));
+}
+
+bool WriteU16(mirage::sim::isa::LinearExecutionMemory* memory,
+              std::uint64_t address,
+              std::uint16_t value) {
+  std::array<std::byte, 2> bytes{};
+  std::memcpy(bytes.data(), &value, sizeof(value));
   return memory->Store(address,
                        std::span<const std::byte>(bytes.data(), bytes.size()));
 }
@@ -1073,6 +1083,138 @@ int main(int argc, char** argv) {
               "expected typed buffer parity store readback") ||
       !Expect(typed_buffer_parity_readback == 0xd4c3b2a1u,
               "expected typed buffer parity store result")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> buffer_d16_parity_program = {
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_XYZW",
+                                      InstructionOperand::Vgpr(20),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_XYZW",
+                                      InstructionOperand::Vgpr(40),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  LinearExecutionMemory buffer_d16_parity_memory(0x400, 0);
+  WaveExecutionState buffer_d16_parity_state{};
+  buffer_d16_parity_state.exec_mask = 1u;
+  buffer_d16_parity_state.sgprs[8] = 0x100u;
+  buffer_d16_parity_state.sgprs[9] = 0u;
+  buffer_d16_parity_state.sgprs[10] = 0x80u;
+  buffer_d16_parity_state.sgprs[11] = make_buffer_format_descriptor_word3(12u, 4u);
+  buffer_d16_parity_state.vgprs[0][0] = 0u;
+  buffer_d16_parity_state.vgprs[40][0] = 0x22221111u;
+  buffer_d16_parity_state.vgprs[41][0] = 0x44443333u;
+  if (!Expect(WriteU16(&buffer_d16_parity_memory, 0x100u, 0x1111u) &&
+                  WriteU16(&buffer_d16_parity_memory, 0x102u, 0x2222u) &&
+                  WriteU16(&buffer_d16_parity_memory, 0x104u, 0x3333u) &&
+                  WriteU16(&buffer_d16_parity_memory, 0x106u, 0x4444u),
+              "expected buffer d16 parity seed writes")) {
+    return 1;
+  }
+
+  std::string buffer_d16_parity_error_message;
+  std::vector<CompiledInstruction> compiled_buffer_d16_parity_program;
+  std::uint16_t buffer_d16_parity_readback = 0;
+  if (!Expect(interpreter.CompileProgram(buffer_d16_parity_program,
+                                         &compiled_buffer_d16_parity_program,
+                                         &buffer_d16_parity_error_message),
+              buffer_d16_parity_error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_buffer_d16_parity_program,
+                                         &buffer_d16_parity_state,
+                                         &buffer_d16_parity_memory,
+                                         &buffer_d16_parity_error_message),
+              buffer_d16_parity_error_message.c_str()) ||
+      !Expect(buffer_d16_parity_state.halted,
+              "expected buffer d16 parity program to halt") ||
+      !Expect(buffer_d16_parity_state.vgprs[20][0] == 0x22221111u &&
+                  buffer_d16_parity_state.vgprs[21][0] == 0x44443333u,
+              "expected buffer d16 parity load result") ||
+      !Expect(buffer_d16_parity_memory.LoadU16(0x120u, &buffer_d16_parity_readback) &&
+                  buffer_d16_parity_readback == 0x1111u &&
+                  buffer_d16_parity_memory.LoadU16(0x122u, &buffer_d16_parity_readback) &&
+                  buffer_d16_parity_readback == 0x2222u &&
+                  buffer_d16_parity_memory.LoadU16(0x124u, &buffer_d16_parity_readback) &&
+                  buffer_d16_parity_readback == 0x3333u &&
+                  buffer_d16_parity_memory.LoadU16(0x126u, &buffer_d16_parity_readback) &&
+                  buffer_d16_parity_readback == 0x4444u,
+              "expected buffer d16 parity store result")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> typed_buffer_d16_parity_program = {
+      DecodedInstruction::SevenOperand("TBUFFER_LOAD_FORMAT_D16_XYZW",
+                                       InstructionOperand::Vgpr(20),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Sgpr(24),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(12),
+                                       InstructionOperand::Imm32(4)),
+      DecodedInstruction::SevenOperand("TBUFFER_STORE_FORMAT_D16_XYZW",
+                                       InstructionOperand::Vgpr(40),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Sgpr(24),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(0x20),
+                                       InstructionOperand::Imm32(12),
+                                       InstructionOperand::Imm32(4)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  LinearExecutionMemory typed_buffer_d16_parity_memory(0x400, 0);
+  WaveExecutionState typed_buffer_d16_parity_state{};
+  typed_buffer_d16_parity_state.exec_mask = 1u;
+  typed_buffer_d16_parity_state.sgprs[24] = 0x200u;
+  typed_buffer_d16_parity_state.sgprs[25] = 0u;
+  typed_buffer_d16_parity_state.sgprs[26] = 0x80u;
+  typed_buffer_d16_parity_state.sgprs[27] = typed_buffer_dst_sel_word3;
+  typed_buffer_d16_parity_state.vgprs[0][0] = 0u;
+  typed_buffer_d16_parity_state.vgprs[40][0] = 0x66665555u;
+  typed_buffer_d16_parity_state.vgprs[41][0] = 0x88887777u;
+  if (!Expect(WriteU16(&typed_buffer_d16_parity_memory, 0x200u, 0x5555u) &&
+                  WriteU16(&typed_buffer_d16_parity_memory, 0x202u, 0x6666u) &&
+                  WriteU16(&typed_buffer_d16_parity_memory, 0x204u, 0x7777u) &&
+                  WriteU16(&typed_buffer_d16_parity_memory, 0x206u, 0x8888u),
+              "expected typed buffer d16 parity seed writes")) {
+    return 1;
+  }
+
+  std::string typed_buffer_d16_parity_error_message;
+  std::vector<CompiledInstruction> compiled_typed_buffer_d16_parity_program;
+  std::uint16_t typed_buffer_d16_parity_readback = 0;
+  if (!Expect(interpreter.CompileProgram(typed_buffer_d16_parity_program,
+                                         &compiled_typed_buffer_d16_parity_program,
+                                         &typed_buffer_d16_parity_error_message),
+              typed_buffer_d16_parity_error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_typed_buffer_d16_parity_program,
+                                         &typed_buffer_d16_parity_state,
+                                         &typed_buffer_d16_parity_memory,
+                                         &typed_buffer_d16_parity_error_message),
+              typed_buffer_d16_parity_error_message.c_str()) ||
+      !Expect(typed_buffer_d16_parity_state.halted,
+              "expected typed buffer d16 parity program to halt") ||
+      !Expect(typed_buffer_d16_parity_state.vgprs[20][0] == 0x66665555u &&
+                  typed_buffer_d16_parity_state.vgprs[21][0] == 0x88887777u,
+              "expected typed buffer d16 parity load result") ||
+      !Expect(typed_buffer_d16_parity_memory.LoadU16(0x220u,
+                                                     &typed_buffer_d16_parity_readback) &&
+                  typed_buffer_d16_parity_readback == 0x5555u &&
+                  typed_buffer_d16_parity_memory.LoadU16(0x222u,
+                                                     &typed_buffer_d16_parity_readback) &&
+                  typed_buffer_d16_parity_readback == 0x6666u &&
+                  typed_buffer_d16_parity_memory.LoadU16(0x224u,
+                                                     &typed_buffer_d16_parity_readback) &&
+                  typed_buffer_d16_parity_readback == 0x7777u &&
+                  typed_buffer_d16_parity_memory.LoadU16(0x226u,
+                                                     &typed_buffer_d16_parity_readback) &&
+                  typed_buffer_d16_parity_readback == 0x8888u,
+              "expected typed buffer d16 parity store result")) {
     return 1;
   }
 
