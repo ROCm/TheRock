@@ -23,6 +23,9 @@ inputs:
     required: true
   FETCH_ARTIFACT_ARGS:
     description: (string) Extra arguments to install_rocm_from_artifacts.py (e.g. `--blas --tests`)
+  RELEASE_TYPE:
+    description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+    default: ""
 
 runs:
   using: "composite"
@@ -70,6 +73,7 @@ runs:
         AMDGPU_TARGETS: ${{ inputs.AMDGPU_TARGETS }}
         ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
+        RELEASE_TYPE: ${{ inputs.RELEASE_TYPE }}
         GITHUB_TOKEN: ${{ github.token }}
       run: |
         python ./build_tools/install_rocm_from_artifacts.py \
