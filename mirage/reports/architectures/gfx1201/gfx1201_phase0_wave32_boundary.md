@@ -57,6 +57,7 @@ execution path.
 - The boundary report now also carries the next empty 50-slice window through opcode `1514..1563`, so the current continuation remains metadata-only.
 - The boundary report now also carries the next empty 50-slice window through opcode `1564..1613`, so the current continuation remains metadata-only.
 - The boundary report now also carries the next empty 50-slice window through opcode `1614..1663`, so the current continuation remains metadata-only.
+- The boundary report now also carries the next empty 50-slice window through opcode `1664..1713`, so the current continuation remains metadata-only.
 
 ## Remaining VDS Boundary
 
@@ -231,6 +232,10 @@ execution path.
 ## Thirty-first Follow-up 50-Slice Frontier Window
 
 - `opcode 1614..1663`: `0` instructions, `50` holes, `0` buckets, safe under current request `false`, covering no remaining VDS instructions.
+
+## Thirty-second Follow-up 50-Slice Frontier Window
+
+- `opcode 1664..1713`: `0` instructions, `50` holes, `0` buckets, safe under current request `false`, covering no remaining VDS instructions.
 
 ## Remaining VDS Next-Risk Chain
 
