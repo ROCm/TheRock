@@ -40,14 +40,15 @@ else()
     set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
 
     # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
+    # On amd-main, flang-rt's CMakeLists.txt requires Threads/Backtrace which
+    # are unavailable for amdgcn cross-compilation. Disable flang-rt for GPU
+    # runtimes until upstream resolves this.
     if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
       list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
       set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
       set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/GPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
+      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;openmp")
+      set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
       set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
       set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
       #TODO: Enable when HWLOC dependency is figured out
@@ -131,6 +132,19 @@ set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator" CACHE STRING
 # set(CLANG_RESOURCE_DIR "../lib/clang/${LLVM_VERSION_MAJOR}" CACHE STRING "Resource dir" FORCE)
 # set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_NEW "lib/clang/${LLVM_VERSION_MAJOR}/amdgcn" CACHE STRING "New devicelibs loc" FORCE)
 # set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_OLD "amdgcn" CACHE STRING "Old devicelibs loc" FORCE)
+
+# The amd-main branch of llvm-project does not ship amdclang/amdclang++
+# driver wrappers. Many downstream components (rocprofiler-sdk, library
+# toolchains, etc.) expect them, so create symlinks at install time.
+install(CODE "
+  set(_bin_dir \"\${CMAKE_INSTALL_PREFIX}/bin\")
+  foreach(_name amdclang amdclang++ amdflang)
+    string(REPLACE \"amd\" \"\" _target \"\${_name}\")
+    if(NOT EXISTS \"\${_bin_dir}/\${_name}\" AND EXISTS \"\${_bin_dir}/\${_target}\")
+      file(CREATE_LINK \"\${_target}\" \"\${_bin_dir}/\${_name}\" SYMBOLIC)
+    endif()
+  endforeach()
+")
 
 # Setup the install rpath (let CMake handle build RPATH per usual):
 # * Executables and libraries can always search their adjacent lib directory

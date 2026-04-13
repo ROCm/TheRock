@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
+Date: Thu, 1 Jan 2099 00:00:00 +0000
+Subject: [PATCH 2/2] hip-tests: remove obsolete -fallow-half-arguments-and-returns flag
+
+The -Xclang -fallow-half-arguments-and-returns flag was removed in
+upstream LLVM because _Float16 is now natively supported. Remove the
+set_source_files_properties() call that applied this flag to
+hipMathFunctions.cc.
+---
+ .../catch/unit/deviceLib/CMakeLists.txt       | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/projects/hip-tests/catch/unit/deviceLib/CMakeLists.txt b/projects/hip-tests/catch/unit/deviceLib/CMakeLists.txt
+index 823bdd87eb..08d7af5d3c 100644
+--- a/projects/hip-tests/catch/unit/deviceLib/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/deviceLib/CMakeLists.txt
+@@ -208,7 +208,8 @@ if(HIP_PLATFORM MATCHES "amd")
+     set_source_files_properties(unsafeAtomicAdd_NonCoherent_withunsafeflag.cc PROPERTIES COMPILE_OPTIONS "-munsafe-fp-atomics")
+     set_source_files_properties(unsafeAtomicAdd_Coherent_withnounsafeflag.cc PROPERTIES COMPILE_OPTIONS "-mno-unsafe-fp-atomics")
+     set_source_files_properties(unsafeAtomicAdd_NonCoherent_withnounsafeflag.cc PROPERTIES COMPILE_OPTIONS "-mno-unsafe-fp-atomics")
+-    set_source_files_properties(hipMathFunctions.cc PROPERTIES COMPILE_FLAGS "-Xclang -fallow-half-arguments-and-returns")
++    # -fallow-half-arguments-and-returns was removed in newer clang; _Float16
++    # is natively supported so this flag is no longer necessary.
+     file(GLOB AtomicAdd_files *AtomicAdd_*_*.cc)
+     set_property(SOURCE ${AtomicAdd_files} PROPERTY COMPILE_FLAGS --save-temps)
+     file(GLOB unsafeAtomicAdd_files *unsafeAtomicAdd_*_*.cc)
+-- 
+2.34.1
+

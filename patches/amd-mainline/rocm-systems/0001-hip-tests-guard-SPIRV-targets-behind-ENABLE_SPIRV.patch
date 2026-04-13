@@ -1,0 +1,47 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
+Date: Thu, 1 Jan 2099 00:00:00 +0000
+Subject: [PATCH 1/2] hip-tests: guard SPIR-V targets behind ENABLE_SPIRV
+
+The addKernel.spv and addKernel-bundle.spv custom targets are built
+with --offload-arch=amdgcnspirv unconditionally on Linux. Newer clang
+(amd-main) correctly rejects __builtin_amdgcn_mov_dpp in HIP headers
+when targeting SPIR-V because the DPP feature is unavailable on the
+spirv64-amd-amdhsa target.
+
+Guard these targets behind the existing ENABLE_SPIRV option (defaults
+to OFF) so they are only attempted when explicitly requested.
+---
+ .../hip-tests/catch/unit/module/CMakeLists.txt | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/projects/hip-tests/catch/unit/module/CMakeLists.txt b/projects/hip-tests/catch/unit/module/CMakeLists.txt
+index 0ed59d0bae..8303f4af85 100644
+--- a/projects/hip-tests/catch/unit/module/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/module/CMakeLists.txt
+@@ -195,8 +195,10 @@ if(HIP_PLATFORM MATCHES "amd")
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+                   -I${CMAKE_CURRENT_SOURCE_DIR}/../../include)
+ 
+-  # TODO - Rock build failure from clang
+-  if(NOT WIN32)
++  # SPIR-V kernel builds require HIP headers to be compatible with the
++  # spirv64-amd-amdhsa target.  Guard behind ENABLE_SPIRV so they are
++  # only attempted when explicitly requested.
++  if(NOT WIN32 AND ENABLE_SPIRV)
+     add_custom_target(addKernel.spv
+                     COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} --cuda-device-only --offload-arch=amdgcnspirv
+                     --no-gpu-bundle-output
+@@ -361,8 +363,7 @@ add_dependencies(ModuleTest empty_module)
+ if(HIP_PLATFORM MATCHES "amd")
+   add_dependencies(build_tests copyKernel.code copyKernel.s)
+   add_dependencies(build_tests addKernel.code)
+-  # TODO - Rock build failure from clang
+-  if(NOT WIN32)
++  if(NOT WIN32 AND ENABLE_SPIRV)
+     add_dependencies(build_tests addKernel.spv)
+     add_dependencies(build_tests addKernel-bundle.spv)
+   endif()
+-- 
+2.34.1
+

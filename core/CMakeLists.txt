@@ -200,6 +200,12 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       rocprofiler-register
       ROCR-Runtime
     )
+    # CLR version scripts reference symbols that are either in separate
+    # libraries (hiprtc) or Windows-only. Newer lld defaults to
+    # --no-undefined-version which makes this a hard error.
+    list(APPEND HIP_CLR_CMAKE_ARGS
+      "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--undefined-version"
+    )
   endif()
 
 
@@ -401,6 +407,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
     )
     list(APPEND OCL_CLR_CMAKE_ARGS
       "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+      "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--undefined-version"
     )
   endif()
 
