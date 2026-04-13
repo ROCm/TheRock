@@ -61,13 +61,13 @@ EXTRAS_REQUIRE = {
     if not pkg.required
 }
 # Per-target device extras: rocm[device-gfx942], rocm[device-gfx1201], etc.
-# In kpack-split builds AVAILABLE_TARGET_FAMILIES contains individual gfx
-# targets, enabling callers to request a specific ISA's device wheel without
-# relying on ROCM_SDK_TARGET_FAMILY being set in the environment.
-# In legacy builds the family names (e.g. gfx94X-dcgpu) become the keys,
-# which is harmless and consistent.
+# The generic 'device' extra resolves via determine_target_family() at
+# sdist-build time, which is unreliable since offload-arch (from rocm-sdk-core)
+# is not yet installed at that point. Replace it with explicit per-target entries
+# so callers can request a specific ISA's device wheel unambiguously.
 device_entry = dist_info.ALL_PACKAGES.get("device")
 if device_entry and device_entry.is_target_specific:
+    EXTRAS_REQUIRE.pop("device", None)
     for _target in dist_info.AVAILABLE_TARGET_FAMILIES:
         EXTRAS_REQUIRE[f"device-{_target}"] = [
             device_entry.get_dist_package_require(target_family=_target)
