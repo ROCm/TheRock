@@ -325,7 +325,6 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
             "miopenprovider",
             "hipblasltprovider",
             "rand",
-            "rccl",
         ]
         and an.component == "lib"
         and an.target_family == target
