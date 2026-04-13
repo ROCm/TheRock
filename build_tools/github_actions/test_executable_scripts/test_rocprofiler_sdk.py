@@ -215,7 +215,9 @@ def run_test_therock_cdash(
     Passes shell-joined command lines so test_therock can set CTEST_CONFIGURE_COMMAND,
     CTEST_BUILD_COMMAND, and CMAKE_CTEST_ARGUMENTS consistently with local runs.
     """
-    ctest_args = ctest_cmd[1:] if ctest_cmd and ctest_cmd[0] == "ctest" else list(ctest_cmd)
+    ctest_args = (
+        ctest_cmd[1:] if ctest_cmd and ctest_cmd[0] == "ctest" else list(ctest_cmd)
+    )
     argv = [
         sys.executable,
         str(SCRIPT_DIR / "test_therock.py"),
