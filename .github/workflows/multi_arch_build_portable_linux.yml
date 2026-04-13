@@ -69,6 +69,7 @@ jobs:
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
@@ -88,6 +89,7 @@ jobs:
       timeout_minutes: 480  # 8 hours (compiler is big)
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
@@ -112,6 +114,7 @@ jobs:
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
@@ -136,6 +139,7 @@ jobs:
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
@@ -155,6 +159,7 @@ jobs:
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
@@ -174,6 +179,7 @@ jobs:
       timeout_minutes: 120  # 2 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
@@ -193,6 +199,7 @@ jobs:
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
@@ -212,6 +219,7 @@ jobs:
       timeout_minutes: 90  # 1.5 hours - iree is not _yet_ building with a common llvm, it includes its own.
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
@@ -231,6 +239,7 @@ jobs:
       timeout_minutes: 60  # 1 hour
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
@@ -250,6 +259,7 @@ jobs:
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read

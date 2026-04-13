@@ -291,6 +291,7 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
             "miopen",
             "miopenprovider",
             "hipblasltprovider",
+            "hipkernelprovider",
             "rand",
             "rccl",
         ]

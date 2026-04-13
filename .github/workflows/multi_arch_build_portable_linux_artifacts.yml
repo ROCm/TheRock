@@ -44,6 +44,11 @@ on:
         type: string
         required: true
         description: "ROCm package version string"
+      build_variant_cmake_preset:
+        type: string
+        required: false
+        default: ""
+        description: "CMake preset name for this build variant (optional)"
       release_type:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease". Controls artifact bucket and IAM role.'
         type: string
@@ -52,7 +57,7 @@ on:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    runs-on: azure-linux-scale-rocm
+    runs-on: ${{ contains(inputs.build_variant_cmake_preset, 'san') && 'azure-linux-scale-rocm-heavy-ramdisk' || 'azure-linux-scale-rocm' }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       id-token: write
@@ -127,6 +132,7 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
