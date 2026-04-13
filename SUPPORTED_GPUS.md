@@ -23,6 +23,7 @@ Note that some fully supported GPU architectures may show a more limited state o
 | CDNA2        | gfx90a      | ✅            |               |               |
 | CDNA         | gfx908      | ✅            |               |               |
 | GCN5.1       | gfx906      | ✅            |               |               |
+| GCN5.0       | gfx900      | ✅            |               |               |
 
 ### AMD Radeon - Linux
 
@@ -43,6 +44,8 @@ Note that some fully supported GPU architectures may show a more limited state o
 | RDNA1        | gfx1011     | ✅            |               |               |
 | RDNA1        | gfx1010     | ✅            |               |               |
 | GCN5.1       | gfx906      | ✅            |               |               |
+| GCN5.0       | gfx90c      |               |               |               |
+| GCN5.0       | gfx900      | ✅            |               |               |
 
 ## ROCm on Windows
 
@@ -65,3 +68,5 @@ Check [windows_support.md](https://github.com/ROCm/TheRock/blob/main/docs/develo
 | RDNA1        | gfx1011     | ✅            |               |               |
 | RDNA1        | gfx1010     | ✅            |               |               |
 | GCN5.1       | gfx906      | ✅            |               |               |
+| GCN5.0       | gfx90c      |               |               |               |
+| GCN5.0       | gfx900      | ✅            |               |               |
