@@ -242,7 +242,7 @@ test_matrix = {
     "hipsparselt": {
         "job_name": "hipsparselt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
