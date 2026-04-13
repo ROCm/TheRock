@@ -550,7 +550,7 @@ def _determine_test_type(
     # test:rocprim). When someone explicitly asks for tests, run the full
     # suite — they're investigating something specific.
     if _has_test_labels(ci_inputs):
-        return "full", "test labels specified"
+        return "standard", "test labels specified"
 
     # Priority 3: schedule runs the full nightly suite — comprehensive
     # coverage on a cadence, catching regressions that quick tests miss.
