@@ -153,9 +153,9 @@ artifact_groups = ["math-libs", "ml-libs"]
 type = "per-arch"
 
 [build_stages.comm-libs]
-description = "Communication libraries per architecture (can run parallel to math-libs)"
+description = "Communication libraries (generic, single job parallel to math-libs)"
 artifact_groups = ["comm-libs"]
-type = "per-arch"
+type = "generic"
 
 [build_stages.debug-tools]
 description = "ROCm debug tools"
@@ -268,7 +268,7 @@ source_sets = ["rocm-libraries", "ml-frameworks"]
 
 [artifact_groups.comm-libs]
 description = "Communication libraries"
-type = "per-arch"
+type = "generic"
 artifact_group_deps = ["hip-runtime"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
 source_sets = ["comm-libs", "rocm-systems"]
