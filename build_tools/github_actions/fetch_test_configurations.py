@@ -546,6 +546,7 @@ def run():
     if test_type == "benchmark":
         logging.info("Using benchmark_matrix only (test_type=benchmark)")
         selected_matrix = deepcopy(benchmark_matrix)
+        selected_matrix["sanity"] = deepcopy(test_matrix["sanity"])
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]

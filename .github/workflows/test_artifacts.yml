@@ -106,8 +106,6 @@ jobs:
   test_sanity_check:
     name: 'Test Sanity Check'
     needs: configure_test_matrix
-    # Skip sanity when the matrix has no sanity entry (e.g. benchmark-only runs).
-    if: ${{ needs.configure_test_matrix.outputs.sanity_component != 'null' }}
     uses: './.github/workflows/test_component.yml'
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
