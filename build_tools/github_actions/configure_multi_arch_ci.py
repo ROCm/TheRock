@@ -829,9 +829,23 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
-        # TODO(#3433): Remove sandbox logic once ASAN tests are passing
-        # For ASAN builds, use sandbox runner to avoid impacting production
         if build_variant == "asan":
+            # For ASAN builds, host-asan and asan have different event behaviors
+            host_asan_variant_config = all_build_variants.get(platform, {}).get(
+                "host-asan", {}
+            )
+            host_asan_ci_trigger = host_asan_variant_config.get("ci_trigger", [])
+            # If the event name matches the host ASAN CI trigger, we use host-asan variant config
+            if ci_inputs.event_name in host_asan_ci_trigger:
+                variant_config = host_asan_variant_config
+
+            # If the event does not match the expected trigger, we skip
+            variant_ci_trigger = variant_config.get("ci_trigger", [])
+            if ci_inputs.event_name not in variant_ci_trigger:
+                continue
+
+            # TODO(#3433): Remove sandbox logic once ASAN tests are passing
+            # For ASAN builds, use sandbox runner to avoid impacting production
             if "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
