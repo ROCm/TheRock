@@ -34,6 +34,10 @@ PATCHES_DIR = THEROCK_DIR / "patches"
 TOPOLOGY_PATH = THEROCK_DIR / "BUILD_TOPOLOGY.toml"
 ALWAYS_SUBMODULE_PATHS: list[str] = []
 
+# Slim llvm-project forks may omit amd/comgr and amd/hipcc; overlay them from
+# ROCm amd-mainline unless opted out (see maybe_overlay_amd_comgr_hipcc).
+NO_AMD_COMGR_HIPCC_OVERLAY_ENV = "THEROCK_NO_AMD_COMGR_HIPCC_OVERLAY"
+
 
 def is_windows() -> bool:
     return platform.system() == "Windows"
@@ -51,6 +55,53 @@ def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = 
 
     full_env = {**os.environ, **(env or {})}
     subprocess.check_call(args, cwd=str(cwd), env=full_env, stdin=subprocess.DEVNULL)
+
+
+def maybe_overlay_amd_comgr_hipcc() -> None:
+    """Populate amd/comgr and amd/hipcc from origin/amd-mainline when missing."""
+    if os.environ.get(NO_AMD_COMGR_HIPCC_OVERLAY_ENV, ""):
+        log(
+            f"Skipping amd/comgr + amd/hipcc overlay ({NO_AMD_COMGR_HIPCC_OVERLAY_ENV} is set)"
+        )
+        return
+    amd_llvm = THEROCK_DIR / "compiler" / "amd-llvm"
+    comgr_cmake = amd_llvm / "amd" / "comgr" / "CMakeLists.txt"
+    hipcc_cmake = amd_llvm / "amd" / "hipcc" / "CMakeLists.txt"
+    if comgr_cmake.is_file() and hipcc_cmake.is_file():
+        return
+    if not amd_llvm.is_dir():
+        return
+    log(
+        "compiler/amd-llvm is missing amd/comgr and/or amd/hipcc; "
+        "fetching amd-mainline and checking out those paths (slim-fork overlay)."
+    )
+    try:
+        try:
+            run_command(
+                ["git", "fetch", "--depth=1", "origin", "amd-mainline"],
+                cwd=amd_llvm,
+            )
+        except subprocess.CalledProcessError:
+            run_command(
+                [
+                    "git",
+                    "fetch",
+                    "--depth=1",
+                    "https://github.com/ROCm/llvm-project.git",
+                    "amd-mainline",
+                ],
+                cwd=amd_llvm,
+            )
+        run_command(
+            ["git", "checkout", "FETCH_HEAD", "--", "amd/comgr", "amd/hipcc"],
+            cwd=amd_llvm,
+        )
+    except subprocess.CalledProcessError as exc:
+        log(
+            "WARNING: Could not overlay amd/comgr and amd/hipcc from origin/amd-mainline "
+            f"({exc!r}). Configure CMake with -DTHEROCK_AMD_COMGR_SOURCE_DIR and "
+            "-DTHEROCK_AMD_HIPCC_SOURCE_DIR, or restore these trees in compiler/amd-llvm."
+        )
 
 
 def resolve_reference_dir(args: argparse.Namespace) -> Path | None:
@@ -396,6 +447,9 @@ def run(args):
     # Fetch nested submodules
     if args.update_submodules:
         fetch_nested_submodules(args, projects)
+
+    if "llvm-project" in projects:
+        maybe_overlay_amd_comgr_hipcc()
 
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is

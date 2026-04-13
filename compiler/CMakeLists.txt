@@ -9,6 +9,45 @@ if(THEROCK_ENABLE_COMPILER)
   # frontend.
   ##############################################################################
 
+  # amd-comgr and hipcc normally live under compiler/amd-llvm/amd/. Some llvm
+  # forks omit these trees; allow overrides so CI can point at a full checkout.
+  set(THEROCK_AMD_COMGR_SOURCE_DIR "" CACHE PATH
+      "Path to amd comgr sources (directory containing CMakeLists.txt). Empty: compiler/amd-llvm/amd/comgr"
+  )
+  set(THEROCK_AMD_HIPCC_SOURCE_DIR "" CACHE PATH
+      "Path to amd hipcc sources (directory containing CMakeLists.txt). Empty: compiler/amd-llvm/amd/hipcc"
+  )
+  if(THEROCK_AMD_COMGR_SOURCE_DIR)
+    set(_therock_comgr_src "${THEROCK_AMD_COMGR_SOURCE_DIR}")
+  else()
+    set(_therock_comgr_src "${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/amd/comgr")
+  endif()
+  if(THEROCK_AMD_HIPCC_SOURCE_DIR)
+    set(_therock_hipcc_src "${THEROCK_AMD_HIPCC_SOURCE_DIR}")
+  else()
+    set(_therock_hipcc_src "${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/amd/hipcc")
+  endif()
+  cmake_path(ABSOLUTE_PATH _therock_comgr_src BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  cmake_path(ABSOLUTE_PATH _therock_hipcc_src BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  if(NOT EXISTS "${_therock_comgr_src}/CMakeLists.txt")
+    message(
+      FATAL_ERROR
+        "amd-comgr sources not found at '${_therock_comgr_src}'. "
+        "The compiler/amd-llvm checkout is missing amd/comgr (common on slim forks). "
+        "Restore it, e.g. in that repo: "
+        "git fetch origin && git checkout origin/amd-mainline -- amd/comgr amd/hipcc "
+        "or reconfigure with -DTHEROCK_AMD_COMGR_SOURCE_DIR=/path/to/amd/comgr "
+        "(and -DTHEROCK_AMD_HIPCC_SOURCE_DIR=... if hipcc is also absent)."
+    )
+  endif()
+  if(NOT EXISTS "${_therock_hipcc_src}/CMakeLists.txt")
+    message(
+      FATAL_ERROR
+        "hipcc sources not found at '${_therock_hipcc_src}'. "
+        "Restore amd/hipcc in compiler/amd-llvm or set -DTHEROCK_AMD_HIPCC_SOURCE_DIR."
+    )
+  endif()
+
   set(_extra_llvm_cmake_args)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     list(APPEND _extra_llvm_cmake_args "-DLLVM_ENABLE_PEDANTIC=OFF")
@@ -110,7 +149,7 @@ if(THEROCK_ENABLE_COMPILER)
       # in the compiler-rt build if not found.
       "-DSANITIZER_AMDGPU=${THEROCK_CONDITION_IS_NON_WINDOWS}"
       "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
-      "-DSANITIZER_COMGR_INCLUDE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/amd/comgr/include"
+      "-DSANITIZER_COMGR_INCLUDE_PATH=${_therock_comgr_src}/include"
 
       # compiler-rt debug mode
       "-DCOMPILER_RT_DEBUG=${THEROCK_COMPILER_RT_DEBUG}"
@@ -153,7 +192,7 @@ if(THEROCK_ENABLE_COMPILER)
   therock_cmake_subproject_declare(amd-comgr
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
-    EXTERNAL_SOURCE_DIR "amd-llvm/amd/comgr"
+    EXTERNAL_SOURCE_DIR "${_therock_comgr_src}"
     BINARY_DIR "amd-comgr"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -192,7 +231,7 @@ if(THEROCK_ENABLE_COMPILER)
 
   therock_cmake_subproject_declare(hipcc
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "amd-llvm/amd/hipcc"
+    EXTERNAL_SOURCE_DIR "${_therock_hipcc_src}"
     BINARY_DIR "hipcc"
     BACKGROUND_BUILD
     CMAKE_ARGS
