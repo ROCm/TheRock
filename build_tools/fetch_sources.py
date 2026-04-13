@@ -455,7 +455,10 @@ def apply_patches(args, projects):
         log("Not patching (no --patch-tag specified)")
     patch_version_dir: Path = PATCHES_DIR / args.patch_tag
     if not patch_version_dir.exists():
-        log(f"ERROR: Patch directory {patch_version_dir} does not exist")
+        log(
+            f"* Patch directory {patch_version_dir} does not exist; skipping apply_patches."
+        )
+        return
     for patch_project_dir in patch_version_dir.iterdir():
         log(f"* Processing project patch directory {patch_project_dir}:")
         # Check that project patch directory was included
