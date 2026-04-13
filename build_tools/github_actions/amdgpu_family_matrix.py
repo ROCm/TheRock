@@ -126,7 +126,7 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
             # TODO(#3299): Re-enable quick tests once capacity is available for Windows gfx1151
-            "run-full-tests-only": True,
+            "nightly_check_only_for_family": True,
         },
     },
     "gfx120x": {
