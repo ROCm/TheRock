@@ -35,9 +35,7 @@ all_build_variants = {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
-            "ci_trigger": ["schedule"],
-            # TESTING
-            # "ci_trigger": ["schedule", "workflow_dispatch"],
+            "ci_trigger": ["schedule", "workflow_dispatch"],
         },
         # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
         "host-asan": {
@@ -45,9 +43,7 @@ all_build_variants = {
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
             "expect_failure": True,
-            # TESTING
-            # "ci_trigger": ["push"],
-            "ci_trigger": ["push", "workflow_dispatch"],
+            "ci_trigger": ["push"],
         },
         "tsan": {
             "build_variant_label": "tsan",

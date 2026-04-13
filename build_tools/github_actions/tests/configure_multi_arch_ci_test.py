@@ -729,7 +729,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         test_cases = [
             ("schedule", "linux-release-asan"),
             ("push", "linux-release-host-asan"),
-            # ("workflow_dispatch", "linux-release-asan"),
+            ("workflow_dispatch", "linux-release-asan"),
         ]
         for event_name, expected_variant in test_cases:
             with self.subTest(event_name=event_name):
