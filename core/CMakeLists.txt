@@ -100,6 +100,10 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   ##############################################################################
   # ROCR-Runtime
   ##############################################################################
+  set(_rocr_optional_deps)
+  if(NOT WIN32)
+    list(APPEND _rocr_optional_deps rocprofiler-register)
+  endif()
 
   therock_cmake_subproject_declare(ROCR-Runtime
     USE_DIST_AMDGPU_TARGETS
@@ -114,10 +118,12 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       amd-llvm
       therock-simde
     RUNTIME_DEPS
-      rocprofiler-register
+      ${_rocr_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_NUMACTL}
+      ${THEROCK_BUNDLED_ZLIB}
+      ${THEROCK_BUNDLED_ZSTD}
     INTERFACE_LINK_DIRS
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS

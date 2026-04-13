@@ -482,7 +482,6 @@ type = "target-neutral"
 artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
-disable_platforms = ["windows"]
 
 [artifacts.core-amdsmi]
 artifact_group = "core-amdsmi"
