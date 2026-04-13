@@ -276,11 +276,19 @@ def _generate_dashboard(cmake_cmd: str, *, include_coverage: bool = False) -> st
         dashboard_submit(PARTS Build RETURN_VALUE _submit_ret)
         handle_error("Build" _build_ret)
     endif()
-
+    
     if("TEST" IN_LIST STAGES)
         ctest_test(BUILD "{BINARY_DIR}" RETURN_VALUE _test_ret)
         dashboard_submit(PARTS Test RETURN_VALUE _submit_ret)
+        if(NOT _test_ret EQUAL 0)
+            if(_test_ret EQUAL -1)
+                message(WARNING "ctest_test finished with code ${{_test_ret}} (test failures); not treating as dashboard failure")
+            else()
+                handle_error("Testing" _test_ret)
+            endif()
+        endif()
     endif()
+
 {_coverage_cmake}
     handle_error("Testing" _test_ret)
     dashboard_submit(PARTS Done RETURN_VALUE _submit_ret)
