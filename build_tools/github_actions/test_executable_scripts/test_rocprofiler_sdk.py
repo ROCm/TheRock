@@ -128,7 +128,7 @@ def setup_env():
     if environ_vars.get("HIP_VISIBLE_DEVICES"):
         environ_vars.pop("GPU_DEVICE_ORDINAL", None)
 
-    # Paths for test_therock.py (single source of truth; subprocess inherits these).
+    # Paths for run-therock-ci.py (single source of truth; subprocess inherits these).
     environ_vars["THEROCK_PATH"] = str(THEROCK_PATH)
     environ_vars["THEROCK_LIB_PATH"] = str(THEROCK_LIB_PATH)
     environ_vars["THEROCK_SYSDEPS_PATH"] = str(THEROCK_SYSDEPS_PATH)
@@ -205,14 +205,14 @@ def get_ctest_cmd() -> list[str]:
     return ctest_cmd
 
 
-def run_test_therock_cdash(
+def run_therock_ci(
     cmake_config_cmd: list[str],
     cmake_build_cmd: list[str],
     ctest_cmd: list[str],
 ) -> None:
-    """Run test_therock.py with the same configure, build, and ctest arguments as this script.
+    """Run run-therock-ci.py with the same configure, build, and ctest arguments as this script.
 
-    Passes shell-joined command lines so test_therock can set CTEST_CONFIGURE_COMMAND,
+    Passes shell-joined command lines so run-therock-ci can set CTEST_CONFIGURE_COMMAND,
     CTEST_BUILD_COMMAND, and CMAKE_CTEST_ARGUMENTS consistently with local runs.
     """
     ctest_args = (
@@ -220,7 +220,7 @@ def run_test_therock_cdash(
     )
     argv = [
         sys.executable,
-        str(SCRIPT_DIR / "test_therock.py"),
+        str(SCRIPT_DIR / "run-therock-ci.py"),
         "--configure-cmd",
         shlex.join(cmake_config_cmd),
         "--build-cmd",
@@ -282,7 +282,7 @@ def execute_tests():
 
 if __name__ == "__main__":
     setup_env()
-    run_test_therock_cdash(
+    run_therock_ci(
         get_cmake_config_cmd(),
         get_cmake_build_cmd(),
         get_ctest_cmd(),
