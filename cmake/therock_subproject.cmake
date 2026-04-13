@@ -818,6 +818,14 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "set(THEROCK_PKG_CONFIG_DIRS \"@_private_pkg_config_dirs@\")\n")
 
   string(APPEND _init_contents "${_compiler_toolchain_init_contents}")
+
+  # Enable reproducible builds on Windows. /Brepro makes the linker (both
+  # MSVC link.exe and lld-link) zero out timestamps in PE headers, producing
+  # deterministic output.
+  if(WIN32)
+    string(APPEND _init_contents "add_link_options(\"LINKER:/Brepro\")\n")
+  endif()
+
   if(_dep_provider_file)
     string(APPEND _init_contents "include(${_dep_provider_file})\n")
   endif()
