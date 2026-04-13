@@ -347,6 +347,29 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}
 
+  test_pytorch_wheels_full:
+    name: Test Full UT | ${{ inputs.amdgpu_family }}
+    if: >-
+      ${{
+        inputs.amdgpu_family == 'gfx94X-dcgpu' &&
+        inputs.python_version == '3.12' &&
+        needs.generate_target_to_run.outputs.test_runs_on != ''
+      }}
+    needs: [build_pytorch_wheels, generate_target_to_run, test_pytorch_wheels]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test_pytorch_wheels_full.yml
+    with:
+      amdgpu_family: ${{ inputs.amdgpu_family }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+      package_index_url: ${{ inputs.cloudfront_staging_url }}
+      python_version: ${{ inputs.python_version }}
+      torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
+      pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
+      pytorch_git_repo: "pytorch/pytorch"
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref || '' }}
+
   upload_pytorch_wheels:
     name: Release PyTorch Wheels to S3
     needs: [build_pytorch_wheels, generate_target_to_run, test_pytorch_wheels]
