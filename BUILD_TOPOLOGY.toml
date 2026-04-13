@@ -61,7 +61,8 @@
 #   feature_name = "FEATURE_NAME"           # Optional: override auto-generated name
 #   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
 #   platform = "windows"                    # Optional: platform-specific artifact
-#   disable_platforms = ["windows"]         # Optional: platforms where disabled
+#   disable_platforms = ["windows"]         # Optional: platforms where disabled (hard block, FATAL_ERROR if explicitly enabled)
+#   ci_disabled = true                     # Optional: CI does not build by default but can be explicitly enabled
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
 #   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
 #
@@ -625,12 +626,11 @@ artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
 
-# Disabled until rocm-libraries bump that has hip-kernel-provider passing
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
-disable_platforms = ["linux", "windows"]
+ci_disabled = true
 
 # --- IREE Integration ---
 

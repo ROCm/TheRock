@@ -221,6 +221,9 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
         if artifact.disable_platforms:
             f.write(f"  DISABLE_PLATFORMS {' '.join(artifact.disable_platforms)}\n")
 
+        if artifact.ci_disabled:
+            f.write("  DEFAULT OFF\n")
+
         f.write(")\n\n")
 
 

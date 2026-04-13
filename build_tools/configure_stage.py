@@ -91,6 +91,8 @@ def get_stage_features(
             artifact = topology.artifacts[artifact_name]
             if platform_name and platform_name in artifact.disable_platforms:
                 continue
+            if artifact.ci_disabled:
+                continue
             feature_name = topology.get_artifact_feature_name(artifact)
             features.add(feature_name)
 

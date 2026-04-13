@@ -95,6 +95,7 @@ class Artifact:
     disable_platforms: List[str] = field(
         default_factory=list
     )  # Platforms where disabled
+    ci_disabled: bool = False  # CI does not build by default but explicit enable works
     python_requires: List[str] = field(
         default_factory=list
     )  # pip install args (e.g., ["-r path/to/req.txt"])
@@ -186,6 +187,7 @@ class BuildTopology:
                 feature_name=artifact_data.get("feature_name"),
                 feature_group=artifact_data.get("feature_group"),
                 disable_platforms=artifact_data.get("disable_platforms", []),
+                ci_disabled=artifact_data.get("ci_disabled", False),
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
             )
