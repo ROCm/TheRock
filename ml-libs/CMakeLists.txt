@@ -303,6 +303,52 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   )
 endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
+if(THEROCK_ENABLE_HIPKERNELPROVIDER)
+  ##############################################################################
+  # hipDNN hip kernel provider
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipkernelprovider
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hip-kernel-provider"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipkernelprovider"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DHIPKERNELPROVIDER_ENABLE_TESTS=${THEROCK_BUILD_TESTING}
+      -DENABLE_CLANG_TIDY=OFF
+      -DENABLE_CLANG_FORMAT=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      hipDNN
+      therock-googletest
+      therock-flatbuffers
+      therock-nlohmann-json
+    RUNTIME_DEPS
+      hip-clr
+  )
+  therock_cmake_subproject_glob_c_sources(hipkernelprovider
+  SUBDIRS
+    .
+  )
+  therock_cmake_subproject_activate(hipkernelprovider)
+
+  therock_provide_artifact(hipkernelprovider
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-hipkernelprovider.toml
+    COMPONENTS
+      dbg
+      lib
+      test
+    SUBPROJECT_DEPS
+      hipkernelprovider
+  )
+endif(THEROCK_ENABLE_HIPKERNELPROVIDER)
+
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)
   ##############################################################################
   # hipDNN samples
