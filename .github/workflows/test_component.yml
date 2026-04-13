@@ -122,7 +122,7 @@ jobs:
         run: |
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
-          git config core.longpaths true
+          git config --global core.longpaths true
 
       - uses: iterative/setup-dvc@4bdfd2b0f6f1ad7e08afadb03b1a895c352a5239 # v2.0.0
         if: ${{ runner.os == 'Windows' }}
