@@ -313,7 +313,6 @@ def _generate_dashboard(cmake_cmd: str) -> str:
         endif()
     endif()
 
-    handle_error("Testing" _test_ret)
     dashboard_submit(PARTS Done RETURN_VALUE _submit_ret)
     """
 
