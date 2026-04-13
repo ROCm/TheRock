@@ -96,6 +96,7 @@ jobs:
       amdgpu_families: ${{ matrix.variant.family }}
       artifact_group: ${{ matrix.variant.artifact_group }}
       test_runs_on: ${{ matrix.variant.test-runs-on }}
+      test_modes: ${{ toJSON(matrix.variant.test_modes) }}
       build_variant_label: ${{ matrix.variant.build_variant_label }}
       build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
       build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}
@@ -104,7 +105,6 @@ jobs:
       expect_failure: ${{ matrix.variant.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       build_pytorch: ${{ matrix.variant.build_pytorch == true }}
     permissions:
@@ -128,6 +128,7 @@ jobs:
       amdgpu_families: ${{ matrix.variant.family }}
       artifact_group: ${{ matrix.variant.artifact_group }}
       test_runs_on: ${{ matrix.variant.test-runs-on }}
+      test_modes: ${{ toJSON(matrix.variant.test_modes) }}
       build_variant_label: ${{ matrix.variant.build_variant_label }}
       build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
       build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}
@@ -136,7 +137,6 @@ jobs:
       expect_failure: ${{ matrix.variant.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       build_pytorch: ${{ matrix.variant.build_pytorch == true }}
     permissions:

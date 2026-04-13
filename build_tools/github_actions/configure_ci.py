@@ -621,12 +621,26 @@ def main(base_args, linux_families, windows_families):
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
     print(f"run_extended_tests: {run_extended_tests}")
 
-    # Pre-resolve benchmark runner: blank it out when extended tests are
-    # disabled so downstream YAML doesn't need to re-check run_extended_tests.
-    if not run_extended_tests:
-        for row in linux_variants_output + windows_variants_output:
-            if "benchmark-runs-on" in row:
-                row["benchmark-runs-on"] = ""
+    # Build test_modes per variant for downstream YAML matrix consumption.
+    # Benchmarks are only included for extended-test release builds (nightly,
+    # workflow_dispatch with labels).
+    include_benchmarks = run_extended_tests and build_variant == "release"
+    for row in linux_variants_output + windows_variants_output:
+        row["test_modes"] = [
+            {
+                "name": "Test Artifacts",
+                "test_type": test_type,
+                "test_runs_on": row.get("test-runs-on", ""),
+            },
+        ]
+        if include_benchmarks:
+            row["test_modes"].append(
+                {
+                    "name": "Test Benchmarks",
+                    "test_type": "benchmark",
+                    "test_runs_on": row.get("benchmark-runs-on", ""),
+                }
+            )
 
     # Format variants for summary
     def format_variants(variants):
