@@ -292,7 +292,6 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
             "miopenprovider",
             "hipblasltprovider",
             "rand",
-            "rccl",
         ]
         and an.component
         in [
@@ -308,7 +307,18 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
 
     Unlike libraries_artifact_filter, this only matches the specific ISA target
     (no generic). Used in kpack-split mode for device wheel population.
+
+    For rccl, a generic artifact (rccl_lib_generic) is also accepted when the
+    target family is an Instinct/CDNA target (gfx9xx). This supports multi-arch
+    builds where a single Instinct-only rccl artifact is produced instead of
+    per-arch artifacts.
     """
+    is_rccl_generic = (
+        an.name == "rccl"
+        and an.component == "lib"
+        and an.target_family == "generic"
+        and target.startswith("gfx9")
+    )
     return (
         an.name
         in [
@@ -323,7 +333,7 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
         ]
         and an.component == "lib"
         and an.target_family == target
-    )
+    ) or is_rccl_generic
 
 
 def main(argv: list[str]):

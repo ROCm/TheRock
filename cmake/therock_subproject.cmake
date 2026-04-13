@@ -219,6 +219,13 @@ endfunction()
 #   artifacts are marked TARGET_NEUTRAL so that the resulting _generic artifact
 #   contains device code for every architecture, making upload races in classic CI
 #   harmless. Does not affect dist_info.json (unlike USE_DIST_AMDGPU_TARGETS).
+# USE_FILTERED_AMDGPU_TARGETS: Like USE_TEST_AMDGPU_TARGETS but applies a regex
+#   filter to the test targets. Takes a REGEX sub-argument specifying the include
+#   pattern. Example:
+#     USE_FILTERED_AMDGPU_TARGETS REGEX "^gfx9"
+#   This selects only Instinct/CDNA targets (gfx9xx) from the full test target
+#   set. Combine with TARGET_NEUTRAL on therock_provide_artifact to produce a
+#   single _generic artifact containing device code for a target subset only.
 # DISABLE_AMDGPU_TARGETS: Do not set any GPU_TARGETS or AMDGPU_TARGETS variables
 #   in the project. This is largely used for broken projects that cannot
 #   build with an explicit target list.
@@ -341,7 +348,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS;USE_FILTERED_AMDGPU_TARGETS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -480,6 +487,12 @@ function(therock_cmake_subproject_declare target_name)
   # GPU Targets.
   if(ARG_DISABLE_AMDGPU_TARGETS)
     set(_gpu_targets)
+  elseif(ARG_USE_FILTERED_AMDGPU_TARGETS)
+    cmake_parse_arguments(_filter "" "" "REGEX" ${ARG_USE_FILTERED_AMDGPU_TARGETS})
+    set(_gpu_targets "${THEROCK_TEST_AMDGPU_TARGETS}")
+    if(_filter_REGEX)
+      list(FILTER _gpu_targets INCLUDE REGEX "${_filter_REGEX}")
+    endif()
   elseif(ARG_USE_TEST_AMDGPU_TARGETS)
     set(_gpu_targets "${THEROCK_TEST_AMDGPU_TARGETS}")
   elseif(ARG_USE_DIST_AMDGPU_TARGETS)

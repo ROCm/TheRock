@@ -5,6 +5,17 @@ if(THEROCK_ENABLE_RCCL)
   # Most libraries need to depend on the profiler, but is conditionally only used
   # on Posix.
   set(optional_profiler_deps)
+
+  # In a generic (multi-arch) build THEROCK_AMDGPU_FAMILIES is not set.
+  # Build RCCL and rccl-tests as a single target-neutral artifact containing
+  # device code for Instinct/CDNA targets only (gfx9xx), making upload races
+  # across parallel family jobs harmless.
+  set(_rccl_extra_args)
+  set(_rccl_artifact_extra_args)
+  if(NOT THEROCK_AMDGPU_FAMILIES)
+    list(APPEND _rccl_extra_args USE_FILTERED_AMDGPU_TARGETS REGEX "^gfx9")
+    list(APPEND _rccl_artifact_extra_args TARGET_NEUTRAL)
+  endif()
   if(THEROCK_FLAG_INCLUDE_PROFILER)
     list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
   endif()
@@ -27,6 +38,7 @@ if(THEROCK_ENABLE_RCCL)
   set(_rccl_subproject_names)
 
   therock_cmake_subproject_declare(rccl
+    ${_rccl_extra_args}
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl"
     # High latency LTO link of a single library.
@@ -71,6 +83,7 @@ if(THEROCK_ENABLE_RCCL)
     endif()
 
     therock_cmake_subproject_declare(rccl-tests
+      ${_rccl_extra_args}
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl-tests"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl-tests"
       BACKGROUND_BUILD
@@ -99,6 +112,7 @@ if(THEROCK_ENABLE_RCCL)
   endif(THEROCK_BUILD_TESTING)
 
   therock_provide_artifact(rccl
+    ${_rccl_artifact_extra_args}
     DESCRIPTOR artifact-rccl.toml
     COMPONENTS
       dbg
