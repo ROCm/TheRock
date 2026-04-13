@@ -225,17 +225,14 @@ set(CTEST_BUILD_COMMAND "{_esc(build_cmd)}")
 set(CTEST_COVERAGE_COMMAND "{shutil.which('gcov') or 'gcov'}")
 """
 
-def _generate_dashboard(cmake_cmd: str, *, include_coverage: bool = False) -> str:
+def _generate_dashboard(cmake_cmd: str) -> str:
     """Generate dashboard.cmake for CDash.
 
     Script includes CTestCustom.cmake, then runs configure, build, test,
-    optional coverage collection, and submit stages.
+    and submit stages.
 
     Args:
         cmake_cmd: Path or command name for the CMake executable.
-        include_coverage: If True, run ``ctest_coverage`` after tests and submit
-            Coverage to CDash. Requires a build instrumented with coverage flags
-            (e.g. ``-DCMAKE_CXX_FLAGS=--coverage``) so running tests produces ``.gcda``.
 
     Returns:
         CMake script content for dashboard.cmake.
@@ -251,14 +248,6 @@ def _generate_dashboard(cmake_cmd: str, *, include_coverage: bool = False) -> st
         if not os.path.exists(os.path.join(SOURCE_DIR, ".git"))
         else SOURCE_DIR
     )
-
-    _coverage_cmake = ""
-    if include_coverage:
-        _coverage_cmake = f"""
-    ctest_coverage(BUILD "{BINARY_DIR}" RETURN_VALUE _coverage_ret)
-    dashboard_submit(PARTS Coverage RETURN_VALUE _submit_ret)
-    handle_error("Coverage" _coverage_ret)
-"""
 
     # Generate initial dashboard.cmake content with minimum necessary version and dashboard_submit macro
     _script = f"""
@@ -320,7 +309,10 @@ def _generate_dashboard(cmake_cmd: str, *, include_coverage: bool = False) -> st
         endif()
     endif()
 
+<<<<<<< HEAD
 {_coverage_cmake}
+=======
+>>>>>>> parent of afd350ea (Added optional code coverage option to cdash reporting)
     handle_error("Testing" _test_ret)
     dashboard_submit(PARTS Done RETURN_VALUE _submit_ret)
     """
@@ -359,15 +351,6 @@ def main(argv: list[str] | None = None) -> int:
         metavar="ARGS",
         help="Arguments for ctest (CMAKE_CTEST_ARGUMENTS), without leading 'ctest'",
     )
-    parser.add_argument(
-        "--ctest-coverage",
-        action="store_true",
-        help=(
-            "After tests, run ctest_coverage and submit Coverage to CDash. "
-            "Configure the project with coverage flags (e.g. "
-            "-DCMAKE_CXX_FLAGS=--coverage -DCMAKE_C_FLAGS=--coverage) so tests emit .gcda data."
-        ),
-    )
     args = parser.parse_args(argv)
 
     # Get path to cmake executable
@@ -383,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
         build_cmd=args.build_cmd,
         ctest_args_str=args.ctest_args,
     )
-    dashboard = _generate_dashboard(cmake_cmd, include_coverage=args.ctest_coverage)
+    dashboard = _generate_dashboard(cmake_cmd)
 
     # Write CTestCustom.cmake and dashboard.cmake scripts to binary directory
     ctest_custom_path = os.path.join(BINARY_DIR, "CTestCustom.cmake")
