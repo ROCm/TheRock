@@ -177,6 +177,26 @@ def rocgdb():
     _exec("bin/rocgdb")
 
 
+def rocpd():
+    _exec("bin/rocpd")
+
+
+def rocpd2csv():
+    _exec("bin/rocpd2csv")
+
+
+def rocpd2otf2():
+    _exec("bin/rocpd2otf2")
+
+
+def rocpd2pftrace():
+    _exec("bin/rocpd2pftrace")
+
+
+def rocpd2summary():
+    _exec("bin/rocpd2summary")
+
+
 def rocprofv3():
     _exec("bin/rocprofv3")
 

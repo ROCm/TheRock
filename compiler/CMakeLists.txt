@@ -132,9 +132,10 @@ if(THEROCK_ENABLE_COMPILER)
     INTERFACE_INSTALL_RPATH_DIRS
       "lib/llvm/lib"
   )
-  # Note that we do not trigger on LLVM source changes because the monorepo is
-  # too large to glob like that. Consider having a project dev mode option for
-  # enabling better ergonomics here.
+  # LLVM is too large to glob by default; opt in with THEROCK_DEV_PROJECTS.
+  if(THEROCK_DEV_PROJECTS AND "amd-llvm" IN_LIST THEROCK_DEV_PROJECTS)
+    therock_cmake_subproject_glob_c_sources(amd-llvm)
+  endif()
 
   therock_cmake_subproject_provide_package(amd-llvm AMDDeviceLibs lib/llvm/lib/cmake/AMDDeviceLibs)
   therock_cmake_subproject_provide_package(amd-llvm Clang lib/llvm/lib/cmake/clang)

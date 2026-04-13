@@ -405,10 +405,11 @@ also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
 >
 > - If you want to install other versions, the currently supported versions are:
 >
->   | jax version | jaxlib version |
->   | ----------- | -------------- |
->   | 0.8.2       | 0.8.2          |
->   | 0.8.0       | 0.8.0          |
+>   | jax version | jaxlib version   |
+>   | ----------- | ---------------- |
+>   | 0.9.1       | 0.9.1 (upstream) |
+>   | 0.8.2       | 0.8.2            |
+>   | 0.8.0       | 0.8.0            |
 >
 >   See also
 >

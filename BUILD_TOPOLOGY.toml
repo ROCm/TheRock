@@ -218,7 +218,7 @@ source_sets = ["rocm-systems"]
 [artifact_groups.core-amdsmi]
 description = "AMD SMI tool (amdsmi)"
 type = "generic"
-artifact_group_deps = ["base", "third-party-sysdeps"]
+artifact_group_deps = ["base", "third-party-sysdeps", "compiler"]
 source_sets = ["rocm-systems"]
 
 [artifact_groups.compiler]
@@ -487,7 +487,7 @@ disable_platforms = ["windows"]
 [artifacts.core-amdsmi]
 artifact_group = "core-amdsmi"
 type = "target-neutral"
-artifact_deps = ["base", "sysdeps", "sysdeps-libnl", "sysdeps-libmnl"]
+artifact_deps = ["base", "sysdeps", "sysdeps-libnl", "sysdeps-libmnl", "amd-llvm"]
 feature_name = "CORE_AMDSMI"
 feature_group = "CORE"
 disable_platforms = ["windows"]
@@ -586,7 +586,6 @@ artifact_deps = ["core-runtime", "core-hip", "blas"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
-disable_platforms = ["windows"]
 
 [artifacts.support]
 artifact_group = "math-libs"
@@ -625,6 +624,13 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
+
+# Disabled until rocm-libraries bump that has hip-kernel-provider passing
+[artifacts.hipkernelprovider]
+artifact_group = "ml-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+disable_platforms = ["linux", "windows"]
 
 # --- IREE Integration ---
 

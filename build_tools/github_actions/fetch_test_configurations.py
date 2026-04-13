@@ -407,6 +407,18 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # Disabled until rocm-libraries bump that has hip-kernel-provider passing
+    # "hipkernelprovider": {
+    #     "job_name": "hipkernelprovider",
+    #     "fetch_artifact_args": "--hipdnn --hipkernelprovider --tests",
+    #     "timeout_minutes": 15,
+    #     "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
+    #     "platform": ["linux", "windows"],
+    #     "total_shards_dict": {
+    #         "linux": 1,
+    #         "windows": 1,
+    #     },
+    # },
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",
@@ -449,7 +461,7 @@ test_matrix = {
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_libhipcxx_hipcc.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
