@@ -9,6 +9,13 @@ on:
       build_variant:
         type: string
         default: "release"
+      release_type:
+        description: >-
+          Release type: "" for CI builds, or "dev", "nightly", "prerelease"
+          for release builds. Controls artifact bucket selection, IAM role,
+          and package versioning.
+        type: string
+        default: ""
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -59,8 +66,23 @@ jobs:
         id: configure
         env:
           BUILD_VARIANT: ${{ inputs.build_variant }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
+      # Note: Other scripts treat "dev releases" and "CI builds" differently.
+      # Here we set to a "dev" package version even for CI builds:
+      #
+      # type of build                         | package version | version example
+      # ------------------------------------- | --------------- | ------------------
+      # ci ("" empty string for release_type) | dev             | 7.10.0.dev0+f689a8
+      # dev                                   | dev             | 7.10.0.dev0+f689a8
+      # nightly                               | nightly         | 7.10.0a20251021
+      # prerelease                            | prerelease      | 7.10.0rc2
+      #
+      # Other scripts upload "ci" and "dev release" packages to different
+      # buckets, use different ccache namespaces, etc.
       - name: Compute package version
         id: rocm_package_version
-        run: python ./build_tools/compute_rocm_package_version.py --release-type=dev
+        run: |
+          python ./build_tools/compute_rocm_package_version.py \
+            --release-type=${{ inputs.release_type || 'dev' }}

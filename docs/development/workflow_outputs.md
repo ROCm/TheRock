@@ -85,6 +85,9 @@ propagate artifact group naming consistently.
         *.whl
         *.tar.gz
         index.html
+
+    tarballs/
+        therock-dist-{platform}-{family}-{version}.tar.gz
 ```
 
 The `comp-summary.*` files appear both in the `therock-build-prof/` subdirectory
@@ -122,6 +125,10 @@ families in parallel, producing identically-named log files (e.g.,
             *.whl                               (per-family wheels, e.g., rocm_sdk_devel)
             *.tar.gz                            (sdist)
             index.html
+
+    tarballs/
+        therock-dist-{platform}-{family}-{version}.tar.gz
+        therock-dist-{platform}-multiarch-{version}.tar.gz  (KPACK split only)
 ```
 
 Example for a run with foundation + math-libs stages:
@@ -171,11 +178,6 @@ ROCm/TheRock (not fork)? ──Yes──> therock-ci-artifacts
        No
        │
        └──> therock-ci-artifacts-external
-
-Legacy (pre-cutover):
-  Runs before 2025-11-11 (TheRock #2046) use the old bucket names:
-    therock-ci-artifacts          → therock-artifacts
-    therock-ci-artifacts-external → therock-artifacts-external
 ```
 
 Valid `RELEASE_TYPE` values are `dev`, `nightly`, and `prerelease`.
@@ -220,16 +222,17 @@ root = WorkflowOutputRoot.for_local(run_id="local", platform="linux")
 # Location methods — each returns an StorageLocation
 root.root()
 root.artifact(filename="blas_lib_gfx94X.tar.xz")
-root.artifact_index(artifact_group="gfx94X-dcgpu")
+root.artifact_index()
 root.log_dir(artifact_group="gfx94X-dcgpu")
+root.log_stage_dir(stage_name="math-libs", amdgpu_family="gfx1151")
+root.log_stage_dir(stage_name="foundation")  # generic stage, no family
 root.log_file(artifact_group="gfx94X-dcgpu", filename="build.log")
 root.log_index(artifact_group="gfx94X-dcgpu")
 root.build_observability(artifact_group="gfx94X-dcgpu")
-root.stage_log_dir(stage_name="math-libs", amdgpu_family="gfx1151")
-root.stage_log_dir(stage_name="foundation")  # generic stage, no family
 root.manifest_dir(artifact_group="gfx94X-dcgpu")
 root.manifest(artifact_group="gfx94X-dcgpu")
 root.python_packages(artifact_group="gfx110X-all")
+root.tarballs()
 ```
 
 The `lookup_workflow_run` parameter controls whether `from_workflow_run()` calls
@@ -273,6 +276,7 @@ To add a new output type:
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
 | [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for artifacts, logs, manifests    |
 | [`post_stage_upload.py`](/build_tools/github_actions/post_stage_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for multi-arch stage logs         |
+| [`upload_tarballs.py`](/build_tools/github_actions/upload_tarballs.py)                     | `WorkflowOutputRoot` + `StorageBackend` for tarballs                      |
 | [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `WorkflowOutputRoot` + `StorageBackend` for Python wheels and index       |
 | [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `WorkflowOutputRoot` + `StorageBackend` for PyTorch manifests             |
 | [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py) | `WorkflowOutputRoot` for S3 base URI (upload not yet migrated to backend) |

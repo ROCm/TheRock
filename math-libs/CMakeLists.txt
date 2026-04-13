@@ -151,6 +151,7 @@ if(THEROCK_ENABLE_PRIM)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -184,6 +185,7 @@ if(THEROCK_ENABLE_PRIM)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+      ${THEROCK_BUNDLED_SQLITE3}
   )
   therock_cmake_subproject_glob_c_sources(rocThrust
     SUBDIRS
@@ -392,6 +394,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       -DROCM_PATH=
       -DROCM_DIR=
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+      -DCMAKE_CXX_STANDARD=17
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN

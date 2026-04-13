@@ -58,7 +58,7 @@ run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.rocm_version
 
 jobs:
   test_wheels:
-    name: Test ${{ matrix.packages }} wheels (${{ matrix.image.name }}) | ${{ inputs.amdgpu_family }}
+    name: Test ROCm wheels | ${{ inputs.amdgpu_family }} | ${{ matrix.image.name }}
     if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 30
@@ -75,7 +75,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        packages: ["rocm[libraries]", "rocm[libraries,devel]"]
         image:
           - name: ubuntu24.04
             url: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
@@ -96,20 +95,46 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
-      - name: Setup venv and install '${{ matrix.packages }}'
+      # Key off install_libraries success (not test_libraries) so devel install/test still run
+      - name: Install rocm[libraries]
+        id: install_libraries
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "${{ matrix.packages }}==${{ inputs.rocm_version }}" \
+            --packages "rocm[libraries]==${{ inputs.rocm_version }}" \
             --index-url=${{ inputs.package_index_url_base }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
             --find-links=${{ inputs.package_find_links_url }} \
             --activate-in-future-github-actions-steps
 
-      - name: Show installed packages
+      - name: Show installed packages (libraries)
+        if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
         run: |
           pip freeze
 
-      - name: Run 'rocm-sdk test' with '${{ matrix.packages }}' installed
+      - name: Test rocm[libraries]
+        id: test_libraries
+        if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          rocm-sdk test
+
+      - name: Install rocm[libraries,devel]
+        id: install_devel
+        if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
+        run: |
+          python build_tools/setup_venv.py ${VENV_DIR} \
+            --packages "rocm[libraries,devel]==${{ inputs.rocm_version }}" \
+            --index-url=${{ inputs.package_index_url_base }} \
+            --index-subdir=${{ inputs.amdgpu_family }} \
+            --find-links=${{ inputs.package_find_links_url }}
+
+      - name: Show installed packages (libraries,devel)
+        if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}
+        run: |
+          pip freeze
+
+      - name: Test rocm[libraries,devel]
+        if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}
         timeout-minutes: 5
         run: |
           rocm-sdk test
