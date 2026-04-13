@@ -80,15 +80,18 @@ def _os_release_id_version() -> str:
 
 
 def _default_cdash_matrix_label() -> str:
-    """``ROCm/rocm-systems-<os>-<gpu>`` when ``THEROCK_CDASH_LABEL`` is unset.
+    """``ROCm/rocm-systems-<os>`` or ``ROCm/rocm-systems-<os>-<gpu>`` when ``THEROCK_CDASH_LABEL`` is unset.
 
     * OS segment from ``/etc/os-release`` (or ``platform.system()``).
-    * GPU segment from ``THEROCK_CDASH_GPU`` (default ````), matching CI matrix
-      names like ``ROCm/rocm-systems-rhel-8.8-mi325-core``.
+    * Optional GPU segment from ``THEROCK_CDASH_GPU`` (default empty). When set, e.g.
+      ``ROCm/rocm-systems-rhel-8.8-mi325-core``; when empty, no trailing hyphen.
     """
     gpu = os.getenv("THEROCK_CDASH_GPU", "")
     os_part = _os_release_id_version()
-    return f"ROCm/rocm-systems-{os_part}-{gpu}"
+    base = f"ROCm/rocm-systems-{os_part}"
+    if not gpu:
+        return base
+    return f"{base}-{gpu}"
 
 
 def _cdash_build_name() -> str:
@@ -104,7 +107,7 @@ def _cdash_build_name() -> str:
         PR_4946_ROCm/rocm-systems-rhel-8.8-mi325-core [9df51e03fa2d4071851eb4d2b8848612]
 
     Set ``THEROCK_CDASH_LABEL`` in CI to override the middle segment. Set
-    ``THEROCK_CDASH_GPU`` to change the trailing SKU (default ``mi325-core``).
+    ``THEROCK_CDASH_GPU`` to append a trailing SKU; leave unset for no ``-<gpu>`` suffix.
     """
     override = os.getenv("THEROCK_CDASH_BUILD_NAME")
     if override:
