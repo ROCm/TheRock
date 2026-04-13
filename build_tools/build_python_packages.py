@@ -24,6 +24,7 @@ import argparse
 import functools
 import json
 from pathlib import Path
+import re
 import sys
 
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
@@ -302,6 +303,11 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
     return libraries
 
 
+# Matches Instinct/CDNA targets: gfx906, gfx908, gfx90a, gfx94x, gfx95x.
+# Excludes iGPU targets gfx900 and gfx90c.
+_INSTINCT_TARGET_RE = re.compile(r"^gfx9(0[68a]|[45])")
+
+
 def device_artifact_filter(target: str, an: ArtifactName) -> bool:
     """Selects per-ISA library artifacts for a specific GFX target.
 
@@ -309,15 +315,16 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
     (no generic). Used in kpack-split mode for device wheel population.
 
     For rccl, a generic artifact (rccl_lib_generic) is also accepted when the
-    target family is an Instinct/CDNA target (gfx9xx). This supports multi-arch
-    builds where a single Instinct-only rccl artifact is produced instead of
-    per-arch artifacts.
+    target family is an Instinct/CDNA target (gfx906, gfx908, gfx90a, gfx94x,
+    gfx95x — iGPU targets gfx900 and gfx90c are excluded). This supports
+    multi-arch builds where a single Instinct-only rccl artifact is produced
+    instead of per-arch artifacts.
     """
     is_rccl_generic = (
         an.name == "rccl"
         and an.component == "lib"
         and an.target_family == "generic"
-        and target.startswith("gfx9")
+        and bool(_INSTINCT_TARGET_RE.match(target))
     )
     return (
         an.name

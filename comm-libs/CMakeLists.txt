@@ -8,12 +8,13 @@ if(THEROCK_ENABLE_RCCL)
 
   # In a generic (multi-arch) build THEROCK_AMDGPU_FAMILIES is not set.
   # Build RCCL and rccl-tests as a single target-neutral artifact containing
-  # device code for Instinct/CDNA targets only (gfx9xx), making upload races
-  # across parallel family jobs harmless.
+  # device code for Instinct/CDNA targets only (gfx906, gfx908, gfx90a,
+  # gfx94x, gfx95x — excludes iGPU targets gfx900 and gfx90c), making
+  # upload races across parallel family jobs harmless.
   set(_rccl_extra_args)
   set(_rccl_artifact_extra_args)
   if(NOT THEROCK_AMDGPU_FAMILIES)
-    list(APPEND _rccl_extra_args USE_FILTERED_AMDGPU_TARGETS REGEX "^gfx9")
+    list(APPEND _rccl_extra_args USE_FILTERED_AMDGPU_TARGETS REGEX "^gfx9(0[68a]|[45])")
     list(APPEND _rccl_artifact_extra_args TARGET_NEUTRAL)
   endif()
   if(THEROCK_FLAG_INCLUDE_PROFILER)
