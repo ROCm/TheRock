@@ -120,7 +120,7 @@ jobs:
     name: 'Test ${{ matrix.components.job_name }}'
     needs: [test_sanity_check, configure_test_matrix]
     # Run when:
-    #   - sanity check passed or was skipped (benchmark-only runs have no sanity)
+    #   - sanity check passed
     #   - there are components to test
     #   - sanity_check_only_for_family is not set
     if: >-
@@ -141,8 +141,8 @@ jobs:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      # If the test requires a multi GPU, use the multi GPU test runner.
-      # Otherwise, use the standard test runner.
+      # If the test requires a multi GPU, use the multi GPU test runner
+      # Otherwise, use the standard test runner
       test_runs_on: >-
         ${{
           matrix.components.multi_gpu_runner != '' &&
