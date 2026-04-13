@@ -8,12 +8,21 @@ if(THEROCK_ENABLE_RDC)
     message(FATAL_ERROR "RDC requires Linux (Windows not supported)")
   endif()
 
+  # RDC links against core libraries like amdsmi. In sanitizer builds these
+  # dependencies are instrumented, so RDC must use the ROCm compiler toolchain
+  # to get compatible sanitizer flags/runtime handling.
+  set(_rdc_compiler_toolchain)
+  if(THEROCK_SANITIZER)
+    set(_rdc_compiler_toolchain "amd-llvm")
+  endif()
+
   # Get gRPC stage directory for RDC's GRPC_ROOT requirement
   get_target_property(_grpc_stage therock-grpc THEROCK_STAGE_DIR)
 
   therock_cmake_subproject_declare(rdc
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rdc"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rdc"
+    COMPILER_TOOLCHAIN "${_rdc_compiler_toolchain}"
     BACKGROUND_BUILD
     USE_DIST_AMDGPU_TARGETS
 
@@ -53,6 +62,12 @@ if(THEROCK_ENABLE_RDC)
     INTERFACE_INSTALL_RPATH_DIRS
       lib
   )
+  if(THEROCK_SANITIZER)
+    get_target_property(_rdc_effective_compiler_toolchain rdc THEROCK_COMPILER_TOOLCHAIN)
+    if(NOT _rdc_effective_compiler_toolchain STREQUAL "amd-llvm")
+      message(FATAL_ERROR "RDC must use COMPILER_TOOLCHAIN=amd-llvm when THEROCK_SANITIZER is enabled")
+    endif()
+  endif()
   therock_cmake_subproject_glob_c_sources(rdc
     SUBDIRS .
   )
