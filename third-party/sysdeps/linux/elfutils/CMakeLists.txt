@@ -72,6 +72,7 @@ message(STATUS "EXTRA_CFLAGS=${EXTRA_CLFAGS}")
 # HACK: elfutils consults pkg-config for cflags for the compression libraries
 # but then does not seem to use them everywhere needed. So we just hard-code
 # paths.
+set(EXTRA_CPPFLAGS)
 string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/bzip2/build/stage/lib/rocm_sysdeps/include")
 string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/liblzma/build/stage/lib/rocm_sysdeps/include")
 string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/include")
