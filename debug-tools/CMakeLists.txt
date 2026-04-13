@@ -196,7 +196,7 @@ if(THEROCK_ENABLE_ROCGDB)
     message(WARNING "No Python with shared libpython found. rocgdb will be built without Python support.")
   endif()
 
-  if(NOT ${THEROCK_ROCGDB_SOURCE_DIR} STREQUAL ${THEROCK_ROCGDB_SOURCE_DIR_DEFAULT})
+  if(THEROCK_USE_EXTERNAL_ROCGDB AND THEROCK_ROCGDB_SOURCE_DIR)
     message(WARNING "Configuring ROCgdb with modified source directory: ${THEROCK_ROCGDB_SOURCE_DIR}")
   endif()
 

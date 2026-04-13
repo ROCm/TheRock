@@ -27,6 +27,12 @@
 # post-install RPATH patching can take place.
 #
 #
+# ROCGDB_SOURCE_DIR
+#
+# Specifies the location of the ROCgdb sources. Used by TheRock to build
+# ROCgdb from an alternative source location.
+#
+#
 # ROCM_VERSION
 #
 # Specifies the ROCM version we are building for. If empty or non-existent
@@ -49,12 +55,6 @@ project(rocgdb C CXX)
 
 include(ExternalProject)
 include(ProcessorCount)
-
-# Allow external rocgdb source directory.
-if(NOT ROCGDB_SOURCE_DIR)
-  set(ROCGDB_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/source")
-endif()
-message(STATUS "ROCgdb source directory: ${ROCGDB_SOURCE_DIR}")
 
 # Function to extract a single path that matches a given regex pattern
 # from a list of paths.
