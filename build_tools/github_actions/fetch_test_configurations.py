@@ -15,6 +15,7 @@ Required environment variables:
   - RUNNER_OS (https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#detecting-the-operating-system)
 """
 
+import ast
 import json
 import logging
 import os
@@ -448,7 +449,7 @@ test_matrix = {
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_libhipcxx_hipcc.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
@@ -475,6 +476,10 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        # rocdecode requires FFmpeg dev libraries (libavcodec-dev, libavformat-dev,
+        # libavutil-dev) for test builds. These are not bundled in TheRock
+        # artifacts and are provided via the specialized media image.
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
     },
     "rocjpeg": {
         "job_name": "rocjpeg",
@@ -518,7 +523,7 @@ def run():
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "full")
-    test_labels = json.loads(os.getenv("TEST_LABELS") or "[]")
+    test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
     run_functional_tests = str2bool(os.getenv("RUN_FUNCTIONAL_TESTS", "false"))
 
@@ -572,6 +577,45 @@ def run():
             key == "sanity" or key in project_array or "*" in project_array
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
+
+            # Hip-tests on Windows run twice: PAL (pass/fail) and ROCR (informational)
+            # for parity tracking until ROCR is the pass/fail path. See:
+            # https://github.com/ROCm/TheRock/issues/3587
+            if key == "hip-tests" and platform == "windows":
+                base = selected_matrix[key]
+                total_shards = base.get("total_shards_dict", {}).get(platform, 1)
+                if test_type == "quick":
+                    total_shards = 1
+                shard_arr = list(range(1, total_shards + 1))
+
+                pal_entry = {
+                    "job_name": "hip-tests (PAL)",
+                    "fetch_artifact_args": base["fetch_artifact_args"],
+                    "timeout_minutes": base["timeout_minutes"],
+                    "test_script": base["test_script"],
+                    "platform": base["platform"],
+                    "total_shards": total_shards,
+                    "test_type": test_type,
+                    "shard_arr": shard_arr,
+                    "gpu_enable_pal": "1",
+                }
+                all_components.append(pal_entry)
+
+                rocr_entry = {
+                    "job_name": "hip-tests (ROCR)",
+                    "fetch_artifact_args": base["fetch_artifact_args"],
+                    "timeout_minutes": base["timeout_minutes"],
+                    "test_script": base["test_script"],
+                    "platform": base["platform"],
+                    "total_shards": total_shards,
+                    "test_type": test_type,
+                    "shard_arr": shard_arr,
+                    "expect_failure": True,
+                    "gpu_enable_pal": "0",
+                }
+                all_components.append(rocr_entry)
+                continue
+
             job_config_data = selected_matrix[key]
             job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
