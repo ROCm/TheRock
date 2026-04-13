@@ -476,6 +476,12 @@ def apply_patches(args, projects):
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches")
+        if not patch_files:
+            log(
+                f"* No *.patch files in {patch_project_dir}; skipping git am "
+                f"(would otherwise wait on stdin)."
+            )
+            continue
         run_command(
             [
                 "git",
