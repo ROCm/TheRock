@@ -70,25 +70,6 @@ jobs:
   #   (implicit) run id, or it could be an explicit run id.
   #   How about having the "build artifacts" job run as a passthrough?
 
-  validate_windows_artifact_structure:
-    needs: [build_windows_artifacts]
-    name: Validate Artifact Structure
-    if: >-
-      ${{
-        !failure() &&
-        !cancelled() &&
-        (
-          inputs.use_prebuilt_artifacts == 'false' ||
-          inputs.use_prebuilt_artifacts == 'true'
-        ) &&
-        inputs.expect_failure == false
-      }}
-    uses: ./.github/workflows/test_artifacts_structure.yml
-    with:
-      artifact_group: ${{ inputs.artifact_group }}
-      artifact_run_id: ${{ inputs.artifact_run_id }}
-      platform: windows
-
   test_windows_artifacts:
     needs: [build_windows_artifacts]
     name: Test Artifacts

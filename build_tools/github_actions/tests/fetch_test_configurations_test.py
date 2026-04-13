@@ -206,6 +206,45 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # Output contract
     # -----------------------
 
+    def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
+        """On Windows, hip-tests run twice: PAL (pass/fail) and ROCR (informational)."""
+        os.environ["RUNNER_OS"] = "Windows"
+        os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        hip_jobs = [j for j in components if "hip-tests" in j["job_name"]]
+        self.assertEqual(
+            len(hip_jobs), 2, "Expected hip-tests (PAL) and hip-tests (ROCR)"
+        )
+        names = {j["job_name"] for j in hip_jobs}
+        self.assertEqual(names, {"hip-tests (PAL)", "hip-tests (ROCR)"})
+
+        pal = next(j for j in hip_jobs if j["job_name"] == "hip-tests (PAL)")
+        self.assertNotIn("expect_failure", pal)
+        self.assertEqual(pal["total_shards"], 4)
+        self.assertEqual(pal["shard_arr"], [1, 2, 3, 4])
+
+        rocr = next(j for j in hip_jobs if j["job_name"] == "hip-tests (ROCR)")
+        self.assertTrue(rocr["expect_failure"])
+        self.assertEqual(rocr["total_shards"], 4)
+        self.assertEqual(rocr["shard_arr"], [1, 2, 3, 4])
+
+    def test_windows_hip_tests_quick_uses_single_shard(self):
+        """On Windows with test_type=quick, hip-tests PAL/ROCR each use 1 shard."""
+        os.environ["RUNNER_OS"] = "Windows"
+        os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
+        os.environ["TEST_TYPE"] = "quick"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        hip_jobs = [j for j in components if "hip-tests" in j["job_name"]]
+        for job in hip_jobs:
+            self.assertEqual(job["total_shards"], 1)
+            self.assertEqual(job["shard_arr"], [1])
+
     def test_platform_is_emitted(self):
         fetch_test_configurations.run()
         self.assertEqual(self.gha_output["platform"], "linux")
