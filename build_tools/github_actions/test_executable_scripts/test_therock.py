@@ -6,8 +6,10 @@
 """
 
 import argparse
+import logging
 import multiprocessing
 import os
+import platform
 import re
 import shutil
 import socket
@@ -15,7 +17,6 @@ import subprocess
 import sys
 import uuid
 from pathlib import Path
-import logging
 
 # Paths match test_rocprofiler_sdk.py (resolved from THEROCK_BIN_DIR / default install).
 from test_rocprofiler_sdk import (
@@ -58,20 +59,52 @@ environ_vars["LD_LIBRARY_PATH"] = ":".join(
 )
 
 
+def _os_release_id_version() -> str:
+    """Short OS tag for CDash labels, e.g. ``ubuntu-22.04``, ``rhel-8.8``."""
+    try:
+        with open("/etc/os-release", encoding="utf-8") as f:
+            data: dict[str, str] = {}
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                data[k] = v.strip().strip('"')
+        id_ = (data.get("ID") or "unknown").lower()
+        ver = (data.get("VERSION_ID") or data.get("VERSION_CODENAME") or "").lower()
+        if ver:
+            return f"{id_}-{ver}"
+        return id_
+    except OSError:
+        return platform.system().lower()
+
+
+def _default_cdash_matrix_label() -> str:
+    """``ROCm/rocm-systems-<os>-<gpu>`` when ``THEROCK_CDASH_LABEL`` is unset.
+
+    * OS segment from ``/etc/os-release`` (or ``platform.system()``).
+    * GPU segment from ``THEROCK_CDASH_GPU`` (default ````), matching CI matrix
+      names like ``ROCm/rocm-systems-rhel-8.8-mi325-core``.
+    """
+    gpu = os.getenv("THEROCK_CDASH_GPU", "")
+    os_part = _os_release_id_version()
+    return f"ROCm/rocm-systems-{os_part}-{gpu}"
+
+
 def _cdash_build_name() -> str:
     """CDash build name: ``PR_<n>_<label> [<id>]`` (e.g. CI matrix labels).
 
     * ``THEROCK_CDASH_BUILD_NAME`` — if set, returned verbatim (full override).
     * PR number from ``GITHUB_REF`` (``refs/pull/N/merge``).
-    * Label from ``THEROCK_CDASH_LABEL``, else ``GITHUB_REPOSITORY`` (``owner/repo``).
+    * Label from ``THEROCK_CDASH_LABEL``, else :func:`_default_cdash_matrix_label`.
     * Bracket id from ``GITHUB_RUN_ID``, ``THEROCK_RUN_ID``, or a random 32-char hex id.
 
     Example::
 
-        PR_4847_ROCm/rocm-systems-ubuntu-22.04-mi325-core [9fd6600e372d464d95dd200c1c77850d]
+        PR_4946_ROCm/rocm-systems-rhel-8.8-mi325-core [9df51e03fa2d4071851eb4d2b8848612]
 
-    Set ``THEROCK_CDASH_LABEL=ROCm/rocm-systems-ubuntu-22.04-mi325-core`` in CI to match
-    the middle segment when the workflow matrix is not the repo name alone.
+    Set ``THEROCK_CDASH_LABEL`` in CI to override the middle segment. Set
+    ``THEROCK_CDASH_GPU`` to change the trailing SKU (default ``mi325-core``).
     """
     override = os.getenv("THEROCK_CDASH_BUILD_NAME")
     if override:
@@ -83,12 +116,10 @@ def _cdash_build_name() -> str:
         refname = os.getenv("GITHUB_REF_NAME", "").strip()
         if refname:
             safe = re.sub(r"[^\w.\-]+", "-", refname).strip("-")
-            prefix = f"{safe}_" if safe else "local_"
+            prefix = f"{safe}_" if safe else ""
         else:
-            prefix = "local_"
-    label = os.getenv("THEROCK_CDASH_LABEL") or os.getenv(
-        "GITHUB_REPOSITORY", "ROCm/TheRock"
-    )
+            prefix = ""
+    label = os.getenv("THEROCK_CDASH_LABEL") or _default_cdash_matrix_label()
     run_key = (
         os.getenv("GITHUB_RUN_ID")
         or os.getenv("THEROCK_RUN_ID")
@@ -257,7 +288,7 @@ def _generate_dashboard(cmake_cmd: str, *, include_coverage: bool = False) -> st
 
     #Run stages for configure, build, test, and submit to CDash
     _script += f"""
-    set(STAGES "START;UPDATE;CONFIGURE;BUILD;TEST;SUBMIT")
+    set(STAGES "START;UPDATE;SUBMIT")
 
     ctest_start({mode})
     ctest_update(SOURCE "{REPO_SOURCE_DIR}" RETURN_VALUE _update_ret
