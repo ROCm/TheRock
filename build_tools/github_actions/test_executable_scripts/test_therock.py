@@ -277,7 +277,7 @@ def _generate_dashboard(cmake_cmd: str) -> str:
 
     #Run stages for configure, build, test, and submit to CDash
     _script += f"""
-    set(STAGES "START;UPDATE;SUBMIT")
+    set(STAGES "START;UPDATE;CONFIGURE;BUILD;TEST;SUBMIT")
 
     ctest_start({mode})
     ctest_update(SOURCE "{REPO_SOURCE_DIR}" RETURN_VALUE _update_ret
