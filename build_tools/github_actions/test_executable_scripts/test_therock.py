@@ -309,10 +309,6 @@ def _generate_dashboard(cmake_cmd: str) -> str:
         endif()
     endif()
 
-<<<<<<< HEAD
-{_coverage_cmake}
-=======
->>>>>>> parent of afd350ea (Added optional code coverage option to cdash reporting)
     handle_error("Testing" _test_ret)
     dashboard_submit(PARTS Done RETURN_VALUE _submit_ret)
     """
