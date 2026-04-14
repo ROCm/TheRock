@@ -28,6 +28,19 @@ target_include_directories(mirage_sim_core PUBLIC
 )
 target_link_libraries(mirage_sim_core PUBLIC simdojo Threads::Threads)
 
+add_library(mirage_gfx1250_local STATIC
+  src/isa/gfx1250/bringup_profile.cc
+  src/isa/gfx1250/decoder_seed_catalog.cc
+  src/isa/gfx1250/stub_decoder.cc
+  src/isa/gfx1250/stub_decoder_selector.cc
+  src/isa/gfx1250/target_catalog.cc
+)
+
+target_compile_features(mirage_gfx1250_local PUBLIC cxx_std_20)
+target_include_directories(mirage_gfx1250_local PUBLIC
+  "${CMAKE_CURRENT_LIST_DIR}/.."
+)
+
 add_executable(mirage_instruction_catalog_test
   tests/instruction_catalog_test.cc
 )
@@ -69,6 +82,31 @@ add_executable(mirage_simdojo_smoke_test
 target_compile_features(mirage_simdojo_smoke_test PRIVATE cxx_std_20)
 target_link_libraries(mirage_simdojo_smoke_test PRIVATE simdojo Threads::Threads)
 
+add_executable(mirage_gfx1250_bringup_profile_test
+  tests/isa/gfx1250/bringup_profile_test.cc
+)
+target_link_libraries(mirage_gfx1250_bringup_profile_test PRIVATE mirage_gfx1250_local)
+
+add_executable(mirage_gfx1250_decoder_seed_catalog_test
+  tests/isa/gfx1250/decoder_seed_catalog_test.cc
+)
+target_link_libraries(mirage_gfx1250_decoder_seed_catalog_test PRIVATE mirage_gfx1250_local)
+
+add_executable(mirage_gfx1250_stub_decoder_selector_test
+  tests/isa/gfx1250/stub_decoder_selector_test.cc
+)
+target_link_libraries(mirage_gfx1250_stub_decoder_selector_test PRIVATE mirage_gfx1250_local)
+
+add_executable(mirage_gfx1250_stub_decoder_test
+  tests/isa/gfx1250/stub_decoder_test.cc
+)
+target_link_libraries(mirage_gfx1250_stub_decoder_test PRIVATE mirage_gfx1250_local)
+
+add_executable(mirage_gfx1250_target_catalog_test
+  tests/isa/gfx1250/target_catalog_test.cc
+)
+target_link_libraries(mirage_gfx1250_target_catalog_test PRIVATE mirage_gfx1250_local)
+
 add_test(NAME mirage_instruction_catalog_test COMMAND mirage_instruction_catalog_test)
 add_test(NAME mirage_isa_common_test COMMAND mirage_isa_common_test)
 add_test(NAME mirage_gfx950_binary_decoder_test COMMAND mirage_gfx950_binary_decoder_test)
@@ -82,3 +120,8 @@ add_test(NAME mirage_sim_core_test COMMAND mirage_sim_core_test)
 add_test(NAME mirage_gfx950_runtime_test COMMAND mirage_gfx950_runtime_test)
 add_test(NAME mirage_simdojo_dispatch_harness_test COMMAND mirage_simdojo_dispatch_harness_test)
 add_test(NAME mirage_simdojo_smoke_test COMMAND mirage_simdojo_smoke_test)
+add_test(NAME mirage_gfx1250_bringup_profile_test COMMAND mirage_gfx1250_bringup_profile_test)
+add_test(NAME mirage_gfx1250_decoder_seed_catalog_test COMMAND mirage_gfx1250_decoder_seed_catalog_test)
+add_test(NAME mirage_gfx1250_stub_decoder_selector_test COMMAND mirage_gfx1250_stub_decoder_selector_test)
+add_test(NAME mirage_gfx1250_stub_decoder_test COMMAND mirage_gfx1250_stub_decoder_test)
+add_test(NAME mirage_gfx1250_target_catalog_test COMMAND mirage_gfx1250_target_catalog_test)
