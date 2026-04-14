@@ -192,7 +192,7 @@ jobs:
         id: device_extras
         run: |
           if [ "${{ inputs.kpack_split }}" = "true" ] && [ -n "${{ inputs.amdgpu_targets }}" ]; then
-            # Prefix each comma-separated target with "device-": gfx942,gfx1201 -> device-gfx942,device-gfx1201
+            # Prefix each comma-separated target with "device-": gfx1151,gfx1201 -> device-gfx1151,device-gfx1201
             extras=$(echo "${{ inputs.amdgpu_targets }}" | sed 's/\(^\|,\)/\1device-/g')
             echo "value=${extras}" >> "$GITHUB_OUTPUT"
           else
