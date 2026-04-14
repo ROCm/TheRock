@@ -79,7 +79,6 @@ jobs:
       expect_failure: ${{ fromJSON(inputs.build_config).expect_failure }}
       prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
-      test_type: ${{ inputs.test_type }}
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
