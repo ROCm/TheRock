@@ -34,13 +34,9 @@ on:
         type: string
       build_variant_suffix:
         type: string
-      test_labels:
-        type: string
       expect_failure:
         type: boolean
       rocm_package_version:
-        type: string
-      test_type:
         type: string
       prebuilt_stages:
         type: string
@@ -205,12 +201,18 @@ jobs:
       contents: read
       id-token: write
 
-  # ==========================================================================
   # STAGE: iree-compiler (generic, parallel to math-libs)
   # ==========================================================================
+  # TODO: re-enable for ASAN once iree-compiler build errors are fixed
   iree-compiler:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'iree-compiler') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        !failure() &&
+        !contains(inputs.prebuilt_stages, 'iree-compiler') &&
+        inputs.build_variant_label != 'asan'
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -228,9 +230,16 @@ jobs:
   # ==========================================================================
   # STAGE: fusilli-libs (generic, after math-libs + iree-compiler)
   # ==========================================================================
+  # TODO: re-enable for ASAN once fusilli-libs build errors are fixed
   fusilli-libs:
     needs: [compiler-runtime, math-libs, iree-compiler]
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'fusilli-libs') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        !failure() &&
+        !contains(inputs.prebuilt_stages, 'fusilli-libs') &&
+        inputs.build_variant_label != 'asan'
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:

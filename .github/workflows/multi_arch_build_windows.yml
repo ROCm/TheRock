@@ -40,8 +40,6 @@ on:
         description: "Comma-separated build stages to skip (artifacts already copied by the orchestrator)"
       rocm_package_version:
         type: string
-      test_type:
-        type: string
       release_type:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
         type: string
