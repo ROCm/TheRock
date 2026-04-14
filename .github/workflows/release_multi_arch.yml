@@ -22,24 +22,16 @@ on:
         description: 'Release type: "dev", "nightly", or "prerelease".'
         type: string
         required: true
+      prerelease_version:
+        description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
+        type: string
+        default: ""
       linux_amdgpu_families:
         description: "Comma-separated list of Linux GPU families. Empty = all families."
         type: string
         default: ""
       windows_amdgpu_families:
         description: "Comma-separated list of Windows GPU families. Empty = all families."
-        type: string
-        default: ""
-      s3_subdir:
-        description: "Subdirectory for release artifacts in S3"
-        type: string
-        default: "v3"
-      prerelease_version:
-        description: "(Optional) Prerelease version number"
-        type: string
-        default: ""
-      ref:
-        description: "Branch, tag, or SHA to checkout. Defaults to the ref that triggered the workflow."
         type: string
         default: ""
   workflow_dispatch:
@@ -52,24 +44,16 @@ on:
           - nightly
           - prerelease
         default: dev
+      prerelease_version:
+        description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
+        type: string
+        default: ""
       linux_amdgpu_families:
         description: "Comma-separated list of Linux GPU families. Empty = all families."
         type: string
         default: ""
       windows_amdgpu_families:
         description: "Comma-separated list of Windows GPU families. Empty = all families."
-        type: string
-        default: ""
-      s3_subdir:
-        description: "Subdirectory for release artifacts in S3"
-        type: string
-        default: "v3"
-      prerelease_version:
-        description: "(Optional) Prerelease version number"
-        type: string
-        default: ""
-      ref:
-        description: "Branch, tag, or SHA to checkout"
         type: string
         default: ""
 
@@ -102,7 +86,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
-      actions: write
-      id-token: write
+      actions: write  # Added permission to trigger workflows
+      id-token: write  # Added permission for AWS S3 upload
 
   # TODO(#3334): release_multi_arch_windows.yml (and update run-name)

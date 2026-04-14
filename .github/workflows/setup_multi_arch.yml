@@ -17,7 +17,7 @@ on:
         type: string
         default: ""
       prerelease_version:
-        description: Prerelease version (typically a build number)
+        description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
         type: string
         default: ""
     outputs:
