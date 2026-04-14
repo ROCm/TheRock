@@ -106,7 +106,7 @@ jobs:
       - name: "Fetch sources"
         timeout-minutes: 30
         run: |
-          ./build_tools/fetch_sources.py --jobs 12
+          ./build_tools/fetch_sources.py --jobs 12 --depth 1
 
       - name: "Configuring CI options"
         id: configure
