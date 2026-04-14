@@ -972,18 +972,12 @@ function(therock_cmake_subproject_activate target_name)
     )
 
     # Passthrough -D<PROJECT_NAME>_ENABLE_COVERAGE=ON to the subproject
-    # Convert logical target name to uppercase for project-specific variable
-    # (e.g., hipDNN -> HIPDNN_ENABLE_COVERAGE, MIOpen -> MIOPEN_ENABLE_COVERAGE)
-    # Check both mixed-case (hipDNN_ENABLE_COVERAGE) and uppercase (HIPDNN_ENABLE_COVERAGE)
+    # Convert logical target name to uppercase (e.g., hipDNN -> HIPDNN_ENABLE_COVERAGE)
     set(_coverage_arg)
     string(TOUPPER "${_logical_target_name}" _coverage_project_name)
     set(_coverage_var_name "${_coverage_project_name}_ENABLE_COVERAGE")
 
-    if(DEFINED ${_logical_target_name}_ENABLE_COVERAGE)
-      # Mixed-case variable defined (e.g., hipDNN_ENABLE_COVERAGE)
-      set(_coverage_arg "-D${_coverage_var_name}=${${_logical_target_name}_ENABLE_COVERAGE}")
-    elseif(DEFINED ${_coverage_var_name})
-      # Uppercase variable defined (e.g., HIPDNN_ENABLE_COVERAGE)
+    if(DEFINED ${_coverage_var_name})
       set(_coverage_arg "-D${_coverage_var_name}=${${_coverage_var_name}}")
     endif()
 
