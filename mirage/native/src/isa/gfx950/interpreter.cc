@@ -228,6 +228,135 @@ std::uint8_t SaturateI16ToU8(std::int16_t value) {
   return static_cast<std::uint8_t>(value);
 }
 
+float ExpandFp8E4m3ToFloat(std::uint8_t bits) {
+  const bool sign = (bits & 0x80u) != 0;
+  const std::uint32_t exponent = (bits >> 3) & 0x0fu;
+  const std::uint32_t mantissa = bits & 0x07u;
+
+  if (exponent == 0x0fu) {
+    if (mantissa == 0u) {
+      return sign ? -std::numeric_limits<float>::infinity()
+                  : std::numeric_limits<float>::infinity();
+    }
+    return sign ? -std::numeric_limits<float>::quiet_NaN()
+                : std::numeric_limits<float>::quiet_NaN();
+  }
+  if (exponent == 0u) {
+    if (mantissa == 0u) {
+      return sign ? -0.0f : 0.0f;
+    }
+    const float value = std::ldexp(static_cast<float>(mantissa), -9);
+    return sign ? -value : value;
+  }
+
+  const float value =
+      std::ldexp(1.0f + static_cast<float>(mantissa) / 8.0f,
+                 static_cast<int>(exponent) - 7);
+  return sign ? -value : value;
+}
+
+float ExpandBf8E5m2ToFloat(std::uint8_t bits) {
+  const bool sign = (bits & 0x80u) != 0;
+  const std::uint32_t exponent = (bits >> 2) & 0x1fu;
+  const std::uint32_t mantissa = bits & 0x03u;
+
+  if (exponent == 0x1fu) {
+    if (mantissa == 0u) {
+      return sign ? -std::numeric_limits<float>::infinity()
+                  : std::numeric_limits<float>::infinity();
+    }
+    return sign ? -std::numeric_limits<float>::quiet_NaN()
+                : std::numeric_limits<float>::quiet_NaN();
+  }
+  if (exponent == 0u) {
+    if (mantissa == 0u) {
+      return sign ? -0.0f : 0.0f;
+    }
+    const float value = std::ldexp(static_cast<float>(mantissa), -16);
+    return sign ? -value : value;
+  }
+
+  const float value =
+      std::ldexp(1.0f + static_cast<float>(mantissa) / 4.0f,
+                 static_cast<int>(exponent) - 15);
+  return sign ? -value : value;
+}
+
+std::uint64_t ExpandPackedFp8PairToF32x2(std::uint32_t value, bool use_bf8) {
+  const auto convert = [use_bf8](std::uint8_t bits) {
+    return use_bf8 ? ExpandBf8E5m2ToFloat(bits) : ExpandFp8E4m3ToFloat(bits);
+  };
+
+  const std::uint32_t low_bits =
+      BitCast<std::uint32_t>(convert(static_cast<std::uint8_t>(value & 0xffu)));
+  const std::uint32_t high_bits = BitCast<std::uint32_t>(
+      convert(static_cast<std::uint8_t>((value >> 8) & 0xffu)));
+  return static_cast<std::uint64_t>(low_bits) |
+         (static_cast<std::uint64_t>(high_bits) << 32);
+}
+
+std::uint32_t EvaluateCvtOffF32I4(std::uint32_t value) {
+  switch (value & 0xfu) {
+    case 0u:
+      return BitCast<std::uint32_t>(0.0f);
+    case 1u:
+      return BitCast<std::uint32_t>(0.0625f);
+    case 2u:
+      return BitCast<std::uint32_t>(0.125f);
+    case 3u:
+      return BitCast<std::uint32_t>(0.1875f);
+    case 4u:
+      return BitCast<std::uint32_t>(0.25f);
+    case 5u:
+      return BitCast<std::uint32_t>(0.3125f);
+    case 6u:
+      return BitCast<std::uint32_t>(0.375f);
+    case 7u:
+      return BitCast<std::uint32_t>(0.4375f);
+    case 8u:
+      return BitCast<std::uint32_t>(-0.5f);
+    case 9u:
+      return BitCast<std::uint32_t>(-0.4375f);
+    case 10u:
+      return BitCast<std::uint32_t>(-0.375f);
+    case 11u:
+      return BitCast<std::uint32_t>(-0.3125f);
+    case 12u:
+      return BitCast<std::uint32_t>(-0.25f);
+    case 13u:
+      return BitCast<std::uint32_t>(-0.1875f);
+    case 14u:
+      return BitCast<std::uint32_t>(-0.125f);
+    case 15u:
+    default:
+      return BitCast<std::uint32_t>(-0.0625f);
+  }
+}
+
+std::uint16_t NormalizeFloatToSnorm16(float value) {
+  if (std::isnan(value)) {
+    return 0u;
+  }
+  if (value <= -1.0f) {
+    return 0x8000u;
+  }
+  if (value >= 1.0f) {
+    return 0x7fffu;
+  }
+  return static_cast<std::uint16_t>(static_cast<std::int16_t>(
+      std::nearbyint(value * 32767.0f)));
+}
+
+std::uint16_t NormalizeFloatToUnorm16(float value) {
+  if (std::isnan(value) || value <= 0.0f) {
+    return 0u;
+  }
+  if (value >= 1.0f) {
+    return 0xffffu;
+  }
+  return static_cast<std::uint16_t>(std::nearbyint(value * 65535.0f));
+}
+
 std::uint16_t TruncateFloatToU16(float value) {
   if (!(value > 0.0f)) {
     return 0u;
@@ -490,11 +619,23 @@ std::uint32_t EvaluateVectorUnary32(std::string_view opcode, std::uint32_t value
     return BitCast<std::uint32_t>(
         static_cast<float>(static_cast<std::uint8_t>((value >> 24) & 0xffu)));
   }
+  if (opcode == "V_CVT_F32_FP8") {
+    return BitCast<std::uint32_t>(
+        ExpandFp8E4m3ToFloat(static_cast<std::uint8_t>(value)));
+  }
+  if (opcode == "V_CVT_F32_BF8") {
+    return BitCast<std::uint32_t>(
+        ExpandBf8E5m2ToFloat(static_cast<std::uint8_t>(value)));
+  }
   if (opcode == "V_CVT_F32_I32") {
     return BitCast<std::uint32_t>(static_cast<float>(BitCast<std::int32_t>(value)));
   }
   if (opcode == "V_CVT_F32_U32") {
     return BitCast<std::uint32_t>(static_cast<float>(value));
+  }
+  if (opcode == "V_CVT_F32_BF16") {
+    return BitCast<std::uint32_t>(
+        BFloat16ToFloat(static_cast<std::uint16_t>(value)));
   }
   if (opcode == "V_CVT_U32_F32") {
     return TruncateFloatToU32(BitCast<float>(value));
@@ -509,11 +650,22 @@ std::uint32_t EvaluateVectorUnary32(std::string_view opcode, std::uint32_t value
   if (opcode == "V_CVT_FLR_I32_F32") {
     return BitCast<std::uint32_t>(FloorFloatToI32(BitCast<float>(value)));
   }
+  if (opcode == "V_CVT_OFF_F32_I4") {
+    return EvaluateCvtOffF32I4(value);
+  }
   if (opcode == "V_CVT_F16_F32") {
     return static_cast<std::uint32_t>(FloatToHalf(BitCast<float>(value)));
   }
   if (opcode == "V_CVT_F32_F16") {
     return BitCast<std::uint32_t>(HalfToFloat(static_cast<std::uint16_t>(value)));
+  }
+  if (opcode == "V_CVT_NORM_I16_F16") {
+    return static_cast<std::uint32_t>(NormalizeFloatToSnorm16(
+        HalfToFloat(static_cast<std::uint16_t>(value))));
+  }
+  if (opcode == "V_CVT_NORM_U16_F16") {
+    return static_cast<std::uint32_t>(NormalizeFloatToUnorm16(
+        HalfToFloat(static_cast<std::uint16_t>(value))));
   }
   if (opcode == "V_RCP_F32" || opcode == "V_RCP_IFLAG_F32" ||
       opcode == "V_RSQ_F32" || opcode == "V_SQRT_F32" ||
@@ -628,6 +780,15 @@ std::uint32_t EvaluateVectorUnary32(CompiledOpcode opcode, std::uint32_t value) 
     case CompiledOpcode::kVCvtF32Ubyte3:
       return BitCast<std::uint32_t>(
           static_cast<float>(static_cast<std::uint8_t>((value >> 24) & 0xffu)));
+    case CompiledOpcode::kVCvtF32Fp8:
+      return BitCast<std::uint32_t>(
+          ExpandFp8E4m3ToFloat(static_cast<std::uint8_t>(value)));
+    case CompiledOpcode::kVCvtF32Bf8:
+      return BitCast<std::uint32_t>(
+          ExpandBf8E5m2ToFloat(static_cast<std::uint8_t>(value)));
+    case CompiledOpcode::kVCvtF32Bf16:
+      return BitCast<std::uint32_t>(
+          BFloat16ToFloat(static_cast<std::uint16_t>(value)));
     case CompiledOpcode::kVCvtF32I32:
       return BitCast<std::uint32_t>(
           static_cast<float>(BitCast<std::int32_t>(value)));
@@ -642,11 +803,19 @@ std::uint32_t EvaluateVectorUnary32(CompiledOpcode opcode, std::uint32_t value) 
           RoundPositiveInfinityFloatToI32(BitCast<float>(value)));
     case CompiledOpcode::kVCvtFlrI32F32:
       return BitCast<std::uint32_t>(FloorFloatToI32(BitCast<float>(value)));
+    case CompiledOpcode::kVCvtOffF32I4:
+      return EvaluateCvtOffF32I4(value);
     case CompiledOpcode::kVCvtF16F32:
       return static_cast<std::uint32_t>(FloatToHalf(BitCast<float>(value)));
     case CompiledOpcode::kVCvtF32F16:
       return BitCast<std::uint32_t>(
           HalfToFloat(static_cast<std::uint16_t>(value)));
+    case CompiledOpcode::kVCvtNormI16F16:
+      return static_cast<std::uint32_t>(NormalizeFloatToSnorm16(
+          HalfToFloat(static_cast<std::uint16_t>(value))));
+    case CompiledOpcode::kVCvtNormU16F16:
+      return static_cast<std::uint32_t>(NormalizeFloatToUnorm16(
+          HalfToFloat(static_cast<std::uint16_t>(value))));
     case CompiledOpcode::kVRcpF32:
     case CompiledOpcode::kVRcpIflagF32:
     case CompiledOpcode::kVRsqF32:
@@ -714,6 +883,12 @@ std::uint32_t EvaluateVectorUnary32(CompiledOpcode opcode, std::uint32_t value) 
 }
 
 std::uint64_t EvaluateVectorUnary64(std::string_view opcode, std::uint32_t value) {
+  if (opcode == "V_CVT_PK_F32_FP8") {
+    return ExpandPackedFp8PairToF32x2(value, false);
+  }
+  if (opcode == "V_CVT_PK_F32_BF8") {
+    return ExpandPackedFp8PairToF32x2(value, true);
+  }
   if (opcode == "V_CVT_F64_F32") {
     return BitCast<std::uint64_t>(static_cast<double>(BitCast<float>(value)));
   }
@@ -728,6 +903,12 @@ std::uint64_t EvaluateVectorUnary64(std::string_view opcode, std::uint32_t value
 }
 
 std::uint64_t EvaluateVectorUnary64(CompiledOpcode opcode, std::uint32_t value) {
+  if (opcode == CompiledOpcode::kVCvtPkF32Fp8) {
+    return ExpandPackedFp8PairToF32x2(value, false);
+  }
+  if (opcode == CompiledOpcode::kVCvtPkF32Bf8) {
+    return ExpandPackedFp8PairToF32x2(value, true);
+  }
   switch (opcode) {
     case CompiledOpcode::kVCvtF64F32:
       return BitCast<std::uint64_t>(static_cast<double>(BitCast<float>(value)));
@@ -2251,6 +2432,9 @@ bool IsVectorUnaryOpcode(std::string_view opcode) {
          opcode == "V_CVT_F32_UBYTE1" ||
          opcode == "V_CVT_F32_UBYTE2" ||
          opcode == "V_CVT_F32_UBYTE3" ||
+         opcode == "V_CVT_F32_FP8" ||
+         opcode == "V_CVT_F32_BF8" ||
+         opcode == "V_CVT_F32_BF16" ||
          opcode == "V_RCP_F16" || opcode == "V_SQRT_F16" ||
          opcode == "V_RSQ_F16" || opcode == "V_LOG_F16" ||
          opcode == "V_EXP_F16" || opcode == "V_SIN_F16" ||
@@ -2262,8 +2446,11 @@ bool IsVectorUnaryOpcode(std::string_view opcode) {
          opcode == "V_CVT_F32_I32" || opcode == "V_CVT_F32_U32" ||
          opcode == "V_CVT_U32_F32" || opcode == "V_CVT_I32_F32" ||
          opcode == "V_CVT_RPI_I32_F32" || opcode == "V_CVT_FLR_I32_F32" ||
+         opcode == "V_CVT_OFF_F32_I4" ||
          opcode == "V_CVT_I32_F64" || opcode == "V_CVT_U32_F64" ||
          opcode == "V_CVT_F16_F32" || opcode == "V_CVT_F32_F16" ||
+         opcode == "V_CVT_NORM_I16_F16" || opcode == "V_CVT_NORM_U16_F16" ||
+         opcode == "V_CVT_PK_F32_FP8" || opcode == "V_CVT_PK_F32_BF8" ||
          opcode == "V_CVT_F32_F64" || opcode == "V_CVT_F64_F32" ||
          opcode == "V_CVT_F64_I32" || opcode == "V_CVT_F64_U32" ||
          opcode == "V_EXP_F32" || opcode == "V_EXP_LEGACY_F32" ||
@@ -6948,12 +7135,24 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kVCvtF32Ubyte3;
     return true;
   }
+  if (opcode == "V_CVT_F32_FP8") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtF32Fp8;
+    return true;
+  }
+  if (opcode == "V_CVT_F32_BF8") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtF32Bf8;
+    return true;
+  }
   if (opcode == "V_CVT_F32_I32") {
     compiled_instruction->opcode = CompiledOpcode::kVCvtF32I32;
     return true;
   }
   if (opcode == "V_CVT_F32_U32") {
     compiled_instruction->opcode = CompiledOpcode::kVCvtF32U32;
+    return true;
+  }
+  if (opcode == "V_CVT_F32_BF16") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtF32Bf16;
     return true;
   }
   if (opcode == "V_CVT_U32_F32") {
@@ -6972,6 +7171,10 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kVCvtFlrI32F32;
     return true;
   }
+  if (opcode == "V_CVT_OFF_F32_I4") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtOffF32I4;
+    return true;
+  }
   if (opcode == "V_CVT_I32_F64") {
     compiled_instruction->opcode = CompiledOpcode::kVCvtI32F64;
     return true;
@@ -6986,6 +7189,22 @@ bool TryCompileOpcode(std::string_view opcode,
   }
   if (opcode == "V_CVT_F32_F16") {
     compiled_instruction->opcode = CompiledOpcode::kVCvtF32F16;
+    return true;
+  }
+  if (opcode == "V_CVT_NORM_I16_F16") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtNormI16F16;
+    return true;
+  }
+  if (opcode == "V_CVT_NORM_U16_F16") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtNormU16F16;
+    return true;
+  }
+  if (opcode == "V_CVT_PK_F32_FP8") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtPkF32Fp8;
+    return true;
+  }
+  if (opcode == "V_CVT_PK_F32_BF8") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtPkF32Bf8;
     return true;
   }
   if (opcode == "V_CVT_F32_F64") {
@@ -10016,6 +10235,14 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kVCvtF32Ubyte1:
     case CompiledOpcode::kVCvtF32Ubyte2:
     case CompiledOpcode::kVCvtF32Ubyte3:
+    case CompiledOpcode::kVCvtF32Fp8:
+    case CompiledOpcode::kVCvtF32Bf8:
+    case CompiledOpcode::kVCvtF32Bf16:
+    case CompiledOpcode::kVCvtOffF32I4:
+    case CompiledOpcode::kVCvtNormI16F16:
+    case CompiledOpcode::kVCvtNormU16F16:
+    case CompiledOpcode::kVCvtPkF32Fp8:
+    case CompiledOpcode::kVCvtPkF32Bf8:
     case CompiledOpcode::kVCvtF32I32:
     case CompiledOpcode::kVCvtF32U32:
     case CompiledOpcode::kVCvtU32F32:
@@ -13796,7 +14023,9 @@ bool Gfx950Interpreter::ExecuteVectorUnary(const DecodedInstruction& instruction
     return true;
   }
 
-  if (instruction.opcode == "V_CVT_F64_F32" ||
+  if (instruction.opcode == "V_CVT_PK_F32_FP8" ||
+      instruction.opcode == "V_CVT_PK_F32_BF8" ||
+      instruction.opcode == "V_CVT_F64_F32" ||
       instruction.opcode == "V_CVT_F64_I32" ||
       instruction.opcode == "V_CVT_F64_U32") {
     for (std::size_t lane_index = 0;
@@ -13873,14 +14102,22 @@ bool Gfx950Interpreter::ExecuteVectorUnary(const DecodedInstruction& instruction
         instruction.opcode != "V_CVT_F32_UBYTE1" &&
         instruction.opcode != "V_CVT_F32_UBYTE2" &&
         instruction.opcode != "V_CVT_F32_UBYTE3" &&
+        instruction.opcode != "V_CVT_F32_FP8" &&
+        instruction.opcode != "V_CVT_F32_BF8" &&
         instruction.opcode != "V_CVT_F32_I32" &&
         instruction.opcode != "V_CVT_F32_U32" &&
+        instruction.opcode != "V_CVT_F32_BF16" &&
         instruction.opcode != "V_CVT_U32_F32" &&
         instruction.opcode != "V_CVT_I32_F32" &&
         instruction.opcode != "V_CVT_RPI_I32_F32" &&
         instruction.opcode != "V_CVT_FLR_I32_F32" &&
+        instruction.opcode != "V_CVT_OFF_F32_I4" &&
         instruction.opcode != "V_CVT_F16_F32" &&
         instruction.opcode != "V_CVT_F32_F16" &&
+        instruction.opcode != "V_CVT_NORM_I16_F16" &&
+        instruction.opcode != "V_CVT_NORM_U16_F16" &&
+        instruction.opcode != "V_CVT_PK_F32_FP8" &&
+        instruction.opcode != "V_CVT_PK_F32_BF8" &&
         instruction.opcode != "V_RCP_F16" &&
         instruction.opcode != "V_SQRT_F16" &&
         instruction.opcode != "V_RSQ_F16" &&
@@ -13965,7 +14202,9 @@ bool Gfx950Interpreter::ExecuteVectorUnary(const CompiledInstruction& instructio
     return true;
   }
 
-  if (instruction.opcode == CompiledOpcode::kVCvtF64F32 ||
+  if (instruction.opcode == CompiledOpcode::kVCvtPkF32Fp8 ||
+      instruction.opcode == CompiledOpcode::kVCvtPkF32Bf8 ||
+      instruction.opcode == CompiledOpcode::kVCvtF64F32 ||
       instruction.opcode == CompiledOpcode::kVCvtF64I32 ||
       instruction.opcode == CompiledOpcode::kVCvtF64U32) {
     for (std::size_t lane_index = 0;
@@ -14043,14 +14282,20 @@ bool Gfx950Interpreter::ExecuteVectorUnary(const CompiledInstruction& instructio
       case CompiledOpcode::kVCvtF32Ubyte1:
       case CompiledOpcode::kVCvtF32Ubyte2:
       case CompiledOpcode::kVCvtF32Ubyte3:
+      case CompiledOpcode::kVCvtF32Fp8:
+      case CompiledOpcode::kVCvtF32Bf8:
       case CompiledOpcode::kVCvtF32I32:
       case CompiledOpcode::kVCvtF32U32:
+      case CompiledOpcode::kVCvtF32Bf16:
       case CompiledOpcode::kVCvtU32F32:
       case CompiledOpcode::kVCvtI32F32:
       case CompiledOpcode::kVCvtRpiI32F32:
       case CompiledOpcode::kVCvtFlrI32F32:
+      case CompiledOpcode::kVCvtOffF32I4:
       case CompiledOpcode::kVCvtF16F32:
       case CompiledOpcode::kVCvtF32F16:
+      case CompiledOpcode::kVCvtNormI16F16:
+      case CompiledOpcode::kVCvtNormU16F16:
       case CompiledOpcode::kVRcpF16:
       case CompiledOpcode::kVSqrtF16:
       case CompiledOpcode::kVRsqF16:

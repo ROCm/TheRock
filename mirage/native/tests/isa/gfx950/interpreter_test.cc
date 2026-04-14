@@ -2537,6 +2537,221 @@ bool RunDsWaveCounterTests(
   return true;
 }
 
+[[gnu::noinline]] bool RunVectorFp8Bf8ConversionTest(
+    const mirage::sim::isa::Gfx950Interpreter& interpreter,
+    std::string* error_message) {
+  using namespace mirage::sim::isa;
+
+  const std::vector<DecodedInstruction> vector_fp8_bf8_conversion_program = {
+      DecodedInstruction::Unary("V_CVT_F32_FP8", InstructionOperand::Vgpr(120),
+                                InstructionOperand::Vgpr(110)),
+      DecodedInstruction::Unary("V_CVT_F32_BF8", InstructionOperand::Vgpr(121),
+                                InstructionOperand::Vgpr(111)),
+      DecodedInstruction::Unary("V_CVT_F32_BF16", InstructionOperand::Vgpr(122),
+                                InstructionOperand::Vgpr(112)),
+      DecodedInstruction::Unary("V_CVT_OFF_F32_I4", InstructionOperand::Vgpr(123),
+                                InstructionOperand::Vgpr(113)),
+      DecodedInstruction::Unary("V_CVT_NORM_I16_F16", InstructionOperand::Vgpr(124),
+                                InstructionOperand::Vgpr(114)),
+      DecodedInstruction::Unary("V_CVT_NORM_U16_F16", InstructionOperand::Vgpr(125),
+                                InstructionOperand::Vgpr(114)),
+      DecodedInstruction::Unary("V_CVT_PK_F32_FP8", InstructionOperand::Vgpr(126),
+                                InstructionOperand::Vgpr(115)),
+      DecodedInstruction::Unary("V_CVT_PK_F32_BF8", InstructionOperand::Vgpr(118),
+                                InstructionOperand::Vgpr(116)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  auto vector_fp8_bf8_conversion_state =
+      std::make_unique<WaveExecutionState>();
+  vector_fp8_bf8_conversion_state->exec_mask = 0b1011ULL;
+  vector_fp8_bf8_conversion_state->vgprs[110][0] = 0x38u;
+  vector_fp8_bf8_conversion_state->vgprs[110][1] = 0x30u;
+  vector_fp8_bf8_conversion_state->vgprs[110][3] = 0x00u;
+  vector_fp8_bf8_conversion_state->vgprs[111][0] = 0x3cu;
+  vector_fp8_bf8_conversion_state->vgprs[111][1] = 0x38u;
+  vector_fp8_bf8_conversion_state->vgprs[111][3] = 0x00u;
+  vector_fp8_bf8_conversion_state->vgprs[112][0] = 0x00003f80u;
+  vector_fp8_bf8_conversion_state->vgprs[112][1] = 0x00003f00u;
+  vector_fp8_bf8_conversion_state->vgprs[112][3] = 0x0000bc00u;
+  vector_fp8_bf8_conversion_state->vgprs[113][0] = 0x00000000u;
+  vector_fp8_bf8_conversion_state->vgprs[113][1] = 0x00000008u;
+  vector_fp8_bf8_conversion_state->vgprs[113][3] = 0x0000000fu;
+  vector_fp8_bf8_conversion_state->vgprs[114][0] = 0x00003800u;
+  vector_fp8_bf8_conversion_state->vgprs[114][1] = 0x00003c00u;
+  vector_fp8_bf8_conversion_state->vgprs[114][3] = 0x0000bc00u;
+  vector_fp8_bf8_conversion_state->vgprs[115][0] = 0x00003038u;
+  vector_fp8_bf8_conversion_state->vgprs[115][1] = 0x00003830u;
+  vector_fp8_bf8_conversion_state->vgprs[115][3] = 0x00000038u;
+  vector_fp8_bf8_conversion_state->vgprs[116][0] = 0x0000303cu;
+  vector_fp8_bf8_conversion_state->vgprs[116][1] = 0x00003c30u;
+  vector_fp8_bf8_conversion_state->vgprs[116][3] = 0x0000003cu;
+  vector_fp8_bf8_conversion_state->vgprs[120][2] = 0xdeadbeefu;
+  vector_fp8_bf8_conversion_state->vgprs[121][2] = 0xdeadbeefu;
+  vector_fp8_bf8_conversion_state->vgprs[122][2] = 0xdeadbeefu;
+  vector_fp8_bf8_conversion_state->vgprs[123][2] = 0xdeadbeefu;
+  vector_fp8_bf8_conversion_state->vgprs[124][2] = 0xdeadbeefu;
+  vector_fp8_bf8_conversion_state->vgprs[125][2] = 0xdeadbeefu;
+  vector_fp8_bf8_conversion_state->vgprs[126][2] = 0xdeadbeefu;
+  vector_fp8_bf8_conversion_state->vgprs[127][2] = 0xcafebabeu;
+  vector_fp8_bf8_conversion_state->vgprs[118][2] = 0xdeadbeefu;
+  vector_fp8_bf8_conversion_state->vgprs[119][2] = 0xcafebabeu;
+
+  const auto validate_vector_fp8_bf8_conversion =
+      [](const WaveExecutionState& state, std::string_view mode) {
+        return Expect(state.halted,
+                      (std::string(mode) +
+                       " vector fp8/bf8 conversion program to halt")
+                          .c_str()) &&
+               Expect(state.vgprs[120][0] == FloatBits(1.0f),
+                      (std::string(mode) + " v_cvt_f32_fp8 lane 0 result")
+                          .c_str()) &&
+               Expect(state.vgprs[120][1] == FloatBits(0.5f),
+                      (std::string(mode) + " v_cvt_f32_fp8 lane 1 result")
+                          .c_str()) &&
+               Expect(state.vgprs[120][2] == 0xdeadbeefu,
+                      (std::string(mode) +
+                       " inactive v_cvt_f32_fp8 result")
+                          .c_str()) &&
+               Expect(state.vgprs[120][3] == FloatBits(0.0f),
+                      (std::string(mode) + " v_cvt_f32_fp8 lane 3 result")
+                          .c_str()) &&
+               Expect(state.vgprs[121][0] == FloatBits(1.0f),
+                      (std::string(mode) + " v_cvt_f32_bf8 lane 0 result")
+                          .c_str()) &&
+               Expect(state.vgprs[121][1] == FloatBits(0.5f),
+                      (std::string(mode) + " v_cvt_f32_bf8 lane 1 result")
+                          .c_str()) &&
+               Expect(state.vgprs[121][2] == 0xdeadbeefu,
+                      (std::string(mode) +
+                       " inactive v_cvt_f32_bf8 result")
+                          .c_str()) &&
+               Expect(state.vgprs[121][3] == FloatBits(0.0f),
+                      (std::string(mode) + " v_cvt_f32_bf8 lane 3 result")
+                          .c_str()) &&
+               Expect(state.vgprs[122][0] == FloatBits(1.0f),
+                      (std::string(mode) + " v_cvt_f32_bf16 lane 0 result")
+                          .c_str()) &&
+               Expect(state.vgprs[122][1] == FloatBits(0.5f),
+                      (std::string(mode) + " v_cvt_f32_bf16 lane 1 result")
+                          .c_str()) &&
+               Expect(state.vgprs[122][2] == 0xdeadbeefu,
+                      (std::string(mode) +
+                       " inactive v_cvt_f32_bf16 result")
+                          .c_str()) &&
+               Expect(state.vgprs[122][3] == FloatBits(-0.0078125f),
+                      (std::string(mode) + " v_cvt_f32_bf16 lane 3 result")
+                          .c_str()) &&
+               Expect(state.vgprs[123][0] == FloatBits(0.0f),
+                      (std::string(mode) + " v_cvt_off_f32_i4 lane 0 result")
+                          .c_str()) &&
+               Expect(state.vgprs[123][1] == FloatBits(-0.5f),
+                      (std::string(mode) + " v_cvt_off_f32_i4 lane 1 result")
+                          .c_str()) &&
+               Expect(state.vgprs[123][2] == 0xdeadbeefu,
+                      (std::string(mode) +
+                       " inactive v_cvt_off_f32_i4 result")
+                          .c_str()) &&
+               Expect(state.vgprs[123][3] == FloatBits(-0.0625f),
+                      (std::string(mode) + " v_cvt_off_f32_i4 lane 3 result")
+                          .c_str()) &&
+               Expect(state.vgprs[124][0] == 0x00004000u,
+                      (std::string(mode) +
+                       " v_cvt_norm_i16_f16 lane 0 result")
+                          .c_str()) &&
+               Expect(state.vgprs[124][1] == 0x00007fffu,
+                      (std::string(mode) +
+                       " v_cvt_norm_i16_f16 lane 1 result")
+                          .c_str()) &&
+               Expect(state.vgprs[124][2] == 0xdeadbeefu,
+                      (std::string(mode) +
+                       " inactive v_cvt_norm_i16_f16 result")
+                          .c_str()) &&
+               Expect(state.vgprs[124][3] == 0x00008000u,
+                      (std::string(mode) +
+                       " v_cvt_norm_i16_f16 lane 3 result")
+                          .c_str()) &&
+               Expect(state.vgprs[125][0] == 0x00008000u,
+                      (std::string(mode) +
+                       " v_cvt_norm_u16_f16 lane 0 result")
+                          .c_str()) &&
+               Expect(state.vgprs[125][1] == 0x0000ffffu,
+                      (std::string(mode) +
+                       " v_cvt_norm_u16_f16 lane 1 result")
+                          .c_str()) &&
+               Expect(state.vgprs[125][2] == 0xdeadbeefu,
+                      (std::string(mode) +
+                       " inactive v_cvt_norm_u16_f16 result")
+                          .c_str()) &&
+               Expect(state.vgprs[125][3] == 0x00000000u,
+                      (std::string(mode) +
+                       " v_cvt_norm_u16_f16 lane 3 result")
+                          .c_str()) &&
+               Expect(ComposeU64(state.vgprs[126][0], state.vgprs[127][0]) ==
+                          ComposeU64(FloatBits(1.0f), FloatBits(0.5f)),
+                      (std::string(mode) + " v_cvt_pk_f32_fp8 lane 0 result")
+                          .c_str()) &&
+               Expect(ComposeU64(state.vgprs[126][1], state.vgprs[127][1]) ==
+                          ComposeU64(FloatBits(0.5f), FloatBits(1.0f)),
+                      (std::string(mode) + " v_cvt_pk_f32_fp8 lane 1 result")
+                          .c_str()) &&
+               Expect(state.vgprs[126][2] == 0xdeadbeefu &&
+                          state.vgprs[127][2] == 0xcafebabeu,
+                      (std::string(mode) +
+                       " inactive v_cvt_pk_f32_fp8 result")
+                          .c_str()) &&
+               Expect(ComposeU64(state.vgprs[126][3], state.vgprs[127][3]) ==
+                          ComposeU64(FloatBits(1.0f), FloatBits(0.0f)),
+                      (std::string(mode) + " v_cvt_pk_f32_fp8 lane 3 result")
+                          .c_str()) &&
+               Expect(ComposeU64(state.vgprs[118][0], state.vgprs[119][0]) ==
+                          ComposeU64(FloatBits(1.0f), FloatBits(0.125f)),
+                      (std::string(mode) + " v_cvt_pk_f32_bf8 lane 0 result")
+                          .c_str()) &&
+               Expect(ComposeU64(state.vgprs[118][1], state.vgprs[119][1]) ==
+                          ComposeU64(FloatBits(0.125f), FloatBits(1.0f)),
+                      (std::string(mode) + " v_cvt_pk_f32_bf8 lane 1 result")
+                          .c_str()) &&
+               Expect(state.vgprs[118][2] == 0xdeadbeefu &&
+                          state.vgprs[119][2] == 0xcafebabeu,
+                      (std::string(mode) +
+                       " inactive v_cvt_pk_f32_bf8 result")
+                          .c_str()) &&
+               Expect(ComposeU64(state.vgprs[118][3], state.vgprs[119][3]) ==
+                          ComposeU64(FloatBits(1.0f), FloatBits(0.0f)),
+                      (std::string(mode) + " v_cvt_pk_f32_bf8 lane 3 result")
+                          .c_str());
+      };
+
+  std::vector<CompiledInstruction> compiled_vector_fp8_bf8_conversion_program;
+  if (!Expect(interpreter.CompileProgram(vector_fp8_bf8_conversion_program,
+                                         &compiled_vector_fp8_bf8_conversion_program,
+                                         error_message),
+              error_message->c_str())) {
+    return false;
+  }
+  auto compiled_vector_fp8_bf8_conversion_state =
+      std::make_unique<WaveExecutionState>(*vector_fp8_bf8_conversion_state);
+  if (!Expect(interpreter.ExecuteProgram(vector_fp8_bf8_conversion_program,
+                                         vector_fp8_bf8_conversion_state.get(),
+                                         error_message),
+              error_message->c_str()) ||
+      !validate_vector_fp8_bf8_conversion(*vector_fp8_bf8_conversion_state,
+                                          "decoded")) {
+    return false;
+  }
+  if (!Expect(interpreter.ExecuteProgram(
+                  compiled_vector_fp8_bf8_conversion_program,
+                  compiled_vector_fp8_bf8_conversion_state.get(), error_message),
+              error_message->c_str()) ||
+      !validate_vector_fp8_bf8_conversion(*compiled_vector_fp8_bf8_conversion_state,
+                                          "compiled")) {
+    return false;
+  }
+
+  return true;
+}
+
 }  // namespace
 
 int main() {
@@ -2980,6 +3195,22 @@ int main() {
               "expected V_CVT_F32_UBYTE2 support") ||
       !Expect(interpreter.Supports("V_CVT_F32_UBYTE3"),
               "expected V_CVT_F32_UBYTE3 support") ||
+      !Expect(interpreter.Supports("V_CVT_F32_FP8"),
+              "expected V_CVT_F32_FP8 support") ||
+      !Expect(interpreter.Supports("V_CVT_F32_BF8"),
+              "expected V_CVT_F32_BF8 support") ||
+      !Expect(interpreter.Supports("V_CVT_F32_BF16"),
+              "expected V_CVT_F32_BF16 support") ||
+      !Expect(interpreter.Supports("V_CVT_OFF_F32_I4"),
+              "expected V_CVT_OFF_F32_I4 support") ||
+      !Expect(interpreter.Supports("V_CVT_NORM_I16_F16"),
+              "expected V_CVT_NORM_I16_F16 support") ||
+      !Expect(interpreter.Supports("V_CVT_NORM_U16_F16"),
+              "expected V_CVT_NORM_U16_F16 support") ||
+      !Expect(interpreter.Supports("V_CVT_PK_F32_FP8"),
+              "expected V_CVT_PK_F32_FP8 support") ||
+      !Expect(interpreter.Supports("V_CVT_PK_F32_BF8"),
+              "expected V_CVT_PK_F32_BF8 support") ||
       !Expect(interpreter.Supports("DS_NOP"),
               "expected DS_NOP support") ||
       !Expect(interpreter.Supports("DS_ADD_U32"),
@@ -4887,6 +5118,10 @@ int main() {
       !Expect(compiled_vector_byte_conversion_state.vgprs[100][3] ==
                   FloatBits(1.0f),
               "expected compiled v_cvt_f32_ubyte3 lane 3 result")) {
+    return 1;
+  }
+
+  if (!RunVectorFp8Bf8ConversionTest(interpreter, &error_message)) {
     return 1;
   }
 
