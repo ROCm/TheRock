@@ -3214,6 +3214,96 @@ int main() {
     return 1;
   }
 
+  const auto v_min_f64_opcode =
+      FindDefaultEncodingOpcode("V_MIN_F64", "ENC_VOP3");
+  const auto v_max_f64_opcode =
+      FindDefaultEncodingOpcode("V_MAX_F64", "ENC_VOP3");
+  if (!Expect(v_min_f64_opcode.has_value(), "expected V_MIN_F64 opcode lookup") ||
+      !Expect(v_max_f64_opcode.has_value(), "expected V_MAX_F64 opcode lookup")) {
+    return 1;
+  }
+
+  const auto vop3_min_f64_word = MakeVop3(*v_min_f64_opcode, 60, 80, 296);
+  const auto vop3_max_f64_word = MakeVop3(*v_max_f64_opcode, 62, 82, 298);
+  const std::vector<std::uint32_t> vector_float_f64_minmax_program = {
+      vop3_min_f64_word[0], vop3_min_f64_word[1],
+      vop3_max_f64_word[0], vop3_max_f64_word[1],
+      MakeSopp(1),
+  };
+  decoded_program.clear();
+  if (!Expect(decoder.DecodeProgram(vector_float_f64_minmax_program,
+                                    &decoded_program, &error_message),
+              error_message.c_str()) ||
+      !Expect(decoded_program.size() == 3,
+              "expected decoded vector float f64 min/max program size") ||
+      !Expect(decoded_program[0].opcode == "V_MIN_F64",
+              "expected V_MIN_F64 decode") ||
+      !Expect(decoded_program[1].opcode == "V_MAX_F64",
+              "expected V_MAX_F64 decode")) {
+    return 1;
+  }
+
+  WaveExecutionState vector_float_f64_minmax_state;
+  vector_float_f64_minmax_state.exec_mask = 0b1011ULL;
+  SplitU64(DoubleBits(1.25), &vector_float_f64_minmax_state.sgprs[80],
+           &vector_float_f64_minmax_state.sgprs[81]);
+  SplitU64(DoubleBits(-2.0), &vector_float_f64_minmax_state.sgprs[82],
+           &vector_float_f64_minmax_state.sgprs[83]);
+  SplitU64(DoubleBits(2.5), &vector_float_f64_minmax_state.vgprs[40][0],
+           &vector_float_f64_minmax_state.vgprs[41][0]);
+  SplitU64(DoubleBits(-0.25), &vector_float_f64_minmax_state.vgprs[40][1],
+           &vector_float_f64_minmax_state.vgprs[41][1]);
+  SplitU64(DoubleBits(0.75), &vector_float_f64_minmax_state.vgprs[40][3],
+           &vector_float_f64_minmax_state.vgprs[41][3]);
+  SplitU64(DoubleBits(1.5), &vector_float_f64_minmax_state.vgprs[42][0],
+           &vector_float_f64_minmax_state.vgprs[43][0]);
+  SplitU64(DoubleBits(1.0), &vector_float_f64_minmax_state.vgprs[42][1],
+           &vector_float_f64_minmax_state.vgprs[43][1]);
+  SplitU64(DoubleBits(4.0), &vector_float_f64_minmax_state.vgprs[42][3],
+           &vector_float_f64_minmax_state.vgprs[43][3]);
+  vector_float_f64_minmax_state.vgprs[60][2] = 0xdeadbeefu;
+  vector_float_f64_minmax_state.vgprs[61][2] = 0xcafebabeu;
+  vector_float_f64_minmax_state.vgprs[62][2] = 0xdeadbeefu;
+  vector_float_f64_minmax_state.vgprs[63][2] = 0xcafebabeu;
+  if (!Expect(interpreter.ExecuteProgram(decoded_program,
+                                         &vector_float_f64_minmax_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_float_f64_minmax_state.halted,
+              "expected vector float f64 min/max program to halt") ||
+      !Expect(ComposeU64(vector_float_f64_minmax_state.vgprs[60][0],
+                         vector_float_f64_minmax_state.vgprs[61][0]) ==
+                  DoubleBits(1.25),
+              "expected V_MIN_F64 lane 0 result") ||
+      !Expect(ComposeU64(vector_float_f64_minmax_state.vgprs[60][1],
+                         vector_float_f64_minmax_state.vgprs[61][1]) ==
+                  DoubleBits(-0.25),
+              "expected V_MIN_F64 lane 1 result") ||
+      !Expect(vector_float_f64_minmax_state.vgprs[60][2] == 0xdeadbeefu &&
+                  vector_float_f64_minmax_state.vgprs[61][2] == 0xcafebabeu,
+              "expected inactive V_MIN_F64 result") ||
+      !Expect(ComposeU64(vector_float_f64_minmax_state.vgprs[60][3],
+                         vector_float_f64_minmax_state.vgprs[61][3]) ==
+                  DoubleBits(0.75),
+              "expected V_MIN_F64 lane 3 result") ||
+      !Expect(ComposeU64(vector_float_f64_minmax_state.vgprs[62][0],
+                         vector_float_f64_minmax_state.vgprs[63][0]) ==
+                  DoubleBits(1.5),
+              "expected V_MAX_F64 lane 0 result") ||
+      !Expect(ComposeU64(vector_float_f64_minmax_state.vgprs[62][1],
+                         vector_float_f64_minmax_state.vgprs[63][1]) ==
+                  DoubleBits(1.0),
+              "expected V_MAX_F64 lane 1 result") ||
+      !Expect(vector_float_f64_minmax_state.vgprs[62][2] == 0xdeadbeefu &&
+                  vector_float_f64_minmax_state.vgprs[63][2] == 0xcafebabeu,
+              "expected inactive V_MAX_F64 result") ||
+      !Expect(ComposeU64(vector_float_f64_minmax_state.vgprs[62][3],
+                         vector_float_f64_minmax_state.vgprs[63][3]) ==
+                  DoubleBits(4.0),
+              "expected V_MAX_F64 lane 3 result")) {
+    return 1;
+  }
+
   const auto v_add_lshl_u32_opcode =
       FindDefaultEncodingOpcode("V_ADD_LSHL_U32", "ENC_VOP3");
   const auto v_lshl_or_b32_opcode =
@@ -4932,6 +5022,89 @@ int main() {
               "expected decoded v_cmp_t_u64 low mask result") ||
       !Expect(vector_compare64_state.vcc_mask == 15u,
               "expected decoded final VCC mask result for compare64")) {
+    return 1;
+  }
+
+  const auto v_cmp_class_f16_vopc_opcode =
+      FindDefaultEncodingOpcode("V_CMP_CLASS_F16", "ENC_VOPC");
+  const auto v_cmpx_class_f16_vopc_opcode =
+      FindDefaultEncodingOpcode("V_CMPX_CLASS_F16", "ENC_VOPC");
+  if (!Expect(v_cmp_class_f16_vopc_opcode.has_value(),
+              "expected V_CMP_CLASS_F16 VOPC opcode lookup") ||
+      !Expect(v_cmpx_class_f16_vopc_opcode.has_value(),
+              "expected V_CMPX_CLASS_F16 VOPC opcode lookup")) {
+    return 1;
+  }
+
+  const std::vector<std::uint32_t> vector_class_f16_vopc_program = {
+      MakeVopc(*v_cmp_class_f16_vopc_opcode, 16, 40),
+      MakeSopp(1),
+  };
+  decoded_program.clear();
+  if (!Expect(decoder.DecodeProgram(vector_class_f16_vopc_program,
+                                    &decoded_program, &error_message),
+              error_message.c_str()) ||
+      !Expect(decoded_program.size() == 2,
+              "expected decoded VOPC f16 class program size") ||
+      !Expect(decoded_program[0].opcode == "V_CMP_CLASS_F16",
+              "expected VOPC V_CMP_CLASS_F16 decode")) {
+    return 1;
+  }
+
+  WaveExecutionState vector_class_f16_vopc_state;
+  vector_class_f16_vopc_state.exec_mask = 0b1011ULL;
+  vector_class_f16_vopc_state.sgprs[16] = 0x0000u;
+  vector_class_f16_vopc_state.vgprs[40][0] = 0x40u;
+  vector_class_f16_vopc_state.vgprs[40][1] = 0x20u;
+  vector_class_f16_vopc_state.vgprs[40][3] = 0x40u;
+  if (!Expect(interpreter.ExecuteProgram(decoded_program,
+                                         &vector_class_f16_vopc_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_class_f16_vopc_state.halted,
+              "expected VOPC f16 class program to halt") ||
+      !Expect(vector_class_f16_vopc_state.sgprs[106] == 9u &&
+                  vector_class_f16_vopc_state.sgprs[107] == 0u,
+              "expected VOPC f16 class low VCC mask result") ||
+      !Expect(vector_class_f16_vopc_state.vcc_mask == 9u,
+              "expected VOPC f16 class final VCC mask result")) {
+    return 1;
+  }
+
+  const std::vector<std::uint32_t> vector_cmpx_class_f16_vopc_program = {
+      MakeVopc(*v_cmpx_class_f16_vopc_opcode, 16, 40),
+      MakeSopp(1),
+  };
+  decoded_program.clear();
+  if (!Expect(decoder.DecodeProgram(vector_cmpx_class_f16_vopc_program,
+                                    &decoded_program, &error_message),
+              error_message.c_str()) ||
+      !Expect(decoded_program.size() == 2,
+              "expected decoded VOPC f16 cmpx program size") ||
+      !Expect(decoded_program[0].opcode == "V_CMPX_CLASS_F16",
+              "expected VOPC V_CMPX_CLASS_F16 decode")) {
+    return 1;
+  }
+
+  WaveExecutionState vector_cmpx_class_f16_vopc_state;
+  vector_cmpx_class_f16_vopc_state.exec_mask = 0b1011ULL;
+  vector_cmpx_class_f16_vopc_state.sgprs[16] = 0x0000u;
+  vector_cmpx_class_f16_vopc_state.vgprs[40][0] = 0x40u;
+  vector_cmpx_class_f16_vopc_state.vgprs[40][1] = 0x20u;
+  vector_cmpx_class_f16_vopc_state.vgprs[40][3] = 0x40u;
+  if (!Expect(interpreter.ExecuteProgram(decoded_program,
+                                         &vector_cmpx_class_f16_vopc_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_cmpx_class_f16_vopc_state.halted,
+              "expected VOPC f16 cmpx program to halt") ||
+      !Expect(vector_cmpx_class_f16_vopc_state.sgprs[106] == 9u &&
+                  vector_cmpx_class_f16_vopc_state.sgprs[107] == 0u,
+              "expected VOPC f16 cmpx low VCC mask result") ||
+      !Expect(vector_cmpx_class_f16_vopc_state.exec_mask == 9u,
+              "expected VOPC f16 cmpx final EXEC mask result") ||
+      !Expect(vector_cmpx_class_f16_vopc_state.vcc_mask == 9u,
+              "expected VOPC f16 cmpx final VCC mask result")) {
     return 1;
   }
 

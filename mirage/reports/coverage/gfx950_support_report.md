@@ -2,12 +2,12 @@
 
 - Catalog instructions: 1242
 - Semantic support: 895 (72.1%)
-- Raw decode support: 910 (73.3% of total, 80.5% of measured)
+- Raw decode support: 946 (76.2% of total, 83.6% of measured)
 - Raw decode measurable instructions: 1131
 
 ## Gaps
 
-- Semantic-only coverage without measured decode: 36
+- Semantic-only coverage without measured decode: 0
 - Decode-only without semantic support: 51
 - Missing both semantic and decode support: 296
 
@@ -32,31 +32,7 @@
 
 ## Semantic-Only Sample
 
-- `V_MIN_F64`
-- `V_MAX_F64`
-- `V_CMP_CLASS_F16`
-- `V_CMPX_CLASS_F16`
-- `V_CMP_F_F16`
-- `V_CMP_LT_F16`
-- `V_CMP_EQ_F16`
-- `V_CMP_LE_F16`
-- `V_CMP_GT_F16`
-- `V_CMP_LG_F16`
-- `V_CMP_GE_F16`
-- `V_CMP_O_F16`
-- `V_CMP_U_F16`
-- `V_CMP_NGE_F16`
-- `V_CMP_NLG_F16`
-- `V_CMP_NGT_F16`
-- `V_CMP_NLE_F16`
-- `V_CMP_NEQ_F16`
-- `V_CMP_NLT_F16`
-- `V_CMP_TRU_F16`
-- `V_CMPX_F_F16`
-- `V_CMPX_LT_F16`
-- `V_CMPX_EQ_F16`
-- `V_CMPX_LE_F16`
-- `V_CMPX_GT_F16`
+- None
 
 ## Decode-Only Sample
 

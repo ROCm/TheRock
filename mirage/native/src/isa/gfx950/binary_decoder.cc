@@ -95,7 +95,25 @@ bool IsVectorCarryInBinaryOpcode(std::string_view opcode) {
 }
 
 bool IsSupportedVectorCompareOpcode(std::string_view opcode) {
-  return opcode == "V_CMP_F_F32" || opcode == "V_CMP_LT_F32" ||
+  return opcode == "V_CMP_F_F16" || opcode == "V_CMP_LT_F16" ||
+         opcode == "V_CMP_EQ_F16" || opcode == "V_CMP_LE_F16" ||
+         opcode == "V_CMP_GT_F16" || opcode == "V_CMP_LG_F16" ||
+         opcode == "V_CMP_GE_F16" || opcode == "V_CMP_O_F16" ||
+         opcode == "V_CMP_U_F16" || opcode == "V_CMP_NGE_F16" ||
+         opcode == "V_CMP_NLG_F16" || opcode == "V_CMP_NGT_F16" ||
+         opcode == "V_CMP_NLE_F16" || opcode == "V_CMP_NEQ_F16" ||
+         opcode == "V_CMP_NLT_F16" || opcode == "V_CMP_TRU_F16" ||
+         opcode == "V_CMP_CLASS_F16" ||
+         opcode == "V_CMPX_F_F16" || opcode == "V_CMPX_LT_F16" ||
+         opcode == "V_CMPX_EQ_F16" || opcode == "V_CMPX_LE_F16" ||
+         opcode == "V_CMPX_GT_F16" || opcode == "V_CMPX_LG_F16" ||
+         opcode == "V_CMPX_GE_F16" || opcode == "V_CMPX_O_F16" ||
+         opcode == "V_CMPX_U_F16" || opcode == "V_CMPX_NGE_F16" ||
+         opcode == "V_CMPX_NLG_F16" || opcode == "V_CMPX_NGT_F16" ||
+         opcode == "V_CMPX_NLE_F16" || opcode == "V_CMPX_NEQ_F16" ||
+         opcode == "V_CMPX_NLT_F16" || opcode == "V_CMPX_TRU_F16" ||
+         opcode == "V_CMPX_CLASS_F16" ||
+         opcode == "V_CMP_F_F32" || opcode == "V_CMP_LT_F32" ||
          opcode == "V_CMP_EQ_F32" || opcode == "V_CMP_LE_F32" ||
          opcode == "V_CMP_GT_F32" || opcode == "V_CMP_LG_F32" ||
          opcode == "V_CMP_GE_F32" || opcode == "V_CMP_O_F32" ||
@@ -183,6 +201,7 @@ bool IsSupportedPromotedVop3BinaryOpcode(std::string_view opcode) {
          opcode == "V_ADD_F32" || opcode == "V_SUB_F32" ||
          opcode == "V_MUL_F32" || opcode == "V_MIN_F32" ||
          opcode == "V_MAX_F32" ||
+         opcode == "V_MIN_F64" || opcode == "V_MAX_F64" ||
          opcode == "V_MIN_I32" || opcode == "V_MAX_I32" ||
          opcode == "V_MIN_U32" || opcode == "V_MAX_U32" ||
          opcode == "V_LSHRREV_B32" || opcode == "V_ASHRREV_I32" ||

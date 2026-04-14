@@ -13171,25 +13171,33 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_MIN_F64"
+      ],
       "instruction_name": "V_MIN_F64",
       "measured_encodings": [
         "ENC_VOP3:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_MAX_F64"
+      ],
       "instruction_name": "V_MAX_F64",
       "measured_encodings": [
         "ENC_VOP3:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -14659,411 +14667,581 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_CLASS_F16"
+      ],
       "instruction_name": "V_CMP_CLASS_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_CLASS_F16"
+      ],
       "instruction_name": "V_CMPX_CLASS_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_F_F16"
+      ],
       "instruction_name": "V_CMP_F_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_LT_F16"
+      ],
       "instruction_name": "V_CMP_LT_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_EQ_F16"
+      ],
       "instruction_name": "V_CMP_EQ_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_LE_F16"
+      ],
       "instruction_name": "V_CMP_LE_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_GT_F16"
+      ],
       "instruction_name": "V_CMP_GT_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_LG_F16"
+      ],
       "instruction_name": "V_CMP_LG_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_GE_F16"
+      ],
       "instruction_name": "V_CMP_GE_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_O_F16"
+      ],
       "instruction_name": "V_CMP_O_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_U_F16"
+      ],
       "instruction_name": "V_CMP_U_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_NGE_F16"
+      ],
       "instruction_name": "V_CMP_NGE_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_NLG_F16"
+      ],
       "instruction_name": "V_CMP_NLG_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_NGT_F16"
+      ],
       "instruction_name": "V_CMP_NGT_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_NLE_F16"
+      ],
       "instruction_name": "V_CMP_NLE_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_NEQ_F16"
+      ],
       "instruction_name": "V_CMP_NEQ_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_NLT_F16"
+      ],
       "instruction_name": "V_CMP_NLT_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMP_TRU_F16"
+      ],
       "instruction_name": "V_CMP_TRU_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_F_F16"
+      ],
       "instruction_name": "V_CMPX_F_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_LT_F16"
+      ],
       "instruction_name": "V_CMPX_LT_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_EQ_F16"
+      ],
       "instruction_name": "V_CMPX_EQ_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_LE_F16"
+      ],
       "instruction_name": "V_CMPX_LE_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_GT_F16"
+      ],
       "instruction_name": "V_CMPX_GT_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_LG_F16"
+      ],
       "instruction_name": "V_CMPX_LG_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_GE_F16"
+      ],
       "instruction_name": "V_CMPX_GE_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_O_F16"
+      ],
       "instruction_name": "V_CMPX_O_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_U_F16"
+      ],
       "instruction_name": "V_CMPX_U_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_NGE_F16"
+      ],
       "instruction_name": "V_CMPX_NGE_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_NLG_F16"
+      ],
       "instruction_name": "V_CMPX_NLG_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_NGT_F16"
+      ],
       "instruction_name": "V_CMPX_NGT_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_NLE_F16"
+      ],
       "instruction_name": "V_CMPX_NLE_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_NEQ_F16"
+      ],
       "instruction_name": "V_CMPX_NEQ_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_NLT_F16"
+      ],
       "instruction_name": "V_CMPX_NLT_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "V_CMPX_TRU_F16"
+      ],
       "instruction_name": "V_CMPX_TRU_F16",
       "measured_encodings": [
         "ENC_VOP3:default",
         "ENC_VOPC:default"
       ],
       "semantic_supported": true,
-      "successful_encodings": []
+      "successful_encodings": [
+        "ENC_VOP3:default",
+        "ENC_VOPC:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -17608,9 +17786,9 @@
   ],
   "summary": {
     "decode_measured": 1131,
-    "decode_supported": 910,
-    "decode_supported_percent_measured": 0.804598,
-    "decode_supported_percent_total": 0.732689,
+    "decode_supported": 946,
+    "decode_supported_percent_measured": 0.836428,
+    "decode_supported_percent_total": 0.761675,
     "semantic_supported": 895,
     "semantic_supported_percent_total": 0.720612
   },
