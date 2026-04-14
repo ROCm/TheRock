@@ -1,0 +1,43 @@
+/*
+ * ROCmGPUUserClient.iig - Per-client escape command dispatch.
+ *
+ * Handles ExternalMethod calls from userspace (IOConnectCallScalarMethod
+ * and IOConnectCallStructMethod) for PCI operations, and
+ * CopyClientMemoryForType for BAR/DMA memory mapping.
+ */
+
+#ifndef ROCMGPU_USERCLIENT_IIG
+#define ROCMGPU_USERCLIENT_IIG
+
+#include <DriverKit/IOUserClient.iig>
+
+class ROCmGPUUserClient : public IOUserClient
+{
+public:
+
+    virtual bool
+    init() override;
+
+    virtual kern_return_t
+    Start(IOService * provider) override;
+
+    virtual kern_return_t
+    Stop(IOService * provider) override;
+
+    virtual void
+    free() override;
+
+    virtual kern_return_t
+    ExternalMethod(uint64_t                            selector,
+                   IOUserClientMethodArguments       * arguments,
+                   const IOUserClientMethodDispatch  * dispatch,
+                   OSObject                          * target,
+                   void                              * reference) override;
+
+    virtual kern_return_t
+    CopyClientMemoryForType(uint64_t                type,
+                            uint64_t              * options,
+                            IOMemoryDescriptor   ** memory) override;
+};
+
+#endif /* ROCMGPU_USERCLIENT_IIG */

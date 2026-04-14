@@ -1,632 +1,257 @@
 /*
  * ROCmGPUUserClient.cpp - Escape command dispatch implementation.
  *
- * Handles all userspace requests via ExternalMethod():
- *   - Device info queries
- *   - PCI config space read/write
- *   - MMIO register read/write (via PCI BARs)
- *   - BAR mapping into client process
- *   - DMA buffer allocation and mapping
- *   - MSI-X interrupt handling
- *   - GPU Function-Level Reset
- *
- * Design note: MMIO read/write uses IOPCIDevice::MemoryRead32/Write32
- * for individual register access. For bulk access (IP discovery, firmware
- * loading), clients should map the BAR via IOConnectMapMemory64 and
- * do direct pointer dereference -- much faster than per-register RPCs.
+ * DriverKit conventions used:
+ *   - _Impl suffix for dispatch methods (Start_Impl, Stop_Impl, etc.)
+ *   - VirtualMethods (ExternalMethod, init, free) are direct overrides
+ *   - Handler functions are file-static (not class members, since
+ *     iig-generated classes only expose _Impl and VirtualMethods)
+ *   - structureOutput is OSData* (created with OSData::withBytes)
+ *   - ivars pattern for instance variables
  */
 
-#include "ROCmGPUUserClient.h"
-#include "ROCmGPUDriver.h"
-#include "ROCmGPUShared.h"
+#include <os/log.h>
+#include <string.h>
 
 #include <DriverKit/IOLib.h>
-#include <DriverKit/IOBufferMemoryDescriptor.iig>
-#include <DriverKit/IODMACommand.iig>
-#include <DriverKit/IOInterruptDispatchSource.iig>
-#include <DriverKit/IODispatchQueue.iig>
+#include <DriverKit/IOUserClient.h>
+#include <DriverKit/IOBufferMemoryDescriptor.h>
+#include <DriverKit/IODMACommand.h>
+#include <DriverKit/IOInterruptDispatchSource.h>
+#include <DriverKit/IODispatchQueue.h>
+#include <DriverKit/OSData.h>
+#include <PCIDriverKit/IOPCIDevice.h>
+
+#include "generated/ROCmGPUUserClient.h"
+#include "generated/ROCmGPUDriver.h"
+#include "ROCmGPUShared.h"
 
 #define LOG_PREFIX "ROCmGPU-UC: "
+#define MAX_DMA_BUFFERS 256
+
+/* ======================================================================
+ * Instance variables
+ * ====================================================================== */
+
+struct ROCmGPUUserClient_IVars {
+    ROCmGPUDriver* driver;
+    IOPCIDevice*   pciDevice;
+
+    struct DMABuffer {
+        IOBufferMemoryDescriptor* descriptor;
+        IODMACommand*             dmaCommand;
+        uint64_t                  physAddr;
+        uint64_t                  size;
+        bool                      inUse;
+    };
+
+    DMABuffer dmaBuffers[MAX_DMA_BUFFERS];
+    uint32_t  nextDMAID;
+
+    IOInterruptDispatchSource* intSource;
+    bool intFired;
+};
+
+/* Helper: get BAR memoryIndex from PCI device */
+static kern_return_t getBarMemoryIndex(IOPCIDevice* dev, uint8_t barIndex,
+                                       uint8_t* memIdx, uint64_t* barSize)
+{
+    uint8_t type = 0;
+    return dev->GetBARInfo(barIndex, memIdx, barSize, &type);
+}
 
 /* ======================================================================
  * Dispatch table
- *
- * Maps selector -> (handler, input/output scalar/struct counts).
- * DriverKit validates argument counts before calling the handler.
  * ====================================================================== */
 
 static const IOUserClientMethodDispatch sMethods[kROCmGPU_SelectorCount] = {
-    /* kROCmGPU_GetInfo: () -> struct ROCmGPUDeviceInfo */
-    [kROCmGPU_GetInfo] = {
-        .function = nullptr,  /* Handled in ExternalMethod directly */
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 0,
-        .checkScalarOutputCount = 0,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = sizeof(ROCmGPUDeviceInfo),
-    },
-
-    /* kROCmGPU_Reset: () -> () */
-    [kROCmGPU_Reset] = {
-        .function = nullptr,
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 0,
-        .checkScalarOutputCount = 0,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = 0,
-    },
-
-    /* kROCmGPU_CfgRead: (offset, width) -> (value) */
-    [kROCmGPU_CfgRead] = {
-        .function = nullptr,
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 2,
-        .checkScalarOutputCount = 1,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = 0,
-    },
-
-    /* kROCmGPU_CfgWrite: (offset, width, value) -> () */
-    [kROCmGPU_CfgWrite] = {
-        .function = nullptr,
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 3,
-        .checkScalarOutputCount = 0,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = 0,
-    },
-
-    /* kROCmGPU_MMIORead32: (barIndex, offset) -> (value) */
-    [kROCmGPU_MMIORead32] = {
-        .function = nullptr,
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 2,
-        .checkScalarOutputCount = 1,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = 0,
-    },
-
-    /* kROCmGPU_MMIOWrite32: (barIndex, offset, value) -> () */
-    [kROCmGPU_MMIOWrite32] = {
-        .function = nullptr,
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 3,
-        .checkScalarOutputCount = 0,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = 0,
-    },
-
-    /* kROCmGPU_MapBAR: (barIndex) -> (size) */
-    [kROCmGPU_MapBAR] = {
-        .function = nullptr,
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 1,
-        .checkScalarOutputCount = 1,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = 0,
-    },
-
-    /* kROCmGPU_UnmapBAR: (barIndex) -> () */
-    [kROCmGPU_UnmapBAR] = {
-        .function = nullptr,
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 1,
-        .checkScalarOutputCount = 0,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = 0,
-    },
-
-    /* kROCmGPU_AllocDMA: (size, flags) -> struct ROCmGPUDMAInfo */
-    [kROCmGPU_AllocDMA] = {
-        .function = nullptr,
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 2,
-        .checkScalarOutputCount = 0,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = sizeof(ROCmGPUDMAInfo),
-    },
-
-    /* kROCmGPU_FreeDMA: (bufferID) -> () */
-    [kROCmGPU_FreeDMA] = {
-        .function = nullptr,
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 1,
-        .checkScalarOutputCount = 0,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = 0,
-    },
-
-    /* kROCmGPU_MapDMA: (bufferID) -> (size) */
-    [kROCmGPU_MapDMA] = {
-        .function = nullptr,
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 1,
-        .checkScalarOutputCount = 1,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = 0,
-    },
-
-    /* kROCmGPU_EnableMSI: (vectorIndex) -> () */
-    [kROCmGPU_EnableMSI] = {
-        .function = nullptr,
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 1,
-        .checkScalarOutputCount = 0,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = 0,
-    },
-
-    /* kROCmGPU_WaitInterrupt: (timeoutMS) -> (status) */
-    [kROCmGPU_WaitInterrupt] = {
-        .function = nullptr,
-        .checkCompletionExists = false,
-        .checkScalarInputCount  = 1,
-        .checkScalarOutputCount = 1,
-        .checkStructureInputSize  = 0,
-        .checkStructureOutputSize = 0,
-    },
+    [kROCmGPU_GetInfo]       = { nullptr, false, 0, 0, 0, sizeof(ROCmGPUDeviceInfo) },
+    [kROCmGPU_Reset]         = { nullptr, false, 0, 0, 0, 0 },
+    [kROCmGPU_CfgRead]       = { nullptr, false, 2, 1, 0, 0 },
+    [kROCmGPU_CfgWrite]      = { nullptr, false, 3, 0, 0, 0 },
+    [kROCmGPU_MMIORead32]    = { nullptr, false, 2, 1, 0, 0 },
+    [kROCmGPU_MMIOWrite32]   = { nullptr, false, 3, 0, 0, 0 },
+    [kROCmGPU_MapBAR]        = { nullptr, false, 1, 1, 0, 0 },
+    [kROCmGPU_UnmapBAR]      = { nullptr, false, 1, 0, 0, 0 },
+    [kROCmGPU_AllocDMA]      = { nullptr, false, 2, 0, 0, sizeof(ROCmGPUDMAInfo) },
+    [kROCmGPU_FreeDMA]       = { nullptr, false, 1, 0, 0, 0 },
+    [kROCmGPU_MapDMA]        = { nullptr, false, 1, 1, 0, 0 },
+    [kROCmGPU_EnableMSI]     = { nullptr, false, 1, 0, 0, 0 },
+    [kROCmGPU_WaitInterrupt] = { nullptr, false, 1, 1, 0, 0 },
 };
 
 /* ======================================================================
- * IOUserClient lifecycle
+ * Static handler functions (called from ExternalMethod dispatch)
  * ====================================================================== */
 
-bool ROCmGPUUserClient::init()
+static kern_return_t handleGetInfo(ROCmGPUUserClient_IVars* iv,
+                                   IOUserClientMethodArguments* args)
 {
-    if (!super::init()) {
-        return false;
-    }
+    ROCmGPUDeviceInfo info = {};
+    auto* dev = iv->pciDevice;
 
-    fDriver = nullptr;
-    fPCIDevice = nullptr;
-    fNextDMAID = 0;
-    fInterruptSource = nullptr;
-    fInterruptEnabled = false;
+    dev->ConfigurationRead16(0x00, &info.vendorID);
+    dev->ConfigurationRead16(0x02, &info.deviceID);
+    dev->ConfigurationRead16(0x2C, &info.subsystemVendorID);
+    dev->ConfigurationRead16(0x2E, &info.subsystemDeviceID);
+    uint8_t rev = 0;
+    dev->ConfigurationRead8(0x08, &rev);
+    info.revisionID = rev;
 
-    for (uint32_t i = 0; i < ROCMGPU_MAX_DMA_BUFFERS; i++) {
-        fDMABuffers[i] = {};
-    }
-
-    return true;
-}
-
-kern_return_t ROCmGPUUserClient::Start(IOService* provider)
-{
-    kern_return_t ret = super::Start(provider);
-    if (ret != kIOReturnSuccess) {
-        return ret;
-    }
-
-    /* Get reference to parent driver */
-    fDriver = OSDynamicCast(ROCmGPUDriver, provider);
-    if (!fDriver) {
-        IOLog(LOG_PREFIX "Provider is not ROCmGPUDriver\n");
-        return kIOReturnError;
-    }
-
-    fPCIDevice = fDriver->getPCIDevice();
-    if (!fPCIDevice) {
-        IOLog(LOG_PREFIX "No PCI device available\n");
-        return kIOReturnNoDevice;
-    }
-
-    IOLog(LOG_PREFIX "UserClient started\n");
-    return kIOReturnSuccess;
-}
-
-kern_return_t ROCmGPUUserClient::Stop(IOService* provider)
-{
-    IOLog(LOG_PREFIX "UserClient stopping — freeing DMA buffers\n");
-
-    /* Release all DMA buffers allocated by this client */
-    for (uint32_t i = 0; i < ROCMGPU_MAX_DMA_BUFFERS; i++) {
-        if (fDMABuffers[i].inUse) {
-            if (fDMABuffers[i].dmaCommand) {
-                fDMABuffers[i].dmaCommand->Complete(kIODMACommandComplete);
-                fDMABuffers[i].dmaCommand->release();
-            }
-            if (fDMABuffers[i].descriptor) {
-                fDMABuffers[i].descriptor->release();
-            }
-            fDMABuffers[i] = {};
-        }
-    }
-
-    /* Release interrupt source */
-    if (fInterruptSource) {
-        fInterruptSource->Cancel(nullptr);
-        fInterruptSource->release();
-        fInterruptSource = nullptr;
-    }
-
-    return super::Stop(provider);
-}
-
-void ROCmGPUUserClient::free()
-{
-    super::free();
-}
-
-/* ======================================================================
- * ExternalMethod dispatch
- * ====================================================================== */
-
-kern_return_t ROCmGPUUserClient::ExternalMethod(
-    uint64_t selector,
-    IOUserClientMethodArguments* arguments,
-    const IOUserClientMethodDispatch* dispatch,
-    OSObject* target,
-    void* reference)
-{
-    if (selector >= kROCmGPU_SelectorCount) {
-        IOLog(LOG_PREFIX "Invalid selector: %llu\n", selector);
-        return kIOReturnBadArgument;
-    }
-
-    /* Validate argument counts against dispatch table */
-    kern_return_t ret = super::ExternalMethod(
-        selector, arguments, &sMethods[selector], this, nullptr);
-    if (ret != kIOReturnSuccess) {
-        /* If super returns kIOReturnBadArgument, it means count validation
-         * failed but .function was null, so we dispatch manually below. */
-    }
-
-    /* Route to handler */
-    switch (selector) {
-    case kROCmGPU_GetInfo:        return handleGetInfo(arguments);
-    case kROCmGPU_Reset:          return handleReset(arguments);
-    case kROCmGPU_CfgRead:        return handleCfgRead(arguments);
-    case kROCmGPU_CfgWrite:       return handleCfgWrite(arguments);
-    case kROCmGPU_MMIORead32:     return handleMMIORead32(arguments);
-    case kROCmGPU_MMIOWrite32:    return handleMMIOWrite32(arguments);
-    case kROCmGPU_MapBAR:         return handleMapBAR(arguments);
-    case kROCmGPU_UnmapBAR:       return handleUnmapBAR(arguments);
-    case kROCmGPU_AllocDMA:       return handleAllocDMA(arguments);
-    case kROCmGPU_FreeDMA:        return handleFreeDMA(arguments);
-    case kROCmGPU_MapDMA:         return handleMapDMA(arguments);
-    case kROCmGPU_EnableMSI:      return handleEnableMSI(arguments);
-    case kROCmGPU_WaitInterrupt:  return handleWaitInterrupt(arguments);
-    default:
-        return kIOReturnBadArgument;
-    }
-}
-
-/* ======================================================================
- * Memory mapping (BAR + DMA buffers)
- * ====================================================================== */
-
-kern_return_t ROCmGPUUserClient::CopyClientMemoryForType(
-    uint64_t type,
-    uint64_t* options,
-    IOMemoryDescriptor** memory)
-{
-    if (type <= kROCmGPU_MemType_BAR5) {
-        /* Map a PCI BAR */
-        uint8_t barIndex = (uint8_t)type;
-        auto bar = fDriver->getBAR(barIndex);
-        if (!bar.valid || bar.size == 0) {
-            IOLog(LOG_PREFIX "BAR%u not available\n", barIndex);
-            return kIOReturnNotFound;
-        }
-
-        /* CopyDeviceMemoryWithIndex returns an IOMemoryDescriptor
-         * for the BAR's physical address range */
-        IOMemoryDescriptor* desc = nullptr;
-        desc = fPCIDevice->CopyDeviceMemoryWithIndex(bar.memoryIndex, this);
-        if (!desc) {
-            IOLog(LOG_PREFIX "CopyDeviceMemoryWithIndex(%u) failed\n",
-                  bar.memoryIndex);
-            return kIOReturnError;
-        }
-
-        *memory = desc;
-        IOLog(LOG_PREFIX "Mapped BAR%u: %lluMB\n", barIndex,
-              bar.size / (1024*1024));
-        return kIOReturnSuccess;
-
-    } else if (type >= kROCmGPU_MemType_DMABase) {
-        /* Map a DMA buffer */
-        uint32_t bufID = (uint32_t)(type - kROCmGPU_MemType_DMABase);
-        if (bufID >= ROCMGPU_MAX_DMA_BUFFERS || !fDMABuffers[bufID].inUse) {
-            IOLog(LOG_PREFIX "DMA buffer %u not found\n", bufID);
-            return kIOReturnNotFound;
-        }
-
-        /* Return the buffer's memory descriptor for client mapping */
-        IOMemoryDescriptor* desc = fDMABuffers[bufID].descriptor;
-        desc->retain();
-        *memory = desc;
-        return kIOReturnSuccess;
-    }
-
-    return kIOReturnBadArgument;
-}
-
-/* ======================================================================
- * Command handlers
- * ====================================================================== */
-
-kern_return_t ROCmGPUUserClient::handleGetInfo(
-    IOUserClientMethodArguments* args)
-{
-    if (!args->structureOutput || args->structureOutputSize < sizeof(ROCmGPUDeviceInfo)) {
-        return kIOReturnBadArgument;
-    }
-
-    ROCmGPUDeviceInfo* info = (ROCmGPUDeviceInfo*)args->structureOutput;
-    memset(info, 0, sizeof(*info));
-
-    /* Read PCI IDs from config space */
-    fPCIDevice->ConfigurationRead16(0x00, &info->vendorID);
-    fPCIDevice->ConfigurationRead16(0x02, &info->deviceID);
-    fPCIDevice->ConfigurationRead16(0x2C, &info->subsystemVendorID);
-    fPCIDevice->ConfigurationRead16(0x2E, &info->subsystemDeviceID);
-
-    uint8_t revID = 0;
-    fPCIDevice->ConfigurationRead8(0x08, &revID);
-    info->revisionID = revID;
-
-    /* Fill BAR info from cached data */
-    for (int i = 0; i < 6; i++) {
-        auto& bar = fDriver->getBAR(i);
-        info->bars[i].size = bar.size;
-        info->bars[i].memoryIndex = bar.memoryIndex;
-        info->bars[i].type = bar.type;
-        info->bars[i].is64bit = bar.is64bit ? 1 : 0;
-        info->bars[i].prefetchable = bar.prefetchable ? 1 : 0;
-    }
-
-    /* Estimate VRAM size from largest prefetchable BAR */
     uint64_t maxVRAM = 0;
     for (int i = 0; i < 6; i++) {
-        if (fDriver->getBAR(i).prefetchable && fDriver->getBAR(i).size > maxVRAM) {
-            maxVRAM = fDriver->getBAR(i).size;
+        uint8_t memIdx = 0; uint64_t barSz = 0; uint8_t barTy = 0;
+        if (dev->GetBARInfo(i, &memIdx, &barSz, &barTy) == kIOReturnSuccess) {
+            info.bars[i].size = barSz;
+            info.bars[i].memoryIndex = memIdx;
+            info.bars[i].type = barTy;
+            uint32_t barReg = 0;
+            dev->ConfigurationRead32(0x10 + i * 4, &barReg);
+            info.bars[i].is64bit = ((barReg & 0x6) == 0x4) ? 1 : 0;
+            info.bars[i].prefetchable = ((barReg & 0x8) != 0) ? 1 : 0;
+            if (info.bars[i].prefetchable && barSz > maxVRAM) maxVRAM = barSz;
         }
     }
-    info->vramSize = maxVRAM;
+    info.vramSize = maxVRAM;
 
-    IOLog(LOG_PREFIX "GetInfo: vendor=0x%04x device=0x%04x vram=%lluMB\n",
-          info->vendorID, info->deviceID, info->vramSize / (1024*1024));
-
-    return kIOReturnSuccess;
+    args->structureOutput = OSData::withBytes(&info, sizeof(info));
+    return args->structureOutput ? kIOReturnSuccess : kIOReturnNoMemory;
 }
 
-kern_return_t ROCmGPUUserClient::handleReset(
-    IOUserClientMethodArguments* args)
+static kern_return_t handleReset(ROCmGPUUserClient_IVars* iv,
+                                 IOUserClientMethodArguments* args)
 {
-    IOLog(LOG_PREFIX "Performing Function-Level Reset\n");
-
-    /* FLR via PCI Express Capability:
-     * 1. Find PCI Express capability
-     * 2. Read Device Control register
-     * 3. Set Initiate Function Level Reset bit (bit 15) */
-    uint32_t pcieCap = 0;
-    kern_return_t ret = fPCIDevice->FindPCICapability(
-        0x10,  /* PCI Express Capability ID */
-        0,     /* Search from beginning */
-        &pcieCap);
-    if (ret != kIOReturnSuccess || pcieCap == 0) {
-        IOLog(LOG_PREFIX "PCI Express capability not found\n");
+    uint64_t cap = 0;
+    if (iv->pciDevice->FindPCICapability(0x10, 0, &cap) != kIOReturnSuccess)
         return kIOReturnUnsupported;
-    }
 
-    /* Device Control register is at capability offset + 0x08 */
     uint16_t devCtl = 0;
-    fPCIDevice->ConfigurationRead16(pcieCap + 0x08, &devCtl);
-    devCtl |= (1 << 15);  /* Initiate FLR */
-    fPCIDevice->ConfigurationWrite16(pcieCap + 0x08, devCtl);
-
-    IOLog(LOG_PREFIX "FLR initiated\n");
+    iv->pciDevice->ConfigurationRead16(cap + 0x08, &devCtl);
+    devCtl |= (1 << 15);
+    iv->pciDevice->ConfigurationWrite16(cap + 0x08, devCtl);
     return kIOReturnSuccess;
 }
 
-kern_return_t ROCmGPUUserClient::handleCfgRead(
-    IOUserClientMethodArguments* args)
+static kern_return_t handleCfgRead(ROCmGPUUserClient_IVars* iv,
+                                   IOUserClientMethodArguments* args)
 {
     uint64_t offset = args->scalarInput[0];
     uint64_t width  = args->scalarInput[1];
+    uint64_t value  = 0;
 
-    uint64_t value = 0;
     switch (width) {
-    case 1: {
-        uint8_t v = 0;
-        fPCIDevice->ConfigurationRead8((uint32_t)offset, &v);
-        value = v;
-        break;
+    case 1: { uint8_t v;  iv->pciDevice->ConfigurationRead8(offset, &v);  value = v; break; }
+    case 2: { uint16_t v; iv->pciDevice->ConfigurationRead16(offset, &v); value = v; break; }
+    case 4: { uint32_t v; iv->pciDevice->ConfigurationRead32(offset, &v); value = v; break; }
+    default: return kIOReturnBadArgument;
     }
-    case 2: {
-        uint16_t v = 0;
-        fPCIDevice->ConfigurationRead16((uint32_t)offset, &v);
-        value = v;
-        break;
-    }
-    case 4: {
-        uint32_t v = 0;
-        fPCIDevice->ConfigurationRead32((uint32_t)offset, &v);
-        value = v;
-        break;
-    }
-    default:
-        return kIOReturnBadArgument;
-    }
-
     args->scalarOutput[0] = value;
     return kIOReturnSuccess;
 }
 
-kern_return_t ROCmGPUUserClient::handleCfgWrite(
-    IOUserClientMethodArguments* args)
+static kern_return_t handleCfgWrite(ROCmGPUUserClient_IVars* iv,
+                                    IOUserClientMethodArguments* args)
 {
     uint64_t offset = args->scalarInput[0];
     uint64_t width  = args->scalarInput[1];
     uint64_t value  = args->scalarInput[2];
 
     switch (width) {
-    case 1:
-        fPCIDevice->ConfigurationWrite8((uint32_t)offset, (uint8_t)value);
-        break;
-    case 2:
-        fPCIDevice->ConfigurationWrite16((uint32_t)offset, (uint16_t)value);
-        break;
-    case 4:
-        fPCIDevice->ConfigurationWrite32((uint32_t)offset, (uint32_t)value);
-        break;
-    default:
-        return kIOReturnBadArgument;
+    case 1: iv->pciDevice->ConfigurationWrite8(offset, (uint8_t)value);   break;
+    case 2: iv->pciDevice->ConfigurationWrite16(offset, (uint16_t)value); break;
+    case 4: iv->pciDevice->ConfigurationWrite32(offset, (uint32_t)value); break;
+    default: return kIOReturnBadArgument;
     }
-
     return kIOReturnSuccess;
 }
 
-kern_return_t ROCmGPUUserClient::handleMMIORead32(
-    IOUserClientMethodArguments* args)
+static kern_return_t handleMMIORead32(ROCmGPUUserClient_IVars* iv,
+                                      IOUserClientMethodArguments* args)
 {
-    uint64_t barIndex = args->scalarInput[0];
-    uint64_t offset   = args->scalarInput[1];
-
-    if (barIndex > 5) {
-        return kIOReturnBadArgument;
-    }
-
-    auto& bar = fDriver->getBAR((unsigned)barIndex);
-    if (!bar.valid) {
+    uint8_t barIdx = (uint8_t)args->scalarInput[0];
+    uint64_t offset = args->scalarInput[1];
+    uint8_t memIdx = 0; uint64_t barSz = 0;
+    if (getBarMemoryIndex(iv->pciDevice, barIdx, &memIdx, &barSz) != kIOReturnSuccess)
         return kIOReturnNotFound;
-    }
-
-    /* Bounds check */
-    if (offset + 4 > bar.size) {
-        return kIOReturnBadArgument;
-    }
+    if (offset + 4 > barSz) return kIOReturnBadArgument;
 
     uint32_t value = 0;
-    fPCIDevice->MemoryRead32(bar.memoryIndex, offset, &value);
+    iv->pciDevice->MemoryRead32(memIdx, offset, &value);
     args->scalarOutput[0] = value;
     return kIOReturnSuccess;
 }
 
-kern_return_t ROCmGPUUserClient::handleMMIOWrite32(
-    IOUserClientMethodArguments* args)
+static kern_return_t handleMMIOWrite32(ROCmGPUUserClient_IVars* iv,
+                                       IOUserClientMethodArguments* args)
 {
-    uint64_t barIndex = args->scalarInput[0];
-    uint64_t offset   = args->scalarInput[1];
-    uint64_t value    = args->scalarInput[2];
-
-    if (barIndex > 5) {
-        return kIOReturnBadArgument;
-    }
-
-    auto& bar = fDriver->getBAR((unsigned)barIndex);
-    if (!bar.valid) {
+    uint8_t barIdx = (uint8_t)args->scalarInput[0];
+    uint64_t offset = args->scalarInput[1];
+    uint32_t value  = (uint32_t)args->scalarInput[2];
+    uint8_t memIdx = 0; uint64_t barSz = 0;
+    if (getBarMemoryIndex(iv->pciDevice, barIdx, &memIdx, &barSz) != kIOReturnSuccess)
         return kIOReturnNotFound;
-    }
+    if (offset + 4 > barSz) return kIOReturnBadArgument;
 
-    if (offset + 4 > bar.size) {
-        return kIOReturnBadArgument;
-    }
-
-    fPCIDevice->MemoryWrite32(bar.memoryIndex, offset, (uint32_t)value);
+    iv->pciDevice->MemoryWrite32(memIdx, offset, value);
     return kIOReturnSuccess;
 }
 
-kern_return_t ROCmGPUUserClient::handleMapBAR(
-    IOUserClientMethodArguments* args)
+static kern_return_t handleMapBAR(ROCmGPUUserClient_IVars* iv,
+                                  IOUserClientMethodArguments* args)
 {
-    uint64_t barIndex = args->scalarInput[0];
-    if (barIndex > 5) {
-        return kIOReturnBadArgument;
-    }
-
-    auto& bar = fDriver->getBAR((unsigned)barIndex);
-    if (!bar.valid || bar.size == 0) {
+    uint8_t barIdx = (uint8_t)args->scalarInput[0];
+    uint8_t memIdx = 0; uint64_t barSz = 0;
+    if (getBarMemoryIndex(iv->pciDevice, barIdx, &memIdx, &barSz) != kIOReturnSuccess)
         return kIOReturnNotFound;
-    }
-
-    /* Client will call IOConnectMapMemory64(connection, barIndex, ...)
-     * which triggers CopyClientMemoryForType(barIndex, ...) */
-    args->scalarOutput[0] = bar.size;
-
-    IOLog(LOG_PREFIX "MapBAR(%llu): size=%lluMB — client should call IOConnectMapMemory64\n",
-          barIndex, bar.size / (1024*1024));
+    args->scalarOutput[0] = barSz;
     return kIOReturnSuccess;
 }
 
-kern_return_t ROCmGPUUserClient::handleUnmapBAR(
-    IOUserClientMethodArguments* args)
+static kern_return_t handleAllocDMA(ROCmGPUUserClient_IVars* iv,
+                                    IOUserClientMethodArguments* args)
 {
-    /* Unmapping is handled by IOConnectUnmapMemory() on the client side.
-     * Nothing to do here — the mapping is ref-counted. */
-    IOLog(LOG_PREFIX "UnmapBAR(%llu)\n", args->scalarInput[0]);
-    return kIOReturnSuccess;
-}
+    uint64_t size = args->scalarInput[0];
+    if (size == 0 || size > (1ULL << 32)) return kIOReturnBadArgument;
 
-kern_return_t ROCmGPUUserClient::handleAllocDMA(
-    IOUserClientMethodArguments* args)
-{
-    uint64_t size  = args->scalarInput[0];
-    uint64_t flags = args->scalarInput[1];
-
-    if (size == 0 || size > (1ULL << 32)) {
-        return kIOReturnBadArgument;
+    uint32_t bufID = UINT32_MAX;
+    for (uint32_t i = 0; i < MAX_DMA_BUFFERS; i++) {
+        uint32_t idx = (iv->nextDMAID + i) % MAX_DMA_BUFFERS;
+        if (!iv->dmaBuffers[idx].inUse) {
+            bufID = idx;
+            iv->nextDMAID = (idx + 1) % MAX_DMA_BUFFERS;
+            break;
+        }
     }
+    if (bufID == UINT32_MAX) return kIOReturnNoResources;
 
-    /* Find a free DMA slot */
-    uint32_t bufID = allocDMASlot();
-    if (bufID == UINT32_MAX) {
-        IOLog(LOG_PREFIX "No free DMA slots\n");
-        return kIOReturnNoResources;
-    }
-
+    auto& buf = iv->dmaBuffers[bufID];
+    buf.inUse = true;
     kern_return_t ret;
-    DMABuffer& buf = fDMABuffers[bufID];
-
-    /* Step 1: Create IOBufferMemoryDescriptor */
-    uint64_t bdOptions = kIOMemoryDirectionInOut;
-    if (flags & kROCmGPU_DMA_ReadOnly) {
-        bdOptions = kIOMemoryDirectionIn;
-    } else if (flags & kROCmGPU_DMA_WriteOnly) {
-        bdOptions = kIOMemoryDirectionOut;
-    }
 
     ret = IOBufferMemoryDescriptor::Create(
-        bdOptions,
-        size,
-        0,  /* alignment — 0 means page-aligned */
-        &buf.descriptor);
+        kIOMemoryDirectionOutIn, size, 0, &buf.descriptor);
     if (ret != kIOReturnSuccess) {
-        IOLog(LOG_PREFIX "IOBufferMemoryDescriptor::Create(%llu) failed: 0x%x\n",
-              size, ret);
         buf.inUse = false;
         return ret;
     }
 
-    /* Step 2: Create IODMACommand and prepare for DMA */
-    uint32_t dmaSpecSize = 0;
-    ret = IODMACommand::Create(this, kIODMACommandSpecSmall, &buf.dmaCommand);
+    IODMACommandSpecification spec = {};
+    spec.maxAddressBits = 64;
+    ret = IODMACommand::Create(iv->pciDevice, 0, &spec, &buf.dmaCommand);
     if (ret != kIOReturnSuccess) {
-        IOLog(LOG_PREFIX "IODMACommand::Create() failed: 0x%x\n", ret);
-        buf.descriptor->release();
-        buf.descriptor = nullptr;
+        OSSafeReleaseNULL(buf.descriptor);
         buf.inUse = false;
         return ret;
     }
 
-    /* Prepare: performs IOMMU translation, returns physical segments */
-    uint32_t segCount = 64;
-    IOAddressSegment segments[64] = {};
     uint64_t dmaFlags = 0;
-
-    ret = buf.dmaCommand->PrepareForDMA(
-        buf.descriptor,
-        nullptr,     /* completion */
-        &dmaFlags,
-        &segCount,
-        segments);
+    uint32_t segCount = 32;
+    IOAddressSegment segments[32] = {};
+    ret = buf.dmaCommand->PrepareForDMA(0, buf.descriptor, 0, size,
+                                         &dmaFlags, &segCount, segments);
     if (ret != kIOReturnSuccess) {
-        IOLog(LOG_PREFIX "PrepareForDMA() failed: 0x%x\n", ret);
-        buf.dmaCommand->release();
-        buf.descriptor->release();
-        buf.dmaCommand = nullptr;
-        buf.descriptor = nullptr;
+        OSSafeReleaseNULL(buf.dmaCommand);
+        OSSafeReleaseNULL(buf.descriptor);
         buf.inUse = false;
         return ret;
     }
@@ -634,154 +259,179 @@ kern_return_t ROCmGPUUserClient::handleAllocDMA(
     buf.physAddr = segments[0].address;
     buf.size = size;
 
-    /* Fill output struct with scatter-gather info */
-    if (args->structureOutput && args->structureOutputSize >= sizeof(ROCmGPUDMAInfo)) {
-        ROCmGPUDMAInfo* info = (ROCmGPUDMAInfo*)args->structureOutput;
-        memset(info, 0, sizeof(*info));
-        info->bufferID = bufID;
-        info->size = size;
-        info->segmentCount = (segCount > 64) ? 64 : segCount;
-
-        for (uint32_t i = 0; i < info->segmentCount; i++) {
-            info->segments[i].address = segments[i].address;
-            info->segments[i].length = segments[i].length;
-        }
+    ROCmGPUDMAInfo info = {};
+    info.bufferID = bufID;
+    info.size = size;
+    info.segmentCount = (segCount > 64) ? 64 : segCount;
+    for (uint32_t i = 0; i < info.segmentCount && i < 32; i++) {
+        info.segments[i].address = segments[i].address;
+        info.segments[i].length = segments[i].length;
     }
 
-    IOLog(LOG_PREFIX "AllocDMA: id=%u size=%lluKB phys=0x%llx segs=%u\n",
-          bufID, size/1024, buf.physAddr, segCount);
-    return kIOReturnSuccess;
+    args->structureOutput = OSData::withBytes(&info, sizeof(info));
+    return args->structureOutput ? kIOReturnSuccess : kIOReturnNoMemory;
 }
 
-kern_return_t ROCmGPUUserClient::handleFreeDMA(
-    IOUserClientMethodArguments* args)
+static kern_return_t handleFreeDMA(ROCmGPUUserClient_IVars* iv,
+                                   IOUserClientMethodArguments* args)
 {
     uint32_t bufID = (uint32_t)args->scalarInput[0];
-    if (bufID >= ROCMGPU_MAX_DMA_BUFFERS || !fDMABuffers[bufID].inUse) {
+    if (bufID >= MAX_DMA_BUFFERS || !iv->dmaBuffers[bufID].inUse)
         return kIOReturnNotFound;
-    }
 
-    DMABuffer& buf = fDMABuffers[bufID];
-
-    if (buf.dmaCommand) {
-        buf.dmaCommand->Complete(kIODMACommandComplete);
-        buf.dmaCommand->release();
-    }
-    if (buf.descriptor) {
-        buf.descriptor->release();
-    }
-
+    auto& buf = iv->dmaBuffers[bufID];
+    if (buf.dmaCommand) { buf.dmaCommand->CompleteDMA(0); OSSafeReleaseNULL(buf.dmaCommand); }
+    OSSafeReleaseNULL(buf.descriptor);
     buf = {};
-    IOLog(LOG_PREFIX "FreeDMA: id=%u\n", bufID);
     return kIOReturnSuccess;
 }
 
-kern_return_t ROCmGPUUserClient::handleMapDMA(
-    IOUserClientMethodArguments* args)
+static kern_return_t handleMapDMA(ROCmGPUUserClient_IVars* iv,
+                                  IOUserClientMethodArguments* args)
 {
     uint32_t bufID = (uint32_t)args->scalarInput[0];
-    if (bufID >= ROCMGPU_MAX_DMA_BUFFERS || !fDMABuffers[bufID].inUse) {
+    if (bufID >= MAX_DMA_BUFFERS || !iv->dmaBuffers[bufID].inUse)
         return kIOReturnNotFound;
-    }
-
-    /* Client calls IOConnectMapMemory64(conn, kROCmGPU_MemType_DMABase + bufID, ...)
-     * which triggers CopyClientMemoryForType() */
-    args->scalarOutput[0] = fDMABuffers[bufID].size;
+    args->scalarOutput[0] = iv->dmaBuffers[bufID].size;
     return kIOReturnSuccess;
 }
 
-kern_return_t ROCmGPUUserClient::handleEnableMSI(
-    IOUserClientMethodArguments* args)
+static kern_return_t handleEnableMSI(ROCmGPUUserClient_IVars* iv,
+                                     IOUserClientMethodArguments* args)
 {
-    uint64_t vectorIndex = args->scalarInput[0];
+    if (iv->intSource) return kIOReturnStillOpen;
 
-    IOLog(LOG_PREFIX "EnableMSI: vector=%llu\n", vectorIndex);
-
-    if (fInterruptSource) {
-        IOLog(LOG_PREFIX "Interrupt already enabled\n");
-        return kIOReturnStillOpen;
-    }
-
-    /* Find MSI/MSI-X interrupt */
-    uint64_t intType = 0;
-    kern_return_t ret = fPCIDevice->GetInterruptType(
-        (uint32_t)vectorIndex, &intType);
-    if (ret != kIOReturnSuccess) {
-        IOLog(LOG_PREFIX "GetInterruptType(%llu) failed: 0x%x\n",
-              vectorIndex, ret);
-        return ret;
-    }
-
-    /* Create dispatch queue for interrupt handler */
     IODispatchQueue* queue = nullptr;
-    ret = IODispatchQueue::Create("ROCmGPU-Interrupt", 0, 0, &queue);
-    if (ret != kIOReturnSuccess) {
-        return ret;
-    }
+    kern_return_t ret = IODispatchQueue::Create("ROCmGPU-Int", 0, 0, &queue);
+    if (ret != kIOReturnSuccess) return ret;
 
-    /* Create interrupt dispatch source */
     ret = IOInterruptDispatchSource::Create(
-        fPCIDevice,
-        (uint32_t)vectorIndex,
-        queue,
-        &fInterruptSource);
-    if (ret != kIOReturnSuccess) {
-        queue->release();
-        IOLog(LOG_PREFIX "Failed to create interrupt source: 0x%x\n", ret);
-        return ret;
-    }
+        iv->pciDevice, (uint32_t)args->scalarInput[0], queue, &iv->intSource);
+    OSSafeReleaseNULL(queue);
+    if (ret != kIOReturnSuccess) return ret;
 
-    /* Set handler — for now just log, will be extended for IH ring */
-    fInterruptSource->SetHandler(
-        ^(IOInterruptDispatchSource* source, int count,
-          void* action, void* data) {
-            /* Read IH ring write pointer to determine interrupt source.
-             * For now, just mark that an interrupt occurred. */
-            fInterruptEnabled = true;  /* Signal to WaitInterrupt */
-        });
-
-    fInterruptSource->SetEnable(true);
-    fInterruptEnabled = false;
-
-    queue->release();
-    IOLog(LOG_PREFIX "MSI vector %llu enabled\n", vectorIndex);
+    iv->intSource->SetEnable(true);
+    iv->intFired = false;
     return kIOReturnSuccess;
 }
 
-kern_return_t ROCmGPUUserClient::handleWaitInterrupt(
-    IOUserClientMethodArguments* args)
+static kern_return_t handleWaitInterrupt(ROCmGPUUserClient_IVars* iv,
+                                         IOUserClientMethodArguments* args)
 {
-    /* Placeholder: proper implementation would use IOTimerDispatchSource
-     * or an async completion. For now, return immediately with status. */
-    if (fInterruptEnabled) {
-        fInterruptEnabled = false;
-        args->scalarOutput[0] = kROCmGPU_IntStatus_OK;
-    } else {
-        args->scalarOutput[0] = kROCmGPU_IntStatus_Timeout;
-    }
+    args->scalarOutput[0] = iv->intFired ? kROCmGPU_IntStatus_OK : kROCmGPU_IntStatus_Timeout;
+    iv->intFired = false;
     return kIOReturnSuccess;
 }
 
 /* ======================================================================
- * DMA slot management
+ * Lifecycle
  * ====================================================================== */
 
-uint32_t ROCmGPUUserClient::allocDMASlot()
+bool ROCmGPUUserClient::init()
 {
-    for (uint32_t i = 0; i < ROCMGPU_MAX_DMA_BUFFERS; i++) {
-        uint32_t id = (fNextDMAID + i) % ROCMGPU_MAX_DMA_BUFFERS;
-        if (!fDMABuffers[id].inUse) {
-            fDMABuffers[id].inUse = true;
-            fNextDMAID = (id + 1) % ROCMGPU_MAX_DMA_BUFFERS;
-            return id;
-        }
-    }
-    return UINT32_MAX;
+    if (!super::init()) return false;
+    ivars = IONewZero(ROCmGPUUserClient_IVars, 1);
+    return ivars != nullptr;
 }
 
-void ROCmGPUUserClient::freeDMASlot(uint32_t id)
+kern_return_t ROCmGPUUserClient::Start_Impl(IOService* provider)
 {
-    if (id < ROCMGPU_MAX_DMA_BUFFERS) {
-        fDMABuffers[id].inUse = false;
+    kern_return_t ret = Start(provider, SUPERDISPATCH);
+    if (ret != kIOReturnSuccess) return ret;
+
+    ivars->driver = OSDynamicCast(ROCmGPUDriver, provider);
+    if (!ivars->driver) return kIOReturnError;
+
+    /* Get PCI device from our provider's provider (the IOPCIDevice) */
+    ivars->pciDevice = OSDynamicCast(IOPCIDevice, ivars->driver->GetProvider());
+    if (!ivars->pciDevice) return kIOReturnNoDevice;
+
+    os_log(OS_LOG_DEFAULT, LOG_PREFIX "UserClient started");
+    return kIOReturnSuccess;
+}
+
+kern_return_t ROCmGPUUserClient::Stop_Impl(IOService* provider)
+{
+    for (uint32_t i = 0; i < MAX_DMA_BUFFERS; i++) {
+        auto& buf = ivars->dmaBuffers[i];
+        if (buf.inUse) {
+            if (buf.dmaCommand) { buf.dmaCommand->CompleteDMA(0); OSSafeReleaseNULL(buf.dmaCommand); }
+            OSSafeReleaseNULL(buf.descriptor);
+            buf.inUse = false;
+        }
     }
+    OSSafeReleaseNULL(ivars->intSource);
+    return Stop(provider, SUPERDISPATCH);
+}
+
+void ROCmGPUUserClient::free()
+{
+    IOSafeDeleteNULL(ivars, ROCmGPUUserClient_IVars, 1);
+    super::free();
+}
+
+/* ======================================================================
+ * ExternalMethod — virtual override (dispatch to static handlers)
+ * ====================================================================== */
+
+kern_return_t ROCmGPUUserClient::ExternalMethod(
+    uint64_t selector,
+    IOUserClientMethodArguments* args,
+    const IOUserClientMethodDispatch* dispatch,
+    OSObject* target,
+    void* reference)
+{
+    if (selector >= kROCmGPU_SelectorCount) return kIOReturnBadArgument;
+
+    switch (selector) {
+    case kROCmGPU_GetInfo:       return handleGetInfo(ivars, args);
+    case kROCmGPU_Reset:         return handleReset(ivars, args);
+    case kROCmGPU_CfgRead:       return handleCfgRead(ivars, args);
+    case kROCmGPU_CfgWrite:      return handleCfgWrite(ivars, args);
+    case kROCmGPU_MMIORead32:    return handleMMIORead32(ivars, args);
+    case kROCmGPU_MMIOWrite32:   return handleMMIOWrite32(ivars, args);
+    case kROCmGPU_MapBAR:        return handleMapBAR(ivars, args);
+    case kROCmGPU_UnmapBAR:      return kIOReturnSuccess;
+    case kROCmGPU_AllocDMA:      return handleAllocDMA(ivars, args);
+    case kROCmGPU_FreeDMA:       return handleFreeDMA(ivars, args);
+    case kROCmGPU_MapDMA:        return handleMapDMA(ivars, args);
+    case kROCmGPU_EnableMSI:     return handleEnableMSI(ivars, args);
+    case kROCmGPU_WaitInterrupt: return handleWaitInterrupt(ivars, args);
+    default: return kIOReturnBadArgument;
+    }
+}
+
+/* ======================================================================
+ * CopyClientMemoryForType_Impl
+ * ====================================================================== */
+
+kern_return_t ROCmGPUUserClient::CopyClientMemoryForType_Impl(
+    uint64_t type,
+    uint64_t* options,
+    IOMemoryDescriptor** memory)
+{
+    if (type <= kROCmGPU_MemType_BAR5) {
+        uint8_t memIdx = 0; uint64_t barSz = 0;
+        if (getBarMemoryIndex(ivars->pciDevice, (uint8_t)type, &memIdx, &barSz) != kIOReturnSuccess)
+            return kIOReturnNotFound;
+
+        IOMemoryDescriptor* desc = nullptr;
+        kern_return_t ret = ivars->pciDevice->_CopyDeviceMemoryWithIndex(
+            memIdx, &desc, this);
+        if (ret != kIOReturnSuccess || !desc) return kIOReturnError;
+
+        *memory = desc;
+        return kIOReturnSuccess;
+
+    } else if (type >= kROCmGPU_MemType_DMABase) {
+        uint32_t bufID = (uint32_t)(type - kROCmGPU_MemType_DMABase);
+        if (bufID >= MAX_DMA_BUFFERS || !ivars->dmaBuffers[bufID].inUse)
+            return kIOReturnNotFound;
+
+        ivars->dmaBuffers[bufID].descriptor->retain();
+        *memory = ivars->dmaBuffers[bufID].descriptor;
+        return kIOReturnSuccess;
+    }
+
+    return kIOReturnBadArgument;
 }

@@ -1,29 +1,46 @@
 /*
  * ROCmGPUDriver.cpp - IOService implementation for AMD eGPU PCIe access.
  *
- * Lifecycle:
- *   1. macOS matches this driver to Thunderbolt-attached AMD PCI devices
- *   2. Start() opens the PCI device, enables bus mastering, caches BAR info
- *   3. NewUserClient() creates per-connection IOUserClient instances
- *   4. Stop() releases the PCI device
- *
- * All GPU-specific logic (IP discovery, firmware, queues) lives in Python.
- * This driver is a minimal PCIe Hardware Abstraction Layer.
+ * DriverKit naming convention:
+ *   - init() / free() are virtual method overrides (direct)
+ *   - Start_Impl / Stop_Impl / NewUserClient_Impl are dispatch implementations
+ *     (the iig compiler generates the dispatch glue)
  */
 
-#include "ROCmGPUDriver.h"
-#include "ROCmGPUUserClient.h"
-#include "ROCmGPUShared.h"
+#include <os/log.h>
 
 #include <DriverKit/IOLib.h>
-#include <DriverKit/IOMemoryDescriptor.iig>
-#include <DriverKit/IOBufferMemoryDescriptor.iig>
-#include <PCIDriverKit/IOPCIDevice.iig>
+#include <DriverKit/IOMemoryDescriptor.h>
+#include <DriverKit/IOBufferMemoryDescriptor.h>
+#include <PCIDriverKit/IOPCIDevice.h>
+
+/* iig-generated headers */
+#include "generated/ROCmGPUDriver.h"
+#include "generated/ROCmGPUUserClient.h"
+#include "ROCmGPUShared.h"
 
 #define LOG_PREFIX "ROCmGPU: "
 
 /* ======================================================================
- * IOService lifecycle
+ * Instance variables
+ * ====================================================================== */
+
+struct ROCmGPUDriver_IVars {
+    IOPCIDevice* pciDevice;
+    bool         busMasterEnabled;
+
+    struct BARInfo {
+        uint64_t size;
+        uint8_t  memoryIndex;
+        uint8_t  type;
+        bool     is64bit;
+        bool     prefetchable;
+        bool     valid;
+    } bars[6];
+};
+
+/* ======================================================================
+ * Virtual method overrides (init / free)
  * ====================================================================== */
 
 bool ROCmGPUDriver::init()
@@ -32,164 +49,149 @@ bool ROCmGPUDriver::init()
         return false;
     }
 
-    fPCIDevice = nullptr;
-    fBusMasterEnabled = false;
-
-    for (int i = 0; i < 6; i++) {
-        fBARs[i] = {};
+    ivars = IONewZero(ROCmGPUDriver_IVars, 1);
+    if (!ivars) {
+        return false;
     }
 
-    IOLog(LOG_PREFIX "init()\n");
+    os_log(OS_LOG_DEFAULT, LOG_PREFIX "init()");
     return true;
 }
 
-kern_return_t ROCmGPUDriver::Start(IOService* provider)
+void ROCmGPUDriver::free()
+{
+    os_log(OS_LOG_DEFAULT, LOG_PREFIX "free()");
+    IOSafeDeleteNULL(ivars, ROCmGPUDriver_IVars, 1);
+    super::free();
+}
+
+/* ======================================================================
+ * Dispatch implementations (_Impl methods)
+ * ====================================================================== */
+
+kern_return_t ROCmGPUDriver::Start_Impl(IOService* provider)
 {
     kern_return_t ret;
 
-    ret = super::Start(provider);
+    ret = Start(provider, SUPERDISPATCH);
     if (ret != kIOReturnSuccess) {
-        IOLog(LOG_PREFIX "super::Start() failed: 0x%x\n", ret);
+        os_log(OS_LOG_DEFAULT, LOG_PREFIX "super::Start() failed: 0x%x", ret);
         return ret;
     }
 
-    /* Cast provider to IOPCIDevice -- this is our PCI device handle */
-    fPCIDevice = OSDynamicCast(IOPCIDevice, provider);
-    if (!fPCIDevice) {
-        IOLog(LOG_PREFIX "Provider is not an IOPCIDevice\n");
+    /* Cast provider to IOPCIDevice */
+    ivars->pciDevice = OSDynamicCast(IOPCIDevice, provider);
+    if (!ivars->pciDevice) {
+        os_log(OS_LOG_DEFAULT, LOG_PREFIX "Provider is not an IOPCIDevice");
         return kIOReturnNoDevice;
     }
 
-    /* Open for exclusive access -- required before any PCI operations */
-    ret = fPCIDevice->Open(this, 0);
+    /* Open for exclusive access */
+    ret = ivars->pciDevice->Open(this, 0);
     if (ret != kIOReturnSuccess) {
-        IOLog(LOG_PREFIX "Failed to open PCI device: 0x%x\n", ret);
+        os_log(OS_LOG_DEFAULT, LOG_PREFIX "Failed to open PCI device: 0x%x", ret);
         return ret;
     }
 
-    /* Read vendor/device IDs to verify this is an AMD GPU */
+    /* Read vendor/device IDs */
     uint16_t vendorID = 0, deviceID = 0;
-    fPCIDevice->ConfigurationRead16(0x00, &vendorID);  /* Vendor ID */
-    fPCIDevice->ConfigurationRead16(0x02, &deviceID);  /* Device ID */
+    ivars->pciDevice->ConfigurationRead16(0x00, &vendorID);
+    ivars->pciDevice->ConfigurationRead16(0x02, &deviceID);
 
-    IOLog(LOG_PREFIX "Matched PCI device: vendor=0x%04x device=0x%04x\n",
-          vendorID, deviceID);
+    os_log(OS_LOG_DEFAULT, LOG_PREFIX "PCI device: vendor=0x%04x device=0x%04x",
+           vendorID, deviceID);
 
     if (vendorID != 0x1002) {
-        IOLog(LOG_PREFIX "Not an AMD device, refusing\n");
-        fPCIDevice->Close(this, 0);
+        os_log(OS_LOG_DEFAULT, LOG_PREFIX "Not an AMD device, refusing");
+        ivars->pciDevice->Close(this, 0);
         return kIOReturnUnsupported;
     }
 
-    /* Enable bus mastering and memory space access */
+    /* Enable bus mastering and memory space */
     uint16_t cmdReg = 0;
-    fPCIDevice->ConfigurationRead16(0x04, &cmdReg);
-    cmdReg |= 0x0006;  /* BIT1 = Memory Space Enable, BIT2 = Bus Master Enable */
-    fPCIDevice->ConfigurationWrite16(0x04, cmdReg);
-    fBusMasterEnabled = true;
+    ivars->pciDevice->ConfigurationRead16(0x04, &cmdReg);
+    cmdReg |= 0x0006;
+    ivars->pciDevice->ConfigurationWrite16(0x04, cmdReg);
+    ivars->busMasterEnabled = true;
 
-    IOLog(LOG_PREFIX "Bus mastering enabled (cmd=0x%04x)\n", cmdReg);
+    os_log(OS_LOG_DEFAULT, LOG_PREFIX "Bus mastering enabled (cmd=0x%04x)", cmdReg);
 
-    /* Cache BAR information for all 6 BARs.
-     *
-     * DriverKit note on 64-bit BARs:
-     *   A 64-bit BAR occupies two consecutive BAR registers.
-     *   GetBARInfo() returns a memoryIndex that accounts for this --
-     *   it's a 0-based index into the device's memory regions, not
-     *   the BAR register number. For example:
-     *     BAR0+BAR1 (64-bit) -> memoryIndex=0
-     *     BAR2+BAR3 (64-bit) -> memoryIndex=1
-     *     BAR4 (32-bit)      -> memoryIndex=2
-     */
+    /* Cache BAR information */
     for (uint8_t i = 0; i < 6; i++) {
         uint8_t  memIdx = 0;
         uint64_t barSize = 0;
         uint8_t  barType = 0;
 
-        ret = fPCIDevice->GetBARInfo(i, &memIdx, &barSize, &barType);
+        ret = ivars->pciDevice->GetBARInfo(i, &memIdx, &barSize, &barType);
         if (ret == kIOReturnSuccess && barSize > 0) {
-            fBARs[i].memoryIndex = memIdx;
-            fBARs[i].size = barSize;
-            fBARs[i].type = barType;
-            fBARs[i].valid = true;
+            ivars->bars[i].memoryIndex = memIdx;
+            ivars->bars[i].size = barSize;
+            ivars->bars[i].type = barType;
+            ivars->bars[i].valid = true;
 
-            /* Determine if 64-bit by checking BAR register bits */
             uint32_t barReg = 0;
-            fPCIDevice->ConfigurationRead32(0x10 + i * 4, &barReg);
-            fBARs[i].is64bit = ((barReg & 0x6) == 0x4);  /* Type bits [2:1] = 10b */
-            fBARs[i].prefetchable = ((barReg & 0x8) != 0);
+            ivars->pciDevice->ConfigurationRead32(0x10 + i * 4, &barReg);
+            ivars->bars[i].is64bit = ((barReg & 0x6) == 0x4);
+            ivars->bars[i].prefetchable = ((barReg & 0x8) != 0);
 
-            IOLog(LOG_PREFIX "  BAR%u: size=%lluMB memIdx=%u type=%u %s%s\n",
-                  i, barSize / (1024*1024), memIdx, barType,
-                  fBARs[i].is64bit ? "64-bit" : "32-bit",
-                  fBARs[i].prefetchable ? " prefetchable" : "");
+            os_log(OS_LOG_DEFAULT, LOG_PREFIX "  BAR%u: size=%lluMB memIdx=%u type=%u %s%s",
+                   i, barSize / (1024*1024), memIdx, barType,
+                   ivars->bars[i].is64bit ? "64-bit" : "32-bit",
+                   ivars->bars[i].prefetchable ? " prefetchable" : "");
         } else {
-            fBARs[i].valid = false;
+            ivars->bars[i].valid = false;
         }
     }
 
-    /* Register the service so IOUserClient connections can be established */
     ret = RegisterService();
     if (ret != kIOReturnSuccess) {
-        IOLog(LOG_PREFIX "RegisterService() failed: 0x%x\n", ret);
-        fPCIDevice->Close(this, 0);
+        os_log(OS_LOG_DEFAULT, LOG_PREFIX "RegisterService() failed: 0x%x", ret);
+        ivars->pciDevice->Close(this, 0);
         return ret;
     }
 
-    IOLog(LOG_PREFIX "Start() complete — ready for user clients\n");
+    os_log(OS_LOG_DEFAULT, LOG_PREFIX "Start() complete");
     return kIOReturnSuccess;
 }
 
-kern_return_t ROCmGPUDriver::Stop(IOService* provider)
+kern_return_t ROCmGPUDriver::Stop_Impl(IOService* provider)
 {
-    IOLog(LOG_PREFIX "Stop()\n");
+    os_log(OS_LOG_DEFAULT, LOG_PREFIX "Stop()");
 
-    if (fPCIDevice) {
-        /* Disable bus mastering before releasing */
-        if (fBusMasterEnabled) {
+    if (ivars->pciDevice) {
+        if (ivars->busMasterEnabled) {
             uint16_t cmdReg = 0;
-            fPCIDevice->ConfigurationRead16(0x04, &cmdReg);
+            ivars->pciDevice->ConfigurationRead16(0x04, &cmdReg);
             cmdReg &= ~0x0006;
-            fPCIDevice->ConfigurationWrite16(0x04, cmdReg);
-            fBusMasterEnabled = false;
+            ivars->pciDevice->ConfigurationWrite16(0x04, cmdReg);
+            ivars->busMasterEnabled = false;
         }
-
-        fPCIDevice->Close(this, 0);
-        fPCIDevice = nullptr;
+        ivars->pciDevice->Close(this, 0);
+        ivars->pciDevice = nullptr;
     }
 
-    return super::Stop(provider);
+    return Stop(provider, SUPERDISPATCH);
 }
 
-void ROCmGPUDriver::free()
-{
-    IOLog(LOG_PREFIX "free()\n");
-    super::free();
-}
-
-/* ======================================================================
- * User client creation
- * ====================================================================== */
-
-kern_return_t ROCmGPUDriver::NewUserClient(
+kern_return_t ROCmGPUDriver::NewUserClient_Impl(
     uint32_t type,
     IOUserClient** userClient)
 {
     kern_return_t ret;
     IOService* client = nullptr;
 
-    IOLog(LOG_PREFIX "NewUserClient(type=%u)\n", type);
+    os_log(OS_LOG_DEFAULT, LOG_PREFIX "NewUserClient(type=%u)", type);
 
     ret = Create(this, "UserClientProperties", &client);
     if (ret != kIOReturnSuccess) {
-        IOLog(LOG_PREFIX "Failed to create user client: 0x%x\n", ret);
+        os_log(OS_LOG_DEFAULT, LOG_PREFIX "Failed to create user client: 0x%x", ret);
         return ret;
     }
 
     *userClient = OSDynamicCast(IOUserClient, client);
     if (!*userClient) {
-        IOLog(LOG_PREFIX "Created service is not an IOUserClient\n");
-        client->release();
+        os_log(OS_LOG_DEFAULT, LOG_PREFIX "Created service is not an IOUserClient");
+        OSSafeReleaseNULL(client);
         return kIOReturnError;
     }
 

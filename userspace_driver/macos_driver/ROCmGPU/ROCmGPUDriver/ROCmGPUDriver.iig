@@ -1,0 +1,35 @@
+/*
+ * ROCmGPUDriver.iig - IOService subclass for AMD eGPU PCIe access.
+ *
+ * Matches on Thunderbolt-attached AMD PCI devices (vendor 0x1002).
+ * Provides PCIe BAR mapping, MMIO, DMA, config space, and interrupts
+ * to userspace via the ROCmGPUUserClient.
+ */
+
+#ifndef ROCMGPU_DRIVER_IIG
+#define ROCMGPU_DRIVER_IIG
+
+#include <DriverKit/IOService.iig>
+
+class ROCmGPUDriver : public IOService
+{
+public:
+
+    virtual bool
+    init() override;
+
+    virtual kern_return_t
+    Start(IOService * provider) override;
+
+    virtual kern_return_t
+    Stop(IOService * provider) override;
+
+    virtual void
+    free() override;
+
+    virtual kern_return_t
+    NewUserClient(uint32_t type,
+                  IOUserClient ** userClient) override;
+};
+
+#endif /* ROCMGPU_DRIVER_IIG */
