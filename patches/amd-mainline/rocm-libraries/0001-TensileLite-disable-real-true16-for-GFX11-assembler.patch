@@ -1,0 +1,55 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
+Date: Thu, 1 Jan 2099 00:00:00 +0000
+Subject: [PATCH] TensileLite: disable real-true16 for GFX11+ assembler
+ invocations
+
+The amd-main branch of llvm-project enables FeatureRealTrue16Insts by
+default for GFX11+ targets.  This changes the assembler syntax so that
+16-bit conversion instructions (v_cvt_f32_f16, v_cvt_f16_f32, etc.)
+require VGPR operands to carry .l/.h sub-register suffixes.
+
+TensileLite generates assembly with old-style full 32-bit VGPR names
+(e.g. "v_cvt_f32_f16 v14, v14") which the updated assembler rejects
+with "operands are not valid for this GPU or mode".
+
+Pass -mattr=-real-true16 when assembling for GFX11+ so the assembler
+accepts the legacy operand syntax.  Both the assembly compilation path
+(getCompileArgs) and the capability-detection path (tryAssembler) are
+updated for consistency.
+---
+ shared/tensile/Tensile/Common.py              | 3 +++
+ shared/tensile/Tensile/KernelWriterAssembly.py | 3 +++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/shared/tensile/Tensile/Common.py b/shared/tensile/Tensile/Common.py
+index 220430061b..ee1a122f91 100644
+--- a/shared/tensile/Tensile/Common.py
++++ b/shared/tensile/Tensile/Common.py
+@@ -2167,6 +2167,9 @@ def tryAssembler(isaVersion, asmString, debug=False, *options):
+   if isaVersion[0] >= 10:
+     options += ['-mwavefrontsize64']
+ 
++  if isaVersion[0] >= 11:
++    options += ['-mattr=-real-true16']
++
+   assembler = globalParameters['AssemblerPath']
+   if assembler is None:
+     raise ValueError('No assembler available; set TENSILE_ROCM_ASSEMBLER_PATH to point to ROCm Clang.')
+diff --git a/shared/tensile/Tensile/KernelWriterAssembly.py b/shared/tensile/Tensile/KernelWriterAssembly.py
+index f89bf6c943..0ea959b43e 100644
+--- a/shared/tensile/Tensile/KernelWriterAssembly.py
++++ b/shared/tensile/Tensile/KernelWriterAssembly.py
+@@ -260,6 +260,9 @@ class KernelWriterAssembly(KernelWriter):
+     else:
+       rv += ['-mno-wavefrontsize64']
+ 
++    if isa[0] >= 11:
++      rv += ['-mattr=-real-true16']
++
+     rv += moreArgs
+ 
+     rv += ['-c', '-o', objectFileName, sourceFileName]
+-- 
+2.34.1
+
