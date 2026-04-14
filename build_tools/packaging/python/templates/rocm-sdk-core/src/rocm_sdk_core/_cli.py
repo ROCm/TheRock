@@ -102,6 +102,10 @@ def _exec(relpath: str, expand_devel=True):
     # need the devel files. System info tools (amd-smi, rocminfo, etc.)
     # override with expand_devel=False to avoid the expansion cost.
     full_path = _get_module_path(expand_devel) / (relpath + exe_suffix)
+    if is_windows:
+        # https://bugs.python.org/issue19124
+        # prevent execution from occuring in the backround
+        os._exit(os.spawnv(os.P_WAIT, full_path, [str(full_path)] + sys.argv[1:]))
     os.execv(full_path, [str(full_path)] + sys.argv[1:])
 
 
