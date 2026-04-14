@@ -2434,6 +2434,109 @@ bool RunDsWaveCounterTests(
   return true;
 }
 
+[[gnu::noinline]] bool RunScalarScratchExecutionCase(
+    const mirage::sim::isa::Gfx950Interpreter& interpreter) {
+  using namespace mirage::sim::isa;
+
+  std::string error_message;
+  const std::vector<DecodedInstruction> scratch_program = {
+      DecodedInstruction::ThreeOperand(
+          "S_SCRATCH_LOAD_DWORD", InstructionOperand::Sgpr(4),
+          InstructionOperand::Sgpr(0), InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand(
+          "S_SCRATCH_LOAD_DWORDX2", InstructionOperand::Sgpr(8),
+          InstructionOperand::Sgpr(0), InstructionOperand::Imm32(0x10)),
+      DecodedInstruction::ThreeOperand(
+          "S_SCRATCH_LOAD_DWORDX4", InstructionOperand::Sgpr(16),
+          InstructionOperand::Sgpr(0), InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::ThreeOperand(
+          "S_SCRATCH_STORE_DWORD", InstructionOperand::Sgpr(4),
+          InstructionOperand::Sgpr(0), InstructionOperand::Imm32(0x200)),
+      DecodedInstruction::ThreeOperand(
+          "S_SCRATCH_STORE_DWORDX2", InstructionOperand::Sgpr(8),
+          InstructionOperand::Sgpr(0), InstructionOperand::Imm32(0x210)),
+      DecodedInstruction::ThreeOperand(
+          "S_SCRATCH_STORE_DWORDX4", InstructionOperand::Sgpr(16),
+          InstructionOperand::Sgpr(0), InstructionOperand::Imm32(0x220)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  LinearExecutionMemory scratch_memory(0x700, 0);
+  if (!Expect(scratch_memory.WriteU32(0x100u, 0x11110000u),
+              "expected scratch seed write")) {
+    return false;
+  }
+  for (std::uint32_t index = 0; index < 2; ++index) {
+    if (!Expect(scratch_memory.WriteU32(0x110u + index * 4u,
+                                        0x22220000u + index),
+                "expected scratch seed write")) {
+      return false;
+    }
+  }
+  for (std::uint32_t index = 0; index < 4; ++index) {
+    if (!Expect(scratch_memory.WriteU32(0x120u + index * 4u,
+                                        0x33330000u + index),
+                "expected scratch seed write")) {
+      return false;
+    }
+  }
+
+  std::vector<CompiledInstruction> compiled_scratch_program;
+  if (!Expect(interpreter.CompileProgram(scratch_program,
+                                         &compiled_scratch_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return false;
+  }
+  auto scratch_state = std::make_unique<WaveExecutionState>();
+  scratch_state->sgprs[0] = 0x100u;
+  scratch_state->sgprs[1] = 0u;
+  scratch_state->sgprs[72] = 0x220u;
+  if (!Expect(interpreter.ExecuteProgram(compiled_scratch_program,
+                                         scratch_state.get(), &scratch_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(scratch_state->halted, "expected scratch program to halt") ||
+      !Expect(scratch_state->sgprs[4] == 0x11110000u,
+              "expected scratch load result") ||
+      !Expect(scratch_state->sgprs[8] == 0x22220000u &&
+                  scratch_state->sgprs[9] == 0x22220001u,
+              "expected scratch loadx2 result") ||
+      !Expect(scratch_state->sgprs[16] == 0x33330000u &&
+                  scratch_state->sgprs[17] == 0x33330001u &&
+                  scratch_state->sgprs[18] == 0x33330002u &&
+                  scratch_state->sgprs[19] == 0x33330003u,
+              "expected scratch loadx4 result")) {
+    return false;
+  }
+
+  std::uint32_t scratch_value = 0;
+  if (!Expect(scratch_memory.ReadU32(0x300u, &scratch_value) &&
+                  scratch_value == 0x11110000u,
+              "expected scratch store result") ||
+      !Expect(scratch_memory.ReadU32(0x310u, &scratch_value) &&
+                  scratch_value == 0x22220000u,
+              "expected scratch storex2 lane 0 result") ||
+      !Expect(scratch_memory.ReadU32(0x314u, &scratch_value) &&
+                  scratch_value == 0x22220001u,
+              "expected scratch storex2 lane 1 result") ||
+      !Expect(scratch_memory.ReadU32(0x320u, &scratch_value) &&
+                  scratch_value == 0x33330000u,
+              "expected scratch storex4 lane 0 result") ||
+      !Expect(scratch_memory.ReadU32(0x324u, &scratch_value) &&
+                  scratch_value == 0x33330001u,
+              "expected scratch storex4 lane 1 result") ||
+      !Expect(scratch_memory.ReadU32(0x328u, &scratch_value) &&
+                  scratch_value == 0x33330002u,
+              "expected scratch storex4 lane 2 result") ||
+      !Expect(scratch_memory.ReadU32(0x32cu, &scratch_value) &&
+                  scratch_value == 0x33330003u,
+              "expected scratch storex4 lane 3 result")) {
+    return false;
+  }
+
+  return true;
+}
+
 }  // namespace
 
 int main() {
@@ -3679,9 +3782,12 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 5> kWideScalarMemoryOpcodes = {
-      "S_LOAD_DWORDX4", "S_LOAD_DWORDX8", "S_LOAD_DWORDX16",
-      "S_STORE_DWORDX2", "S_STORE_DWORDX4",
+  const std::array<std::string_view, 9> kWideScalarMemoryOpcodes = {
+      "S_LOAD_DWORDX4",         "S_LOAD_DWORDX8",
+      "S_LOAD_DWORDX16",        "S_SCRATCH_LOAD_DWORDX2",
+      "S_SCRATCH_LOAD_DWORDX4", "S_SCRATCH_STORE_DWORDX2",
+      "S_SCRATCH_STORE_DWORDX4", "S_STORE_DWORDX2",
+      "S_STORE_DWORDX4",
   };
   for (std::string_view opcode : kWideScalarMemoryOpcodes) {
     const std::string message = "expected " + std::string(opcode) + " support";
@@ -3702,15 +3808,15 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 6> kUnsupportedScalarScratchExecutionOpcodes = {
-      "S_SCRATCH_LOAD_DWORD",  "S_SCRATCH_LOAD_DWORDX2",
-      "S_SCRATCH_LOAD_DWORDX4", "S_SCRATCH_STORE_DWORD",
+  const std::array<std::string_view, 6> kScalarScratchExecutionOpcodes = {
+      "S_SCRATCH_LOAD_DWORD",   "S_SCRATCH_LOAD_DWORDX2",
+      "S_SCRATCH_LOAD_DWORDX4",  "S_SCRATCH_STORE_DWORD",
       "S_SCRATCH_STORE_DWORDX2", "S_SCRATCH_STORE_DWORDX4",
   };
-  for (std::string_view opcode : kUnsupportedScalarScratchExecutionOpcodes) {
-    const std::string message =
-        "expected " + std::string(opcode) + " to remain unsupported";
-    if (!Expect(!interpreter.Supports(opcode), message.c_str())) {
+  for (std::string_view opcode : kScalarScratchExecutionOpcodes) {
+    const std::string message = "expected " + std::string(opcode) +
+                                " support";
+    if (!Expect(interpreter.Supports(opcode), message.c_str())) {
       return 1;
     }
   }
@@ -9066,56 +9172,20 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 6> kUnsupportedScalarScratchOpcodes = {
-      "S_SCRATCH_LOAD_DWORD",  "S_SCRATCH_LOAD_DWORDX2",
+  const std::array<std::string_view, 6> kScalarScratchOpcodes = {
+      "S_SCRATCH_LOAD_DWORD",   "S_SCRATCH_LOAD_DWORDX2",
       "S_SCRATCH_LOAD_DWORDX4", "S_SCRATCH_STORE_DWORD",
       "S_SCRATCH_STORE_DWORDX2", "S_SCRATCH_STORE_DWORDX4",
   };
-  for (std::string_view opcode : kUnsupportedScalarScratchOpcodes) {
-    if (!Expect(!interpreter.Supports(opcode),
-                ("expected " + std::string(opcode) + " unsupported")
-                    .c_str())) {
-      return 1;
-    }
-    const std::vector<DecodedInstruction> scratch_program = {
-        DecodedInstruction::ThreeOperand(opcode, InstructionOperand::Sgpr(4),
-                                         InstructionOperand::Sgpr(0),
-                                         InstructionOperand::Imm32(0)),
-    };
-    if (!Expect(!interpreter.ExecuteProgram(scratch_program, &unsupported_state,
-                                            &error_message),
-                ("expected " + std::string(opcode) +
-                 " execution rejection")
-                    .c_str()) ||
-        !Expect(!error_message.empty(),
-                ("expected " + std::string(opcode) + " execution error")
+  for (std::string_view opcode : kScalarScratchOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                ("expected " + std::string(opcode) + " support")
                     .c_str())) {
       return 1;
     }
   }
-
-  const std::array<std::string_view, 6> kUnsupportedScalarScratchCompileOpcodes = {
-      "S_SCRATCH_LOAD_DWORD",  "S_SCRATCH_LOAD_DWORDX2",
-      "S_SCRATCH_LOAD_DWORDX4", "S_SCRATCH_STORE_DWORD",
-      "S_SCRATCH_STORE_DWORDX2", "S_SCRATCH_STORE_DWORDX4",
-  };
-  for (std::string_view opcode : kUnsupportedScalarScratchCompileOpcodes) {
-    std::vector<DecodedInstruction> compile_program = {
-        DecodedInstruction::ThreeOperand(opcode, InstructionOperand::Sgpr(4),
-                                         InstructionOperand::Sgpr(0),
-                                         InstructionOperand::Imm32(0)),
-    };
-    std::vector<CompiledInstruction> compiled_program;
-    if (!Expect(!interpreter.CompileProgram(compile_program, &compiled_program,
-                                            &error_message),
-                ("expected " + std::string(opcode) +
-                 " compile rejection")
-                    .c_str()) ||
-        !Expect(!error_message.empty(),
-                ("expected " + std::string(opcode) + " compile error")
-                    .c_str())) {
-      return 1;
-    }
+  if (!RunScalarScratchExecutionCase(interpreter)) {
+    return 1;
   }
 
   const std::vector<DecodedInstruction> ds_program = {

@@ -6351,51 +6351,138 @@ int main() {
   }
 
   {
-    const std::array<std::string_view, 6> kUnsupportedScalarScratchOpcodes = {
-        "S_SCRATCH_LOAD_DWORD",  "S_SCRATCH_LOAD_DWORDX2",
-        "S_SCRATCH_LOAD_DWORDX4", "S_SCRATCH_STORE_DWORD",
-        "S_SCRATCH_STORE_DWORDX2", "S_SCRATCH_STORE_DWORDX4",
+    const auto load_opcode =
+        FindDefaultEncodingOpcode("S_SCRATCH_LOAD_DWORD", "ENC_SMEM");
+    const auto loadx2_opcode =
+        FindDefaultEncodingOpcode("S_SCRATCH_LOAD_DWORDX2", "ENC_SMEM");
+    const auto loadx4_opcode =
+        FindDefaultEncodingOpcode("S_SCRATCH_LOAD_DWORDX4", "ENC_SMEM");
+    const auto store_opcode =
+        FindDefaultEncodingOpcode("S_SCRATCH_STORE_DWORD", "ENC_SMEM");
+    const auto storex2_opcode =
+        FindDefaultEncodingOpcode("S_SCRATCH_STORE_DWORDX2", "ENC_SMEM");
+    const auto storex4_opcode =
+        FindDefaultEncodingOpcode("S_SCRATCH_STORE_DWORDX4", "ENC_SMEM");
+    if (!Expect(load_opcode.has_value(),
+                "expected scratch load opcode lookup") ||
+        !Expect(loadx2_opcode.has_value(),
+                "expected scratch loadx2 opcode lookup") ||
+        !Expect(loadx4_opcode.has_value(),
+                "expected scratch loadx4 opcode lookup") ||
+        !Expect(store_opcode.has_value(),
+                "expected scratch store opcode lookup") ||
+        !Expect(storex2_opcode.has_value(),
+                "expected scratch storex2 opcode lookup") ||
+        !Expect(storex4_opcode.has_value(),
+                "expected scratch storex4 opcode lookup")) {
+      return 1;
+    }
+
+    const auto load_word = MakeSmem(*load_opcode, 4, 0, true, 0);
+    const auto loadx2_word = MakeSmem(*loadx2_opcode, 8, 0, true, 0x10);
+    const auto loadx4_word = MakeSmem(*loadx4_opcode, 16, 0, true, 0x20);
+    const auto store_word = MakeSmem(*store_opcode, 4, 0, true, 0x200);
+    const auto storex2_word = MakeSmem(*storex2_opcode, 8, 0, true, 0x210);
+    const auto storex4_word = MakeSmem(*storex4_opcode, 16, 0, false, 72, true);
+    const std::vector<std::uint32_t> scratch_program = {
+        load_word[0],    load_word[1],    loadx2_word[0],  loadx2_word[1],
+        loadx4_word[0],  loadx4_word[1],  store_word[0],   store_word[1],
+        storex2_word[0], storex2_word[1], storex4_word[0], storex4_word[1],
+        MakeSopp(1),
     };
-    for (std::string_view opcode_name : kUnsupportedScalarScratchOpcodes) {
-      const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_SMEM");
-      if (!Expect(opcode.has_value(),
-                  ("expected catalog opcode for " + std::string(opcode_name))
-                      .c_str())) {
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(scratch_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 7,
+                "expected decoded scratch program size") ||
+        !Expect(decoded_program[0].opcode == "S_SCRATCH_LOAD_DWORD",
+                "expected scratch load decode") ||
+        !Expect(decoded_program[1].opcode == "S_SCRATCH_LOAD_DWORDX2",
+                "expected scratch loadx2 decode") ||
+        !Expect(decoded_program[2].opcode == "S_SCRATCH_LOAD_DWORDX4",
+                "expected scratch loadx4 decode") ||
+        !Expect(decoded_program[3].opcode == "S_SCRATCH_STORE_DWORD",
+                "expected scratch store decode") ||
+        !Expect(decoded_program[4].opcode == "S_SCRATCH_STORE_DWORDX2",
+                "expected scratch storex2 decode") ||
+        !Expect(decoded_program[5].opcode == "S_SCRATCH_STORE_DWORDX4",
+                "expected scratch storex4 decode") ||
+        !Expect(decoded_program[5].operands[2].kind == OperandKind::kSgpr &&
+                    decoded_program[5].operands[2].index == 72,
+                "expected scratch soffset decode")) {
+      return 1;
+    }
+
+    LinearExecutionMemory scratch_memory(0x700, 0);
+    if (!Expect(scratch_memory.WriteU32(0x100u, 0x11110000u),
+                "expected scratch seed write")) {
+      return 1;
+    }
+    for (std::uint32_t index = 0; index < 2; ++index) {
+      if (!Expect(scratch_memory.WriteU32(0x110u + index * 4u,
+                                          0x22220000u + index),
+                  "expected scratch seed write")) {
         return 1;
       }
-
-      const std::vector<std::array<std::uint32_t, 2>> scratch_words = {
-          MakeSmem(*opcode, 4, 0, true, 0),
-          MakeSmem(*opcode, 4, 0, false, 70u, true),
-      };
-      for (const auto& scratch_word : scratch_words) {
-        const std::vector<std::uint32_t> scratch_program = {
-            scratch_word[0], scratch_word[1], MakeSopp(1),
-        };
-        decoded_program.clear();
-        if (!Expect(!decoder.DecodeProgram(scratch_program, &decoded_program,
-                                           &error_message),
-                    ("expected scratch decode rejection for " +
-                     std::string(opcode_name))
-                        .c_str())) {
-          return 1;
-        }
-
-        const std::array<std::uint32_t, 2> scratch_instruction = {
-            scratch_word[0], scratch_word[1],
-        };
-        DecodedInstruction decoded_instruction;
-        std::size_t words_consumed = 0;
-        if (!Expect(!decoder.DecodeInstruction(scratch_instruction,
-                                               &decoded_instruction,
-                                               &words_consumed,
-                                               &error_message),
-                    ("expected scratch instruction rejection for " +
-                     std::string(opcode_name))
-                        .c_str())) {
-          return 1;
-        }
+    }
+    for (std::uint32_t index = 0; index < 4; ++index) {
+      if (!Expect(scratch_memory.WriteU32(0x120u + index * 4u,
+                                          0x33330000u + index),
+                  "expected scratch seed write")) {
+        return 1;
       }
+    }
+    WaveExecutionState scratch_state;
+    scratch_state.sgprs[0] = 0x100u;
+    scratch_state.sgprs[1] = 0u;
+    scratch_state.sgprs[72] = 0x220u;
+    if (!Expect(interpreter.ExecuteProgram(decoded_program, &scratch_state,
+                                           &scratch_memory, &error_message),
+                error_message.c_str()) ||
+        !Expect(scratch_state.sgprs[4] == 0x11110000u,
+                "expected scratch load result") ||
+        !Expect(scratch_state.sgprs[8] == 0x22220000u &&
+                    scratch_state.sgprs[9] == 0x22220001u,
+                "expected scratch loadx2 result") ||
+        !Expect(scratch_state.sgprs[16] == 0x33330000u &&
+                    scratch_state.sgprs[17] == 0x33330001u &&
+                    scratch_state.sgprs[18] == 0x33330002u &&
+                    scratch_state.sgprs[19] == 0x33330003u,
+                "expected scratch loadx4 result")) {
+      return 1;
+    }
+
+    std::uint32_t value = 0;
+    if (!Expect(scratch_memory.ReadU32(0x300u, &value),
+                "expected scratch store read") ||
+        !Expect(value == 0x11110000u,
+                "expected scratch store result") ||
+        !Expect(scratch_memory.ReadU32(0x310u, &value),
+                "expected scratch storex2 read") ||
+        !Expect(value == 0x22220000u,
+                "expected scratch storex2 result") ||
+        !Expect(scratch_memory.ReadU32(0x314u, &value),
+                "expected scratch storex2 read") ||
+        !Expect(value == 0x22220001u,
+                "expected scratch storex2 result") ||
+        !Expect(scratch_memory.ReadU32(0x320u, &value),
+                "expected scratch storex4 read") ||
+        !Expect(value == 0x33330000u,
+                "expected scratch storex4 result") ||
+        !Expect(scratch_memory.ReadU32(0x324u, &value),
+                "expected scratch storex4 read") ||
+        !Expect(value == 0x33330001u,
+                "expected scratch storex4 result") ||
+        !Expect(scratch_memory.ReadU32(0x328u, &value),
+                "expected scratch storex4 read") ||
+        !Expect(value == 0x33330002u,
+                "expected scratch storex4 result") ||
+        !Expect(scratch_memory.ReadU32(0x32cu, &value),
+                "expected scratch storex4 read") ||
+        !Expect(value == 0x33330003u,
+                "expected scratch storex4 result")) {
+      return 1;
     }
   }
 

@@ -984,11 +984,18 @@ bool IsScalarMemoryOpcode(std::string_view opcode) {
          opcode == "S_BUFFER_LOAD_DWORDX8" ||
          opcode == "S_BUFFER_LOAD_DWORDX16" ||
          opcode == "S_LOAD_DWORDX4" || opcode == "S_LOAD_DWORDX8" ||
-         opcode == "S_LOAD_DWORDX16" || opcode == "S_STORE_DWORD" ||
+         opcode == "S_LOAD_DWORDX16" ||
+         opcode == "S_SCRATCH_LOAD_DWORD" ||
+         opcode == "S_SCRATCH_LOAD_DWORDX2" ||
+         opcode == "S_SCRATCH_LOAD_DWORDX4" ||
+         opcode == "S_STORE_DWORD" ||
          opcode == "S_BUFFER_STORE_DWORD" ||
          opcode == "S_BUFFER_STORE_DWORDX2" ||
          opcode == "S_BUFFER_STORE_DWORDX4" ||
-         opcode == "S_STORE_DWORDX2" || opcode == "S_STORE_DWORDX4";
+         opcode == "S_STORE_DWORDX2" || opcode == "S_STORE_DWORDX4" ||
+         opcode == "S_SCRATCH_STORE_DWORD" ||
+         opcode == "S_SCRATCH_STORE_DWORDX2" ||
+         opcode == "S_SCRATCH_STORE_DWORDX4";
 }
 
 bool IsScalarBufferMemoryOpcode(std::string_view opcode) {
@@ -1010,7 +1017,10 @@ bool IsScalarMemoryLoadOpcode(std::string_view opcode) {
          opcode == "S_BUFFER_LOAD_DWORDX8" ||
          opcode == "S_BUFFER_LOAD_DWORDX16" ||
          opcode == "S_LOAD_DWORDX4" || opcode == "S_LOAD_DWORDX8" ||
-         opcode == "S_LOAD_DWORDX16";
+         opcode == "S_LOAD_DWORDX16" ||
+         opcode == "S_SCRATCH_LOAD_DWORD" ||
+         opcode == "S_SCRATCH_LOAD_DWORDX2" ||
+         opcode == "S_SCRATCH_LOAD_DWORDX4";
 }
 
 bool IsScalarMemoryMaintenanceOpcode(std::string_view opcode) {
@@ -1275,12 +1285,16 @@ std::uint8_t GetScalarMemoryRegisterDwordCount(std::string_view opcode) {
   }
   if (opcode == "S_LOAD_DWORDX4" || opcode == "S_STORE_DWORDX4" ||
       opcode == "S_BUFFER_LOAD_DWORDX4" ||
-      opcode == "S_BUFFER_STORE_DWORDX4") {
+      opcode == "S_BUFFER_STORE_DWORDX4" ||
+      opcode == "S_SCRATCH_LOAD_DWORDX4" ||
+      opcode == "S_SCRATCH_STORE_DWORDX4") {
     return 4;
   }
   if (opcode == "S_LOAD_DWORDX2" || opcode == "S_STORE_DWORDX2" ||
       opcode == "S_BUFFER_LOAD_DWORDX2" ||
-      opcode == "S_BUFFER_STORE_DWORDX2") {
+      opcode == "S_BUFFER_STORE_DWORDX2" ||
+      opcode == "S_SCRATCH_LOAD_DWORDX2" ||
+      opcode == "S_SCRATCH_STORE_DWORDX2") {
     return 2;
   }
   return 1;
@@ -8128,6 +8142,11 @@ bool TryCompileOpcode(std::string_view opcode,
                             true, 1);
     return true;
   }
+  if (opcode == "S_SCRATCH_LOAD_DWORD") {
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSLoadDword,
+                            true, 1);
+    return true;
+  }
   if (opcode == "S_BUFFER_LOAD_DWORD") {
     SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSLoadDword,
                             true, 1, true);
@@ -8138,12 +8157,22 @@ bool TryCompileOpcode(std::string_view opcode,
                             true, 2);
     return true;
   }
+  if (opcode == "S_SCRATCH_LOAD_DWORDX2") {
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSLoadDwordX2,
+                            true, 2);
+    return true;
+  }
   if (opcode == "S_BUFFER_LOAD_DWORDX2") {
     SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSLoadDwordX2,
                             true, 2, true);
     return true;
   }
   if (opcode == "S_LOAD_DWORDX4") {
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSLoadDwordX2,
+                            true, 4);
+    return true;
+  }
+  if (opcode == "S_SCRATCH_LOAD_DWORDX4") {
     SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSLoadDwordX2,
                             true, 4);
     return true;
@@ -8178,6 +8207,11 @@ bool TryCompileOpcode(std::string_view opcode,
                             false, 1);
     return true;
   }
+  if (opcode == "S_SCRATCH_STORE_DWORD") {
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSStoreDword,
+                            false, 1);
+    return true;
+  }
   if (opcode == "S_BUFFER_STORE_DWORD") {
     SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSStoreDword,
                             false, 1, true);
@@ -8188,12 +8222,22 @@ bool TryCompileOpcode(std::string_view opcode,
                             false, 2);
     return true;
   }
+  if (opcode == "S_SCRATCH_STORE_DWORDX2") {
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSStoreDword,
+                            false, 2);
+    return true;
+  }
   if (opcode == "S_BUFFER_STORE_DWORDX2") {
     SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSStoreDword,
                             false, 2, true);
     return true;
   }
   if (opcode == "S_STORE_DWORDX4") {
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSStoreDword,
+                            false, 4);
+    return true;
+  }
+  if (opcode == "S_SCRATCH_STORE_DWORDX4") {
     SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSStoreDword,
                             false, 4);
     return true;

@@ -884,6 +884,9 @@ bool Gfx950BinaryDecoder::DecodeSmem(std::span<const std::uint32_t> words,
 
   if (std::string_view(instruction_name) != "S_LOAD_DWORD" &&
       std::string_view(instruction_name) != "S_LOAD_DWORDX2" &&
+      std::string_view(instruction_name) != "S_SCRATCH_LOAD_DWORD" &&
+      std::string_view(instruction_name) != "S_SCRATCH_LOAD_DWORDX2" &&
+      std::string_view(instruction_name) != "S_SCRATCH_LOAD_DWORDX4" &&
       std::string_view(instruction_name) != "S_BUFFER_LOAD_DWORD" &&
       std::string_view(instruction_name) != "S_BUFFER_LOAD_DWORDX2" &&
       std::string_view(instruction_name) != "S_BUFFER_LOAD_DWORDX4" &&
@@ -893,6 +896,9 @@ bool Gfx950BinaryDecoder::DecodeSmem(std::span<const std::uint32_t> words,
       std::string_view(instruction_name) != "S_LOAD_DWORDX8" &&
       std::string_view(instruction_name) != "S_LOAD_DWORDX16" &&
       std::string_view(instruction_name) != "S_STORE_DWORD" &&
+      std::string_view(instruction_name) != "S_SCRATCH_STORE_DWORD" &&
+      std::string_view(instruction_name) != "S_SCRATCH_STORE_DWORDX2" &&
+      std::string_view(instruction_name) != "S_SCRATCH_STORE_DWORDX4" &&
       std::string_view(instruction_name) != "S_BUFFER_STORE_DWORD" &&
       std::string_view(instruction_name) != "S_BUFFER_STORE_DWORDX2" &&
       std::string_view(instruction_name) != "S_BUFFER_STORE_DWORDX4" &&

@@ -5278,36 +5278,48 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_SCRATCH_LOAD_DWORD"
+      ],
       "instruction_name": "S_SCRATCH_LOAD_DWORD",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_SCRATCH_LOAD_DWORDX2"
+      ],
       "instruction_name": "S_SCRATCH_LOAD_DWORDX2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_SCRATCH_LOAD_DWORDX4"
+      ],
       "instruction_name": "S_SCRATCH_LOAD_DWORDX4",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -5431,36 +5443,48 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_SCRATCH_STORE_DWORD"
+      ],
       "instruction_name": "S_SCRATCH_STORE_DWORD",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_SCRATCH_STORE_DWORDX2"
+      ],
       "instruction_name": "S_SCRATCH_STORE_DWORDX2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_SCRATCH_STORE_DWORDX4"
+      ],
       "instruction_name": "S_SCRATCH_STORE_DWORDX4",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -17422,11 +17446,11 @@
   ],
   "summary": {
     "decode_measured": 1104,
-    "decode_supported": 877,
-    "decode_supported_percent_measured": 0.794384,
-    "decode_supported_percent_total": 0.706119,
-    "semantic_supported": 854,
-    "semantic_supported_percent_total": 0.687601
+    "decode_supported": 883,
+    "decode_supported_percent_measured": 0.799819,
+    "decode_supported_percent_total": 0.71095,
+    "semantic_supported": 860,
+    "semantic_supported_percent_total": 0.692432
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",
