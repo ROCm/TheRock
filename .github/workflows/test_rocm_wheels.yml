@@ -31,6 +31,17 @@ on:
         description: ROCm version to pip install (e.g. "7.10.0a20251124")
         required: true
         type: string
+      amdgpu_targets:
+        description: >-
+          Comma-separated individual gfx targets for kpack-split builds
+          (e.g. 'gfx942' or 'gfx1200,gfx1201'). Used to install the correct
+          per-target device wheels. Leave empty for legacy per-family builds.
+        type: string
+        default: ""
+      kpack_split:
+        description: "'true' if this is a kpack-split flat build."
+        type: string
+        default: "false"
 
   workflow_call:
     inputs:
@@ -50,6 +61,17 @@ on:
       rocm_version:
         required: true
         type: string
+      amdgpu_targets:
+        description: >-
+          Comma-separated individual gfx targets for kpack-split builds
+          (e.g. 'gfx942' or 'gfx1200,gfx1201'). Used to install the correct
+          per-target device wheels. Leave empty for legacy per-family builds.
+        type: string
+        default: ""
+      kpack_split:
+        description: "'true' if this is a kpack-split flat build."
+        type: string
+        default: "false"
 
 permissions:
   contents: read
@@ -89,12 +111,27 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
+      - name: Compute ROCm device extras
+        id: device_extras
+        run: |
+          if [ "${{ inputs.kpack_split }}" = "true" ] && [ -n "${{ inputs.amdgpu_targets }}" ]; then
+            # Prefix each comma-separated target with "device-": gfx942,gfx1201 -> device-gfx942,device-gfx1201
+            extras=$(echo "${{ inputs.amdgpu_targets }}" | sed 's/\(^\|,\)/\1device-/g')
+            echo "value=${extras}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=" >> "$GITHUB_OUTPUT"
+          fi
+
       # Key off install_libraries success (not test_libraries) so devel install/test still run
       - name: Install rocm[libraries]
         id: install_libraries
         run: |
+          pkg="rocm[libraries]"
+          if [ -n "${{ steps.device_extras.outputs.value }}" ]; then
+            pkg="${pkg%]},${{ steps.device_extras.outputs.value }}]"
+          fi
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "rocm[libraries]==${{ inputs.rocm_version }}" \
+            --packages "${pkg}==${{ inputs.rocm_version }}" \
             --index-url=${{ inputs.package_index_url_base }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
             --find-links=${{ inputs.package_find_links_url }} \
@@ -116,8 +153,12 @@ jobs:
         id: install_devel
         if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
         run: |
+          pkg="rocm[libraries,devel]"
+          if [ -n "${{ steps.device_extras.outputs.value }}" ]; then
+            pkg="${pkg%]},${{ steps.device_extras.outputs.value }}]"
+          fi
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "rocm[libraries,devel]==${{ inputs.rocm_version }}" \
+            --packages "${pkg}==${{ inputs.rocm_version }}" \
             --index-url=${{ inputs.package_index_url_base }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
             --find-links=${{ inputs.package_find_links_url }}
