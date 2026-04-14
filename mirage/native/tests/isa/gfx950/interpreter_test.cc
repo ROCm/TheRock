@@ -2920,6 +2920,8 @@ int main() {
       !Expect(interpreter.Supports("V_ADD_U32"), "expected V_ADD_U32 support") ||
       !Expect(interpreter.Supports("V_ADD_F32"), "expected V_ADD_F32 support") ||
       !Expect(interpreter.Supports("V_SUB_F32"), "expected V_SUB_F32 support") ||
+      !Expect(interpreter.Supports("V_SUBREV_F32"),
+              "expected V_SUBREV_F32 support") ||
       !Expect(interpreter.Supports("V_MUL_F32"), "expected V_MUL_F32 support") ||
       !Expect(interpreter.Supports("V_MIN_F32"), "expected V_MIN_F32 support") ||
       !Expect(interpreter.Supports("V_MAX_F32"), "expected V_MAX_F32 support") ||
@@ -7132,6 +7134,9 @@ int main() {
       DecodedInstruction::Binary("V_SUB_F32", InstructionOperand::Vgpr(31),
                                  InstructionOperand::Sgpr(61),
                                  InstructionOperand::Vgpr(21)),
+      DecodedInstruction::Binary("V_SUBREV_F32", InstructionOperand::Vgpr(35),
+                                 InstructionOperand::Sgpr(61),
+                                 InstructionOperand::Vgpr(21)),
       DecodedInstruction::Binary("V_MUL_F32", InstructionOperand::Vgpr(32),
                                  InstructionOperand::Sgpr(62),
                                  InstructionOperand::Vgpr(22)),
@@ -7168,6 +7173,7 @@ int main() {
   vector_float_f32_state.vgprs[24][3] = FloatBits(1.5f);
   vector_float_f32_state.vgprs[30][2] = 0xdeadbeefu;
   vector_float_f32_state.vgprs[31][2] = 0xdeadbeefu;
+  vector_float_f32_state.vgprs[35][2] = 0xdeadbeefu;
   vector_float_f32_state.vgprs[32][2] = 0xdeadbeefu;
   vector_float_f32_state.vgprs[33][2] = 0xdeadbeefu;
   vector_float_f32_state.vgprs[34][2] = 0xdeadbeefu;
@@ -7193,6 +7199,14 @@ int main() {
               "expected inactive decoded v_sub_f32 result") ||
       !Expect(vector_float_f32_state.vgprs[31][3] == FloatBits(5.5f),
               "expected decoded v_sub_f32 lane 3 result") ||
+      !Expect(vector_float_f32_state.vgprs[35][0] == FloatBits(-3.75f),
+              "expected decoded v_subrev_f32 lane 0 result") ||
+      !Expect(vector_float_f32_state.vgprs[35][1] == FloatBits(3.0f),
+              "expected decoded v_subrev_f32 lane 1 result") ||
+      !Expect(vector_float_f32_state.vgprs[35][2] == 0xdeadbeefu,
+              "expected inactive decoded v_subrev_f32 result") ||
+      !Expect(vector_float_f32_state.vgprs[35][3] == FloatBits(-5.5f),
+              "expected decoded v_subrev_f32 lane 3 result") ||
       !Expect(vector_float_f32_state.vgprs[32][0] == FloatBits(-3.0f),
               "expected decoded v_mul_f32 lane 0 result") ||
       !Expect(vector_float_f32_state.vgprs[32][1] == FloatBits(1.0f),
@@ -7252,6 +7266,7 @@ int main() {
   compiled_vector_float_f32_state.vgprs[24][3] = FloatBits(1.5f);
   compiled_vector_float_f32_state.vgprs[30][2] = 0xdeadbeefu;
   compiled_vector_float_f32_state.vgprs[31][2] = 0xdeadbeefu;
+  compiled_vector_float_f32_state.vgprs[35][2] = 0xdeadbeefu;
   compiled_vector_float_f32_state.vgprs[32][2] = 0xdeadbeefu;
   compiled_vector_float_f32_state.vgprs[33][2] = 0xdeadbeefu;
   compiled_vector_float_f32_state.vgprs[34][2] = 0xdeadbeefu;
@@ -7279,6 +7294,17 @@ int main() {
               "expected inactive compiled v_sub_f32 result") ||
       !Expect(compiled_vector_float_f32_state.vgprs[31][3] == FloatBits(5.5f),
               "expected compiled v_sub_f32 lane 3 result") ||
+      !Expect(compiled_vector_float_f32_state.vgprs[35][0] ==
+                  FloatBits(-3.75f),
+              "expected compiled v_subrev_f32 lane 0 result") ||
+      !Expect(compiled_vector_float_f32_state.vgprs[35][1] ==
+                  FloatBits(3.0f),
+              "expected compiled v_subrev_f32 lane 1 result") ||
+      !Expect(compiled_vector_float_f32_state.vgprs[35][2] == 0xdeadbeefu,
+              "expected inactive compiled v_subrev_f32 result") ||
+      !Expect(compiled_vector_float_f32_state.vgprs[35][3] ==
+                  FloatBits(-5.5f),
+              "expected compiled v_subrev_f32 lane 3 result") ||
       !Expect(compiled_vector_float_f32_state.vgprs[32][0] == FloatBits(-3.0f),
               "expected compiled v_mul_f32 lane 0 result") ||
       !Expect(compiled_vector_float_f32_state.vgprs[32][1] == FloatBits(1.0f),

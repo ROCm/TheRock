@@ -10702,7 +10702,7 @@
         "ENC_VOP2:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP2:default"
       ]
@@ -17789,8 +17789,8 @@
     "decode_supported": 946,
     "decode_supported_percent_measured": 0.836428,
     "decode_supported_percent_total": 0.761675,
-    "semantic_supported": 895,
-    "semantic_supported_percent_total": 0.720612
+    "semantic_supported": 896,
+    "semantic_supported_percent_total": 0.721417
   },
   "unmeasured_encoding_families": [
     "ENC_VOP3P",
