@@ -3,6 +3,15 @@
 
 # Runs the full PyTorch unit-test suite against nightly wheels from v2-staging.
 #
+# Triggered automatically after "Release portable Linux PyTorch Wheels"
+# completes successfully. This keeps full UTs completely decoupled from the
+# build pipeline — build failures and full UT failures have independent
+# red/green signals, and dev workflow_dispatch runs of the build workflow
+# are not slowed down by multi-hour test runs.
+#
+# Can also be triggered manually via workflow_dispatch or on a weekly
+# schedule as a fallback.
+#
 # Automatically tests all GPU families that have:
 #   - A runner label (non-empty test-runs-on) in amdgpu_family_matrix.py
 #   - The run-full-tests-only flag set to True
@@ -14,20 +23,17 @@
 #      run_pytorch_tests_full.py for better shard balancing (falls back to
 #      mi300 timings if absent).
 #   3. Add family-specific test skips in skip_tests/ as needed.
-#
-# TODO: This schedule-based trigger assumes the nightly build has completed.
-#       Neither is guaranteed — the build could fail or take longer than
-#       expected, in which case this re-runs tests against the previous
-#       nightly. Consider integrating into the existing build/release
-#       workflows (build_portable_linux_pytorch_wheels.yml /
-#       release_portable_linux_packages.yml) so tests only run after a
-#       successful build, or use a workflow_dispatch trigger / Quartz.
 
 name: CI Nightly PyTorch Full Test
 
 on:
+  workflow_run:
+    workflows: ["Release portable Linux PyTorch Wheels"]
+    types: [completed]
   schedule:
-    - cron: "0 12 * * *" # 12:00 UTC, after nightly builds (~04:00 UTC) have completed
+    # Weekly fallback in case the workflow_run trigger doesn't fire
+    # (e.g. release workflow was skipped or failed before completion).
+    - cron: "0 12 * * 0" # Sundays 12:00 UTC
   workflow_dispatch:
     inputs:
       package_index_url:
@@ -60,7 +66,10 @@ permissions:
 
 run-name: >-
   CI Nightly PyTorch Full Test
-  (${{ inputs.pytorch_git_ref || 'nightly' }})
+  (${{ github.event_name == 'workflow_run'
+       && github.event.workflow_run.name
+       || inputs.pytorch_git_ref
+       || 'nightly' }})
 
 env:
   PACKAGE_INDEX_URL: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
@@ -71,7 +80,19 @@ env:
   PYTHON_VERSION: ${{ inputs.python_version || '3.12' }}
 
 jobs:
+  # Skip the entire workflow when triggered by workflow_run and the
+  # upstream release workflow did not succeed.
+  gate:
+    name: Check trigger
+    runs-on: ubuntu-24.04
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - run: echo "Trigger OK (event=${{ github.event_name }})"
+
   generate_matrix:
+    needs: gate
     name: Generate GPU family matrix
     runs-on: ubuntu-24.04
     outputs:
