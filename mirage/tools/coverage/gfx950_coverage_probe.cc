@@ -250,6 +250,66 @@ std::array<std::uint32_t, 2> MakeGlobalAtomic(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeMubuf(std::uint32_t op,
+                                       std::uint32_t vdata,
+                                       std::uint32_t vaddr,
+                                       std::uint32_t srsrc_start,
+                                       std::uint32_t soffset,
+                                       std::uint32_t offset,
+                                       bool offen = false,
+                                       bool idxen = false,
+                                       bool lds = false,
+                                       bool sc0 = false) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x38u) << 26;
+  word |= static_cast<std::uint64_t>(offset & 0xfffu) << 0;
+  word |= static_cast<std::uint64_t>(offen ? 1u : 0u) << 12;
+  word |= static_cast<std::uint64_t>(idxen ? 1u : 0u) << 13;
+  word |= static_cast<std::uint64_t>(sc0 ? 1u : 0u) << 14;
+  word |= static_cast<std::uint64_t>(lds ? 1u : 0u) << 16;
+  word |= static_cast<std::uint64_t>(op & 0x7fu) << 18;
+  word |= static_cast<std::uint64_t>(vaddr & 0xffu) << 32;
+  word |= static_cast<std::uint64_t>(vdata & 0xffu) << 40;
+  word |= static_cast<std::uint64_t>((srsrc_start >> 2) & 0x1fu) << 48;
+  word |= static_cast<std::uint64_t>(soffset & 0xffu) << 56;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
+std::array<std::uint32_t, 2> MakeMubufNullary(std::uint32_t op) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x38u) << 26;
+  word |= static_cast<std::uint64_t>(op & 0x7fu) << 18;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
+std::array<std::uint32_t, 2> MakeMtbuf(std::uint32_t op,
+                                       std::uint32_t vdata,
+                                       std::uint32_t vaddr,
+                                       std::uint32_t srsrc_start,
+                                       std::uint32_t soffset,
+                                       std::uint32_t offset,
+                                       std::uint32_t dfmt,
+                                       std::uint32_t nfmt,
+                                       bool offen = false,
+                                       bool idxen = false) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x3au) << 26;
+  word |= static_cast<std::uint64_t>(offset & 0xfffu) << 0;
+  word |= static_cast<std::uint64_t>(offen ? 1u : 0u) << 12;
+  word |= static_cast<std::uint64_t>(idxen ? 1u : 0u) << 13;
+  word |= static_cast<std::uint64_t>(op & 0xfu) << 15;
+  word |= static_cast<std::uint64_t>(dfmt & 0xfu) << 19;
+  word |= static_cast<std::uint64_t>(nfmt & 0x7u) << 23;
+  word |= static_cast<std::uint64_t>(vaddr & 0xffu) << 32;
+  word |= static_cast<std::uint64_t>(vdata & 0xffu) << 40;
+  word |= static_cast<std::uint64_t>((srsrc_start >> 2) & 0x1fu) << 48;
+  word |= static_cast<std::uint64_t>(soffset & 0xffu) << 56;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 bool IsVectorCarryOutBinaryOpcode(std::string_view opcode) {
   return opcode == "V_ADD_CO_U32" || opcode == "V_SUB_CO_U32" ||
          opcode == "V_SUBREV_CO_U32";
@@ -381,6 +441,18 @@ std::optional<std::vector<std::uint32_t>> BuildCandidateWords(
       return std::vector<std::uint32_t>{words[0], words[1]};
     }
     const auto words = MakeGlobal(opcode, 0, 0, 0, 0, 0);
+    return std::vector<std::uint32_t>{words[0], words[1]};
+  }
+  if (encoding_name == "ENC_MUBUF") {
+    if (instruction_name == "BUFFER_WBL2" || instruction_name == "BUFFER_INV") {
+      const auto words = MakeMubufNullary(opcode);
+      return std::vector<std::uint32_t>{words[0], words[1]};
+    }
+    const auto words = MakeMubuf(opcode, 0, 0, 0, 0, 0);
+    return std::vector<std::uint32_t>{words[0], words[1]};
+  }
+  if (encoding_name == "ENC_MTBUF") {
+    const auto words = MakeMtbuf(opcode, 0, 0, 0, 0, 0, 0, 0);
     return std::vector<std::uint32_t>{words[0], words[1]};
   }
   return std::nullopt;

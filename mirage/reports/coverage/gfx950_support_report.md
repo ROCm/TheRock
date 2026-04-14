@@ -2,20 +2,18 @@
 
 - Catalog instructions: 1242
 - Semantic support: 854 (68.8%)
-- Raw decode support: 787 (63.4% of total, 77.6% of measured)
-- Raw decode measurable instructions: 1014
+- Raw decode support: 877 (70.6% of total, 79.4% of measured)
+- Raw decode measurable instructions: 1104
 
 ## Gaps
 
-- Semantic-only coverage without measured decode: 126
+- Semantic-only coverage without measured decode: 36
 - Decode-only without semantic support: 59
 - Missing both semantic and decode support: 329
 
 ## Unmeasured Encoding Families
 
 - `ENC_FLAT_SCRATCH`
-- `ENC_MTBUF`
-- `ENC_MUBUF`
 - `ENC_VOP3P`
 - `ENC_VOP3PX2`
 - `SOP1_INST_LITERAL`
@@ -35,31 +33,31 @@
 
 ## Semantic-Only Sample
 
-- `TBUFFER_LOAD_FORMAT_X`
-- `TBUFFER_LOAD_FORMAT_XY`
-- `TBUFFER_LOAD_FORMAT_XYZ`
-- `TBUFFER_LOAD_FORMAT_XYZW`
-- `TBUFFER_STORE_FORMAT_X`
-- `TBUFFER_STORE_FORMAT_XY`
-- `TBUFFER_STORE_FORMAT_XYZ`
-- `TBUFFER_STORE_FORMAT_XYZW`
-- `TBUFFER_LOAD_FORMAT_D16_X`
-- `TBUFFER_LOAD_FORMAT_D16_XY`
-- `TBUFFER_LOAD_FORMAT_D16_XYZ`
-- `TBUFFER_LOAD_FORMAT_D16_XYZW`
-- `TBUFFER_STORE_FORMAT_D16_X`
-- `TBUFFER_STORE_FORMAT_D16_XY`
-- `TBUFFER_STORE_FORMAT_D16_XYZ`
-- `TBUFFER_STORE_FORMAT_D16_XYZW`
-- `BUFFER_LOAD_FORMAT_X`
-- `BUFFER_LOAD_FORMAT_XY`
-- `BUFFER_LOAD_FORMAT_XYZ`
-- `BUFFER_LOAD_FORMAT_XYZW`
-- `BUFFER_STORE_FORMAT_X`
-- `BUFFER_STORE_FORMAT_XY`
-- `BUFFER_STORE_FORMAT_XYZ`
-- `BUFFER_STORE_FORMAT_XYZW`
-- `BUFFER_LOAD_FORMAT_D16_X`
+- `V_MIN_F64`
+- `V_MAX_F64`
+- `V_CMP_CLASS_F16`
+- `V_CMPX_CLASS_F16`
+- `V_CMP_F_F16`
+- `V_CMP_LT_F16`
+- `V_CMP_EQ_F16`
+- `V_CMP_LE_F16`
+- `V_CMP_GT_F16`
+- `V_CMP_LG_F16`
+- `V_CMP_GE_F16`
+- `V_CMP_O_F16`
+- `V_CMP_U_F16`
+- `V_CMP_NGE_F16`
+- `V_CMP_NLG_F16`
+- `V_CMP_NGT_F16`
+- `V_CMP_NLE_F16`
+- `V_CMP_NEQ_F16`
+- `V_CMP_NLT_F16`
+- `V_CMP_TRU_F16`
+- `V_CMPX_F_F16`
+- `V_CMPX_LT_F16`
+- `V_CMPX_EQ_F16`
+- `V_CMPX_LE_F16`
+- `V_CMPX_GT_F16`
 
 ## Decode-Only Sample
 
