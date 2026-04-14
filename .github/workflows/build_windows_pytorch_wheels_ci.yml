@@ -46,7 +46,7 @@ on:
       amdgpu_targets:
         description: >-
           Comma-separated individual gfx targets for kpack-split builds
-          (e.g. 'gfx942' or 'gfx1200,gfx1201'). Used to install the correct
+          (e.g. 'gfx1151' or 'gfx1200,gfx1201'). Used to install the correct
           per-target device wheels. Leave empty for legacy per-family builds.
         type: string
         default: ""
