@@ -28,6 +28,11 @@ cmd = ["./rocrtst64"]
 
 # TODO(#3851): Excluded tests (flaky or disabled in CI).
 TEST_TO_IGNORE = {
+    "gfx90a": {
+        "linux": [
+            "rocrtstFunc.Memory_Max_Mem",
+        ]
+    },
     "gfx94X-dcgpu": {
         "linux": [
             "rocrtstFunc.Memory_Max_Mem",
