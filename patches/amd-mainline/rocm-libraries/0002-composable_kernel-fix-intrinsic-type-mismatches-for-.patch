@@ -1,8 +1,8 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From 2b8f42834272384bf5a81c3f75681622338c6c9d Mon Sep 17 00:00:00 2001
 From: Andrey Kasaurov <andrey.kasaurov@amd.com>
 Date: Thu, 1 Jan 2099 00:00:00 +0000
-Subject: [PATCH] composable_kernel: fix intrinsic type mismatches for
- amd-main LLVM
+Subject: [PATCH] composable_kernel: fix intrinsic type mismatches for amd-main
+ LLVM
 
 The amd-main branch of llvm-project changed the signatures of several
 AMDGPU intrinsics:
@@ -13,20 +13,24 @@ AMDGPU intrinsics:
   vectors instead of signed int vectors.
 - __builtin_amdgcn_mfma_f32_*bf16* intrinsics now expect signed short
   vectors instead of unsigned short vectors.
+- __builtin_amdgcn_wmma_*bf16* intrinsics (GFX11/GFX12) now expect
+  signed short vectors instead of unsigned short vectors for bf16
+  operands.
 
 composable_kernel uses signed int vectors (int32x2_t, int32x4_t) for
 buffer load/store and unsigned short vectors (bhalf2_t, bhalf4_t,
-bhalf8_t) for BF16 MFMA operations, causing compilation errors with
-the updated compiler.
+bhalf8_t, bhalf16_t) for BF16 MFMA/WMMA operations, causing
+compilation errors with the updated compiler.
 
 Fix by adding explicit bit_cast conversions between the CK types and
 the types expected by the intrinsics. This is safe because the
 underlying bit patterns are identical -- only the C++ type-level
 signedness differs.
 ---
- .../ck/utility/amd_buffer_addressing_builtins.hpp  | 111 ++++++++++++---------
- .../include/ck/utility/amd_xdlops.hpp              |  65 ++++++++++--
- 2 files changed, 118 insertions(+), 58 deletions(-)
+ .../amd_buffer_addressing_builtins.hpp        | 133 ++++++++++--------
+ .../include/ck/utility/amd_wmma.hpp           |  29 +++-
+ .../include/ck/utility/amd_xdlops.hpp         |  47 ++++++-
+ 3 files changed, 136 insertions(+), 73 deletions(-)
 
 diff --git a/projects/composablekernel/include/ck/utility/amd_buffer_addressing_builtins.hpp b/projects/composablekernel/include/ck/utility/amd_buffer_addressing_builtins.hpp
 index f4ea9c80f1..acc84ebede 100644
@@ -233,6 +237,83 @@ index f4ea9c80f1..acc84ebede 100644
      }
  }
  
+diff --git a/projects/composablekernel/include/ck/utility/amd_wmma.hpp b/projects/composablekernel/include/ck/utility/amd_wmma.hpp
+index 057687985d..8fcc4ff871 100644
+--- a/projects/composablekernel/include/ck/utility/amd_wmma.hpp
++++ b/projects/composablekernel/include/ck/utility/amd_wmma.hpp
+@@ -9,6 +9,9 @@
+ // TODO: Add arch limitation
+ namespace ck {
+ 
++using sshort8_t  = short __attribute__((ext_vector_type(8)));
++using sshort16_t = short __attribute__((ext_vector_type(16)));
++
+ #if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || \
+     defined(__gfx1103__) || defined(__gfx1150__) || defined(__gfx1151__) || \
+     defined(__gfx1152__) || defined(__gfx1153__) || defined(__gfx11_generic__)
+@@ -59,7 +62,9 @@ struct intrin_wmma_f32_16x16x16_bf16_w32<16, 16>
+ #if defined(__gfx11__)
+         reg_c.template AsType<float8_t>()(Number<0>{}) =
+             __builtin_amdgcn_wmma_f32_16x16x16_bf16_w32(
+-                reg_a, reg_b, reg_c.template AsType<float8_t>()[Number<0>{}]);
++                bit_cast<sshort16_t>(reg_a),
++                bit_cast<sshort16_t>(reg_b),
++                reg_c.template AsType<float8_t>()[Number<0>{}]);
+ #else
+         ignore = reg_a;
+         ignore = reg_b;
+@@ -106,9 +111,12 @@ struct intrin_wmma_bf16_16x16x16_bf16_w32<16, 16, Opsel>
+         // false: D0.[0:15] = result
+         // true : D0.[16:31]= result
+ #if defined(__gfx11__)
+-        reg_c.template AsType<bhalf16_t>()(Number<0>{}) =
++        reg_c.template AsType<bhalf16_t>()(Number<0>{}) = bit_cast<bhalf16_t>(
+             __builtin_amdgcn_wmma_bf16_16x16x16_bf16_w32(
+-                reg_a, reg_b, reg_c.template AsType<bhalf16_t>()[Number<0>{}], Opsel);
++                bit_cast<sshort16_t>(reg_a),
++                bit_cast<sshort16_t>(reg_b),
++                bit_cast<sshort16_t>(reg_c.template AsType<bhalf16_t>()[Number<0>{}]),
++                Opsel));
+ #else
+         ignore = reg_a;
+         ignore = reg_b;
+@@ -179,7 +187,9 @@ struct intrin_wmma_f32_16x16x16_bf16_w64<16, 16>
+ #if defined(__gfx11__)
+         reg_c.template AsType<float4_t>()(Number<0>{}) =
+             __builtin_amdgcn_wmma_f32_16x16x16_bf16_w64(
+-                reg_a, reg_b, reg_c.template AsType<float4_t>()[Number<0>{}]);
++                bit_cast<sshort16_t>(reg_a),
++                bit_cast<sshort16_t>(reg_b),
++                reg_c.template AsType<float4_t>()[Number<0>{}]);
+ #else
+         ignore = reg_a;
+         ignore = reg_b;
+@@ -226,9 +236,12 @@ struct intrin_wmma_bf16_16x16x16_bf16_w64<16, 16, Opsel>
+         // false: D0.[0:15] = result
+         // true : D0.[16:31]= result
+ #if defined(__gfx11__)
+-        reg_c.template AsType<bhalf8_t>()(Number<0>{}) =
++        reg_c.template AsType<bhalf8_t>()(Number<0>{}) = bit_cast<bhalf8_t>(
+             __builtin_amdgcn_wmma_bf16_16x16x16_bf16_w64(
+-                reg_a, reg_b, reg_c.template AsType<bhalf8_t>()[Number<0>{}], Opsel);
++                bit_cast<sshort16_t>(reg_a),
++                bit_cast<sshort16_t>(reg_b),
++                bit_cast<sshort8_t>(reg_c.template AsType<bhalf8_t>()[Number<0>{}]),
++                Opsel));
+ #else
+         ignore = reg_a;
+         ignore = reg_b;
+@@ -306,7 +319,9 @@ struct intrin_wmma_f32_16x16x16_bf16_w32_gfx12<16, 16>
+ #if defined(__gfx12__)
+         reg_c.template AsType<float8_t>()(Number<0>{}) =
+             __builtin_amdgcn_wmma_f32_16x16x16_bf16_w32_gfx12(
+-                reg_a, reg_b, reg_c.template AsType<float8_t>()[Number<0>{}]);
++                bit_cast<sshort8_t>(reg_a),
++                bit_cast<sshort8_t>(reg_b),
++                reg_c.template AsType<float8_t>()[Number<0>{}]);
+ #else
+         ignore = reg_a;
+         ignore = reg_b;
 diff --git a/projects/composablekernel/include/ck/utility/amd_xdlops.hpp b/projects/composablekernel/include/ck/utility/amd_xdlops.hpp
 index f8b1736801..986eeb5868 100644
 --- a/projects/composablekernel/include/ck/utility/amd_xdlops.hpp
@@ -335,3 +416,4 @@ index f8b1736801..986eeb5868 100644
  
 -- 
 2.34.1
+

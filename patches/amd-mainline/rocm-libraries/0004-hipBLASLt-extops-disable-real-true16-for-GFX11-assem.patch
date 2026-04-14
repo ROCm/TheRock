@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
+Date: Thu, 1 Jan 2099 00:00:00 +0000
+Subject: [PATCH] hipBLASLt extops: disable real-true16 for GFX11+ assembly
+ targets
+
+hipBLASLt's device-library/extops compiles generated assembly (.s)
+files directly via clang with -x assembler.  On the amd-main compiler
+branch, FeatureRealTrue16Insts is enabled by default for GFX11+ which
+changes the expected operand syntax for certain conversion instructions
+(e.g. v_cvt_f32_f16, v_cvt_f16_f32).  The generated assembly uses the
+legacy syntax, so pass -Wa,-mattr=-real-true16 to the assembler for
+GFX11+ targets.
+
+The -Wa, prefix is required because clang does not accept bare -mattr
+as a driver flag; the prefix forwards it to the integrated assembler
+backend.
+---
+ projects/hipblaslt/device-library/extops/CMakeLists.txt | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/projects/hipblaslt/device-library/extops/CMakeLists.txt b/projects/hipblaslt/device-library/extops/CMakeLists.txt
+index 48029cab52..8b31458c5f 100644
+--- a/projects/hipblaslt/device-library/extops/CMakeLists.txt
++++ b/projects/hipblaslt/device-library/extops/CMakeLists.txt
+@@ -22,13 +22,15 @@ foreach(arch IN LISTS archs)
+     #  Start of arch configuration
+     message(STATUS "hipblaslt device library extops: Configuring target for architecture ${arch} for hipblasltExtOpLibrary")
+     set(WAVEFRONT "-mwavefrontsize64")
++    set(EXTOP_ASM_EXTRA "")
+     if(arch MATCHES "^gfx1[12][0-9][0-9]$")
+         set(WAVEFRONT "-mno-wavefrontsize64")
++        set(EXTOP_ASM_EXTRA "-Wa,-mattr=-real-true16")
+     endif()
+     add_library(extop-obj-${arch} OBJECT)
+     target_compile_options(extop-obj-${arch}
+         PRIVATE
+-            -Wno-unused-command-line-argument -x assembler -target amdgcn-amd-amdhsa -mcode-object-version=4 -mcpu=${arch} ${WAVEFRONT} -c
++            -Wno-unused-command-line-argument -x assembler -target amdgcn-amd-amdhsa -mcode-object-version=4 -mcpu=${arch} ${WAVEFRONT} ${EXTOP_ASM_EXTRA} -c
+     )
+     target_sources(extop-obj-${arch}
+         PRIVATE
+-- 
+2.34.1
+

@@ -13,10 +13,12 @@ TensileLite generates assembly with old-style full 32-bit VGPR names
 (e.g. "v_cvt_f32_f16 v14, v14") which the updated assembler rejects
 with "operands are not valid for this GPU or mode".
 
-Pass -mattr=-real-true16 when assembling for GFX11+ so the assembler
-accepts the legacy operand syntax.  Both the assembly compilation path
-(getCompileArgs) and the capability-detection path (tryAssembler) are
-updated for consistency.
+Pass -Wa,-mattr=-real-true16 when assembling for GFX11+ so the
+assembler accepts the legacy operand syntax.  The flag must use the
+-Wa, prefix because clang++ (the assembler driver) does not accept
+bare -mattr; the prefix forwards it to the integrated assembler
+backend.  Both the assembly compilation path (getCompileArgs) and the
+capability-detection path (tryAssembler) are updated for consistency.
 ---
  shared/tensile/Tensile/Common.py              | 3 +++
  shared/tensile/Tensile/KernelWriterAssembly.py | 3 +++
@@ -31,7 +33,7 @@ index 220430061b..ee1a122f91 100644
      options += ['-mwavefrontsize64']
  
 +  if isaVersion[0] >= 11:
-+    options += ['-mattr=-real-true16']
++    options += ['-Wa,-mattr=-real-true16']
 +
    assembler = globalParameters['AssemblerPath']
    if assembler is None:
@@ -45,7 +47,7 @@ index f89bf6c943..0ea959b43e 100644
        rv += ['-mno-wavefrontsize64']
  
 +    if isa[0] >= 11:
-+      rv += ['-mattr=-real-true16']
++      rv += ['-Wa,-mattr=-real-true16']
 +
      rv += moreArgs
  
