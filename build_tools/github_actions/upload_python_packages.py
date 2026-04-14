@@ -190,8 +190,9 @@ Per-family indexes:
         # kpack-split flat build — single index covers all per-target wheels
         index_url = f"{packages_loc.https_url}/index.html"
         install_instructions_markdown = f"""[ROCm Python packages (kpack-split)]({index_url})
+Replace `<YOUR_TARGET>` with your GPU target (e.g. `gfx942`, `gfx1201`):
 ```bash
-pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
+pip install rocm[libraries,devel,device-<YOUR_TARGET>] --pre {LINE_CONTINUATION_CHAR}
     --find-links={index_url}
 ```
 """
