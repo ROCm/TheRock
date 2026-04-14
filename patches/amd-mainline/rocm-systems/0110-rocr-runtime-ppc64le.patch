@@ -1,7 +1,7 @@
-From ea23ee345d17e89a872542f03a0151cc1736c55f Mon Sep 17 00:00:00 2001
+From cd02dc3cbd21c4c2b1e0e2b6afd1f3fa488609da Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 2 Apr 2026 21:15:16 +0000
-Subject: [PATCH] rocr-runtime ppc64le
+Date: Tue, 14 Apr 2026 01:52:09 +0000
+Subject: [PATCH] ppc64le rocr-runtime
 
 ---
  projects/rocr-runtime/libhsakmt/src/queues.c  |  28 ++++++++++++++----
@@ -11021,10 +11021,10 @@ index ccc20b8d19..64c49f2322 100644
      if (!agent_->LargeBarEnabled()) {
        throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_QUEUE_CREATION,
 diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_gpu_agent.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_gpu_agent.cpp
-index 4cff385f25..75384e5afb 100644
+index b154ee457a..3e805ac055 100644
 --- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_gpu_agent.cpp
 +++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_gpu_agent.cpp
-@@ -2197,7 +2197,9 @@ void GpuAgent::AcquireQueueMainScratch(ScratchInfo& scratch) {
+@@ -2269,7 +2269,9 @@ void GpuAgent::AcquireQueueMainScratch(ScratchInfo& scratch) {
    if (large) scratch.main_size = scratch.dispatch_size;
  
    // Ensure mapping will be in whole pages.
@@ -11035,7 +11035,7 @@ index 4cff385f25..75384e5afb 100644
  
    /*
    Sequence of attempts is:
-@@ -2339,7 +2341,9 @@ void GpuAgent::AcquireQueueAltScratch(ScratchInfo& scratch) {
+@@ -2411,7 +2413,9 @@ void GpuAgent::AcquireQueueAltScratch(ScratchInfo& scratch) {
    std::lock_guard<std::mutex> lock(scratch_lock_);
  
    // Ensure mapping will be in whole pages.
@@ -11046,7 +11046,7 @@ index 4cff385f25..75384e5afb 100644
  
    /*
    Sequence of attempts is:
-@@ -2801,7 +2805,7 @@ void GpuAgent::InitAllocators() {
+@@ -2873,7 +2877,7 @@ void GpuAgent::InitAllocators() {
        const core::MemoryRegion* pool_ptr = pool.get();
        system_allocator_ = [pool_ptr](size_t size, size_t alignment,
                                   MemoryRegion::AllocateFlags alloc_flags) -> void* {
@@ -11056,7 +11056,7 @@ index 4cff385f25..75384e5afb 100644
          return (HSA_STATUS_SUCCESS ==
                  core::Runtime::runtime_singleton_->AllocateMemory(pool_ptr, size, alloc_flags, &ptr))
 diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
-index bd5c0e2871..c7d60bf41e 100644
+index b849f5a629..517ff07cac 100644
 --- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
 +++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
 @@ -205,7 +205,7 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
@@ -11068,7 +11068,7 @@ index bd5c0e2871..c7d60bf41e 100644
              void* ptr = NULL;
              return (HSA_STATUS_SUCCESS ==
                      core::Runtime::runtime_singleton_->AllocateMemory(pool.get(), size, alloc_flags,
-@@ -2235,6 +2235,7 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
+@@ -2203,6 +2203,7 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
        } else if (fault.Failure.ErrorType == 3) {
          reason += "Generic hang recovery";
        } else {
@@ -11076,7 +11076,7 @@ index bd5c0e2871..c7d60bf41e 100644
          reason += "Unknown";
        }
  
-@@ -3095,8 +3096,9 @@ hsa_status_t Runtime::SetSvmAttrib(void* ptr, size_t size,
+@@ -3066,8 +3067,9 @@ hsa_status_t Runtime::SetSvmAttrib(void* ptr, size_t size,
    if (clear_flags) attribs.push_back(kmtPair(HSA_SVM_ATTR_CLR_FLAGS, clear_flags));
    if (set_flags) attribs.push_back(kmtPair(HSA_SVM_ATTR_SET_FLAGS, set_flags));
  
@@ -11089,13 +11089,13 @@ index bd5c0e2871..c7d60bf41e 100644
    HSAKMT_STATUS error = HSAKMT_CALL(hsaKmtSVMSetAttr(base, len, attribs.size(), &attribs[0]));
    if (error != HSAKMT_STATUS_SUCCESS)
 diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp
-index 5077170eba..15c64e7a7f 100644
+index 9e99aa7412..037a367704 100644
 --- a/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp
 +++ b/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp
-@@ -326,7 +326,7 @@ static int callback(struct dl_phdr_info* info, size_t size, void* data) {
+@@ -335,7 +335,7 @@ static int callback(struct dl_phdr_info* info, size_t size, void* data) {
     */
  
-   if ((info) && (info->dlpi_name[0] != '\0')) {
+   if ((info) && (info->dlpi_name) && (info->dlpi_name[0] != '\0')) {
 -    if (std::string(info->dlpi_name).find("vdso.so") != std::string::npos) return 0;
 +    if (std::string(info->dlpi_name).find("vdso64.so") != std::string::npos || std::string(info->dlpi_name).find("vdso.so") != std::string::npos) return 0;
  
