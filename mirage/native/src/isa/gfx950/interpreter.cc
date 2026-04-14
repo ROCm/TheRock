@@ -84,6 +84,8 @@ std::uint32_t EvaluateVectorFloatBinaryF16(std::string_view opcode,
     result = lhs_float + rhs_float;
   } else if (opcode == "V_SUB_F16") {
     result = lhs_float - rhs_float;
+  } else if (opcode == "V_SUBREV_F16") {
+    result = rhs_float - lhs_float;
   } else if (opcode == "V_MUL_F16") {
     result = lhs_float * rhs_float;
   } else if (opcode == "V_MIN_F16") {
@@ -129,6 +131,9 @@ std::uint32_t EvaluateVectorFloatBinaryF16(CompiledOpcode opcode,
       break;
     case CompiledOpcode::kVSubF16:
       result = lhs_float - rhs_float;
+      break;
+    case CompiledOpcode::kVSubrevF16:
+      result = rhs_float - lhs_float;
       break;
     case CompiledOpcode::kVMulF16:
       result = lhs_float * rhs_float;
@@ -2388,6 +2393,7 @@ bool IsVectorBinaryOpcode(std::string_view opcode) {
          opcode == "V_ADD_U32" || opcode == "V_ADD_CO_U32" ||
          opcode == "V_ADDC_CO_U32" ||
          opcode == "V_ADD_F16" || opcode == "V_SUB_F16" ||
+         opcode == "V_SUBREV_F16" ||
          opcode == "V_MUL_F16" || opcode == "V_MIN_F16" ||
          opcode == "V_MAX_F16" ||
          opcode == "V_ADD_F32" || opcode == "V_SUB_F32" ||
@@ -7425,6 +7431,10 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kVSubF16;
     return true;
   }
+  if (opcode == "V_SUBREV_F16") {
+    compiled_instruction->opcode = CompiledOpcode::kVSubrevF16;
+    return true;
+  }
   if (opcode == "V_MUL_F32") {
     compiled_instruction->opcode = CompiledOpcode::kVMulF32;
     return true;
@@ -10399,6 +10409,7 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kVAddF16:
     case CompiledOpcode::kVAddF32:
     case CompiledOpcode::kVSubF16:
+    case CompiledOpcode::kVSubrevF16:
     case CompiledOpcode::kVSubF32:
     case CompiledOpcode::kVSubrevF32:
     case CompiledOpcode::kVMulF16:
@@ -14562,6 +14573,7 @@ bool Gfx950Interpreter::ExecuteVectorBinary(const DecodedInstruction& instructio
       result = lhs + rhs;
     } else if (instruction.opcode == "V_ADD_F16" ||
                instruction.opcode == "V_SUB_F16" ||
+               instruction.opcode == "V_SUBREV_F16" ||
                instruction.opcode == "V_MUL_F16" ||
                instruction.opcode == "V_MIN_F16" ||
                instruction.opcode == "V_MAX_F16") {
@@ -14855,6 +14867,7 @@ bool Gfx950Interpreter::ExecuteVectorBinary(const CompiledInstruction& instructi
         break;
       case CompiledOpcode::kVAddF16:
       case CompiledOpcode::kVSubF16:
+      case CompiledOpcode::kVSubrevF16:
       case CompiledOpcode::kVMulF16:
       case CompiledOpcode::kVMinF16:
       case CompiledOpcode::kVMaxF16:

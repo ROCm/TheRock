@@ -11,6 +11,7 @@
 
 #include "lib/sim/isa/common/decoded_instruction.h"
 #include "lib/sim/isa/common/execution_memory.h"
+#include "lib/sim/isa/common/numeric_conversions.h"
 #include "lib/sim/isa/common/wave_execution_state.h"
 #include "lib/sim/isa/gfx950/interpreter.h"
 
@@ -2920,6 +2921,8 @@ int main() {
       !Expect(interpreter.Supports("V_ADD_U32"), "expected V_ADD_U32 support") ||
       !Expect(interpreter.Supports("V_ADD_F32"), "expected V_ADD_F32 support") ||
       !Expect(interpreter.Supports("V_SUB_F32"), "expected V_SUB_F32 support") ||
+      !Expect(interpreter.Supports("V_SUBREV_F16"),
+              "expected V_SUBREV_F16 support") ||
       !Expect(interpreter.Supports("V_SUBREV_F32"),
               "expected V_SUBREV_F32 support") ||
       !Expect(interpreter.Supports("V_MUL_F32"), "expected V_MUL_F32 support") ||
@@ -7124,6 +7127,69 @@ int main() {
               "expected compiled inactive v_subrev_u32 result") ||
       !Expect(compiled_vector_binary_extra_state.vgprs[98][3] == 0xfffffff6u,
               "expected compiled v_subrev_u32 lane 3 result")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> vector_float_f16_program = {
+      DecodedInstruction::Binary("V_SUBREV_F16", InstructionOperand::Vgpr(30),
+                                 InstructionOperand::Sgpr(60),
+                                 InstructionOperand::Vgpr(20)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  WaveExecutionState vector_float_f16_state;
+  vector_float_f16_state.exec_mask = 0b1011ULL;
+  vector_float_f16_state.sgprs[60] = FloatToHalf(5.0f);
+  vector_float_f16_state.vgprs[20][0] = FloatToHalf(1.5f);
+  vector_float_f16_state.vgprs[20][1] = FloatToHalf(6.0f);
+  vector_float_f16_state.vgprs[20][3] = FloatToHalf(-2.0f);
+  vector_float_f16_state.vgprs[30][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(vector_float_f16_program,
+                                         &vector_float_f16_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_float_f16_state.halted,
+              "expected vector float f16 program to halt") ||
+      !Expect(vector_float_f16_state.vgprs[30][0] == FloatToHalf(-3.5f),
+              "expected v_subrev_f16 lane 0 result") ||
+      !Expect(vector_float_f16_state.vgprs[30][1] == FloatToHalf(1.0f),
+              "expected v_subrev_f16 lane 1 result") ||
+      !Expect(vector_float_f16_state.vgprs[30][2] == 0xdeadbeefu,
+              "expected inactive v_subrev_f16 result") ||
+      !Expect(vector_float_f16_state.vgprs[30][3] == FloatToHalf(-7.0f),
+              "expected v_subrev_f16 lane 3 result")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_vector_float_f16_program;
+  if (!Expect(interpreter.CompileProgram(vector_float_f16_program,
+                                         &compiled_vector_float_f16_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_vector_float_f16_state;
+  compiled_vector_float_f16_state.exec_mask = 0b1011ULL;
+  compiled_vector_float_f16_state.sgprs[60] = FloatToHalf(5.0f);
+  compiled_vector_float_f16_state.vgprs[20][0] = FloatToHalf(1.5f);
+  compiled_vector_float_f16_state.vgprs[20][1] = FloatToHalf(6.0f);
+  compiled_vector_float_f16_state.vgprs[20][3] = FloatToHalf(-2.0f);
+  compiled_vector_float_f16_state.vgprs[30][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(compiled_vector_float_f16_program,
+                                         &compiled_vector_float_f16_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(compiled_vector_float_f16_state.halted,
+              "expected compiled vector float f16 program to halt") ||
+      !Expect(compiled_vector_float_f16_state.vgprs[30][0] == FloatToHalf(-3.5f),
+              "expected compiled v_subrev_f16 lane 0 result") ||
+      !Expect(compiled_vector_float_f16_state.vgprs[30][1] == FloatToHalf(1.0f),
+              "expected compiled v_subrev_f16 lane 1 result") ||
+      !Expect(compiled_vector_float_f16_state.vgprs[30][2] == 0xdeadbeefu,
+              "expected compiled inactive v_subrev_f16 result") ||
+      !Expect(compiled_vector_float_f16_state.vgprs[30][3] == FloatToHalf(-7.0f),
+              "expected compiled v_subrev_f16 lane 3 result")) {
     return 1;
   }
 

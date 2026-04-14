@@ -492,6 +492,7 @@ enum class CompiledOpcode : std::uint16_t {
   kVAddF16,
   kVAddF32,
   kVSubF16,
+  kVSubrevF16,
   kVSubF32,
   kVSubrevF32,
   kVMulF16,
