@@ -51,7 +51,7 @@ normalize_gpu_target() {
 #   7.13.0a20260322 → 20260322
 # ---------------------------------------------------------------------------
 extract_date_from_version() {
-    echo "$1" | grep -oE '[0-9]{8}' | tail -1 || echo ""
+    echo "$1" | grep -oE '[0-9]{8}' | head -1 || echo ""
 }
 
 # ---------------------------------------------------------------------------
@@ -78,8 +78,10 @@ map_distro_to_repo() {
 
     case "$id" in
         ubuntu)
-            # 24.04 → ubuntu2404, 22.04 → ubuntu2204 (strip patch version if present)
-            local major_minor="${ver%.*}"
+            # 24.04 → ubuntu2404, 22.04 → ubuntu2204
+            # Use cut to keep MAJOR.MINOR even if VERSION_ID has a patch (e.g., 24.04.1)
+            local major_minor
+            major_minor=$(echo "$ver" | cut -d. -f1,2)
             REPO_DISTRO="ubuntu$(echo "$major_minor" | tr -d '.')"
             PKG_TYPE="deb"
             PKG_MGR="apt"
@@ -130,7 +132,8 @@ resolve_nightly_build_dir() {
     echo "Searching for nightly build directory matching date ${date_str}..." >&2
 
     local build_dir
-    build_dir=$(curl -fsSL "$listing_url" | grep -oE "${date_str}-[0-9]+" | head -1) || true
+    build_dir=$(curl -fsSL --connect-timeout 30 --retry 3 --retry-delay 5 \
+        "$listing_url" | grep -oE "${date_str}-[0-9]+" | head -1) || true
 
     if [ -z "$build_dir" ]; then
         echo "Error: No nightly build found for date ${date_str}" >&2
@@ -214,7 +217,8 @@ install_deb() {
     if [ -n "$gpg_key_url" ]; then
         # Signed repo: import GPG key (ASCII-armored, needs dearmor for apt)
         mkdir -p /etc/apt/keyrings
-        curl -fsSL "$gpg_key_url" | gpg --dearmor -o /etc/apt/keyrings/amdrocm.gpg
+        curl -fsSL --connect-timeout 30 --retry 3 --retry-delay 5 \
+            "$gpg_key_url" | gpg --dearmor -o /etc/apt/keyrings/amdrocm.gpg
         echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/amdrocm.gpg] ${repo_url} stable main" \
             > /etc/apt/sources.list.d/rocm.list
     else
@@ -266,7 +270,8 @@ REPOEOF
     if [ "$pkg_mgr" = "tdnf" ]; then
         # tdnf requires explicit GPG key import before install
         if [ -n "$gpg_key_url" ]; then
-            curl -fsSL "$gpg_key_url" -o /tmp/rocm.gpg
+            curl -fsSL --connect-timeout 30 --retry 3 --retry-delay 5 \
+                "$gpg_key_url" -o /tmp/rocm.gpg
             rpm --import /tmp/rocm.gpg
             rm -f /tmp/rocm.gpg
         fi

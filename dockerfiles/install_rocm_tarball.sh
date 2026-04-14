@@ -62,9 +62,12 @@ if ! curl -fsSL -o "$TARBALL_FILE" "$TARBALL_URL" 2>/dev/null; then
     else
         LISTING_URL="https://rocm.${RELEASE_TYPE}.amd.com/tarball/"
     fi
-    # Case-insensitive search for tarball matching AMDGPU_FAMILY and VERSION
+    # Case-insensitive search for tarball matching AMDGPU_FAMILY and VERSION.
+    # The HTML listing contains literal '+' (not URL-encoded), so use VERSION
+    # with '+' escaped as '\+' for PCRE rather than VERSION_ENCODED.
+    VERSION_REGEX="${VERSION//+/\\+}"
     MATCHED_FILE=$(curl -fsSL "$LISTING_URL" 2>/dev/null \
-        | grep -ioP "therock-dist-linux-[^\"]*${AMDGPU_FAMILY}[^\"]*-${VERSION_ENCODED}\.tar\.gz" \
+        | grep -ioP "therock-dist-linux-[^\"]*${AMDGPU_FAMILY}[^\"]*-${VERSION_REGEX}\.tar\.gz" \
         | head -1) || true
     if [ -z "$MATCHED_FILE" ]; then
         echo "Error: No tarball found matching '${AMDGPU_FAMILY}' and version '${VERSION}'"
@@ -73,7 +76,8 @@ if ! curl -fsSL -o "$TARBALL_FILE" "$TARBALL_URL" 2>/dev/null; then
         echo "Hint: specify the full AMDGPU_FAMILY (e.g., gfx110X-all) or check available tarballs"
         exit 1
     fi
-    TARBALL_URL="${LISTING_URL}${MATCHED_FILE}"
+    # URL-encode '+' in the matched filename for the download URL
+    TARBALL_URL="${LISTING_URL}${MATCHED_FILE//+/%2B}"
     echo "Found matching tarball: ${MATCHED_FILE}"
     echo "Downloading from: ${TARBALL_URL}"
     curl -fsSL -o "$TARBALL_FILE" "$TARBALL_URL" || {
