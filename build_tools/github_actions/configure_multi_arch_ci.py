@@ -855,7 +855,10 @@ def _expand_build_config_for_platform(
             )
 
         # If nightly_check_only_for_family is set for non-schedule runs, enable sanity checks
-        if platform_info.get("nightly_check_only_for_family", False) and not ci_inputs.is_schedule:
+        if (
+            platform_info.get("nightly_check_only_for_family", False)
+            and not ci_inputs.is_schedule
+        ):
             sanity_check_only = True
             print(
                 f"  {family_name}: nightly_check_only_for_family flag set, "
@@ -868,10 +871,6 @@ def _expand_build_config_for_platform(
                 "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
                 "test-runs-on": test_runs_on,
                 "sanity_check_only_for_family": sanity_check_only,
-                "run-full-tests-only": platform_info.get("run-full-tests-only", False),
-                "nightly_check_only_for_family": platform_info.get(
-                    "nightly_check_only_for_family", False
-                ),
             }
         )
 

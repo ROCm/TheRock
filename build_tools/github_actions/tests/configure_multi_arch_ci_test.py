@@ -598,7 +598,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
     def test_empty_targets_both_none(self):
         """Empty targets on both platforms → both None."""
         targets = cm.TargetSelection()
-        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs(), test_type="quick")
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+        )
         self.assertIsNone(result.linux)
         self.assertIsNone(result.windows)
 
@@ -636,14 +638,14 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant="release",
         )
         targets = cm.select_targets(inputs)
-        result = cm.expand_build_configs(targets=targets, ci_inputs=inputs, test_type="quick")
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=inputs, test_type="quick"
+        )
         required_keys = {
             "amdgpu_family",
             "amdgpu_targets",
             "test-runs-on",
             "sanity_check_only_for_family",
-            "run-full-tests-only",
-            "nightly_check_only_for_family",
         }
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)
@@ -686,7 +688,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             linux_families=["gfx94x", "gfx110x"],
             windows_families=["gfx110x"],
         )
-        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs(), test_type="quick")
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+        )
 
         # All target families that support the variant appear in output.
         linux_per_family = result.linux.per_family_info
@@ -714,7 +718,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            targets=targets, ci_inputs=self._inputs(build_variant="asan"), test_type="quick"
+            targets=targets,
+            ci_inputs=self._inputs(build_variant="asan"),
+            test_type="quick",
         )
         # Only gfx94x on linux survives.
         self.assertIsNotNone(result.linux)
@@ -751,7 +757,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
     def test_no_test_runner_label_uses_default(self):
         """Without test_runner: label, default runner labels are used."""
         targets = cm.TargetSelection(linux_families=["gfx1151"])
-        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs(), test_type="quick")
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+        )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
         # Default runner, not the oem one
