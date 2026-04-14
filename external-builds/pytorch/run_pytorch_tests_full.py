@@ -160,6 +160,67 @@ def has_junit_failures(reports_dir: Path) -> bool:
     return False
 
 
+def collect_junit_failures(reports_dir: Path) -> list[dict]:
+    """Parse JUnit XML reports and return a list of failed/errored test cases.
+
+    Each entry is a dict with keys: suite, name, status, message.
+    """
+    failures = []
+    if not reports_dir.is_dir():
+        return failures
+    for xml_file in sorted(reports_dir.rglob("*.xml")):
+        try:
+            tree = ET.parse(xml_file)
+        except ET.ParseError:
+            continue
+        root = tree.getroot()
+        suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+        for suite in suites:
+            suite_name = suite.get("name", xml_file.stem)
+            for tc in suite.findall("testcase"):
+                failure = tc.find("failure")
+                error = tc.find("error")
+                element = failure if failure is not None else error
+                if element is None:
+                    continue
+                msg = element.get("message", "")
+                if msg and len(msg) > 200:
+                    msg = msg[:200] + "…"
+                failures.append(
+                    {
+                        "suite": suite_name,
+                        "name": tc.get("name", "unknown"),
+                        "status": "FAIL" if failure is not None else "ERROR",
+                        "message": msg,
+                    }
+                )
+    return failures
+
+
+def write_failure_summary(reports_dir: Path) -> None:
+    """Write a markdown summary of test failures to $GITHUB_STEP_SUMMARY."""
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+
+    failures = collect_junit_failures(reports_dir)
+    with open(summary_path, "a") as f:
+        if not failures:
+            f.write("### :white_check_mark: All tests passed\n")
+            return
+
+        f.write(f"### :x: {len(failures)} test failure(s)\n\n")
+        f.write("| Status | Test Suite | Test Name | Message |\n")
+        f.write("|--------|-----------|-----------|--------|\n")
+        for entry in failures:
+            msg = entry["message"].replace("|", "\\|").replace("\n", " ")
+            f.write(
+                f"| {entry['status']} | `{entry['suite']}` "
+                f"| `{entry['name']}` | {msg} |\n"
+            )
+        f.write("\n")
+
+
 def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
     os.environ.setdefault("CI", "1")
     build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
@@ -560,6 +621,8 @@ def main(argv: list[str]) -> int:
     if return_code == 0 and has_junit_failures(reports_dir):
         print("JUnit XML reports contain failures — overriding exit code to 1")
         return_code = 1
+
+    write_failure_summary(reports_dir)
 
     # Force-exit immediately.  PyTorch's run_test.py is known to hang after
     # all test files complete due to leaked daemon threads or orphan child
