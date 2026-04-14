@@ -98,14 +98,18 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
         local_path.mkdir(parents=True, exist_ok=True)
         lines.append(f"cache_dir = {local_path}")
 
-    # Compiler check: on POSIX we use a custom script that fingerprints the
-    # compiler binary and its shared libraries via ldd + sha256sum. On Windows
-    # (MSVC) those tools don't exist; ccache's default mtime check works well.
+    # Compiler Check
     if not IS_WINDOWS:
+        # On POSIX we use a custom script that fingerprints the
+        # compiler binary and its shared libraries via ldd + sha256sum.
         lines.append(
             f"compiler_check = {sys.executable} {compiler_check_file} "
             f"{dir / 'compiler_check_cache'} %compiler%"
         )
+    else:
+        # On Windows the LLVM toolchain is compiled statically linked,
+        # therefore using content is sufficient to detect changes.
+        lines.append(f"compiler_check = content")
 
     # Slop settings.
     # Creating a hard link to a file increasing the link count, which triggers
