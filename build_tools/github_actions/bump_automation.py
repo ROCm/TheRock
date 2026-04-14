@@ -16,6 +16,7 @@ ROCM_SYSTEMS_FILES = [
     ".github/workflows/therock-ci-windows.yml",
     ".github/workflows/therock-rccl-ci-linux.yml",
     ".github/workflows/therock-rccl-test-packages-multi-node.yml",
+    ".github/workflows/therock-rccl-test-packages-single-node.yml",
     ".github/workflows/therock-test-component.yml",
     ".github/workflows/therock-test-packages.yml",
 ]
@@ -317,7 +318,15 @@ def main():
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
     args = parser.parse_args()
-
+    run(
+        [
+            "git",
+            "-c",
+            "user.name=therockbot",
+            "-c",
+            "user.email=therockbot@amd.com",
+        ]
+    )
     if args.event_type == "schedule":
         handle_schedule(args.systems_token, args.libraries_token)
     elif args.event_type == "push":

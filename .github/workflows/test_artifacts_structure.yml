@@ -10,6 +10,10 @@ on:
         type: string
         description: "Run ID to fetch artifacts from (defaults to current run)"
         default: ""
+      artifact_github_repo:
+        description: "GitHub repository for artifact_run_id"
+        type: string
+        default: ROCm/TheRock
       amdgpu_families:
         description: "amdgpu_families as a semicolon-separated list (e.g. 'gfx94X-dcgpu;gfx120X-all')"
         type: string
@@ -21,9 +25,16 @@ on:
           - linux
           - windows
         default: "linux"
+      release_type:
+        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_run_id:
+        type: string
+        default: ""
+      artifact_github_repo:
         type: string
         default: ""
       amdgpu_families:
@@ -32,6 +43,9 @@ on:
       platform:
         type: string
         default: "linux"
+      release_type:
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -44,6 +58,7 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       PLATFORM: ${{ inputs.platform }}
       THEROCK_ARTIFACTS_DIR: ${{ github.workspace }}/.download_cache
+      RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -63,6 +78,7 @@ jobs:
         run: |
           python ./build_tools/artifact_manager.py fetch \
             --run-id="${{ env.ARTIFACT_RUN_ID }}" \
+            --run-github-repo="${{ inputs.artifact_github_repo }}" \
             --stage=all \
             --amdgpu-families="${{ inputs.amdgpu_families }}" \
             --platform="${{ env.PLATFORM }}" \

@@ -224,7 +224,7 @@ jobs:
           # Use versions passed from the build workflow when available.
           # For manual workflow_dispatch, compute the version suffix using
           # compute_jax_package_version.py (matches rocm-jax ci_build format).
-          if [ -n "${{ inputs.jaxlib_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
+          if [ -n "${{ inputs.jax_plugin_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
             echo "Using versions passed from build workflow"
             echo "JAXLIB_VERSION=${{ inputs.jaxlib_version }}" >> "$GITHUB_ENV"
             echo "JAX_VERSION=${{ inputs.jax_version }}" >> "$GITHUB_ENV"
@@ -245,12 +245,18 @@ jobs:
           echo "  JAX_PLUGIN_VERSION=${JAX_PLUGIN_VERSION}"
           echo "  JAX_PJRT_VERSION=${JAX_PJRT_VERSION}"
           echo "  JAX_VERSION=${JAX_VERSION}"
-          # Install jaxlib/plugin/pjrt from the GPU-family index; install jax from PyPI to match the version
+          # Install plugin/pjrt from the GPU-family index
           pip install --index-url "${{ env.WHEEL_INDEX_URL }}" \
-            "jaxlib==${JAXLIB_VERSION}" \
             "jax_rocm7_plugin==${JAX_PLUGIN_VERSION}" \
             "jax_rocm7_pjrt==${JAX_PJRT_VERSION}"
-          pip install jax==${JAX_VERSION}
+          # For JAX <= 0.9.0, jaxlib is built and installed from GPU index.
+          # For JAX >= 0.9.1, jaxlib is not built - install jax and jaxlib from upstream PyPI.
+          if [ -n "${JAXLIB_VERSION}" ]; then
+            pip install --index-url "${{ env.WHEEL_INDEX_URL }}" "jaxlib==${JAXLIB_VERSION}"
+            pip install jax==${JAX_VERSION}
+          else
+            pip install jax==${JAX_VERSION} jaxlib==${JAX_VERSION}
+          fi
 
       - name: Run JAX tests
         env:
