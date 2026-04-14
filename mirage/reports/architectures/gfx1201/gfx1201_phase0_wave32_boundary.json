@@ -837,6 +837,19 @@
     "last_instruction_name": "",
     "safe_under_current_request": false
   },
+  "next_vds_50_slice_window_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup_followup": {
+    "start_opcode": 1714,
+    "end_opcode": 1763,
+    "opcode_span_width": 50,
+    "instruction_count": 0,
+    "opcode_hole_count": 50,
+    "bucket_count": 0,
+    "bucket_names": [],
+    "instruction_names": [],
+    "first_instruction_name": "",
+    "last_instruction_name": "",
+    "safe_under_current_request": false
+  },
   "remaining_vds_instruction_statuses": [
     {
       "instruction_name": "DS_APPEND",
@@ -1423,6 +1436,7 @@
     "The twenty-eighth empty layer is opcode 1464..1513 and remains empty, and the twenty-ninth empty layer is opcode 1514..1563 and remains empty, so the current continuation remains metadata-only.",
     "The thirtieth empty layer is opcode 1564..1613 and remains empty, so the current continuation remains metadata-only.",
     "The thirty-first empty layer is opcode 1614..1663 and remains empty, so the current continuation remains metadata-only.",
-    "The thirty-second empty layer is opcode 1664..1713 and remains empty, so the current continuation remains metadata-only."
+    "The thirty-second empty layer is opcode 1664..1713 and remains empty, so the current continuation remains metadata-only.",
+    "The thirty-third empty layer is opcode 1714..1763 and remains empty, so the current continuation remains metadata-only."
   ]
 }
