@@ -205,45 +205,58 @@ jobs:
       contents: read
       id-token: write
 
-  # TODO: re-enable when ASAN build is clear
-  # # STAGE: iree-compiler (generic, parallel to math-libs)
-  # # ==========================================================================
-  # iree-compiler:
-  #   needs: compiler-runtime
-  #   if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'iree-compiler') }}
-  #   uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-  #   secrets: inherit
-  #   with:
-  #     stage_name: iree-compiler
-  #     stage_display_name: "Stage - IREE Compiler"
-  #     timeout_minutes: 90  # 1.5 hours - iree is not _yet_ building with a common llvm, it includes its own.
-  #     dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
-  #     rocm_package_version: ${{ inputs.rocm_package_version }}
-  #     build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-  #     release_type: ${{ inputs.release_type }}
-  #   permissions:
-  #     contents: read
-  #     id-token: write
+  # STAGE: iree-compiler (generic, parallel to math-libs)
+  # ==========================================================================
+  # TODO: re-enable for ASAN once iree-compiler build errors are fixed
+  iree-compiler:
+    needs: compiler-runtime
+    if: >-
+      ${{
+        !cancelled() &&
+        !failure() &&
+        !contains(inputs.prebuilt_stages, 'iree-compiler') &&
+        inputs.build_variant_label != 'asan'
+      }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: iree-compiler
+      stage_display_name: "Stage - IREE Compiler"
+      timeout_minutes: 90  # 1.5 hours - iree is not _yet_ building with a common llvm, it includes its own.
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      release_type: ${{ inputs.release_type }}
+    permissions:
+      contents: read
+      id-token: write
 
-  # # ==========================================================================
-  # # STAGE: fusilli-libs (generic, after math-libs + iree-compiler)
-  # # ==========================================================================
-  # fusilli-libs:
-  #   needs: [compiler-runtime, math-libs, iree-compiler]
-  #   if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'fusilli-libs') }}
-  #   uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-  #   secrets: inherit
-  #   with:
-  #     stage_name: fusilli-libs
-  #     stage_display_name: "Stage - Fusilli Libs"
-  #     timeout_minutes: 60  # 1 hour
-  #     dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
-  #     rocm_package_version: ${{ inputs.rocm_package_version }}
-  #     build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-  #     release_type: ${{ inputs.release_type }}
-  #   permissions:
-  #     contents: read
-  #     id-token: write
+  # ==========================================================================
+  # STAGE: fusilli-libs (generic, after math-libs + iree-compiler)
+  # ==========================================================================
+  # TODO: re-enable for ASAN once fusilli-libs build errors are fixed
+  fusilli-libs:
+    needs: [compiler-runtime, math-libs, iree-compiler]
+    if: >-
+      ${{
+        !cancelled() &&
+        !failure() &&
+        !contains(inputs.prebuilt_stages, 'fusilli-libs') &&
+        inputs.build_variant_label != 'asan'
+      }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: fusilli-libs
+      stage_display_name: "Stage - Fusilli Libs"
+      timeout_minutes: 60  # 1 hour
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      release_type: ${{ inputs.release_type }}
+    permissions:
+      contents: read
+      id-token: write
 
   # ==========================================================================
   # STAGE: media-libs (generic)
