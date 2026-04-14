@@ -13,7 +13,7 @@
 # let us have this pre-trigger job freeze commits/versions so re-runs use
 # consistent values, see https://github.com/ROCm/TheRock/issues/1236.
 
-name: Release Multi-Arch
+name: Multi-Arch Release
 
 on:
   workflow_call:
@@ -77,7 +77,7 @@ jobs:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
     needs: setup
     if: ${{ needs.setup.outputs.linux_build_config != '' }}
-    uses: ./.github/workflows/release_multi_arch_linux.yml
+    uses: ./.github/workflows/multi_arch_release_linux.yml
     secrets: inherit
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
@@ -89,4 +89,4 @@ jobs:
       actions: write  # Added permission to trigger workflows
       id-token: write  # Added permission for AWS S3 upload
 
-  # TODO(#3334): release_multi_arch_windows.yml (and update run-name)
+  # TODO(#3334): multi_release_arch_windows.yml (and update run-name)

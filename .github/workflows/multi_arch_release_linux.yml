@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Release Multi-Arch Linux
+name: Multi-Arch Release Linux
 
 on:
   workflow_call:
