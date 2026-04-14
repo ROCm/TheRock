@@ -49,6 +49,10 @@ on:
         description: "rocm-jax repository ref/branch to check out"
         type: string
         default: "rocm-jaxlib-v0.8.2"
+      build_jaxlib:
+        description: "Whether to build jaxlib from source. Set to false for JAX >= 0.9.1 where jaxlib is installed from upstream PyPI."
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -111,6 +115,10 @@ on:
         description: rocm-jax repository ref/branch to check out
         type: string
         default: "rocm-jaxlib-v0.8.2"
+      build_jaxlib:
+        description: Whether to build jaxlib from source. Set to false for JAX >= 0.9.1.
+        type: boolean
+        default: true
 
 permissions:
   id-token: write
@@ -148,6 +156,7 @@ jobs:
           ref: ${{ inputs.jax_ref }}
 
       - name: Checkout JAX (source for jaxlib build)
+        if: ${{ inputs.build_jaxlib }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           path: jax
@@ -175,7 +184,7 @@ jobs:
         run: |
           ls -lah
           pushd rocm-jax
-          [[ "${{ inputs.jax_ref }}" != *"0.8.0"* ]] && SOURCE_ARG="--jax-source-dir=${{ github.workspace }}/jax" || SOURCE_ARG=""
+          [[ "${{ inputs.jax_ref }}" != *"0.8.0"* && "${{ inputs.build_jaxlib }}" == "true" ]] && SOURCE_ARG="--jax-source-dir=${{ github.workspace }}/jax" || SOURCE_ARG=""
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_version }}" \
@@ -185,6 +194,7 @@ jobs:
             dist_wheels
 
       - name: Generate JAX manifest
+        if: ${{ inputs.build_jaxlib }}
         working-directory: build_tools
         run: |
           python3 -m github_actions.generate_jax_manifest \
@@ -222,7 +232,7 @@ jobs:
           python3 -m pip install boto3
 
       - name: Upload JAX manifest to artifacts S3
-        if: ${{ github.repository_owner == 'ROCm' }}
+        if: ${{ github.repository_owner == 'ROCm' && inputs.build_jaxlib }}
         working-directory: build_tools
         run: |
           python3 -m github_actions.upload_jax_manifest \
@@ -328,12 +338,16 @@ jobs:
           echo "  JAXLIB_VERSION=${JAXLIB_VERSION}"
           echo "  JAX_PLUGIN_VERSION=${JAX_PLUGIN_VERSION}"
           echo "  JAX_PJRT_VERSION=${JAX_PJRT_VERSION}"
+          JAXLIB_INCLUDE=""
+          if [ -n "${JAXLIB_VERSION}" ]; then
+            JAXLIB_INCLUDE="--include jaxlib-${JAXLIB_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl"
+          fi
           aws s3 cp \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive \
             --exclude "*" \
-            --include "jaxlib-${JAXLIB_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl" \
+            ${JAXLIB_INCLUDE:+${JAXLIB_INCLUDE}} \
             --include "jax_rocm7_plugin-${JAX_PLUGIN_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl" \
             --include "jax_rocm7_pjrt-${JAX_PJRT_VERSION}-py3-none-manylinux_2_28_x86_64.whl"
 
