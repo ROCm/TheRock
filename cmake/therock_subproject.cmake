@@ -1024,6 +1024,7 @@ function(therock_cmake_subproject_activate target_name)
       LABEL "${target_name}"
       OUTPUT_ON_FAILURE "${_output_on_failure}"
     )
+
     add_custom_command(
       OUTPUT "${_build_stamp_file}"
       COMMAND

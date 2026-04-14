@@ -586,7 +586,6 @@ artifact_deps = ["core-runtime", "core-hip", "blas"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
-disable_platforms = ["windows"]
 
 [artifacts.support]
 artifact_group = "math-libs"
@@ -625,6 +624,13 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
+
+# Disabled until rocm-libraries bump that has hip-kernel-provider passing
+[artifacts.hipkernelprovider]
+artifact_group = "ml-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+disable_platforms = ["linux", "windows"]
 
 # --- IREE Integration ---
 
