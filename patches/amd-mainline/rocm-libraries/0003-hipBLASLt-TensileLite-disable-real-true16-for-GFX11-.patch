@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
+Date: Thu, 1 Jan 2099 00:00:00 +0000
+Subject: [PATCH] hipBLASLt TensileLite: disable real-true16 for GFX11+
+ assembler invocations
+
+hipBLASLt ships its own internal copy of TensileLite under
+projects/hipblaslt/tensilelite/ that is separate from the shared
+TensileLite in shared/tensile/.  The shared copy was already patched
+(patch 0001) but the hipBLASLt-internal copy still lacked the
+-mattr=-real-true16 flag, causing identical assembler failures when
+building hipBLASLt kernels for GFX11+ targets on the amd-main
+compiler branch.
+
+Pass -mattr=-real-true16 in the Assembler component for GFX11+ so
+the assembler accepts the legacy operand syntax.
+---
+ projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
+index 67fa35e2d8..5924d00aa4 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
+@@ -169,10 +169,13 @@ class Assembler(Component):
+             destPath: The destination path for the generated object file.
+         """
+         args = self._default_args
++        gfx_major = int(targetGfx.replace("gfx", "")[:2]) if targetGfx.startswith("gfx") else 0
++        mattr_args = ["-mattr=-real-true16"] if gfx_major >= 11 else []
+         args = [
+             *args,
+             f"-mcpu={targetGfx}",
+             "-mwavefrontsize64" if wavefrontSize == 64 else "-mno-wavefrontsize64",
++            *mattr_args,
+             srcPath,
+             "-o",
+             destPath
+-- 
+2.34.1
+
