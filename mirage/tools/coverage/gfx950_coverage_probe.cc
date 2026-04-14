@@ -320,7 +320,7 @@ bool IsVectorCarryInBinaryOpcode(std::string_view opcode) {
          opcode == "V_SUBBREV_CO_U32";
 }
 
-std::vector<std::string_view> ExpectedDecodedOpcodes(
+std::vector<std::string> ExpectedDecodedOpcodes(
     std::string_view instruction_name) {
   if (instruction_name == "S_MOVK_I32") {
     return {"S_MOV_B32"};
@@ -370,7 +370,12 @@ std::vector<std::string_view> ExpectedDecodedOpcodes(
   if (instruction_name == "S_CMPK_LE_U32") {
     return {"S_CMP_LE_U32"};
   }
-  return {instruction_name};
+  if (instruction_name.starts_with("SCRATCH_")) {
+    std::string alias(instruction_name);
+    alias.replace(0, std::string_view("SCRATCH_").size(), "GLOBAL_");
+    return {alias};
+  }
+  return {std::string(instruction_name)};
 }
 
 std::optional<std::vector<std::uint32_t>> BuildCandidateWords(
@@ -443,6 +448,10 @@ std::optional<std::vector<std::uint32_t>> BuildCandidateWords(
     const auto words = MakeGlobal(opcode, 0, 0, 0, 0, 0);
     return std::vector<std::uint32_t>{words[0], words[1]};
   }
+  if (encoding_name == "ENC_FLAT_SCRATCH") {
+    const auto words = MakeGlobal(opcode, 0, 0, 0, 0, 0);
+    return std::vector<std::uint32_t>{words[0], words[1]};
+  }
   if (encoding_name == "ENC_MUBUF") {
     if (instruction_name == "BUFFER_WBL2" || instruction_name == "BUFFER_INV") {
       const auto words = MakeMubufNullary(opcode);
@@ -460,9 +469,9 @@ std::optional<std::vector<std::uint32_t>> BuildCandidateWords(
 
 bool IsExpectedDecodedOpcode(std::string_view catalog_name,
                              std::string_view decoded_name) {
-  const std::vector<std::string_view> expected =
+  const std::vector<std::string> expected =
       ExpectedDecodedOpcodes(catalog_name);
-  for (const std::string_view expected_name : expected) {
+  for (const std::string& expected_name : expected) {
     if (expected_name == decoded_name) {
       return true;
     }

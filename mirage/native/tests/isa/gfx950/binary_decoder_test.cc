@@ -8552,6 +8552,125 @@ int main() {
     return 1;
   }
 
+  const auto scratch_load_opcode =
+      FindDefaultEncodingOpcode("SCRATCH_LOAD_DWORD", "ENC_FLAT_SCRATCH");
+  const auto scratch_store_opcode =
+      FindDefaultEncodingOpcode("SCRATCH_STORE_DWORD", "ENC_FLAT_SCRATCH");
+  if (!Expect(scratch_load_opcode.has_value(),
+              "expected scratch load opcode lookup") ||
+      !Expect(scratch_store_opcode.has_value(),
+              "expected scratch store opcode lookup")) {
+    return 1;
+  }
+
+  const auto scratch_load_word =
+      MakeGlobal(*scratch_load_opcode, 10, 6, 0, 0, 0);
+  const auto scratch_store_word =
+      MakeGlobal(*scratch_store_opcode, 0, 8, 12, 0, 0);
+  const std::vector<std::uint32_t> scratch_program = {
+      scratch_load_word[0],  scratch_load_word[1],
+      scratch_store_word[0], scratch_store_word[1],
+      MakeSopp(1),
+  };
+  decoded_program.clear();
+  if (!Expect(decoder.DecodeProgram(scratch_program, &decoded_program,
+                                    &error_message),
+              error_message.c_str()) ||
+      !Expect(decoded_program.size() == 3,
+              "expected decoded scratch program size") ||
+      !Expect(decoded_program[0].opcode == "GLOBAL_LOAD_DWORD",
+              "expected scratch load decode") ||
+      !Expect(decoded_program[1].opcode == "GLOBAL_STORE_DWORD",
+              "expected scratch store decode") ||
+      !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr &&
+                  decoded_program[0].operands[1].kind == OperandKind::kVgpr &&
+                  decoded_program[0].operands[2].kind == OperandKind::kSgpr,
+              "expected scratch load operand kinds") ||
+      !Expect(decoded_program[1].operands[0].kind == OperandKind::kVgpr &&
+                  decoded_program[1].operands[1].kind == OperandKind::kVgpr &&
+                  decoded_program[1].operands[2].kind == OperandKind::kSgpr,
+              "expected scratch store operand kinds")) {
+    return 1;
+  }
+
+  LinearExecutionMemory scratch_memory(0x800, 0);
+  if (!Expect(scratch_memory.WriteU32(0x186, 0x11112222u),
+              "expected scratch load seed write") ||
+      !Expect(scratch_memory.WriteU32(0x24, 0xaaaa0001u),
+              "expected scratch store seed write")) {
+    return 1;
+  }
+
+  WaveExecutionState scratch_state;
+  scratch_state.exec_mask = 0b1011ULL;
+  scratch_state.sgprs[0] = 0x0;
+  scratch_state.sgprs[1] = 0x0;
+  scratch_state.vgprs[6][0] = 0x186;
+  scratch_state.vgprs[6][1] = 0x186;
+  scratch_state.vgprs[6][3] = 0x186;
+  scratch_state.vgprs[8][0] = 0x24;
+  scratch_state.vgprs[8][1] = 0x28;
+  scratch_state.vgprs[8][3] = 0x30;
+  scratch_state.vgprs[12][0] = 0xdead0001u;
+  scratch_state.vgprs[12][1] = 0xbeef0022u;
+  scratch_state.vgprs[12][3] = 0xfeed0044u;
+  if (!Expect(interpreter.ExecuteProgram(decoded_program, &scratch_state,
+                                         &scratch_memory, &error_message),
+              error_message.c_str()) ||
+      !Expect(scratch_state.vgprs[10][0] == 0x11112222u,
+              "expected scratch load lane 0 result") ||
+      !Expect(scratch_state.vgprs[10][1] == 0x11112222u,
+              "expected scratch load lane 1 result") ||
+      !Expect(scratch_state.vgprs[10][3] == 0x11112222u,
+              "expected scratch load lane 3 result")) {
+    return 1;
+  }
+
+  std::uint32_t scratch_store_value = 0;
+  if (!Expect(scratch_memory.ReadU32(0x24, &scratch_store_value),
+              "expected scratch store lane 0 read") ||
+      !Expect(scratch_store_value == 0xdead0001u,
+              "expected scratch store lane 0 result") ||
+      !Expect(scratch_memory.ReadU32(0x28, &scratch_store_value),
+              "expected scratch store lane 1 read") ||
+      !Expect(scratch_store_value == 0xbeef0022u,
+              "expected scratch store lane 1 result") ||
+      !Expect(scratch_memory.ReadU32(0x30, &scratch_store_value),
+              "expected scratch store lane 3 read") ||
+      !Expect(scratch_store_value == 0xfeed0044u,
+              "expected scratch store lane 3 result")) {
+    return 1;
+  }
+
+  const auto scratch_load_lds_opcode = FindDefaultEncodingOpcode(
+      "SCRATCH_LOAD_LDS_DWORD", "ENC_FLAT_SCRATCH");
+  if (!Expect(scratch_load_lds_opcode.has_value(),
+              "expected scratch load lds opcode lookup")) {
+    return 1;
+  }
+
+  const auto scratch_load_lds_word =
+      MakeGlobal(*scratch_load_lds_opcode, 4, 6, 0, 0, 0);
+  const std::vector<std::uint32_t> scratch_load_lds_program = {
+      scratch_load_lds_word[0], scratch_load_lds_word[1], MakeSopp(1),
+  };
+  decoded_program.clear();
+  if (!Expect(decoder.DecodeProgram(scratch_load_lds_program, &decoded_program,
+                                    &error_message),
+              error_message.c_str()) ||
+      !Expect(decoded_program.size() == 2,
+              "expected decoded scratch load lds program size") ||
+      !Expect(decoded_program[0].opcode == "GLOBAL_LOAD_LDS_DWORD",
+              "expected scratch load lds decode") ||
+      !Expect(decoded_program[0].operand_count == 3,
+              "expected scratch load lds operand count") ||
+      !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr &&
+                  decoded_program[0].operands[1].kind == OperandKind::kSgpr &&
+                  decoded_program[0].operands[2].kind == OperandKind::kImm32,
+              "expected scratch load lds operand kinds")) {
+    return 1;
+  }
+
   const auto flat_load_ubyte_opcode =
       FindDefaultEncodingOpcode("FLAT_LOAD_UBYTE", "ENC_FLAT");
   const auto flat_load_sbyte_opcode =

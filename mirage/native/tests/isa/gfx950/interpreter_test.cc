@@ -3769,13 +3769,36 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 7> kGlobalLoadLdsOpcodes = {
+  const std::array<std::string_view, 12> kGlobalLoadLdsOpcodes = {
       "GLOBAL_LOAD_LDS_UBYTE",  "GLOBAL_LOAD_LDS_SBYTE",
       "GLOBAL_LOAD_LDS_USHORT", "GLOBAL_LOAD_LDS_SSHORT",
       "GLOBAL_LOAD_LDS_DWORD",  "GLOBAL_LOAD_LDS_DWORDX3",
       "GLOBAL_LOAD_LDS_DWORDX4",
+      "SCRATCH_LOAD_LDS_UBYTE", "SCRATCH_LOAD_LDS_SBYTE",
+      "SCRATCH_LOAD_LDS_USHORT", "SCRATCH_LOAD_LDS_SSHORT",
+      "SCRATCH_LOAD_LDS_DWORD",
   };
   for (std::string_view opcode : kGlobalLoadLdsOpcodes) {
+    const std::string message = "expected " + std::string(opcode) + " support";
+    if (!Expect(interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 22> kScratchVectorMemoryOpcodes = {
+      "SCRATCH_LOAD_UBYTE",      "SCRATCH_LOAD_SBYTE",
+      "SCRATCH_LOAD_USHORT",     "SCRATCH_LOAD_SSHORT",
+      "SCRATCH_LOAD_DWORD",      "SCRATCH_LOAD_DWORDX2",
+      "SCRATCH_LOAD_DWORDX3",    "SCRATCH_LOAD_DWORDX4",
+      "SCRATCH_LOAD_UBYTE_D16",  "SCRATCH_LOAD_UBYTE_D16_HI",
+      "SCRATCH_LOAD_SBYTE_D16",  "SCRATCH_LOAD_SBYTE_D16_HI",
+      "SCRATCH_LOAD_SHORT_D16",  "SCRATCH_LOAD_SHORT_D16_HI",
+      "SCRATCH_STORE_BYTE",      "SCRATCH_STORE_BYTE_D16_HI",
+      "SCRATCH_STORE_SHORT",     "SCRATCH_STORE_SHORT_D16_HI",
+      "SCRATCH_STORE_DWORD",     "SCRATCH_STORE_DWORDX2",
+      "SCRATCH_STORE_DWORDX3",    "SCRATCH_STORE_DWORDX4",
+  };
+  for (std::string_view opcode : kScratchVectorMemoryOpcodes) {
     const std::string message = "expected " + std::string(opcode) + " support";
     if (!Expect(interpreter.Supports(opcode), message.c_str())) {
       return 1;
@@ -21696,6 +21719,66 @@ int main() {
               error_message.c_str()) ||
       !validate_vector_memory(compiled_vector_memory_state,
                               compiled_vector_memory, "compiled")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> scratch_vector_memory_program = {
+      DecodedInstruction::ThreeOperand("FLAT_LOAD_DWORD",
+                                       InstructionOperand::Vgpr(10),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Imm32(4)),
+      DecodedInstruction::ThreeOperand("FLAT_STORE_DWORD",
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(2),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand(
+          "SCRATCH_LOAD_DWORD", InstructionOperand::Vgpr(11),
+          InstructionOperand::Vgpr(4), InstructionOperand::Sgpr(0),
+          InstructionOperand::Imm32(static_cast<std::uint32_t>(-4))),
+      DecodedInstruction::FourOperand(
+          "SCRATCH_STORE_DWORD", InstructionOperand::Vgpr(4),
+          InstructionOperand::Vgpr(3), InstructionOperand::Sgpr(0),
+          InstructionOperand::Imm32(4)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  LinearExecutionMemory scratch_vector_memory(0x800, 0);
+  if (!Expect(seed_vector_memory(&scratch_vector_memory),
+              "expected scratch vector memory seed writes")) {
+    return 1;
+  }
+  WaveExecutionState scratch_vector_memory_state = make_vector_memory_state();
+  if (!Expect(interpreter.ExecuteProgram(scratch_vector_memory_program,
+                                         &scratch_vector_memory_state,
+                                         &scratch_vector_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_vector_memory(scratch_vector_memory_state,
+                              scratch_vector_memory, "decoded scratch")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_scratch_vector_memory_program;
+  if (!Expect(interpreter.CompileProgram(scratch_vector_memory_program,
+                                         &compiled_scratch_vector_memory_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_scratch_vector_memory(0x800, 0);
+  if (!Expect(seed_vector_memory(&compiled_scratch_vector_memory),
+              "expected compiled scratch vector memory seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_scratch_vector_memory_state =
+      make_vector_memory_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_scratch_vector_memory_program,
+                                         &compiled_scratch_vector_memory_state,
+                                         &compiled_scratch_vector_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_vector_memory(compiled_scratch_vector_memory_state,
+                              compiled_scratch_vector_memory,
+                              "compiled scratch")) {
     return 1;
   }
 

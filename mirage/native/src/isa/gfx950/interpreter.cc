@@ -2621,7 +2621,12 @@ bool IsGlobalLoadLdsOpcode(std::string_view opcode) {
          opcode == "GLOBAL_LOAD_LDS_SSHORT" ||
          opcode == "GLOBAL_LOAD_LDS_DWORD" ||
          opcode == "GLOBAL_LOAD_LDS_DWORDX3" ||
-         opcode == "GLOBAL_LOAD_LDS_DWORDX4";
+         opcode == "GLOBAL_LOAD_LDS_DWORDX4" ||
+         opcode == "SCRATCH_LOAD_LDS_UBYTE" ||
+         opcode == "SCRATCH_LOAD_LDS_SBYTE" ||
+         opcode == "SCRATCH_LOAD_LDS_USHORT" ||
+         opcode == "SCRATCH_LOAD_LDS_SSHORT" ||
+         opcode == "SCRATCH_LOAD_LDS_DWORD";
 }
 
 bool IsGlobalVectorMemoryOpcode(std::string_view opcode) {
@@ -2641,7 +2646,8 @@ bool IsGlobalVectorMemoryOpcode(std::string_view opcode) {
          opcode == "GLOBAL_STORE_SHORT" ||
          opcode == "GLOBAL_STORE_SHORT_D16_HI" ||
          opcode == "GLOBAL_STORE_DWORD" || opcode == "GLOBAL_STORE_DWORDX2" ||
-         opcode == "GLOBAL_STORE_DWORDX3" || opcode == "GLOBAL_STORE_DWORDX4";
+         opcode == "GLOBAL_STORE_DWORDX3" || opcode == "GLOBAL_STORE_DWORDX4" ||
+         opcode.starts_with("SCRATCH_");
 }
 
 bool IsVectorMemoryOpcode(std::string_view opcode) {
@@ -2724,7 +2730,8 @@ bool IsDsOpcode(std::string_view opcode) {
          opcode == "DS_CMPST_RTN_F64" ||
          opcode == "DS_CONDXCHG32_RTN_B64" ||
          opcode == "DS_ADD_RTN_F64" ||
-         opcode == "DS_MIN_RTN_F64" || opcode == "DS_MAX_RTN_F64";
+         opcode == "DS_MIN_RTN_F64" || opcode == "DS_MAX_RTN_F64" ||
+         opcode.starts_with("SCRATCH_STORE_");
 }
 
 bool IsDsPairWriteOpcode(std::string_view opcode) {
@@ -4244,7 +4251,8 @@ bool IsVectorMemoryLoadOpcode(std::string_view opcode) {
          opcode == "GLOBAL_LOAD_SHORT_D16" ||
          opcode == "GLOBAL_LOAD_SHORT_D16_HI" ||
          opcode == "GLOBAL_LOAD_DWORD" || opcode == "GLOBAL_LOAD_DWORDX2" ||
-         opcode == "GLOBAL_LOAD_DWORDX3" || opcode == "GLOBAL_LOAD_DWORDX4";
+         opcode == "GLOBAL_LOAD_DWORDX3" || opcode == "GLOBAL_LOAD_DWORDX4" ||
+         opcode.starts_with("SCRATCH_LOAD_");
 }
 
 bool IsSignedVectorMemoryLoadOpcode(std::string_view opcode) {
@@ -4255,6 +4263,12 @@ bool IsSignedVectorMemoryLoadOpcode(std::string_view opcode) {
          opcode == "GLOBAL_LOAD_SSHORT" || opcode == "GLOBAL_LOAD_LDS_SSHORT" ||
          opcode == "GLOBAL_LOAD_SBYTE_D16" ||
          opcode == "GLOBAL_LOAD_SBYTE_D16_HI" ||
+         opcode == "SCRATCH_LOAD_SBYTE" ||
+         opcode == "SCRATCH_LOAD_SSHORT" ||
+         opcode == "SCRATCH_LOAD_SBYTE_D16" ||
+         opcode == "SCRATCH_LOAD_SBYTE_D16_HI" ||
+         opcode == "SCRATCH_LOAD_LDS_SBYTE" ||
+         opcode == "SCRATCH_LOAD_LDS_SSHORT" ||
          opcode == "BUFFER_LOAD_SBYTE" ||
          opcode == "BUFFER_LOAD_SSHORT" ||
          opcode == "BUFFER_LOAD_SBYTE_D16" ||
@@ -4265,6 +4279,8 @@ DsD16AccessKind GetVectorMemoryD16AccessKind(std::string_view opcode) {
   if (opcode == "FLAT_LOAD_UBYTE_D16" || opcode == "FLAT_LOAD_SBYTE_D16" ||
       opcode == "GLOBAL_LOAD_UBYTE_D16" ||
       opcode == "GLOBAL_LOAD_SBYTE_D16" ||
+      opcode == "SCRATCH_LOAD_UBYTE_D16" ||
+      opcode == "SCRATCH_LOAD_SBYTE_D16" ||
       opcode == "BUFFER_LOAD_UBYTE_D16" ||
       opcode == "BUFFER_LOAD_SBYTE_D16") {
     return DsD16AccessKind::kByteLo;
@@ -4275,12 +4291,16 @@ DsD16AccessKind GetVectorMemoryD16AccessKind(std::string_view opcode) {
       opcode == "GLOBAL_LOAD_UBYTE_D16_HI" ||
       opcode == "GLOBAL_LOAD_SBYTE_D16_HI" ||
       opcode == "GLOBAL_STORE_BYTE_D16_HI" ||
+      opcode == "SCRATCH_LOAD_UBYTE_D16_HI" ||
+      opcode == "SCRATCH_LOAD_SBYTE_D16_HI" ||
+      opcode == "SCRATCH_STORE_BYTE_D16_HI" ||
       opcode == "BUFFER_LOAD_UBYTE_D16_HI" ||
       opcode == "BUFFER_LOAD_SBYTE_D16_HI" ||
       opcode == "BUFFER_STORE_BYTE_D16_HI") {
     return DsD16AccessKind::kByteHi;
   }
   if (opcode == "FLAT_LOAD_SHORT_D16" || opcode == "GLOBAL_LOAD_SHORT_D16" ||
+      opcode == "SCRATCH_LOAD_SHORT_D16" ||
       opcode == "BUFFER_LOAD_SHORT_D16") {
     return DsD16AccessKind::kHalfLo;
   }
@@ -4288,6 +4308,8 @@ DsD16AccessKind GetVectorMemoryD16AccessKind(std::string_view opcode) {
       opcode == "FLAT_STORE_SHORT_D16_HI" ||
       opcode == "GLOBAL_LOAD_SHORT_D16_HI" ||
       opcode == "GLOBAL_STORE_SHORT_D16_HI" ||
+      opcode == "SCRATCH_LOAD_SHORT_D16_HI" ||
+      opcode == "SCRATCH_STORE_SHORT_D16_HI" ||
       opcode == "BUFFER_LOAD_SHORT_D16_HI" ||
       opcode == "BUFFER_STORE_SHORT_D16_HI") {
     return DsD16AccessKind::kHalfHi;
@@ -4712,6 +4734,9 @@ std::uint8_t GetVectorMemoryRegisterDwordCount(std::string_view opcode) {
   if (opcode == "GLOBAL_LOAD_LDS_DWORDX4") {
     return 4;
   }
+  if (opcode == "SCRATCH_LOAD_DWORDX4" || opcode == "SCRATCH_STORE_DWORDX4") {
+    return 4;
+  }
   if (opcode == "FLAT_LOAD_DWORDX4" || opcode == "FLAT_STORE_DWORDX4") {
     return 4;
   }
@@ -4721,10 +4746,16 @@ std::uint8_t GetVectorMemoryRegisterDwordCount(std::string_view opcode) {
   if (opcode == "GLOBAL_LOAD_LDS_DWORDX3") {
     return 3;
   }
+  if (opcode == "SCRATCH_LOAD_DWORDX3" || opcode == "SCRATCH_STORE_DWORDX3") {
+    return 3;
+  }
   if (opcode == "FLAT_LOAD_DWORDX3" || opcode == "FLAT_STORE_DWORDX3") {
     return 3;
   }
   if (opcode == "GLOBAL_LOAD_DWORDX2" || opcode == "GLOBAL_STORE_DWORDX2") {
+    return 2;
+  }
+  if (opcode == "SCRATCH_LOAD_DWORDX2" || opcode == "SCRATCH_STORE_DWORDX2") {
     return 2;
   }
   if (opcode == "FLAT_LOAD_DWORDX2" || opcode == "FLAT_STORE_DWORDX2") {
@@ -4744,8 +4775,17 @@ std::uint8_t GetVectorMemoryElementSizeBytes(std::string_view opcode) {
       opcode == "GLOBAL_LOAD_UBYTE_D16_HI" ||
       opcode == "GLOBAL_LOAD_SBYTE_D16" ||
       opcode == "GLOBAL_LOAD_SBYTE_D16_HI" ||
+      opcode == "SCRATCH_LOAD_UBYTE" || opcode == "SCRATCH_LOAD_SBYTE" ||
+      opcode == "SCRATCH_LOAD_UBYTE_D16" ||
+      opcode == "SCRATCH_LOAD_UBYTE_D16_HI" ||
+      opcode == "SCRATCH_LOAD_SBYTE_D16" ||
+      opcode == "SCRATCH_LOAD_SBYTE_D16_HI" ||
+      opcode == "SCRATCH_LOAD_LDS_UBYTE" ||
+      opcode == "SCRATCH_LOAD_LDS_SBYTE" ||
       opcode == "GLOBAL_STORE_BYTE" ||
       opcode == "GLOBAL_STORE_BYTE_D16_HI" ||
+      opcode == "SCRATCH_STORE_BYTE" ||
+      opcode == "SCRATCH_STORE_BYTE_D16_HI" ||
       opcode == "BUFFER_LOAD_UBYTE" || opcode == "BUFFER_LOAD_SBYTE" ||
       opcode == "BUFFER_LOAD_UBYTE_D16" ||
       opcode == "BUFFER_LOAD_UBYTE_D16_HI" ||
@@ -4762,6 +4802,13 @@ std::uint8_t GetVectorMemoryElementSizeBytes(std::string_view opcode) {
       opcode == "GLOBAL_LOAD_SSHORT" || opcode == "GLOBAL_LOAD_LDS_SSHORT" ||
       opcode == "GLOBAL_LOAD_SHORT_D16" ||
       opcode == "GLOBAL_LOAD_SHORT_D16_HI" ||
+      opcode == "SCRATCH_LOAD_USHORT" || opcode == "SCRATCH_LOAD_SSHORT" ||
+      opcode == "SCRATCH_LOAD_SHORT_D16" ||
+      opcode == "SCRATCH_LOAD_SHORT_D16_HI" ||
+      opcode == "SCRATCH_LOAD_LDS_USHORT" ||
+      opcode == "SCRATCH_LOAD_LDS_SSHORT" ||
+      opcode == "SCRATCH_STORE_SHORT" ||
+      opcode == "SCRATCH_STORE_SHORT_D16_HI" ||
       opcode == "GLOBAL_STORE_SHORT" ||
       opcode == "GLOBAL_STORE_SHORT_D16_HI" ||
       opcode == "BUFFER_LOAD_USHORT" || opcode == "BUFFER_LOAD_SSHORT" ||
@@ -5970,6 +6017,146 @@ void SetVectorMemoryMetadata(CompiledInstruction* instruction,
       (writes_lds ? kFlagVectorMemoryToLds : 0u);
   instruction->register_dword_count = register_dword_count;
   instruction->element_size_bytes = element_size_bytes;
+}
+
+bool TrySetScratchVectorMemoryMetadata(std::string_view opcode,
+                                       CompiledInstruction* instruction) {
+  if (opcode == "SCRATCH_LOAD_UBYTE") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadUByte, true,
+                            true, false, 1, 1);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_UBYTE_D16") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadUByteD16,
+                            true, true, false, 1, 1);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_UBYTE_D16_HI") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadUByteD16Hi,
+                            true, true, false, 1, 1);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_SBYTE") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadSByte, true,
+                            true, true, 1, 1);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_SBYTE_D16") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadSByteD16,
+                            true, true, true, 1, 1);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_SBYTE_D16_HI") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadSByteD16Hi,
+                            true, true, true, 1, 1);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_USHORT") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadUShort, true,
+                            true, false, 1, 2);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_SSHORT") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadSShort, true,
+                            true, true, 1, 2);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_SHORT_D16") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadShortD16,
+                            true, true, false, 1, 2);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_SHORT_D16_HI") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadShortD16Hi,
+                            true, true, false, 1, 2);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_DWORD") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadDword, true,
+                            true, false, 1, 4);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_DWORDX2") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadDwordX2,
+                            true, true, false, 2, 4);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_DWORDX3") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadDwordX3,
+                            true, true, false, 3, 4);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_DWORDX4") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadDwordX4,
+                            true, true, false, 4, 4);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_LDS_UBYTE") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadUByte, true,
+                            true, false, 1, 1, true);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_LDS_SBYTE") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadSByte, true,
+                            true, true, 1, 1, true);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_LDS_USHORT") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadUShort, true,
+                            true, false, 1, 2, true);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_LDS_SSHORT") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadSShort, true,
+                            true, true, 1, 2, true);
+    return true;
+  }
+  if (opcode == "SCRATCH_LOAD_LDS_DWORD") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalLoadDword, true,
+                            true, false, 1, 4, true);
+    return true;
+  }
+  if (opcode == "SCRATCH_STORE_BYTE") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalStoreByte, true,
+                            false, false, 1, 1);
+    return true;
+  }
+  if (opcode == "SCRATCH_STORE_BYTE_D16_HI") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalStoreByteD16Hi,
+                            true, false, false, 1, 1);
+    return true;
+  }
+  if (opcode == "SCRATCH_STORE_SHORT") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalStoreShort, true,
+                            false, false, 1, 2);
+    return true;
+  }
+  if (opcode == "SCRATCH_STORE_SHORT_D16_HI") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalStoreShortD16Hi,
+                            true, false, false, 1, 2);
+    return true;
+  }
+  if (opcode == "SCRATCH_STORE_DWORD") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalStoreDword, true,
+                            false, false, 1, 4);
+    return true;
+  }
+  if (opcode == "SCRATCH_STORE_DWORDX2") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalStoreDwordX2,
+                            true, false, false, 2, 4);
+    return true;
+  }
+  if (opcode == "SCRATCH_STORE_DWORDX3") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalStoreDwordX3,
+                            true, false, false, 3, 4);
+    return true;
+  }
+  if (opcode == "SCRATCH_STORE_DWORDX4") {
+    SetVectorMemoryMetadata(instruction, CompiledOpcode::kGlobalStoreDwordX4,
+                            true, false, false, 4, 4);
+    return true;
+  }
+  return false;
 }
 
 void SetBufferMemoryMetadata(CompiledInstruction* instruction,
@@ -9024,6 +9211,9 @@ bool TryCompileOpcode(std::string_view opcode,
   if (opcode == "FLAT_STORE_DWORDX4") {
     SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kFlatStoreDwordX4,
                             false, false, false, 4, 4);
+    return true;
+  }
+  if (TrySetScratchVectorMemoryMetadata(opcode, compiled_instruction)) {
     return true;
   }
   if (opcode == "GLOBAL_LOAD_UBYTE") {

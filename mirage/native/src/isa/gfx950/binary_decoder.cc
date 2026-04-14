@@ -243,7 +243,8 @@ bool IsSupportedGlobalVectorMemoryOpcode(std::string_view opcode_name) {
          opcode_name == "GLOBAL_STORE_DWORD" ||
          opcode_name == "GLOBAL_STORE_DWORDX2" ||
          opcode_name == "GLOBAL_STORE_DWORDX3" ||
-         opcode_name == "GLOBAL_STORE_DWORDX4";
+         opcode_name == "GLOBAL_STORE_DWORDX4" ||
+         opcode_name.starts_with("SCRATCH_");
 }
 
 bool IsSupportedScalarAtomicOpcode(std::string_view opcode_name) {
@@ -1477,6 +1478,9 @@ bool Gfx950BinaryDecoder::DecodeFlatGlobal(
       static_cast<std::uint32_t>(ExtractBits(instruction_word, 18, 7));
   const char* instruction_name = FindInstructionName("ENC_FLAT_GLBL", opcode);
   if (instruction_name == nullptr) {
+    instruction_name = FindInstructionName("ENC_FLAT_SCRATCH", opcode);
+  }
+  if (instruction_name == nullptr) {
     if (error_message != nullptr) {
       *error_message = "unknown GLOBAL opcode";
     }
@@ -1510,10 +1514,12 @@ bool Gfx950BinaryDecoder::DecodeFlatGlobal(
           ExtractBits(instruction_word, 0, 13)))));
   const bool return_prior_value = ExtractBits(instruction_word, 16, 1) != 0;
 
-  if (opcode_name.starts_with("GLOBAL_LOAD_LDS_")) {
+  if (opcode_name.starts_with("GLOBAL_LOAD_LDS_") ||
+      opcode_name.starts_with("SCRATCH_LOAD_LDS_")) {
     *instruction =
         DecodedInstruction::ThreeOperand(instruction_name, addr, saddr, offset);
-  } else if (opcode_name.starts_with("GLOBAL_LOAD_")) {
+  } else if (opcode_name.starts_with("GLOBAL_LOAD_") ||
+             opcode_name.starts_with("SCRATCH_LOAD_")) {
     InstructionOperand dst;
     if (!DecodeVectorDestination(
             static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
@@ -1522,7 +1528,8 @@ bool Gfx950BinaryDecoder::DecodeFlatGlobal(
     }
     *instruction = DecodedInstruction::FourOperand(instruction_name, dst, addr,
                                                    saddr, offset);
-  } else if (opcode_name.starts_with("GLOBAL_STORE_")) {
+  } else if (opcode_name.starts_with("GLOBAL_STORE_") ||
+             opcode_name.starts_with("SCRATCH_STORE_")) {
     InstructionOperand data;
     if (!DecodeVectorRegisterSource(
             static_cast<std::uint32_t>(ExtractBits(instruction_word, 40, 8)),
