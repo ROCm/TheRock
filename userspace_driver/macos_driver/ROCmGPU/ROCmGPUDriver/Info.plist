@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>ROCmGPUDriver</string>
+    <key>CFBundlePackageType</key>
+    <string>DEXT</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <!-- IOKit Matching Personality -->
+    <key>IOKitPersonalities</key>
+    <dict>
+        <key>ROCmGPUDriver</key>
+        <dict>
+            <key>CFBundleIdentifier</key>
+            <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+            <key>IOClass</key>
+            <string>ROCmGPUDriver</string>
+            <key>IOProviderClass</key>
+            <string>IOPCIDevice</string>
+            <!--
+              Match AMD vendor ID 0x1002, any device ID.
+              Format: 0xDDDDVVVV where DDDD=device, VVVV=vendor.
+              The &0x0000FFFF mask means: match vendor only, ignore device.
+              This only matches external/Thunderbolt devices — Apple's PCI
+              transport entitlement blocks "Built In" hardware.
+            -->
+            <key>IOPCIPrimaryMatch</key>
+            <string>0x00001002&amp;0x0000ffff</string>
+            <key>IOUserClientClass</key>
+            <string>ROCmGPUUserClient</string>
+
+            <!-- UserClient creation properties (for NewUserClient -> Create) -->
+            <key>UserClientProperties</key>
+            <dict>
+                <key>IOClass</key>
+                <string>ROCmGPUUserClient</string>
+            </dict>
+        </dict>
+    </dict>
+</dict>
+</plist>

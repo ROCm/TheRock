@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Base DriverKit entitlement -->
+    <key>com.apple.developer.driverkit</key>
+    <true/>
+
+    <!-- PCI transport: match AMD vendor 0x1002, any device.
+         Must request from Apple via developer.apple.com/system-extensions/
+         For development, disable SIP and self-sign instead. -->
+    <key>com.apple.developer.driverkit.transport.pci</key>
+    <array>
+        <string>0x00001002&amp;0x0000FFFF</string>
+    </array>
+
+    <!-- Allow any userspace process to connect (not just the host app).
+         Required for the Python driver to communicate with the DEXT. -->
+    <key>com.apple.developer.driverkit.allow-any-userclient-access</key>
+    <true/>
+</dict>
+</plist>
