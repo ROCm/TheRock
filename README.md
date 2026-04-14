@@ -217,12 +217,20 @@ hipDNN provider plugins:
 > CMake configure.
 
 By default, components are built from the sources fetched via the submodules.
-For some components, external sources can be used instead.
+For some components, external sources can be used by setting the following couple
+options:
 
-| External source settings                        | Description                                    |
-| ----------------------------------------------- | ---------------------------------------------- |
-| `-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=OFF`  | Use external composable-kernel source location |
-| `-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=<PATH>` | Path to composable-kernel sources              |
+| External source settings                         | Description                                             |
+| ------------------------------------------------ | ------------------------------------------------------- |
+| `-DTHEROCK_USE_EXTERNAL_<COMPONENT STRING>=OFF`  | Enable/Disable external source location for a component |
+| `-DTHEROCK_<COMPONENT_STRING>_SOURCE_DIR=<PATH>` | External path to the component sources                  |
+
+The following components accept specifying alternative source locations:
+
+| Component string    |
+| ------------------- |
+| `COMPOSABLE_KERNEL` |
+| `ROCGDB`            |
 
 Further flags allow to build components with specific features enabled.
 
