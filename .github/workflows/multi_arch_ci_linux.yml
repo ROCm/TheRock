@@ -144,6 +144,8 @@ jobs:
     with:
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      # TODO: Simplify to just `needs.build_python_packages.outputs.package_find_links_url`
+      # once kpack split is always enabled.
       package_find_links_url: >-
         ${{
           needs.build_python_packages.outputs.kpack_split == 'true'
