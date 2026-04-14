@@ -57,7 +57,8 @@ on:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    runs-on: ${{ contains(inputs.build_variant_cmake_preset, 'san') && 'azure-linux-scale-rocm-heavy-ramdisk' || 'aws-linux-scale-rocm' }}
+    runs-on: 
+      labels: ${{ contains(inputs.build_variant_cmake_preset, 'san') && 'azure-linux-scale-rocm-heavy-ramdisk' || 'aws-linux-scale-rocm' }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       id-token: write
