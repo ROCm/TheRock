@@ -296,6 +296,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             github_repository=None,
             workflow_run_id=None,
             workflow_run=None,
+            release_type=None,
         )
 
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
@@ -314,6 +315,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             github_repository="SomeUser/TheRock",
             workflow_run_id="99999",
             workflow_run=None,
+            release_type=None,
         )
 
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
@@ -330,6 +332,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             github_repository=None,
             workflow_run_id=None,
             workflow_run=fake_run,
+            release_type=None,
         )
 
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
@@ -349,6 +352,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             github_repository=None,
             workflow_run_id=None,
             workflow_run=fake_run,
+            release_type=None,
         )
 
 
