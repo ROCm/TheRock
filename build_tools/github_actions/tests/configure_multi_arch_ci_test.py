@@ -1059,44 +1059,7 @@ class TestFamilyTestFilters(unittest.TestCase):
                     gfx90a_info = family_info
                     break
 
-            # If gfx90a is in the build, it should have sanity_check_only_for_family=True
-            # for non-schedule runs (like this PR)
-            if gfx90a_info:
-                self.assertTrue(
-                    gfx90a_info["sanity_check_only_for_family"],
-                    "gfx90a should have sanity checks enabled for PR runs",
-                )
-
-    def test_real_family_gfx1151_windows_nightly_check_only(self):
-        """Integration test: gfx1151 Windows has nightly_check_only_for_family in the matrix."""
-        # gfx1151 Windows (in presubmit matrix) has nightly_check_only_for_family=True
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",  # Non-schedule run
-            commit_ref="feature-branch",
-            base_ref="HEAD^",
-            build_variant="release",
-        )
-        # gfx1151 is in presubmit, so it should be included by default
-        targets = cm.select_targets(ci_inputs)
-        git_context = cm.GitContext.empty()
-        outputs = cm.configure(ci_inputs, git_context)
-
-        # Find gfx1151 in the windows build config
-        if outputs.builds.windows:
-            gfx1151_info = None
-            for family_info in outputs.builds.windows.per_family_info:
-                if family_info["amdgpu_family"] == "gfx1151":
-                    gfx1151_info = family_info
-                    break
-
-            # If gfx1151 is in the build, it should have sanity_check_only_for_family=True
-            # for non-schedule runs (like this PR)
-            if gfx1151_info:
-                self.assertTrue(
-                    gfx1151_info["sanity_check_only_for_family"],
-                    "gfx1151 Windows should have sanity checks enabled for PR runs",
-                )
+        self.assertIsNone(gfx90a_info)
 
 
 if __name__ == "__main__":

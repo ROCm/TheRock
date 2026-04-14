@@ -843,9 +843,6 @@ def _expand_build_config_for_platform(
                     f"disabling tests"
                 )
 
-        # Apply per-family test filtering flags
-        sanity_check_only = platform_info.get("sanity_check_only_for_family", False)
-
         # If run-full-tests-only is set and test_type is "quick", disable testing
         if platform_info.get("run-full-tests-only", False) and test_type == "quick":
             test_runs_on = ""
@@ -854,23 +851,25 @@ def _expand_build_config_for_platform(
                 f"disabling tests for quick test run"
             )
 
-        # If nightly_check_only_for_family is set for non-schedule runs, enable sanity checks
+        # If nightly_check_only_for_family is set for schedule runs only
         if (
             platform_info.get("nightly_check_only_for_family", False)
             and not ci_inputs.is_schedule
         ):
-            sanity_check_only = True
             print(
                 f"  {family_name}: nightly_check_only_for_family flag set, "
-                f"enabling sanity checks for non-schedule run"
+                f"disabling for non-scheduled runs"
             )
+            continue
 
         per_family_info.append(
             {
                 "amdgpu_family": platform_info["family"],
                 "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
                 "test-runs-on": test_runs_on,
-                "sanity_check_only_for_family": sanity_check_only,
+                "sanity_check_only_for_family": platform_info.get(
+                    "sanity_check_only_for_family", False
+                ),
             }
         )
 
