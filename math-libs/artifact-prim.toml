@@ -16,6 +16,7 @@ include = [
 [components.test."math-libs/hipCUB/stage"]
 include = [
   "bin/test_*",
+  "bin/benchmark_*",
   "bin/hipcub/CTestTestfile.cmake",
   "bin/hipcub/generate_resource_spec*",
 ]
