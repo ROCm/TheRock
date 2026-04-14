@@ -49,6 +49,16 @@ TEST_TO_IGNORE = {
             "rocrtstFunc.Memory_Max_Mem",
         ]
     },
+    "gfx90a": {
+        "linux": [
+            "rocrtstFunc.Memory_Max_Mem",
+        ]
+    },
+    "gfx1250": {
+        "linux": [
+            "rocrtstFunc.Memory_Max_Mem",
+        ]
+    },
 }
 
 # If quick tests are enabled, run quick tests only. Otherwise, run the full suite.
