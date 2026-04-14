@@ -320,6 +320,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       BUILD_DEPS
         therock-spdlog
         therock-fmt
+        roctracer
       RUNTIME_DEPS
         amdsmi
         aqlprofile
