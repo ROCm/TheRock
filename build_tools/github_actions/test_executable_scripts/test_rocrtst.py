@@ -22,7 +22,7 @@ environ_vars = os.environ.copy()
 # For shard indexes, we convert to 0th index.
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
-exclude_filter = ""
+
 cwd_dir = Path(THEROCK_BIN_DIR)
 cmd = ["./rocrtst64"]
 
@@ -70,9 +70,10 @@ QUICK_TESTS = [
     "rocrtstFunc.Memory_Atomic_Xchg_Test",
 ]
 
+exclude_filter = "-"
 if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
     ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
-    exclude_filter = "-" + ":".join(ignored_tests)
+    exclude_filter += ":".join(ignored_tests)
 
 test_type = os.getenv("TEST_TYPE", "full")
 
