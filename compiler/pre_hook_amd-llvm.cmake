@@ -136,15 +136,23 @@ set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator" CACHE STRING
 # The amd-main branch of llvm-project does not ship amdclang/amdclang++
 # driver wrappers. Many downstream components (rocprofiler-sdk, library
 # toolchains, etc.) expect them, so create symlinks at install time.
-install(CODE "
-  set(_bin_dir \"\${CMAKE_INSTALL_PREFIX}/bin\")
-  foreach(_name amdclang amdclang++ amdflang)
-    string(REPLACE \"amd\" \"\" _target \"\${_name}\")
-    if(NOT EXISTS \"\${_bin_dir}/\${_name}\" AND EXISTS \"\${_bin_dir}/\${_target}\")
-      file(CREATE_LINK \"\${_target}\" \"\${_bin_dir}/\${_name}\" SYMBOLIC)
-    endif()
-  endforeach()
-")
+# The install(CODE) must run AFTER LLVM's own install rules have placed
+# clang/clang++ into the bin directory.  Because the pre_hook is included
+# before LLVM's CMakeLists.txt, a plain install(CODE) here would execute
+# first and the EXISTS check would fail on a clean build.  Wrapping it in
+# a deferred call ensures the rule is appended after LLVM's install rules.
+function(_therock_amd_llvm_install_amdclang_symlinks)
+  install(CODE "
+    set(_bin_dir \"\${CMAKE_INSTALL_PREFIX}/bin\")
+    foreach(_name amdclang amdclang++ amdflang)
+      string(REPLACE \"amd\" \"\" _target \"\${_name}\")
+      if(NOT EXISTS \"\${_bin_dir}/\${_name}\" AND EXISTS \"\${_bin_dir}/\${_target}\")
+        file(CREATE_LINK \"\${_target}\" \"\${_bin_dir}/\${_name}\" SYMBOLIC)
+      endif()
+    endforeach()
+  ")
+endfunction()
+cmake_language(DEFER CALL _therock_amd_llvm_install_amdclang_symlinks)
 
 # Setup the install rpath (let CMake handle build RPATH per usual):
 # * Executables and libraries can always search their adjacent lib directory
