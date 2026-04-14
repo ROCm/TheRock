@@ -1,5 +1,5 @@
 # SuiteSparse
+[components.lib."third-party/SuiteSparse/stage"]
 [components.dbg."third-party/SuiteSparse/stage"]
 [components.dev."third-party/SuiteSparse/stage"]
 [components.doc."third-party/SuiteSparse/stage"]
-[components.lib."third-party/SuiteSparse/stage"]

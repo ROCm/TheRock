@@ -151,7 +151,10 @@ Each sub-project, by default, uses a standard directory layout for its build:
 
 ## CMake Configuration Options
 
-TODO
+### `THEROCK_DEV_PROJECTS`
+
+Subprojects that opt in to source file globbing even when otherwise skipped
+(e.g. `-DTHEROCK_DEV_PROJECTS=amd-llvm`).
 
 ## Developer Cookbook
 
