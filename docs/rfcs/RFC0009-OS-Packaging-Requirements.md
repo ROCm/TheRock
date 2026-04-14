@@ -73,6 +73,44 @@ The soft links allow for an independent directory structure for ROCm expansions,
 /opt/rocm/hpc/ -> /opt/rocm/hpc-26.2.0
 ```
 
+### System Configuration Files (`sys` component)
+
+Some ROCm packages install system-level configuration files that must reside in OS-managed directories outside the ROCm install prefix (e.g. `/etc/ld.so.conf.d/`, `/etc/OpenCL/vendors/`). These are captured in the `sys` artifact component type (see [artifact component types](../development/artifacts.md#component-types)).
+
+Examples:
+
+```
+/etc/ld.so.conf.d/10-rocm7.12-opencl.conf
+/etc/OpenCL/vendors/amdocl64_70200_43.icd
+```
+
+#### ROCm Path References in Config File Contents
+
+Any ROCm path referenced inside a `sys` config file must point to the **unversioned symlink** `/opt/rocm/core` rather than a versioned path (e.g. `/opt/rocm/core-7.12`). This ensures the config remains valid across patch updates and supports side-by-side multi-version installs, where the active version is controlled by the symlink.
+
+Example — correct content for `/etc/ld.so.conf.d/10-rocm7.12-opencl.conf`:
+
+```
+/opt/rocm/core/lib/opencl
+```
+
+Not:
+
+```
+/opt/rocm/core-7.12/lib/opencl   # Wrong — breaks when version changes
+```
+
+#### Handling During Packaging and Installation
+
+When a `sys` component is present, the packaging and install tooling must **copy** these files to the corresponding system directory. A post install script can install these files to system folders. Symlinks must not be used because:
+
+- OS package managers (`apt`, `dnf`, `zypper`) always copy files into `/etc`
+- Symlinks pointing into `/opt/rocm/` break in container and chroot environments
+- `ldconfig` silently skips broken symlinks in `ld.so.conf.d/`
+- Symlinks become dangling if ROCm is removed before the config files are cleaned up
+
+When installing from tarballs or artifacts directly (without an OS package manager), the user/installer must copy `sys` component files to the appropriate system paths (requires elevated privileges) and run `ldconfig` after copying any `ld.so.conf.d/` entries.
+
 ### RPATH and Relocatability
 
 - All ROCm packages must be built and shipped with `$ORIGIN`-based RPATH
