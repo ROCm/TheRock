@@ -122,7 +122,9 @@ def generate_flat_index(dist_dir: Path, patterns: list[str] | None = None) -> No
     for pattern in patterns:
         local_files.extend([f for f in dist_dir.glob(pattern) if f.is_file()])
 
-    print(f"Generating flat index for kpack-split build: {len(local_files)} files in {dist_dir}")
+    print(
+        f"Generating flat index for kpack-split build: {len(local_files)} files in {dist_dir}"
+    )
 
     generate_simple_index(
         output_path=dist_dir / "index.html",

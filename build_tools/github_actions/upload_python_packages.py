@@ -273,7 +273,9 @@ def run(args: argparse.Namespace):
 
         log("Set github actions output")
         log("-------------------------")
-        gha_set_output({"package_find_links_url": index_url, "kpack_split": kpack_split})
+        gha_set_output(
+            {"package_find_links_url": index_url, "kpack_split": kpack_split}
+        )
 
         log("Write github actions build summary")
         log("----------------------------------")

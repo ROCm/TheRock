@@ -171,9 +171,9 @@ class TestGenerateIndex(unittest.TestCase):
             dist_dir = Path(tmp)
             (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
             (dist_dir / "gfx94X-dcgpu").mkdir()
-            (dist_dir / "gfx94X-dcgpu" / "rocm_sdk_libraries_gfx94x_dcgpu-1.0.whl").write_bytes(
-                b"libs"
-            )
+            (
+                dist_dir / "gfx94X-dcgpu" / "rocm_sdk_libraries_gfx94x_dcgpu-1.0.whl"
+            ).write_bytes(b"libs")
 
             upload_python_packages.generate_index(dist_dir, multiarch=True)
 
@@ -186,7 +186,9 @@ class TestGenerateIndex(unittest.TestCase):
             dist_dir = Path(tmp)
             (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
 
-            upload_python_packages.generate_index(dist_dir, multiarch=True, dry_run=True)
+            upload_python_packages.generate_index(
+                dist_dir, multiarch=True, dry_run=True
+            )
 
             self.assertFalse((dist_dir / "index.html").is_file())
 
