@@ -1,113 +1,87 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Compute subproject test dependencies from CMake manifest."""
+"""Compute subproject test dependencies by parsing CMakeLists.txt files."""
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Set
 
 
-class SubprojectInfo:
-    def __init__(self, name: str):
-        self.name = name
-        self.runtime_deps: Set[str] = set()
-        self.test_subprojects: Optional[Set[str]] = None
+def parse_cmake_test_subprojects(therock_dir):
+    """Parse CMakeLists.txt files to extract TEST_SUBPROJECTS declarations.
 
+    Returns dict mapping subproject name -> list of test dependencies.
+    """
+    test_deps = {}
+    cmake_files = list(Path(therock_dir).rglob("CMakeLists.txt"))
 
-class SubprojectDependencyAnalyzer:
-    def __init__(self, manifest_path: Path):
-        self.manifest_path = manifest_path
-        self.subprojects: Dict[str, SubprojectInfo] = {}
-        self.reverse_deps: Dict[str, Set[str]] = {}
-        self._load_manifest()
-        self._build_reverse_dependency_graph()
+    for cmake_file in cmake_files:
+        try:
+            content = cmake_file.read_text()
+        except:
+            continue
 
-    def _load_manifest(self):
-        if not self.manifest_path.exists():
-            raise FileNotFoundError(
-                f"Subproject test manifest not found: {self.manifest_path}\n"
-                f"Please run CMake configure first."
+        # Find all therock_cmake_subproject_declare blocks
+        pattern = r'therock_cmake_subproject_declare\s*\(\s*(\w+)(.*?)\)'
+
+        for match in re.finditer(pattern, content, re.DOTALL):
+            subproject_name = match.group(1)
+            block_content = match.group(2)
+
+            # Look for TEST_SUBPROJECTS within this block
+            test_subprojects_match = re.search(
+                r'TEST_SUBPROJECTS\s+((?:\s+\w+)+)', block_content
             )
 
-        with open(self.manifest_path) as f:
-            manifest = json.load(f)
+            if test_subprojects_match:
+                deps_str = test_subprojects_match.group(1).strip()
+                deps = [d.strip() for d in deps_str.split() if d.strip()]
+                test_deps[subproject_name] = deps
 
-        for name, data in manifest.get("subprojects", {}).items():
-            info = SubprojectInfo(name)
-            info.runtime_deps = set(data.get("runtime_deps", []))
-            test_subprojects = data.get("test_subprojects")
-            if test_subprojects is not None:
-                info.test_subprojects = set(test_subprojects)
-            self.subprojects[name] = info
-
-    def _build_reverse_dependency_graph(self):
-        for name in self.subprojects:
-            self.reverse_deps[name] = set()
-
-        for name, info in self.subprojects.items():
-            for dep in info.runtime_deps:
-                if dep in self.subprojects:
-                    self.reverse_deps[dep].add(name)
-
-    def get_subprojects_to_test(self, changed_subprojects: List[str]) -> Set[str]:
-        """Get subprojects to test when given subprojects change.
-
-        Returns changed subprojects + their dependents.
-        If test_subprojects is set, use those; otherwise use reverse deps.
-        """
-        result = set(changed_subprojects)
-
-        for changed in changed_subprojects:
-            info = self.subprojects.get(changed)
-            if info and info.test_subprojects is not None:
-                result.update(info.test_subprojects)
-            else:
-                result.update(self.reverse_deps.get(changed, set()))
-
-        return result
+    return test_deps
 
 
-def get_rocm_test_dependencies(
-    changed_subprojects: List[str],
-    therock_dir: Optional[Path] = None,
-    build_dir: Optional[Path] = None,
-) -> Set[str]:
-    """Get all subprojects to test when specific subprojects change."""
-    analyzer = create_analyzer(therock_dir, build_dir)
-    return analyzer.get_subprojects_to_test(changed_subprojects)
-
-
-def create_analyzer(
-    therock_dir: Optional[Path] = None, build_dir: Optional[Path] = None
-) -> SubprojectDependencyAnalyzer:
+def get_subprojects_to_test(changed_subprojects, therock_dir=None):
+    """Get all subprojects to test when given subprojects change."""
     if therock_dir is None:
         therock_dir = Path.cwd()
     else:
-        therock_dir = Path(therock_dir).resolve()
+        therock_dir = Path(therock_dir)
 
-    if not therock_dir.exists():
-        raise FileNotFoundError(f"TheRock root not found: {therock_dir}")
+    test_deps = parse_cmake_test_subprojects(therock_dir)
+    result = set(changed_subprojects)
 
-    if build_dir is None:
-        build_dir = therock_dir / "build"
-    else:
-        build_dir = Path(build_dir).resolve()
+    for changed in changed_subprojects:
+        if changed in test_deps:
+            result.update(test_deps[changed])
 
-    manifest_path = build_dir / "subproject_test_manifest.json"
-    return SubprojectDependencyAnalyzer(manifest_path)
+    return result
+
+
+def get_rocm_test_dependencies(changed_subprojects, therock_dir=None):
+    """Get all subprojects to test when specific subprojects change."""
+    return get_subprojects_to_test(changed_subprojects, therock_dir)
+
+
+def list_subprojects(therock_dir=None):
+    """List all subprojects with TEST_SUBPROJECTS."""
+    if therock_dir is None:
+        therock_dir = Path.cwd()
+
+    test_deps = parse_cmake_test_subprojects(therock_dir)
+    return sorted(test_deps.keys())
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Compute subproject test dependencies"
+        description="Compute subproject test dependencies by parsing CMakeLists.txt"
     )
     parser.add_argument(
         "--therock-dir", type=str, default=".", help="TheRock directory"
     )
-    parser.add_argument("--build-dir", type=str, help="Build directory")
     parser.add_argument(
         "--changed",
         type=str,
@@ -120,7 +94,7 @@ def main():
         type=str,
         nargs="+",
         metavar="PROJECT",
-        help="Alias for --changed (for consistency with fetch_test_configurations.py)",
+        help="Alias for --changed",
     )
     parser.add_argument(
         "--list-subprojects", action="store_true", help="List all subprojects"
@@ -135,57 +109,21 @@ def main():
     args = parser.parse_args()
 
     therock_dir = Path(args.therock_dir).resolve()
-    if not therock_dir.exists():
-        print(f"Error: TheRock root not found: {therock_dir}", file=sys.stderr)
-        sys.exit(1)
-
-    build_dir = (
-        Path(args.build_dir).resolve() if args.build_dir else therock_dir / "build"
-    )
-
-    if not build_dir.exists():
-        print(
-            f"Error: Build directory not found: {build_dir}\n"
-            f"Please run CMake configure first.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    try:
-        analyzer = create_analyzer(therock_dir, build_dir)
-    except FileNotFoundError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    if not analyzer.subprojects:
-        print("Error: No subprojects found in manifest.", file=sys.stderr)
-        sys.exit(1)
 
     if args.list_subprojects:
-        print(json.dumps(sorted(analyzer.subprojects.keys()), indent=2))
+        result = list_subprojects(therock_dir)
+        print(json.dumps(result, indent=2))
         return
 
-    # Support both --changed and --projects (alias)
     changed = args.changed or args.projects
     if not changed:
         parser.error("one of the following arguments is required: --changed, --projects")
 
-    valid = set(analyzer.subprojects.keys())
-    invalid = [p for p in changed if p not in valid]
-    if invalid:
-        print(f"Error: Unknown subproject(s): {', '.join(invalid)}", file=sys.stderr)
-        print(f"\nAvailable subprojects:", file=sys.stderr)
-        for sp in sorted(valid)[:20]:
-            print(f"  {sp}", file=sys.stderr)
-        if len(valid) > 20:
-            print(f"  ... and {len(valid) - 20} more", file=sys.stderr)
-        sys.exit(1)
-
-    result = analyzer.get_subprojects_to_test(changed)
+    result = get_subprojects_to_test(changed, therock_dir)
 
     if args.format == "json":
         print(json.dumps(sorted(result)))
-    else:  # list format
+    else:
         for item in sorted(result):
             print(item)
 
