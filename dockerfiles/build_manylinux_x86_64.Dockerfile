@@ -76,7 +76,6 @@ RUN yum install -y epel-release && \
       gcc-toolset-13-gcc-gfortran \
       gcc-toolset-13-libatomic-devel \
       gcc-toolset-13-libstdc++-devel \
-      patchelf \
       vim-common \
       git-lfs \
     && yum install -y \
@@ -84,6 +83,12 @@ RUN yum install -y epel-release && \
       flex \
     && yum clean all && \
     rm -rf /var/cache/yum
+
+######## PatchELF ########
+WORKDIR /install-patchelf
+ENV PATCHELF_GIT_REF="d0f70eea5397606c486857e0a105e53ec123904a"
+COPY install_patchelf.sh ./
+RUN ./install_patchelf.sh "${PATCHELF_GIT_REF}" && rm -rf /install-patchelf
 
 
 ######## DVC via pip ######
