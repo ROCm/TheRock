@@ -302,9 +302,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
         -DROCPROFSYS_BUILD_FOR_THEROCK="${THEROCK_BUILD_TESTING}" # TODO: Will be deprecated
-        -DROCPROFSYS_BUILD_TESTING="${THEROCK_BUILD_TESTING}"
-        -DROCPROFSYS_INSTALL_TESTING="${THEROCK_BUILD_TESTING}"
-        -DROCPROFSYS_BUILD_EXAMPLES="${THEROCK_BUILD_TESTING}"
+        -DROCPROFSYS_INSTALL_TESTING="${THEROCK_BUILD_TESTING}""
         -DROCPROFSYS_INSTALL_EXAMPLES="${THEROCK_BUILD_TESTING}"
         # jacobi-hip includes <roctracer_ext.h>; TheRock stages headers under
         # include/roctracer/, so the example fails until include paths are fixed.
