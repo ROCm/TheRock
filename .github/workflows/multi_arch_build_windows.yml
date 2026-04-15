@@ -95,6 +95,11 @@ jobs:
     needs: compiler-runtime
     if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') }}
     strategy:
+      # `fail-fast: false` lets all families complete even if one fails.
+      # This is useful for CI (to see all failures at once), but for releases
+      # this risks publishing incomplete packages. Release pipelines may want
+      # to either set `fail-fast: true` or add a validation step that blocks
+      # promotion unless all jobs succeeded.
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}

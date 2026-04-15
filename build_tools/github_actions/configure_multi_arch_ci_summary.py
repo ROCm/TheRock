@@ -87,6 +87,9 @@ def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
 def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
     highlights: list[str] = []
 
+    if ci_inputs.release_type:
+        highlights.append(f"Release type: {ci_inputs.release_type}")
+
     # Explicit family selection (workflow_dispatch)
     if ci_inputs.is_workflow_dispatch:
         parts = []
