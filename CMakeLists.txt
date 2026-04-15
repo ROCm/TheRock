@@ -223,6 +223,11 @@ option(THEROCK_MINIMAL_DEBUG_INFO "Enables compiler-specific flags for minimal d
 option(THEROCK_COMPILER_RT_DEBUG "Enables compiler-rt debug build" OFF)
 option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
 option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider, performing strict package checks" ON)
+option(THEROCK_DO_RPATH_PAD
+    "Pad each target's INSTALL_RPATH with trailing ':' bytes to reserve DT_STRTAB slack for downstream patchelf-based RPATH rewrites (kpack surgery moves PHDR to end-of-file, which breaks patchelf's PHDR relocation logic)."
+    ON)
+set(THEROCK_RPATH_PAD_BYTES "100" CACHE STRING
+    "Number of trailing ':' padding bytes to append when THEROCK_DO_RPATH_PAD is enabled.")
 
 ################################################################################
 # Feature selection

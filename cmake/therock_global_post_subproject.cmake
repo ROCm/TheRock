@@ -79,6 +79,16 @@ function(_therock_post_process_rpath_target target)
   endforeach()
 
   therock_set_install_rpath(TARGETS "${target}" PATHS ${_install_rpath})
+
+  # Reserve DT_STRTAB slack by padding INSTALL_RPATH with trailing ':' bytes,
+  # so that downstream patchelf-based RPATH rewrites in py_packaging.py can
+  # edit the RPATH string in place rather than relocating PHDR. kpack ELF
+  # surgery moves PHDR to the end of the file; patchelf mis-handles that
+  # layout and produces unloadable ELFs when it has to relocate PHDR again.
+  if(THEROCK_DO_RPATH_PAD AND THEROCK_RPATH_PAD_BYTES GREATER 0)
+    string(REPEAT ":" "${THEROCK_RPATH_PAD_BYTES}" _rpath_pad)
+    set_property(TARGET "${target}" APPEND_STRING PROPERTY INSTALL_RPATH "${_rpath_pad}")
+  endif()
 endfunction()
 
 
