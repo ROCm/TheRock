@@ -407,18 +407,18 @@ test_matrix = {
             "windows": 1,
         },
     },
-    # Disabled until rocm-libraries bump that has hip-kernel-provider passing
-    # "hipkernelprovider": {
-    #     "job_name": "hipkernelprovider",
-    #     "fetch_artifact_args": "--hipdnn --hipkernelprovider --tests",
-    #     "timeout_minutes": 15,
-    #     "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
-    #     "platform": ["linux", "windows"],
-    #     "total_shards_dict": {
-    #         "linux": 1,
-    #         "windows": 1,
-    #     },
-    # },
+    "hipkernelprovider": {
+        "job_name": "hipkernelprovider",
+        "fetch_artifact_args": "--hipdnn --hipkernelprovider --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+        "ci_disabled": True,
+    },
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",
@@ -574,6 +574,11 @@ def run():
             logging.info(
                 f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
             )
+            continue
+
+        # If the test is marked as ci_disabled, skip it unless explicitly requested
+        if selected_matrix[key].get("ci_disabled", False) and key not in project_array:
+            logging.info(f"Excluding job {job_name} (ci_disabled)")
             continue
 
         # If test labels are populated, and the test job name is not in the test labels, skip the test
