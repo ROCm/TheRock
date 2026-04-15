@@ -109,7 +109,7 @@ def _cdash_build_name() -> str:
     m = re.match(r"refs/pull/(\d+)/", ref)
     prefix = f"PR_{m.group(1)}_" if m else ""
     label = _default_cdash_matrix_label()
-    run_key = os.getenv("ARTIFACT_RUN_ID", "")
+    run_key = os.getenv("GITHUB_RUN_ID") or os.getenv("THEROCK_RUN_ID") or os.getenv("ARTIFACT_RUN_ID")
     if not run_key:
         return f"{prefix}{label}"
     return f"{prefix}{label} [RUN_ID: {run_key}]"
