@@ -15,7 +15,6 @@ import shutil
 import socket
 import subprocess
 import sys
-import uuid
 from pathlib import Path
 
 # Paths match test_rocprofiler_sdk.py (resolved from THEROCK_BIN_DIR / default install).
@@ -117,6 +116,46 @@ def _cdash_build_name() -> str:
     if not run_key:
         return f"{prefix}{label}"
     return f"{prefix}{label} [RUN_ID: {run_key}]"
+
+
+def _therock_git_repo_root_for_ctest_update() -> str:
+    """Local root of the ROCm/TheRock clone for ``ctest_update`` (a Git work tree).
+
+    The default ``SOURCE_DIR`` points at installed ``share/rocprofiler-sdk/tests``,
+    which is not the superproject git checkout. This resolves the TheRock repo root.
+    """
+    for env_var in ("GITHUB_WORKSPACE", "THEROCK_SOURCE_DIR"):
+        raw = os.getenv(env_var, "").strip()
+        if not raw:
+            continue
+        candidate = Path(raw).resolve()
+        if (candidate / ".git").exists():
+            return str(candidate)
+
+    script_superproject = Path(__file__).resolve().parents[3]
+    if (script_superproject / ".git").exists():
+        return str(script_superproject)
+
+    try:
+        proc = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(Path(__file__).resolve().parent),
+                "rev-parse",
+                "--show-toplevel",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if proc.returncode == 0 and (top := proc.stdout.strip()):
+            return str(Path(top).resolve())
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+    return str(script_superproject)
 
 
 def _which_cmake() -> str:
@@ -238,11 +277,7 @@ def _generate_dashboard(cmake_cmd: str) -> str:
     group = "TheRock"  # Group for the dashboard
     ARGN = "${ARGN}"  # Arguments for dashboard submission
 
-    REPO_SOURCE_DIR = (
-        os.path.dirname(os.path.dirname((SOURCE_DIR)))
-        if not os.path.exists(os.path.join(SOURCE_DIR, ".git"))
-        else SOURCE_DIR
-    )
+    REPO_SOURCE_DIR = _therock_git_repo_root_for_ctest_update()
 
     # Generate initial dashboard.cmake content with minimum necessary version and dashboard_submit macro
     _script = f"""
