@@ -32,8 +32,6 @@ on:
         type: string
       build_variant_suffix:
         type: string
-      expect_failure:
-        type: boolean
       prebuilt_stages:
         type: string
         default: ""

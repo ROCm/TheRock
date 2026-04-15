@@ -10,7 +10,7 @@ This script is a pipeline of data transformations:
     2. Check Skip CI   — gate: should we skip CI entirely?
     3. Decide Jobs     — changed files + topology → per-job-group decisions
     4. Select Targets  — trigger type + labels → per-platform GPU families
-    5. Build Configs   — families × variant → per-platform build configs
+    5. Build Configs   — inputs × jobs × families → per-platform build configs
     6. Write Outputs   — JSON → GITHUB_OUTPUT + GITHUB_STEP_SUMMARY
 
 Each step (except 1 and 6) is a pure function of typed dataclasses,
@@ -414,7 +414,6 @@ class BuildConfig:
     build_variant_label: str
     build_variant_suffix: str
     build_variant_cmake_preset: str
-    expect_failure: bool
     build_pytorch: bool
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
@@ -760,13 +759,12 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 
 
 def _expand_build_config_for_platform(
-    families: list[str],
-    platform: str,
     ci_inputs: CIInputs,
-    all_families: dict[str, dict],
+    jobs: JobDecisions,
+    platform: str,
     variant_config: dict,
-    prebuilt_stages: list[str] | None = None,
-    baseline_run_id: str = "",
+    all_families: dict[str, dict],
+    families: list[str],
 ) -> BuildConfig | None:
     """Build a BuildConfig for one platform, or None if no families match.
 
@@ -863,6 +861,9 @@ def _expand_build_config_for_platform(
                 "sanity_check_only_for_family": platform_info.get(
                     "sanity_check_only_for_family", False
                 ),
+                "expect_pytorch_failure": platform_info.get(
+                    "expect_pytorch_failure", False
+                ),
             }
         )
 
@@ -870,8 +871,6 @@ def _expand_build_config_for_platform(
         return None
 
     family_names = [f["amdgpu_family"] for f in per_family_info]
-    expect_failure = variant_config.get("expect_failure", False)
-    expect_pytorch_failure = variant_config.get("expect_pytorch_failure", False)
     suffix = variant_config.get("build_variant_suffix", "")
 
     return BuildConfig(
@@ -881,18 +880,16 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        expect_failure=expect_failure,
-        build_pytorch=not expect_failure and not expect_pytorch_failure,
-        prebuilt_stages=prebuilt_stages or [],
-        baseline_run_id=baseline_run_id,
+        build_pytorch=jobs.build_pytorch.action == JobAction.RUN,
+        prebuilt_stages=jobs.build_rocm.prebuilt_stages or [],
+        baseline_run_id=jobs.build_rocm.baseline_run_id,
     )
 
 
 def expand_build_configs(
-    targets: TargetSelection,
     ci_inputs: CIInputs,
-    prebuilt_stages: list[str] | None = None,
-    baseline_run_id: str = "",
+    jobs: JobDecisions,
+    targets: TargetSelection,
 ) -> BuildConfigs:
     """Build a BuildConfig for each platform that supports the variant.
 
@@ -919,13 +916,12 @@ def expand_build_configs(
             )
             continue
         config = _expand_build_config_for_platform(
-            families=families,
-            platform=platform,
             ci_inputs=ci_inputs,
-            all_families=all_families,
+            jobs=jobs,
+            platform=platform,
             variant_config=variant_config,
-            prebuilt_stages=prebuilt_stages,
-            baseline_run_id=baseline_run_id,
+            all_families=all_families,
+            families=families,
         )
         if platform == "linux":
             linux_config = config
@@ -1008,10 +1004,9 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 
     print("\n=== Building per-platform configs ===")
     builds = expand_build_configs(
-        targets=targets,
         ci_inputs=ci_inputs,
-        prebuilt_stages=jobs.build_rocm.prebuilt_stages,
-        baseline_run_id=jobs.build_rocm.baseline_run_id,
+        jobs=jobs,
+        targets=targets,
     )
     builds.log()
 

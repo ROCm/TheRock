@@ -601,11 +601,10 @@ class TestSelectTargets(unittest.TestCase):
 
 
 class TestExpandBuildConfigs(unittest.TestCase):
-    """Test expand_build_configs: TargetSelection × CIInputs → BuildConfigs.
+    """Test expand_build_configs: CIInputs × JobDecisions × TargetSelection → BuildConfigs.
 
     Tests verify structural properties of the output, not specific data values
-    from amdgpu_family_matrix.py. Changing a runner label or flipping
-    expect_failure in the matrix data should not require test updates here.
+    from amdgpu_family_matrix.py.
     """
 
     def _inputs(self, **kwargs):
@@ -619,6 +618,19 @@ class TestExpandBuildConfigs(unittest.TestCase):
         defaults.update(kwargs)
         return cm.CIInputs(**defaults)
 
+    def _jobs(self, skip_pytorch: bool = False):
+        return cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
+            test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN, test_type="full"),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_pytorch=cm.JobGroupDecision(
+                action=cm.JobAction.SKIP if skip_pytorch else cm.JobAction.RUN
+            ),
+            test_pytorch=cm.JobGroupDecision(
+                action=cm.JobAction.SKIP if skip_pytorch else cm.JobAction.RUN
+            ),
+        )
+
     def test_build_config_to_dict_has_all_fields(self):
         """BuildConfig.to_dict() produces all expected keys."""
         config = cm.BuildConfig(
@@ -628,7 +640,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_label="release",
             build_variant_suffix="",
             build_variant_cmake_preset="",
-            expect_failure=False,
             build_pytorch=True,
         )
         d = config.to_dict()
@@ -639,7 +650,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
     def test_empty_targets_both_none(self):
         """Empty targets on both platforms → both None."""
         targets = cm.TargetSelection()
-        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs())
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(), jobs=self._jobs(), targets=targets
+        )
         self.assertIsNone(result.linux)
         self.assertIsNone(result.windows)
 
@@ -653,7 +666,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_label="release",
             build_variant_suffix="",
             build_variant_cmake_preset="release",
-            expect_failure=False,
             build_pytorch=True,
         )
         # Present config → valid JSON
@@ -677,12 +689,15 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant="release",
         )
         targets = cm.select_targets(inputs)
-        result = cm.expand_build_configs(targets=targets, ci_inputs=inputs)
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(), jobs=self._jobs(), targets=targets
+        )
         required_keys = {
             "amdgpu_family",
             "amdgpu_targets",
             "test-runs-on",
             "sanity_check_only_for_family",
+            "expect_pytorch_failure",
         }
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)
@@ -725,7 +740,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             linux_families=["gfx94x", "gfx110x"],
             windows_families=["gfx110x"],
         )
-        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs())
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(), jobs=self._jobs(), targets=targets
+        )
 
         # All target families that support the variant appear in output.
         linux_per_family = result.linux.per_family_info
@@ -738,12 +755,18 @@ class TestExpandBuildConfigs(unittest.TestCase):
         json_set = {f["amdgpu_family"] for f in linux_per_family}
         self.assertEqual(dist_set, json_set)
 
-        # Variant metadata is populated.
+        # Metadata should be populated.
         config = result.linux
         self.assertTrue(len(config.build_variant_label) > 0)
         self.assertIn("release", config.artifact_group)
-        self.assertIsInstance(config.expect_failure, bool)
-        self.assertIsInstance(config.build_pytorch, bool)
+        self.assertTrue(config.build_pytorch)
+        self.assertIsInstance(config.prebuilt_stages, list)
+
+        config = result.windows
+        self.assertTrue(len(config.build_variant_label) > 0)
+        self.assertIn("release", config.artifact_group)
+        self.assertTrue(config.build_pytorch)
+        self.assertIsInstance(config.prebuilt_stages, list)
 
     def test_variant_filters_by_platform_and_family_support(self):
         """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
@@ -753,7 +776,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            targets=targets, ci_inputs=self._inputs(build_variant="asan")
+            ci_inputs=self._inputs(build_variant="asan"),
+            jobs=self._jobs(),
+            targets=targets,
         )
         # Only gfx94x on linux survives.
         self.assertIsNotNone(result.linux)
@@ -762,12 +787,44 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Windows has no asan variant config at all.
         self.assertIsNone(result.windows)
 
+    def test_config_skips_pytorch_if_job_skips(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx906"],
+            windows_families=["gfx906"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(),
+            jobs=self._jobs(skip_pytorch=True),
+            targets=targets,
+        )
+        self.assertIsNotNone(result.linux)
+        self.assertFalse(result.linux.build_pytorch)
+        self.assertIsNotNone(result.windows)
+        self.assertFalse(result.windows.build_pytorch)
+
+    def test_config_skips_pytorch_if_family_expects_failure(self):
+        """gfx906 fails to build pytorch on Windows, should be skipped."""
+        targets = cm.TargetSelection(
+            linux_families=["gfx906"],
+            windows_families=["gfx906"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(), jobs=self._jobs(), targets=targets
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertFalse(entry["expect_pytorch_failure"])
+        self.assertIsNotNone(result.windows)
+        entry = result.windows.per_family_info[0]
+        self.assertTrue(entry["expect_pytorch_failure"])
+
     def test_test_runner_kernel_overrides_runner_label(self):
         """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
         targets = cm.TargetSelection(linux_families=["gfx1151"])
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
+            jobs=self._jobs(),
+            targets=targets,
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -778,8 +835,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # gfx94x has no test-runs-on-kernel entry
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
+            jobs=self._jobs(),
+            targets=targets,
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -788,12 +846,38 @@ class TestExpandBuildConfigs(unittest.TestCase):
     def test_no_test_runner_label_uses_default(self):
         """Without test_runner: label, default runner labels are used."""
         targets = cm.TargetSelection(linux_families=["gfx1151"])
-        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs())
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(), jobs=self._jobs(), targets=targets
+        )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
         # Default runner, not the oem one
         self.assertNotEqual(entry["test-runs-on"], "")
         self.assertNotIn("oem", entry["test-runs-on"])
+
+    def test_alternate_label_selected_based_on_random(self):
+        """Some targets have multiple runner labels, chosen by a random weight"""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+
+        # Mock random.random() to return 0.9 (> 0.2 weight)
+        with patch("random.random", return_value=0.9):
+            result = cm.expand_build_configs(
+                ci_inputs=self._inputs(), jobs=self._jobs(), targets=targets
+            )
+            self.assertIsNotNone(result.linux)
+            entry = result.linux.per_family_info[0]
+            # Default runner should be selected
+            self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
+
+        # Mock random.random() to return 0.1 (< 0.2 weight)
+        with patch("random.random", return_value=0.1):
+            result = cm.expand_build_configs(
+                ci_inputs=self._inputs(), jobs=self._jobs(), targets=targets
+            )
+            self.assertIsNotNone(result.linux)
+            entry = result.linux.per_family_info[0]
+            # Alternate runner should be selected
+            self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm")
 
 
 # ---------------------------------------------------------------------------
@@ -936,130 +1020,6 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
             f"  In YAML but not Python: {yaml_fields - python_fields}\n"
             f"  In Python but not YAML: {python_fields - yaml_fields}",
         )
-
-
-# ---------------------------------------------------------------------------
-# Dual-label runner selection
-# ---------------------------------------------------------------------------
-
-
-class TestDualLabelRunnerSelection(unittest.TestCase):
-    """Test weighted random selection of dual-label runner configurations."""
-
-    def test_gfx94x_has_dual_label_config(self):
-        """Verify gfx94x has the dual-label configuration."""
-        from amdgpu_family_matrix import get_all_families_for_trigger_types
-
-        all_families = get_all_families_for_trigger_types(["presubmit"])
-        self.assertIn("gfx94x", all_families)
-
-        gfx94x_linux = all_families["gfx94x"].get("linux", {})
-        self.assertIn("test-runs-on", gfx94x_linux)
-        self.assertIn("test-runs-on-alternate", gfx94x_linux)
-        self.assertIn("test-runs-on-alternate-weight", gfx94x_linux)
-
-        # Verify the expected labels
-        self.assertEqual(gfx94x_linux["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
-        self.assertEqual(
-            gfx94x_linux["test-runs-on-alternate"],
-            "linux-gfx942-1gpu-ccs-ossci-rocm",
-        )
-
-    def test_alternate_label_selected_when_random_below_weight(self):
-        """When random() < weight, alternate label should be selected."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant="release",
-        )
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-
-        # Mock random.random() to return 0.1 (< 0.2 weight)
-        with patch("random.random", return_value=0.1):
-            builds = cm.expand_build_configs(targets, ci_inputs)
-
-        self.assertIsNotNone(builds.linux)
-        # Check that the alternate label was selected
-        gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm"
-        )
-
-    def test_primary_label_selected_when_random_above_weight(self):
-        """When random() >= weight, primary label should be selected."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant="release",
-        )
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-
-        # Mock random.random() to return 0.5 (>= 0.2 weight)
-        with patch("random.random", return_value=0.5):
-            builds = cm.expand_build_configs(targets, ci_inputs)
-
-        self.assertIsNotNone(builds.linux)
-        # Check that the primary label was selected
-        gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
-
-    def test_distribution_approximates_weight(self):
-        """Over many runs, selection should approximate the configured weight."""
-        with patch("random.random", return_value=0.5):
-            ci_inputs = cm.CIInputs(
-                run_id="12345",
-                event_name="pull_request",
-                commit_ref="feature",
-                base_ref="HEAD^",
-                build_variant="release",
-            )
-            targets = cm.TargetSelection(linux_families=["gfx94x"])
-            builds = cm.expand_build_configs(targets, ci_inputs)
-            gfx94x_info = builds.linux.per_family_info[0]
-            self.assertEqual(
-                gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm"
-            )
-
-    def test_distribution_approximates_alternative_weight(self):
-        """Over many runs, selection should approximate the configured weight."""
-        with patch("random.random", return_value=0.2):
-            ci_inputs = cm.CIInputs(
-                run_id="12345",
-                event_name="pull_request",
-                commit_ref="feature",
-                base_ref="HEAD^",
-                build_variant="release",
-            )
-            targets = cm.TargetSelection(linux_families=["gfx94x"])
-            builds = cm.expand_build_configs(targets, ci_inputs)
-            gfx94x_info = builds.linux.per_family_info[0]
-            self.assertEqual(
-                gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm"
-            )
-
-    def test_families_without_alternate_use_primary_only(self):
-        """Families without dual-label config should only use primary label."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="schedule",
-            commit_ref="main",
-            base_ref="HEAD^1",
-            build_variant="release",
-        )
-        # gfx103x doesn't have alternate label
-        targets = cm.TargetSelection(linux_families=["gfx103x"])
-
-        # Run multiple times to ensure consistency
-        for _ in range(10):
-            builds = cm.expand_build_configs(targets, ci_inputs)
-            if builds.linux and builds.linux.per_family_info:
-                gfx103x_info = builds.linux.per_family_info[0]
-                # Should always use the primary label
-                self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
 
 
 if __name__ == "__main__":
