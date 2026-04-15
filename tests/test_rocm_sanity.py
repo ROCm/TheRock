@@ -126,18 +126,19 @@ class TestROCmSanity:
 
         # Compiling .cpp file using hipcc
         hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"
-        run_command(
-            [
-                f"{THEROCK_BIN_DIR}/hipcc",
-                str(THIS_DIR / "hipcc_check.cpp"),
-                "-Xlinker",
-                f"-rpath={THEROCK_BIN_DIR}/../lib/",
-                f"--offload-arch={offload_arch}",
-                "-o",
-                hipcc_check_executable_file,
-            ],
-            cwd=str(THEROCK_BIN_DIR),
-        )
+        hipcc_cmd = [
+            f"{THEROCK_BIN_DIR}/hipcc",
+            str(THIS_DIR / "hipcc_check.cpp"),
+        ]
+        # -Xlinker and -rpath are Linux-only
+        if not is_windows():
+            hipcc_cmd.extend(["-Xlinker", f"-rpath={THEROCK_BIN_DIR}/../lib/"])
+        hipcc_cmd.extend([
+            f"--offload-arch={offload_arch}",
+            "-o",
+            hipcc_check_executable_file,
+        ])
+        run_command(hipcc_cmd, cwd=str(THEROCK_BIN_DIR))
 
         # Running and checking the executable
         platform_executable_prefix = "./" if not is_windows() else ""
