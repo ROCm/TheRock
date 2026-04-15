@@ -109,6 +109,9 @@ jobs:
 
       - name: Run setup test environment workflow
         timeout-minutes: 15
+        env:
+          RETRY_THIS_STEP: "true"
+          STEP_TIMEOUT_MINUTES: "15" # should match timeout-minutes specified above at this step
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
@@ -125,6 +128,17 @@ jobs:
         run: |
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
+          git config --global core.longpaths true
+
+      - uses: iterative/setup-dvc@4bdfd2b0f6f1ad7e08afadb03b1a895c352a5239 # v2.0.0
+        if: ${{ runner.os == 'Windows' }}
+        with:
+          version: '3.62.0'
+
+      - name: "Fetch sources"
+        timeout-minutes: 30
+        run: |
+          ./build_tools/fetch_sources.py --jobs 12 --depth 1
 
       - name: Runner health status
         run: |
@@ -164,6 +178,7 @@ jobs:
           RETRY_THIS_STEP: "true"
           RETRY_COUNT: "1"
           RETRY_DELAY: "7"
+          STEP_TIMEOUT_MINUTES: ${{ fromJSON(inputs.component).timeout_minutes }}
           STEP_NAME: >-
             Test ${{ fromJSON(inputs.component).job_name }}
             (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
