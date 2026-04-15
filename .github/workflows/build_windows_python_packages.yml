@@ -56,6 +56,9 @@ on:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
         value: ${{ jobs.build_rocm_wheels.outputs.package_find_links_url }}
+      kpack_split:
+        description: "true if this is a kpack-split flat build, false for legacy per-family"
+        value: ${{ jobs.build_rocm_wheels.outputs.kpack_split }}
 
 permissions:
   contents: read
@@ -70,6 +73,7 @@ jobs:
       id-token: write
     outputs:
       package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
+      kpack_split: ${{ steps.upload.outputs.kpack_split }}
     env:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
@@ -99,6 +103,7 @@ jobs:
               --run-github-repo="${{ inputs.artifact_github_repo }}" \
               --stage=all \
               --amdgpu-families="${{ inputs.amdgpu_families }}" \
+              --expand-family-to-targets \
               --output-dir="${{ github.workspace }}"
               # NOTE: artifact_manager.py appends /artifacts to --output-dir
               # in non-flatten mode, so pass workspace root here so that
