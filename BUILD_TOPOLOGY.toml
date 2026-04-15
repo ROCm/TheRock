@@ -565,7 +565,7 @@ artifact_deps = ["core-runtime", "core-hip"]
 [artifacts.prim]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip"]
+artifact_deps = ["core-runtime", "core-hip", "rand"]
 
 [artifacts.sparse]
 artifact_group = "math-libs"
