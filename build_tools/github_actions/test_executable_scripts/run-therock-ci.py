@@ -119,8 +119,8 @@ def _cdash_build_name() -> str:
 
 
 def _therock_git_repo_root_for_ctest_update() -> str:
-    """Local root of the ROCm/TheRock clone for ``ctest_update`` (a Git work tree).
-
+    """Local root of the ROCm/TheRock clone for ``ctest_update`` (a Git work tree). TESTING
+    GIT COMPARISON HERE
     The default ``SOURCE_DIR`` points at installed ``share/rocprofiler-sdk/tests``,
     which is not the superproject git checkout. This resolves the TheRock repo root.
     """
