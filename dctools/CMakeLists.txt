@@ -8,11 +8,6 @@ if(THEROCK_ENABLE_RDC)
     message(FATAL_ERROR "RDC requires Linux (Windows not supported)")
   endif()
 
-  # RDC links against core libraries like amdsmi. Use the ROCm compiler
-  # toolchain by default to keep RDC aligned with the ROCm stack across
-  # sanitizer and release builds.
-  set(_rdc_compiler_toolchain "amd-llvm")
-
   # Get gRPC stage directory for RDC's GRPC_ROOT requirement
   get_target_property(_grpc_stage therock-grpc THEROCK_STAGE_DIR)
 
