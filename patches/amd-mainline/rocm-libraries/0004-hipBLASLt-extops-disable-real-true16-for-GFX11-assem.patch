@@ -28,7 +28,7 @@ index 48029cab52..8b31458c5f 100644
 +    set(EXTOP_ASM_EXTRA "")
      if(arch MATCHES "^gfx1[12][0-9][0-9]$")
          set(WAVEFRONT "-mno-wavefrontsize64")
-+        set(EXTOP_ASM_EXTRA "-Xclangas;-target-feature;-Xclangas;-real-true16")
++        set(EXTOP_ASM_EXTRA "SHELL:-Xclangas -target-feature -Xclangas -real-true16")
      endif()
      add_library(extop-obj-${arch} OBJECT)
      target_compile_options(extop-obj-${arch}
