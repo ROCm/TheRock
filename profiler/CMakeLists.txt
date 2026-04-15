@@ -331,7 +331,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
-        roctracer
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
         ${_openmpi_optional_dep}
@@ -355,7 +354,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       SUBPROJECT_DEPS
         amdsmi
         rocprofiler-sdk
-        roctracer
         rocprofiler-systems
       )
   endif(THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
