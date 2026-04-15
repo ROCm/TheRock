@@ -56,6 +56,9 @@ on:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
         value: ${{ jobs.build_rocm_wheels.outputs.package_find_links_url }}
+      kpack_split:
+        description: "true if this is a kpack-split flat build, false for legacy per-family"
+        value: ${{ jobs.build_rocm_wheels.outputs.kpack_split }}
 
 permissions:
   contents: read
@@ -70,10 +73,11 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
       options: -v /runner/config:/home/awsconfig/
     outputs:
       package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
+      kpack_split: ${{ steps.upload.outputs.kpack_split }}
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
@@ -98,6 +102,7 @@ jobs:
               --run-github-repo="${{ inputs.artifact_github_repo }}" \
               --stage=all \
               --amdgpu-families="${{ inputs.amdgpu_families }}" \
+              --expand-family-to-targets \
               --output-dir="${{ github.workspace }}"
               # NOTE: artifact_manager.py appends /artifacts to --output-dir
               # in non-flatten mode, so pass workspace root here so that

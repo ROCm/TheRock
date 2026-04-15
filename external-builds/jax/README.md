@@ -35,6 +35,7 @@ Support for JAX is provided via stable release branches of
 
 | JAX version | Linux                                                                                                           | Windows          |
 | ----------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
+| 0.9.1       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.9.1`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.9.1) | ❌ Not supported |
 | 0.8.2       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.8.2`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.2) | ❌ Not supported |
 | 0.8.0       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.8.0`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.0) | ❌ Not supported |
 
@@ -47,9 +48,14 @@ See also:
 
 This repository builds the following ROCm-enabled JAX artifacts:
 
-- **jaxlib** (ROCm)
+- **jaxlib** (ROCm) - built for JAX ≤ 0.9.0 only
 - **jax_rocm7_pjrt** (PJRT runtime for ROCm)
 - **jax_rocm7_plugin** (JAX runtime plugin for ROCm)
+
+> [!NOTE]
+> Starting with JAX 0.9.1, jaxlib is **not built** - it is used from upstream
+> PyPI (`pip install jaxlib==0.9.1`). Only **jax_rocm7_pjrt** and
+> **jax_rocm7_plugin** are built.
 
 ### How building with TheRock differs from upstream
 
