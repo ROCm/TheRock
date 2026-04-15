@@ -148,6 +148,8 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocminfo"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocminfo"
     BACKGROUND_BUILD
+    INSTALL_TEST_SCRIPT_FILES
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/test/therock/test_sanity.py"
     COMPILER_TOOLCHAIN
       "${_system_toolchain}"
     RUNTIME_DEPS
@@ -165,6 +167,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS
       ROCR-Runtime
       rocminfo
@@ -307,6 +310,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/catch"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-tests"
       BACKGROUND_BUILD
+      INSTALL_TEST_SCRIPT_FILES
+        "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/test/therock/test_hiptests.py"
       COMPILER_TOOLCHAIN
         amd-hip
       CMAKE_ARGS
@@ -495,6 +500,8 @@ if(THEROCK_BUILD_TESTING)
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
       BACKGROUND_BUILD
+      INSTALL_TEST_SCRIPT_FILES
+        "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/test/therock/test_rocrtst.py"
       CMAKE_ARGS
         "-DCMAKE_PREFIX_PATH="
         "-DLLVM_DIR="

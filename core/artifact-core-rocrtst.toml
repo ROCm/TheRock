@@ -8,6 +8,9 @@ exclude = [
 [components.dev."core/rocrtst/stage"]
 [components.doc."core/rocrtst/stage"]
 [components.test."core/rocrtst/stage"]
+include = [
+  "share/therock/tests/test_rocrtst.py",
+]
 exclude = [
     "lib/rocrtst/lib/libhwloc.so*",
     "lib/rocrtst/lib/LICENSE",

@@ -31,13 +31,23 @@ from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 logging.basicConfig(level=logging.INFO)
 
-# Note: these paths are relative to the repository root. We could make that
-# more explicit, or use absolute paths.
-SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
+# Installed artifact location for test scripts that are packaged into component
+# test artifacts.
+PACKAGED_SCRIPT_DIR = Path("./build/share/therock/tests")
+# Repository checkout location for scripts that still execute directly from the
+# TheRock source tree.
+REPO_SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
 
 
-def _get_script_path(script_name: str) -> str:
-    platform_path = SCRIPT_DIR / script_name
+def _get_script_path(script_name: str, *, packaged: bool = False) -> str:
+    """Returns the workflow path for a test script.
+
+    When packaged is True, the path points at the installed artifact location
+    under ./build. Otherwise it points at the checked-out TheRock repository
+    copy under build_tools/github_actions/test_executable_scripts.
+    """
+    script_dir = PACKAGED_SCRIPT_DIR if packaged else REPO_SCRIPT_DIR
+    platform_path = script_dir / script_name
     # Convert to posix (using `/` instead of `\\`) so test workflows can use
     # 'bash' as the shell on Linux and Windows.
     posix_path = platform_path.as_posix()
@@ -50,7 +60,7 @@ test_matrix = {
         "job_name": "sanity",
         "fetch_artifact_args": "--base-only",
         "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_sanity.py')}",
+        "test_script": f"python {_get_script_path('test_sanity.py', packaged=True)}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -65,7 +75,7 @@ test_matrix = {
         "job_name": "hip-tests",
         "fetch_artifact_args": "--tests",
         "timeout_minutes": 120,
-        "test_script": f"python {_get_script_path('test_hiptests.py')}",
+        "test_script": f"python {_get_script_path('test_hiptests.py', packaged=True)}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 4,
@@ -520,7 +530,7 @@ test_matrix = {
         "job_name": "rocrtst",
         "fetch_artifact_args": "--rocrtst --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocrtst.py')}",
+        "test_script": f"python {_get_script_path('test_rocrtst.py', packaged=True)}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,

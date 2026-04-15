@@ -9,3 +9,7 @@
 [components.run."core/rocminfo/stage"]
 [components.dbg."core/rocminfo/stage"]
 [components.doc."core/rocminfo/stage"]
+[components.test."core/rocminfo/stage"]
+include = [
+  "share/therock/tests/test_sanity.py",
+]

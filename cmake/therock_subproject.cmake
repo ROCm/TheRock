@@ -336,12 +336,17 @@ endfunction()
 #   all files hashed instead of querying the source control system. This is used for
 #   certain small, in-tree directories where we don't want them fingerprinted from
 #   TheRock's commit but based on content.
+# INSTALL_TEST_SCRIPT_FILES: Source files to install into the subproject stage
+#   for packaged test-script execution. Relative paths are resolved against
+#   EXTERNAL_SOURCE_DIR.
+# INSTALL_TEST_SCRIPT_DESTINATION: Install-tree destination for packaged test
+#   scripts. Defaults to share/therock/tests.
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
-    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
+    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR;INSTALL_TEST_SCRIPT_DESTINATION"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS;INSTALL_TEST_SCRIPT_FILES"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -369,6 +374,19 @@ function(therock_cmake_subproject_declare target_name)
   if(ARG_CMAKE_LISTS_RELPATH)
     cmake_path(APPEND _cmake_source_dir "${ARG_CMAKE_LISTS_RELPATH}")
   endif()
+  if(NOT ARG_INSTALL_TEST_SCRIPT_DESTINATION)
+    set(ARG_INSTALL_TEST_SCRIPT_DESTINATION "share/therock/tests")
+  endif()
+  foreach(_install_test_script_file IN LISTS ARG_INSTALL_TEST_SCRIPT_FILES)
+    cmake_path(IS_ABSOLUTE _install_test_script_file _install_test_script_file_is_absolute)
+    if(NOT _install_test_script_file_is_absolute)
+      cmake_path(ABSOLUTE_PATH _install_test_script_file BASE_DIRECTORY "${ARG_EXTERNAL_SOURCE_DIR}")
+    endif()
+    if(NOT EXISTS "${_install_test_script_file}")
+      message(FATAL_ERROR "INSTALL_TEST_SCRIPT_FILES entry does not exist for ${target_name}: ${_install_test_script_file}")
+    endif()
+    list(APPEND _resolved_install_test_script_files "${_install_test_script_file}")
+  endforeach()
 
   message(STATUS "Including subproject ${target_name} (from ${_cmake_source_dir})")
   add_custom_target("${target_name}" COMMENT "Top level target to build the ${target_name} sub-project")
@@ -536,6 +554,8 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_EXTRA_DEPENDS "${ARG_EXTRA_DEPENDS}"
     THEROCK_OUTPUT_ON_FAILURE "${ARG_OUTPUT_ON_FAILURE}"
     THEROCK_OPTIONAL_INSTALL_COMPONENTS "${ARG_INSTALL_OPTIONAL_COMPONENTS}"
+    THEROCK_INSTALL_TEST_SCRIPT_FILES "${_resolved_install_test_script_files}"
+    THEROCK_INSTALL_TEST_SCRIPT_DESTINATION "${ARG_INSTALL_TEST_SCRIPT_DESTINATION}"
 
     # RPATH
     THEROCK_NO_INSTALL_RPATH "${ARG_NO_INSTALL_RPATH}"
@@ -630,6 +650,8 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
   get_target_property(_logical_target_name "${target_name}" THEROCK_LOGICAL_TARGET_NAME)
   get_target_property(_optional_install_components "${target_name}" THEROCK_OPTIONAL_INSTALL_COMPONENTS)
+  get_target_property(_install_test_script_files "${target_name}" THEROCK_INSTALL_TEST_SCRIPT_FILES)
+  get_target_property(_install_test_script_destination "${target_name}" THEROCK_INSTALL_TEST_SCRIPT_DESTINATION)
 
   # RPATH properties: just mirror these to same named variables because we just
   # mirror them syntactically into the subprojet..
@@ -777,6 +799,9 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "cmake_policy(SET CMP0087 NEW)\n")
   foreach(_var_name ${_mirror_cmake_vars})
     string(APPEND _init_contents "set(${_var_name} \"@${_var_name}@\" CACHE STRING \"\" FORCE)\n")
+  endforeach()
+  foreach(_install_test_script_file ${_install_test_script_files})
+    string(APPEND _init_contents "install(FILES \"${_install_test_script_file}\" DESTINATION \"${_install_test_script_destination}\")\n")
   endforeach()
   # Process dependencies. We process runtime deps first so that they take precedence
   # over build deps (first wins). Both come from the dist directory because if
