@@ -98,18 +98,21 @@ def _cdash_build_name() -> str:
     """CDash build name: ``<label>`` or ``<label> [RUN_ID: <id>]`` when set.
     * Label from :func:`_default_cdash_matrix_label`.
     * If ``ARTIFACT_RUN_ID`` is non-empty, append `` [RUN_ID: ...]``.
+    * If ``GITHUB_REF`` is a pull request, prefix the label with ``PR_<n>_``.
 
     Example::
 
-        ROCm/rocm-systems-rhel-8.8-mi325-core [RUN_ID: 24378824659]
+        PR_4946_ROCm/TheRock/rocm-systems-rhel-8.8-mi325-core [RUN_ID: 24378824659]
 
     """
-
+    ref = os.getenv("GITHUB_REF", "")
+    m = re.match(r"refs/pull/(\d+)/", ref)
+    prefix = f"PR_{m.group(1)}_" if m else ""
     label = _default_cdash_matrix_label()
     run_key = os.getenv("ARTIFACT_RUN_ID", "")
     if not run_key:
-        return label
-    return f"{label} [RUN_ID: {run_key}]"
+        return f"{prefix}{label}"
+    return f"{prefix}{label} [RUN_ID: {run_key}]"
 
 
 def _which_cmake() -> str:
