@@ -244,7 +244,8 @@ def _generate_dashboard(cmake_cmd: str) -> str:
 
     # Define variables for dashboard submission
     submit = "1"  # Submit to CDash or not
-    mode = "Continuous"  # Mode (Nightly, Experimental, Continuous, etc.)
+    model = "Experimental"  # Mode (Nightly, Experimental, Continuous, etc.)
+    group = "TheRock"  # Group for the dashboard
     ARGN = "${ARGN}"  # Arguments for dashboard submission
 
     REPO_SOURCE_DIR = (
@@ -283,7 +284,7 @@ def _generate_dashboard(cmake_cmd: str) -> str:
     _script += f"""
     set(STAGES "START;UPDATE;CONFIGURE;BUILD;TEST;SUBMIT")
 
-    ctest_start({mode})
+    ctest_start({model} GROUP {group})
     ctest_update(SOURCE "{REPO_SOURCE_DIR}" RETURN_VALUE _update_ret
                     CAPTURE_CMAKE_ERROR _update_err)
     ctest_configure(BUILD "{BINARY_DIR}" RETURN_VALUE _configure_ret)
