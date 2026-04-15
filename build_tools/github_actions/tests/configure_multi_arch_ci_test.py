@@ -20,6 +20,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_multi_arch_ci as cm
+from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
 
@@ -526,6 +527,46 @@ class TestSelectTargets(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             cm.select_targets(inputs)
+
+    def test_workflow_dispatch_release_type_defaults_to_all_families(self):
+        """workflow_dispatch with release_type but no explicit families uses all."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            release_type="dev",
+        )
+        result = cm.select_targets(inputs)
+        # Should have all families for Linux (at least presubmit + postsubmit + nightly)
+        self.assertGreater(len(result.linux_families), 0)
+        # Should include a nightly-only family that wouldn't appear in presubmit defaults
+        all_families = get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
+        linux_families_in_matrix = [
+            name for name, info in all_families.items() if "linux" in info
+        ]
+        self.assertEqual(
+            sorted(result.linux_families), sorted(linux_families_in_matrix)
+        )
+
+    def test_workflow_dispatch_release_type_with_explicit_families(self):
+        """workflow_dispatch with release_type AND explicit families uses explicit list."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            release_type="dev",
+            linux_amdgpu_families=["gfx94x"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertIn("gfx94x", [f.split("-")[0] for f in result.linux_families])
+        # Should NOT include all families — explicit list takes precedence
+        self.assertLessEqual(len(result.linux_families), 2)
 
     def test_unsupported_event_type_raises(self):
         """Unknown event type raises ValueError."""
