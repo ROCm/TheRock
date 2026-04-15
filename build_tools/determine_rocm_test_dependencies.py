@@ -1,7 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Compute subproject test dependencies by parsing CMakeLists.txt files."""
+"""
+Compute subproject test dependencies by parsing CMakeLists.txt files.
+
+Example:
+$ python build_tools/determine_rocm_test_dependencies.py --projects rocSPARSE
+["hipsparse", "rocsparse"]
+"""
 
 import argparse
 import json
@@ -25,7 +31,7 @@ def parse_cmake_test_subprojects(therock_dir):
             continue
 
         # Find all therock_cmake_subproject_declare blocks
-        pattern = r'therock_cmake_subproject_declare\s*\(\s*(\w+)(.*?)\)'
+        pattern = r"therock_cmake_subproject_declare\s*\(\s*(\w+)(.*?)\)"
 
         for match in re.finditer(pattern, content, re.DOTALL):
             subproject_name = match.group(1).lower()
@@ -33,7 +39,7 @@ def parse_cmake_test_subprojects(therock_dir):
 
             # Look for TEST_SUBPROJECTS within this block
             test_subprojects_match = re.search(
-                r'TEST_SUBPROJECTS\s+((?:\s+\w+)+)', block_content
+                r"TEST_SUBPROJECTS\s+((?:\s+\w+)+)", block_content
             )
 
             if test_subprojects_match:
@@ -120,7 +126,9 @@ def main():
 
     changed = args.changed or args.projects
     if not changed:
-        parser.error("one of the following arguments is required: --changed, --projects")
+        parser.error(
+            "one of the following arguments is required: --changed, --projects"
+        )
 
     result = get_subprojects_to_test(changed, therock_dir)
 
