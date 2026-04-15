@@ -100,21 +100,6 @@ jobs:
         with:
           python-version: 3.12
 
-      - name: Enable long paths on Windows
-        if: ${{ runner.os == 'Windows' }}
-        shell: powershell
-        run: git config --global core.longpaths true
-
-      - uses: iterative/setup-dvc@4bdfd2b0f6f1ad7e08afadb03b1a895c352a5239 # v2.0.0
-        if: ${{ runner.os == 'Windows' }}
-        with:
-          version: '3.62.0'
-
-      - name: "Fetch sources"
-        timeout-minutes: 30
-        run: |
-          ./build_tools/fetch_sources.py --jobs 12 --depth 1
-
       - name: "Configuring CI options"
         id: configure
         env:

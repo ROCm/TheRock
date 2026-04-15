@@ -128,17 +128,6 @@ jobs:
         run: |
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
-          git config --global core.longpaths true
-
-      - uses: iterative/setup-dvc@4bdfd2b0f6f1ad7e08afadb03b1a895c352a5239 # v2.0.0
-        if: ${{ runner.os == 'Windows' }}
-        with:
-          version: '3.62.0'
-
-      - name: "Fetch sources"
-        timeout-minutes: 30
-        run: |
-          ./build_tools/fetch_sources.py --jobs 12 --depth 1
 
       - name: Runner health status
         run: |
