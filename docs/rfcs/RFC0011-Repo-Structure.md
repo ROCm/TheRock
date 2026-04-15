@@ -29,12 +29,11 @@ repo.amd.com's open source software release publications need standardization. I
 - **archives** *(unmaintained releasees, for reference only)*
 - **rocm** (current rocm folder with non production releases, move to archives in 6 months)
 - **rocm-ecosystem**
-  - **nightly** *(Retention policy: 30 dev, 120 nightly — builds.amd.com)*
+  - **nightly** *(Retention policy: 30 dev, 120 nightly)*
     - **pyindex** *(central nightly wheel repository for all ROCm components)*
     - **core**
       - tarball
       - zip
-      
       - whl
       - packages
     - **Linux Distros [a–z]**
@@ -61,14 +60,14 @@ repo.amd.com's open source software release publications need standardization. I
     - **jax**
     - **onnx-runtime**
 
-  - **prerelease** *(Retention policy: 2 years — builds.amd.com)*
+  - **prerelease** *(Retention policy: 2 years)*
     - Mirrors nightly folder structure
     - Tested by QA
     - Must match structure of `repo.amd.com`
 
-  - **stable** *(repo.amd.com)* or **sts** *(short-term support)*
+  - **stable** or **sts** *(short-term support)*
     - Current ROCm Core release from TheRock
 
-  - **lts** *(repo.amd.com)*
+  - **lts**
     - `YYYYMM`
       - Mirrors stable folder structure
