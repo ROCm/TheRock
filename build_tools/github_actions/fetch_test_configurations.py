@@ -60,7 +60,7 @@ test_matrix = {
         "job_name": "sanity",
         "fetch_artifact_args": "--base-only",
         "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_sanity.py', packaged=True)}",
+        "test_script": f"python {_get_script_path('test_sanity.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,

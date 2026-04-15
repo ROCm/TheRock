@@ -148,8 +148,6 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocminfo"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocminfo"
     BACKGROUND_BUILD
-    INSTALL_TEST_SCRIPT_FILES
-      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/test/therock/test_sanity.py"
     COMPILER_TOOLCHAIN
       "${_system_toolchain}"
     RUNTIME_DEPS
@@ -167,7 +165,6 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       doc
       lib
       run
-      test
     SUBPROJECT_DEPS
       ROCR-Runtime
       rocminfo
