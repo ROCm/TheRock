@@ -3,40 +3,39 @@
 
 # Runs the full PyTorch unit-test suite against nightly wheels from v2-staging.
 #
-# Current scope: Linux gfx94X-dcgpu only.
-# TODO: Expand to additional GPU families (Radeon, gfx950, etc.) and Windows.
-#       Runner labels should eventually come from amdgpu_family_matrix.py /
-#       configure_target_run.py instead of being passed as inputs here.
-#       Encode "run full pytorch tests" in amdgpu_family_matrix.py /
-#       new_amdgpu_family_matrix.py for central tracking of what builds/tests
-#       we enable on each GPU and platform.
-# TODO: This schedule-based trigger assumes the nightly build has completed.
-#       Neither is guaranteed — the build could fail or take longer than
-#       expected, in which case this re-runs tests against the previous
-#       nightly. Consider integrating into the existing build/release
-#       workflows (build_portable_linux_pytorch_wheels.yml /
-#       release_portable_linux_packages.yml) so tests only run after a
-#       successful build, or use a workflow_dispatch trigger / Quartz.
+# Triggered automatically after "Release portable Linux PyTorch Wheels"
+# completes successfully. This keeps full UTs completely decoupled from the
+# build pipeline — build failures and full UT failures have independent
+# red/green signals, and dev workflow_dispatch runs of the build workflow
+# are not slowed down by multi-hour test runs.
+#
+# Can also be triggered manually via workflow_dispatch or on a weekly
+# schedule as a fallback.
+#
+# Automatically tests all GPU families that have:
+#   - A runner label (non-empty test-runs-on) in amdgpu_family_matrix.py
+#   - The run-full-tests-only flag set to True
+#
+# To add a new GPU family to the full UT suite:
+#   1. Set "run-full-tests-only": True on the family's platform entry in
+#      amdgpu_family_matrix.py.
+#   2. Optionally add the family to AMDGPU_FAMILY_TO_BUILD_ENV in
+#      run_pytorch_tests_full.py for better shard balancing (falls back to
+#      mi300 timings if absent).
+#   3. Add family-specific test skips in skip_tests/ as needed.
 
 name: CI Nightly PyTorch Full Test
 
 on:
+  workflow_run:
+    workflows: ["Release portable Linux PyTorch Wheels"]
+    types: [completed]
   schedule:
-    - cron: "0 12 * * *" # 12:00 UTC, after nightly builds (~04:00 UTC) have completed
+    # Weekly fallback in case the workflow_run trigger doesn't fire
+    # (e.g. release workflow was skipped or failed before completion).
+    - cron: "0 12 * * 0" # Sundays 12:00 UTC
   workflow_dispatch:
     inputs:
-      amdgpu_family:
-        description: GPU family to test
-        type: string
-        default: "gfx94X-dcgpu"
-      test_runs_on:
-        description: Runner label for single-GPU test configs
-        type: string
-        default: "linux-gfx942-1gpu-ossci-rocm"
-      test_runs_on_multi_gpu:
-        description: Runner label for multi-GPU test configs (e.g. distributed)
-        type: string
-        default: "linux-gfx942-8gpu-ossci-rocm"
       package_index_url:
         description: "Base package index URL (without GPU family subdir)"
         type: string
@@ -67,13 +66,12 @@ permissions:
 
 run-name: >-
   CI Nightly PyTorch Full Test
-  (${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }},
-   ${{ inputs.pytorch_git_ref || 'nightly' }})
+  (${{ github.event_name == 'workflow_run'
+       && github.event.workflow_run.name
+       || inputs.pytorch_git_ref
+       || 'nightly' }})
 
 env:
-  AMDGPU_FAMILY: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
-  TEST_RUNS_ON: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ossci-rocm' }}
-  TEST_RUNS_ON_MULTI_GPU: ${{ inputs.test_runs_on_multi_gpu || 'linux-gfx942-8gpu-ossci-rocm' }}
   PACKAGE_INDEX_URL: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
   TORCH_VERSION_INPUT: ${{ inputs.torch_version || '' }}
   PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref || 'nightly' }}
@@ -82,51 +80,84 @@ env:
   PYTHON_VERSION: ${{ inputs.python_version || '3.12' }}
 
 jobs:
-  resolve_torch_version:
+  # Skip the entire workflow when triggered by workflow_run and the
+  # upstream release workflow did not succeed.
+  gate:
+    name: Check trigger
     runs-on: ubuntu-24.04
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - run: echo "Trigger OK (event=${{ github.event_name }})"
+
+  generate_matrix:
+    needs: gate
+    name: Generate GPU family matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Generate matrix from amdgpu_family_matrix
+        id: gen
+        run: python build_tools/github_actions/generate_full_test_matrix.py --platform linux
+
+  resolve_torch_version:
+    needs: generate_matrix
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.generate_matrix.outputs.matrix) }}
     outputs:
       torch_version: ${{ steps.resolve.outputs.torch_version }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - name: Resolve latest nightly torch version
         id: resolve
+        env:
+          AMDGPU_FAMILY: ${{ matrix.amdgpu_family }}
         run: |
-          INDEX_URL="${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}"
-
-          if [ -n "${TORCH_VERSION_INPUT}" ]; then
-            echo "torch_version=${TORCH_VERSION_INPUT}" >> "$GITHUB_OUTPUT"
-            echo "Using provided torch_version: ${TORCH_VERSION_INPUT}"
-            exit 0
-          fi
-
           pip install packaging
-          # --platform ensures this works even when the runner OS differs from
-          # the target (e.g. querying Linux packages from an ubuntu runner that
-          # might later be replaced by a Windows runner for cross-platform support).
-          # TODO: When adding Windows support, pass --platform win_amd64 for
-          # Windows targets or derive the platform from amdgpu_family/runner.
-          TORCH_VERSION=$(pip index versions torch \
-            --pre \
-            --index-url "${INDEX_URL}" \
-            --python-version "${PYTHON_VERSION}" \
-            --platform linux_x86_64 2>/dev/null \
-            | head -1 \
-            | sed 's/torch (\(.*\))/\1/')
 
-          if [ -z "${TORCH_VERSION}" ]; then
-            echo "::error::Failed to resolve torch version from ${INDEX_URL}"
-            exit 1
-          fi
+          python -c "
+          import os, sys
+          sys.path.insert(0, 'external-builds/pytorch')
+          from pytorch_utils import resolve_torch_version
 
-          echo "torch_version=${TORCH_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Resolved torch_version: ${TORCH_VERSION}"
+          torch_version_input = os.environ.get('TORCH_VERSION_INPUT', '')
+          if torch_version_input:
+              version = torch_version_input
+              print(f'Using provided torch_version: {version}')
+          else:
+              family = os.environ['AMDGPU_FAMILY']
+              index_url = os.environ['PACKAGE_INDEX_URL'] + '/' + family
+              python_version = os.environ.get('PYTHON_VERSION', '')
+              version = resolve_torch_version(
+                  index_url=index_url,
+                  python_version=python_version,
+                  platform='linux_x86_64',
+              )
+              print(f'Resolved torch_version for {family}: {version}')
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'torch_version={version}\n')
+          "
 
   run_full_tests:
-    needs: resolve_torch_version
+    needs: [generate_matrix, resolve_torch_version]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.generate_matrix.outputs.matrix) }}
     uses: ./.github/workflows/test_pytorch_wheels_full.yml
     with:
-      amdgpu_family: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
-      test_runs_on: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ossci-rocm' }}
-      test_runs_on_multi_gpu: ${{ inputs.test_runs_on_multi_gpu || 'linux-gfx942-8gpu-ossci-rocm' }}
+      amdgpu_family: ${{ matrix.amdgpu_family }}
+      test_runs_on: ${{ matrix.test_runs_on }}
+      test_runs_on_multi_gpu: ${{ matrix.test_runs_on_multi_gpu }}
       package_index_url: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
       python_version: ${{ inputs.python_version || '3.12' }}
       torch_version: ${{ needs.resolve_torch_version.outputs.torch_version }}

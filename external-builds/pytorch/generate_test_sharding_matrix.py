@@ -57,6 +57,12 @@ def build_matrix(
     for config in test_configs:
         num_shards = SHARDS_PER_CONFIG.get(config, DEFAULT_SHARDS)
         runner = multi_gpu_runner if config in MULTI_GPU_CONFIGS else default_runner
+        if not runner:
+            print(
+                f"  Skipping config '{config}': no runner available"
+                f" (needs {'multi-GPU' if config in MULTI_GPU_CONFIGS else 'single-GPU'})"
+            )
+            continue
         for shard in range(1, num_shards + 1):
             includes.append(
                 {
@@ -87,11 +93,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--multi-gpu-runner",
-        required=True,
+        default="",
         help=(
             "Runner label for multi-GPU configs (e.g. distributed). Corresponds to "
             "'test-runs-on-multi-gpu' in amdgpu_family_matrix.py "
-            "(e.g. 'linux-gfx942-8gpu-ossci-rocm')"
+            "(e.g. 'linux-gfx942-8gpu-ossci-rocm'). "
+            "If empty, multi-GPU configs are skipped."
         ),
     )
     args = parser.parse_args()

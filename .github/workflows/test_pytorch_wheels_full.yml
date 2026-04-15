@@ -280,7 +280,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: test-reports-${{ matrix.test_config }}-${{ matrix.shard }}-${{ matrix.num_shards }}
+          name: test-reports-${{ inputs.amdgpu_family }}-${{ matrix.test_config }}-${{ matrix.shard }}-${{ matrix.num_shards }}
           path: external-builds/pytorch/pytorch/test/test-reports/
           if-no-files-found: ignore
           retention-days: 30
@@ -314,3 +314,33 @@ jobs:
             echo "No run_pytorch_tests_exit_code.txt found"
             exit 1
           fi
+
+  test_summary:
+    if: always()
+    needs: test_wheels
+    name: Test Summary
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+          sparse-checkout: external-builds/pytorch/summarize_test_results.py
+
+      - name: Download all test report artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          path: artifacts
+          pattern: test-reports-${{ inputs.amdgpu_family }}-*
+
+      - name: Generate combined summary
+        env:
+          AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+          TORCH_VERSION: ${{ inputs.torch_version }}
+          PYTHON_VERSION: ${{ inputs.python_version }}
+          PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+          PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
+        run: |
+          python external-builds/pytorch/summarize_test_results.py \
+            --combined-dir artifacts
