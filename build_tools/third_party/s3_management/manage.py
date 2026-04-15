@@ -40,20 +40,16 @@ CLIENT = boto3.client('s3')
 # Must be provided via --bucket (CLI) or S3_BUCKET_PY (env).
 
 # Bucket globals configured via initialize_bucket()
-BUCKET_NAME: Optional[str] = None
+BUCKET_NAME: str | None = None
 BUCKET = None
 INDEX_BUCKETS: Set = set()
 
-# NOTE:
-# initialize_bucket() is required for both CLI and Lambda usage.
-# Do not move bucket initialization exclusively into main(), as the
-# Lambda wrapper imports and calls update_pep503_index() directly.
-def initialize_bucket(bucket_name: Optional[str]) -> None:
-    '''
+def initialize_bucket(bucket_name: str | None) -> None:
+    """
     initialize_bucket() is required for both CLI and Lambda usage.
     Do not move bucket initialization exclusively into main(), as the
     Lambda wrapper imports and calls update_pep503_index() directly.
-   '''
+    """
     # Resolve and configure the S3 bucket used for index updates.
     # CLI --bucket takes precedence over S3_BUCKET_PY; fails if neither is set.
     global BUCKET_NAME, BUCKET, INDEX_BUCKETS
@@ -79,6 +75,11 @@ PREFIXES = [
     "v2-staging/gfx950-dcgpu",
     "v2/gfx110X-all",
     "v2/gfx1151",
+    "v2/gfx1152",
+    "v2/gfx1153",
+    "v2/gfx90a",
+    "v2/gfx908",
+    "v2/gfx906",
     "v2/gfx120X-all",
     "v2/gfx94X-dcgpu",
     "v2/gfx950-dcgpu",
@@ -500,13 +501,26 @@ def update_pep503_index(prefix: str, compute_sha256: bool = False, upload: bool 
 
     This function is used both by the CLI (via main()) and by the AWS Lambda
     wrapper (lambda_function.py). It must remain callable without relying on
-    CLI argument parsing or main() initialization.
+
+    IMPORTANT:
+        `initialize_bucket()` must be called prior to invoking this function.
+        The function depends on module-level globals (BUCKET_NAME, BUCKET,
+        INDEX_BUCKETS) that are configured via initialize_bucket().
+        CLI argument parsing or main() initialization.
+
+    Returns:
+        int: The number of S3 objects included in the index after filtering.
     """
     print(f"Processing prefix: {prefix}")
+
+    # Record start time to measure S3 fetch duration
     stime = time.time()
 
+    # Bucket must already be initialized via initialize_bucket().
+    # S3Index.from_S3() relies on module-level BUCKET_NAME / BUCKET.
     idx = S3Index.from_S3(prefix=prefix, with_metadata=True)
-
+    
+    # Record end time and compute elapsed duration
     etime = time.time()
     print(f"Fetched {len(idx.objects)} objects for '{prefix}' in {etime-stime:.2f}s")
 
