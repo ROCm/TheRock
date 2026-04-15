@@ -1059,7 +1059,8 @@ class TestFamilyTestFilters(unittest.TestCase):
                     gfx90a_info = family_info
                     break
 
-        self.assertIsNone(gfx90a_info)
+        self.assertIsNotNone(gfx90a_info)
+        self.assertEqual(gfx90a_info["test-runs-on"], "")
 
 
 if __name__ == "__main__":

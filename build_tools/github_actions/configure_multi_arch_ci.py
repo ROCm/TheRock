@@ -856,11 +856,11 @@ def _expand_build_config_for_platform(
             platform_info.get("nightly_check_only_for_family", False)
             and not ci_inputs.is_schedule
         ):
+            test_runs_on = ""
             print(
                 f"  {family_name}: nightly_check_only_for_family flag set, "
-                f"disabling for non-scheduled runs"
+                f"disabling test runner for non-scheduled runs"
             )
-            continue
 
         per_family_info.append(
             {
