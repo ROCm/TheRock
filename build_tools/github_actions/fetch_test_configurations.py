@@ -466,6 +466,17 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+      "exclude_family": {
+            # libhipcxx component build is disabled in NPI
+            "linux": [
+                "gfx90a",
+                "gfx1250",
+            ],
+            "windows": [
+                "gfx90a",
+                "gfx1250",
+            ],
+        },
     },
     "rocdecode": {
         "job_name": "rocdecode",
