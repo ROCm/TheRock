@@ -79,7 +79,7 @@ jobs:
           - name: ubuntu24.04
             url: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
           - name: ubi10
-            url: ghcr.io/rocm/no_rocm_image_ubi10@sha256:c3221c45b9fd45262fbe9fde2ff739b48b6f326a933d9f68b37f8d2138d199c7
+            url: ghcr.io/rocm/no_rocm_image_ubi10@sha256:4e24b4f03f1d48192e972eb913d086f3b244649d97fca14af65ce79ea18acb92
     defaults:
       run:
         shell: bash
