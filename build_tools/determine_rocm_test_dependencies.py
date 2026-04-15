@@ -13,7 +13,7 @@ from pathlib import Path
 def parse_cmake_test_subprojects(therock_dir):
     """Parse CMakeLists.txt files to extract TEST_SUBPROJECTS declarations.
 
-    Returns dict mapping subproject name -> list of test dependencies.
+    Returns dict mapping subproject name (lowercase) -> list of test dependencies (lowercase).
     """
     test_deps = {}
     cmake_files = list(Path(therock_dir).rglob("CMakeLists.txt"))
@@ -28,7 +28,7 @@ def parse_cmake_test_subprojects(therock_dir):
         pattern = r'therock_cmake_subproject_declare\s*\(\s*(\w+)(.*?)\)'
 
         for match in re.finditer(pattern, content, re.DOTALL):
-            subproject_name = match.group(1)
+            subproject_name = match.group(1).lower()
             block_content = match.group(2)
 
             # Look for TEST_SUBPROJECTS within this block
@@ -38,7 +38,7 @@ def parse_cmake_test_subprojects(therock_dir):
 
             if test_subprojects_match:
                 deps_str = test_subprojects_match.group(1).strip()
-                deps = [d.strip() for d in deps_str.split() if d.strip()]
+                deps = [d.strip().lower() for d in deps_str.split() if d.strip()]
                 test_deps[subproject_name] = deps
 
     return test_deps
@@ -52,9 +52,12 @@ def get_subprojects_to_test(changed_subprojects, therock_dir=None):
         therock_dir = Path(therock_dir)
 
     test_deps = parse_cmake_test_subprojects(therock_dir)
-    result = set(changed_subprojects)
 
-    for changed in changed_subprojects:
+    # Convert inputs to lowercase
+    changed_lower = [p.lower() for p in changed_subprojects]
+    result = set(changed_lower)
+
+    for changed in changed_lower:
         if changed in test_deps:
             result.update(test_deps[changed])
 

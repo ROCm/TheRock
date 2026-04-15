@@ -50,6 +50,8 @@ project wide:
   - `THEROCK_BUNDLED_LIBCAP`
   - `THEROCK_BUNDLED_LIBDRM`
   - `THEROCK_BUNDLED_LIBLZMA`
+  - `THEROCK_BUNDLED_LIBMNL`
+  - `THEROCK_BUNDLED_LIBNL`
   - `THEROCK_BUNDLED_NUMACTL`
   - `THEROCK_BUNDLED_SQLITE3`
   - `THEROCK_BUNDLED_ZLIB`
@@ -134,6 +136,34 @@ Supported sub-libraries: `libdrm`, `libdrm_amdgpu`
 - Canonical method: `find_package(LibLZMA)`
 - Import library: `LibLZMA::LibLZMA`
 - Alternatives: `pkg_check_modules(LZMA liblzma)`
+
+## libmnl
+
+Minimal netlink library for low-level netlink socket operations (used by amdsmi).
+
+- Canonical method: `find_package(libmnl CONFIG)`
+- Import library: `libmnl::libmnl`
+- Alternatives: `pkg_check_modules(LIBMNL REQUIRED IMPORTED_TARGET libmnl)`
+- Note: Provides minimalist netlink socket interface, typically used as a dependency for libnl
+
+## libnl
+
+Netlink protocol library suite providing high-level interfaces for Linux kernel netlink sockets (used by amdsmi).
+
+Supported sub-libraries: `libnl` (core), `libnl-genl` (generic netlink)
+
+### Core libnl
+
+- Canonical method: `find_package(libnl CONFIG)`
+- Import library: `libnl::libnl`
+- Alternatives: `pkg_check_modules(LIBNL3 REQUIRED IMPORTED_TARGET libnl-3.0)`
+
+### Generic netlink (libnl-genl)
+
+- Canonical method: `find_package(libnl CONFIG)` (provides `libnl::genl`)
+- Import library: `libnl::genl`
+- Alternatives: `pkg_check_modules(LIBNL3_GENL REQUIRED IMPORTED_TARGET libnl-genl-3.0)`
+- Dependencies: Automatically links `libnl::libnl`
 
 ## MPFR
 

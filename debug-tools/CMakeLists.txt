@@ -139,6 +139,8 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-debug-agent/test"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent-tests"
+      INSTALL_RPATH_EXECUTABLE_DIR
+        "tests/rocm-debug-agent"
       CMAKE_ARGS
         "-DHIP_PLATFORM=amd"
       COMPILER_TOOLCHAIN
@@ -194,6 +196,10 @@ if(THEROCK_ENABLE_ROCGDB)
     message(WARNING "No Python with shared libpython found. rocgdb will be built without Python support.")
   endif()
 
+  if(THEROCK_USE_EXTERNAL_ROCGDB AND THEROCK_ROCGDB_SOURCE_DIR)
+    message(WARNING "Configuring ROCgdb with modified source directory: ${THEROCK_ROCGDB_SOURCE_DIR}")
+  endif()
+
   therock_cmake_subproject_declare(rocgdb
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "rocgdb"
@@ -204,6 +210,7 @@ if(THEROCK_ENABLE_ROCGDB)
       "-DROCM_VERSION=${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}"
       "-DSHARED_PYTHON_EXECUTABLES=${_rocgdb_python_executables_escaped}"
       "-DTHEROCK_BUNDLE_SYSDEPS=${THEROCK_BUNDLE_SYSDEPS}"
+      "-DROCGDB_SOURCE_DIR=${THEROCK_ROCGDB_SOURCE_DIR}"
     COMPILER_TOOLCHAIN
       amd-llvm
     RUNTIME_DEPS

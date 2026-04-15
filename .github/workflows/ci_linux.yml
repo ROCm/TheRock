@@ -25,6 +25,9 @@ on:
       benchmark_runs_on:
         type: string
         default: ""
+      run_functional_tests:
+        type: boolean
+        default: false
       expect_failure:
         type: boolean
       use_prebuilt_artifacts:
@@ -93,6 +96,7 @@ jobs:
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
+      run_functional_tests: ${{ inputs.run_functional_tests }}
 
   test_linux_benchmarks:
     needs: [build_portable_linux_artifacts]
@@ -192,6 +196,39 @@ jobs:
       pytorch_git_ref: "release/2.10"
       rocm_package_find_links_url: ${{ needs.build_portable_linux_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
+
+  build_native_linux_packages:
+    needs: [build_portable_linux_artifacts]
+    name: Build Native Packages (${{ matrix.package_type }})
+    # Build native packages for CI validation without uploading to S3.
+    # Run if:
+    # - Build succeeded (or using prebuilt artifacts)
+    # - Not expecting failure
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package_type: [deb, rpm]
+    uses: ./.github/workflows/build_native_linux_packages.yml
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      artifact_run_id: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+      rocm_version: ${{ inputs.rocm_package_version }}
+      native_package_type: ${{ matrix.package_type }}
+      package_suffix: ${{ inputs.build_variant_suffix }}
+      skip_package_upload: true
     permissions:
       contents: read
       id-token: write

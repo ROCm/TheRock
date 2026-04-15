@@ -173,8 +173,24 @@ if(NOT WIN32)
   if(TARGET rocm_smi_lib)
     list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
   endif()
-elseif(THEROCK_BUILD_TESTING)
-  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
+endif()
+if(THEROCK_BUILD_TESTING)
+  # Client tests link ILP64 reference BLAS (see cmake/finders/FindBLAS.cmake + BLA_SIZEOF_INTEGER=8).
+  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas64)
+endif()
+
+set(rocBLAS_extra_cmake_args)
+if(THEROCK_BUILD_TESTING)
+  list(APPEND rocBLAS_extra_cmake_args -DROCBLAS_CLIENTS_REFERENCE_ILP64=ON)
+endif()
+
+# Disable rocBLAS samples on Windows due to use of deprecated
+# <experimental/filesystem> in client_utility.cpp with MSVC.
+# TODO(#3630): Re-enable once upstream rocBLAS migrates to <filesystem>.
+if(WIN32)
+  set(_blas_build_samples OFF)
+else()
+  set(_blas_build_samples ${THEROCK_BUILD_TESTING})
 endif()
 
 therock_cmake_subproject_declare(rocBLAS
@@ -194,8 +210,10 @@ therock_cmake_subproject_declare(rocBLAS
     # doing a strict check of exact version.
     -DTENSILE_VERSION=
     -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
+    -DBUILD_CLIENTS_SAMPLES=${_blas_build_samples}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
     -DLINK_BLIS=OFF
+    ${rocBLAS_extra_cmake_args}
   CMAKE_INCLUDES
     therock_explicit_finders.cmake
   COMPILER_TOOLCHAIN
