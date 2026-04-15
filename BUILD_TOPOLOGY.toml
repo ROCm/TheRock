@@ -552,15 +552,15 @@ type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
 split_databases = ["rocblas", "hipblaslt"]
 
-[artifacts.fft]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "fftw3", "rocprofiler-sdk"]
-
 [artifacts.rand]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
+
+[artifacts.fft]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "fftw3", "rand", "rocprofiler-sdk"]
 
 [artifacts.prim]
 artifact_group = "math-libs"
