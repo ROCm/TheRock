@@ -680,19 +680,19 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
     if ci_inputs.is_workflow_dispatch:
         # Manual trigger: caller specifies exact families per platform.
-        # For CI dispatches, empty input means "no families for that
-        # platform" — the caller has full control over what runs.
-        # For release dispatches, empty input defaults to all families
-        # so that release workflows don't need to enumerate every family.
+        # "all" = all known families. "none" or empty = skip platform.
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
-        if ci_inputs.release_type and not linux_names and not windows_names:
+        if linux_names == ["all"]:
             linux_names = list(all_families.keys())
+            print("  linux_amdgpu_families='all' -> all Linux families")
+        elif linux_names == ["none"]:
+            linux_names = []
+        if windows_names == ["all"]:
             windows_names = list(all_families.keys())
-            print(
-                f"  Release type {ci_inputs.release_type!r} with no "
-                f"explicit families -> all families"
-            )
+            print("  windows_amdgpu_families='all' -> all Windows families")
+        elif windows_names == ["none"]:
+            windows_names = []
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (gfx* for individual families, ci:run-all-archs
