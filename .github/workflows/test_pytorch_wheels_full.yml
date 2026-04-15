@@ -280,7 +280,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: test-reports-${{ matrix.test_config }}-${{ matrix.shard }}-${{ matrix.num_shards }}
+          name: test-reports-${{ inputs.amdgpu_family }}-${{ matrix.test_config }}-${{ matrix.shard }}-${{ matrix.num_shards }}
           path: external-builds/pytorch/pytorch/test/test-reports/
           if-no-files-found: ignore
           retention-days: 30
@@ -332,7 +332,7 @@ jobs:
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           path: artifacts
-          pattern: test-reports-*
+          pattern: test-reports-${{ inputs.amdgpu_family }}-*
 
       - name: Generate combined summary
         env:
