@@ -158,7 +158,7 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx1151": {
         "linux": {
-            "test-runs-on": "linux-gfx1151-gpu-rocm",
+            "test-runs-on": "test_setup_linux_igpu_stxh",
             "test-runs-on-kernel": {
                 "oem": "linux-strix-halo-gpu-rocm-oem",
             },
@@ -181,7 +181,7 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx120x": {
         "linux": {
-            "test-runs-on": "linux-gfx120X-gpu-rocm",
+            "test-runs-on": "test_setup_linux_gpu_navi4x",
             "family": "gfx120X-all",
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
