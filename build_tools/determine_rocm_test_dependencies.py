@@ -1,31 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""
-Compute subproject-level test dependencies for changed components.
-
-This module reads the CMake-generated subproject_test_manifest.json to determine
-which subprojects need testing when a specific subproject is updated.
-
-By default, we test the changed subproject plus its direct downstream dependents
-(computed from the reverse runtime_deps graph). Subprojects can optionally specify
-test_subprojects to override this behavior and limit testing to specific consumers.
-
-usage: determine_rocm_test_dependencies.py [-h] [--therock-dir THEROCK_DIR]
-                                           [--build-dir BUILD_DIR]
-                                           [--changed SUBPROJECT [SUBPROJECT ...]]
-                                           [--list-subprojects]
-
-options:
-  -h, --help            show this help message and exit
-  --therock-dir THEROCK_DIR
-                        Path to TheRock directory (default: current directory)
-  --build-dir BUILD_DIR
-                        Path to build directory (default: therock-dir/build)
-  --changed SUBPROJECT [SUBPROJECT ...]
-                        Subproject(s) that have changed (e.g., rocBLAS, MIOpen)
-  --list-subprojects    List all available subprojects
-"""
+"""Compute subproject test dependencies from CMake manifest."""
 
 import argparse
 import json
@@ -35,17 +11,13 @@ from typing import Dict, List, Optional, Set
 
 
 class SubprojectInfo:
-    """Information about a subproject from the CMake manifest."""
-
     def __init__(self, name: str):
         self.name = name
         self.runtime_deps: Set[str] = set()
-        self.test_subprojects: Optional[Set[str]] = None  # If set, overrides reverse deps
+        self.test_subprojects: Optional[Set[str]] = None
 
 
 class SubprojectDependencyAnalyzer:
-    """Analyzes subproject-level test dependencies from CMake manifest."""
-
     def __init__(self, manifest_path: Path):
         self.manifest_path = manifest_path
         self.subprojects: Dict[str, SubprojectInfo] = {}
@@ -54,78 +26,48 @@ class SubprojectDependencyAnalyzer:
         self._build_reverse_dependency_graph()
 
     def _load_manifest(self):
-        """Load and parse the CMake-generated manifest."""
         if not self.manifest_path.exists():
             raise FileNotFoundError(
                 f"Subproject test manifest not found: {self.manifest_path}\n"
-                f"Please run CMake configure first to generate the manifest."
+                f"Please run CMake configure first."
             )
 
-        with open(self.manifest_path, "r") as f:
+        with open(self.manifest_path) as f:
             manifest = json.load(f)
 
-        # Extract subprojects
-        subprojects_section = manifest.get("subprojects", {})
-        for subproject_name, subproject_data in subprojects_section.items():
-            info = SubprojectInfo(subproject_name)
-
-            # Get runtime dependencies
-            runtime_deps = subproject_data.get("runtime_deps", [])
-            info.runtime_deps = set(runtime_deps)
-
-            # Get test subprojects override (optional)
-            test_subprojects = subproject_data.get("test_subprojects")
+        for name, data in manifest.get("subprojects", {}).items():
+            info = SubprojectInfo(name)
+            info.runtime_deps = set(data.get("runtime_deps", []))
+            test_subprojects = data.get("test_subprojects")
             if test_subprojects is not None:
                 info.test_subprojects = set(test_subprojects)
-
-            self.subprojects[subproject_name] = info
+            self.subprojects[name] = info
 
     def _build_reverse_dependency_graph(self):
-        """
-        Build a reverse dependency graph for fast lookups.
+        for name in self.subprojects:
+            self.reverse_deps[name] = set()
 
-        Maps each subproject to its direct downstream dependents.
-
-        Example: if rocSOLVER has runtime_deps containing "rocBLAS":
-            subprojects["rocSOLVER"].runtime_deps contains "rocBLAS"
-            reverse_deps["rocBLAS"] contains "rocSOLVER"
-        """
-        # Initialize empty sets for all subprojects
-        for subproject_name in self.subprojects:
-            self.reverse_deps[subproject_name] = set()
-
-        # Populate reverse dependencies
-        for subproject_name, subproject_info in self.subprojects.items():
-            for dep_name in subproject_info.runtime_deps:
-                if dep_name in self.subprojects:
-                    self.reverse_deps[dep_name].add(subproject_name)
+        for name, info in self.subprojects.items():
+            for dep in info.runtime_deps:
+                if dep in self.subprojects:
+                    self.reverse_deps[dep].add(name)
 
     def get_subprojects_to_test(self, changed_subprojects: List[str]) -> Set[str]:
-        """
-        Get all subprojects that need testing given a list of changed subprojects.
+        """Get subprojects to test when given subprojects change.
 
-        Returns the changed subprojects PLUS their downstream dependents.
-        - If a subproject specifies test_subprojects, only those subprojects are tested
-        - Otherwise, all direct downstream dependents (from reverse runtime_deps) are tested
-
-        Example: rocBLAS <- rocSOLVER <- rocSPARSE
-            If rocBLAS.test_subprojects = ["rocSOLVER", "hipBLAS"]:
-                get_subprojects_to_test(["rocBLAS"]) -> {rocBLAS, rocSOLVER, hipBLAS}
-            If rocBLAS has no test_subprojects:
-                get_subprojects_to_test(["rocBLAS"]) -> {rocBLAS, rocSOLVER, hipBLAS, rocSPARSE, ...}
+        Returns changed subprojects + their dependents.
+        If test_subprojects is set, use those; otherwise use reverse deps.
         """
-        subprojects_to_test = set(changed_subprojects)
+        result = set(changed_subprojects)
 
         for changed in changed_subprojects:
-            subproject_info = self.subprojects.get(changed)
-            if subproject_info and subproject_info.test_subprojects is not None:
-                # Use explicit test_subprojects override
-                subprojects_to_test.update(subproject_info.test_subprojects)
+            info = self.subprojects.get(changed)
+            if info and info.test_subprojects is not None:
+                result.update(info.test_subprojects)
             else:
-                # Add all direct dependents from reverse dependency graph
-                subprojects_to_test.update(self.reverse_deps.get(changed, set()))
+                result.update(self.reverse_deps.get(changed, set()))
 
-        return subprojects_to_test
+        return result
 
 
 def get_rocm_test_dependencies(
@@ -133,25 +75,7 @@ def get_rocm_test_dependencies(
     therock_dir: Optional[Path] = None,
     build_dir: Optional[Path] = None,
 ) -> Set[str]:
-    """
-    Get all subprojects that need testing when specific subprojects change.
-
-    This is the main programmatic API for determining test dependencies.
-
-    Args:
-        changed_subprojects: List of subproject names that changed (e.g., ["rocBLAS"])
-        therock_dir: Path to TheRock repository (defaults to current directory)
-        build_dir: Path to build directory (defaults to therock_dir/build)
-
-    Returns:
-        Set of subproject names to test (includes changed subprojects + their dependents)
-
-    Example:
-        >>> from determine_rocm_test_dependencies import get_rocm_test_dependencies
-        >>> tests_to_run = get_rocm_test_dependencies(["rocBLAS"])
-        >>> print(sorted(tests_to_run))
-        ['hipBLAS', 'rocBLAS', 'rocSOLVER']
-    """
+    """Get all subprojects to test when specific subprojects change."""
     analyzer = create_analyzer(therock_dir, build_dir)
     return analyzer.get_subprojects_to_test(changed_subprojects)
 
@@ -159,25 +83,13 @@ def get_rocm_test_dependencies(
 def create_analyzer(
     therock_dir: Optional[Path] = None, build_dir: Optional[Path] = None
 ) -> SubprojectDependencyAnalyzer:
-    """
-    Create a SubprojectDependencyAnalyzer instance.
-
-    For most use cases, prefer get_rocm_test_dependencies() instead.
-
-    Example:
-        >>> from determine_rocm_test_dependencies import create_analyzer
-        >>> analyzer = create_analyzer()
-        >>> subprojects_to_test = analyzer.get_subprojects_to_test(["rocBLAS"])
-        >>> print(subprojects_to_test)
-        {'rocBLAS', 'hipBLAS', 'rocSOLVER'}
-    """
     if therock_dir is None:
         therock_dir = Path.cwd()
     else:
         therock_dir = Path(therock_dir).resolve()
 
     if not therock_dir.exists():
-        raise FileNotFoundError(f"TheRock root directory not found: {therock_dir}")
+        raise FileNotFoundError(f"TheRock root not found: {therock_dir}")
 
     if build_dir is None:
         build_dir = therock_dir / "build"
@@ -190,47 +102,46 @@ def create_analyzer(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Compute subproject-level test dependencies for changed components"
+        description="Compute subproject test dependencies"
     )
     parser.add_argument(
-        "--therock-dir",
-        type=str,
-        default=".",
-        help="Path to TheRock directory (default: current directory)",
+        "--therock-dir", type=str, default=".", help="TheRock directory"
     )
-    parser.add_argument(
-        "--build-dir",
-        type=str,
-        help="Path to build directory (default: therock-dir/build)",
-    )
+    parser.add_argument("--build-dir", type=str, help="Build directory")
     parser.add_argument(
         "--changed",
         type=str,
         nargs="+",
         metavar="SUBPROJECT",
-        help="Subproject(s) that have changed (e.g., rocBLAS, MIOpen)",
+        help="Changed subproject(s)",
     )
     parser.add_argument(
-        "--list-subprojects",
-        action="store_true",
-        help="List all available subprojects",
+        "--projects",
+        type=str,
+        nargs="+",
+        metavar="PROJECT",
+        help="Alias for --changed (for consistency with fetch_test_configurations.py)",
+    )
+    parser.add_argument(
+        "--list-subprojects", action="store_true", help="List all subprojects"
+    )
+    parser.add_argument(
+        "--format",
+        choices=["json", "list"],
+        default="json",
+        help="Output format: json (default) or list (newline-separated)",
     )
 
     args = parser.parse_args()
 
-    # Find TheRock root
     therock_dir = Path(args.therock_dir).resolve()
     if not therock_dir.exists():
-        print(
-            f"Error: TheRock root directory not found: {therock_dir}", file=sys.stderr
-        )
+        print(f"Error: TheRock root not found: {therock_dir}", file=sys.stderr)
         sys.exit(1)
 
-    # Find build directory
-    if args.build_dir:
-        build_dir = Path(args.build_dir).resolve()
-    else:
-        build_dir = therock_dir / "build"
+    build_dir = (
+        Path(args.build_dir).resolve() if args.build_dir else therock_dir / "build"
+    )
 
     if not build_dir.exists():
         print(
@@ -240,7 +151,6 @@ def main():
         )
         sys.exit(1)
 
-    # Create the analyzer
     try:
         analyzer = create_analyzer(therock_dir, build_dir)
     except FileNotFoundError as e:
@@ -248,39 +158,36 @@ def main():
         sys.exit(1)
 
     if not analyzer.subprojects:
-        print(
-            "Error: No subprojects found in manifest. Check the build directory.",
-            file=sys.stderr,
-        )
+        print("Error: No subprojects found in manifest.", file=sys.stderr)
         sys.exit(1)
 
-    # Handle --list-subprojects
     if args.list_subprojects:
-        subproject_list = sorted(analyzer.subprojects.keys())
-        print(json.dumps(subproject_list, indent=2))
+        print(json.dumps(sorted(analyzer.subprojects.keys()), indent=2))
         return
 
-    # Require --changed if not listing subprojects
-    if not args.changed:
-        parser.error("the following arguments are required: --changed")
+    # Support both --changed and --projects (alias)
+    changed = args.changed or args.projects
+    if not changed:
+        parser.error("one of the following arguments is required: --changed, --projects")
 
-    # Validate subproject names (case-sensitive for CMake targets)
-    valid_subprojects = set(analyzer.subprojects.keys())
-    invalid = [p for p in args.changed if p not in valid_subprojects]
+    valid = set(analyzer.subprojects.keys())
+    invalid = [p for p in changed if p not in valid]
     if invalid:
         print(f"Error: Unknown subproject(s): {', '.join(invalid)}", file=sys.stderr)
         print(f"\nAvailable subprojects:", file=sys.stderr)
-        for sp in sorted(valid_subprojects)[:20]:
+        for sp in sorted(valid)[:20]:
             print(f"  {sp}", file=sys.stderr)
-        if len(valid_subprojects) > 20:
-            print(f"  ... and {len(valid_subprojects) - 20} more", file=sys.stderr)
+        if len(valid) > 20:
+            print(f"  ... and {len(valid) - 20} more", file=sys.stderr)
         sys.exit(1)
 
-    # Get subprojects to test
-    subprojects_to_test = analyzer.get_subprojects_to_test(args.changed)
+    result = analyzer.get_subprojects_to_test(changed)
 
-    # Output JSON array
-    print(json.dumps(sorted(subprojects_to_test)))
+    if args.format == "json":
+        print(json.dumps(sorted(result)))
+    else:  # list format
+        for item in sorted(result):
+            print(item)
 
 
 if __name__ == "__main__":
