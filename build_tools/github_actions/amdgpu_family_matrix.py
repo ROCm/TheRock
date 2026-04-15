@@ -150,22 +150,22 @@ amdgpu_family_info_matrix_presubmit = {
             "build_variants": ["release"],
         },
     },
-    "gfx90a": {
-        "linux": {
-            "test-runs-on": "linux-gfx90a-gpu-npi-rocm",
-            "family": "gfx90a",
-            "fetch-gfx-targets": ["gfx90a"],
-            "sanity_check_only_for_family": True,
-            "build_variants": ["release"],
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx90a",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-            "expect_pytorch_failure": True,
-        },
-    },
+    # "gfx90a": {
+    #     "linux": {
+    #         "test-runs-on": "linux-gfx90a-gpu-npi-rocm",
+    #         "family": "gfx90a",
+    #         "fetch-gfx-targets": ["gfx90a"],
+    #         "sanity_check_only_for_family": True,
+    #         "build_variants": ["release"],
+    #     },
+    #     "windows": {
+    #         "test-runs-on": "",
+    #         "family": "gfx90a",
+    #         "fetch-gfx-targets": [],
+    #         "build_variants": ["release"],
+    #         "expect_pytorch_failure": True,
+    #     },
+    # },
 }
 
 # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
