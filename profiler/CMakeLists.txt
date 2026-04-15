@@ -258,9 +258,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
   ##############################################################################
   # rocprofiler-systems
   ##############################################################################
-  # Examples (e.g. jacobi-hip) use find_library(roctx64). therock_explicit_finders
-  # only searches CMAKE_LIBRARY_PATH from RUNTIME_DEPS; libroctx64 is staged under
-  # roctracer, so roctracer must be a dependency here.
   # rocprofiler-systems requires GCC, but sanitizer builds use Clang.
   # Skip enabling rocprofiler-systems when building with sanitizers.
   if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
@@ -304,12 +301,11 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
-        -DROCPROFSYS_BUILD_FOR_THEROCK="${THEROCK_BUILD_TESTING}" # TODO: Will be deprecated
+        -DROCPROFSYS_BUILD_FOR_THEROCK=OFF # TODO: Will be deprecated
         -DROCPROFSYS_BUILD_TESTING="${THEROCK_BUILD_TESTING}"
         -DROCPROFSYS_INSTALL_TESTING="${THEROCK_BUILD_TESTING}"
         -DROCPROFSYS_BUILD_EXAMPLES="${THEROCK_BUILD_TESTING}"
         -DROCPROFSYS_INSTALL_EXAMPLES="${THEROCK_BUILD_TESTING}"
-        -DROCPROFSYS_BUILD_FOR_THEROCK=ON
         # jacobi-hip includes <roctracer_ext.h>; TheRock stages headers under
         # include/roctracer/, so the example fails until include paths are fixed.
         # -DROCPROFSYS_DISABLE_EXAMPLES=jacobi-hip
