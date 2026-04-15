@@ -337,12 +337,14 @@ class PopulatedDistPackage:
     def populate_device_files(
         self, artifacts: ArtifactCatalog
     ) -> "PopulatedDistPackage":
-        """Populates device files (.kpack, kernel DBs) into the platform directory.
+        """Populates device files into the platform directory.
 
-        Unlike populate_runtime_files(), this does a straight copy with no
-        RPATH patching, soname resolution, or symlink chasing. Device files
-        are binary data (.kpack archives, .co/.dat/.hsaco kernels, MIOpen DBs),
-        not ELF shared libraries.
+        Device artifacts are a mix of opaque binary data (.kpack archives,
+        .co/.dat/.hsaco kernels, MIOpen DBs) and per-arch ELF shared
+        libraries (e.g. libMIOpenCKGroupedConv_gfx1201.so). Data files
+        are copied verbatim; ELF .so/exe files go through the same
+        RPATH-patching path as populate_runtime_files() so their
+        dynamic deps resolve across the kpack-split wheel layout.
         """
         log(
             f"::: Populating device files {self.logical_name}[{self.target_family}]: "
@@ -356,17 +358,7 @@ class PopulatedDistPackage:
             if self.files.has(relpath):
                 continue
             dest_path = package_dest_dir / relpath
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            if dir_entry.is_dir():
-                dest_path.mkdir(parents=True, exist_ok=True)
-                continue
-            if dest_path.exists():
-                dest_path.unlink()
-            src_path = Path(dir_entry.path)
-            if src_path.is_symlink():
-                src_path = src_path.resolve()
-            shutil.copy2(src_path, dest_path)
-            self.files.mark_populated(self, relpath, dest_path)
+            self._populate_file(relpath, dest_path, dir_entry, resolve_src=True)
         self.params.populated_packages.append(self)
         return self
 
