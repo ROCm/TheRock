@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 # gRPC static library for RDC
-set(THEROCK_GRPC_VERSION "1.78.1" CACHE STRING "gRPC version built by TheRock")
+set(THEROCK_GRPC_VERSION "1.78.1" CACHE INTERNAL "gRPC version built by TheRock")
 
 therock_subproject_fetch(therock-grpc-sources
   CMAKE_PROJECT

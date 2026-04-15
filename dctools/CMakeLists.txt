@@ -13,7 +13,7 @@ if(THEROCK_ENABLE_RDC)
   # includes merged runtime deps (e.g. bundled zlib), ensuring that gRPC
   # executables like grpc_cpp_plugin can resolve all shared library dependencies
   # when invoked during RDC's configure step.
-  get_target_property(_grpc_stage therock-grpc THEROCK_DIST_DIR)
+  get_target_property(_grpc_dist therock-grpc THEROCK_DIST_DIR)
 
   therock_cmake_subproject_declare(rdc
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rdc"
@@ -29,7 +29,7 @@ if(THEROCK_ENABLE_RDC)
       -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
       -DHIP_PLATFORM=amd
       -DCMAKE_CXX_STANDARD=17
-      -DGRPC_ROOT=${_grpc_stage}
+      -DGRPC_ROOT=${_grpc_dist}
       -DGRPC_DESIRED_VERSION=${THEROCK_GRPC_VERSION}
 
     BUILD_DEPS
