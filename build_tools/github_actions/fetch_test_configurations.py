@@ -96,7 +96,7 @@ test_matrix = {
         "job_name": "rocblas-multigpu",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 90,  # Adjust based on actual test duration
-        "test_script": f"python {_get_script_path('test_runner.py')} --multigpu",
+        "test_script": f"python {_get_script_path('test_runner.py', ROCM_LIBRARIES_SCRIPT_DIR)} --multigpu",
         "platform": ["linux"],  # Multi-GPU runners only on Linux
         "total_shards_dict": {
             "linux": 1,  # Start with 1 shard, multi-GPU subset typically smaller
