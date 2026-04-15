@@ -88,7 +88,7 @@ def _default_cdash_matrix_label() -> str:
     """
     gpu = os.getenv("ARTIFACT_GROUP", "")
     os_part = _os_release_id_version()
-    base = f"ROCm/rocm-systems-{os_part}"
+    base = f"ROCm/TheRock/rocm-systems-{os_part}"
     if not gpu:
         return base
     return f"{base}-{gpu}"
