@@ -776,7 +776,7 @@ def main(argv):
         default=False,
         help="Include OpenMPI (vendored by TheRock build)",
         action=argparse.BooleanOptionalAction,
-)
+    )
 
     artifacts_group.add_argument(
         "--rocprofiler-compute",
