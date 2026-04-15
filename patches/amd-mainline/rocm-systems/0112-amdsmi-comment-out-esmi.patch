@@ -1,0 +1,2172 @@
+From 863592d1c6e110c11cf91b8b2750815db2748b11 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Wed, 15 Apr 2026 01:41:04 +0000
+Subject: [PATCH] amdsmi python wrapper: Comment out refernces to ESMI lib
+
+Temporary while SMI team makes amd-smi work properly with
+ESMI disabled.
+---
+ .../amdsmi/py-interface/amdsmi_interface.py   |  252 +++-
+ .../amdsmi/py-interface/amdsmi_wrapper.py     | 1186 +++++++++--------
+ 2 files changed, 857 insertions(+), 581 deletions(-)
+
+diff --git a/projects/amdsmi/py-interface/amdsmi_interface.py b/projects/amdsmi/py-interface/amdsmi_interface.py
+index 3c3f8393a1..1da0ec16ae 100644
+--- a/projects/amdsmi/py-interface/amdsmi_interface.py
++++ b/projects/amdsmi/py-interface/amdsmi_interface.py
+@@ -1085,6 +1085,8 @@ def amdsmi_get_cpusocket_handles() -> List[c_void_p]:
+     Returns:
+         `List`: List containing all of the found cpu socket handles.
+     """
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_handles'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     cpu_count = ctypes.c_uint32(0)
+     null_ptr = POINTER(amdsmi_wrapper.amdsmi_processor_handle)()
+     _check_res(amdsmi_wrapper.amdsmi_get_cpu_handles(ctypes.byref(cpu_count), null_ptr))
+@@ -1110,6 +1112,8 @@ def amdsmi_get_socket_info(socket_handle):
+ 
+ 
+ def amdsmi_get_processor_info(processor_handle):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_processor_info'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     processor_info = ctypes.create_string_buffer(128)
+@@ -1161,19 +1165,25 @@ def get_switch_handles() -> List[amdsmi_wrapper.amdsmi_processor_handle]:
+         null_ptr = ctypes.POINTER(amdsmi_wrapper.amdsmi_processor_handle)()
+ 
+         # First call to get the count of Switch processors
+-        _check_res(
+-            amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
+-                socket, switch_type, null_ptr, ctypes.byref(switch_count)
++        try:
++            _check_res(
++                amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
++                    socket, switch_type, null_ptr, ctypes.byref(switch_count)
++                )
+             )
+-        )
++        except AttributeError:
++            break
+ 
+         if switch_count.value > 0:
+             c_handles = (amdsmi_wrapper.amdsmi_processor_handle * switch_count.value)()
+-            _check_res(
+-                amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
+-                    socket, switch_type, c_handles, ctypes.byref(switch_count)
++            try:
++                _check_res(
++                    amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
++                        socket, switch_type, c_handles, ctypes.byref(switch_count)
++                    )
+                 )
+-            )
++            except AttributeError:
++                break
+ 
+             switch_handles.extend(
+                 [
+@@ -1196,19 +1206,25 @@ def get_nic_handles() -> List[amdsmi_wrapper.amdsmi_processor_handle]:
+         null_ptr = ctypes.POINTER(amdsmi_wrapper.amdsmi_processor_handle)()
+ 
+         # First call to get the count of NIC processors
+-        _check_res(
+-            amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
+-                socket, nic_type, null_ptr, ctypes.byref(nic_count)
++        try:
++            _check_res(
++                amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
++                    socket, nic_type, null_ptr, ctypes.byref(nic_count)
++                )
+             )
+-        )
++        except AttributeError:
++            break
+ 
+         if nic_count.value > 0:
+             c_handles = (amdsmi_wrapper.amdsmi_processor_handle * nic_count.value)()
+-            _check_res(
+-                amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
+-                    socket, nic_type, c_handles, ctypes.byref(nic_count)
++            try:
++                _check_res(
++                    amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
++                        socket, nic_type, c_handles, ctypes.byref(nic_count)
++                    )
+                 )
+-            )
++            except AttributeError:
++                break
+ 
+             nic_handles.extend(
+                 [
+@@ -1231,19 +1247,25 @@ def get_gpu_handles() -> List[amdsmi_wrapper.amdsmi_processor_handle]:
+         null_ptr = ctypes.POINTER(amdsmi_wrapper.amdsmi_processor_handle)()
+ 
+         # First call to get the count of GPU processors
+-        _check_res(
+-            amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
+-                socket, gpu_type, null_ptr, ctypes.byref(gpu_count)
++        try:
++            _check_res(
++                amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
++                    socket, gpu_type, null_ptr, ctypes.byref(gpu_count)
++                )
+             )
+-        )
++        except AttributeError:
++            break
+ 
+         if gpu_count.value > 0:
+             c_handles = (amdsmi_wrapper.amdsmi_processor_handle * gpu_count.value)()
+-            _check_res(
+-                amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
+-                    socket, gpu_type, c_handles, ctypes.byref(gpu_count)
++            try:
++                _check_res(
++                    amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
++                        socket, gpu_type, c_handles, ctypes.byref(gpu_count)
++                    )
+                 )
+-            )
++            except AttributeError:
++                break
+ 
+             gpu_handles.extend(
+                 [
+@@ -1266,19 +1288,25 @@ def get_ainic_handles() -> List[amdsmi_wrapper.amdsmi_processor_handle]:
+         null_ptr = ctypes.POINTER(amdsmi_wrapper.amdsmi_processor_handle)()
+ 
+         # First call to get the count of NIC processors
+-        _check_res(
+-            amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
+-                socket, nic_type, null_ptr, ctypes.byref(nic_count)
++        try:
++            _check_res(
++                amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
++                    socket, nic_type, null_ptr, ctypes.byref(nic_count)
++                )
+             )
+-        )
++        except AttributeError:
++            break
+ 
+         if nic_count.value > 0:
+             c_handles = (amdsmi_wrapper.amdsmi_processor_handle * nic_count.value)()
+-            _check_res(
+-                amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
+-                    socket, nic_type, c_handles, ctypes.byref(nic_count)
++            try:
++                _check_res(
++                    amdsmi_wrapper.amdsmi_get_processor_handles_by_type(
++                        socket, nic_type, c_handles, ctypes.byref(nic_count)
++                    )
+                 )
+-            )
++            except AttributeError:
++                break
+ 
+             nic_handles.extend(
+                 [
+@@ -1290,6 +1318,8 @@ def get_ainic_handles() -> List[amdsmi_wrapper.amdsmi_processor_handle]:
+ 
+ 
+ def amdsmi_get_cpucore_handles() -> List[c_void_p]:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpucore_handles'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     cores_count = ctypes.c_uint32(0)
+     null_ptr = POINTER(amdsmi_wrapper.amdsmi_processor_handle)()
+     _check_res(amdsmi_wrapper.amdsmi_get_cpucore_handles(ctypes.byref(cores_count), null_ptr))
+@@ -1304,6 +1334,8 @@ def amdsmi_get_cpucore_handles() -> List[c_void_p]:
+ 
+ 
+ def amdsmi_get_cpu_hsmp_proto_ver(processor_handle: processor_handle_t) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_hsmp_proto_ver'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1316,6 +1348,8 @@ def amdsmi_get_cpu_hsmp_proto_ver(processor_handle: processor_handle_t) -> int:
+ 
+ 
+ def amdsmi_get_cpu_smu_fw_version(processor_handle: processor_handle_t) -> Dict[str, int]:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_smu_fw_version'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1331,6 +1365,8 @@ def amdsmi_get_cpu_smu_fw_version(processor_handle: processor_handle_t) -> Dict[
+ 
+ 
+ def amdsmi_get_cpu_hsmp_driver_version(processor_handle: processor_handle_t) -> Dict[str, int]:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_hsmp_driver_version'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1347,6 +1383,8 @@ def amdsmi_get_cpu_hsmp_driver_version(processor_handle: processor_handle_t) ->
+ 
+ 
+ def amdsmi_get_cpu_core_energy(processor_handle: processor_handle_t) -> str:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_core_energy'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1357,6 +1395,8 @@ def amdsmi_get_cpu_core_energy(processor_handle: processor_handle_t) -> str:
+ 
+ 
+ def amdsmi_get_cpu_core_ccd_power(processor_handle: processor_handle_t) -> float:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_core_ccd_power'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1369,6 +1409,8 @@ def amdsmi_get_cpu_core_ccd_power(processor_handle: processor_handle_t) -> float
+ 
+ 
+ def amdsmi_get_cpu_socket_energy(processor_handle: processor_handle_t) -> str:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_socket_energy'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1379,6 +1421,8 @@ def amdsmi_get_cpu_socket_energy(processor_handle: processor_handle_t) -> str:
+ 
+ 
+ def amdsmi_get_threads_per_core():
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_threads_per_core'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     threads_per_core = ctypes.c_uint32()
+     _check_res(amdsmi_wrapper.amdsmi_get_threads_per_core(ctypes.byref(threads_per_core)))
+ 
+@@ -1386,6 +1430,8 @@ def amdsmi_get_threads_per_core():
+ 
+ 
+ def amdsmi_get_cpu_prochot_status(processor_handle: processor_handle_t) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_prochot_status'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1398,6 +1444,8 @@ def amdsmi_get_cpu_prochot_status(processor_handle: processor_handle_t) -> int:
+ 
+ 
+ def amdsmi_get_cpu_fclk_mclk(processor_handle: processor_handle_t):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_fclk_mclk'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1413,6 +1461,8 @@ def amdsmi_get_cpu_fclk_mclk(processor_handle: processor_handle_t):
+ 
+ 
+ def amdsmi_get_cpu_cclk_limit(processor_handle: processor_handle_t) -> str:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_cclk_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1423,6 +1473,8 @@ def amdsmi_get_cpu_cclk_limit(processor_handle: processor_handle_t) -> str:
+ 
+ 
+ def amdsmi_get_cpu_socket_current_active_freq_limit(processor_handle: processor_handle_t):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_socket_current_active_freq_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1449,6 +1501,8 @@ def amdsmi_get_cpu_socket_current_active_freq_limit(processor_handle: processor_
+ 
+ 
+ def amdsmi_get_cpu_socket_freq_range(processor_handle: processor_handle_t):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_socket_freq_range'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1464,6 +1518,8 @@ def amdsmi_get_cpu_socket_freq_range(processor_handle: processor_handle_t):
+ 
+ 
+ def amdsmi_get_cpu_core_current_freq_limit(processor_handle: processor_handle_t) -> str:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_core_current_freq_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1476,6 +1532,8 @@ def amdsmi_get_cpu_core_current_freq_limit(processor_handle: processor_handle_t)
+ 
+ 
+ def amdsmi_get_cpu_socket_power(processor_handle: processor_handle_t) -> str:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_socket_power'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1486,6 +1544,8 @@ def amdsmi_get_cpu_socket_power(processor_handle: processor_handle_t) -> str:
+ 
+ 
+ def amdsmi_get_cpu_socket_power_cap(processor_handle: processor_handle_t) -> str:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_socket_power_cap'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1496,6 +1556,8 @@ def amdsmi_get_cpu_socket_power_cap(processor_handle: processor_handle_t) -> str
+ 
+ 
+ def amdsmi_get_cpu_socket_power_cap_max(processor_handle: processor_handle_t) -> str:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_socket_power_cap_max'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1508,6 +1570,8 @@ def amdsmi_get_cpu_socket_power_cap_max(processor_handle: processor_handle_t) ->
+ 
+ 
+ def amdsmi_get_cpu_pwr_svi_telemetry_all_rails(processor_handle: processor_handle_t) -> str:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_pwr_svi_telemetry_all_rails'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1522,6 +1586,8 @@ def amdsmi_get_cpu_pwr_svi_telemetry_all_rails(processor_handle: processor_handl
+ 
+ 
+ def amdsmi_set_cpu_socket_power_cap(processor_handle: processor_handle_t, power_cap: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_socket_power_cap'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(power_cap, int):
+@@ -1538,6 +1604,8 @@ def amdsmi_set_cpu_pwr_efficiency_mode(
+     util: int = AMDSMI_MAX_UTIL,
+     ppt_limit: int = AMDSMI_MAX_PPT_LIMIT,
+ ) -> tuple:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_pwr_efficiency_mode'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(mode, int):
+@@ -1561,6 +1629,8 @@ def amdsmi_set_cpu_pwr_efficiency_mode(
+ 
+ 
+ def amdsmi_get_cpu_pwr_efficiency_mode(processor_handle: processor_handle_t) -> tuple:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_pwr_efficiency_mode'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1578,6 +1648,8 @@ def amdsmi_get_cpu_pwr_efficiency_mode(processor_handle: processor_handle_t) ->
+ 
+ 
+ def amdsmi_get_cpu_core_boostlimit(processor_handle: processor_handle_t) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_core_boostlimit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1591,6 +1663,8 @@ def amdsmi_get_cpu_core_boostlimit(processor_handle: processor_handle_t) -> int:
+ 
+ 
+ def amdsmi_get_cpu_socket_c0_residency(processor_handle: processor_handle_t) -> str:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_socket_c0_residency'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1605,6 +1679,8 @@ def amdsmi_get_cpu_socket_c0_residency(processor_handle: processor_handle_t) ->
+ 
+ 
+ def amdsmi_set_cpu_core_boostlimit(processor_handle: processor_handle_t, boostlimit: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_core_boostlimit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(boostlimit, int):
+@@ -1615,6 +1691,8 @@ def amdsmi_set_cpu_core_boostlimit(processor_handle: processor_handle_t, boostli
+ 
+ 
+ def amdsmi_set_cpu_socket_boostlimit(processor_handle: processor_handle_t, boostlimit: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_socket_boostlimit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(boostlimit, int):
+@@ -1625,6 +1703,8 @@ def amdsmi_set_cpu_socket_boostlimit(processor_handle: processor_handle_t, boost
+ 
+ 
+ def amdsmi_get_cpu_ddr_bw(processor_handle: processor_handle_t):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_ddr_bw'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1640,6 +1720,8 @@ def amdsmi_get_cpu_ddr_bw(processor_handle: processor_handle_t):
+ 
+ 
+ def amdsmi_get_cpu_socket_temperature(processor_handle: processor_handle_t) -> str:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_socket_temperature'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1655,6 +1737,8 @@ def amdsmi_get_cpu_socket_temperature(processor_handle: processor_handle_t) -> s
+ def amdsmi_get_cpu_dimm_temp_range_and_refresh_rate(
+     processor_handle: processor_handle_t, dimm_addr: int
+ ):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_dimm_temp_range_and_refresh_rate'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(dimm_addr, int):
+@@ -1673,6 +1757,8 @@ def amdsmi_get_cpu_dimm_temp_range_and_refresh_rate(
+ 
+ 
+ def amdsmi_get_cpu_dimm_power_consumption(processor_handle: processor_handle_t, dimm_addr: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_dimm_power_consumption'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(dimm_addr, int):
+@@ -1695,6 +1781,8 @@ def amdsmi_get_cpu_dimm_power_consumption(processor_handle: processor_handle_t,
+ 
+ 
+ def amdsmi_get_cpu_dimm_thermal_sensor(processor_handle: processor_handle_t, dimm_addr: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_dimm_thermal_sensor'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(dimm_addr, int):
+@@ -1718,6 +1806,8 @@ def amdsmi_get_cpu_dimm_thermal_sensor(processor_handle: processor_handle_t, dim
+ 
+ 
+ def amdsmi_set_cpu_xgmi_width(processor_handle: processor_handle_t, min_width: int, max_width: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_xgmi_width'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(min_width, int):
+@@ -1734,6 +1824,8 @@ def amdsmi_set_cpu_xgmi_width(processor_handle: processor_handle_t, min_width: i
+ def amdsmi_set_cpu_gmi3_link_width_range(
+     processor_handle: processor_handle_t, min_link_width: int, max_link_width: int
+ ):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_gmi3_link_width_range'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(min_link_width, int):
+@@ -1752,6 +1844,8 @@ def amdsmi_set_cpu_gmi3_link_width_range(
+ 
+ 
+ def amdsmi_cpu_apb_enable(processor_handle: processor_handle_t):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_cpu_apb_enable'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1759,6 +1853,8 @@ def amdsmi_cpu_apb_enable(processor_handle: processor_handle_t):
+ 
+ 
+ def amdsmi_cpu_apb_disable(processor_handle: processor_handle_t, pstate: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_cpu_apb_disable'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(pstate, int):
+@@ -1772,6 +1868,8 @@ def amdsmi_cpu_apb_disable(processor_handle: processor_handle_t, pstate: int):
+ def amdsmi_set_cpu_socket_lclk_dpm_level(
+     processor_handle: processor_handle_t, nbio_id: int, min_val: int, max_val: int
+ ):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_socket_lclk_dpm_level'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(nbio_id, int):
+@@ -1793,6 +1891,8 @@ def amdsmi_set_cpu_socket_lclk_dpm_level(
+ 
+ 
+ def amdsmi_get_cpu_socket_lclk_dpm_level(processor_handle: processor_handle_t, nbio_id: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_socket_lclk_dpm_level'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(nbio_id, int):
+@@ -1812,6 +1912,8 @@ def amdsmi_get_cpu_socket_lclk_dpm_level(processor_handle: processor_handle_t, n
+ 
+ 
+ def amdsmi_set_cpu_pcie_link_rate(processor_handle: processor_handle_t, rate_ctrl: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_pcie_link_rate'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(rate_ctrl, int):
+@@ -1832,6 +1934,8 @@ def amdsmi_set_cpu_pcie_link_rate(processor_handle: processor_handle_t, rate_ctr
+ def amdsmi_set_cpu_df_pstate_range(
+     processor_handle: processor_handle_t, min_pstate: int, max_pstate: int
+ ):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_df_pstate_range'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(min_pstate, int):
+@@ -1850,6 +1954,8 @@ def amdsmi_set_cpu_df_pstate_range(
+ def amdsmi_get_cpu_current_io_bandwidth(
+     processor_handle: processor_handle_t, encoding: int, link_name: str
+ ):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_current_io_bandwidth'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(encoding, int):
+@@ -1874,6 +1980,8 @@ def amdsmi_get_cpu_current_io_bandwidth(
+ def amdsmi_get_cpu_current_xgmi_bw(
+     processor_handle: processor_handle_t, encoding: int, link_name: str
+ ):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_current_xgmi_bw'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(encoding, int):
+@@ -1894,6 +2002,8 @@ def amdsmi_get_cpu_current_xgmi_bw(
+ 
+ 
+ def amdsmi_get_hsmp_metrics_table_version(processor_handle: processor_handle_t):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_hsmp_metrics_table_version'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1911,6 +2021,8 @@ def amdsmi_get_hsmp_metrics_table_version(processor_handle: processor_handle_t):
+ def amdsmi_set_cpu_xgmi_pstate_range(
+     processor_handle: processor_handle_t, min_pstate: int, max_pstate: int
+ ):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_xgmi_pstate_range'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(min_pstate, int):
+@@ -1929,6 +2041,8 @@ def amdsmi_set_cpu_xgmi_pstate_range(
+ 
+ 
+ def amdsmi_get_cpu_xgmi_pstate_range(processor_handle: processor_handle_t):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_xgmi_pstate_range'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1945,6 +2059,8 @@ def amdsmi_get_cpu_xgmi_pstate_range(processor_handle: processor_handle_t):
+ 
+ 
+ def amdsmi_set_cpu_rail_isofreq_policy(processor_handle: processor_handle_t, value: int) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_rail_isofreq_policy'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(value, int):
+@@ -1963,6 +2079,8 @@ def amdsmi_set_cpu_rail_isofreq_policy(processor_handle: processor_handle_t, val
+ 
+ 
+ def amdsmi_get_cpu_rail_isofreq_policy(processor_handle: processor_handle_t) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_rail_isofreq_policy'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -1979,6 +2097,8 @@ def amdsmi_get_cpu_rail_isofreq_policy(processor_handle: processor_handle_t) ->
+ 
+ 
+ def amdsmi_set_cpu_dfc_ctrl(processor_handle: processor_handle_t, value: int) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_dfc_ctrl'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(value, int):
+@@ -1992,6 +2112,8 @@ def amdsmi_set_cpu_dfc_ctrl(processor_handle: processor_handle_t, value: int) ->
+ 
+ 
+ def amdsmi_get_cpu_dfc_ctrl(processor_handle: processor_handle_t) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_dfc_ctrl'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2003,6 +2125,8 @@ def amdsmi_get_cpu_dfc_ctrl(processor_handle: processor_handle_t) -> int:
+ 
+ 
+ def amdsmi_set_cpu_pc6_enable(processor_handle: processor_handle_t, value: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_pc6_enable'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(value, int):
+@@ -2014,6 +2138,8 @@ def amdsmi_set_cpu_pc6_enable(processor_handle: processor_handle_t, value: int):
+ 
+ 
+ def amdsmi_get_cpu_pc6_enable(processor_handle: processor_handle_t) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_pc6_enable'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2025,6 +2151,8 @@ def amdsmi_get_cpu_pc6_enable(processor_handle: processor_handle_t) -> int:
+ 
+ 
+ def amdsmi_set_cpu_cc6_enable(processor_handle: processor_handle_t, value: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_cc6_enable'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(value, int):
+@@ -2036,6 +2164,8 @@ def amdsmi_set_cpu_cc6_enable(processor_handle: processor_handle_t, value: int):
+ 
+ 
+ def amdsmi_get_cpu_cc6_enable(processor_handle: processor_handle_t) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_cc6_enable'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2049,6 +2179,8 @@ def amdsmi_get_cpu_cc6_enable(processor_handle: processor_handle_t) -> int:
+ def amdsmi_get_cpu_dimm_sb_reg(
+     processor_handle: processor_handle_t, dimm_addr: int, lid: int, reg_offset: int, reg_space: int
+ ):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_dimm_sb_reg'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(dimm_addr, int):
+@@ -2083,6 +2215,8 @@ def amdsmi_set_cpu_dimm_sb_reg(
+     reg_space: int,
+     write_data: int,
+ ):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_dimm_sb_reg'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(dimm_addr, int):
+@@ -2110,6 +2244,8 @@ def amdsmi_set_cpu_dimm_sb_reg(
+ 
+ 
+ def amdsmi_get_cpu_tdelta(processor_handle: processor_handle_t) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_tdelta'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2125,6 +2261,8 @@ def amdsmi_get_cpu_svi3_vr_controller_temp(
+     rail_selection: int,
+     rail_index: int = AMDSMI_MAX_RAIL_INDEX,
+ ) -> dict:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_svi3_vr_controller_temp'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(rail_selection, int):
+@@ -2153,6 +2291,8 @@ def amdsmi_get_cpu_svi3_vr_controller_temp(
+ 
+ 
+ def amdsmi_get_cpu_enabled_commands(processor_handle: processor_handle_t):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_enabled_commands'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2199,6 +2339,8 @@ def amdsmi_get_cpu_enabled_commands(processor_handle: processor_handle_t):
+ 
+ 
+ def amdsmi_get_cpu_core_floor_freq_limit(processor_handle: processor_handle_t) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_core_floor_freq_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2215,6 +2357,8 @@ def amdsmi_get_cpu_core_floor_freq_limit(processor_handle: processor_handle_t) -
+ 
+ 
+ def amdsmi_get_cpu_floor_freq_limit(processor_handle: processor_handle_t) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_floor_freq_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2229,6 +2373,8 @@ def amdsmi_get_cpu_floor_freq_limit(processor_handle: processor_handle_t) -> int
+ 
+ 
+ def amdsmi_get_cpu_core_eff_floor_freq_limit(processor_handle: processor_handle_t) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_core_eff_floor_freq_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2245,6 +2391,8 @@ def amdsmi_get_cpu_core_eff_floor_freq_limit(processor_handle: processor_handle_
+ 
+ 
+ def amdsmi_get_cpu_eff_floor_freq_limit(processor_handle: processor_handle_t) -> int:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_eff_floor_freq_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2261,6 +2409,8 @@ def amdsmi_get_cpu_eff_floor_freq_limit(processor_handle: processor_handle_t) ->
+ 
+ 
+ def amdsmi_set_cpu_core_floor_freq_limit(processor_handle: processor_handle_t, floorlimit: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_core_floor_freq_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(floorlimit, int):
+@@ -2272,6 +2422,8 @@ def amdsmi_set_cpu_core_floor_freq_limit(processor_handle: processor_handle_t, f
+ 
+ 
+ def amdsmi_set_cpu_floor_freq_limit(processor_handle: processor_handle_t, floorlimit: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_floor_freq_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(floorlimit, int):
+@@ -2283,6 +2435,8 @@ def amdsmi_set_cpu_floor_freq_limit(processor_handle: processor_handle_t, floorl
+ 
+ 
+ def amdsmi_set_cpu_msr_floor_freq_limit(processor_handle: processor_handle_t, msrfloorlimit: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_msr_floor_freq_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(msrfloorlimit, int):
+@@ -2298,6 +2452,8 @@ def amdsmi_set_cpu_msr_floor_freq_limit(processor_handle: processor_handle_t, ms
+ def amdsmi_set_cpu_core_msr_floor_freq_limit(
+     processor_handle: processor_handle_t, msrfloorlimit: int
+ ):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_core_msr_floor_freq_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(msrfloorlimit, int):
+@@ -2311,6 +2467,8 @@ def amdsmi_set_cpu_core_msr_floor_freq_limit(
+ 
+ 
+ def amdsmi_get_cpu_freq_range() -> Dict[str, int]:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_freq_range'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+ 
+     fmax = ctypes.c_uint32()
+     fmin = ctypes.c_uint32()
+@@ -2322,6 +2480,8 @@ def amdsmi_get_cpu_freq_range() -> Dict[str, int]:
+ 
+ 
+ def amdsmi_set_cpu_sdps_limit(processor_handle: processor_handle_t, sdps_limit: int):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_set_cpu_sdps_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+     if not isinstance(sdps_limit, int):
+@@ -2333,6 +2493,8 @@ def amdsmi_set_cpu_sdps_limit(processor_handle: processor_handle_t, sdps_limit:
+ 
+ 
+ def amdsmi_get_cpu_sdps_limit(processor_handle: processor_handle_t) -> str:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_sdps_limit'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2364,6 +2526,8 @@ def check_msb_64(num):
+ 
+ 
+ def amdsmi_get_hsmp_metrics_table(processor_handle: processor_handle_t):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_hsmp_metrics_table'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2445,6 +2609,8 @@ def amdsmi_get_hsmp_metrics_table(processor_handle: processor_handle_t):
+ 
+ 
+ def amdsmi_first_online_core_on_cpu_socket(processor_handle: processor_handle_t):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_first_online_core_on_cpu_socket'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2460,18 +2626,24 @@ def amdsmi_first_online_core_on_cpu_socket(processor_handle: processor_handle_t)
+ 
+ 
+ def amdsmi_get_cpu_family():
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_family'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     family = ctypes.c_uint32()
+     _check_res(amdsmi_wrapper.amdsmi_get_cpu_family(ctypes.byref(family)))
+     return family.value
+ 
+ 
+ def amdsmi_get_cpu_model():
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_model'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     model = ctypes.c_uint32()
+     _check_res(amdsmi_wrapper.amdsmi_get_cpu_model(ctypes.byref(model)))
+     return model.value
+ 
+ 
+ def amdsmi_get_cpu_model_name(processor_handle: processor_handle_t):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_model_name'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -2482,6 +2654,8 @@ def amdsmi_get_cpu_model_name(processor_handle: processor_handle_t):
+ 
+ 
+ def amdsmi_get_cpu_cores_per_socket(sock_count: ctypes.c_uint32):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_cores_per_socket'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     cps = amdsmi_wrapper.amdsmi_sock_info_t()
+ 
+     _check_res(amdsmi_wrapper.amdsmi_get_cpu_cores_per_socket(sock_count, cps))
+@@ -2489,6 +2663,8 @@ def amdsmi_get_cpu_cores_per_socket(sock_count: ctypes.c_uint32):
+ 
+ 
+ def amdsmi_get_cpu_socket_count():
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_socket_count'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     sock_count = ctypes.c_uint32()
+     _check_res(amdsmi_wrapper.amdsmi_get_cpu_socket_count(ctypes.byref(sock_count)))
+     return sock_count.value
+@@ -2863,6 +3039,8 @@ def amdsmi_get_gpu_enumeration_info(processor_handle: processor_handle_t) -> Dic
+ def amdsmi_get_cpu_affinity_with_scope(
+     processor_handle: processor_handle_t, scope: AmdSmiAffinityScope
+ ) -> List[int]:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_affinity_with_scope'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -5058,6 +5236,8 @@ def amdsmi_set_gpu_power_profile(
+ 
+ 
+ def amdsmi_get_energy_count(processor_handle: processor_handle_t):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_energy_count'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handle, amdsmi_wrapper.amdsmi_processor_handle):
+         raise AmdSmiParameterException(processor_handle, amdsmi_wrapper.amdsmi_processor_handle)
+ 
+@@ -6708,11 +6888,15 @@ def amdsmi_get_rocm_version() -> Tuple[bool, str]:
+ 
+ 
+ def amdsmi_get_cpu_handles() -> Dict[str, Any]:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_cpu_handles'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     cpu_handles = amdsmi_get_cpusocket_handles()
+     return {"cpu_count": len(cpu_handles), "processor_handles": cpu_handles}
+ 
+ 
+ def amdsmi_get_esmi_err_msg(status: AmdSmiStatus) -> str:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_esmi_err_msg'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(status, AmdSmiStatus):
+         raise AmdSmiParameterException(status, AmdSmiStatus)
+ 
+@@ -6789,6 +6973,8 @@ def amdsmi_get_gpu_revision(processor_handle: processor_handle_t) -> str:
+ 
+ 
+ def amdsmi_get_processor_count_from_handles(processor_handles_list) -> Dict[str, int]:
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_processor_count_from_handles'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(processor_handles_list, list):
+         raise AmdSmiParameterException(processor_handles_list, list)
+ 
+@@ -6820,6 +7006,8 @@ def amdsmi_get_processor_count_from_handles(processor_handles_list) -> Dict[str,
+ def amdsmi_get_processor_handles_by_type(
+     socket_handle: socket_handle_t, processor_type: AmdSmiProcessorType
+ ):
++    if not hasattr(amdsmi_wrapper, 'amdsmi_get_processor_handles_by_type'):
++        raise AmdSmiLibraryException(amdsmi_wrapper.AMDSMI_STATUS_NOT_SUPPORTED)
+     if not isinstance(socket_handle, amdsmi_wrapper.amdsmi_socket_handle):
+         raise AmdSmiParameterException(socket_handle, amdsmi_wrapper.amdsmi_socket_handle)
+     if not isinstance(processor_type, AmdSmiProcessorType):
+diff --git a/projects/amdsmi/py-interface/amdsmi_wrapper.py b/projects/amdsmi/py-interface/amdsmi_wrapper.py
+index 097347217d..c449337f72 100644
+--- a/projects/amdsmi/py-interface/amdsmi_wrapper.py
++++ b/projects/amdsmi/py-interface/amdsmi_wrapper.py
+@@ -2770,12 +2770,13 @@ try:
+     amdsmi_get_socket_handles.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.POINTER(None))]
+ except AttributeError:
+     pass
+-try:
+-    amdsmi_get_cpu_handles = _libraries['libamd_smi.so'].amdsmi_get_cpu_handles
+-    amdsmi_get_cpu_handles.restype = amdsmi_status_t
+-    amdsmi_get_cpu_handles.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.POINTER(None))]
+-except AttributeError:
+-    pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_handles = _libraries['libamd_smi.so'].amdsmi_get_cpu_handles
++#     amdsmi_get_cpu_handles.restype = amdsmi_status_t
++#     amdsmi_get_cpu_handles.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.POINTER(None))]
++# except AttributeError:
++#     pass
+ size_t = ctypes.c_uint64
+ try:
+     amdsmi_get_socket_info = _libraries['libamd_smi.so'].amdsmi_get_socket_info
+@@ -2783,24 +2784,27 @@ try:
+     amdsmi_get_socket_info.argtypes = [amdsmi_socket_handle, size_t, ctypes.POINTER(ctypes.c_char)]
+ except AttributeError:
+     pass
+-try:
+-    amdsmi_get_processor_info = _libraries['libamd_smi.so'].amdsmi_get_processor_info
+-    amdsmi_get_processor_info.restype = amdsmi_status_t
+-    amdsmi_get_processor_info.argtypes = [amdsmi_processor_handle, size_t, ctypes.POINTER(ctypes.c_char)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_processor_count_from_handles = _libraries['libamd_smi.so'].amdsmi_get_processor_count_from_handles
+-    amdsmi_get_processor_count_from_handles.restype = amdsmi_status_t
+-    amdsmi_get_processor_count_from_handles.argtypes = [ctypes.POINTER(ctypes.POINTER(None)), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_processor_handles_by_type = _libraries['libamd_smi.so'].amdsmi_get_processor_handles_by_type
+-    amdsmi_get_processor_handles_by_type.restype = amdsmi_status_t
+-    amdsmi_get_processor_handles_by_type.argtypes = [amdsmi_socket_handle, processor_type_t, ctypes.POINTER(ctypes.POINTER(None)), ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_processor_info = _libraries['libamd_smi.so'].amdsmi_get_processor_info
++#     amdsmi_get_processor_info.restype = amdsmi_status_t
++#     amdsmi_get_processor_info.argtypes = [amdsmi_processor_handle, size_t, ctypes.POINTER(ctypes.c_char)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_processor_count_from_handles = _libraries['libamd_smi.so'].amdsmi_get_processor_count_from_handles
++#     amdsmi_get_processor_count_from_handles.restype = amdsmi_status_t
++#     amdsmi_get_processor_count_from_handles.argtypes = [ctypes.POINTER(ctypes.POINTER(None)), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_processor_handles_by_type = _libraries['libamd_smi.so'].amdsmi_get_processor_handles_by_type
++#     amdsmi_get_processor_handles_by_type.restype = amdsmi_status_t
++#     amdsmi_get_processor_handles_by_type.argtypes = [amdsmi_socket_handle, processor_type_t, ctypes.POINTER(ctypes.POINTER(None)), ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
+ try:
+     amdsmi_get_processor_handles = _libraries['libamd_smi.so'].amdsmi_get_processor_handles
+     amdsmi_get_processor_handles.restype = amdsmi_status_t
+@@ -2813,12 +2817,13 @@ try:
+     amdsmi_get_node_handle.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.POINTER(None))]
+ except AttributeError:
+     pass
+-try:
+-    amdsmi_get_cpucore_handles = _libraries['libamd_smi.so'].amdsmi_get_cpucore_handles
+-    amdsmi_get_cpucore_handles.restype = amdsmi_status_t
+-    amdsmi_get_cpucore_handles.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.POINTER(None))]
+-except AttributeError:
+-    pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpucore_handles = _libraries['libamd_smi.so'].amdsmi_get_cpucore_handles
++#     amdsmi_get_cpucore_handles.restype = amdsmi_status_t
++#     amdsmi_get_cpucore_handles.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.POINTER(None))]
++# except AttributeError:
++#     pass
+ try:
+     amdsmi_get_processor_type = _libraries['libamd_smi.so'].amdsmi_get_processor_type
+     amdsmi_get_processor_type.restype = amdsmi_status_t
+@@ -2850,12 +2855,13 @@ try:
+ except AttributeError:
+     pass
+ uint32_t = ctypes.c_uint32
+-try:
+-    amdsmi_get_cpu_affinity_with_scope = _libraries['libamd_smi.so'].amdsmi_get_cpu_affinity_with_scope
+-    amdsmi_get_cpu_affinity_with_scope.restype = amdsmi_status_t
+-    amdsmi_get_cpu_affinity_with_scope.argtypes = [amdsmi_processor_handle, uint32_t, ctypes.POINTER(ctypes.c_uint64), amdsmi_affinity_scope_t]
+-except AttributeError:
+-    pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_affinity_with_scope = _libraries['libamd_smi.so'].amdsmi_get_cpu_affinity_with_scope
++#     amdsmi_get_cpu_affinity_with_scope.restype = amdsmi_status_t
++#     amdsmi_get_cpu_affinity_with_scope.argtypes = [amdsmi_processor_handle, uint32_t, ctypes.POINTER(ctypes.c_uint64), amdsmi_affinity_scope_t]
++# except AttributeError:
++#     pass
+ try:
+     amdsmi_get_gpu_virtualization_mode = _libraries['libamd_smi.so'].amdsmi_get_gpu_virtualization_mode
+     amdsmi_get_gpu_virtualization_mode.restype = amdsmi_status_t
+@@ -2934,12 +2940,13 @@ try:
+     amdsmi_set_gpu_pci_bandwidth.argtypes = [amdsmi_processor_handle, uint64_t]
+ except AttributeError:
+     pass
+-try:
+-    amdsmi_get_energy_count = _libraries['libamd_smi.so'].amdsmi_get_energy_count
+-    amdsmi_get_energy_count.restype = amdsmi_status_t
+-    amdsmi_get_energy_count.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_uint64)]
+-except AttributeError:
+-    pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_energy_count = _libraries['libamd_smi.so'].amdsmi_get_energy_count
++#     amdsmi_get_energy_count.restype = amdsmi_status_t
++#     amdsmi_get_energy_count.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_uint64)]
++# except AttributeError:
++#     pass
+ try:
+     amdsmi_set_power_cap = _libraries['libamd_smi.so'].amdsmi_set_power_cap
+     amdsmi_set_power_cap.restype = amdsmi_status_t
+@@ -2958,55 +2965,63 @@ try:
+     amdsmi_get_supported_power_cap.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(amdsmi_power_cap_type_t)]
+ except AttributeError:
+     pass
+-try:
+-    amdsmi_get_cpu_socket_power = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_power
+-    amdsmi_get_cpu_socket_power.restype = amdsmi_status_t
+-    amdsmi_get_cpu_socket_power.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_double)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_socket_power_cap = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_power_cap
+-    amdsmi_get_cpu_socket_power_cap.restype = amdsmi_status_t
+-    amdsmi_get_cpu_socket_power_cap.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_double)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_socket_power_cap_max = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_power_cap_max
+-    amdsmi_get_cpu_socket_power_cap_max.restype = amdsmi_status_t
+-    amdsmi_get_cpu_socket_power_cap_max.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_double)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_pwr_svi_telemetry_all_rails = _libraries['libamd_smi.so'].amdsmi_get_cpu_pwr_svi_telemetry_all_rails
+-    amdsmi_get_cpu_pwr_svi_telemetry_all_rails.restype = amdsmi_status_t
+-    amdsmi_get_cpu_pwr_svi_telemetry_all_rails.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_socket_power_cap = _libraries['libamd_smi.so'].amdsmi_set_cpu_socket_power_cap
+-    amdsmi_set_cpu_socket_power_cap.restype = amdsmi_status_t
+-    amdsmi_set_cpu_socket_power_cap.argtypes = [amdsmi_processor_handle, uint32_t]
+-except AttributeError:
+-    pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_socket_power = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_power
++#     amdsmi_get_cpu_socket_power.restype = amdsmi_status_t
++#     amdsmi_get_cpu_socket_power.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_double)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_socket_power_cap = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_power_cap
++#     amdsmi_get_cpu_socket_power_cap.restype = amdsmi_status_t
++#     amdsmi_get_cpu_socket_power_cap.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_double)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_socket_power_cap_max = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_power_cap_max
++#     amdsmi_get_cpu_socket_power_cap_max.restype = amdsmi_status_t
++#     amdsmi_get_cpu_socket_power_cap_max.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_double)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_pwr_svi_telemetry_all_rails = _libraries['libamd_smi.so'].amdsmi_get_cpu_pwr_svi_telemetry_all_rails
++#     amdsmi_get_cpu_pwr_svi_telemetry_all_rails.restype = amdsmi_status_t
++#     amdsmi_get_cpu_pwr_svi_telemetry_all_rails.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_socket_power_cap = _libraries['libamd_smi.so'].amdsmi_set_cpu_socket_power_cap
++#     amdsmi_set_cpu_socket_power_cap.restype = amdsmi_status_t
++#     amdsmi_set_cpu_socket_power_cap.argtypes = [amdsmi_processor_handle, uint32_t]
++# except AttributeError:
++#     pass
+ uint8_t = ctypes.c_uint8
+-try:
+-    amdsmi_set_cpu_pwr_efficiency_mode = _libraries['libamd_smi.so'].amdsmi_set_cpu_pwr_efficiency_mode
+-    amdsmi_set_cpu_pwr_efficiency_mode.restype = amdsmi_status_t
+-    amdsmi_set_cpu_pwr_efficiency_mode.argtypes = [amdsmi_processor_handle, uint8_t, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_pwr_efficiency_mode = _libraries['libamd_smi.so'].amdsmi_get_cpu_pwr_efficiency_mode
+-    amdsmi_get_cpu_pwr_efficiency_mode.restype = amdsmi_status_t
+-    amdsmi_get_cpu_pwr_efficiency_mode.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_double)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_core_ccd_power = _libraries['libamd_smi.so'].amdsmi_get_cpu_core_ccd_power
+-    amdsmi_get_cpu_core_ccd_power.restype = amdsmi_status_t
+-    amdsmi_get_cpu_core_ccd_power.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_double)]
+-except AttributeError:
+-    pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_pwr_efficiency_mode = _libraries['libamd_smi.so'].amdsmi_set_cpu_pwr_efficiency_mode
++#     amdsmi_set_cpu_pwr_efficiency_mode.restype = amdsmi_status_t
++#     amdsmi_set_cpu_pwr_efficiency_mode.argtypes = [amdsmi_processor_handle, uint8_t, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_pwr_efficiency_mode = _libraries['libamd_smi.so'].amdsmi_get_cpu_pwr_efficiency_mode
++#     amdsmi_get_cpu_pwr_efficiency_mode.restype = amdsmi_status_t
++#     amdsmi_get_cpu_pwr_efficiency_mode.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_double)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_core_ccd_power = _libraries['libamd_smi.so'].amdsmi_get_cpu_core_ccd_power
++#     amdsmi_get_cpu_core_ccd_power.restype = amdsmi_status_t
++#     amdsmi_get_cpu_core_ccd_power.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_double)]
++# except AttributeError:
++#     pass
+ try:
+     amdsmi_get_gpu_memory_total = _libraries['libamd_smi.so'].amdsmi_get_gpu_memory_total
+     amdsmi_get_gpu_memory_total.restype = amdsmi_status_t
+@@ -3743,402 +3758,468 @@ try:
+     amdsmi_set_gpu_ptl_formats.argtypes = [amdsmi_processor_handle, amdsmi_ptl_data_format_t, amdsmi_ptl_data_format_t]
+ except AttributeError:
+     pass
+-try:
+-    amdsmi_get_cpu_core_energy = _libraries['libamd_smi.so'].amdsmi_get_cpu_core_energy
+-    amdsmi_get_cpu_core_energy.restype = amdsmi_status_t
+-    amdsmi_get_cpu_core_energy.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint64)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_socket_energy = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_energy
+-    amdsmi_get_cpu_socket_energy.restype = amdsmi_status_t
+-    amdsmi_get_cpu_socket_energy.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint64)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_threads_per_core = _libraries['libamd_smi.so'].amdsmi_get_threads_per_core
+-    amdsmi_get_threads_per_core.restype = amdsmi_status_t
+-    amdsmi_get_threads_per_core.argtypes = [ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_hsmp_driver_version = _libraries['libamd_smi.so'].amdsmi_get_cpu_hsmp_driver_version
+-    amdsmi_get_cpu_hsmp_driver_version.restype = amdsmi_status_t
+-    amdsmi_get_cpu_hsmp_driver_version.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_amdsmi_hsmp_driver_version_t)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_smu_fw_version = _libraries['libamd_smi.so'].amdsmi_get_cpu_smu_fw_version
+-    amdsmi_get_cpu_smu_fw_version.restype = amdsmi_status_t
+-    amdsmi_get_cpu_smu_fw_version.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_amdsmi_smu_fw_version_t)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_hsmp_proto_ver = _libraries['libamd_smi.so'].amdsmi_get_cpu_hsmp_proto_ver
+-    amdsmi_get_cpu_hsmp_proto_ver.restype = amdsmi_status_t
+-    amdsmi_get_cpu_hsmp_proto_ver.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_prochot_status = _libraries['libamd_smi.so'].amdsmi_get_cpu_prochot_status
+-    amdsmi_get_cpu_prochot_status.restype = amdsmi_status_t
+-    amdsmi_get_cpu_prochot_status.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_fclk_mclk = _libraries['libamd_smi.so'].amdsmi_get_cpu_fclk_mclk
+-    amdsmi_get_cpu_fclk_mclk.restype = amdsmi_status_t
+-    amdsmi_get_cpu_fclk_mclk.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_cclk_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_cclk_limit
+-    amdsmi_get_cpu_cclk_limit.restype = amdsmi_status_t
+-    amdsmi_get_cpu_cclk_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_socket_current_active_freq_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_current_active_freq_limit
+-    amdsmi_get_cpu_socket_current_active_freq_limit.restype = amdsmi_status_t
+-    amdsmi_get_cpu_socket_current_active_freq_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint16), ctypes.POINTER(ctypes.POINTER(ctypes.c_char))]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_socket_freq_range = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_freq_range
+-    amdsmi_get_cpu_socket_freq_range.restype = amdsmi_status_t
+-    amdsmi_get_cpu_socket_freq_range.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint16), ctypes.POINTER(ctypes.c_uint16)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_core_current_freq_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_core_current_freq_limit
+-    amdsmi_get_cpu_core_current_freq_limit.restype = amdsmi_status_t
+-    amdsmi_get_cpu_core_current_freq_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_rail_isofreq_policy = _libraries['libamd_smi.so'].amdsmi_set_cpu_rail_isofreq_policy
+-    amdsmi_set_cpu_rail_isofreq_policy.restype = amdsmi_status_t
+-    amdsmi_set_cpu_rail_isofreq_policy.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_bool)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_rail_isofreq_policy = _libraries['libamd_smi.so'].amdsmi_get_cpu_rail_isofreq_policy
+-    amdsmi_get_cpu_rail_isofreq_policy.restype = amdsmi_status_t
+-    amdsmi_get_cpu_rail_isofreq_policy.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_dfc_ctrl = _libraries['libamd_smi.so'].amdsmi_set_cpu_dfc_ctrl
+-    amdsmi_set_cpu_dfc_ctrl.restype = amdsmi_status_t
+-    amdsmi_set_cpu_dfc_ctrl.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_dfc_ctrl = _libraries['libamd_smi.so'].amdsmi_get_cpu_dfc_ctrl
+-    amdsmi_get_cpu_dfc_ctrl.restype = amdsmi_status_t
+-    amdsmi_get_cpu_dfc_ctrl.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_core_boostlimit = _libraries['libamd_smi.so'].amdsmi_get_cpu_core_boostlimit
+-    amdsmi_get_cpu_core_boostlimit.restype = amdsmi_status_t
+-    amdsmi_get_cpu_core_boostlimit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_socket_c0_residency = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_c0_residency
+-    amdsmi_get_cpu_socket_c0_residency.restype = amdsmi_status_t
+-    amdsmi_get_cpu_socket_c0_residency.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_core_boostlimit = _libraries['libamd_smi.so'].amdsmi_set_cpu_core_boostlimit
+-    amdsmi_set_cpu_core_boostlimit.restype = amdsmi_status_t
+-    amdsmi_set_cpu_core_boostlimit.argtypes = [amdsmi_processor_handle, uint32_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_socket_boostlimit = _libraries['libamd_smi.so'].amdsmi_set_cpu_socket_boostlimit
+-    amdsmi_set_cpu_socket_boostlimit.restype = amdsmi_status_t
+-    amdsmi_set_cpu_socket_boostlimit.argtypes = [amdsmi_processor_handle, uint32_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_core_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_core_floor_freq_limit
+-    amdsmi_get_cpu_core_floor_freq_limit.restype = amdsmi_status_t
+-    amdsmi_get_cpu_core_floor_freq_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_floor_freq_limit
+-    amdsmi_get_cpu_floor_freq_limit.restype = amdsmi_status_t
+-    amdsmi_get_cpu_floor_freq_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_core_eff_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_core_eff_floor_freq_limit
+-    amdsmi_get_cpu_core_eff_floor_freq_limit.restype = amdsmi_status_t
+-    amdsmi_get_cpu_core_eff_floor_freq_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_eff_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_eff_floor_freq_limit
+-    amdsmi_get_cpu_eff_floor_freq_limit.restype = amdsmi_status_t
+-    amdsmi_get_cpu_eff_floor_freq_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_core_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_set_cpu_core_floor_freq_limit
+-    amdsmi_set_cpu_core_floor_freq_limit.restype = amdsmi_status_t
+-    amdsmi_set_cpu_core_floor_freq_limit.argtypes = [amdsmi_processor_handle, uint32_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_set_cpu_floor_freq_limit
+-    amdsmi_set_cpu_floor_freq_limit.restype = amdsmi_status_t
+-    amdsmi_set_cpu_floor_freq_limit.argtypes = [amdsmi_processor_handle, uint32_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_msr_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_set_cpu_msr_floor_freq_limit
+-    amdsmi_set_cpu_msr_floor_freq_limit.restype = amdsmi_status_t
+-    amdsmi_set_cpu_msr_floor_freq_limit.argtypes = [amdsmi_processor_handle, uint32_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_core_msr_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_set_cpu_core_msr_floor_freq_limit
+-    amdsmi_set_cpu_core_msr_floor_freq_limit.restype = amdsmi_status_t
+-    amdsmi_set_cpu_core_msr_floor_freq_limit.argtypes = [amdsmi_processor_handle, uint32_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_freq_range = _libraries['libamd_smi.so'].amdsmi_get_cpu_freq_range
+-    amdsmi_get_cpu_freq_range.restype = amdsmi_status_t
+-    amdsmi_get_cpu_freq_range.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_sdps_limit = _libraries['libamd_smi.so'].amdsmi_set_cpu_sdps_limit
+-    amdsmi_set_cpu_sdps_limit.restype = amdsmi_status_t
+-    amdsmi_set_cpu_sdps_limit.argtypes = [amdsmi_processor_handle, uint32_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_sdps_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_sdps_limit
+-    amdsmi_get_cpu_sdps_limit.restype = amdsmi_status_t
+-    amdsmi_get_cpu_sdps_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_double)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_ddr_bw = _libraries['libamd_smi.so'].amdsmi_get_cpu_ddr_bw
+-    amdsmi_get_cpu_ddr_bw.restype = amdsmi_status_t
+-    amdsmi_get_cpu_ddr_bw.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_amdsmi_ddr_bw_metrics_t)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_socket_temperature = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_temperature
+-    amdsmi_get_cpu_socket_temperature.restype = amdsmi_status_t
+-    amdsmi_get_cpu_socket_temperature.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_tdelta = _libraries['libamd_smi.so'].amdsmi_get_cpu_tdelta
+-    amdsmi_get_cpu_tdelta.restype = amdsmi_status_t
+-    amdsmi_get_cpu_tdelta.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_svi3_vr_controller_temp = _libraries['libamd_smi.so'].amdsmi_get_cpu_svi3_vr_controller_temp
+-    amdsmi_get_cpu_svi3_vr_controller_temp.restype = amdsmi_status_t
+-    amdsmi_get_cpu_svi3_vr_controller_temp.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_dimm_temp_range_and_refresh_rate = _libraries['libamd_smi.so'].amdsmi_get_cpu_dimm_temp_range_and_refresh_rate
+-    amdsmi_get_cpu_dimm_temp_range_and_refresh_rate.restype = amdsmi_status_t
+-    amdsmi_get_cpu_dimm_temp_range_and_refresh_rate.argtypes = [amdsmi_processor_handle, uint8_t, ctypes.POINTER(struct_amdsmi_temp_range_refresh_rate_t)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_dimm_power_consumption = _libraries['libamd_smi.so'].amdsmi_get_cpu_dimm_power_consumption
+-    amdsmi_get_cpu_dimm_power_consumption.restype = amdsmi_status_t
+-    amdsmi_get_cpu_dimm_power_consumption.argtypes = [amdsmi_processor_handle, uint8_t, ctypes.POINTER(struct_amdsmi_dimm_power_t)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_dimm_thermal_sensor = _libraries['libamd_smi.so'].amdsmi_get_cpu_dimm_thermal_sensor
+-    amdsmi_get_cpu_dimm_thermal_sensor.restype = amdsmi_status_t
+-    amdsmi_get_cpu_dimm_thermal_sensor.argtypes = [amdsmi_processor_handle, uint8_t, ctypes.POINTER(struct_amdsmi_dimm_thermal_t)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_dimm_sb_reg = _libraries['libamd_smi.so'].amdsmi_get_cpu_dimm_sb_reg
+-    amdsmi_get_cpu_dimm_sb_reg.restype = amdsmi_status_t
+-    amdsmi_get_cpu_dimm_sb_reg.argtypes = [amdsmi_processor_handle, uint32_t, uint32_t, uint32_t, uint32_t, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_dimm_sb_reg = _libraries['libamd_smi.so'].amdsmi_set_cpu_dimm_sb_reg
+-    amdsmi_set_cpu_dimm_sb_reg.restype = amdsmi_status_t
+-    amdsmi_set_cpu_dimm_sb_reg.argtypes = [amdsmi_processor_handle, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_xgmi_width = _libraries['libamd_smi.so'].amdsmi_set_cpu_xgmi_width
+-    amdsmi_set_cpu_xgmi_width.restype = amdsmi_status_t
+-    amdsmi_set_cpu_xgmi_width.argtypes = [amdsmi_processor_handle, uint8_t, uint8_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_gmi3_link_width_range = _libraries['libamd_smi.so'].amdsmi_set_cpu_gmi3_link_width_range
+-    amdsmi_set_cpu_gmi3_link_width_range.restype = amdsmi_status_t
+-    amdsmi_set_cpu_gmi3_link_width_range.argtypes = [amdsmi_processor_handle, uint8_t, uint8_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_cpu_apb_enable = _libraries['libamd_smi.so'].amdsmi_cpu_apb_enable
+-    amdsmi_cpu_apb_enable.restype = amdsmi_status_t
+-    amdsmi_cpu_apb_enable.argtypes = [amdsmi_processor_handle]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_cpu_apb_disable = _libraries['libamd_smi.so'].amdsmi_cpu_apb_disable
+-    amdsmi_cpu_apb_disable.restype = amdsmi_status_t
+-    amdsmi_cpu_apb_disable.argtypes = [amdsmi_processor_handle, uint8_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_socket_lclk_dpm_level = _libraries['libamd_smi.so'].amdsmi_set_cpu_socket_lclk_dpm_level
+-    amdsmi_set_cpu_socket_lclk_dpm_level.restype = amdsmi_status_t
+-    amdsmi_set_cpu_socket_lclk_dpm_level.argtypes = [amdsmi_processor_handle, uint8_t, uint8_t, uint8_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_socket_lclk_dpm_level = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_lclk_dpm_level
+-    amdsmi_get_cpu_socket_lclk_dpm_level.restype = amdsmi_status_t
+-    amdsmi_get_cpu_socket_lclk_dpm_level.argtypes = [amdsmi_processor_handle, uint8_t, ctypes.POINTER(struct_amdsmi_dpm_level_t)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_pcie_link_rate = _libraries['libamd_smi.so'].amdsmi_set_cpu_pcie_link_rate
+-    amdsmi_set_cpu_pcie_link_rate.restype = amdsmi_status_t
+-    amdsmi_set_cpu_pcie_link_rate.argtypes = [amdsmi_processor_handle, uint8_t, ctypes.POINTER(ctypes.c_ubyte)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_df_pstate_range = _libraries['libamd_smi.so'].amdsmi_set_cpu_df_pstate_range
+-    amdsmi_set_cpu_df_pstate_range.restype = amdsmi_status_t
+-    amdsmi_set_cpu_df_pstate_range.argtypes = [amdsmi_processor_handle, uint8_t, uint8_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_xgmi_pstate_range = _libraries['libamd_smi.so'].amdsmi_set_cpu_xgmi_pstate_range
+-    amdsmi_set_cpu_xgmi_pstate_range.restype = amdsmi_status_t
+-    amdsmi_set_cpu_xgmi_pstate_range.argtypes = [amdsmi_processor_handle, uint8_t, uint8_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_xgmi_pstate_range = _libraries['libamd_smi.so'].amdsmi_get_cpu_xgmi_pstate_range
+-    amdsmi_get_cpu_xgmi_pstate_range.restype = amdsmi_status_t
+-    amdsmi_get_cpu_xgmi_pstate_range.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte), ctypes.POINTER(ctypes.c_ubyte)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_pc6_enable = _libraries['libamd_smi.so'].amdsmi_get_cpu_pc6_enable
+-    amdsmi_get_cpu_pc6_enable.restype = amdsmi_status_t
+-    amdsmi_get_cpu_pc6_enable.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_pc6_enable = _libraries['libamd_smi.so'].amdsmi_set_cpu_pc6_enable
+-    amdsmi_set_cpu_pc6_enable.restype = amdsmi_status_t
+-    amdsmi_set_cpu_pc6_enable.argtypes = [amdsmi_processor_handle, uint8_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_cc6_enable = _libraries['libamd_smi.so'].amdsmi_get_cpu_cc6_enable
+-    amdsmi_get_cpu_cc6_enable.restype = amdsmi_status_t
+-    amdsmi_get_cpu_cc6_enable.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_set_cpu_cc6_enable = _libraries['libamd_smi.so'].amdsmi_set_cpu_cc6_enable
+-    amdsmi_set_cpu_cc6_enable.restype = amdsmi_status_t
+-    amdsmi_set_cpu_cc6_enable.argtypes = [amdsmi_processor_handle, uint8_t]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_current_io_bandwidth = _libraries['libamd_smi.so'].amdsmi_get_cpu_current_io_bandwidth
+-    amdsmi_get_cpu_current_io_bandwidth.restype = amdsmi_status_t
+-    amdsmi_get_cpu_current_io_bandwidth.argtypes = [amdsmi_processor_handle, amdsmi_link_id_bw_type_t, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_current_xgmi_bw = _libraries['libamd_smi.so'].amdsmi_get_cpu_current_xgmi_bw
+-    amdsmi_get_cpu_current_xgmi_bw.restype = amdsmi_status_t
+-    amdsmi_get_cpu_current_xgmi_bw.argtypes = [amdsmi_processor_handle, amdsmi_link_id_bw_type_t, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_hsmp_metrics_table_version = _libraries['libamd_smi.so'].amdsmi_get_hsmp_metrics_table_version
+-    amdsmi_get_hsmp_metrics_table_version.restype = amdsmi_status_t
+-    amdsmi_get_hsmp_metrics_table_version.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_hsmp_metrics_table = _libraries['libamd_smi.so'].amdsmi_get_hsmp_metrics_table
+-    amdsmi_get_hsmp_metrics_table.restype = amdsmi_status_t
+-    amdsmi_get_hsmp_metrics_table.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_amdsmi_hsmp_metrics_table_t)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_first_online_core_on_cpu_socket = _libraries['libamd_smi.so'].amdsmi_first_online_core_on_cpu_socket
+-    amdsmi_first_online_core_on_cpu_socket.restype = amdsmi_status_t
+-    amdsmi_first_online_core_on_cpu_socket.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_family = _libraries['libamd_smi.so'].amdsmi_get_cpu_family
+-    amdsmi_get_cpu_family.restype = amdsmi_status_t
+-    amdsmi_get_cpu_family.argtypes = [ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_model = _libraries['libamd_smi.so'].amdsmi_get_cpu_model
+-    amdsmi_get_cpu_model.restype = amdsmi_status_t
+-    amdsmi_get_cpu_model.argtypes = [ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_model_name = _libraries['libamd_smi.so'].amdsmi_get_cpu_model_name
+-    amdsmi_get_cpu_model_name.restype = amdsmi_status_t
+-    amdsmi_get_cpu_model_name.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_amdsmi_cpu_info_t)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_esmi_err_msg = _libraries['libamd_smi.so'].amdsmi_get_esmi_err_msg
+-    amdsmi_get_esmi_err_msg.restype = amdsmi_status_t
+-    amdsmi_get_esmi_err_msg.argtypes = [amdsmi_status_t, ctypes.POINTER(ctypes.POINTER(ctypes.c_char))]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_cores_per_socket = _libraries['libamd_smi.so'].amdsmi_get_cpu_cores_per_socket
+-    amdsmi_get_cpu_cores_per_socket.restype = amdsmi_status_t
+-    amdsmi_get_cpu_cores_per_socket.argtypes = [uint32_t, ctypes.POINTER(struct_amdsmi_sock_info_t)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_socket_count = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_count
+-    amdsmi_get_cpu_socket_count.restype = amdsmi_status_t
+-    amdsmi_get_cpu_socket_count.argtypes = [ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
+-try:
+-    amdsmi_get_cpu_enabled_commands = _libraries['libamd_smi.so'].amdsmi_get_cpu_enabled_commands
+-    amdsmi_get_cpu_enabled_commands.restype = amdsmi_status_t
+-    amdsmi_get_cpu_enabled_commands.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_bool), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+-except AttributeError:
+-    pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_core_energy = _libraries['libamd_smi.so'].amdsmi_get_cpu_core_energy
++#     amdsmi_get_cpu_core_energy.restype = amdsmi_status_t
++#     amdsmi_get_cpu_core_energy.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint64)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_socket_energy = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_energy
++#     amdsmi_get_cpu_socket_energy.restype = amdsmi_status_t
++#     amdsmi_get_cpu_socket_energy.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint64)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_threads_per_core = _libraries['libamd_smi.so'].amdsmi_get_threads_per_core
++#     amdsmi_get_threads_per_core.restype = amdsmi_status_t
++#     amdsmi_get_threads_per_core.argtypes = [ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_hsmp_driver_version = _libraries['libamd_smi.so'].amdsmi_get_cpu_hsmp_driver_version
++#     amdsmi_get_cpu_hsmp_driver_version.restype = amdsmi_status_t
++#     amdsmi_get_cpu_hsmp_driver_version.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_amdsmi_hsmp_driver_version_t)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_smu_fw_version = _libraries['libamd_smi.so'].amdsmi_get_cpu_smu_fw_version
++#     amdsmi_get_cpu_smu_fw_version.restype = amdsmi_status_t
++#     amdsmi_get_cpu_smu_fw_version.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_amdsmi_smu_fw_version_t)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_hsmp_proto_ver = _libraries['libamd_smi.so'].amdsmi_get_cpu_hsmp_proto_ver
++#     amdsmi_get_cpu_hsmp_proto_ver.restype = amdsmi_status_t
++#     amdsmi_get_cpu_hsmp_proto_ver.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_prochot_status = _libraries['libamd_smi.so'].amdsmi_get_cpu_prochot_status
++#     amdsmi_get_cpu_prochot_status.restype = amdsmi_status_t
++#     amdsmi_get_cpu_prochot_status.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_fclk_mclk = _libraries['libamd_smi.so'].amdsmi_get_cpu_fclk_mclk
++#     amdsmi_get_cpu_fclk_mclk.restype = amdsmi_status_t
++#     amdsmi_get_cpu_fclk_mclk.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_cclk_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_cclk_limit
++#     amdsmi_get_cpu_cclk_limit.restype = amdsmi_status_t
++#     amdsmi_get_cpu_cclk_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_socket_current_active_freq_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_current_active_freq_limit
++#     amdsmi_get_cpu_socket_current_active_freq_limit.restype = amdsmi_status_t
++#     amdsmi_get_cpu_socket_current_active_freq_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint16), ctypes.POINTER(ctypes.POINTER(ctypes.c_char))]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_socket_freq_range = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_freq_range
++#     amdsmi_get_cpu_socket_freq_range.restype = amdsmi_status_t
++#     amdsmi_get_cpu_socket_freq_range.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint16), ctypes.POINTER(ctypes.c_uint16)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_core_current_freq_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_core_current_freq_limit
++#     amdsmi_get_cpu_core_current_freq_limit.restype = amdsmi_status_t
++#     amdsmi_get_cpu_core_current_freq_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_rail_isofreq_policy = _libraries['libamd_smi.so'].amdsmi_set_cpu_rail_isofreq_policy
++#     amdsmi_set_cpu_rail_isofreq_policy.restype = amdsmi_status_t
++#     amdsmi_set_cpu_rail_isofreq_policy.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_bool)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_rail_isofreq_policy = _libraries['libamd_smi.so'].amdsmi_get_cpu_rail_isofreq_policy
++#     amdsmi_get_cpu_rail_isofreq_policy.restype = amdsmi_status_t
++#     amdsmi_get_cpu_rail_isofreq_policy.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_dfc_ctrl = _libraries['libamd_smi.so'].amdsmi_set_cpu_dfc_ctrl
++#     amdsmi_set_cpu_dfc_ctrl.restype = amdsmi_status_t
++#     amdsmi_set_cpu_dfc_ctrl.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_dfc_ctrl = _libraries['libamd_smi.so'].amdsmi_get_cpu_dfc_ctrl
++#     amdsmi_get_cpu_dfc_ctrl.restype = amdsmi_status_t
++#     amdsmi_get_cpu_dfc_ctrl.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_core_boostlimit = _libraries['libamd_smi.so'].amdsmi_get_cpu_core_boostlimit
++#     amdsmi_get_cpu_core_boostlimit.restype = amdsmi_status_t
++#     amdsmi_get_cpu_core_boostlimit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_socket_c0_residency = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_c0_residency
++#     amdsmi_get_cpu_socket_c0_residency.restype = amdsmi_status_t
++#     amdsmi_get_cpu_socket_c0_residency.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_core_boostlimit = _libraries['libamd_smi.so'].amdsmi_set_cpu_core_boostlimit
++#     amdsmi_set_cpu_core_boostlimit.restype = amdsmi_status_t
++#     amdsmi_set_cpu_core_boostlimit.argtypes = [amdsmi_processor_handle, uint32_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_socket_boostlimit = _libraries['libamd_smi.so'].amdsmi_set_cpu_socket_boostlimit
++#     amdsmi_set_cpu_socket_boostlimit.restype = amdsmi_status_t
++#     amdsmi_set_cpu_socket_boostlimit.argtypes = [amdsmi_processor_handle, uint32_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_core_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_core_floor_freq_limit
++#     amdsmi_get_cpu_core_floor_freq_limit.restype = amdsmi_status_t
++#     amdsmi_get_cpu_core_floor_freq_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_floor_freq_limit
++#     amdsmi_get_cpu_floor_freq_limit.restype = amdsmi_status_t
++#     amdsmi_get_cpu_floor_freq_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_core_eff_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_core_eff_floor_freq_limit
++#     amdsmi_get_cpu_core_eff_floor_freq_limit.restype = amdsmi_status_t
++#     amdsmi_get_cpu_core_eff_floor_freq_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_eff_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_eff_floor_freq_limit
++#     amdsmi_get_cpu_eff_floor_freq_limit.restype = amdsmi_status_t
++#     amdsmi_get_cpu_eff_floor_freq_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_core_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_set_cpu_core_floor_freq_limit
++#     amdsmi_set_cpu_core_floor_freq_limit.restype = amdsmi_status_t
++#     amdsmi_set_cpu_core_floor_freq_limit.argtypes = [amdsmi_processor_handle, uint32_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_set_cpu_floor_freq_limit
++#     amdsmi_set_cpu_floor_freq_limit.restype = amdsmi_status_t
++#     amdsmi_set_cpu_floor_freq_limit.argtypes = [amdsmi_processor_handle, uint32_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_msr_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_set_cpu_msr_floor_freq_limit
++#     amdsmi_set_cpu_msr_floor_freq_limit.restype = amdsmi_status_t
++#     amdsmi_set_cpu_msr_floor_freq_limit.argtypes = [amdsmi_processor_handle, uint32_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_core_msr_floor_freq_limit = _libraries['libamd_smi.so'].amdsmi_set_cpu_core_msr_floor_freq_limit
++#     amdsmi_set_cpu_core_msr_floor_freq_limit.restype = amdsmi_status_t
++#     amdsmi_set_cpu_core_msr_floor_freq_limit.argtypes = [amdsmi_processor_handle, uint32_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_freq_range = _libraries['libamd_smi.so'].amdsmi_get_cpu_freq_range
++#     amdsmi_get_cpu_freq_range.restype = amdsmi_status_t
++#     amdsmi_get_cpu_freq_range.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_sdps_limit = _libraries['libamd_smi.so'].amdsmi_set_cpu_sdps_limit
++#     amdsmi_set_cpu_sdps_limit.restype = amdsmi_status_t
++#     amdsmi_set_cpu_sdps_limit.argtypes = [amdsmi_processor_handle, uint32_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_sdps_limit = _libraries['libamd_smi.so'].amdsmi_get_cpu_sdps_limit
++#     amdsmi_get_cpu_sdps_limit.restype = amdsmi_status_t
++#     amdsmi_get_cpu_sdps_limit.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_double)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_ddr_bw = _libraries['libamd_smi.so'].amdsmi_get_cpu_ddr_bw
++#     amdsmi_get_cpu_ddr_bw.restype = amdsmi_status_t
++#     amdsmi_get_cpu_ddr_bw.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_amdsmi_ddr_bw_metrics_t)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_socket_temperature = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_temperature
++#     amdsmi_get_cpu_socket_temperature.restype = amdsmi_status_t
++#     amdsmi_get_cpu_socket_temperature.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_tdelta = _libraries['libamd_smi.so'].amdsmi_get_cpu_tdelta
++#     amdsmi_get_cpu_tdelta.restype = amdsmi_status_t
++#     amdsmi_get_cpu_tdelta.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_svi3_vr_controller_temp = _libraries['libamd_smi.so'].amdsmi_get_cpu_svi3_vr_controller_temp
++#     amdsmi_get_cpu_svi3_vr_controller_temp.restype = amdsmi_status_t
++#     amdsmi_get_cpu_svi3_vr_controller_temp.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_dimm_temp_range_and_refresh_rate = _libraries['libamd_smi.so'].amdsmi_get_cpu_dimm_temp_range_and_refresh_rate
++#     amdsmi_get_cpu_dimm_temp_range_and_refresh_rate.restype = amdsmi_status_t
++#     amdsmi_get_cpu_dimm_temp_range_and_refresh_rate.argtypes = [amdsmi_processor_handle, uint8_t, ctypes.POINTER(struct_amdsmi_temp_range_refresh_rate_t)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_dimm_power_consumption = _libraries['libamd_smi.so'].amdsmi_get_cpu_dimm_power_consumption
++#     amdsmi_get_cpu_dimm_power_consumption.restype = amdsmi_status_t
++#     amdsmi_get_cpu_dimm_power_consumption.argtypes = [amdsmi_processor_handle, uint8_t, ctypes.POINTER(struct_amdsmi_dimm_power_t)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_dimm_thermal_sensor = _libraries['libamd_smi.so'].amdsmi_get_cpu_dimm_thermal_sensor
++#     amdsmi_get_cpu_dimm_thermal_sensor.restype = amdsmi_status_t
++#     amdsmi_get_cpu_dimm_thermal_sensor.argtypes = [amdsmi_processor_handle, uint8_t, ctypes.POINTER(struct_amdsmi_dimm_thermal_t)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_dimm_sb_reg = _libraries['libamd_smi.so'].amdsmi_get_cpu_dimm_sb_reg
++#     amdsmi_get_cpu_dimm_sb_reg.restype = amdsmi_status_t
++#     amdsmi_get_cpu_dimm_sb_reg.argtypes = [amdsmi_processor_handle, uint32_t, uint32_t, uint32_t, uint32_t, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_dimm_sb_reg = _libraries['libamd_smi.so'].amdsmi_set_cpu_dimm_sb_reg
++#     amdsmi_set_cpu_dimm_sb_reg.restype = amdsmi_status_t
++#     amdsmi_set_cpu_dimm_sb_reg.argtypes = [amdsmi_processor_handle, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_xgmi_width = _libraries['libamd_smi.so'].amdsmi_set_cpu_xgmi_width
++#     amdsmi_set_cpu_xgmi_width.restype = amdsmi_status_t
++#     amdsmi_set_cpu_xgmi_width.argtypes = [amdsmi_processor_handle, uint8_t, uint8_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_gmi3_link_width_range = _libraries['libamd_smi.so'].amdsmi_set_cpu_gmi3_link_width_range
++#     amdsmi_set_cpu_gmi3_link_width_range.restype = amdsmi_status_t
++#     amdsmi_set_cpu_gmi3_link_width_range.argtypes = [amdsmi_processor_handle, uint8_t, uint8_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_cpu_apb_enable = _libraries['libamd_smi.so'].amdsmi_cpu_apb_enable
++#     amdsmi_cpu_apb_enable.restype = amdsmi_status_t
++#     amdsmi_cpu_apb_enable.argtypes = [amdsmi_processor_handle]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_cpu_apb_disable = _libraries['libamd_smi.so'].amdsmi_cpu_apb_disable
++#     amdsmi_cpu_apb_disable.restype = amdsmi_status_t
++#     amdsmi_cpu_apb_disable.argtypes = [amdsmi_processor_handle, uint8_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_socket_lclk_dpm_level = _libraries['libamd_smi.so'].amdsmi_set_cpu_socket_lclk_dpm_level
++#     amdsmi_set_cpu_socket_lclk_dpm_level.restype = amdsmi_status_t
++#     amdsmi_set_cpu_socket_lclk_dpm_level.argtypes = [amdsmi_processor_handle, uint8_t, uint8_t, uint8_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_socket_lclk_dpm_level = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_lclk_dpm_level
++#     amdsmi_get_cpu_socket_lclk_dpm_level.restype = amdsmi_status_t
++#     amdsmi_get_cpu_socket_lclk_dpm_level.argtypes = [amdsmi_processor_handle, uint8_t, ctypes.POINTER(struct_amdsmi_dpm_level_t)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_pcie_link_rate = _libraries['libamd_smi.so'].amdsmi_set_cpu_pcie_link_rate
++#     amdsmi_set_cpu_pcie_link_rate.restype = amdsmi_status_t
++#     amdsmi_set_cpu_pcie_link_rate.argtypes = [amdsmi_processor_handle, uint8_t, ctypes.POINTER(ctypes.c_ubyte)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_df_pstate_range = _libraries['libamd_smi.so'].amdsmi_set_cpu_df_pstate_range
++#     amdsmi_set_cpu_df_pstate_range.restype = amdsmi_status_t
++#     amdsmi_set_cpu_df_pstate_range.argtypes = [amdsmi_processor_handle, uint8_t, uint8_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_xgmi_pstate_range = _libraries['libamd_smi.so'].amdsmi_set_cpu_xgmi_pstate_range
++#     amdsmi_set_cpu_xgmi_pstate_range.restype = amdsmi_status_t
++#     amdsmi_set_cpu_xgmi_pstate_range.argtypes = [amdsmi_processor_handle, uint8_t, uint8_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_xgmi_pstate_range = _libraries['libamd_smi.so'].amdsmi_get_cpu_xgmi_pstate_range
++#     amdsmi_get_cpu_xgmi_pstate_range.restype = amdsmi_status_t
++#     amdsmi_get_cpu_xgmi_pstate_range.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte), ctypes.POINTER(ctypes.c_ubyte)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_pc6_enable = _libraries['libamd_smi.so'].amdsmi_get_cpu_pc6_enable
++#     amdsmi_get_cpu_pc6_enable.restype = amdsmi_status_t
++#     amdsmi_get_cpu_pc6_enable.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_pc6_enable = _libraries['libamd_smi.so'].amdsmi_set_cpu_pc6_enable
++#     amdsmi_set_cpu_pc6_enable.restype = amdsmi_status_t
++#     amdsmi_set_cpu_pc6_enable.argtypes = [amdsmi_processor_handle, uint8_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_cc6_enable = _libraries['libamd_smi.so'].amdsmi_get_cpu_cc6_enable
++#     amdsmi_get_cpu_cc6_enable.restype = amdsmi_status_t
++#     amdsmi_get_cpu_cc6_enable.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_ubyte)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_set_cpu_cc6_enable = _libraries['libamd_smi.so'].amdsmi_set_cpu_cc6_enable
++#     amdsmi_set_cpu_cc6_enable.restype = amdsmi_status_t
++#     amdsmi_set_cpu_cc6_enable.argtypes = [amdsmi_processor_handle, uint8_t]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_current_io_bandwidth = _libraries['libamd_smi.so'].amdsmi_get_cpu_current_io_bandwidth
++#     amdsmi_get_cpu_current_io_bandwidth.restype = amdsmi_status_t
++#     amdsmi_get_cpu_current_io_bandwidth.argtypes = [amdsmi_processor_handle, amdsmi_link_id_bw_type_t, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_current_xgmi_bw = _libraries['libamd_smi.so'].amdsmi_get_cpu_current_xgmi_bw
++#     amdsmi_get_cpu_current_xgmi_bw.restype = amdsmi_status_t
++#     amdsmi_get_cpu_current_xgmi_bw.argtypes = [amdsmi_processor_handle, amdsmi_link_id_bw_type_t, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_hsmp_metrics_table_version = _libraries['libamd_smi.so'].amdsmi_get_hsmp_metrics_table_version
++#     amdsmi_get_hsmp_metrics_table_version.restype = amdsmi_status_t
++#     amdsmi_get_hsmp_metrics_table_version.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_hsmp_metrics_table = _libraries['libamd_smi.so'].amdsmi_get_hsmp_metrics_table
++#     amdsmi_get_hsmp_metrics_table.restype = amdsmi_status_t
++#     amdsmi_get_hsmp_metrics_table.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_amdsmi_hsmp_metrics_table_t)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_first_online_core_on_cpu_socket = _libraries['libamd_smi.so'].amdsmi_first_online_core_on_cpu_socket
++#     amdsmi_first_online_core_on_cpu_socket.restype = amdsmi_status_t
++#     amdsmi_first_online_core_on_cpu_socket.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_family = _libraries['libamd_smi.so'].amdsmi_get_cpu_family
++#     amdsmi_get_cpu_family.restype = amdsmi_status_t
++#     amdsmi_get_cpu_family.argtypes = [ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_model = _libraries['libamd_smi.so'].amdsmi_get_cpu_model
++#     amdsmi_get_cpu_model.restype = amdsmi_status_t
++#     amdsmi_get_cpu_model.argtypes = [ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_model_name = _libraries['libamd_smi.so'].amdsmi_get_cpu_model_name
++#     amdsmi_get_cpu_model_name.restype = amdsmi_status_t
++#     amdsmi_get_cpu_model_name.argtypes = [amdsmi_processor_handle, ctypes.POINTER(struct_amdsmi_cpu_info_t)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_esmi_err_msg = _libraries['libamd_smi.so'].amdsmi_get_esmi_err_msg
++#     amdsmi_get_esmi_err_msg.restype = amdsmi_status_t
++#     amdsmi_get_esmi_err_msg.argtypes = [amdsmi_status_t, ctypes.POINTER(ctypes.POINTER(ctypes.c_char))]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_cores_per_socket = _libraries['libamd_smi.so'].amdsmi_get_cpu_cores_per_socket
++#     amdsmi_get_cpu_cores_per_socket.restype = amdsmi_status_t
++#     amdsmi_get_cpu_cores_per_socket.argtypes = [uint32_t, ctypes.POINTER(struct_amdsmi_sock_info_t)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_socket_count = _libraries['libamd_smi.so'].amdsmi_get_cpu_socket_count
++#     amdsmi_get_cpu_socket_count.restype = amdsmi_status_t
++#     amdsmi_get_cpu_socket_count.argtypes = [ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
++# ESMI disabled (ENABLE_ESMI_LIB=OFF)
++# try:
++#     amdsmi_get_cpu_enabled_commands = _libraries['libamd_smi.so'].amdsmi_get_cpu_enabled_commands
++#     amdsmi_get_cpu_enabled_commands.restype = amdsmi_status_t
++#     amdsmi_get_cpu_enabled_commands.argtypes = [amdsmi_processor_handle, ctypes.POINTER(ctypes.c_bool), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
++# except AttributeError:
++#     pass
+ try:
+     amdsmi_get_nic_driver_info = _libraries['libamd_smi.so'].amdsmi_get_nic_driver_info
+     amdsmi_get_nic_driver_info.restype = amdsmi_status_t
+@@ -4544,8 +4625,10 @@ __all__ = \
+     'amdsmi_counter_value_t', 'amdsmi_cper_guid_t',
+     'amdsmi_cper_hdr_t', 'amdsmi_cper_notify_type_t',
+     'amdsmi_cper_sev_t', 'amdsmi_cper_timestamp_t',
+-    'amdsmi_cper_valid_bits_t', 'amdsmi_cpu_apb_disable',
+-    'amdsmi_cpu_apb_enable', 'amdsmi_cpu_info_t', 'amdsmi_cpu_util_t',
++    'amdsmi_cper_valid_bits_t',
++    # ESMI disabled: 'amdsmi_cpu_apb_disable'
++    'amdsmi_cpu_info_t', 'amdsmi_cpu_util_t',
++    # ESMI disabled: 'amdsmi_cpu_apb_enable'
+     'amdsmi_cpusocket_handle', 'amdsmi_ddr_bw_metrics_t',
+     'amdsmi_dev_perf_level_t', 'amdsmi_dimm_power_t',
+     'amdsmi_dimm_thermal_t', 'amdsmi_dpm_level_t',
+@@ -4555,50 +4638,51 @@ __all__ = \
+     'amdsmi_event_group_t', 'amdsmi_event_handle_t',
+     'amdsmi_event_type_t', 'amdsmi_evt_notification_data_t',
+     'amdsmi_evt_notification_type_t',
+-    'amdsmi_first_online_core_on_cpu_socket', 'amdsmi_freq_ind_t',
++    'amdsmi_freq_ind_t',
++    # ESMI disabled: 'amdsmi_first_online_core_on_cpu_socket'
+     'amdsmi_freq_volt_region_t', 'amdsmi_frequencies_t',
+     'amdsmi_frequency_range_t', 'amdsmi_fw_block_t',
+     'amdsmi_fw_info_t', 'amdsmi_get_afids_from_cper',
+     'amdsmi_get_clk_freq', 'amdsmi_get_clock_info',
+-    'amdsmi_get_cpu_affinity_with_scope', 'amdsmi_get_cpu_cc6_enable',
+-    'amdsmi_get_cpu_cclk_limit', 'amdsmi_get_cpu_core_boostlimit',
+-    'amdsmi_get_cpu_core_ccd_power',
+-    'amdsmi_get_cpu_core_current_freq_limit',
+-    'amdsmi_get_cpu_core_eff_floor_freq_limit',
+-    'amdsmi_get_cpu_core_energy',
+-    'amdsmi_get_cpu_core_floor_freq_limit',
+-    'amdsmi_get_cpu_cores_per_socket',
+-    'amdsmi_get_cpu_current_io_bandwidth',
+-    'amdsmi_get_cpu_current_xgmi_bw', 'amdsmi_get_cpu_ddr_bw',
+-    'amdsmi_get_cpu_dfc_ctrl',
+-    'amdsmi_get_cpu_dimm_power_consumption',
+-    'amdsmi_get_cpu_dimm_sb_reg',
+-    'amdsmi_get_cpu_dimm_temp_range_and_refresh_rate',
+-    'amdsmi_get_cpu_dimm_thermal_sensor',
+-    'amdsmi_get_cpu_eff_floor_freq_limit',
+-    'amdsmi_get_cpu_enabled_commands', 'amdsmi_get_cpu_family',
+-    'amdsmi_get_cpu_fclk_mclk', 'amdsmi_get_cpu_floor_freq_limit',
+-    'amdsmi_get_cpu_freq_range', 'amdsmi_get_cpu_handles',
+-    'amdsmi_get_cpu_hsmp_driver_version',
+-    'amdsmi_get_cpu_hsmp_proto_ver', 'amdsmi_get_cpu_model',
+-    'amdsmi_get_cpu_model_name', 'amdsmi_get_cpu_pc6_enable',
+-    'amdsmi_get_cpu_prochot_status',
+-    'amdsmi_get_cpu_pwr_efficiency_mode',
+-    'amdsmi_get_cpu_pwr_svi_telemetry_all_rails',
+-    'amdsmi_get_cpu_rail_isofreq_policy', 'amdsmi_get_cpu_sdps_limit',
+-    'amdsmi_get_cpu_smu_fw_version',
+-    'amdsmi_get_cpu_socket_c0_residency',
+-    'amdsmi_get_cpu_socket_count',
+-    'amdsmi_get_cpu_socket_current_active_freq_limit',
+-    'amdsmi_get_cpu_socket_energy',
+-    'amdsmi_get_cpu_socket_freq_range',
+-    'amdsmi_get_cpu_socket_lclk_dpm_level',
+-    'amdsmi_get_cpu_socket_power', 'amdsmi_get_cpu_socket_power_cap',
+-    'amdsmi_get_cpu_socket_power_cap_max',
+-    'amdsmi_get_cpu_socket_temperature',
+-    'amdsmi_get_cpu_svi3_vr_controller_temp', 'amdsmi_get_cpu_tdelta',
+-    'amdsmi_get_cpu_xgmi_pstate_range', 'amdsmi_get_cpucore_handles',
+-    'amdsmi_get_energy_count', 'amdsmi_get_esmi_err_msg',
++    # ESMI disabled: 'amdsmi_get_cpu_affinity_with_scope', 'amdsmi_get_cpu_cc6_enable',
++    # ESMI disabled: 'amdsmi_get_cpu_cclk_limit', 'amdsmi_get_cpu_core_boostlimit',
++    # ESMI disabled: 'amdsmi_get_cpu_core_ccd_power',
++    # ESMI disabled: 'amdsmi_get_cpu_core_current_freq_limit',
++    # ESMI disabled: 'amdsmi_get_cpu_core_eff_floor_freq_limit',
++    # ESMI disabled: 'amdsmi_get_cpu_core_energy',
++    # ESMI disabled: 'amdsmi_get_cpu_core_floor_freq_limit',
++    # ESMI disabled: 'amdsmi_get_cpu_cores_per_socket',
++    # ESMI disabled: 'amdsmi_get_cpu_current_io_bandwidth',
++    # ESMI disabled: 'amdsmi_get_cpu_current_xgmi_bw', 'amdsmi_get_cpu_ddr_bw',
++    # ESMI disabled: 'amdsmi_get_cpu_dfc_ctrl',
++    # ESMI disabled: 'amdsmi_get_cpu_dimm_power_consumption',
++    # ESMI disabled: 'amdsmi_get_cpu_dimm_sb_reg',
++    # ESMI disabled: 'amdsmi_get_cpu_dimm_temp_range_and_refresh_rate',
++    # ESMI disabled: 'amdsmi_get_cpu_dimm_thermal_sensor',
++    # ESMI disabled: 'amdsmi_get_cpu_eff_floor_freq_limit',
++    # ESMI disabled: 'amdsmi_get_cpu_enabled_commands', 'amdsmi_get_cpu_family',
++    # ESMI disabled: 'amdsmi_get_cpu_fclk_mclk', 'amdsmi_get_cpu_floor_freq_limit',
++    # ESMI disabled: 'amdsmi_get_cpu_freq_range', 'amdsmi_get_cpu_handles',
++    # ESMI disabled: 'amdsmi_get_cpu_hsmp_driver_version',
++    # ESMI disabled: 'amdsmi_get_cpu_hsmp_proto_ver', 'amdsmi_get_cpu_model',
++    # ESMI disabled: 'amdsmi_get_cpu_model_name', 'amdsmi_get_cpu_pc6_enable',
++    # ESMI disabled: 'amdsmi_get_cpu_prochot_status',
++    # ESMI disabled: 'amdsmi_get_cpu_pwr_efficiency_mode',
++    # ESMI disabled: 'amdsmi_get_cpu_pwr_svi_telemetry_all_rails',
++    # ESMI disabled: 'amdsmi_get_cpu_rail_isofreq_policy', 'amdsmi_get_cpu_sdps_limit',
++    # ESMI disabled: 'amdsmi_get_cpu_smu_fw_version',
++    # ESMI disabled: 'amdsmi_get_cpu_socket_c0_residency',
++    # ESMI disabled: 'amdsmi_get_cpu_socket_count',
++    # ESMI disabled: 'amdsmi_get_cpu_socket_current_active_freq_limit',
++    # ESMI disabled: 'amdsmi_get_cpu_socket_energy',
++    # ESMI disabled: 'amdsmi_get_cpu_socket_freq_range',
++    # ESMI disabled: 'amdsmi_get_cpu_socket_lclk_dpm_level',
++    # ESMI disabled: 'amdsmi_get_cpu_socket_power', 'amdsmi_get_cpu_socket_power_cap',
++    # ESMI disabled: 'amdsmi_get_cpu_socket_power_cap_max',
++    # ESMI disabled: 'amdsmi_get_cpu_socket_temperature',
++    # ESMI disabled: 'amdsmi_get_cpu_svi3_vr_controller_temp', 'amdsmi_get_cpu_tdelta',
++    # ESMI disabled: 'amdsmi_get_cpu_xgmi_pstate_range', 'amdsmi_get_cpucore_handles',
++    # ESMI disabled: 'amdsmi_get_energy_count',  # 'amdsmi_get_esmi_err_msg',  # ESMI disabled (ENABLE_ESMI_LIB=OFF)
+     'amdsmi_get_fw_info',
+     'amdsmi_get_gpu_accelerator_partition_profile',
+     'amdsmi_get_gpu_accelerator_partition_profile_config',
+@@ -4647,8 +4731,9 @@ __all__ = \
+     'amdsmi_get_gpu_volt_metric', 'amdsmi_get_gpu_vram_info',
+     'amdsmi_get_gpu_vram_usage', 'amdsmi_get_gpu_vram_vendor',
+     'amdsmi_get_gpu_xcd_counter', 'amdsmi_get_gpu_xgmi_link_status',
+-    'amdsmi_get_hsmp_metrics_table',
+-    'amdsmi_get_hsmp_metrics_table_version', 'amdsmi_get_lib_version',
++    # ESMI disabled: 'amdsmi_get_hsmp_metrics_table',
++    'amdsmi_get_lib_version',
++    # ESMI disabled: 'amdsmi_get_hsmp_metrics_table_version'
+     'amdsmi_get_link_metrics', 'amdsmi_get_link_topology_nearest',
+     'amdsmi_get_minmax_bandwidth_between_processors',
+     'amdsmi_get_nic_asic_info', 'amdsmi_get_nic_bus_info',
+@@ -4657,14 +4742,16 @@ __all__ = \
+     'amdsmi_get_nic_rdma_port_statistics', 'amdsmi_get_node_handle',
+     'amdsmi_get_npm_info', 'amdsmi_get_pcie_info',
+     'amdsmi_get_power_cap_info', 'amdsmi_get_power_info',
+-    'amdsmi_get_processor_count_from_handles',
++    # ESMI disabled: 'amdsmi_get_processor_count_from_handles',
+     'amdsmi_get_processor_handle_from_bdf',
+     'amdsmi_get_processor_handles',
+-    'amdsmi_get_processor_handles_by_type',
+-    'amdsmi_get_processor_info', 'amdsmi_get_processor_type',
++    # ESMI disabled: 'amdsmi_get_processor_handles_by_type',
++    'amdsmi_get_processor_type',
++    # ESMI disabled: 'amdsmi_get_processor_info'
+     'amdsmi_get_soc_pstate', 'amdsmi_get_socket_handles',
+     'amdsmi_get_socket_info', 'amdsmi_get_supported_power_cap',
+-    'amdsmi_get_temp_metric', 'amdsmi_get_threads_per_core',
++    'amdsmi_get_temp_metric',
++    # ESMI disabled: 'amdsmi_get_threads_per_core'
+     'amdsmi_get_ttm_info', 'amdsmi_get_utilization_count',
+     'amdsmi_get_violation_status', 'amdsmi_get_xgmi_info',
+     'amdsmi_get_xgmi_plpd', 'amdsmi_gpu_block_t',
+@@ -4705,21 +4792,22 @@ __all__ = \
+     'amdsmi_ras_feature_t', 'amdsmi_reg_type_t', 'amdsmi_reset_gpu',
+     'amdsmi_reset_gpu_fan', 'amdsmi_reset_gpu_xgmi_error',
+     'amdsmi_reset_ttm_pages_limit', 'amdsmi_retired_page_record_t',
+-    'amdsmi_set_clk_freq', 'amdsmi_set_cpu_cc6_enable',
+-    'amdsmi_set_cpu_core_boostlimit',
+-    'amdsmi_set_cpu_core_floor_freq_limit',
+-    'amdsmi_set_cpu_core_msr_floor_freq_limit',
+-    'amdsmi_set_cpu_df_pstate_range', 'amdsmi_set_cpu_dfc_ctrl',
+-    'amdsmi_set_cpu_dimm_sb_reg', 'amdsmi_set_cpu_floor_freq_limit',
+-    'amdsmi_set_cpu_gmi3_link_width_range',
+-    'amdsmi_set_cpu_msr_floor_freq_limit',
+-    'amdsmi_set_cpu_pc6_enable', 'amdsmi_set_cpu_pcie_link_rate',
+-    'amdsmi_set_cpu_pwr_efficiency_mode',
+-    'amdsmi_set_cpu_rail_isofreq_policy', 'amdsmi_set_cpu_sdps_limit',
+-    'amdsmi_set_cpu_socket_boostlimit',
+-    'amdsmi_set_cpu_socket_lclk_dpm_level',
+-    'amdsmi_set_cpu_socket_power_cap',
+-    'amdsmi_set_cpu_xgmi_pstate_range', 'amdsmi_set_cpu_xgmi_width',
++    'amdsmi_set_clk_freq',
++    # ESMI disabled: 'amdsmi_set_cpu_cc6_enable'
++    # ESMI disabled: 'amdsmi_set_cpu_core_boostlimit',
++    # ESMI disabled: 'amdsmi_set_cpu_core_floor_freq_limit',
++    # ESMI disabled: 'amdsmi_set_cpu_core_msr_floor_freq_limit',
++    # ESMI disabled: 'amdsmi_set_cpu_df_pstate_range', 'amdsmi_set_cpu_dfc_ctrl',
++    # ESMI disabled: 'amdsmi_set_cpu_dimm_sb_reg', 'amdsmi_set_cpu_floor_freq_limit',
++    # ESMI disabled: 'amdsmi_set_cpu_gmi3_link_width_range',
++    # ESMI disabled: 'amdsmi_set_cpu_msr_floor_freq_limit',
++    # ESMI disabled: 'amdsmi_set_cpu_pc6_enable', 'amdsmi_set_cpu_pcie_link_rate',
++    # ESMI disabled: 'amdsmi_set_cpu_pwr_efficiency_mode',
++    # ESMI disabled: 'amdsmi_set_cpu_rail_isofreq_policy', 'amdsmi_set_cpu_sdps_limit',
++    # ESMI disabled: 'amdsmi_set_cpu_socket_boostlimit',
++    # ESMI disabled: 'amdsmi_set_cpu_socket_lclk_dpm_level',
++    # ESMI disabled: 'amdsmi_set_cpu_socket_power_cap',
++    # ESMI disabled: 'amdsmi_set_cpu_xgmi_pstate_range', 'amdsmi_set_cpu_xgmi_width',
+     'amdsmi_set_gpu_accelerator_partition_profile',
+     'amdsmi_set_gpu_clk_limit', 'amdsmi_set_gpu_clk_range',
+     'amdsmi_set_gpu_compute_partition',
+-- 
+2.47.3
+
