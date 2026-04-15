@@ -829,21 +829,7 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
-        if build_variant == "asan":
-            # For ASAN builds, host-asan and asan have different event behaviors
-            host_asan_variant_config = all_build_variants.get(platform, {}).get(
-                "host-asan", {}
-            )
-            host_asan_ci_trigger = host_asan_variant_config.get("ci_trigger", [])
-            # If the event name matches the host ASAN CI trigger, we use host-asan variant config
-            if ci_inputs.event_name in host_asan_ci_trigger:
-                variant_config = host_asan_variant_config
-
-            # If the event does not match the expected trigger, we skip
-            variant_ci_trigger = variant_config.get("ci_trigger", [])
-            if ci_inputs.event_name not in variant_ci_trigger:
-                continue
-
+        if build_variant == "asan" or build_variant == "host-asan":
             # TODO(#3433): Remove sandbox logic once ASAN tests are passing
             # For ASAN builds, use sandbox runner to avoid impacting production
             if "test-runs-on-sandbox" in platform_info:
@@ -904,6 +890,10 @@ def expand_build_configs(
         ["presubmit", "postsubmit", "nightly"]
     )
     build_variant = ci_inputs.build_variant
+    # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
+    # Otherwise, push events run "host-asan"
+    if build_variant == "asan" and ci_inputs.is_push:
+        build_variant = "host-asan"
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
