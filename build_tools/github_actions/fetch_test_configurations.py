@@ -104,6 +104,8 @@ test_matrix = {
         "multi_gpu": {
             "linux": ["gfx94X-dcgpu"],  # Can expand to other architectures later
         },
+        # test type for this test to ignore
+        "test_types_to_ignore": ["quick"],
     },
     "rocroller": {
         "job_name": "rocroller",
@@ -593,6 +595,14 @@ def run():
             logging.info(
                 f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
             )
+            continue
+
+        # If a test_type is a part of "test_types_to_ignore" for the specific test, we ignore the test
+        if (
+            "test_types_to_ignore" in selected_matrix[key]
+            and test_type in selected_matrix[key]["test_types_to_ignore"]
+        ):
+            logging.info(f"Excluding job {job_name} for test_type {test_type}")
             continue
 
         # If test labels are populated, and the test job name is not in the test labels, skip the test
