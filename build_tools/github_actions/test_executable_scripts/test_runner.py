@@ -27,7 +27,7 @@ from pathlib import Path
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full", "multi_gpu"}
+VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
 TEST_TYPE = os.getenv("TEST_TYPE", "quick")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
@@ -37,7 +37,6 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 COMPONENT_DIR_MAPPING = {
     "miopen": "MIOpen",
     "rocblas": "rocblas",
-    "rocblas-multigpu": "rocblas",  # Map multi-GPU variant to same component
     "rocrand": "rocRAND",
     "hiprand": "hipRAND",
     "rocthrust": "rocthrust",
@@ -87,7 +86,6 @@ ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
 logging.basicConfig(level=logging.INFO)
-
 ##############################################
 
 
@@ -200,7 +198,6 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
             f"{SHARD_INDEX},,{TOTAL_SHARDS}",
         ]
     )
-
 
     if gpu_arch.lower() in ["generic", "none", ""]:
         # For generic/unspecified GPU, exclude all GPU-specific suite tests
