@@ -126,7 +126,7 @@ def _cdash_build_name() -> str:
     run_key = (
         os.getenv("GITHUB_RUN_ID") or os.getenv("THEROCK_RUN_ID") or uuid.uuid4().hex
     )
-    return f"{prefix}{label} [{run_key}]"
+    return f"{prefix}{label} [ID: {run_key}]"
 
 
 def _which_cmake() -> str:
