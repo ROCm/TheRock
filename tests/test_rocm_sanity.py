@@ -133,11 +133,13 @@ class TestROCmSanity:
         # -Xlinker and -rpath are Linux-only
         if not is_windows():
             hipcc_cmd.extend(["-Xlinker", f"-rpath={THEROCK_BIN_DIR}/../lib/"])
-        hipcc_cmd.extend([
-            f"--offload-arch={offload_arch}",
-            "-o",
-            hipcc_check_executable_file,
-        ])
+        hipcc_cmd.extend(
+            [
+                f"--offload-arch={offload_arch}",
+                "-o",
+                hipcc_check_executable_file,
+            ]
+        )
         run_command(hipcc_cmd, cwd=str(THEROCK_BIN_DIR))
 
         # Running and checking the executable
