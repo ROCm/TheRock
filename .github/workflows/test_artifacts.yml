@@ -28,6 +28,10 @@ on:
       run_functional_tests:
         type: boolean
         default: false
+      release_type:
+        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_group:
@@ -52,6 +56,9 @@ on:
       run_functional_tests:
         type: boolean
         default: false
+      release_type:
+        type: string
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -93,6 +100,21 @@ jobs:
         with:
           python-version: 3.12
 
+      - name: Enable long paths on Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: git config --global core.longpaths true
+
+      - uses: iterative/setup-dvc@4bdfd2b0f6f1ad7e08afadb03b1a895c352a5239 # v2.0.0
+        if: ${{ runner.os == 'Windows' }}
+        with:
+          version: '3.62.0'
+
+      - name: "Fetch sources"
+        timeout-minutes: 30
+        run: |
+          ./build_tools/fetch_sources.py --jobs 12 --depth 1
+
       - name: "Configuring CI options"
         id: configure
         env:
@@ -116,6 +138,7 @@ jobs:
       test_runs_on: ${{ inputs.test_runs_on }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ needs.configure_test_matrix.outputs.sanity_component }}
+      release_type: ${{ inputs.release_type }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
@@ -142,3 +165,4 @@ jobs:
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ toJSON(matrix.components) }}
+      release_type: ${{ inputs.release_type }}

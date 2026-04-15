@@ -47,8 +47,14 @@ Outputs (written to GITHUB_OUTPUT):
 import enum
 import json
 import os
+import sys
+import random
 from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
 
+# Add parent directory to path for _therock_utils imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _therock_utils.build_topology import get_topology
 
 from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
 from configure_ci_path_filters import (
@@ -63,12 +69,37 @@ from github_actions_api import gha_append_step_summary, gha_set_output
 # ---------------------------------------------------------------------------
 
 
+def _get_all_build_stages() -> list[str]:
+    """Get all build stage names from BUILD_TOPOLOGY.toml.
+
+    Returns:
+        List of stage names in the order they appear in the TOML file
+    """
+    topology = get_topology()
+    return list(topology.build_stages.keys())
+
+
 def _parse_comma_list(raw: str) -> list[str]:
     """Parse a comma-separated string into a list of stripped, lowercased, non-empty names.
 
     Example: "gfx94X, gfx120X" → ["gfx94x", "gfx120x"]
     """
     return [name.strip().lower() for name in raw.split(",") if name.strip()]
+
+
+def _parse_prebuilt_stages(raw: str) -> list[str]:
+    """Parse prebuilt_stages input, expanding 'all' to all available stages.
+
+    Reads stage names from BUILD_TOPOLOGY.toml when 'all' is specified.
+
+    Example:
+        "foundation,compiler-runtime" → ["foundation", "compiler-runtime"]
+        "all" → ["foundation", "compiler-runtime", "math-libs", ...]
+    """
+    stages = _parse_comma_list(raw)
+    if "all" in stages:
+        return _get_all_build_stages()
+    return stages
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +121,7 @@ class CIInputs:
     commit_ref: str  # GITHUB_REF_NAME value
     base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
+    release_type: str = ""  # "" for CI, or "dev", "nightly", "prerelease" for releases
 
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
@@ -143,8 +175,10 @@ class CIInputs:
         # "inputs" are set for workflow_dispatch, empty otherwise.
         inputs = event.get("inputs") or {}
 
-        # BUILD_VARIANT comes from workflow_call inputs, not the event payload.
+        # BUILD_VARIANT and RELEASE_TYPE come from workflow_call inputs, not
+        # the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
+        release_type = os.environ.get("RELEASE_TYPE", "")
 
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
@@ -166,6 +200,7 @@ class CIInputs:
             commit_ref=commit_ref,
             base_ref=base_ref,
             build_variant=build_variant,
+            release_type=release_type,
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
                 inputs.get("linux_amdgpu_families", "")
@@ -173,8 +208,10 @@ class CIInputs:
             windows_amdgpu_families=_parse_comma_list(
                 inputs.get("windows_amdgpu_families", "")
             ),
-            linux_test_labels=inputs.get("linux_test_labels", ""),
-            windows_test_labels=inputs.get("windows_test_labels", ""),
+            linux_test_labels=_parse_comma_list(inputs.get("linux_test_labels", "")),
+            windows_test_labels=_parse_comma_list(
+                inputs.get("windows_test_labels", "")
+            ),
             prebuilt_stages=inputs.get("prebuilt_stages", ""),
             baseline_run_id=inputs.get("baseline_run_id", ""),
         )
@@ -552,7 +589,7 @@ def decide_jobs(
     # Parse explicit prebuilt stages from workflow_dispatch input.
     stage_decisions: dict[str, JobAction] = {}
     if ci_inputs.prebuilt_stages:
-        for stage in _parse_comma_list(ci_inputs.prebuilt_stages):
+        for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
             stage_decisions[stage] = JobAction.PREBUILT
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
@@ -643,10 +680,19 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
     if ci_inputs.is_workflow_dispatch:
         # Manual trigger: caller specifies exact families per platform.
-        # Empty input means "no families for that platform" — the caller
-        # has full control over what runs.
+        # For CI dispatches, empty input means "no families for that
+        # platform" — the caller has full control over what runs.
+        # For release dispatches, empty input defaults to all families
+        # so that release workflows don't need to enumerate every family.
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
+        if ci_inputs.release_type and not linux_names and not windows_names:
+            linux_names = list(all_families.keys())
+            windows_names = list(all_families.keys())
+            print(
+                f"  Release type {ci_inputs.release_type!r} with no "
+                f"explicit families -> all families"
+            )
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (gfx* for individual families, ci:run-all-archs
@@ -760,6 +806,24 @@ def _expand_build_config_for_platform(
 
         # Determine test runner label.
         test_runs_on = platform_info["test-runs-on"]
+
+        # Handle dual-label configuration with weighted random selection.
+        # Some families (e.g. gfx94x) have multiple runner labels available.
+        if "test-runs-on-alternate" in platform_info:
+            alternate_label = platform_info["test-runs-on-alternate"]
+            alternate_weight = platform_info.get("test-runs-on-alternate-weight", 0.5)
+            if random.random() < alternate_weight:
+                test_runs_on = alternate_label
+                print(
+                    f"  {family_name}: selected alternate runner (weight={alternate_weight}): "
+                    f"{test_runs_on}"
+                )
+            else:
+                print(
+                    f"  {family_name}: selected primary runner (weight={1-alternate_weight}): "
+                    f"{test_runs_on}"
+                )
+
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
         # this family (the default runner may not have the right kernel).
@@ -776,6 +840,19 @@ def _expand_build_config_for_platform(
                 print(
                     f"  {family_name}: no {test_runner_kernel} kernel "
                     f"runner available, disabling tests"
+                )
+
+        # TODO(#3433): Remove sandbox logic once ASAN tests are passing
+        # For ASAN builds, use sandbox runner to avoid impacting production
+        if build_variant == "asan":
+            if "test-runs-on-sandbox" in platform_info:
+                test_runs_on = platform_info["test-runs-on-sandbox"]
+                print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
+            else:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: no ASAN sandbox runner available, "
+                    f"disabling tests"
                 )
 
         per_family_info.append(

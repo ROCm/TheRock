@@ -782,6 +782,79 @@ class TestFetchFlatten(ArtifactManagerTestBase):
         self.assertEqual(ctx.exception.code, 2)
 
 
+class TestFetchDownloadCache(ArtifactManagerTestBase):
+    """Tests for --download-cache-dir behavior."""
+
+    def test_shared_cache_skips_redownload(self):
+        """Second fetch with same --download-cache-dir skips already-cached archives.
+
+        Uses a FailingBackend for the second fetch — if the cache check in
+        download_artifact() works, the backend's download method is never
+        reached, so the failing backend won't cause errors. If the cache
+        check is removed, the second fetch hits the FailingBackend and fails.
+        """
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+
+        cache_dir = Path(self.temp_dir) / "shared-cache"
+        cache_dir.mkdir()
+
+        def mock_extract(request):
+            return request.output_dir
+
+        base_argv = [
+            "fetch",
+            "--stage",
+            "downstream-stage",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+            "--flatten",
+            "--download-cache-dir",
+            str(cache_dir),
+        ]
+
+        # First fetch — downloads to cache
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            artifact_manager.main(base_argv)
+
+        first_cached = list(cache_dir.glob("*.tar.zst"))
+        self.assertGreater(len(first_cached), 0)
+
+        # Second fetch with a FailingBackend. If the cache check works,
+        # download_artifact() returns early before calling the backend,
+        # so the failing backend is never hit.
+        failing_backend = FailingBackend(fail_downloads_after=0)
+        # Give it the same listing so artifact matching works
+        failing_backend.list_artifacts = lambda name_filter=None: [
+            f.name for f in first_cached
+        ]
+
+        second_output = Path(self.temp_dir) / "output2"
+        second_output.mkdir()
+        second_argv = base_argv.copy()
+        idx = second_argv.index("--output-dir") + 1
+        second_argv[idx] = str(second_output)
+
+        with (
+            mock.patch("artifact_manager.extract_artifact", mock_extract),
+            mock.patch(
+                "artifact_manager.create_backend_from_env",
+                return_value=failing_backend,
+            ),
+        ):
+            # Should succeed — cache hits bypass the failing backend
+            artifact_manager.main(second_argv)
+
+
 class TestCopy(ArtifactManagerTestBase):
     """Tests for the copy subcommand."""
 
@@ -1061,6 +1134,93 @@ class TestCopy(ArtifactManagerTestBase):
         self.assertTrue(
             dest_backend.artifact_exists("second-artifact_lib_generic.tar.zst")
         )
+
+
+class ParseTargetFamiliesTest(unittest.TestCase):
+    """Unit tests for artifact_manager.parse_target_families."""
+
+    def setUp(self):
+        # Import here so sys.path is already set up.
+        import artifact_manager as am
+
+        self.am = am
+
+    def _make_args(
+        self,
+        amdgpu_families: str = "",
+        amdgpu_targets: str = "",
+        generic_only: bool = False,
+        expand_family_to_targets: bool = False,
+    ):
+        import argparse
+
+        return argparse.Namespace(
+            amdgpu_families=amdgpu_families,
+            amdgpu_targets=amdgpu_targets,
+            generic_only=generic_only,
+            expand_family_to_targets=expand_family_to_targets,
+        )
+
+    def test_generic_only(self):
+        args = self._make_args(generic_only=True)
+        result = self.am.parse_target_families(args)
+        self.assertEqual(result, ["generic"])
+
+    def test_family_no_expansion(self):
+        args = self._make_args(amdgpu_families="gfx110X-all")
+        result = self.am.parse_target_families(args)
+        self.assertEqual(result, ["generic", "gfx110X-all"])
+        # No per-target entries without the flag.
+        self.assertNotIn("gfx1100", result)
+
+    def test_family_with_expansion_multi_target(self):
+        fake_map = {"gfx110X-all": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"]}
+        with mock.patch.object(
+            self.am, "_get_family_to_targets", return_value=fake_map
+        ):
+            args = self._make_args(
+                amdgpu_families="gfx110X-all", expand_family_to_targets=True
+            )
+            result = self.am.parse_target_families(args)
+        self.assertIn("generic", result)
+        self.assertIn("gfx110X-all", result)
+        for t in ["gfx1100", "gfx1101", "gfx1102", "gfx1103"]:
+            self.assertIn(t, result)
+
+    def test_family_with_expansion_single_target(self):
+        # A single-target family: the target should appear once even though
+        # it also matches its own self-family name.
+        fake_map = {"gfx942": ["gfx942"], "gfx94X-dcgpu": ["gfx942"]}
+        with mock.patch.object(
+            self.am, "_get_family_to_targets", return_value=fake_map
+        ):
+            args = self._make_args(
+                amdgpu_families="gfx94X-dcgpu", expand_family_to_targets=True
+            )
+            result = self.am.parse_target_families(args)
+        self.assertEqual(result.count("gfx942"), 1)
+
+    def test_unknown_family_skipped(self):
+        # A family not in the cmake file should not crash; just the family name
+        # stays in the list.
+        fake_map = {}
+        with mock.patch.object(
+            self.am, "_get_family_to_targets", return_value=fake_map
+        ):
+            args = self._make_args(
+                amdgpu_families="custom-family", expand_family_to_targets=True
+            )
+            result = self.am.parse_target_families(args)
+        self.assertIn("custom-family", result)
+
+    def test_explicit_targets_still_added(self):
+        args = self._make_args(
+            amdgpu_families="gfx110X-all", amdgpu_targets="gfx1100,gfx1101"
+        )
+        result = self.am.parse_target_families(args)
+        self.assertIn("gfx110X-all", result)
+        self.assertIn("gfx1100", result)
+        self.assertIn("gfx1101", result)
 
 
 if __name__ == "__main__":

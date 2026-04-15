@@ -46,6 +46,10 @@ on:
         type: string
         required: true
         description: "ROCm package version string"
+      release_type:
+        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease". Controls artifact bucket and IAM role.'
+        type: string
+        default: ""
 
 jobs:
   build_stage:
@@ -64,7 +68,7 @@ jobs:
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       CACHE_DIR: ${{ github.workspace }}/.cache
       TEATIME_FORCE_INTERACTIVE: 0
-      IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+      RELEASE_TYPE: ${{ inputs.release_type }}
 
     steps:
       - name: Checkout Repository
@@ -110,7 +114,7 @@ jobs:
       - name: Setup ccache
         run: |
           python ./build_tools/setup_ccache.py \
-            --config-preset "github-oss-presubmit" \
+            --release-type "${{ inputs.release_type }}" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache" \
             --log-dir "${BUILD_DIR}/logs/ccache"
@@ -165,15 +169,11 @@ jobs:
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
-      # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
-      # fall back to runner base credentials (therock-ci-artifacts-external).
-      - name: Configure AWS Credentials
-        if: ${{ always() && github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+      - name: Configure AWS credentials for artifact uploads
+        if: ${{ always() }}
+        uses: ./.github/actions/configure_aws_artifacts_credentials
         with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
-          special-characters-workaround: true
+          release_type: ${{ inputs.release_type }}
 
       # TODO(#3336): Attempt upload `always()`?
       #   * If some part of the build failed, partial artifacts may be useful for debugging.
