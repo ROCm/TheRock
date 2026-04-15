@@ -80,13 +80,13 @@ def _os_release_id_version() -> str:
 
 
 def _default_cdash_matrix_label() -> str:
-    """``ROCm/rocm-systems-<os>`` or ``ROCm/rocm-systems-<os>-<gpu>`` when ``THEROCK_CDASH_LABEL`` is unset.
+    """``ROCm/rocm-systems-<os>`` or ``ROCm/rocm-systems-<os>-<gpu>`` when ``ARTIFACT_GROUP`` is unset.
 
     * OS segment from ``/etc/os-release`` (or ``platform.system()``).
-    * Optional GPU segment from ``THEROCK_CDASH_GPU`` (default empty). When set, e.g.
+    * Optional GPU segment from ``ARTIFACT_GROUP`` (default empty). When set, e.g.
       ``ROCm/rocm-systems-rhel-8.8-mi325-core``; when empty, no trailing hyphen.
     """
-    gpu = os.getenv("THEROCK_CDASH_GPU", "")
+    gpu = os.getenv("ARTIFACT_GROUP", "")
     os_part = _os_release_id_version()
     base = f"ROCm/rocm-systems-{os_part}"
     if not gpu:
@@ -95,38 +95,21 @@ def _default_cdash_matrix_label() -> str:
 
 
 def _cdash_build_name() -> str:
-    """CDash build name: ``PR_<n>_<label> [<id>]`` (e.g. CI matrix labels).
-
-    * ``THEROCK_CDASH_BUILD_NAME`` — if set, returned verbatim (full override).
-    * PR number from ``GITHUB_REF`` (``refs/pull/N/merge``).
-    * Label from ``THEROCK_CDASH_LABEL``, else :func:`_default_cdash_matrix_label`.
-    * Bracket id from ``GITHUB_RUN_ID``, ``THEROCK_RUN_ID``, or a random 32-char hex id.
+    """CDash build name: ``<label>`` or ``<label> [RUN_ID: <id>]`` when set.
+    * Label from :func:`_default_cdash_matrix_label`.
+    * If ``ARTIFACT_RUN_ID`` is non-empty, append `` [RUN_ID: ...]``.
 
     Example::
 
-        PR_4946_ROCm/rocm-systems-rhel-8.8-mi325-core [9df51e03fa2d4071851eb4d2b8848612]
+        ROCm/rocm-systems-rhel-8.8-mi325-core [RUN_ID: 24378824659]
 
-    Set ``THEROCK_CDASH_LABEL`` in CI to override the middle segment. Set
-    ``THEROCK_CDASH_GPU`` to append a trailing SKU; leave unset for no ``-<gpu>`` suffix.
     """
-    override = os.getenv("THEROCK_CDASH_BUILD_NAME")
-    if override:
-        return override
-    ref = os.getenv("GITHUB_REF", "")
-    m = re.match(r"refs/pull/(\d+)/", ref)
-    prefix = f"PR_{m.group(1)}_" if m else ""
-    if not prefix:
-        refname = os.getenv("GITHUB_REF_NAME", "").strip()
-        if refname:
-            safe = re.sub(r"[^\w.\-]+", "-", refname).strip("-")
-            prefix = f"{safe}_" if safe else ""
-        else:
-            prefix = ""
-    label = os.getenv("THEROCK_CDASH_LABEL") or _default_cdash_matrix_label()
-    run_key = (
-        os.getenv("GITHUB_RUN_ID") or os.getenv("THEROCK_RUN_ID") or uuid.uuid4().hex
-    )
-    return f"{prefix}{label} [ID: {run_key}]"
+
+    label = _default_cdash_matrix_label()
+    run_key = os.getenv("ARTIFACT_RUN_ID", "")
+    if not run_key:
+        return label
+    return f"{label} [RUN_ID: {run_key}]"
 
 
 def _which_cmake() -> str:
@@ -184,7 +167,7 @@ def _generate_ctest_custom(
             f"--test-dir {BINARY_DIR} --output-on-failure -j {os.cpu_count() or 1}"
         )
 
-    # CDash build name: PR_<n>_<label> [<run id>] (see _cdash_build_name).
+    # CDash build name: <label> or <label> [RUN_ID: ...] (see _cdash_build_name).
     NAME = _cdash_build_name()
 
     # Specify dashboard URL and site/host name for CDash submission
