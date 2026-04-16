@@ -49,7 +49,7 @@ cmd = [
     str(pytest_package_exec),
     # TODO: Once the corresponding tests are fixed, remove the lines below
     "-k",
-    "not TestOpenMPTarget and not (TestTranspose and runtime_instrument) and not TestGPUConnect",
+    "not TestOpenMPTarget and not (TestTranspose and runtime_instrument)",
     "--junit-xml=junit.xml",
     "--ci-mode",
     "--log-cli-level=info",
