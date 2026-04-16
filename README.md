@@ -68,15 +68,10 @@ sudo apt install gfortran git ninja-build cmake g++ pkg-config xxd automake libt
 git clone https://github.com/ROCm/TheRock.git
 cd TheRock
 
-# Install a patched patchelf from source. Ubuntu's packaged patchelf
-# silently corrupts kpack-split libraries; see the environment setup
-# guide for details.
+# Install a patched patchelf from source. For details see
 # https://github.com/ROCm/TheRock/blob/main/docs/environment_setup_guide.md#patchelf
 sudo apt install curl make
-PATCHELF_GIT_REF=$(sed -n 's/^ENV PATCHELF_GIT_REF="\(.*\)"/\1/p' \
-  dockerfiles/build_manylinux_x86_64.Dockerfile)
-sudo env INSTALL_PREFIX=/usr/local \
-  ./dockerfiles/install_patchelf.sh "${PATCHELF_GIT_REF}"
+sudo env INSTALL_PREFIX=/usr/local ./dockerfiles/install_pinned_patchelf.sh
 
 # Init python virtual environment and install python dependencies
 python3 -m venv .venv && source .venv/bin/activate
