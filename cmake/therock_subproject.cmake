@@ -66,6 +66,7 @@ set(THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS
   -Wno-documentation-unknown-command
   -Wno-documentation-pedantic
   -Wno-unused-command-line-argument
+  -Wno-c2y-extensions
 
   # There are real issues here but rocBLAS and rocSPARSE generate 300-400MB of
   # warning logs with this enabled, practically breaking build tooling.

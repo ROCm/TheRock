@@ -36,6 +36,9 @@ if(THEROCK_ENABLE_IREE_COMPILER)
       -DIREE_BUILD_BINDINGS_TFLITE_JAVA=OFF
       # Disable runtime, it's built into fusilli, we only need the compiler
       -DIREE_HAL_DRIVER_DEFAULTS=OFF
+      # Suppress -Werror in bundled google benchmark to work around
+      # __COUNTER__ C2y extension warnings with newer clang.
+      -DBENCHMARK_ENABLE_WERROR=OFF
     INSTALL_OPTIONAL_COMPONENTS
       IREEDevLibraries-Compiler
     BUILD_DEPS
