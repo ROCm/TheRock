@@ -5,7 +5,7 @@ modified: 2026-04-14
 status: draft
 ---
 
-# ROCm End-User Projects With Independent Release Lifecycle for 
+# ROCm End-User Projects With Independent Release Lifecycle 
 
 ## 1. Overview
 
@@ -144,10 +144,10 @@ ROCm 7.0  ─────── ROCm 7.1 ─────── ROCm 7.2 ──�
   │                  │                  │                  │
   ├─ rvs-1.0.0       │                  │                  │
   │  (extras-7)      ├─ rvs-1.1.0       │                  │
-  │                  │  (extras-7)       │                  │
-  │                  │    ├─ rvs-1.1.1   │                  │
-  │                  │    (extras-7)     ├─ rvs-1.2.0       │
-  │                  │                  │  (extras-7)       │
+  │                  │  (extras-7)      │                  │
+  │                  │    ├─ rvs-1.1.1  │                  │
+  │                  │    (extras-7)    ├─ rvs-1.2.0       │
+  │                  │                  │  (extras-7)      │
   │                  │                  │                  ├─ rvs-2.0.0
   │                  │                  │                  │  (extras-8)
 ```
@@ -448,34 +448,12 @@ Key conventions:
 
 Example (RVS on Ubuntu):
 
-```bash
-build_tools/packaging/linux/build_package.py \
-    --artifacts-dir ./ARTIFACTS_DIR \
-    --target gfx94X-dcgpu \
-    --dest-dir ./OUTPUT_PKG \
-    --rocm-version 7.1.0 \
-    --pkg-type deb
-```
-
-This produces packages such as:
-
 ```
 amdrocm-rvs_1.2.0-7_amd64.deb
 amdrocm-rvs-dev_1.2.0-7_amd64.deb
 ```
 
 Example (RVS on RHEL):
-
-```bash
-build_tools/packaging/linux/build_package.py \
-    --artifacts-dir ./ARTIFACTS_DIR \
-    --target gfx94X-dcgpu \
-    --dest-dir ./OUTPUT_PKG \
-    --rocm-version 7.1.0 \
-    --pkg-type rpm
-```
-
-This produces packages such as:
 
 ```
 amdrocm-rvs-1.2.0-7.x86_64.rpm
@@ -556,6 +534,5 @@ project characteristics:
 | Project type | DEB/RPM | Tarball | Wheel |
 | :--- | :---: | :---: | :---: |
 | Native C/C++ tool (e.g., RVS) | Yes | Yes | No |
-| Native tool with Python CLI wrapper | Yes | Yes | Yes |
 | Pure Python tool/test harness | No | No | Yes |
 | Mixed native + Python library | Yes | Yes | Yes |
