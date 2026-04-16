@@ -21,13 +21,13 @@ the clang integrated assembler backend.
  1 file changed, 3 insertions(+)
 
 diff --git a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
-index 67fa35e2d8..5924d00aa4 100644
+index 8d3a115e3e..682567daa4 100644
 --- a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
 +++ b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
-@@ -169,10 +169,13 @@ class Assembler(Component):
-             destPath: The destination path for the generated object file.
-         """
-         args = self._default_args
+@@ -172,10 +172,13 @@ class Assembler(Component):
+         # Add gfx1250-specific parameters
+         if targetGfx == "gfx1250":
+             args = args + ["-Xclangas", "-target-feature", "-Xclangas", "+real-true16"]
 +        gfx_major = int(targetGfx.replace("gfx", "")[:2]) if targetGfx.startswith("gfx") else 0
 +        mattr_args = ["-Xclangas", "-target-feature", "-Xclangas", "-real-true16"] if gfx_major >= 11 else []
          args = [
@@ -40,4 +40,3 @@ index 67fa35e2d8..5924d00aa4 100644
              destPath
 -- 
 2.34.1
-
