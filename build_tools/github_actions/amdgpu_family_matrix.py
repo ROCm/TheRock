@@ -210,9 +210,9 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx1151-gpu-rocm",
+            "test-runs-on": "test_setup_windows_igpu_stxh",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
+            "benchmark-runs-on": "test_setup_windows_igpu_stxh",
             "family": "gfx1151",
             "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
@@ -230,9 +230,9 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx120X-gpu-rocm",
+            "test-runs-on": "test_setup_windows_gpu_navi4x",
             "family": "gfx120X-all",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,
