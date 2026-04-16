@@ -105,6 +105,12 @@ class TestROCmSanity:
         ).resolve()
         process = run_command([str(offload_arch_path)])
 
+        # DEBUG: Log full offload-arch output to investigate incorrect detection
+        logger.info(f"DEBUG: offload-arch stdout: {process.stdout!r}")
+        logger.info(f"DEBUG: offload-arch stderr: {process.stderr!r}")
+        logger.info(f"DEBUG: offload-arch path: {offload_arch_path}")
+        logger.info(f"DEBUG: AMDGPU_FAMILIES env var: {AMDGPU_FAMILIES}")
+
         # Extract the arch from the command output, working around
         # https://github.com/ROCm/TheRock/issues/1118. We only expect the output
         # to contain 'gfx####` text but some ROCm releases contained stray
@@ -118,7 +124,8 @@ class TestROCmSanity:
         offload_arch = None
         for line in process.stdout.splitlines():
             if "gfx" in line:
-                offload_arch = line
+                offload_arch = line.strip()
+                logger.info(f"DEBUG: Extracted offload_arch from line: {offload_arch!r}")
                 break
         assert (
             offload_arch is not None
