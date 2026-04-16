@@ -805,17 +805,27 @@ def setup_environment(artifacts_dir: Path) -> Dict[str, str]:
     env_vars = os.environ.copy()
 
     # Add ROCgdb and LLVM binaries to PATH.
-    env_vars["PATH"] = f"{artifacts_dir}/bin:{artifacts_dir}/llvm/bin:" + env_vars.get(
-        "PATH", ""
+    #
+    # Please note LLVM has switched location for its executables. It used to
+    # be llvm/bin but now is lib/llvm/bin. A llvm -> lib/llvm symlink is kept
+    # for backwards compatibility, but the new path should be used moving
+    # forward.
+    path_entries = (
+        f"{artifacts_dir}/bin:{artifacts_dir}/llvm/bin:{artifacts_dir}/lib/llvm/bin:"
     )
-    logger.info(f"PATH: {artifacts_dir}/bin:{artifacts_dir}/llvm/bin")
+    env_vars["PATH"] = path_entries + env_vars.get("PATH", "")
+    logger.info(f"PATH: {path_entries}")
 
     # Add ROCgdb and LLVM libraries to LD_LIBRARY_PATH.
-    env_vars["LD_LIBRARY_PATH"] = (
-        f"{artifacts_dir}/lib:{artifacts_dir}/llvm/lib:"
-        + env_vars.get("LD_LIBRARY_PATH", "")
+    #
+    # See note above about LLVM's location change.
+    ld_library_path_entries = (
+        f"{artifacts_dir}/lib:{artifacts_dir}/llvm/lib:{artifacts_dir}/lib/llvm/lib:"
     )
-    logger.info(f"LD_LIBRARY_PATH: {artifacts_dir}/lib:{artifacts_dir}/llvm/lib")
+    env_vars["LD_LIBRARY_PATH"] = ld_library_path_entries + env_vars.get(
+        "LD_LIBRARY_PATH", ""
+    )
+    logger.info(f"LD_LIBRARY_PATH: {ld_library_path_entries}")
 
     # Configure GPU core dump pattern.
     env_vars["HSA_COREDUMP_PATTERN"] = "gpucore.%p"

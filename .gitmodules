@@ -5,11 +5,11 @@
 [submodule "HIPIFY"]
 	path = compiler/hipify
 	url = https://github.com/ROCm/HIPIFY.git
-	branch = amd-mainline
+	# Branch follows the weekly format: amd-compiler-YYYY-MM-DD
 [submodule "llvm-project"]
 	path = compiler/amd-llvm
 	url = https://github.com/ROCm/llvm-project.git
-	branch = amd-mainline
+	# Branch follows the weekly format: amd-compiler-YYYY-MM-DD
 [submodule "rocm-cmake"]
 	path = base/rocm-cmake
 	url = https://github.com/ROCm/rocm-cmake.git
@@ -25,7 +25,7 @@
 [submodule "spirv-llvm-translator"]
 	path = compiler/spirv-llvm-translator
 	url = https://github.com/ROCm/SPIRV-LLVM-Translator.git
-	branch = amd-mainline
+	# Branch follows the weekly format: amd-compiler-YYYY-MM-DD
 [submodule "amd-mesa"]
 	path = third-party/sysdeps/linux/amd-mesa/mesa-fork
 	url = https://github.com/ROCm/mesa-fork.git

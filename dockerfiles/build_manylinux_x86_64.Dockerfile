@@ -76,7 +76,6 @@ RUN yum install -y epel-release && \
       gcc-toolset-13-gcc-gfortran \
       gcc-toolset-13-libatomic-devel \
       gcc-toolset-13-libstdc++-devel \
-      patchelf \
       vim-common \
       git-lfs \
     && yum install -y \
@@ -84,7 +83,6 @@ RUN yum install -y epel-release && \
       flex \
     && yum clean all && \
     rm -rf /var/cache/yum
-
 
 ######## DVC via pip ######
 # dvc's rpm package includes .so dependencies built against glib 2.29
@@ -116,6 +114,13 @@ ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-13/root/usr/lib64:/opt/rh/gcc-toolset-1
 RUN which gcc && gcc --version && \
     which g++ && g++ --version && \
     which clang++ || true
+
+######## PatchELF ########
+# Note: requires newer gcc toolset so after gcc activation
+WORKDIR /install-patchelf
+ENV PATCHELF_GIT_REF="d0f70eea5397606c486857e0a105e53ec123904a"
+COPY install_patchelf.sh ./
+RUN ./install_patchelf.sh "${PATCHELF_GIT_REF}" && rm -rf /install-patchelf
 
 ######## Shared Python Interpreters ########
 # Build Python with --enable-shared for embedding (e.g., rocgdb).
