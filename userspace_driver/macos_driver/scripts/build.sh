@@ -2,8 +2,8 @@
 # Build the ROCmGPU DriverKit extension and host app.
 #
 # Usage:
-#   ./build.sh              # Build both DEXT and app (Debug)
-#   ./build.sh release      # Build Release configuration
+#   ./build.sh              # Compile check (Debug, ad-hoc signed)
+#   ./build.sh release      # Compile check (Release, ad-hoc signed)
 #   ./build.sh clean        # Clean build artifacts
 #
 # Requirements:
@@ -11,11 +11,30 @@
 #   - macOS 12.1+ SDK
 #   - Apple Silicon Mac (for arm64 target)
 #
-# For development without Apple entitlements:
-#   1. Disable SIP: csrutil disable (from Recovery Mode)
-#   2. Enable developer mode: systemextensionsctl developer on
-#   3. Build and self-sign: ./build.sh
-#   4. Install: ./install.sh
+# Ad-hoc signing is sufficient for validating that the sources compile
+# against the DriverKit SDK. Ad-hoc DEXTs CANNOT be installed via
+# OSSystemExtensionRequest — the framework silently rejects them with
+# code 4 (.extensionNotFound) regardless of SIP / dev-mode settings.
+#
+# To build an installable DEXT you need:
+#   1. Paid Apple Developer Program membership.
+#   2. Apple-approved entitlements:
+#        - com.apple.developer.driverkit.transport.pci (managed — request
+#          at developer.apple.com/system-extensions/ for your Team ID +
+#          bundle id ai.rocm.gpu.driver + match 0x00001002&0x0000FFFF)
+#        - com.apple.developer.driverkit.userclient-access (managed —
+#          request for ai.rocm.gpu.app referring to ai.rocm.gpu.driver)
+#   3. Build with automatic signing + device registration, e.g.:
+#        xcodebuild build -project ROCmGPU/ROCmGPU.xcodeproj \
+#            -scheme ROCmGPUApp -configuration Debug \
+#            -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
+#            ONLY_ACTIVE_ARCH=YES ARCHS=arm64 VALID_ARCHS=arm64 \
+#            CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=<YOUR_TEAM_ID>
+#   4. On the target Mac: csrutil disable + `sudo systemextensionsctl
+#      developer on` + reboot.
+#   5. Copy built .app to /Applications and run `ROCmGPUApp install`.
+#
+# See userspace_driver/macos_driver/README.md for background.
 
 set -euo pipefail
 

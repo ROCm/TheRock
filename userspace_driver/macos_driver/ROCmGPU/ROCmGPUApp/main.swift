@@ -8,7 +8,7 @@
  *
  * The DEXT is embedded at:
  *   ROCmGPUApp.app/Contents/Library/SystemExtensions/
- *       com.rocm.gpu.driver.dext
+ *       ai.rocm.gpu.driver.dext
  *
  * First install requires user approval in:
  *   System Settings > General > Login Items & Extensions > Driver Extensions
@@ -17,12 +17,9 @@
 import Foundation
 import SystemExtensions
 
-let dextBundleID = "com.rocm.gpu.driver"
+let dextBundleID = "ai.rocm.gpu.driver"
 
 class ExtensionDelegate: NSObject, OSSystemExtensionRequestDelegate {
-    let semaphore = DispatchSemaphore(value: 0)
-    var result: Result<Void, Error> = .success(())
-
     func request(
         _ request: OSSystemExtensionRequest,
         didFinishWithResult result: OSSystemExtensionRequest.Result
@@ -30,15 +27,14 @@ class ExtensionDelegate: NSObject, OSSystemExtensionRequestDelegate {
         switch result {
         case .completed:
             print("DEXT activation completed successfully.")
-            self.result = .success(())
+            exit(0)
         case .willCompleteAfterReboot:
             print("DEXT will activate after reboot.")
-            self.result = .success(())
+            exit(0)
         @unknown default:
             print("Unknown result: \(result)")
-            self.result = .success(())
+            exit(0)
         }
-        semaphore.signal()
     }
 
     func request(
@@ -46,8 +42,11 @@ class ExtensionDelegate: NSObject, OSSystemExtensionRequestDelegate {
         didFailWithError error: Error
     ) {
         print("DEXT activation failed: \(error.localizedDescription)")
-        self.result = .failure(error)
-        semaphore.signal()
+        let ns = error as NSError
+        print("  domain: \(ns.domain)")
+        print("  code:   \(ns.code)")
+        print("  userInfo: \(ns.userInfo)")
+        exit(1)
     }
 
     func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
@@ -70,29 +69,46 @@ class ExtensionDelegate: NSObject, OSSystemExtensionRequestDelegate {
 }
 
 func install() {
+    // Diagnostics: confirm we're finding the app bundle + DEXT
+    print("Bundle.main.bundleURL: \(Bundle.main.bundleURL.path)")
+    let sysExtDir = Bundle.main.bundleURL
+        .appendingPathComponent("Contents/Library/SystemExtensions")
+    print("Looking for DEXTs in: \(sysExtDir.path)")
+    if let entries = try? FileManager.default.contentsOfDirectory(atPath: sysExtDir.path) {
+        print("  entries: \(entries)")
+        for entry in entries where entry.hasSuffix(".dext") {
+            let plist = sysExtDir.appendingPathComponent(entry)
+                .appendingPathComponent("Info.plist")
+            if let data = try? Data(contentsOf: plist),
+               let dict = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] {
+                print("  \(entry) CFBundleIdentifier: \(dict["CFBundleIdentifier"] ?? "???")")
+            }
+        }
+    } else {
+        print("  (directory unreadable)")
+    }
     print("Requesting DEXT activation for: \(dextBundleID)")
     let delegate = ExtensionDelegate()
+    // Use a background queue for callbacks so the main RunLoop can pump
+    // messages from OSSystemExtensionManager. Delegate exits the process
+    // directly on completion/failure.
     let request = OSSystemExtensionRequest.activationRequest(
         forExtensionWithIdentifier: dextBundleID,
-        queue: .main
+        queue: DispatchQueue.global(qos: .userInitiated)
     )
     request.delegate = delegate
     OSSystemExtensionManager.shared.submitRequest(request)
 
-    // Wait for completion (with timeout)
-    let timeout = delegate.semaphore.wait(timeout: .now() + 60)
-    if timeout == .timedOut {
+    // Safety timeout: exit if nothing happens in 120s
+    DispatchQueue.global().asyncAfter(deadline: .now() + 120) {
         print("Timed out waiting for DEXT activation.")
-        print("Check System Settings for pending approval.")
+        print("Check System Settings > General > Login Items & Extensions > Driver Extensions")
         exit(1)
     }
 
-    switch delegate.result {
-    case .success:
-        exit(0)
-    case .failure:
-        exit(1)
-    }
+    // Pump the main RunLoop so activation can progress. Delegate calls
+    // exit() directly when done (success or failure).
+    RunLoop.main.run()
 }
 
 func uninstall() {
@@ -100,23 +116,17 @@ func uninstall() {
     let delegate = ExtensionDelegate()
     let request = OSSystemExtensionRequest.deactivationRequest(
         forExtensionWithIdentifier: dextBundleID,
-        queue: .main
+        queue: DispatchQueue.global(qos: .userInitiated)
     )
     request.delegate = delegate
     OSSystemExtensionManager.shared.submitRequest(request)
 
-    let timeout = delegate.semaphore.wait(timeout: .now() + 30)
-    if timeout == .timedOut {
+    DispatchQueue.global().asyncAfter(deadline: .now() + 60) {
         print("Timed out waiting for DEXT deactivation.")
         exit(1)
     }
 
-    switch delegate.result {
-    case .success:
-        exit(0)
-    case .failure:
-        exit(1)
-    }
+    RunLoop.main.run()
 }
 
 func status() {

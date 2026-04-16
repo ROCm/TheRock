@@ -2,14 +2,25 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Required to install/manage system extensions -->
+    <!-- Required to install/manage system extensions.
+         This entitlement is self-provisionable for paid Apple Developer
+         Program members. -->
     <key>com.apple.developer.system-extension.install</key>
     <true/>
 
-    <!-- Required to connect to the ROCmGPU DEXT's IOUserClient -->
+    <!-- DriverKit UserClient Access is a managed entitlement; requires Apple
+         approval. Commented out until the entitlement request for
+         ai.rocm.gpu.app (team 3TD7AHFFV3) is approved. Restore from
+         ROCmGPUApp.entitlements.with-userclient on approval.
+         Without this, the app cannot open a UserClient to the DEXT, but
+         can still install/approve/activate the DEXT via the System
+         Extensions flow. -->
+    <!--
     <key>com.apple.developer.driverkit.userclient-access</key>
     <array>
-        <string>com.rocm.gpu.driver</string>
+        <string>ai.rocm.gpu.driver</string>
     </array>
+    -->
+
 </dict>
 </plist>

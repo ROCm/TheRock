@@ -2,22 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Base DriverKit entitlement (self-provisionable by any paid Apple
-         Developer Program member). -->
+    <!-- Base DriverKit entitlement -->
     <key>com.apple.developer.driverkit</key>
     <true/>
 
-    <!-- PCI transport entitlement is commented out until Apple approves the
-         request. Restore from ROCmGPUDriver.entitlements.with-pci once the
-         entitlement request for team 3TD7AHFFV3 / ai.rocm.gpu.driver is
-         approved. Without this key the DEXT will load but cannot match any
-         PCI device — useful for validating the sysext install pipeline. -->
-    <!--
+    <!-- PCI transport: match AMD vendor 0x1002, any device.
+         Must request from Apple via developer.apple.com/system-extensions/
+         For development, disable SIP and self-sign instead. -->
     <key>com.apple.developer.driverkit.transport.pci</key>
     <array>
         <string>0x00001002&amp;0x0000FFFF</string>
     </array>
-    -->
 
     <!-- Allow any userspace process to connect (not just the host app).
          Required for the Python driver to communicate with the DEXT. -->

@@ -27,3 +27,7 @@ __pycache__
 /install/
 /output-*/
 /out/
+
+# DriverKit iig-generated header symlink (points to Xcode DerivedSources;
+# re-created by the xcodeproj's "Create generated symlink" build phase).
+/userspace_driver/macos_driver/ROCmGPU/ROCmGPUDriver/generated

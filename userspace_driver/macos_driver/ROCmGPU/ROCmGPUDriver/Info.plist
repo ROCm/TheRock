@@ -19,7 +19,15 @@
     <key>CFBundleVersion</key>
     <string>1</string>
 
-    <!-- IOKit Matching Personality -->
+    <!-- IOKit Matching Personality (DriverKit / PCIDriverKit)
+         Schema cribbed from tinygrad's TinyGPU DEXT (Apple-approved for
+         com.apple.developer.driverkit.transport.pci, March 2026). Do NOT
+         add CFBundleIdentifierKernel — that flags the bundle as a kext
+         and causes OSSystemExtensionRequest to silently reject it with
+         code 4 (.extensionNotFound). -->
+    <key>OSBundleUsageDescription</key>
+    <string>Provides PCIe access for AMD eGPUs attached over Thunderbolt, used by the ROCm userspace runtime.</string>
+
     <key>IOKitPersonalities</key>
     <dict>
         <key>ROCmGPUDriver</key>
@@ -27,9 +35,25 @@
             <key>CFBundleIdentifier</key>
             <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
             <key>IOClass</key>
+            <string>IOUserService</string>
+            <key>IOUserClass</key>
             <string>ROCmGPUDriver</string>
+            <!-- IOUserServerName must match the DEXT's bundle ID. -->
+            <key>IOUserServerName</key>
+            <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
             <key>IOProviderClass</key>
             <string>IOPCIDevice</string>
+            <!-- Required for DriverKit matching. -->
+            <key>IOResourceMatch</key>
+            <string>IOKit</string>
+            <!-- Required for multi-DEXT arbitration; value is the
+                 personality name. -->
+            <key>IOMatchCategory</key>
+            <string>ROCmGPUDriver</string>
+            <!-- REQUIRED for Thunderbolt-attached devices. Without this
+                 key the match never fires for TB3/TB4/TB5 eGPUs. -->
+            <key>IOPCITunnelCompatible</key>
+            <true/>
             <!--
               Match AMD vendor ID 0x1002, any device ID.
               Format: 0xDDDDVVVV where DDDD=device, VVVV=vendor.
@@ -46,6 +70,8 @@
             <key>UserClientProperties</key>
             <dict>
                 <key>IOClass</key>
+                <string>IOUserUserClient</string>
+                <key>IOUserClass</key>
                 <string>ROCmGPUUserClient</string>
             </dict>
         </dict>
