@@ -19,6 +19,28 @@ PROFILER_PACKAGE = ALL_PACKAGES["profiler"]
 PROFILER_PY_PACKAGE_NAME = PROFILER_PACKAGE.get_py_package_name()
 
 
+def _extend_ld_library_path() -> None:
+    if platform.system() == "Windows":
+        return
+
+    try:
+        sdk_module = importlib.import_module("_rocm_sdk_core")
+    except ModuleNotFoundError:
+        return
+
+    sdk_path = Path(sdk_module.__file__).parent
+    sysdeps_path = sdk_path / "lib" / "rocm_sysdeps" / "lib"
+    if not sysdeps_path.exists():
+        return
+
+    existing = os.environ.get("LD_LIBRARY_PATH", "")
+    existing_parts = [p for p in existing.split(":") if p]
+    sysdeps_str = str(sysdeps_path)
+
+    if sysdeps_str not in existing_parts:
+        os.environ["LD_LIBRARY_PATH"] = ":".join([sysdeps_str, *existing_parts])
+
+
 def _get_profiler_module_path() -> Path:
     profiler_module = importlib.import_module(PROFILER_PY_PACKAGE_NAME)
     return Path(profiler_module.__file__).parent
@@ -27,6 +49,8 @@ def _get_profiler_module_path() -> Path:
 def _exec(relpath: str) -> None:
     if platform.system() == "Windows":
         raise RuntimeError("rocm-profiler is not supported on Windows.")
+
+    _extend_ld_library_path()
 
     full_path = _get_profiler_module_path() / relpath
     if not full_path.exists():
