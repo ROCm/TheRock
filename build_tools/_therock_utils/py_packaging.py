@@ -3,7 +3,7 @@
 
 """Utilities for producing Python packages."""
 
-from typing import Callable, Sequence
+from typing import Callable, Mapping, Sequence
 
 import importlib.util
 import re
@@ -486,9 +486,19 @@ class PopulatedDistPackage:
         *,
         addl_artifact_names: Sequence[str] = (),
         exclude_components: Sequence[str] = (),
+        component_include_overrides: Mapping[str, Sequence[str]] = {},
         tarball_compression: bool = True,
     ):
-        """Populates all files that have not yet been materialized and symlink the rest."""
+        """Populates all files that have not yet been materialized and symlink the rest.
+
+        ``component_include_overrides`` re-admits narrow file patterns from
+        components listed in ``exclude_components``. Keys are component names;
+        values are glob patterns matched against relpaths. Used when an
+        excluded component is the canonical home for files that are still
+        needed in devel (e.g. the BLAS fortran interop shims live in ``test``
+        because the test binary links against them at runtime, yet devel
+        consumers also need them resolved through exported CMake targets).
+        """
         package_path = self.platform_dir
         # Set up for what artifacts to include in the devel package, including
         # any emitted runtime artifacts plus additional requested.
@@ -520,6 +530,36 @@ class PopulatedDistPackage:
                 dest_path,
                 dir_entry,
             )
+
+        for component, include_globs in component_include_overrides.items():
+            if component not in excluded:
+                continue
+
+            def _override_filter(an: ArtifactName, _c=component) -> bool:
+                if an.name not in devel_artifact_names:
+                    return False
+                if an.component != _c:
+                    return False
+                if (
+                    an.target_family != "generic"
+                    and an.target_family != self.target_family
+                ):
+                    return False
+                return True
+
+            override_artifacts = self.params.filter_artifacts(
+                _override_filter, includes=tuple(include_globs)
+            )
+            log(f"::: Re-admitting {component} files matching {list(include_globs)}")
+            for an, an_path in override_artifacts.artifact_basedirs:
+                log(f"  + {an}: {an_path}")
+            for relpath, dir_entry in override_artifacts.pm.matches():
+                dest_path = package_path / relpath
+                self._populate_devel_file(
+                    relpath,
+                    dest_path,
+                    dir_entry,
+                )
 
         # For packaging, the devel platform/ contents are not wheel safe, so we
         # store them into their own tarball and dynamically decompress at runtime.

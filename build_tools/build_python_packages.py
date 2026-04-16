@@ -149,6 +149,15 @@ def _run_kpack_split(
             "nlohmann-json",
         ],
         exclude_components=["test"],
+        # hipSOLVER's fortran interop shim lives in the `test` component
+        # alongside `hipsolver-test`, which links against it at runtime. Devel
+        # consumers also need it: `hipsolver-targets.cmake` exports
+        # `roc::hipsolver_fortran` with an IMPORTED_LOCATION pointing at the
+        # shim, and CMake's generated import-check fails the configure step
+        # of downstream projects (e.g. PyTorch) when the file is absent.
+        component_include_overrides={
+            "test": ["lib/libhipsolver_fortran.so*"],
+        },
         tarball_compression=args.devel_tarball_compression,
     )
     if args.build_packages:
