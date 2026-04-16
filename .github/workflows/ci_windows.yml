@@ -22,19 +22,19 @@ on:
         type: string
       test_runs_on:
         type: string
-      run_extended_tests:
-        type: string
-        default: 'false'
       benchmark_runs_on:
         type: string
         default: ""
-      test_type:
+      run_extended_tests:
         type: string
+        default: 'false'
       expect_failure:
         type: boolean
       use_prebuilt_artifacts:
         type: string
       rocm_package_version:
+        type: string
+      test_type:
         type: string
       sanity_check_only_for_family:
         type: boolean
