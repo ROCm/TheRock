@@ -23,10 +23,6 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 os_type = platform.system().lower()
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 
-# Importing is_asan from github_actions_api.py
-sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_api import is_asan
-
 env = os.environ.copy()
 
 if THEROCK_BIN_DIR_STR is None:
@@ -129,7 +125,7 @@ def setup_env(env):
         else:
             env["LD_LIBRARY_PATH"] = HIP_LIB_PATH
         # For ASAN mode, we preload it for test count query and test running
-        if is_asan():
+        if "asan" in os.getenv("ARTIFACT_GROUP", ""):
             env["LD_PRELOAD"] = get_asan_lib_path()
             env["HSA_XNACK"] = "1"
             # TODO: enable this when we have symbolizer patch in
@@ -140,7 +136,7 @@ def setup_env(env):
 
 def execute_tests(env):
     # Allow for more time in ASAN mode to run the tests.
-    timeout = 1500 if is_asan() else 600
+    timeout = 1500 if "asan" in os.getenv("ARTIFACT_GROUP", "") else 600
     cmd = [
         "ctest",
         "--tests-information",
