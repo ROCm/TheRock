@@ -433,15 +433,15 @@ non-versioned packages.
 
 Key conventions:
 
-- **Naming**: Packages use the `amdrocm-<project>` prefix for AMD
+- **Naming**: Packages use the `amdrocm<rocm-major-ver>-<project>` prefix for AMD
   repository distribution, matching the convention in RFC0009. Distro-native
   packages (e.g., those maintained by Ubuntu or Red Hat) use
-  `rocm-<project>` without the `amd` prefix.
+  `rocm<rocm-major-ver>-<project>` without the `amd` prefix.
 
   | AMD repository package | Distro-native equivalent | Contents |
   | :--- | :--- | :--- |
-  | `amdrocm-rvs` | `rocm-rvs` | RVS runtime — binaries, modules, and configs |
-  | `amdrocm-rvs-devel` | `rocm-rvs-dev` | RVS development headers and CMake files |
+  | `amdrocm7-rvs` | `rocm7-rvs` | RVS runtime — binaries, modules, and configs |
+  | `amdrocm7-rvs-devel` | `rocm7-rvs-dev` | RVS development headers and CMake files |
 - **Runtime vs. development split (optional)**: Projects that expose a
   public API with headers and CMake config files may choose to produce a
   separate `-devel` / `-dev` package. Most extras projects are end-user
@@ -450,15 +450,15 @@ Key conventions:
 Example (RVS on Ubuntu):
 
 ```
-amdrocm-rvs_1.2.0-7_amd64.deb
-amdrocm-rvs-dev_1.2.0-7_amd64.deb
+amdrocm7-rvs_1.2.0_amd64.deb
+amdrocm7-rvs-dev_1.2.0_amd64.deb
 ```
 
 Example (RVS on RHEL):
 
 ```
-amdrocm-rvs-1.2.0-7.x86_64.rpm
-amdrocm-rvs-devel-1.2.0-7.x86_64.rpm
+amdrocm7-rvs-1.2.0.x86_64.rpm
+amdrocm7-rvs-devel-1.2.0.x86_64.rpm
 ```
 
 #### Dependency Resolution
@@ -659,14 +659,14 @@ a `.tar.xz` file with a corresponding `sha256sum`. The archive extracts
 into the flat FHS layout described in Section 4:
 
 ```bash
-tar -xf amdrocm-rvs-1.2.0-rocm7-linux-x86_64.tar.xz \
+tar -xf amdrocm7-rvs-1.2.0-linux-x86_64.tar.xz \
     -C /opt/rocm/extras-7/
 ```
 
 Tarball naming follows the pattern:
 
 ```
-amdrocm-<project>-<version>-rocm<major>-<os>-<arch>.tar.xz
+amdrocm<major>-<project>-<version>-rocm-<os>-<arch>.tar.xz
 ```
 
 #### Installing ROCm Dependencies for Tarball-Based Deployments
