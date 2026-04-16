@@ -121,6 +121,7 @@ class CIInputs:
     commit_ref: str  # GITHUB_REF_NAME value
     base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
+    release_type: str = ""  # "" for CI, or "dev", "nightly", "prerelease" for releases
 
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
@@ -174,8 +175,10 @@ class CIInputs:
         # "inputs" are set for workflow_dispatch, empty otherwise.
         inputs = event.get("inputs") or {}
 
-        # BUILD_VARIANT comes from workflow_call inputs, not the event payload.
+        # BUILD_VARIANT and RELEASE_TYPE come from workflow_call inputs, not
+        # the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
+        release_type = os.environ.get("RELEASE_TYPE", "")
 
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
@@ -197,6 +200,7 @@ class CIInputs:
             commit_ref=commit_ref,
             base_ref=base_ref,
             build_variant=build_variant,
+            release_type=release_type,
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
                 inputs.get("linux_amdgpu_families", "")
@@ -676,10 +680,19 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
     if ci_inputs.is_workflow_dispatch:
         # Manual trigger: caller specifies exact families per platform.
-        # Empty input means "no families for that platform" — the caller
-        # has full control over what runs.
+        # For CI dispatches, empty input means "no families for that
+        # platform" — the caller has full control over what runs.
+        # For release dispatches, empty input defaults to all families
+        # so that release workflows don't need to enumerate every family.
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
+        if ci_inputs.release_type and not linux_names and not windows_names:
+            linux_names = list(all_families.keys())
+            windows_names = list(all_families.keys())
+            print(
+                f"  Release type {ci_inputs.release_type!r} with no "
+                f"explicit families -> all families"
+            )
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (gfx* for individual families, ci:run-all-archs

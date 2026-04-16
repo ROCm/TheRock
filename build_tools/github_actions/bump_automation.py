@@ -318,15 +318,10 @@ def main():
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
     args = parser.parse_args()
-    run(
-        [
-            "git",
-            "-c",
-            "user.name=therockbot",
-            "-c",
-            "user.email=therockbot@amd.com",
-        ]
-    )
+
+    run(["git", "config", "--global", "user.name", "therockbot"])
+    run(["git", "config", "--global", "user.email", "therockbot@amd.com"])
+
     if args.event_type == "schedule":
         handle_schedule(args.systems_token, args.libraries_token)
     elif args.event_type == "push":

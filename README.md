@@ -234,9 +234,10 @@ The following components accept specifying alternative source locations:
 
 Further flags allow to build components with specific features enabled.
 
-| Other flags                | Description                                                              |
-| -------------------------- | ------------------------------------------------------------------------ |
-| `-DTHEROCK_ENABLE_MPI=OFF` | Enables building components with Message Passing Interface (MPI) support |
+| Other flags                                       | Description                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| `-DTHEROCK_ENABLE_MPI=OFF`                        | Enables building components with Message Passing Interface (MPI) support |
+| `-DTHEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY=OFF` | Builds composable_kernel with only the targets required for MIOpen       |
 
 > [!NOTE]
 > Building components with MPI support, currently requires MPI to be

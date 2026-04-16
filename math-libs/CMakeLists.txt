@@ -177,11 +177,13 @@ if(THEROCK_ENABLE_PRIM)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
       rocPRIM
+      rocRAND
       therock-googletest
     RUNTIME_DEPS
       hip-clr
