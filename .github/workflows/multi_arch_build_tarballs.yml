@@ -99,4 +99,5 @@ jobs:
           python build_tools/github_actions/upload_tarballs.py \
             --input-tarballs-dir="${{ github.workspace }}/tarballs" \
             --run-id="${{ github.run_id }}" \
-            --platform="${{ inputs.platform }}"
+            --platform="${{ inputs.platform }}" \
+            --release-type="${{ inputs.release_type }}"
