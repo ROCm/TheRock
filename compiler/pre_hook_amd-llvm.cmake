@@ -29,7 +29,7 @@ else()
     set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
     set(LIBOMPTARGET_ENABLE_DEBUG ON)
     set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
-    set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
+    set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib:${THEROCK_INSTALL_RPATH_PAD_COLON}")
     set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime")
     set(OFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR ON)
     # There is an issue with finding the zstd config built by TheRock when zstd
@@ -141,7 +141,12 @@ set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator" CACHE STRING
 #   utilities can be compiled into libLLVM, in which case, that RUNPATH is
 #   primary.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../../../lib;$ORIGIN/../../rocm_sysdeps/lib")
+  # The pad entry below reserves .dynstr space so py_packaging can rewrite
+  # RPATHs in place with patchelf --set-rpath. Without it, patchelf grows
+  # .dynstr, prepends a new PT_LOAD segment, and the resulting ELF layout
+  # crashes execve() on RHEL 8.10 kernels (issue #4271). The pad path is a
+  # non-existent directory so it has no runtime effect.
+  set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../../../lib;$ORIGIN/../../rocm_sysdeps/lib;${THEROCK_INSTALL_RPATH_PAD}")
 endif()
 
 # Disable all implicit LLVM tools by default so that we can allow-list just what

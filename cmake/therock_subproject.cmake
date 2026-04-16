@@ -10,6 +10,11 @@
 
 include(ExternalProject)
 
+# therock_subproject_utils defines THEROCK_INSTALL_RPATH_PAD and friends,
+# which are baked into each subproject's init file below. Include it eagerly
+# so the pad is computed before any _init_contents generation runs.
+include(therock_subproject_utils)
+
 # Global properties.
 # THEROCK_DEFAULT_CMAKE_VARS:
 # List of CMake variables that will be injected by default into the
@@ -768,7 +773,15 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "set(THEROCK_PRIVATE_BUILD_RPATH_DIRS)\n")
   string(APPEND _init_contents "set(THEROCK_BUILD_STAMP_FILE \"@_build_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_STAGE_STAMP_FILE \"@_stage_stamp_file@\")\n")
-  string(APPEND _init_contents "set(THEROCK_SUBPROJECT_TARGET \"@target_name@\")\n")
+  string(APPEND _init_contents "set(THEROCK_SUBPROJECT_TARGET \"@target_name@\")\n"
+    # Propagate the patchelf pad so pre-hooks and auto-managed targets in the
+    # child CMake invocation see the same reserved RPATH entry that the
+    # super-project uses. See therock_subproject_utils.cmake for the full
+    # rationale (issue #4271).
+    "set(THEROCK_INSTALL_RPATH_PAD_SIZE \"${THEROCK_INSTALL_RPATH_PAD_SIZE}\" CACHE STRING \"\" FORCE)\n"
+    "set(THEROCK_INSTALL_RPATH_PAD_MARKER \"${THEROCK_INSTALL_RPATH_PAD_MARKER}\" CACHE STRING \"\" FORCE)\n"
+    "set(THEROCK_INSTALL_RPATH_PAD \"${THEROCK_INSTALL_RPATH_PAD}\" CACHE INTERNAL \"\")\n"
+    "set(THEROCK_INSTALL_RPATH_PAD_COLON \"${THEROCK_INSTALL_RPATH_PAD_COLON}\" CACHE INTERNAL \"\")\n")
 
   # Support generator expressions in install CODE
   # We rely on this for debug symbol separation and some of our very old projects

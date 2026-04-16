@@ -36,6 +36,21 @@ assert DIST_INFO_PATH.exists()
 
 ENABLED_VLOG_LEVEL: int = 5
 
+# Marker substring baked into RPATH pad entries at link time by
+# cmake/therock_subproject_utils.cmake. ELFs TheRock ships are linked with a
+# ~1KB filler RPATH entry containing this marker so that when we later rewrite
+# RPATHs below with `patchelf --set-rpath`, the replacement always fits inside
+# the .dynstr allocation that was reserved at link time. Patchelf therefore
+# overwrites in place and does not need to prepend a new PT_LOAD segment,
+# which is the mutation that crashes execve() on RHEL 8.10 / EL 4.18 kernels.
+# See https://github.com/ROCm/TheRock/issues/4271 for the full diagnosis.
+#
+# The same constant is duplicated in
+# build_tools/packaging/python/templates/rocm/src/rocm_sdk/tests/core_test.py
+# because that file ships inside the wheel and cannot import from build-only
+# modules. Keep the two string literals in sync.
+PATCHELF_PAD_MARKER = "__therock_patchelf_pad__"
+
 
 def log(*args, vlog: int = 0, **kwargs):
     if vlog > ENABLED_VLOG_LEVEL:
@@ -428,10 +443,11 @@ class PopulatedDistPackage:
             # Update RPATHs on Linux.
             file_type = get_file_type(dest_path)
             if file_type == "exe" or file_type == "so":
-                self._extend_rpath(dest_path)
-                self._normalize_rpath(dest_path)
+                self._rewrite_rpath(dest_path, self._dep_rpath_entries(dest_path))
 
-    def _extend_rpath(self, file_path: Path):
+    def _dep_rpath_entries(self, file_path: Path) -> list[str]:
+        """$ORIGIN-relative RPATH entries contributed by rpath_deps packages."""
+        entries: list[str] = []
         for dep_project, rpath in self.rpath_deps:
             parent_relpath = self._platform_dir.parent.relative_to(
                 file_path.parent, walk_up=True
@@ -439,40 +455,56 @@ class PopulatedDistPackage:
             dep_py_package_name = dep_project.entry.get_py_package_name(
                 self.target_family
             )
-            addl_rpath = f"$ORIGIN/{parent_relpath}/{dep_py_package_name}/{rpath}"
-            log(f"  ADD_RPATH: {file_path}: {addl_rpath}")
-            patchelf_cl = [
-                "patchelf",
-                "--add-rpath",
-                addl_rpath,
-                str(file_path),
-            ]
-            subprocess.check_call(patchelf_cl)
+            entries.append(f"$ORIGIN/{parent_relpath}/{dep_py_package_name}/{rpath}")
+        return entries
 
-    def _normalize_rpath(self, file_path: Path):
+    def _rewrite_rpath(self, file_path: Path, extra_rpath_entries: Sequence[str] = ()):
+        """Rewrite DT_RPATH in place.
+
+        Reads the existing RPATH, strips any filler entries the build planted
+        at link time (identified by PATCHELF_PAD_MARKER), appends the requested
+        extra_rpath_entries deduplicated against what's already there, and
+        writes the result back with a single `patchelf --set-rpath`.
+
+        Using `--set-rpath` means patchelf overwrites the existing .dynstr
+        entry in place as long as the new string fits within the space that
+        was reserved at link time by the pad. That's the whole point: it
+        avoids the .dynstr-growth path that prepends a new PT_LOAD segment
+        and trips the RHEL 8.10 execve() bug (see PATCHELF_PAD_MARKER docs
+        and issue #4271). If the replacement ever doesn't fit, patchelf will
+        fall back to growing .dynstr and the CI pad-marker grep will flag it.
+        """
         existing_rpath = (
-            subprocess.check_output(
-                [
-                    "patchelf",
-                    "--print-rpath",
-                    str(file_path),
-                ]
-            )
+            subprocess.check_output(["patchelf", "--print-rpath", str(file_path)])
             .decode()
             .strip()
         )
-        if not existing_rpath:
+
+        entries: list[str] = []
+        seen: set[str] = set()
+        if existing_rpath:
+            for entry in existing_rpath.split(":"):
+                if not entry or PATCHELF_PAD_MARKER in entry:
+                    continue
+                if entry in seen:
+                    continue
+                entries.append(entry)
+                seen.add(entry)
+        for entry in extra_rpath_entries:
+            if entry and entry not in seen:
+                entries.append(entry)
+                seen.add(entry)
+
+        new_rpath = ":".join(entries)
+        if new_rpath == existing_rpath:
             return
 
-        # Possibly in the future, do manual normalization of the RPATH.
-        norm_rpath = existing_rpath
-
-        log(f"  NORMALIZE_RPATH: {file_path}: {norm_rpath}")
+        log(f"  REWRITE_RPATH: {file_path}: {existing_rpath!r} -> {new_rpath!r}")
         subprocess.check_call(
             [
                 "patchelf",
                 "--set-rpath",
-                norm_rpath,
+                new_rpath,
                 # Forces the use of RPATH vs RUNPATH, which is more appropriate
                 # for hermetic libraries like these since it does not allow
                 # LD_LIBRARY_PATH to interfere.
@@ -637,10 +669,12 @@ class PopulatedDistPackage:
         shutil.copy2(src_entry.path, dest_path)
 
         if not is_windows:
-            # Update RPATHs on Linux.
+            # Update RPATHs on Linux. Devel files don't pull in new
+            # dep-relative RPATHs, but we still run the rewrite so any link-
+            # time pad entries get stripped in place.
             file_type = get_file_type(dest_path)
             if file_type == "exe" or file_type == "so":
-                self._normalize_rpath(dest_path)
+                self._rewrite_rpath(dest_path)
 
 
 MAGIC_AR_MATCH = re.compile("ar archive")

@@ -13,7 +13,9 @@ else()
   set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
 endif()
 
-set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/llvm/lib;$ORIGIN/rocm_sysdeps/lib")
+# The pad entry reserves .dynstr space for later patchelf --set-rpath.
+# See comments in pre_hook_amd-llvm.cmake and issue #4271.
+set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/llvm/lib;$ORIGIN/rocm_sysdeps/lib;${THEROCK_INSTALL_RPATH_PAD}")
 
 # See Comgr::LoadLib in clr comgrctx.cpp: On windows, this expects the cmgr
 # library to have a versioned output name, but there does not seem to be a
