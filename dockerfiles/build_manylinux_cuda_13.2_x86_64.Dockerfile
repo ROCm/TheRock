@@ -134,8 +134,8 @@ RUN ./install_shared_pythons.sh /tmp/python-build && rm -rf /install-shared-pyth
 RUN git config --global --add safe.directory '*'
 
 ######## CUDA Toolkit 13.2 ########
-RUN dnf config-manager --set-enabled powertools && \
-  dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo && \
-  dnf install cuda-toolkit-13-2-13.2.0-1.x86_64 -y
+WORKDIR /install-cuda
+COPY install_cuda.sh ./
+RUN ./install_cuda.sh "13.2" && rm -rf /install-cuda
 ENV PATH="/usr/local/cuda/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
