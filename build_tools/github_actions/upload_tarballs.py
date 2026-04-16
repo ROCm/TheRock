@@ -7,24 +7,25 @@
 Uploads all .tar.gz files from the input directory to the tarballs/
 subdirectory of the workflow output root in S3.
 
+Example with ``--run-id 12345 --platform linux --release-type dev``:
+
+    /tmp/tarballs/therock-dist-linux-gfx94X-dcgpu-7.10.0.tar.gz
+      -> s3://therock-dev-artifacts/12345-linux/tarballs/therock-dist-linux-gfx94X-dcgpu-7.10.0.tar.gz
+
 Usage:
-    upload_tarballs.py --input-tarballs-dir TARBALLS_DIR --run-id RUN_ID [--platform PLATFORM]
-
-Manual testing:
-    # Test with local output (no S3 credentials needed):
     python build_tools/github_actions/upload_tarballs.py \\
         --input-tarballs-dir /tmp/tarballs \\
-        --run-id 12345 \\
-        --platform linux \\
+        --run-id 12345 --platform linux --release-type dev
+
+    python build_tools/github_actions/upload_tarballs.py \\
+        --input-tarballs-dir /tmp/tarballs \\
+        --run-id 12345 --platform linux --release-type dev --dry-run
+
+    # Local testing (no S3 credentials needed):
+    python build_tools/github_actions/upload_tarballs.py \\
+        --input-tarballs-dir /tmp/tarballs \\
+        --run-id 12345 --platform linux \\
         --output-dir /tmp/upload-test
-
-    # Verify: /tmp/upload-test/12345-linux/tarballs/*.tar.gz
-
-    # Dry run (prints plan without uploading):
-    python build_tools/github_actions/upload_tarballs.py \\
-        --input-tarballs-dir /tmp/tarballs \\
-        --run-id 12345 \\
-        --dry-run
 """
 
 import argparse
@@ -57,6 +58,11 @@ def main():
         type=str,
         required=True,
         help="Workflow run ID",
+    )
+    parser.add_argument(
+        "--release-type",
+        default="",
+        help='Release type: "" for CI, or "dev", "nightly", "prerelease"',
     )
     parser.add_argument(
         "--output-dir",
@@ -95,7 +101,9 @@ def main():
         log(f"  {f.name} ({size_mb:.1f} MB)")
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=args.run_id, platform=args.platform
+        run_id=args.run_id,
+        platform=args.platform,
+        release_type=args.release_type or None,
     )
     tarballs_loc = output_root.tarballs()
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
