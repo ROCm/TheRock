@@ -74,7 +74,7 @@ class ArtifactRunInfo:
 
     @property
     def s3_index_url(self) -> str:
-        return f"https://{self.s3_bucket}.s3.amazonaws.com/{self.s3_path}index-{self.artifact_group}.html"
+        return f"https://{self.s3_bucket}.s3.amazonaws.com/{self.s3_path}index.html"
 
     def print(self):
         """Prints artifact info in a human-readable format."""
