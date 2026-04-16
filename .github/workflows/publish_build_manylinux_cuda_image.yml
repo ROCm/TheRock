@@ -1,0 +1,31 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Publish CUDA build images
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "main"
+      - "stage/docker/**"
+    paths:
+      - dockerfiles/build_manylinux_cuda_*.Dockerfile
+      - .github/workflows/publish_build_manylinux_cuda_image.yml
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish_cuda_12_9:
+    uses: ./.github/workflows/publish_dockerfile.yml
+    with:
+      DOCKER_FILE_NAME: build_manylinux_cuda_12_9_x86_64
+      DOCKER_IMAGE_NAME: therock_build_manylinux_cuda_12_9_x86_64
+
+  publish_cuda_13_2:
+    uses: ./.github/workflows/publish_dockerfile.yml
+    with:
+      DOCKER_FILE_NAME: build_manylinux_cuda_13.2_x86_64
+      DOCKER_IMAGE_NAME: therock_build_manylinux_cuda_13_2_x86_64
