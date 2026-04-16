@@ -12,7 +12,7 @@ status: draft
 ROCm ships a core SDK through TheRock build system. In addition to the core
 SDK, AMD and the broader community maintain a set of **extras** — tools,
 validation suites, and utility projects — that are compiled *on top of* a
-released ROCm installation but follow their own development and release
+released ROCm Core SDK installation but follow their own development and release
 timelines. These extras are not part of the ROCm Core SDK; they consume
 ROCm as a build dependency and are delivered as independently versioned
 packages.
@@ -31,7 +31,7 @@ release cadence.
 1. **Decouple extras from the ROCm release train** so that bug fixes,
    new test modules, and feature enhancements can ship without waiting for
    the next ROCm Core SDK release.
-2. **Guarantee backward compatibility within a ROCm major version** so
+2. **Guarantee backward compatibility within a ROCm major version release stream** so
    that a single extras build works across every minor and patch release
    of that major version.
 3. **Provide a clear installation layout** that coexists with the ROCm
@@ -39,7 +39,7 @@ release cadence.
    [RFC0009](/docs/rfcs/RFC0009-OS-Packaging-Requirements.md) without
    creating conflicts or ambiguity.
 4. **Enable community and partner contributions** by keeping the extras
-   repositories buildable against any compatible, publicly released ROCm
+   repositories buildable against any compatible, publicly released ROCm Core SDK
    installation.
 
 ### Scope
@@ -63,12 +63,16 @@ release cadence.
 Extras projects follow an **independent release cadence** that is not tied
 to the ROCm Core SDK release schedule.
 
+Each extras project may set an appropriate release cadence for the project in 
+conjunction with its stakeholders.
+
 ### Versioning Scheme
 
-Each end-user project adopts its own semantic version:
+Each end-user project adopts its own semantic version which results in the following
+filename template:
 
 ```
-<project>-<major>.<minor>.<patch>
+<projectname>-<major>.<minor>.<patch>
 ```
 
 For example:
