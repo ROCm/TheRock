@@ -611,12 +611,17 @@ def main():
         "--job",
         default="dev",
         choices=["dev", "nightly", "prerelease", "ci"],
-        help="Job type: dev, nightly, prerelease, or ci",
+        help="Job type: dev, nightly, prerelease, or ci (defaults to dev)",
     )
     parser.add_argument(
         "--s3-prefix",
         required=False,
         help="Override S3 prefix (for backward compatibility, auto-generated if not provided)",
+    )
+    parser.add_argument(
+        "--platform",
+        default="linux",
+        help="Platform name (linux or windows), defaults to linux",
     )
 
     args = parser.parse_args()
@@ -628,7 +633,7 @@ def main():
         prefix = args.s3_prefix
         dedupe = True
     elif args.job in ["nightly", "dev"]:
-        # Legacy behavior: <pkg_type>/<YYYYMMDD>-<artifact_id>
+        # Dev/Nightly: <pkg_type>/<YYYYMMDD>-<artifact_id>
         prefix = f"{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
         dedupe = True
     elif args.job == "prerelease":
@@ -636,8 +641,12 @@ def main():
         prefix = f"v3/packages/{args.pkg_type}"
         dedupe = True
     elif args.job == "ci":
-        # CI builds: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
-        prefix = f"v3/packages/{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
+        # CI builds: <artifact_id>-<platform>/packages/<pkg_type>
+        # For external bucket, include repository prefix (defaults to ROCm-TheRock)
+        if args.s3_bucket == "therock-ci-artifacts-external":
+            prefix = f"ROCm-TheRock/{args.artifact_id}-{args.platform}/packages/{args.pkg_type}"
+        else:
+            prefix = f"{args.artifact_id}-{args.platform}/packages/{args.pkg_type}"
         dedupe = True
     else:
         raise ValueError(f"Unknown job type: {args.job}")
@@ -659,8 +668,18 @@ def main():
         s3_client, args.s3_bucket, prefix, args.pkg_type, uploaded_packages, args.job
     )
 
-    # Generate index.html files from S3 state (recursive for specific upload)
-    generate_index_from_s3(s3_client, args.s3_bucket, prefix)
+    # Skip index.html generation for CI builds. Its handled in lamda fn
+    # Only generate indexes for release builds (dev/nightly/prerelease)
+    if args.job != "ci":
+        # Generate index.html files from S3 state (recursive for specific upload)
+        generate_index_from_s3(s3_client, args.s3_bucket, prefix)
+
+        # Generate a top-level index for the pkg type (e.g., 'deb' or 'rpm')
+        # Uses S3 Delimiter for efficiency (only lists folders, not all nested files)
+        top_prefix = prefix.split("/")[0]
+        generate_top_index_from_s3(s3_client, args.s3_bucket, top_prefix)
+    else:
+        print("Skipping index.html generation for CI build")
 
     # Generate a top-level index for the pkg type (e.g., 'deb' or 'rpm')
     # Uses S3 Delimiter for efficiency (only lists folders, not all nested files)
