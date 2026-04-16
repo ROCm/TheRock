@@ -249,15 +249,20 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
         ]
     )
 
+    # Collect all exclude patterns into a list so they can be combined into
+    # a single -LE regex.
+    le_patterns = []
+
     # Exclude tests labeled with {category}_exclude if that label exists
     category_exclude_label = f"{category}_exclude"
     if category_exclude_label in exclude_labels:
-        cmd.extend(["-LE", category_exclude_label])
+        le_patterns.append(category_exclude_label)
         print(f"# Excluding tests with label: {category_exclude_label}")
 
     if gpu_arch.lower() in ["generic", "none", ""]:
-        # For generic/unspecified GPU, exclude all GPU-specific suite tests
-        cmd.extend(["-LE", "ex_gpu"])
+        le_patterns.append("ex_gpu")
+        if le_patterns:
+            cmd.extend(["-LE", "|".join(le_patterns)])
         return cmd
 
     # Find the appropriate GPU suite
@@ -269,9 +274,11 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
         cmd.extend(["-L", gpu_label])
         print(f"# Using GPU suite label: {gpu_label}")
     else:
-        # No specific GPU suite found, run standard tests excluding all GPU-specific ones
-        cmd.extend(["-LE", "ex_gpu"])
+        le_patterns.append("ex_gpu")
         print(f"# No GPU suite found for {gpu_arch}, excluding all ex_gpu tests")
+
+    if le_patterns:
+        cmd.extend(["-LE", "|".join(le_patterns)])
 
     return cmd
 
