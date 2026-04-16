@@ -10,7 +10,8 @@ If you have a configuration that you have found workarounds to support, please s
 
 See the [project README](../README.md) for quick getting started instructions the following combinations:
 
-- Fedora (TODO: looking for contribution)
+- Fedora (TODO: looking for contribution; see [patchelf](#patchelf) for a
+  Fedora-specific note)
 - Ubuntu 24.04
 - Windows (VS2022)
 
@@ -29,6 +30,80 @@ There are various, easy ways to acquire specific CMake versions. For Windows and
    - Windows: `.venv\Scripts\Activate.bat`
 1. `pip install 'cmake<4'`
 1. For Linux: if afterwards cmake is not found anymore, run `hash -r` to forget the previously cached location of cmake
+
+### patchelf
+
+Building with `THEROCK_BUNDLE_SYSDEPS=ON` (the default for portable Linux
+builds), `THEROCK_ENABLE_ROCGDB=ON`, or generating Python wheels via
+`build_tools/build_python_packages.py` all invoke `patchelf` to rewrite
+`RPATH`, `SONAME`, and `DT_NEEDED` entries on ELF binaries. Upstream
+`patchelf` releases through 0.18.0 contain a bug that corrupts the PHDR
+virtual address on any ELF whose PHDR sits in a trailing LOAD segment,
+which is how `kpack` leaves libraries after splitting device code from
+host code.
+
+#### Failure mode
+
+When the wrong `patchelf` rewrites an affected library you will see one
+or more of:
+
+- `OSError: failed to map segment from shared object` at load time (e.g.
+  during `rocm-sdk test testSharedLibrariesLoad`).
+- `readelf -l <file>` reports `Error: the PHDR segment is not covered by
+  a LOAD segment`.
+- The PHDR `VirtAddr` in `readelf -l` is `0xfffffffffff79040` (a
+  sign-extended negative).
+
+If you see any of these after a local wheel build or `BUNDLE_SYSDEPS`
+build, suspect your host `patchelf`.
+
+#### Fix
+
+The fix is [NixOS/patchelf PR #544](https://github.com/NixOS/patchelf/pull/544)
+("Allocate PHT/SHT at the end of the ELF file"), merged 2025-01-07 to
+master but not yet in a tagged release. Any supported build path needs a
+`patchelf` that includes this commit.
+
+#### Supported install paths
+
+Pick whichever applies to your host:
+
+1. **Portable / manylinux container.** If you build inside
+   `ghcr.io/rocm/therock_build_manylinux_x86_64`, the image already ships
+   a patched `patchelf` built from source and installed at
+   `/usr/local/bin/patchelf`. Nothing to do. See
+   [`dockerfiles/build_manylinux_x86_64.Dockerfile`][dockerfile].
+2. **Fedora.** Recent Fedora releases ship the fix as a downstream patch
+   on the packaged `patchelf 0.18.0` (the Fedora `patchelf` SRPM carries
+   upstream PR #544 as `0001-Allocate-PHT-SHT-at-the-end-of-the-.elf-file.patch`).
+   Verify with:
+
+   ```bash
+   rpm -q --changelog patchelf | head
+   ```
+
+   The changelog entry referencing the "PHT/SHT at the end" patch
+   indicates a good build. `dnf install patchelf` is sufficient on a
+   release that carries it.
+3. **Any other Linux (Ubuntu, Debian, Arch, openSUSE, ...).** Build
+   `patchelf` from source using the script the manylinux image uses:
+
+   ```bash
+   # From the TheRock checkout. The pinned ref tracks the
+   # PATCHELF_GIT_REF ENV in build_manylinux_x86_64.Dockerfile.
+   PATCHELF_GIT_REF=$(sed -n 's/^ENV PATCHELF_GIT_REF="\(.*\)"/\1/p' \
+     dockerfiles/build_manylinux_x86_64.Dockerfile)
+   sudo env INSTALL_PREFIX=/usr/local \
+     ./dockerfiles/install_patchelf.sh "${PATCHELF_GIT_REF}"
+
+   patchelf --version
+   # -> patchelf 0.18.0+therock.<short-ref>
+   ```
+
+   The script needs `curl`, `autoconf`, `automake`, `make`, and a C++
+   compiler. On Ubuntu: `sudo apt install curl autoconf automake make g++`.
+
+[dockerfile]: ../dockerfiles/build_manylinux_x86_64.Dockerfile
 
 ### Resource Utilization
 
