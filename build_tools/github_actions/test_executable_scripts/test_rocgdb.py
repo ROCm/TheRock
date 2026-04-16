@@ -831,6 +831,45 @@ def setup_environment(artifacts_dir: Path) -> Dict[str, str]:
     env_vars["HSA_COREDUMP_PATTERN"] = "gpucore.%p"
     logger.info(f"HSA_COREDUMP_PATTERN: {env_vars['HSA_COREDUMP_PATTERN']}")
 
+    # Print and configure kernel.core_pattern.
+    try:
+        with open("/proc/sys/kernel/core_pattern", "r") as f:
+            current_pattern = f.read().strip()
+        logger.info(f"Current kernel.core_pattern: {current_pattern}")
+
+        desired_pattern = "/proc/%p/cwd/core.%p"
+        try:
+            with open("/proc/sys/kernel/core_pattern", "w") as f:
+                f.write(desired_pattern)
+            logger.info(f"Set kernel.core_pattern to: {desired_pattern}")
+        except PermissionError:
+            logger.warning(
+                "Permission denied writing to /proc/sys/kernel/core_pattern directly. "
+                "Attempting to set via sudo sysctl..."
+            )
+            try:
+                result = subprocess.run(
+                    ["sudo", "sysctl", f"kernel.core_pattern={desired_pattern}"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                logger.info(
+                    f"Successfully set kernel.core_pattern via sysctl: {result.stdout.strip()}"
+                )
+            except subprocess.CalledProcessError as e:
+                logger.warning(
+                    f"Failed to set kernel.core_pattern via sudo sysctl: {e.stderr.strip()}"
+                )
+            except FileNotFoundError:
+                logger.warning("sudo or sysctl command not found")
+    except FileNotFoundError:
+        logger.warning(
+            "kernel.core_pattern not available (not running on Linux or /proc not mounted)"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to configure kernel.core_pattern: {e}")
+
     # Check if we are running within a github actions context, where a
     # non-system version of Python is being used. If so, we have
     # pythonLocation set to the base location of the Python interpreter.
