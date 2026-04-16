@@ -113,7 +113,7 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx1151-gpu-rocm",
+            "test-runs-on": "windows-strix-halo-gpu-rocm-8gb",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
