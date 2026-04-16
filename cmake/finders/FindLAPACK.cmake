@@ -8,7 +8,6 @@ cmake_policy(SET CMP0057 NEW)
 
 if(("OpenBLAS" IN_LIST THEROCK_PROVIDED_PACKAGES) OR ("OpenBLAS64" IN_LIST
                                                      THEROCK_PROVIDED_PACKAGES))
-  cmake_policy(POP)
   message(STATUS "Resolving bundled host-blas library from super-project")
 
   set(_want_ilp64 FALSE)
@@ -45,6 +44,7 @@ if(("OpenBLAS" IN_LIST THEROCK_PROVIDED_PACKAGES) OR ("OpenBLAS64" IN_LIST
   set(LAPACK95_LIBRARIES)
   set(LAPACK95_FOUND FALSE)
   set(LAPACK_FOUND TRUE)
+  cmake_policy(POP)
 else()
   cmake_policy(POP)
   set(LAPACK_FOUND FALSE)
