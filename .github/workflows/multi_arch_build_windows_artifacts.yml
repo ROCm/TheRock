@@ -166,7 +166,7 @@ jobs:
           rc1=0
           python build_tools/teatime.py --log-timestamps \
             --label "comgr lit tests" "${{ env.BUILD_DIR }}/logs/comgr-lit-tests.log" -- \
-            "${{ env.BUILD_DIR }}/compiler/amd-llvm/dist/lib/llvm/bin/llvm-lit.cmd" \
+            python "${{ env.BUILD_DIR }}/compiler/amd-llvm/build/bin/llvm-lit.py" \
             "${{ env.BUILD_DIR }}/compiler/amd-comgr/build/test-lit" -v || rc1=$?
           echo ""
           rc2=0
