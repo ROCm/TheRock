@@ -44,6 +44,17 @@ on:
         required: false
         type: string
         default: "none"
+      amdgpu_targets:
+        description: >-
+          Comma-separated individual gfx targets for kpack-split builds
+          (e.g. 'gfx942' or 'gfx1200,gfx1201'). Used to install the correct
+          per-target device wheels. Leave empty for legacy per-family builds.
+        type: string
+        default: ""
+      kpack_split:
+        description: "'true' if this is a kpack-split flat build."
+        type: string
+        default: "false"
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -157,6 +168,17 @@ jobs:
           echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
           echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX}"
 
+      - name: Compute ROCm device extras
+        id: device_extras
+        run: |
+          if [ "${{ inputs.kpack_split }}" = "true" ] && [ -n "${{ inputs.amdgpu_targets }}" ]; then
+            # Prefix each comma-separated target with "device-": gfx942,gfx1201 -> device-gfx942,device-gfx1201
+            extras=$(echo "${{ inputs.amdgpu_targets }}" | sed 's/\(^\|,\)/\1device-/g')
+            echo "value=${extras}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build PyTorch wheels
         run: |
           cache_flag=""
@@ -166,6 +188,11 @@ jobs:
             cache_flag="--use-ccache"
           fi
 
+          rocm_extras_flag=""
+          if [ -n "${{ steps.device_extras.outputs.value }}" ]; then
+            rocm_extras_flag="--rocm-extras ${{ steps.device_extras.outputs.value }}"
+          fi
+
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
@@ -173,6 +200,7 @@ jobs:
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
+            ${rocm_extras_flag} \
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats
