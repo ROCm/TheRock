@@ -72,6 +72,14 @@ TEST_TO_IGNORE = {
             "Unit_NonHost_Printf_BufferAvailability",
         ]
     },
+    "gfx94X-dcgpu": {
+        "linux": [
+            # TODO(#4244): Flaky with compiler submodule update — subprocess aborted.
+            "Unit_NonHost_Printf_loop",
+            "Unit_NonHost_Printf_multiple_Threads",
+            "Unit_NonHost_Printf_BufferAvailability",
+        ]
+    },
     "gfx110X-all": {
         "windows": [
             "Unit_hipStreamValue_Wait_Blocking - uint64_t",
