@@ -309,6 +309,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       BACKGROUND_BUILD
       INSTALL_TEST_SCRIPT_FILES
         "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/test/therock/test_hiptests.py"
+        "${THEROCK_SOURCE_DIR}/build_tools/github_actions/github_actions_api.py"
       COMPILER_TOOLCHAIN
         amd-hip
       CMAKE_ARGS

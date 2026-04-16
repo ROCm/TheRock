@@ -6,5 +6,6 @@
 [components.test."core/hip-tests/stage"]
 include = [
   "share/hip/**",
+  "share/therock/tests/github_actions_api.py",
   "share/therock/tests/test_hiptests.py",
 ]
