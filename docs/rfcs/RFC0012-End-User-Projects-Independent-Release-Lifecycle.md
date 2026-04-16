@@ -442,9 +442,6 @@ Key conventions:
   public API with headers and CMake config files may choose to produce a
   separate `-devel` / `-dev` package. Most extras projects are end-user
   tools built on top of the SDK and ship a single runtime package only.
-- **RPATH**: Packages are built with `$ORIGIN`-based RPATH. The
-  `--rpath-pkg` option produces versioned-only packages when relocatable
-  installs are required.
 
 Example (RVS on Ubuntu):
 
