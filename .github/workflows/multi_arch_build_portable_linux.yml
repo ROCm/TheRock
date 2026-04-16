@@ -212,7 +212,7 @@ jobs:
   # ==========================================================================
   iree-compiler:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'iree-compiler') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'iree-compiler') && inputs.build_variant_label != 'host-asan'}}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -238,7 +238,8 @@ jobs:
         !cancelled() &&
         !failure() &&
         !contains(inputs.prebuilt_stages, 'fusilli-libs') &&
-        inputs.build_variant_label != 'asan'
+        inputs.build_variant_label != 'asan' &&
+        inputs.build_variant_label != 'host-asan'
       }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
