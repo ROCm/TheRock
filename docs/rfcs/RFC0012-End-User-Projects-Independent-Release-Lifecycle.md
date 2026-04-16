@@ -457,6 +457,187 @@ amdrocm-rvs-1.2.0-7.x86_64.rpm
 amdrocm-rvs-devel-1.2.0-7.x86_64.rpm
 ```
 
+#### Dependency Resolution
+
+End-user projects built on top of ROCm must declare their ROCm
+dependencies correctly so that package managers can resolve and install
+the required ROCm components automatically. The following covers the
+general principles for DEB and RPM dependency resolution and how to map
+them to ROCm's host, architecture-specific, and multi-arch package
+structure.
+
+#### General Principles
+
+DEB and RPM package managers resolve dependencies using metadata declared
+in the package control file (`Depends` for DEB, `Requires` for RPM).
+The following rules apply to all end-user project packages:
+
+1. **Declare only direct dependencies.** List only the ROCm packages
+   the project links against or invokes directly. Transitive dependencies
+   are resolved automatically by the package manager through the ROCm
+   packages' own dependency chains.
+
+2. **Use version ranges, not exact versions.** Pin dependencies to the
+   ROCm major version to honor the compatibility contract from Section 3.
+   Avoid pinning to a specific minor or patch release unless a known
+   minimum is required.
+
+   DEB example (`debian/control`):
+
+   ```
+   Depends: amdrocm-runtimes (>= 7.0), amdrocm-runtimes (<< 8.0)
+   ```
+
+   RPM example (`.spec`):
+
+   ```
+   Requires: amdrocm-runtimes >= 7.0
+   Requires: amdrocm-runtimes < 8.0
+   ```
+
+3. **Separate build-time and install-time dependencies.** Build
+   dependencies (`Build-Depends` / `BuildRequires`) may reference
+   development packages such as `amdrocm-core-devel`. Runtime packages
+   should only depend on the runtime counterparts.
+
+#### ROCm Dependency Categories
+
+ROCm packages in TheRock are organized into three categories. End-user
+projects must understand this structure to declare the right dependencies.
+
+| Category | Description | Example packages |
+| :--- | :--- | :--- |
+| **Host packages** | Architecture-independent runtime and libraries — the host-side binaries that work regardless of which GPU is installed. Not all host packages have corresponding device packages; some (e.g., `amdrocm-runtimes`) are purely host-side. | `amdrocm-runtimes`, `amdrocm-core`, `amdrocm-base` |
+| **Device packages** | GPU-architecture-specific binaries containing device code for a particular `gfx` target. Only ROCm library packages that ship pre-compiled GPU kernels produce device variants. These are suffixed with the architecture name. | `amdrocm-blas-gfx942`, `amdrocm-blas-gfx1100` |
+| **Meta packages** | Convenience packages that pull in a set of host + device packages for a given architecture family or the full SDK. | `amdrocm`, `amdrocm-core-sdk`, `rocm-gfx90X` |
+
+#### Mapping End-User Project Dependencies to ROCm
+
+Most end-user projects depend only on **host packages** because they call
+ROCm APIs (HIP, ROCm libraries) and do not ship their own GPU device
+code. The device packages are an end-user installation choice that
+determines which GPUs are supported at runtime — the end-user project
+itself is agnostic to this selection.
+
+**Host-only dependency (typical case)**
+
+An end-user project like RVS links against HIP, ROCm SMI, rocBLAS, and
+the ROCm runtime. Its package declares dependencies on the host packages
+for each component it uses:
+
+DEB:
+
+```
+Depends: amdrocm-runtimes (>= 7.0), amdrocm-runtimes (<< 8.0),
+         amdrocm-amdsmi (>= 7.0), amdrocm-amdsmi (<< 8.0),
+         amdrocm-blas (>= 7.0), amdrocm-blas (<< 8.0)
+```
+
+RPM:
+
+```
+Requires: amdrocm-runtimes >= 7.0, amdrocm-runtimes < 8.0
+Requires: amdrocm-amdsmi >= 7.0, amdrocm-amdsmi < 8.0
+Requires: amdrocm-blas >= 7.0, amdrocm-blas < 8.0
+```
+
+Note that `amdrocm-runtimes` is a host-only package and does not have
+architecture-specific variants. Libraries like `amdrocm-blas`, however,
+have corresponding device packages (`amdrocm-blas-gfx942`, etc.) that
+contain pre-compiled GPU kernels for specific architectures.
+
+The end-user project depends only on the host packages. The user is
+responsible for installing the device packages for their GPU, either
+individually or through an architecture family meta-package:
+
+```bash
+# Option 1: Install device packages for a specific architecture
+apt install amdrocm-blas-gfx942
+
+# Option 2: Install an architecture family meta-package (pulls in all
+#            device packages for the gfx94X family)
+apt install rocm-gfx94X
+```
+
+The end-user project does not need to know or declare which GPU
+architectures are present.
+
+**Architecture-specific dependency (rare case)**
+
+If an end-user project ships its own pre-compiled GPU kernels for
+specific architectures, it must produce architecture-specific package
+variants and declare dependencies on the matching ROCm library device
+packages:
+
+```
+Package: amdrocm-mytool-gfx942
+Depends: amdrocm-runtimes (>= 7.0), amdrocm-runtimes (<< 8.0),
+         amdrocm-blas-gfx942 (>= 7.0), amdrocm-blas-gfx942 (<< 8.0)
+```
+
+Each architecture variant must:
+
+- Not conflict with other architecture variants of the same project.
+- Be independently installable.
+- Follow the `<package>-<gfxarch>` naming convention from
+  [RFC0009](/docs/rfcs/RFC0009-OS-Packaging-Requirements.md).
+
+**Meta-package dependency**
+
+If an end-user project needs the full ROCm runtime stack (not just
+individual libraries), it may depend on a meta-package instead of
+listing each component:
+
+```
+Depends: amdrocm-core (>= 7.0), amdrocm-core (<< 8.0)
+```
+
+This pulls in the complete ROCm Core runtime. Use this approach
+sparingly — prefer fine-grained dependencies to avoid installing
+unnecessary components.
+
+#### Multi-Arch Considerations
+
+ROCm is transitioning to a multi-arch packaging model through
+[RFC0008](/docs/rfcs/RFC0008-Multi-Arch-Packaging.md), where host code
+and device code are split into separate packages using `rocm-kpack`.
+End-user projects should be prepared for this model:
+
+1. **Depend on host packages only.** As ROCm splits host and device
+   code into separate packages, end-user projects that follow the
+   host-only dependency pattern (the typical case above) are
+   automatically compatible — no changes needed.
+
+2. **Do not assume fat binaries.** End-user projects must not assume
+   that ROCm libraries contain embedded device code for all
+   architectures. The device code may reside in separate architecture
+   packages or kpack archives loaded at runtime.
+
+3. **Let the user choose architectures.** The end-user project package
+   should never force-install a specific GPU architecture. Architecture
+   selection is the user's responsibility through device meta-packages:
+
+   ```bash
+   # User installs the end-user project + their architecture
+   apt install amdrocm-rvs
+   apt install rocm-gfx90X        # User's architecture choice
+   ```
+
+4. **Test against both fat and split layouts.** During the transition
+   period, CI should verify that the end-user project works correctly
+   whether ROCm is installed from fat-binary packages or multi-arch
+   split packages.
+
+#### Dependency Declaration Summary
+
+| Scenario | DEB `Depends` | RPM `Requires` |
+| :--- | :--- | :--- |
+| Uses HIP runtime | `amdrocm-runtimes (>= 7.0), amdrocm-runtimes (<< 8.0)` | `amdrocm-runtimes >= 7.0, amdrocm-runtimes < 8.0` |
+| Uses a ROCm library (e.g., rocBLAS) | `amdrocm-blas (>= 7.0), amdrocm-blas (<< 8.0)` | `amdrocm-blas >= 7.0, amdrocm-blas < 8.0` |
+| Uses ROCm SMI | `amdrocm-amdsmi (>= 7.0), amdrocm-amdsmi (<< 8.0)` | `amdrocm-amdsmi >= 7.0, amdrocm-amdsmi < 8.0` |
+| Needs full Core SDK runtime | `amdrocm-core (>= 7.0), amdrocm-core (<< 8.0)` | `amdrocm-core >= 7.0, amdrocm-core < 8.0` |
+| Ships own device kernels for a library | `amdrocm-<library>-<gfxarch> (>= 7.0)` | `amdrocm-<library>-<gfxarch> >= 7.0` |
+
 ### Tarball Packages
 
 Tarball archives provide a package-manager-independent distribution
@@ -483,6 +664,133 @@ Tarball naming follows the pattern:
 ```
 amdrocm-<project>-<version>-rocm<major>-<os>-<arch>.tar.xz
 ```
+
+#### Installing ROCm Dependencies for Tarball-Based Deployments
+
+Unlike DEB/RPM packages, tarballs do not have a package manager to
+resolve and install ROCm dependencies automatically. The user must
+ensure a compatible ROCm installation is present before extracting
+the end-user project tarball. There are several options:
+
+**Option 1: ROCm installed via native packages (recommended)**
+
+If the host already has ROCm installed through `apt` or `dnf`, the
+tarball-based end-user project can link against it directly. Verify
+the installed ROCm major version matches:
+
+```bash
+# Check the installed ROCm version
+amd-smi version
+
+# Extract the end-user project into the extras tree
+tar -xf amdrocm-rvs-1.2.0-rocm7-linux-x86_64.tar.xz \
+    -C /opt/rocm/extras-7/
+```
+
+**Option 2: ROCm installed from tarball**
+
+ROCm itself can be deployed from a tarball into a custom prefix. In
+this case both ROCm and the end-user project are package-manager-free:
+
+```bash
+# Extract ROCm Core SDK tarball
+tar -xf amdrocm-core-7.1.0-linux-x86_64.tar.xz \
+    -C /opt/rocm/core-7/
+
+# Extract the end-user project
+tar -xf amdrocm-rvs-1.2.0-rocm7-linux-x86_64.tar.xz \
+    -C /opt/rocm/extras-7/
+```
+
+**Option 3: ROCm installed via Python packages**
+
+When ROCm is available through `pip install rocm[core]`, the SDK
+libraries reside inside the Python site-packages directory. Use
+`rocm-sdk path` to locate the installation:
+
+```bash
+ROCM_ROOT=$(rocm-sdk path --root)
+
+tar -xf amdrocm-rvs-1.2.0-rocm7-linux-x86_64.tar.xz \
+    -C /opt/rocm/extras-7/
+```
+
+#### Connecting Project Binaries with ROCm Libraries
+
+After extracting both ROCm and the end-user project, the project
+binaries must be able to locate ROCm shared libraries at runtime.
+The following options are available, listed from most to least
+preferred:
+
+**Option 1: `$ORIGIN`-based RPATH (built-in, no user action)**
+
+End-user project binaries are built with `$ORIGIN`-relative RPATH
+entries. If the end-user project and ROCm are installed under the
+same `/opt/rocm/` parent, the relative paths resolve automatically
+and no additional configuration is needed.
+
+**Option 2: `LD_LIBRARY_PATH` environment variable**
+
+Set `LD_LIBRARY_PATH` to include the ROCm library directory. This is
+the simplest option when ROCm is installed in a non-standard location
+or when `$ORIGIN` RPATH does not cover the layout:
+
+```bash
+export ROCM_PATH=/opt/rocm/core-7
+export LD_LIBRARY_PATH=${ROCM_PATH}/lib:${LD_LIBRARY_PATH}
+export PATH=/opt/rocm/extras-7/bin:${ROCM_PATH}/bin:${PATH}
+```
+
+**Option 3: `ld.so.conf.d` drop-in (system-wide, requires root)**
+
+Create a linker configuration file so the dynamic linker finds ROCm
+libraries without environment variables:
+
+```bash
+echo "/opt/rocm/core-7/lib" > /etc/ld.so.conf.d/rocm-7.conf
+ldconfig
+```
+
+**Option 4: Environment modules / Lmod**
+
+On HPC clusters, use environment modules to manage ROCm and extras
+paths per user or per job:
+
+```tcl
+# /opt/modulefiles/rocm-extras/7
+set     rocm_root    /opt/rocm/core-7
+set     extras_root  /opt/rocm/extras-7
+
+prepend-path  PATH             $extras_root/bin
+prepend-path  PATH             $rocm_root/bin
+prepend-path  LD_LIBRARY_PATH  $extras_root/lib
+prepend-path  LD_LIBRARY_PATH  $rocm_root/lib
+prepend-path  CMAKE_PREFIX_PATH $extras_root
+prepend-path  CMAKE_PREFIX_PATH $rocm_root
+```
+
+Usage:
+
+```bash
+module load rocm-extras/7
+rvs -d 1
+```
+
+#### Verifying the Setup
+
+After installation and environment configuration, verify that the
+end-user project binaries can find all required ROCm libraries:
+
+```bash
+# Check that all shared library dependencies resolve
+ldd /opt/rocm/extras-7/bin/rvs
+
+# Run the project's built-in sanity check (if available)
+rvs -d 1 -g
+```
+
+Any `not found` entries in the `ldd` output indicate a missing ROCm
+library or an incorrectly configured library search path.
 
 ### Python Wheel Packages
 
@@ -533,3 +841,4 @@ project characteristics:
 | Native C/C++ tool (e.g., RVS) | Yes | Yes | No |
 | Pure Python tool/test harness | No | No | Yes |
 | Mixed native + Python library | Yes | Yes | Yes |
+
