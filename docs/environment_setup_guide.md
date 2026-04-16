@@ -83,8 +83,7 @@ or more of:
 
 - `OSError: failed to map segment from shared object` at load time (e.g.
   during `rocm-sdk test testSharedLibrariesLoad`).
-- `readelf -l <file>` reports `Error: the PHDR segment is not covered by
-  a LOAD segment`.
+- `readelf -l <file>` reports `Error: the PHDR segment is not covered by a LOAD segment`.
 - The PHDR `VirtAddr` in `readelf -l` is `0xfffffffffff79040` (a
   sign-extended negative).
 
@@ -107,7 +106,8 @@ Pick whichever applies to your host:
    a patched `patchelf` built from source and installed at
    `/usr/local/bin/patchelf`. Nothing to do. See
    [`dockerfiles/build_manylinux_x86_64.Dockerfile`][dockerfile].
-2. **Fedora.** Recent Fedora releases ship the fix as a downstream patch
+
+1. **Fedora.** Recent Fedora releases ship the fix as a downstream patch
    on the packaged `patchelf 0.18.0` (the Fedora `patchelf` SRPM carries
    upstream PR #544 as `0001-Allocate-PHT-SHT-at-the-end-of-the-.elf-file.patch`).
    Verify with:
@@ -119,12 +119,12 @@ Pick whichever applies to your host:
    The changelog entry referencing the "PHT/SHT at the end" patch
    indicates a good build. `dnf install patchelf` is sufficient on a
    release that carries it.
-3. **Any other Linux (Ubuntu, Debian, Arch, openSUSE, ...).** Build
+
+1. **Any other Linux (Ubuntu, Debian, Arch, openSUSE, ...).** Build
    `patchelf` from source using the script the manylinux image uses:
 
    ```bash
    sudo env INSTALL_PREFIX=/usr/local ./dockerfiles/install_pinned_patchelf.sh
-   ```
 
    patchelf --version
    # -> patchelf 0.18.0+therock.<short-ref>
@@ -133,8 +133,8 @@ Pick whichever applies to your host:
    The script needs `curl`, `autoconf`, `automake`, `make`, and a C++
    compiler. On Ubuntu: `sudo apt install curl autoconf automake make g++`.
 
-[dockerfile]: ../dockerfiles/build_manylinux_x86_64.Dockerfile
-
 ### Resource Utilization
 
 ROCm is a very resource hungry project to build. If running with high parallelism (i.e. on systems with a high core:memory ratio), it will likely use more memory than you have without special consideration. Sometimes this will result in a transient "resource exhausted" problem which clears on a restart. Sufficient swap and controlling concurrency may be necessary. TODO: Link to guide on how to control concurrency and resource utilization.
+
+[dockerfile]: ../dockerfiles/build_manylinux_x86_64.Dockerfile
