@@ -1360,6 +1360,13 @@
               "dev",
               "doc"
             ]
+          },
+          {
+            "Name": "rocm-cmake",
+            "Components": [
+              "dev",
+              "doc"
+            ]
           }
         ]
       },
