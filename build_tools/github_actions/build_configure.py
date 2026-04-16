@@ -84,41 +84,6 @@ platform_options = {
     ],
 }
 
-# Map from individual GPU target tokens to required host CPU march flags.
-#
-# Only list targets here when ALL hardware that ships with that GPU also uses
-# a known, fixed CPU microarchitecture (i.e. unified/integrated chipsets where
-# the GPU and CPU die are the same product line).
-#
-# To add a new target: find it in cmake/therock_amdgpu_targets.cmake, verify
-# the CPU arch, then add the gfx token → march string entry below.
-#
-# IMPORTANT: Do NOT add family aliases (e.g. "gfx115X-igpu") unless every
-# member of that family uses the same CPU arch.  The gfx115X-igpu family is a
-# concrete example of why: it includes gfx1153 (Radeon 820M / Hawk Point,
-# Zen 4), so the family cannot be mapped to znver5.
-AMDGPU_HOST_MARCH_MAP = {
-    # gfx115X Strix family — all ship on Zen 5 CPU dies (Ryzen AI 300 / MAX)
-    "gfx1150": "znver5",  # Strix Point  — Ryzen AI 9 HX 370 / AI 9 365
-    "gfx1151": "znver5",  # Strix Halo   — Ryzen AI MAX 395 / 385 / 370
-    "gfx1152": "znver5",  # Krackan Point — Zen 5c, Ryzen AI 300 mobile
-    # gfx1153 (Radeon 820M / Hawk Point) is Zen 4 — intentionally omitted.
-}
-
-
-def host_march_for_families(families_str: str | None) -> str | None:
-    """Return a -march value if all requested GPU families map to a single
-    known host microarchitecture, otherwise return None."""
-    if not families_str:
-        return None
-    tokens = [t.strip() for t in families_str.replace(";", ",").split(",")]
-    known_tokens = [t for t in tokens if t in AMDGPU_HOST_MARCH_MAP]
-    marches = {AMDGPU_HOST_MARCH_MAP[t] for t in known_tokens}
-    # Only inject if every token maps to the same arch (avoid mixing targets).
-    if known_tokens and len(marches) == 1 and len(known_tokens) == len(tokens):
-        return marches.pop()
-    return None
-
 
 def build_configure(build_dir, manylinux=False):
     logging.info(f"Building package {package_version}")
@@ -145,16 +110,6 @@ def build_configure(build_dir, manylinux=False):
             "-DBUILD_TESTING=ON",
         ]
     )
-
-    # Inject host CPU march flags for targets tied to a specific microarchitecture.
-    # MSVC does not accept -march, so skip on Windows.
-    if PLATFORM != "windows":
-        host_march = host_march_for_families(amdgpu_families)
-        if host_march:
-            march_flags = f"-march={host_march} -mtune={host_march}"
-            cmd.append(f"-DCMAKE_C_FLAGS={march_flags}")
-            cmd.append(f"-DCMAKE_CXX_FLAGS={march_flags}")
-            logging.info(f"Injecting host CPU flags: {march_flags}")
 
     # Adding platform specific options
     cmd += platform_options.get(PLATFORM, [])
