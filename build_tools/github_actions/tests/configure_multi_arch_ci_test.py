@@ -804,7 +804,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
         # Default runner, not the oem one
-        self.assertNotEqual(entry["test-runs-on"], 'linux-gfx1151-gpu-rocm')
+        self.assertNotEqual(entry["test-runs-on"], "linux-gfx1151-gpu-rocm")
         self.assertNotIn("oem", entry["test-runs-on"])
 
 
