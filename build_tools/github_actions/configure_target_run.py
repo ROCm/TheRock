@@ -15,6 +15,15 @@ from amdgpu_family_matrix import get_all_families_for_trigger_types
 from github_actions_api import *
 
 
+def is_pytorch_wheel_workflow() -> bool:
+    """True when this process runs from a *pytorch_wheels*.yml GitHub Actions workflow.
+
+    Matches the workflow file path in ``GITHUB_WORKFLOW_REF`` (stable)
+    """
+    ref = os.getenv("GITHUB_WORKFLOW_REF", "")
+    return "pytorch_wheels" in ref.replace("\\", "/").lower()
+
+
 def get_runner_label(target: str, platform: str) -> str:
     print(f"Searching for a runner for target '{target}' on platform '{platform}'")
     amdgpu_family_info_matrix = get_all_families_for_trigger_types(
@@ -41,8 +50,19 @@ def get_runner_label(target: str, platform: str) -> str:
             )
             continue
 
-        # If there is a test machine available for this target, run on it.
-        test_runs_on_machine = platform_for_key.get("test-runs-on")
+        # `pytorch-ci-test-runs-on` is used only for Windows gfx1151 when the workflow
+        # is a `*pytorch_wheels*.yml` job; all other families use `test-runs-on`.
+        use_pytorch_ci_windows_gfx1151 = (
+            is_pytorch_wheel_workflow()
+            and platform == "windows"
+            and family_for_platform == "gfx1151"
+        )
+        if use_pytorch_ci_windows_gfx1151:
+            test_runs_on_machine = platform_for_key.get(
+                "pytorch-ci-test-runs-on"
+            ) or platform_for_key.get("test-runs-on")
+        else:
+            test_runs_on_machine = platform_for_key.get("test-runs-on")
         if test_runs_on_machine:
             print(f"  Found runner: '{test_runs_on_machine}'")
             return test_runs_on_machine

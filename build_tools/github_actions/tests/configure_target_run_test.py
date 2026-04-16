@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_target_run
@@ -28,6 +29,12 @@ class ConfigureTargetRunTest(unittest.TestCase):
     def test_windows_gfx115x(self):
         runner_label = configure_target_run.get_runner_label("gfx1151", "windows")
         self.assertEqual(runner_label, "windows-gfx1151-gpu-rocm")
+
+    def test_windows_gfx1151_pytorch_ci_runner(self):
+        ref = "refs/heads/main/.github/workflows/build_windows_pytorch_wheels.yml"
+        with patch.dict(os.environ, {"GITHUB_WORKFLOW_REF": ref}, clear=False):
+            runner_label = configure_target_run.get_runner_label("gfx1151", "windows")
+        self.assertEqual(runner_label, "windows-strix-halo-gpu-rocm-128gb")
 
     def test_windows_gfx120X_all(self):
         runner_label = configure_target_run.get_runner_label("gfx120X-all", "windows")
