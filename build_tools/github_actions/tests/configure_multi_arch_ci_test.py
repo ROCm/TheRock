@@ -770,49 +770,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Windows has no asan variant config at all.
         self.assertIsNone(result.windows)
 
-    def test_variant_filters_by_trigger(self):
-        """ASAN: based on event type, we run an expected ASAN build variant"""
-        targets = cm.TargetSelection(
-            linux_families=["gfx94x"],
-        )
-        test_cases = [
-            ("schedule", "linux-release-asan"),
-            ("push", "linux-release-host-asan"),
-            ("workflow_dispatch", "linux-release-asan"),
-        ]
-        for event_name, expected_variant in test_cases:
-            with self.subTest(event_name=event_name):
-                defaults = dict(
-                    run_id="12345",
-                    event_name=event_name,
-                    commit_ref="main",
-                    base_ref="HEAD^1",
-                    build_variant="asan",
-                )
-                ci_inputs = cm.CIInputs(**defaults)
-                result = cm.expand_build_configs(targets=targets, ci_inputs=ci_inputs)
-                # Only gfx94x on linux survives.
-                self.assertIsNotNone(result.linux)
-                build_variant_cmake_preset = result.linux.build_variant_cmake_preset
-                self.assertEqual(build_variant_cmake_preset, expected_variant)
-
-    def test_variant_filters_by_platform_and_family_support(self):
-        """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
-        # gfx94x supports asan, gfx110x is release-only, windows has no asan variant.
-        targets = cm.TargetSelection(
-            linux_families=["gfx94x", "gfx110x"],
-            windows_families=["gfx110x"],
-        )
-        result = cm.expand_build_configs(
-            targets=targets, ci_inputs=self._inputs(build_variant="asan")
-        )
-        # Only gfx94x on linux survives.
-        self.assertIsNotNone(result.linux)
-        linux_per_family = result.linux.per_family_info
-        self.assertEqual(len(linux_per_family), 1)
-        # Windows has no asan variant config at all.
-        self.assertIsNone(result.windows)
-
     def test_test_runner_kernel_overrides_runner_label(self):
         """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
         targets = cm.TargetSelection(linux_families=["gfx1151"])
