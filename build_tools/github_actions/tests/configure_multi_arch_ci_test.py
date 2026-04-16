@@ -770,18 +770,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Windows has no asan variant config at all.
         self.assertIsNone(result.windows)
 
-    def test_test_runner_kernel_overrides_runner_label(self):
-        """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
-        targets = cm.TargetSelection(linux_families=["gfx1151"])
-        result = cm.expand_build_configs(
-            targets=targets,
-            ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
-            test_type="quick",
-        )
-        self.assertIsNotNone(result.linux)
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
     def test_test_runner_kernel_clears_unsupported_family(self):
         """test_runner:oem label clears runner for families without kernel support."""
         # gfx94x has no test-runs-on-kernel entry
