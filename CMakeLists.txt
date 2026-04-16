@@ -146,12 +146,16 @@ set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/rocm-systems"
 set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rocm-systems superrepo")
 cmake_path(ABSOLUTE_PATH THEROCK_ROCM_SYSTEMS_SOURCE_DIR NORMALIZE)
 
+# Allow specifying alternative source location for ROCgdb.
+therock_enable_external_source("rocgdb" "${THEROCK_SOURCE_DIR}/debug-tools/rocgdb/source" OFF)
+
 # Allow to specify alternative source locations instead of using
 # repositories tracked in TheRock's `.gitmodules`.
 therock_enable_external_source("composable-kernel" "${THEROCK_SOURCE_DIR}/ml-libs/composable_kernel" OFF)
 
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
+set(THEROCK_DEV_PROJECTS "" CACHE STRING "Semicolon-separated list of subprojects that opt in to source globbing even when otherwise skipped (e.g. amd-llvm).")
 
 # Initialize the install directory.
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
