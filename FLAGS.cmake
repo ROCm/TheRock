@@ -22,7 +22,7 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
-  NAME HIPDNN_SDPA
+  NAME HIPDNN_ENABLE_SDPA
   DEFAULT_VALUE OFF
   DESCRIPTION "Enable SDPA (Scaled Dot-Product Attention) support in hipDNN"
   CMAKE_VARS
