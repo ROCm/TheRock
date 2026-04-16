@@ -33,7 +33,7 @@ from test_rocprofiler_sdk import (
 logging.basicConfig(level=logging.INFO)
 
 # Define default project name and CDash base URL
-_DEFAULT_PROJECT_NAME = "rocprofiler-sdk-alt"
+_DEFAULT_PROJECT_NAME = "TheRock"
 _DEFAULT_BASE_URL = "my.cdash.org"
 
 # Define paths to output artifacts directory and script directory
@@ -234,7 +234,7 @@ def _generate_dashboard(cmake_cmd: str) -> str:
     # Define variables for dashboard submission
     submit = "1"  # Submit to CDash or not
     model = "Experimental"  # Mode (Nightly, Experimental, Continuous, etc.)
-    group = "TheRock"  # Group for the dashboard
+    group = "rocprofiler-sdk"  # Group for the dashboard
     ARGN = "${ARGN}"  # Arguments for dashboard submission
 
     REPO_SOURCE_DIR = str(Path(__file__).resolve().parents[3])
