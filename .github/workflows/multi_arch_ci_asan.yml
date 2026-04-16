@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - main
+      - users/geomin12/host-asan-tests
   schedule:
     # Runs at 02:00 AM UTC, which is 7:00 PM PST (UTC-8)
     - cron: '0 02 * * *'
