@@ -111,16 +111,21 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
         # therefore using content is sufficient to detect changes.
         lines.append(f"compiler_check = content")
 
-    # Slop settings.
-    # Creating a hard link to a file increasing the link count, which triggers
-    # a ctime update (since ctime tracks changes to the inode metadata) for
-    # *all* links to the file. Since we are basically always creating hard
-    # link farms in parallel as part of sandboxing, we have to disable this
-    # check as it is never valid for our build system and will result in
-    # spurious ccache panics where it randomly falls back to the real compiler
-    # if the ccache invocation happens to coincide with parallel sandbox
-    # creation for another sub-project.
-    lines.append(f"sloppiness = include_file_ctime")
+    # Sloppiness settings.
+    # include_file_ctime:
+    #   Creating a hard link to a file increasing the link count, which triggers
+    #   a ctime update (since ctime tracks changes to the inode metadata) for
+    #   *all* links to the file. Since we are basically always creating hard
+    #   link farms in parallel as part of sandboxing, we have to disable this
+    #   check as it is never valid for our build system and will result in
+    #   spurious ccache panics where it randomly falls back to the real compiler
+    #   if the ccache invocation happens to coincide with parallel sandbox
+    #   creation for another sub-project.
+    # pch_defines, time_macros:
+    #   amd-llvm uses PCH on Windows builds by default, CMake will correctly
+    #   use the appropriate compilation flags that ccache understands. See 
+    #   https://ccache.dev/manual/4.7.html#_precompiled_headers for details.
+    lines.append(f"sloppiness = include_file_ctime,pch_defines,time_macros")
 
     # End with blank line.
     lines.append("")
