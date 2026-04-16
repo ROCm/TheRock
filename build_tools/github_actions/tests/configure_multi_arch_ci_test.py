@@ -797,14 +797,14 @@ class TestExpandBuildConfigs(unittest.TestCase):
 
     def test_no_test_runner_label_uses_default(self):
         """Without test_runner: label, default runner labels are used."""
-        targets = cm.TargetSelection(linux_families=["gfx1151"])
+        targets = cm.TargetSelection(linux_families=["gfx908"])
         result = cm.expand_build_configs(
             targets=targets, ci_inputs=self._inputs(), test_type="quick"
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
         # Default runner, not the oem one
-        self.assertNotEqual(entry["test-runs-on"], "")
+        self.assertNotEqual(entry["test-runs-on"], 'linux-gfx1151-gpu-rocm')
         self.assertNotIn("oem", entry["test-runs-on"])
 
 
