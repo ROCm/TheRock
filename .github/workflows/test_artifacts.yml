@@ -18,6 +18,9 @@ on:
         default: ""
       test_runs_on:
         type: string
+      benchmark_runs_on:
+        type: string
+        default: ""
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -46,6 +49,9 @@ on:
         default: ""
       test_runs_on:
         type: string
+      benchmark_runs_on:
+        type: string
+        default: ""
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -149,10 +155,15 @@ jobs:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      # If the test requires a multi GPU, use the multi GPU test runner
-      # Otherwise, use the standard test runner
+      # Route to the appropriate runner:
+      #   1. Benchmark components use the dedicated benchmark runner
+      #   2. Multi-GPU components use the multi-GPU runner
+      #   3. Everything else uses the standard test runner
       test_runs_on: >-
         ${{
+          matrix.components.is_benchmark == true &&
+            inputs.benchmark_runs_on != '' &&
+            inputs.benchmark_runs_on ||
           matrix.components.multi_gpu_runner != '' &&
             matrix.components.multi_gpu_runner ||
             inputs.test_runs_on

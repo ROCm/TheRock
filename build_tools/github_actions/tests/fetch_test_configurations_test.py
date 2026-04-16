@@ -193,7 +193,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("func1", names)
 
     # -----------------------
-    # Benchmark selection via test_type=benchmark
+    # Benchmark merging via run_extended_tests
     # -----------------------
 
     def _setup_benchmark_test(self):
@@ -207,8 +207,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             }
         }
 
-    def test_benchmarks_selected_when_test_type_benchmark(self):
-        os.environ["TEST_TYPE"] = "benchmark"
+    def test_benchmarks_merged_when_extended_tests_enabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "true"
         self._setup_benchmark_test()
 
         fetch_test_configurations.run()
@@ -216,9 +216,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         self.assertEqual(len(components), 1)
         self.assertEqual(components[0]["job_name"], "bench1")
+        self.assertTrue(components[0]["is_benchmark"])
+        self.assertEqual(components[0]["test_type"], "full")
 
-    def test_benchmarks_not_selected_when_test_type_full(self):
-        os.environ["TEST_TYPE"] = "full"
+    def test_benchmarks_not_merged_when_extended_tests_disabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "false"
         self._setup_benchmark_test()
 
         fetch_test_configurations.run()

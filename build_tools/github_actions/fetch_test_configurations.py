@@ -541,10 +541,9 @@ def run():
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
-    # Build the selected test matrix with minimal branching:
+    # Build the selected test matrix:
     # 1) Start from regular tests
-    # 2) Optionally merge extended functional tests
-    # 3) Override entirely if running benchmarks
+    # 2) Optionally merge extended tests (functional + benchmarks)
     selected_matrix: dict = deepcopy(test_matrix)
     logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
 
@@ -555,10 +554,14 @@ def run():
         for key, value in functional_matrix.items():
             selected_matrix[key] = deepcopy(value)
 
-    if test_type == "benchmark":
-        logging.info("Using benchmark_matrix only (test_type=benchmark)")
-        selected_matrix = deepcopy(benchmark_matrix)
-        selected_matrix["sanity"] = deepcopy(test_matrix["sanity"])
+    if run_extended_tests and benchmark_matrix:
+        logging.info(
+            f"Merging {len(benchmark_matrix)} benchmark test(s) into test matrix"
+        )
+        for key, value in benchmark_matrix.items():
+            entry = deepcopy(value)
+            entry["is_benchmark"] = True
+            selected_matrix[key] = entry
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]
@@ -631,7 +634,9 @@ def run():
                 continue
 
             job_config_data = selected_matrix[key]
-            job_config_data["test_type"] = test_type
+            job_config_data["test_type"] = (
+                "full" if job_config_data.get("is_benchmark") else test_type
+            )
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index

@@ -25,7 +25,10 @@ on:
       run_extended_tests:
         type: string
         default: 'false'
-      test_modes:
+      benchmark_runs_on:
+        type: string
+        default: ""
+      test_type:
         type: string
       expect_failure:
         type: boolean
@@ -69,7 +72,7 @@ jobs:
 
   test_linux_artifacts:
     needs: [build_portable_linux_artifacts]
-    name: ${{ matrix.test_mode.name }}
+    name: Test Artifacts
     # If the dependent job failed/cancelled, this job will not be run
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
     # previous build step is run or skipped.concurrency.
@@ -84,18 +87,15 @@ jobs:
         ) &&
         inputs.expect_failure == false
       }}
-    strategy:
-      fail-fast: false
-      matrix:
-        test_mode: ${{ fromJSON(inputs.test_modes) }}
     uses: ./.github/workflows/test_artifacts.yml
     secrets: inherit
     with:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ matrix.test_mode.test_runs_on }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      benchmark_runs_on: ${{ inputs.benchmark_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      test_type: ${{ matrix.test_mode.test_type }}
+      test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
       run_extended_tests: ${{ inputs.run_extended_tests }}

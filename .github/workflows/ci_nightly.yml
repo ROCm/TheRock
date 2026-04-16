@@ -79,7 +79,8 @@ jobs:
       artifact_group: ${{ matrix.variant.artifact_group }}
       test_runs_on: ${{ matrix.variant.test-runs-on }}
       run_extended_tests: ${{ needs.setup.outputs.run_extended_tests }}
-      test_modes: ${{ toJSON(matrix.variant.test_modes) }}
+      benchmark_runs_on: ${{ matrix.variant.benchmark-runs-on }}
+      test_type: ${{ needs.setup.outputs.test_type }}
       build_variant_label: ${{ matrix.variant.build_variant_label }}
       build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
       build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}
@@ -113,7 +114,8 @@ jobs:
       artifact_group: ${{ matrix.variant.artifact_group }}
       test_runs_on: ${{ matrix.variant.test-runs-on }}
       run_extended_tests: ${{ needs.setup.outputs.run_extended_tests }}
-      test_modes: ${{ toJSON(matrix.variant.test_modes) }}
+      benchmark_runs_on: ${{ matrix.variant.benchmark-runs-on }}
+      test_type: ${{ needs.setup.outputs.test_type }}
       build_variant_label: ${{ matrix.variant.build_variant_label }}
       build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
       build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}
