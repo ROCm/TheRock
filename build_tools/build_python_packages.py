@@ -67,6 +67,7 @@ def run(args: argparse.Namespace):
     # Populate each target neutral library package.
     core = PopulatedDistPackage(params, logical_name="core")
     core.rpath_dep(core, "lib/llvm/lib")
+    core.rpath_dep(core, "lib/rocm_sysdeps/lib")
     core.populate_runtime_files(
         params.filter_artifacts(
             core_artifact_filter,
@@ -107,10 +108,14 @@ def _run_kpack_split(
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
 
-    # Per-ISA device wheels.
+    # Per-ISA device wheels. Device artifacts overlay into
+    # _rocm_sdk_libraries/lib/ and may include ELF .so files (per-arch
+    # MIOpen CK kernels) with dynamic deps on core.
     all_targets = sorted(params.all_target_families)
     for target in all_targets:
         dev = PopulatedDistPackage(params, logical_name="device", target_family=target)
+        dev.rpath_dep(core, "lib")
+        dev.rpath_dep(core, "lib/rocm_sysdeps/lib")
         dev.populate_device_files(
             params.filter_artifacts(
                 filter=functools.partial(device_artifact_filter, target),
@@ -291,6 +296,7 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
             "miopen",
             "miopenprovider",
             "hipblasltprovider",
+            "hipkernelprovider",
             "rand",
             "rccl",
         ]

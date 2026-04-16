@@ -34,13 +34,9 @@ on:
         type: string
       build_variant_suffix:
         type: string
-      test_labels:
-        type: string
       expect_failure:
         type: boolean
       rocm_package_version:
-        type: string
-      test_type:
         type: string
       prebuilt_stages:
         type: string
@@ -102,6 +98,11 @@ jobs:
     needs: compiler-runtime
     if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') }}
     strategy:
+      # `fail-fast: false` lets all families complete even if one fails.
+      # This is useful for CI (to see all failures at once), but for releases
+      # this risks publishing incomplete packages. Release pipelines may want
+      # to either set `fail-fast: true` or add a validation step that blocks
+      # promotion unless all jobs succeeded.
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
@@ -127,6 +128,7 @@ jobs:
     needs: compiler-runtime
     if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'comm-libs') }}
     strategy:
+      # See comment on math-libs fail-fast above.
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
@@ -228,9 +230,16 @@ jobs:
   # ==========================================================================
   # STAGE: fusilli-libs (generic, after math-libs + iree-compiler)
   # ==========================================================================
+  # TODO: re-enable for ASAN once fusilli-libs build is validated to work
   fusilli-libs:
     needs: [compiler-runtime, math-libs, iree-compiler]
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'fusilli-libs') }}
+    if: >-
+      ${{
+        !cancelled() &&
+        !failure() &&
+        !contains(inputs.prebuilt_stages, 'fusilli-libs') &&
+        inputs.build_variant_label != 'asan'
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
