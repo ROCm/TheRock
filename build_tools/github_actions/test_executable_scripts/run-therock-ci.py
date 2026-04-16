@@ -238,8 +238,6 @@ def _generate_dashboard(cmake_cmd: str) -> str:
     ARGN = "${ARGN}"  # Arguments for dashboard submission
 
     REPO_SOURCE_DIR = str(Path(__file__).resolve().parents[3])
-    print(f"REPO_SOURCE_DIR: {REPO_SOURCE_DIR}")
-    sys.exit()
 
     # Generate initial dashboard.cmake content with minimum necessary version and dashboard_submit macro
     _script = f"""
