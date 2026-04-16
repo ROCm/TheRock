@@ -207,18 +207,12 @@ jobs:
       contents: read
       id-token: write
 
+  # ==========================================================================
   # STAGE: iree-compiler (generic, parallel to math-libs)
   # ==========================================================================
-  # TODO: re-enable for ASAN once iree-compiler build errors are fixed
   iree-compiler:
     needs: compiler-runtime
-    if: >-
-      ${{
-        !cancelled() &&
-        !failure() &&
-        !contains(inputs.prebuilt_stages, 'iree-compiler') &&
-        inputs.build_variant_label != 'asan'
-      }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'iree-compiler') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -236,7 +230,7 @@ jobs:
   # ==========================================================================
   # STAGE: fusilli-libs (generic, after math-libs + iree-compiler)
   # ==========================================================================
-  # TODO: re-enable for ASAN once fusilli-libs build errors are fixed
+  # TODO: re-enable for ASAN once fusilli-libs build is validated to work
   fusilli-libs:
     needs: [compiler-runtime, math-libs, iree-compiler]
     if: >-

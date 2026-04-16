@@ -765,6 +765,7 @@ def _expand_build_config_for_platform(
     ci_inputs: CIInputs,
     all_families: dict[str, dict],
     variant_config: dict,
+    test_type: str,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -855,6 +856,25 @@ def _expand_build_config_for_platform(
                     f"disabling tests"
                 )
 
+        # If run-full-tests-only is set and test_type is "quick", disable testing
+        if platform_info.get("run-full-tests-only", False) and test_type == "quick":
+            test_runs_on = ""
+            print(
+                f"  {family_name}: run-full-tests-only flag set, "
+                f"disabling tests for quick test run"
+            )
+
+        # If nightly_check_only_for_family is set for schedule runs only
+        if (
+            platform_info.get("nightly_check_only_for_family", False)
+            and not ci_inputs.is_schedule
+        ):
+            test_runs_on = ""
+            print(
+                f"  {family_name}: nightly_check_only_for_family flag set, "
+                f"disabling test runner for non-scheduled runs"
+            )
+
         per_family_info.append(
             {
                 "amdgpu_family": platform_info["family"],
@@ -891,6 +911,7 @@ def _expand_build_config_for_platform(
 def expand_build_configs(
     targets: TargetSelection,
     ci_inputs: CIInputs,
+    test_type: str,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfigs:
@@ -924,6 +945,7 @@ def expand_build_configs(
             ci_inputs=ci_inputs,
             all_families=all_families,
             variant_config=variant_config,
+            test_type=test_type,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
         )
@@ -1010,6 +1032,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     builds = expand_build_configs(
         targets=targets,
         ci_inputs=ci_inputs,
+        test_type=jobs.test_rocm.test_type,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
     )
