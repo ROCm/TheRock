@@ -153,16 +153,28 @@ string(REPLACE ";" ":" PKG_CONFIG_PATH_ENV_VAR "${THEROCK_PKG_CONFIG_DIRS}")
 
 # Set conditional configure flags for bundled sysdep prefixes. When using system
 # libraries, these are left empty so autotools discovers them via pkg-config.
-# Furthermore, set an RPATH segment for the bundled sysdeps lib directory.
 set(ROCGDB_EXPAT_FLAG "")
 set(ROCGDB_GMP_FLAG "")
 set(ROCGDB_MPFR_FLAG "")
-set(ROCGDB_SYSDEPS_RPATH_SEGMENT "")
 if(THEROCK_BUNDLE_SYSDEPS)
   set(ROCGDB_EXPAT_FLAG "--with-expat-prefix=${EXPAT_PREFIX}")
   set(ROCGDB_GMP_FLAG "--with-gmp=${GMP_PREFIX}")
   set(ROCGDB_MPFR_FLAG "--with-mpfr=${MPFR_PREFIX}")
-  set(ROCGDB_SYSDEPS_RPATH_SEGMENT ":\\\$ORIGIN/../lib/rocm_sysdeps/lib")
+endif()
+
+# Build RPATH segments from THEROCK_PRIVATE_INSTALL_RPATH_DIRS if defined.
+# These paths are relative to <root>, but need to be relative to <root>/bin.
+# If not defined, fall back to hardcoded sysdeps path for backward compatibility.
+set(ROCGDB_EXTRA_RPATH_SEGMENTS "")
+if(DEFINED THEROCK_PRIVATE_INSTALL_RPATH_DIRS AND NOT "${THEROCK_PRIVATE_INSTALL_RPATH_DIRS}" STREQUAL "")
+  foreach(rpath_dir ${THEROCK_PRIVATE_INSTALL_RPATH_DIRS})
+    # Convert path from <root>-relative to <root>/bin-relative by prepending ../
+    string(APPEND ROCGDB_EXTRA_RPATH_SEGMENTS ":\\\$ORIGIN/../${rpath_dir}")
+  endforeach()
+  message(STATUS "RPATH segments from THEROCK_PRIVATE_INSTALL_RPATH_DIRS: ${ROCGDB_EXTRA_RPATH_SEGMENTS}")
+elseif(THEROCK_BUNDLE_SYSDEPS)
+  # Fallback for older builds without THEROCK_PRIVATE_INSTALL_RPATH_DIRS
+  set(ROCGDB_EXTRA_RPATH_SEGMENTS ":\\\$ORIGIN/../lib/rocm_sysdeps/lib")
 endif()
 
 # Set some global variables for the configure/build.
@@ -381,7 +393,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
   # Register RPATH patching for this rocgdb variant.
   message(STATUS "Registering fixup of ${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}")
   install(CODE "execute_process(
-      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib${ROCGDB_SYSDEPS_RPATH_SEGMENT}${LIBPYTHON_RPATH}\"
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN${ROCGDB_EXTRA_RPATH_SEGMENTS}${LIBPYTHON_RPATH}\"
       \"${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}\"
       COMMAND_ERROR_IS_FATAL ANY
     )"
@@ -486,7 +498,7 @@ foreach(rocgdb_exec_filename ${ROCGDB_EXECS_TO_PATCH})
 
   # Patch in the RUNPATH.
   install(CODE "execute_process(
-      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib${ROCGDB_SYSDEPS_RPATH_SEGMENT}\"
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN${ROCGDB_EXTRA_RPATH_SEGMENTS}\"
       \"${rocgdb_exec_file}\"
       COMMAND_ERROR_IS_FATAL ANY
   )"
