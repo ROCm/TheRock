@@ -122,9 +122,9 @@ def generate_package_repository_url(
         Public repository URL for package installation instructions
 
     Examples:
-        CI DEB:         https://therock-ci-artifacts.s3.amazonaws.com/12345678-linux/packages/deb
-        CI RPM:         https://therock-ci-artifacts.s3.amazonaws.com/12345678-linux/packages/rpm/x86_64/
-        External DEB:   https://therock-ci-artifacts-external.s3.amazonaws.com/user-fork/12345678-linux/packages/deb
+        CI DEB:         https://therock-ci-artifacts.s3.us-east-2.amazonaws.com/12345678-linux/packages/deb
+        CI RPM:         https://therock-ci-artifacts.s3.us-east-2.amazonaws.com/12345678-linux/packages/rpm/x86_64/
+        External DEB:   https://therock-ci-artifacts-external.s3.us-east-2.amazonaws.com/user-fork/12345678-linux/packages/deb
         Nightly DEB:    https://rocm.nightlies.amd.com/deb/20260320-12345678
         Nightly RPM:    https://rocm.nightlies.amd.com/rpm/20260320-12345678/x86_64/
         Prerelease DEB: https://rocm.prereleases.amd.com/packages/ubuntu2404
@@ -160,9 +160,9 @@ def generate_package_repository_url(
         # For external repos, include repository name in path
         if repository and bucket == "therock-ci-artifacts-external":
             repo_name = repository.replace("/", "-")
-            url = f"https://{bucket}.s3.amazonaws.com/{repo_name}/{artifact_id}-{platform}/packages/{pkg_type}"
+            url = f"https://{bucket}.s3.us-east-2.amazonaws.com/{repo_name}/{artifact_id}-{platform}/packages/{pkg_type}"
         else:
-            url = f"https://{bucket}.s3.amazonaws.com/{artifact_id}-{platform}/packages/{pkg_type}"
+            url = f"https://{bucket}.s3.us-east-2.amazonaws.com/{artifact_id}-{platform}/packages/{pkg_type}"
 
         # RPM repos need /x86_64/ subdirectory for yum/dnf
         return f"{url}/x86_64/" if pkg_type == "rpm" else url
@@ -176,9 +176,10 @@ def determine_s3_config(
     artifact_id: str,
     rocm_version: Optional[str] = None,
     platform: str = "linux",
-) -> Tuple[str, str, str, str]:
+) -> Tuple[str, str, str, str, str, str]:
     """
-    Determine S3 bucket, prefix, job type, and public repository URL based on inputs.
+    Determine S3 bucket, prefix, job type, public repository URL, and multi-arch
+    S3 bucket/prefix based on inputs.
 
     Args:
         release_type: Release type ('dev', 'nightly', 'prerelease', 'release', 'ci', or empty)
@@ -190,7 +191,12 @@ def determine_s3_config(
         platform: Platform name ('linux' or 'windows'), defaults to 'linux'
 
     Returns:
-        Tuple of (s3_bucket, s3_prefix, job_type, package_repository_url)
+        Tuple of (s3_bucket, s3_prefix, job_type, package_repository_url,
+                  multi_arch_s3_bucket, multi_arch_s3_prefix)
+
+        multi_arch_s3_bucket and multi_arch_s3_prefix are only populated for
+        dev/nightly/prerelease/release builds (therock-{release_type}-artifacts);
+        they are empty strings for CI builds.
 
     Raises:
         ValueError: If pkg_type is 'deb' or 'rpm' but platform is not 'linux'
@@ -221,6 +227,10 @@ def determine_s3_config(
             job_type = release_type
             print(f"✓ Using release-type bucket: {s3_bucket}", file=sys.stderr)
 
+        # Multi-arch artifacts use a separate bucket/prefix (no date, run-id based)
+        multi_arch_s3_bucket = f"therock-{release_type}-artifacts"
+        multi_arch_s3_prefix = f"{artifact_id}-{platform}/packages/{pkg_type}"
+
     # Branch 2: Fork PRs or external repositories
     elif is_fork or repository != "ROCm/TheRock":
         s3_bucket = "therock-ci-artifacts-external"
@@ -228,6 +238,8 @@ def determine_s3_config(
         repo_name = repository.replace("/", "-")  # e.g., "ROCm-TheRock" or "user-fork"
         s3_prefix = f"{repo_name}/{artifact_id}-{platform}/packages/{pkg_type}"
         job_type = "ci"
+        multi_arch_s3_bucket = s3_bucket
+        multi_arch_s3_prefix = s3_prefix
         print(f"✓ Using external bucket: {s3_bucket}", file=sys.stderr)
 
     # Branch 3: Default - ROCm/TheRock non-fork (normal CI builds)
@@ -235,6 +247,8 @@ def determine_s3_config(
         s3_bucket = "therock-ci-artifacts"
         s3_prefix = f"{artifact_id}-{platform}/packages/{pkg_type}"
         job_type = "ci"
+        multi_arch_s3_bucket = s3_bucket
+        multi_arch_s3_prefix = s3_prefix
         print(f"✓ Using default CI bucket: {s3_bucket}", file=sys.stderr)
 
     # Generate public repository URL
@@ -252,8 +266,17 @@ def determine_s3_config(
     print(f"S3 prefix: {s3_prefix}", file=sys.stderr)
     print(f"Job type: {job_type}", file=sys.stderr)
     print(f"Package repository URL: {package_repository_url}", file=sys.stderr)
+    print(f"Multi-arch S3 bucket: {multi_arch_s3_bucket}", file=sys.stderr)
+    print(f"Multi-arch S3 prefix: {multi_arch_s3_prefix}", file=sys.stderr)
 
-    return s3_bucket, s3_prefix, job_type, package_repository_url
+    return (
+        s3_bucket,
+        s3_prefix,
+        job_type,
+        package_repository_url,
+        multi_arch_s3_bucket,
+        multi_arch_s3_prefix,
+    )
 
 
 def main():
@@ -315,7 +338,14 @@ def main():
     is_fork = args.is_fork.lower() in ("true", "1", "yes")
 
     # Determine S3 configuration
-    s3_bucket, s3_prefix, job_type, package_repository_url = determine_s3_config(
+    (
+        s3_bucket,
+        s3_prefix,
+        job_type,
+        package_repository_url,
+        multi_arch_s3_bucket,
+        multi_arch_s3_prefix,
+    ) = determine_s3_config(
         release_type=args.release_type,
         repository=args.repository,
         is_fork=is_fork,
@@ -332,6 +362,8 @@ def main():
             "s3_prefix": s3_prefix,
             "job_type": job_type,
             "package_repository_url": package_repository_url,
+            "multi_arch_s3_bucket": multi_arch_s3_bucket,
+            "multi_arch_s3_prefix": multi_arch_s3_prefix,
         }
         print(json.dumps(output, indent=2))
     elif args.output_format == "github":
@@ -340,11 +372,15 @@ def main():
         print(f"s3_prefix={s3_prefix}")
         print(f"job_type={job_type}")
         print(f"package_repository_url={package_repository_url}")
+        print(f"multi_arch_s3_bucket={multi_arch_s3_bucket}")
+        print(f"multi_arch_s3_prefix={multi_arch_s3_prefix}")
     else:  # env format
         print(f"export S3_BUCKET={s3_bucket}")
         print(f"export S3_PREFIX={s3_prefix}")
         print(f"export JOB_TYPE={job_type}")
         print(f"export PACKAGE_REPOSITORY_URL={package_repository_url}")
+        print(f"export MULTI_ARCH_S3_BUCKET={multi_arch_s3_bucket}")
+        print(f"export MULTI_ARCH_S3_PREFIX={multi_arch_s3_prefix}")
 
 
 if __name__ == "__main__":
