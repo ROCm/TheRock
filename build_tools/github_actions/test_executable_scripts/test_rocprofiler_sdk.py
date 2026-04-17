@@ -111,6 +111,12 @@ def get_ctest_cmd() -> list[str]:
     ]
 
 
+def _running_in_ci() -> bool:
+    """True when running on a typical CI runner (GitHub Actions sets CI=true)."""
+    ci = os.environ.get("CI", "").strip().lower()
+    return ci in ("1", "true", "yes")
+
+
 def run_therock_ci(
     cmake_config_cmd: list[str],
     cmake_build_cmd: list[str],
@@ -126,7 +132,13 @@ def run_therock_ci(
     )
     argv = [
         sys.executable,
-        str(SCRIPT_DIR / "run-therock-ci.py"),
+        str(_REPO_ROOT / "rocm-systems/.github/scripts/run-therock-ci.py"),
+        "--configure-cmd",
+        shlex.join(cmake_config_cmd),
+        "--build-cmd",
+        shlex.join(cmake_build_cmd),
+        "--ctest-args",
+        shlex.join(ctest_args),
         "--rocprofiler-sdk-path",
         str(ROCPROFILER_SDK_PATH),
         "--rocprofiler-sdk-tests-path",
@@ -145,12 +157,6 @@ def run_therock_ci(
         str(THEROCK_SYSDEPS_PATH),
         "--therock-path",
         str(THEROCK_PATH),
-        "--configure-cmd",
-        shlex.join(cmake_config_cmd),
-        "--build-cmd",
-        shlex.join(cmake_build_cmd),
-        "--ctest-args",
-        shlex.join(ctest_args),
     ]
     logging.info(f"++ Exec [{_REPO_ROOT}]$ {shlex.join(argv)}")
     subprocess.run(
@@ -206,8 +212,13 @@ def execute_tests():
 
 if __name__ == "__main__":
     setup_env()
-    run_therock_ci(
-        get_cmake_config_cmd(),
-        get_cmake_build_cmd(),
-        get_ctest_cmd(),
-    )
+    if _running_in_ci():
+        run_therock_ci(
+            get_cmake_config_cmd(),
+            get_cmake_build_cmd(),
+            get_ctest_cmd(),
+        )
+    else:
+        cmake_config()
+        cmake_build()
+        execute_tests()
