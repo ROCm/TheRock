@@ -103,13 +103,34 @@ def _wait_c64_response(client, mp0_base_dw: int, timeout_ms: int,
 
 def ring_create(client, driver, mp0_base_dw: int,
                 *, ring_size: int = PSP_KM_RING_SIZE,
+                destroy_first: bool = True,
                 verbose: bool = False) -> PSPRing:
     """Create a KM (kernel-mode / GPCOM) ring for the PSP.
 
     Requires SOS to be alive (C2PMSG_81 != 0). Returns a PSPRing that holds
     the DMA buffer + bus address + write pointer. Caller owns the ring and
     must call ring_destroy() (or rely on DEXT teardown) to reclaim.
+
+    If `destroy_first` is True (default), any pre-existing ring is torn
+    down first — needed when a prior process created a ring but exited
+    without calling ring_destroy, leaving SOS with a stale registration.
     """
+    c64 = c2pmsg_dw(mp0_base_dw, 64) * 4
+
+    # 0. Optionally destroy any pre-existing ring. Safe to issue even if
+    #    no ring exists — SOS responds with OK in both cases.
+    if destroy_first:
+        client.mmio_write32(5, c64, GFX_CTRL_CMD_ID_DESTROY_RINGS)
+        time.sleep(0.020)
+        try:
+            v = _wait_c64_response(client, mp0_base_dw, timeout_ms=2000)
+            if verbose:
+                print(f"  Pre-destroy OK: C2PMSG_64 = 0x{v:08x}")
+        except TimeoutError:
+            # Non-fatal — proceed to create anyway.
+            if verbose:
+                print("  Pre-destroy did not ack (probably no prior ring)")
+
     # 1. Allocate ring buffer (DART-mapped so PSP sees the right phys addr).
     ring_cpu, ring_bus, ring_handle = driver.alloc_dma(ring_size)
     # Zero the ring — psp_gfx_rb_frame.reserved* fields must be 0.
