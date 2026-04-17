@@ -55,7 +55,6 @@ release cadence.
 
 - ROCm Core SDK packaging (covered by RFC0009)
 - GPU driver packaging
-- Python / pip / wheel packaging for extras
 - Internal CI/CD pipeline specifics of individual extras projects
 
 ## 2. Release Cadence
