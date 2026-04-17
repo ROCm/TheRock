@@ -634,7 +634,7 @@ artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
 disable_platforms = ["linux", "windows"]
 
 # --- IREE Integration ---

@@ -382,6 +382,7 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
       therock-nlohmann-json
     RUNTIME_DEPS
       hip-clr
+      hipdnn_integration_tests
   )
   therock_cmake_subproject_glob_c_sources(hipkernelprovider
   SUBDIRS
