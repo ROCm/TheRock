@@ -184,7 +184,9 @@ jobs:
         run: |
           ls -lah
           pushd rocm-jax
-          [[ "${{ inputs.jax_ref }}" != *"0.8.0"* && "${{ inputs.build_jaxlib }}" == "true" ]] && SOURCE_ARG="--jax-source-dir=${{ github.workspace }}/jax" || SOURCE_ARG=""
+          # --jax-source-dir is only needed when building jaxlib from source
+          # (JAX <= 0.9.0). For JAX >= 0.9.1, jaxlib comes from upstream PyPI.
+          [[ "${{ inputs.build_jaxlib }}" == "true" ]] && SOURCE_ARG="--jax-source-dir=${{ github.workspace }}/jax" || SOURCE_ARG=""
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_version }}" \

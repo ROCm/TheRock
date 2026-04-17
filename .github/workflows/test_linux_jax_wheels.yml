@@ -37,11 +37,11 @@ on:
         type: string
         default: "rocm-jaxlib-v0.8.2"
       jax_version:
-        description: "Base JAX version (e.g. 0.8.0) for installing jax from PyPI. Extracted from built wheels by write_jax_versions.py."
+        description: "Base JAX version (e.g. 0.8.2) for installing jax from PyPI. Extracted from built wheels by write_jax_versions.py."
         required: false
         type: string
       jaxlib_version:
-        description: "jaxlib wheel version (e.g. 0.9.0+rocm7 or 0.8.0+rocm7.12.0). Extracted from built wheels by write_jax_versions.py."
+        description: "jaxlib wheel version (e.g. 0.9.0+rocm7 or 0.8.2+rocm7.12.0). Extracted from built wheels by write_jax_versions.py."
         required: false
         type: string
       jax_plugin_version:
@@ -108,11 +108,11 @@ on:
         type: string
         default: "rocm-jaxlib-v0.8.2"
       jax_version:
-        description: "Base JAX version (e.g. 0.8.0). Leave empty to auto-detect from rocm-jax requirements."
+        description: "Base JAX version (e.g. 0.8.2). Leave empty to auto-detect from rocm-jax requirements."
         required: false
         type: string
       jaxlib_version:
-        description: "jaxlib wheel version (e.g. 0.9.0+rocm7 or 0.8.0+rocm7.12.0). Leave empty to auto-compute from rocm_version."
+        description: "jaxlib wheel version (e.g. 0.9.0+rocm7 or 0.8.2+rocm7.12.0). Leave empty to auto-compute from rocm_version."
         required: false
         type: string
       jax_plugin_version:
