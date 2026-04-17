@@ -167,11 +167,16 @@ def load_bootloader_component(
     comp: PSPComponent, bl_cmd: int,
     fw_buf_cpu: int, fw_buf_bus: int,
     *, verbose: bool = False,
+    is_sos: bool = False,
+    sos_timeout_ms: int = 5000,
 ) -> dict:
     """Load one PSP bootloader component (KDB, SYS_DRV, SOS, etc.).
 
-    Mirrors psp_v14_0_bootloader_load_component() line-by-line.
-    Returns a dict of pre/post register state for diagnostics.
+    Mirrors psp_v14_0_bootloader_load_component() line-by-line — with one
+    special case: SOS itself uses psp_v14_0_bootloader_load_sos(), which
+    after issuing the cmd waits on C2PMSG_81 (SOS sign-of-life) instead
+    of C2PMSG_35 (bootloader ready). Set `is_sos=True` to switch to that
+    post-wait path.
     """
     c35 = c2pmsg_dw(mp0_base_dw, 35) * 4
     c36 = c2pmsg_dw(mp0_base_dw, 36) * 4
@@ -202,12 +207,36 @@ def load_bootloader_component(
     # Handshake delay per psp_v14_0_bootloader_load_sos (20 ms).
     time.sleep(0.020)
 
-    # Poll C2PMSG_35 for bit 31 (bootloader done/ready).
-    c35_final = wait_bootloader_ready(client, mp0_base_dw)
-    diag["c35_post"] = c35_final
-    diag["c81_post"] = client.mmio_read32(5, c81)
-    if verbose:
-        print(f"    {comp.name}: cmd=0x{bl_cmd:x} c35_post=0x{c35_final:08x} c81=0x{diag['c81_post']:08x}")
+    if is_sos:
+        # SOS handoff: the bootloader accepts the cmd and transfers control
+        # to SOS, which then populates C2PMSG_81 with a non-zero
+        # sign-of-life value. C2PMSG_35 will *not* go back to bit-31-set
+        # after this point — the bootloader is done, SOS is now driving.
+        deadline = time.time() + sos_timeout_ms / 1000
+        v81 = 0
+        while time.time() < deadline:
+            v81 = client.mmio_read32(5, c81)
+            if v81 != 0:
+                break
+            time.sleep(0.002)
+        if v81 == 0:
+            raise TimeoutError(
+                f"SOS did not come alive after {sos_timeout_ms} ms "
+                f"(C2PMSG_81 still 0, C2PMSG_35=0x{client.mmio_read32(5, c35):08x})"
+            )
+        diag["c81_post"] = v81
+        diag["c35_post"] = client.mmio_read32(5, c35)
+        if verbose:
+            print(f"    {comp.name}: cmd=0x{bl_cmd:x}  "
+                  f"C2PMSG_81=0x{v81:08x} ← SOS ALIVE")
+    else:
+        # Non-SOS components: wait for bootloader-ready signal again.
+        c35_final = wait_bootloader_ready(client, mp0_base_dw)
+        diag["c35_post"] = c35_final
+        diag["c81_post"] = client.mmio_read32(5, c81)
+        if verbose:
+            print(f"    {comp.name}: cmd=0x{bl_cmd:x} "
+                  f"c35_post=0x{c35_final:08x} c81=0x{diag['c81_post']:08x}")
     return diag
 
 
@@ -249,7 +278,8 @@ def load_sos(client, driver, mp0_base_dw: int, firmware_path: str,
                 continue
             load_bootloader_component(
                 client, driver, mp0_base_dw, comp, cmd, fw_cpu, fw_bus,
-                verbose=verbose)
+                verbose=verbose,
+                is_sos=(fw_type == FW_TYPE_PSP_SOS))
     finally:
         driver.free_dma(fw_handle)
 
