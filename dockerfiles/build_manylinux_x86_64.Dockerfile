@@ -88,12 +88,13 @@ RUN yum install -y epel-release && \
 # dvc's rpm package includes .so dependencies built against glib 2.29
 # settling for pip install for now, but it installs modules not needed for dvc pull
 # more dvc features may be used in upcoming sequenced builds
-# Also pinning pathspec because a new version of it breaks the private _DIR_MARK
-# API that dvc uses. When upgrading past ~3.64.0, then pin can likely be removed.
+# Pin aiobotocore explicitly so rebuilds resolve a deterministic botocore
+# window. Without this, dvc's loose `aiobotocore` bound lets future pip
+# resolutions drift botocore out of the boto3 pin in requirements.txt.
 #
-# Note: dvc[s3] version locking currently limits boto3>=1.41.0,<1.42.0
-#       in requirements.txt
-RUN pip install 'pathspec<0.13.0' 'dvc[s3]==3.62.0' && \
+# Note: aiobotocore==3.4.0 requires botocore>=1.42.79,<1.42.85; keep the
+#       boto3 pin in requirements.txt aligned with that window.
+RUN pip install 'dvc[s3]==3.67.1' 'aiobotocore==3.4.0' && \
     which dvc && dvc --version || true
 
 ######## Enable GCC Toolset and verify ########
