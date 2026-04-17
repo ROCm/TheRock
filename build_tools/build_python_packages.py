@@ -105,12 +105,7 @@ def run(args: argparse.Namespace):
                 "bin/rocprof-*",
                 "libexec/rocprofiler-compute/**",
                 # rocprofiler-systems sysdeps
-                "lib/rocm_sysdeps/lib/librocm_sysdeps_dw.so*",
-                "lib/rocm_sysdeps/lib/librocm_sysdeps_elf.so*",
-                "lib/rocm_sysdeps/lib/librocm_sysdeps_z.so*",
-                "lib/rocm_sysdeps/lib/librocm_sysdeps_zstd.so*",
-                "lib/rocm_sysdeps/lib/librocm_sysdeps_liblzma.so*",
-                "lib/rocm_sysdeps/lib/librocm_sysdeps_bz2.so*",
+                "lib/rocm_sysdeps/lib/**",
             ],
         ),
     )
