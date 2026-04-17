@@ -17,7 +17,8 @@ import shlex
 import subprocess
 import sys
 
-_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+THEROCK_DIR = Path(__file__).resolve().parent.parent
+_BUILD_TOOLS_DIR = THEROCK_DIR / "build_tools"
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
@@ -25,7 +26,6 @@ from github_actions.github_actions_api import gha_append_step_summary
 
 logging.basicConfig(level=logging.INFO)
 
-THEROCK_DIR = _BUILD_TOOLS_DIR.parent
 PLATFORM = platform.system().lower()
 
 # Importing indexer.py

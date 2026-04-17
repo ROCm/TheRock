@@ -71,7 +71,7 @@ def check_docker() -> bool:
 def build_reproduction_command(args: argparse.Namespace) -> str:
     """Build the command string for reproduction."""
     cmd = (
-        f"python build_tools/github_actions/reproduce_test_failure.py "
+        f"python test_tools/reproduce_test_failure.py "
         f"--run-id {args.run_id} "
         f"--repository {args.repository} "
         f"--amdgpu-family {args.amdgpu_family} "

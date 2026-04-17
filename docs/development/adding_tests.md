@@ -12,12 +12,12 @@ graph LR
 where we:
 
 1. Check that the artifacts pass sanity tests.
-1. The `configure_test_matrix` step runs [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_configurations.py), where we generate a test matrix for which tests to run.
+1. The `configure_test_matrix` step runs [`fetch_test_configurations.py`](../../test_tools/fetch_test_configurations.py), where we generate a test matrix for which tests to run.
 1. After we generate the matrix, `test_components` executes those tests in parallel.
 
 ### How these tests are executed
 
-These tests are retrieved from [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_configurations.py), where we generate a matrix of tests to run for various AMD GPU families from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py) on both Linux and Windows test machines.
+These tests are retrieved from [`fetch_test_configurations.py`](../../test_tools/fetch_test_configurations.py), where we generate a matrix of tests to run for various AMD GPU families from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py) on both Linux and Windows test machines.
 
 These tests are run per pull request, main branch commit, `workflow_dispatch` and nightly runs.
 
@@ -39,13 +39,13 @@ subprocess.run(
 )
 ```
 
-After creating your script, please refer below to create your test entry in [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_configurations.py)
+After creating your script, please refer below to create your test entry in [`fetch_test_configurations.py`](../../test_tools/fetch_test_configurations.py)
 
 ## Fields for the test matrix
 
-Add an entry in [`test_matrix`](../../build_tools/github_actions/fetch_test_configurations.py), then your test will be enabled in the test workflow
+Add an entry in [`test_matrix`](../../test_tools/fetch_test_configurations.py), then your test will be enabled in the test workflow
 
-In [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_configurations.py), a test option (in this example rocBLAS) in `test_matrix` is setup as:
+In [`fetch_test_configurations.py`](../../test_tools/fetch_test_configurations.py), a test option (in this example rocBLAS) in `test_matrix` is setup as:
 
 ```
 "rocblas": {

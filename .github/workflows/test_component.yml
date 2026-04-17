@@ -90,10 +90,12 @@ jobs:
       BENCHMARK_DB_URL: ${{ secrets.BENCHMARK_DB_URL }}
       BENCHMARK_DB_FALLBACK_URL: ${{ secrets.BENCHMARK_DB_FALLBACK_URL }}
     steps:
-      - name: "Fetch 'build_tools' from repository"
+      - name: "Fetch 'build_tools' and 'test_tools' from repository"
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          sparse-checkout: build_tools
+          sparse-checkout: |
+            build_tools
+            test_tools
           path: "prejob"
 
       - name: Pre-job cleanup processes on Windows
@@ -180,7 +182,7 @@ jobs:
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
         run: |
-          python ./build_tools/github_actions/reproduce_test_failure.py \
+          python ./test_tools/reproduce_test_failure.py \
             --run-id "${{ env.ARTIFACT_RUN_ID }}" \
             --repository "${{ github.repository }}" \
             --amdgpu-family "${{ inputs.amdgpu_families }}" \

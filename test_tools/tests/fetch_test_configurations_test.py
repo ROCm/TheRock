@@ -7,7 +7,8 @@ import sys
 import json
 import unittest
 
-# Add repo root to PYTHONPATH
+# Make the test_tools/ package importable so we can import
+# `fetch_test_configurations` directly.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import fetch_test_configurations
