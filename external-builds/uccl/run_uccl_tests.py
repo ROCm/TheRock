@@ -63,6 +63,23 @@ def detect_gpu_count() -> int:
         sys.exit(1)
 
 
+def uccl_ep_available() -> bool:
+    """Return True if the `uccl.ep` module is importable.
+
+    UCCL's upstream build.sh currently skips the EP build for the "therock"
+    target (see build_inner.sh: "Skipping GPU-driven build on therock (no
+    GPU-driven support yet)"). When uccl.ep is not present, the intranode
+    test cannot run and we exit 0 with a skip message so CI stays green.
+    """
+    check_script = "import uccl.ep"
+    result = subprocess.run(
+        [sys.executable, "-c", check_script],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
+
+
 def cmd_arguments(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Runs UCCL intranode EP tests via torchrun."
@@ -143,6 +160,15 @@ def build_torchrun_cmd(args: argparse.Namespace, nproc: int) -> list[str]:
 
 def main(argv: list[str]) -> int:
     args = cmd_arguments(argv)
+
+    if not uccl_ep_available():
+        print(
+            "[SKIP] uccl.ep is not available in the installed UCCL wheel. "
+            "Upstream UCCL currently skips the EP (Expert Parallelism) build "
+            "for the 'therock' target. Skipping intranode EP tests.",
+            file=sys.stderr,
+        )
+        return 0
 
     nproc = args.nproc_per_node
     if nproc == 0:
