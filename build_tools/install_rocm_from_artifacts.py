@@ -443,7 +443,7 @@ def retrieve_artifacts_by_run_id(args):
             # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
             argv.append("rocprofiler-systems_run")
         if args.rocrtst:
-            extra_artifacts.append("core-rocrtst")
+            extra_artifacts.append("rocrtst")
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
             extra_artifacts.append("sysdeps-hwloc")
             extra_artifacts.append("sysdeps-libpciaccess")
