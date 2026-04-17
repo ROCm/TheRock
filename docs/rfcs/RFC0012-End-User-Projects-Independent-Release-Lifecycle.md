@@ -99,38 +99,33 @@ ways:
    ROCm 7.x family. This makes compatibility immediately visible from
    the filesystem path — no additional metadata lookup is required.
 
-2. **Package version string.** Each package embeds the target ROCm major
-   version in its release tag so that the compatibility scope is apparent
-   even outside the filesystem context (e.g., in repository listings,
-   download pages, and CI logs):
+2. **Package name.** Each package embeds the target ROCm major version
+   in its name using the `amdrocm<major>-<project>` convention, so the
+   compatibility scope is apparent in repository listings, download
+   pages, and CI logs:
 
    ```
-   <project>-<major>.<minor>.<patch>-rocm<rocm-major>
+   amdrocm7-rvs-1.0.0       # RVS 1.0.0 for ROCm 7.x
+   amdrocm7-rvs-1.2.0       # RVS 1.2.0 for ROCm 7.x
+   amdrocm8-rvs-2.0.0       # RVS 2.0.0 for ROCm 8.x
    ```
 
-   Examples:
-
-   ```
-   rvs-1.0.0-rocm7      # RVS 1.0.0 compatible with ROCm 7.x
-   rvs-1.2.0-rocm7      # RVS 1.2.0 compatible with ROCm 7.x
-   rvs-2.0.0-rocm8      # RVS 2.0.0 compatible with ROCm 8.x
-   ```
-
-The combination of both signals ensures that whether a user is looking at
-an installed directory, a package filename, or a repository index, the
-compatible ROCm version family is always unambiguous.
+The combination of both signals — the install path and the package
+name — ensures that whether a user is looking at an installed directory,
+a package filename, or a repository index, the compatible ROCm version
+family is always unambiguous.
 
 ### ROCm Compatibility Matrix
 
 The following table illustrates how project versions map to ROCm
 compatibility:
 
-| Project version | ROCm target | Package release tag | Install path          |
-| :-------------- | :---------- | :------------------ | :-------------------- |
-| rvs-1.0.0       | ROCm 7.x    | `rvs-1.0.0-rocm7`   | `/opt/rocm/extras-7/` |
-| rvs-1.1.0       | ROCm 7.x    | `rvs-1.1.0-rocm7`   | `/opt/rocm/extras-7/` |
-| rvs-1.2.0       | ROCm 7.x    | `rvs-1.2.0-rocm7`   | `/opt/rocm/extras-7/` |
-| rvs-2.0.0       | ROCm 8.x    | `rvs-2.0.0-rocm8`   | `/opt/rocm/extras-8/` |
+| Project version | ROCm target | Package name    | Install path          |
+| :-------------- | :---------- | :-------------- | :-------------------- |
+| rvs-1.0.0       | ROCm 7.x    | `amdrocm7-rvs`  | `/opt/rocm/extras-7/` |
+| rvs-1.1.0       | ROCm 7.x    | `amdrocm7-rvs`  | `/opt/rocm/extras-7/` |
+| rvs-1.2.0       | ROCm 7.x    | `amdrocm7-rvs`  | `/opt/rocm/extras-7/` |
+| rvs-2.0.0       | ROCm 8.x    | `amdrocm8-rvs`  | `/opt/rocm/extras-8/` |
 
 ### Release Principles
 
