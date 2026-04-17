@@ -1380,6 +1380,28 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocm-cmake",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "half",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
       }
     ],
 
@@ -1667,28 +1689,6 @@
         "Artifact_Subdir": [
           {
             "Name": "rocWMMA",
-            "Components": [
-              "dev"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "base",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocm-cmake",
-            "Components": [
-              "dev"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "base",
-        "Artifact_Subdir": [
-          {
-            "Name": "half",
             "Components": [
               "dev"
             ]
