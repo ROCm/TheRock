@@ -1074,7 +1074,7 @@
     "Gfxarch": "True"
   },
   {
-    "Package": "amdrocm-prim-test",
+    "Package": "amdrocm-ccl-test",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
