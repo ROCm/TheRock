@@ -5,17 +5,17 @@ modified: 2026-04-14
 status: draft
 ---
 
-# ROCm End-User Projects With Independent Release Lifecycle 
+# ROCm End-User Projects With Independent Release Lifecycle
 
 ## 1. Overview
 
 ROCm ships a core SDK through TheRock build system. In addition to the core
 SDK, AMD and the broader community maintain a set of **extras** — tools,
 validation suites, and utility projects — that are compiled *on top of* a
-released ROCm installation but follow their own development and release
-timelines. These extras are not part of the ROCm Core SDK; they consume
-ROCm as a build dependency and are delivered as independently versioned
-packages.
+released ROCm Core SDK installation but follow their own development and
+release timelines. These extras are not part of the ROCm Core SDK; they
+consume ROCm as a build dependency and are delivered as independently
+versioned packages.
 
 The ROCm Validation Suite (RVS) is the canonical example of such a project.
 RVS exercises GPU hardware and the ROCm software stack through a collection
@@ -31,16 +31,16 @@ release cadence.
 1. **Decouple extras from the ROCm release train** so that bug fixes,
    new test modules, and feature enhancements can ship without waiting for
    the next ROCm Core SDK release.
-2. **Guarantee backward compatibility within a ROCm major version** so
-   that a single extras build works across every minor and patch release
+2. **Guarantee backward compatibility within a ROCm major version release stream**
+   so that a single extras build works across every minor and patch release
    of that major version.
 3. **Provide a clear installation layout** that coexists with the ROCm
    Core SDK directory structure defined in
    [RFC0009](/docs/rfcs/RFC0009-OS-Packaging-Requirements.md) without
    creating conflicts or ambiguity.
 4. **Enable community and partner contributions** by keeping the extras
-   repositories buildable against any compatible, publicly released ROCm
-   installation.
+   repositories buildable against any compatible, publicly released
+   ROCm Core SDK installation.
 
 ### Scope
 
@@ -63,12 +63,16 @@ release cadence.
 Extras projects follow an **independent release cadence** that is not tied
 to the ROCm Core SDK release schedule.
 
+Each extras project may set an appropriate release cadence for the project in
+conjunction with its stakeholders.
+
 ### Versioning Scheme
 
-Each end-user project adopts its own semantic version:
+Each end-user project adopts its own semantic version which results in
+following filename template:
 
 ```
-<project>-<major>.<minor>.<patch>
+<projectname>-<major>.<minor>.<patch>
 ```
 
 For example:
@@ -121,21 +125,21 @@ compatible ROCm version family is always unambiguous.
 The following table illustrates how project versions map to ROCm
 compatibility:
 
-| Project version | ROCm target | Package release tag | Install path |
-| :--- | :--- | :--- | :--- |
-| rvs-1.0.0 | ROCm 7.x | `rvs-1.0.0-rocm7` | `/opt/rocm/extras-7/` |
-| rvs-1.1.0 | ROCm 7.x | `rvs-1.1.0-rocm7` | `/opt/rocm/extras-7/` |
-| rvs-1.2.0 | ROCm 7.x | `rvs-1.2.0-rocm7` | `/opt/rocm/extras-7/` |
-| rvs-2.0.0 | ROCm 8.x | `rvs-2.0.0-rocm8` | `/opt/rocm/extras-8/` |
+| Project version | ROCm target | Package release tag | Install path          |
+| :-------------- | :---------- | :------------------ | :-------------------- |
+| rvs-1.0.0       | ROCm 7.x    | `rvs-1.0.0-rocm7`   | `/opt/rocm/extras-7/` |
+| rvs-1.1.0       | ROCm 7.x    | `rvs-1.1.0-rocm7`   | `/opt/rocm/extras-7/` |
+| rvs-1.2.0       | ROCm 7.x    | `rvs-1.2.0-rocm7`   | `/opt/rocm/extras-7/` |
+| rvs-2.0.0       | ROCm 8.x    | `rvs-2.0.0-rocm8`   | `/opt/rocm/extras-8/` |
 
 ### Release Principles
 
-| Principle | Description |
-| :--- | :--- |
-| Independent scheduling | Extras may release at any time — weekly, monthly, or on-demand — without coordinating with upcoming ROCm Core SDK milestones. |
-| ROCm version binding | Each release of an extras project declares the ROCm major version it targets (e.g., ROCm 7). A new ROCm major version requires a corresponding new release of the extras project. |
-| Hotfix freedom | Critical bug fixes in an extras tool can ship immediately as a patch release without waiting for a ROCm point release. |
-| Nightly / pre-release builds | Extras projects may publish nightly or pre-release packages to a staging repository for early validation. |
+| Principle                    | Description                                                                                                                                                                       |
+| :--------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Independent scheduling       | Extras may release at any time — weekly, monthly, or on-demand — without coordinating with upcoming ROCm Core SDK milestones.                                                     |
+| ROCm version binding         | Each release of an extras project declares the ROCm major version it targets (e.g., ROCm 7). A new ROCm major version requires a corresponding new release of the extras project. |
+| Hotfix freedom               | Critical bug fixes in an extras tool can ship immediately as a patch release without waiting for a ROCm point release.                                                             |
+| Nightly / pre-release builds | Extras projects may publish nightly or pre-release packages to a staging repository for early validation.                                                                          |
 
 ### Example Timeline
 
@@ -170,19 +174,18 @@ whether the ROCm release is older or newer than the one used at build time.
 
 Concretely for RVS:
 
-| RVS version | Built against | Must work on |
-| :--- | :--- | :--- |
-| rvs-1.0.0 | ROCm 7.0 | ROCm 7.0, 7.1, 7.2, … |
-| rvs-1.1.0 | ROCm 7.1 | ROCm 7.0, 7.1, 7.2, … |
-| rvs-1.2.0 | ROCm 7.2 | ROCm 7.0, 7.1, 7.2, … |
-| rvs-2.0.0 | ROCm 8.0 | ROCm 8.0, 8.1, … |
+| RVS version | Built against | Must work on           |
+| :---------- | :------------ | :--------------------- |
+| rvs-1.0.0   | ROCm 7.0      | ROCm 7.0, 7.1, 7.2, … |
+| rvs-1.1.0   | ROCm 7.1      | ROCm 7.0, 7.1, 7.2, … |
+| rvs-1.2.0   | ROCm 7.2      | ROCm 7.0, 7.1, 7.2, … |
+| rvs-2.0.0   | ROCm 8.0      | ROCm 8.0, 8.1, …      |
 
 This means an operator who upgrades their cluster from ROCm 7.0 to ROCm 7.2
 does **not** need to reinstall or upgrade RVS — the existing RVS binary
 continues to function. Conversely, an operator running ROCm 7.0 can install a
 newer RVS release (e.g., rvs-1.2.0, originally built against ROCm 7.2) and it
 will work correctly.
-
 
 ### How Compatibility Is Achieved
 
@@ -411,12 +414,12 @@ applicable and when to use each.
 
 ### Format Overview
 
-| Format | Applicable | Primary use case |
-| :--- | :--- | :--- |
-| **DEB** (`.deb`) | Yes | Installation on Debian-based distributions (Ubuntu, Debian) via `apt` / `dpkg`. |
-| **RPM** (`.rpm`) | Yes | Installation on RPM-based distributions (RHEL, SLES, AlmaLinux, CentOS, Rocky, Oracle Linux) via `dnf` / `yum` / `zypper`. |
-| **Tarball** (`.tar.xz`) | Yes | Portable, package-manager-independent installation. Useful for container images, HPC environments without root access, and CI/CD pipelines that consume pre-built artifacts. |
-| **Python wheel** (`.whl`) | Conditional | Only applicable when the extras project ships a Python interface or CLI tool written in Python. Native-only projects (e.g., RVS) do not produce wheels. |
+| Format                    | Applicable  | Primary use case                                                                                                                                                             |
+| :------------------------ | :---------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **DEB** (`.deb`)          | Yes         | Installation on Debian-based distributions (Ubuntu, Debian) via `apt` / `dpkg`.                                                                                              |
+| **RPM** (`.rpm`)          | Yes         | Installation on RPM-based distributions (RHEL, SLES, AlmaLinux, CentOS, Rocky, Oracle Linux) via `dnf` / `yum` / `zypper`.                                                  |
+| **Tarball** (`.tar.xz`)   | Yes         | Portable, package-manager-independent installation. Useful for container images, HPC environments without root access, and CI/CD pipelines that consume pre-built artifacts. |
+| **Python wheel** (`.whl`) | Conditional | Only applicable when the extras project ships a Python interface or CLI tool written in Python. Native-only projects (e.g., RVS) do not produce wheels.                      |
 
 ### DEB and RPM Packages
 
@@ -429,32 +432,41 @@ non-versioned packages.
 
 Key conventions:
 
-- **Naming**: Packages use the `amdrocm-<project>` prefix for AMD
-  repository distribution, matching the convention in RFC0009. Distro-native
-  packages (e.g., those maintained by Ubuntu or Red Hat) use
-  `rocm-<project>` without the `amd` prefix.
+- **Naming**: Packages embed the target ROCm major version in the name
+  using the `amdrocm<major>-<project>` convention. This enables
+  side-by-side installation of the same project across different ROCm
+  major versions, since `amdrocm7-rvs` and `amdrocm8-rvs` are distinct
+  packages to the package manager. Distro-native packages use the
+  corresponding `rocm<major>-<project>` convention.
 
-  | AMD repository package | Distro-native equivalent | Contents |
-  | :--- | :--- | :--- |
-  | `amdrocm-rvs` | `rocm-rvs` | RVS runtime — binaries, modules, and configs |
-  | `amdrocm-rvs-devel` | `rocm-rvs-dev` | RVS development headers and CMake files |
+  | AMD repository package | Distro-native equivalent | Contents                                                   |
+  | :--------------------- | :----------------------- | :--------------------------------------------------------- |
+  | `amdrocm7-rvs`         | `rocm7-rvs`              | RVS runtime for ROCm 7.x — binaries, modules, and configs |
+  | `amdrocm7-rvs-devel`   | `rocm7-rvs-dev`          | RVS development headers and CMake files for ROCm 7.x      |
+  | `amdrocm8-rvs`         | `rocm8-rvs`              | RVS runtime for ROCm 8.x                                  |
 - **Runtime vs. development split (optional)**: Projects that expose a
   public API with headers and CMake config files may choose to produce a
   separate `-devel` / `-dev` package. Most extras projects are end-user
   tools built on top of the SDK and ship a single runtime package only.
 
-Example (RVS on Ubuntu):
+Example (RVS for ROCm 7 on Ubuntu):
 
 ```
-amdrocm-rvs_1.2.0-7_amd64.deb
-amdrocm-rvs-dev_1.2.0-7_amd64.deb
+amdrocm7-rvs_1.2.0_amd64.deb
+amdrocm7-rvs-dev_1.2.0_amd64.deb
 ```
 
-Example (RVS on RHEL):
+Example (RVS for ROCm 7 on RHEL):
 
 ```
-amdrocm-rvs-1.2.0-7.x86_64.rpm
-amdrocm-rvs-devel-1.2.0-7.x86_64.rpm
+amdrocm7-rvs-1.2.0.x86_64.rpm
+amdrocm7-rvs-devel-1.2.0.x86_64.rpm
+```
+
+Side-by-side install of RVS across ROCm 7 and ROCm 8:
+
+```bash
+apt install amdrocm7-rvs amdrocm8-rvs
 ```
 
 #### Dependency Resolution
@@ -477,7 +489,7 @@ The following rules apply to all end-user project packages:
    are resolved automatically by the package manager through the ROCm
    packages' own dependency chains.
 
-2. **Use version ranges, not exact versions.** Pin dependencies to the
+1. **Use version ranges, not exact versions.** Pin dependencies to the
    ROCm major version to honor the compatibility contract from Section 3.
    Avoid pinning to a specific minor or patch release unless a known
    minimum is required.
@@ -495,7 +507,7 @@ The following rules apply to all end-user project packages:
    Requires: amdrocm-runtimes < 8.0
    ```
 
-3. **Separate build-time and install-time dependencies.** Build
+1. **Separate build-time and install-time dependencies.** Build
    dependencies (`Build-Depends` / `BuildRequires`) may reference
    development packages such as `amdrocm-core-devel`. Runtime packages
    should only depend on the runtime counterparts.
@@ -505,11 +517,11 @@ The following rules apply to all end-user project packages:
 ROCm packages in TheRock are organized into three categories. End-user
 projects must understand this structure to declare the right dependencies.
 
-| Category | Description | Example packages |
-| :--- | :--- | :--- |
-| **Host packages** | Architecture-independent runtime and libraries — the host-side binaries that work regardless of which GPU is installed. Not all host packages have corresponding device packages; some (e.g., `amdrocm-runtimes`) are purely host-side. | `amdrocm-runtimes`, `amdrocm-core`, `amdrocm-base` |
-| **Device packages** | GPU-architecture-specific binaries containing device code for a particular `gfx` target. Only ROCm library packages that ship pre-compiled GPU kernels produce device variants. These are suffixed with the architecture name. | `amdrocm-blas-gfx942`, `amdrocm-blas-gfx1100` |
-| **Meta packages** | Convenience packages that pull in a set of host + device packages for a given architecture family or the full SDK. | `amdrocm`, `amdrocm-core-sdk`, `rocm-gfx90X` |
+| Category            | Description                                                                                                                                                                                                                             | Example packages                                    |
+| :------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------- |
+| **Host packages**   | Architecture-independent runtime and libraries — the host-side binaries that work regardless of which GPU is installed. Not all host packages have corresponding device packages; some (e.g., `amdrocm-runtimes`) are purely host-side. | `amdrocm-runtimes`, `amdrocm-core`, `amdrocm-base` |
+| **Device packages** | GPU-architecture-specific binaries containing device code for a particular `gfx` target. Only ROCm library packages that ship pre-compiled GPU kernels produce device variants. These are suffixed with the architecture name.          | `amdrocm-blas-gfx942`, `amdrocm-blas-gfx1100`      |
+| **Meta packages**   | Convenience packages that pull in a set of host + device packages for a given architecture family or the full SDK.                                                                                                                      | `amdrocm`, `amdrocm-core-sdk`, `rocm-gfx90X`       |
 
 #### Mapping End-User Project Dependencies to ROCm
 
@@ -570,7 +582,7 @@ variants and declare dependencies on the matching ROCm library device
 packages:
 
 ```
-Package: amdrocm-mytool-gfx942
+Package: amdrocm7-mytool-gfx942
 Depends: amdrocm-runtimes (>= 7.0), amdrocm-runtimes (<< 8.0),
          amdrocm-blas-gfx942 (>= 7.0), amdrocm-blas-gfx942 (<< 8.0)
 ```
@@ -608,35 +620,35 @@ End-user projects should be prepared for this model:
    host-only dependency pattern (the typical case above) are
    automatically compatible — no changes needed.
 
-2. **Do not assume fat binaries.** End-user projects must not assume
+1. **Do not assume fat binaries.** End-user projects must not assume
    that ROCm libraries contain embedded device code for all
    architectures. The device code may reside in separate architecture
    packages or kpack archives loaded at runtime.
 
-3. **Let the user choose architectures.** The end-user project package
+1. **Let the user choose architectures.** The end-user project package
    should never force-install a specific GPU architecture. Architecture
    selection is the user's responsibility through device meta-packages:
 
    ```bash
    # User installs the end-user project + their architecture
-   apt install amdrocm-rvs
+   apt install amdrocm7-rvs
    apt install rocm-gfx90X        # User's architecture choice
    ```
 
-4. **Test against both fat and split layouts.** During the transition
+1. **Test against both fat and split layouts.** During the transition
    period, CI should verify that the end-user project works correctly
    whether ROCm is installed from fat-binary packages or multi-arch
    split packages.
 
 #### Dependency Declaration Summary
 
-| Scenario | DEB `Depends` | RPM `Requires` |
-| :--- | :--- | :--- |
-| Uses HIP runtime | `amdrocm-runtimes (>= 7.0), amdrocm-runtimes (<< 8.0)` | `amdrocm-runtimes >= 7.0, amdrocm-runtimes < 8.0` |
-| Uses a ROCm library (e.g., rocBLAS) | `amdrocm-blas (>= 7.0), amdrocm-blas (<< 8.0)` | `amdrocm-blas >= 7.0, amdrocm-blas < 8.0` |
-| Uses ROCm SMI | `amdrocm-amdsmi (>= 7.0), amdrocm-amdsmi (<< 8.0)` | `amdrocm-amdsmi >= 7.0, amdrocm-amdsmi < 8.0` |
-| Needs full Core SDK runtime | `amdrocm-core (>= 7.0), amdrocm-core (<< 8.0)` | `amdrocm-core >= 7.0, amdrocm-core < 8.0` |
-| Ships own device kernels for a library | `amdrocm-<library>-<gfxarch> (>= 7.0)` | `amdrocm-<library>-<gfxarch> >= 7.0` |
+| Scenario                               | DEB `Depends`                                            | RPM `Requires`                                     |
+| :------------------------------------- | :------------------------------------------------------- | :------------------------------------------------- |
+| Uses HIP runtime                       | `amdrocm-runtimes (>= 7.0), amdrocm-runtimes (<< 8.0)` | `amdrocm-runtimes >= 7.0, amdrocm-runtimes < 8.0` |
+| Uses a ROCm library (e.g., rocBLAS)    | `amdrocm-blas (>= 7.0), amdrocm-blas (<< 8.0)`         | `amdrocm-blas >= 7.0, amdrocm-blas < 8.0`         |
+| Uses ROCm SMI                          | `amdrocm-amdsmi (>= 7.0), amdrocm-amdsmi (<< 8.0)`     | `amdrocm-amdsmi >= 7.0, amdrocm-amdsmi < 8.0`     |
+| Needs full Core SDK runtime            | `amdrocm-core (>= 7.0), amdrocm-core (<< 8.0)`         | `amdrocm-core >= 7.0, amdrocm-core < 8.0`         |
+| Ships own device kernels for a library | `amdrocm-<library>-<gfxarch> (>= 7.0)`                  | `amdrocm-<library>-<gfxarch> >= 7.0`              |
 
 ### Tarball Packages
 
@@ -655,14 +667,14 @@ a `.tar.xz` file with a corresponding `sha256sum`. The archive extracts
 into the flat FHS layout described in Section 4:
 
 ```bash
-tar -xf amdrocm-rvs-1.2.0-rocm7-linux-x86_64.tar.xz \
+tar -xf amdrocm7-rvs-1.2.0-linux-x86_64.tar.xz \
     -C /opt/rocm/extras-7/
 ```
 
 Tarball naming follows the pattern:
 
 ```
-amdrocm-<project>-<version>-rocm<major>-<os>-<arch>.tar.xz
+amdrocm<rocm-major>-<project>-<version>-<os>-<arch>.tar.xz
 ```
 
 #### Installing ROCm Dependencies for Tarball-Based Deployments
@@ -683,7 +695,7 @@ the installed ROCm major version matches:
 amd-smi version
 
 # Extract the end-user project into the extras tree
-tar -xf amdrocm-rvs-1.2.0-rocm7-linux-x86_64.tar.xz \
+tar -xf amdrocm7-rvs-1.2.0-linux-x86_64.tar.xz \
     -C /opt/rocm/extras-7/
 ```
 
@@ -698,7 +710,7 @@ tar -xf amdrocm-core-7.1.0-linux-x86_64.tar.xz \
     -C /opt/rocm/core-7/
 
 # Extract the end-user project
-tar -xf amdrocm-rvs-1.2.0-rocm7-linux-x86_64.tar.xz \
+tar -xf amdrocm7-rvs-1.2.0-linux-x86_64.tar.xz \
     -C /opt/rocm/extras-7/
 ```
 
@@ -711,7 +723,7 @@ libraries reside inside the Python site-packages directory. Use
 ```bash
 ROCM_ROOT=$(rocm-sdk path --root)
 
-tar -xf amdrocm-rvs-1.2.0-rocm7-linux-x86_64.tar.xz \
+tar -xf amdrocm7-rvs-1.2.0-linux-x86_64.tar.xz \
     -C /opt/rocm/extras-7/
 ```
 
@@ -801,7 +813,7 @@ projects like RVS do not produce wheels.
 When applicable, extras wheels follow the conventions described in the
 [Python packaging documentation](/docs/packaging/python_packaging.md):
 
-- **Selector package**: A source distribution (`rocm-<project>`)
+- **Selector package**: A source distribution (`rocm<major>-<project>`)
   that evaluates install-time constraints and pulls the correct runtime
   wheels.
 - **Runtime wheels**: Contain the minimal set of files needed to run,
@@ -827,7 +839,7 @@ build_tools/build_python_packages.py \
 Example install:
 
 ```bash
-pip install rocm-mytool --pre \
+pip install rocm7-mytool --pre \
     --find-links=./OUTPUT_PKG/dist
 ```
 
@@ -836,9 +848,9 @@ pip install rocm-mytool --pre \
 The following table summarizes which format to produce based on the
 project characteristics:
 
-| Project type | DEB/RPM | Tarball | Wheel |
-| :--- | :---: | :---: | :---: |
-| Native C/C++ tool (e.g., RVS) | Yes | Yes | No |
-| Pure Python tool/test harness | No | No | Yes |
-| Mixed native + Python library | Yes | Yes | Yes |
+| Project type                  | DEB/RPM | Tarball | Wheel |
+| :---------------------------- | :-----: | :-----: | :---: |
+| Native C/C++ tool (e.g., RVS) |   Yes   |   Yes   |  No   |
+| Pure Python tool/test harness |   No    |   No    |  Yes  |
+| Mixed native + Python library |   Yes   |   Yes   |  Yes  |
 
