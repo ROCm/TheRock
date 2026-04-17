@@ -22,6 +22,9 @@ on:
         type: string
       component:
         type: string
+      release_type:
+        type: string
+        default: ""
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
@@ -106,6 +109,9 @@ jobs:
 
       - name: Run setup test environment workflow
         timeout-minutes: 15
+        env:
+          RETRY_THIS_STEP: "true"
+          STEP_TIMEOUT_MINUTES: "15" # should match timeout-minutes specified above at this step
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
@@ -115,7 +121,7 @@ jobs:
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
-          IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
@@ -155,6 +161,18 @@ jobs:
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
+          # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
+          # leave it empty. #3587
+          GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal }}
+          RETRY_THIS_STEP: "true"
+          RETRY_COUNT: "1"
+          RETRY_DELAY: "7"
+          STEP_TIMEOUT_MINUTES: ${{ fromJSON(inputs.component).timeout_minutes }}
+          STEP_NAME: >-
+            Test ${{ fromJSON(inputs.component).job_name }}
+            (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
+            (${{ inputs.amdgpu_families }})
+            ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
         run: |
           python ./build_tools/memory_monitor.py --phase "Test ${{ fromJSON(inputs.component).job_name }}" -- \
             bash -c '${{ fromJSON(inputs.component).test_script }}'

@@ -1,6 +1,3 @@
-# Copyright Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: MIT
-
 # Many things need to be configured with paths to additional LLVM tools.
 # If a project is using an amd-hip or amd-llvm toolchain, then it will already
 # have an implicit dep on the toolchain, so it is safe to reference binaries
@@ -94,6 +91,37 @@ endif()
 
 
 ##############################################################################
+# origami
+##############################################################################
+
+therock_cmake_subproject_declare(origami
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/origami"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/origami"
+  BACKGROUND_BUILD
+  CMAKE_ARGS
+    -DHIP_PLATFORM=amd
+    -DORIGAMI_BUILD_SHARED_LIBS=ON
+    -DORIGAMI_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+    -DORIGAMI_ENABLE_PYTHON=ON
+    -DORIGAMI_ENABLE_FETCH=OFF
+  COMPILER_TOOLCHAIN
+    amd-hip
+  BUILD_DEPS
+    rocm-cmake
+    therock-catch2
+  RUNTIME_DEPS
+    hip-clr
+)
+therock_cmake_subproject_glob_c_sources(origami
+  SUBDIRS
+    .
+)
+therock_cmake_subproject_provide_package(origami origami lib/cmake/origami)
+therock_cmake_subproject_activate(origami)
+list(APPEND _blas_subproject_names origami)
+
+
+##############################################################################
 # hipBLASLt
 ##############################################################################
 
@@ -149,6 +177,7 @@ therock_cmake_subproject_declare(hipBLASLt
     ${hipBLASLt_rocRoller_build_deps}
   RUNTIME_DEPS
     hip-clr
+    origami
     therock-host-blas
     ${hipBLASLt_rocRoller_runtime_deps}
     ${hipBLASLt_runtime_deps}
@@ -173,8 +202,15 @@ if(NOT WIN32)
   if(TARGET rocm_smi_lib)
     list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
   endif()
-elseif(THEROCK_BUILD_TESTING)
-  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
+endif()
+if(THEROCK_BUILD_TESTING)
+  # Client tests link ILP64 reference BLAS (see cmake/finders/FindBLAS.cmake + BLA_SIZEOF_INTEGER=8).
+  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas64)
+endif()
+
+set(rocBLAS_extra_cmake_args)
+if(THEROCK_BUILD_TESTING)
+  list(APPEND rocBLAS_extra_cmake_args -DROCBLAS_CLIENTS_REFERENCE_ILP64=ON)
 endif()
 
 # Disable rocBLAS samples on Windows due to use of deprecated
@@ -206,6 +242,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DBUILD_CLIENTS_SAMPLES=${_blas_build_samples}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
     -DLINK_BLIS=OFF
+    ${rocBLAS_extra_cmake_args}
   CMAKE_INCLUDES
     therock_explicit_finders.cmake
   COMPILER_TOOLCHAIN
