@@ -128,14 +128,34 @@ class MacOSDevice(DeviceBackend):
         return self._client
 
     # ---- Register access (passthrough to DEXT) ----
+    # Convention (matches Windows amdgpu_mcdm.sys): bar_index=0 means
+    # "the MMIO aperture" in the init modules, not PCIe BAR 0. On RDNA4
+    # (Navi 48, gfx1201) the MMIO register aperture is PCIe BAR 5 (the
+    # 512 KiB non-prefetchable 32-bit BAR). We translate 0 -> MMIO_BAR
+    # so the Windows init modules can drop into our backend unchanged.
+    # Explicit bar_index (e.g. 2 for doorbell, 0 for VRAM aperture) still
+    # works by passing a value that matches _MMIO_BAR semantically.
+    _MMIO_BAR = 5
 
     def read_reg32(self, offset: int, bar_index: int = 0) -> int:
         """Read a 32-bit MMIO register via DEXT."""
-        return self.client.mmio_read32(bar_index, offset)
+        bar = self._MMIO_BAR if bar_index == 0 else bar_index
+        return self.client.mmio_read32(bar, offset)
 
     def write_reg32(self, offset: int, value: int, bar_index: int = 0) -> None:
         """Write a 32-bit MMIO register via DEXT."""
-        self.client.mmio_write32(bar_index, offset, value)
+        bar = self._MMIO_BAR if bar_index == 0 else bar_index
+        self.client.mmio_write32(bar, offset, value)
+
+    # ---- Windows-compat driver shim ----
+    # The Windows init modules call dev.driver.alloc_dma / .map_bar /
+    # .enable_msi / .read_reg32 / .write_reg32. Expose a lightweight
+    # adapter with matching signatures around our IOKitClient.
+
+    @property
+    def driver(self) -> "_MacOSDriverCompat":
+        """Windows-DriverInterface-compatible shim around the IOKit client."""
+        return _MacOSDriverCompat(self)
 
     def read_reg_indirect(self, address: int) -> int:
         """Read a register via SMN indirect access (NBIO index/data).
@@ -274,3 +294,81 @@ class MacOSDevice(DeviceBackend):
                 f"vram={self.vram_size // (1024**3)}GB)"
             )
         return "MacOSDevice(not opened)"
+
+
+class _MacOSDriverCompat:
+    """Adapter exposing the Windows DriverInterface shape over our DEXT.
+
+    The Windows bring-up modules (gmc_init, psp_init, ih_init, ring_init,
+    nbio_init) call `dev.driver.alloc_dma(size)`, `dev.driver.map_bar(...)`,
+    etc. This class wraps MacOSDevice.client (an IOKitClient) and translates
+    each call into the DEXT escape interface. Returns are shaped to match
+    the Windows contract so the init modules can drop in unchanged.
+
+    Signatures replicated from
+    userspace_driver/python/amd_gpu_driver/backends/windows/driver_interface.py.
+    """
+
+    def __init__(self, device: "MacOSDevice") -> None:
+        self._device = device
+
+    # ---- Register access ----
+
+    def read_reg32(self, offset: int, bar_index: int = 0) -> int:
+        return self._device.read_reg32(offset, bar_index)
+
+    def write_reg32(self, offset: int, value: int, bar_index: int = 0) -> None:
+        self._device.write_reg32(offset, value, bar_index)
+
+    # ---- DMA allocation ----
+
+    def alloc_dma(self, size: int) -> tuple[int, int, int]:
+        """Allocate a DMA buffer. Returns (cpu_addr, bus_addr, handle).
+
+        The bus address returned is the IOMMU-translated physical address
+        of the FIRST scatter-gather segment. Our DEXT-backed allocator is
+        contiguous in the IOMMU window per DMACommand, so a single-segment
+        bus address is the common case; multi-segment allocations would
+        need the caller to consult DMAAllocation.segments directly via
+        device.client.alloc_dma().
+        """
+        dma = self._device.client.alloc_dma(size)
+        bus_addr = dma.segments[0][0] if dma.segments else 0
+        return (dma.cpu_addr, bus_addr, dma.buffer_id)
+
+    def free_dma(self, allocation_handle: int) -> None:
+        self._device.client.free_dma(allocation_handle)
+
+    # ---- BAR mapping ----
+
+    def map_bar(self, bar_index: int, offset: int = 0, length: int = 0) -> tuple[int, int]:
+        """Map a region of a PCIe BAR into this process. Returns (cpu_addr, handle).
+
+        The macOS DEXT maps whole BARs at a time (IOConnectMapMemory64 with
+        a BAR selector). `offset` and `length` are conveniences: we return
+        `cpu_base + offset`; the caller is expected to not exceed BAR size.
+        The `handle` is the bar_index itself (we use it to unmap later).
+        """
+        cpu_base, bar_size = self._device.client.map_bar(bar_index)
+        if length and (offset + length) > bar_size:
+            raise ValueError(
+                f"map_bar(bar={bar_index}, offset=0x{offset:x}, length=0x{length:x}) "
+                f"exceeds BAR size 0x{bar_size:x}"
+            )
+        return (cpu_base + offset, bar_index)
+
+    def unmap_bar(self, handle: int) -> None:
+        # DEXT unmap is by BAR index; we stored that as the handle.
+        self._device.client.unmap_bar(handle)
+
+    # ---- MSI/interrupts ----
+
+    def enable_msi(self, num_vectors: int = 1, *args, **kwargs) -> tuple[bool, int]:
+        """Enable MSI/MSI-X and register ISR.
+
+        Our DEXT ENABLE_MSI escape takes a single vector index. For Windows
+        parity we treat num_vectors>=1 as "enable vector 0" and report
+        num_vectors=1 actually enabled.
+        """
+        self._device.client.enable_msi(vector_index=0)
+        return (True, 1)

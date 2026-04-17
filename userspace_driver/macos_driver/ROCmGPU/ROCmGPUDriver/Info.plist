@@ -55,14 +55,20 @@
             <key>IOPCITunnelCompatible</key>
             <true/>
             <!--
-              Match AMD vendor ID 0x1002, any device ID.
-              Format: 0xDDDDVVVV where DDDD=device, VVVV=vendor.
-              The &0x0000FFFF mask means: match vendor only, ignore device.
-              This only matches external/Thunderbolt devices — Apple's PCI
-              transport entitlement blocks "Built In" hardware.
+              Match PCI class 0x03 (display controller), subclass/progif
+              wildcard via low byte zero. This matches what tinygrad's
+              TinyGPU DEXT does (Apple-approved), and stays within the
+              scope of the dev-variant transport.pci entitlement grant
+              (0xFFFFFFFF&0x00000000 = any external PCI). Using
+              IOPCIPrimaryMatch with a vendor-specific spec outside the
+              entitlement's grant causes SystemExtensions.framework to
+              silently reject registration.
+              Narrower vendor filtering (AMD 0x1002) can be reinstated
+              here once the production transport.pci entitlement is
+              approved.
             -->
-            <key>IOPCIPrimaryMatch</key>
-            <string>0x00001002&amp;0x0000ffff</string>
+            <key>IOPCIClassMatch</key>
+            <string>0x03000000</string>
             <key>IOUserClientClass</key>
             <string>ROCmGPUUserClient</string>
 

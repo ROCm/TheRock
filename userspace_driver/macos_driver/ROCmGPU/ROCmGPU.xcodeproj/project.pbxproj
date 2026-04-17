@@ -201,7 +201,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Create 'generated' symlink so #include \"generated/ROCmGPUDriver.h\" finds the iig output\n# DERIVED_FILE_DIR = .../DerivedSources; iig headers are in ROCmGPUDriver/ subdirectory\nln -sfn \"${DERIVED_FILE_DIR}/ROCmGPUDriver\" \"${SRCROOT}/ROCmGPUDriver/generated\"\n";
+			shellScript = "# Create 'generated' symlink so #include \"generated/ROCmGPUDriver.h\" finds the iig output\n# DERIVED_FILE_DIR = .../DerivedSources; iig headers are in ${PRODUCT_NAME}/ subdirectory\nln -sfn \"${DERIVED_FILE_DIR}/${PRODUCT_NAME}\" \"${SRCROOT}/ROCmGPUDriver/generated\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -252,7 +252,7 @@
 					PCIDriverKit,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = ai.rocm.gpu.driver;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = ai.rocm.gpu.driver;
 				SDKROOT = driverkit;
 				SKIP_INSTALL = YES;
 				SYSTEM_FRAMEWORK_SEARCH_PATHS = "$(SDKROOT)/System/DriverKit/System/Library/Frameworks";
@@ -279,7 +279,7 @@
 					PCIDriverKit,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = ai.rocm.gpu.driver;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = ai.rocm.gpu.driver;
 				SDKROOT = driverkit;
 				SKIP_INSTALL = YES;
 				SYSTEM_FRAMEWORK_SEARCH_PATHS = "$(SDKROOT)/System/DriverKit/System/Library/Frameworks";

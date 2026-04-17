@@ -71,13 +71,22 @@ kIOReturnSuccess = 0
 def _setup_iokit_functions():
     """Declare IOKit function signatures for ctypes."""
 
-    # mach_task_self()
-    _libsystem.mach_task_self_.restype = mach_port_t
-    _libsystem.mach_task_self_.argtypes = []
+    # mach_task_self_ is a GLOBAL VARIABLE, not a function. The
+    # mach_task_self() identifier in C is a macro that expands to the
+    # mach_task_self_ variable. Calling it as a function crashes with
+    # SIGBUS. Access via ctypes.in_dll() instead — see _mach_task_self().
+    pass
 
     # IOServiceMatching(name) -> CFDictionaryRef
     _iokit.IOServiceMatching.restype = ctypes.c_void_p
     _iokit.IOServiceMatching.argtypes = [ctypes.c_char_p]
+
+    # IOServiceNameMatching(name) -> CFDictionaryRef — matches on service
+    # name (IORegistryEntryName), not IOProviderClass. DriverKit DEXTs
+    # register their IOUserClass name as the service name while their
+    # IOClass in IOKit is "IOUserService".
+    _iokit.IOServiceNameMatching.restype = ctypes.c_void_p
+    _iokit.IOServiceNameMatching.argtypes = [ctypes.c_char_p]
 
     # IOServiceGetMatchingService(masterPort, matching) -> io_service_t
     _iokit.IOServiceGetMatchingService.restype = io_service_t
@@ -122,6 +131,21 @@ def _setup_iokit_functions():
         ctypes.c_void_p, ctypes.c_size_t,
         ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
 
+    # IOConnectCallMethod(connect, selector,
+    #                     scalarInput, scalarInputCount,
+    #                     structInput, structInputSize,
+    #                     scalarOutput, scalarOutputCount,
+    #                     structOutput, structOutputSize)
+    # Universal dispatch — required when a selector mixes scalar and struct,
+    # e.g. ALLOC_DMA takes 2 scalar inputs + returns a struct.
+    _iokit.IOConnectCallMethod.restype = kern_return_t
+    _iokit.IOConnectCallMethod.argtypes = [
+        io_connect_t, ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint64), ctypes.c_uint32,
+        ctypes.c_void_p, ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(ctypes.c_uint32),
+        ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
+
     # IOConnectMapMemory64(connect, memoryType, intoTask,
     #                      &address, &size, options)
     _iokit.IOConnectMapMemory64.restype = kern_return_t
@@ -143,8 +167,14 @@ def _setup_iokit_functions():
 _setup_iokit_functions()
 
 
+_mach_task_self_var = ctypes.c_uint32.in_dll(_libsystem, "mach_task_self_")
+
+
 def _mach_task_self() -> mach_port_t:
-    return _libsystem.mach_task_self_()
+    # mach_task_self_ is a libSystem global variable (mach_port_t).
+    # Read its current value each time — it can change between calls
+    # in pathological cases (e.g., exec), though for our use it's stable.
+    return mach_port_t(_mach_task_self_var.value)
 
 
 # ============================================================================
@@ -293,11 +323,14 @@ class IOKitClient:
 
         name = service_name or self.DEXT_SERVICE_NAME
 
-        # Find the service in IOKit registry
-        matching = _iokit.IOServiceMatching(name)
+        # Find the service in IOKit registry. DEXTs register under their
+        # IOUserClass name (not IOClass), so we use IOServiceNameMatching
+        # instead of IOServiceMatching — the latter matches by class and
+        # would need "IOUserService" which matches all DEXTs.
+        matching = _iokit.IOServiceNameMatching(name)
         if not matching:
             raise RuntimeError(
-                f"IOServiceMatching({name!r}) returned NULL — "
+                f"IOServiceNameMatching({name!r}) returned NULL — "
                 "is the DEXT installed?"
             )
 
@@ -542,13 +575,25 @@ class IOKitClient:
           - cpu_addr: virtual address mapped into this process
           - segments: list of (phys_addr, length) for GPU page tables
         """
-        raw = self._call_struct(
-            Selector.ALLOC_DMA,
-            input_data=struct.pack("<QI", size, flags),
-            output_type=DMAInfoStruct,
+        # ALLOC_DMA uses the universal IOConnectCallMethod — 2 scalar
+        # inputs (size, flags), struct output (ROCmGPUDMAInfo). The
+        # dispatch table is { nullptr, false, 2, 0, 0, sizeof(...) } in
+        # the DEXT, so we must match scalarInputs=2 / structOutput.
+        scalar_in = (ctypes.c_uint64 * 2)(size, flags)
+        raw = DMAInfoStruct()
+        struct_out_size = ctypes.c_size_t(ctypes.sizeof(raw))
+        ret = _iokit.IOConnectCallMethod(
+            self._connection, int(Selector.ALLOC_DMA),
+            scalar_in, 2,
+            None, 0,
+            None, None,
+            ctypes.byref(raw), ctypes.byref(struct_out_size),
         )
-        if raw is None:
-            raise RuntimeError("AllocDMA returned no data")
+        if ret != kIOReturnSuccess:
+            raise RuntimeError(
+                f"IOConnectCallMethod(ALLOC_DMA, size={size}) "
+                f"failed: 0x{ret & 0xFFFFFFFF:08x}"
+            )
 
         buf_id = raw.bufferID
 
