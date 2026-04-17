@@ -86,6 +86,20 @@ def main():
 
     failed = False
 
+    # Build tensilelite-client to pick up any C++ changes.
+    # This uses 'invoke build-client' which runs cmake --preset tensilelite.
+    logging.info("=== Building tensilelite client ===")
+    result = run_command(
+        ["uv", "run", "invoke", "build-client"],
+        cwd=TENSILELITE_DIR,
+        check=False,
+    )
+    if result.returncode != 0:
+        logging.error(
+            f"tensilelite client build failed with return code {result.returncode}"
+        )
+        failed = True
+
     # Run TensileLite unit tests (CPU only, no GPU required)
     logging.info("=== Running TensileLite unit tests ===")
     result = run_command(
