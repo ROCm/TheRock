@@ -43,6 +43,17 @@ on:
         required: false
         type: string
         default: "none"
+      amdgpu_targets:
+        description: >-
+          Comma-separated individual gfx targets for kpack-split builds
+          (e.g. 'gfx1151' or 'gfx1200,gfx1201'). Used to install the correct
+          per-target device wheels. Leave empty for legacy per-family builds.
+        type: string
+        default: ""
+      kpack_split:
+        description: "'true' if this is a kpack-split flat build."
+        type: string
+        default: "false"
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -177,6 +188,17 @@ jobs:
           echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
           echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX}"
 
+      - name: Compute ROCm device extras
+        id: device_extras
+        run: |
+          if [ "${{ inputs.kpack_split }}" = "true" ] && [ -n "${{ inputs.amdgpu_targets }}" ]; then
+            # Prefix each comma-separated target with "device-": gfx1151,gfx1201 -> device-gfx1151,device-gfx1201
+            extras=$(echo "${{ inputs.amdgpu_targets }}" | sed 's/\(^\|,\)/\1device-/g')
+            echo "value=${extras}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=" >> "$GITHUB_OUTPUT"
+          fi
+
       # Using 'cmd' here is load bearing! There are configuration issues when
       # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
       - name: Build PyTorch wheels
@@ -185,6 +207,9 @@ jobs:
           set "CACHE_FLAG="
           if "${{ inputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
           if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
+
+          set "ROCM_EXTRAS_FLAG="
+          if not "${{ steps.device_extras.outputs.value }}"=="" set "ROCM_EXTRAS_FLAG=--rocm-extras ${{ steps.device_extras.outputs.value }}"
 
           echo "Building PyTorch wheels for ${{ inputs.artifact_group }} (cache: ${{ inputs.cache_type }})"
           python ./external-builds/pytorch/build_prod_wheels.py ^
@@ -196,6 +221,7 @@ jobs:
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             %CACHE_FLAG% ^
+            %ROCM_EXTRAS_FLAG% ^
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats

@@ -420,7 +420,10 @@ def do_install_rocm(args: argparse.Namespace):
     if args.pip_cache_dir:
         pip_args.extend(["--cache-dir", str(args.pip_cache_dir)])
     rocm_sdk_version = args.rocm_sdk_version if args.rocm_sdk_version else ""
-    pip_args.extend([f"rocm[libraries,devel]{rocm_sdk_version}"])
+    extras = "libraries,devel"
+    if args.rocm_extras:
+        extras += f",{args.rocm_extras}"
+    pip_args.extend([f"rocm[{extras}]{rocm_sdk_version}"])
     run_command(pip_args, cwd=Path.cwd())
     print(f"Installed version: {get_rocm_sdk_version()}")
 
@@ -1253,6 +1256,15 @@ def main(argv: list[str]):
             default=True,
             action=argparse.BooleanOptionalAction,
             help="Include pre-release packages (default True)",
+        )
+        p.add_argument(
+            "--rocm-extras",
+            default="",
+            help=(
+                "Comma-separated additional extras for rocm package install "
+                "(e.g. 'device-gfx942,device-gfx943'). "
+                "Added alongside the base 'libraries,devel' extras."
+            ),
         )
 
     sub_p = p.add_subparsers(required=True)

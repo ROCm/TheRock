@@ -226,6 +226,7 @@ class WorkflowOutputRoot:
         github_repository: str | None = None,
         workflow_run: dict | None = None,
         lookup_workflow_run: bool = False,
+        release_type: str | None = None,
     ) -> "WorkflowOutputRoot":
         """Create from CI workflow context.
 
@@ -245,6 +246,8 @@ class WorkflowOutputRoot:
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
+            release_type: Release type override (e.g. "dev", "nightly"). If
+                None, falls back to the RELEASE_TYPE environment variable.
         """
         workflow_run_id = (
             run_id if lookup_workflow_run and workflow_run is None else None
@@ -253,6 +256,7 @@ class WorkflowOutputRoot:
             github_repository=github_repository,
             workflow_run_id=workflow_run_id,
             workflow_run=workflow_run,
+            release_type=release_type,
         )
         return cls(
             bucket=bucket,
@@ -289,6 +293,7 @@ def _retrieve_bucket_info(
     github_repository: str | None = None,
     workflow_run_id: str | None = None,
     workflow_run: dict | None = None,
+    release_type: str | None = None,
 ) -> tuple[str, str]:
     """Determine S3 bucket and external_repo prefix for a workflow run.
 
@@ -305,6 +310,7 @@ def _retrieve_bucket_info(
 
     artifact_bucket_config = get_artifacts_bucket_config_for_workflow_run(
         github_repository=github_repository,
+        release_type=release_type,
         workflow_run_id=workflow_run_id,
         workflow_run=workflow_run,
     )
