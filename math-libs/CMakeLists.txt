@@ -119,9 +119,11 @@ if(THEROCK_ENABLE_PRIM)
     if(WIN32)
       set(_rocprim_benchmark_enable "OFF")
       set(_rocprim_benchmark_deps)
+      set(_rocprim_benchmark_includes)
     else()
       set(_rocprim_benchmark_enable "ON")
       set(_rocprim_benchmark_deps amdsmi)
+      set(_rocprim_benchmark_includes therock_rocprim_benchmark_deps.cmake)
     endif()
 
     therock_cmake_subproject_declare(rocPRIM_tests
@@ -135,6 +137,8 @@ if(THEROCK_ENABLE_PRIM)
         -DBUILD_TEST=ON
         -DBUILD_BENCHMARK=${_rocprim_benchmark_enable}
         -DUSE_SYSTEM_LIB=ON
+      CMAKE_INCLUDES
+        ${_rocprim_benchmark_includes}
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
