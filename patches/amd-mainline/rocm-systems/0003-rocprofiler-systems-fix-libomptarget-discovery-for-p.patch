@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
+Date: Thu, 1 Jan 2099 00:00:00 +0000
+Subject: [PATCH 3/3] rocprofiler-systems: fix libomptarget discovery for
+ per-target runtime dirs
+
+Recent LLVM (amd-main / Clang 23) installs libomptarget.so under a
+host-triple subdirectory (e.g. lib/x86_64-unknown-linux-gnu/) when
+LLVM_ENABLE_PER_TARGET_RUNTIME_DIR is enabled (the default).
+
+The existing find_library() search only checked flat lib/ paths and
+failed to locate the library in its new position.
+
+Query the compiler directly via -print-file-name=libomptarget.so to
+resolve the correct path, falling back to the original hint-based
+search for older layouts.
+---
+ .../examples/openmp/target/CMakeLists.txt     | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/projects/rocprofiler-systems/examples/openmp/target/CMakeLists.txt b/projects/rocprofiler-systems/examples/openmp/target/CMakeLists.txt
+index 3897a5eec6..c705f99c19 100644
+--- a/projects/rocprofiler-systems/examples/openmp/target/CMakeLists.txt
++++ b/projects/rocprofiler-systems/examples/openmp/target/CMakeLists.txt
+@@ -54,8 +54,24 @@ get_filename_component(ROCM_ROOT_DIR "${_omp_bin_dir}" DIRECTORY)
+ message(STATUS "Using OpenMP target compiler: ${OMP_TARGET_COMPILER}")
+ message(STATUS "ROCm root inferred from compiler: ${ROCM_ROOT_DIR}")
+ 
+-# Candidate lib directories for libomptarget across ROCm layouts
++# LLVM with per-target runtime dirs (the default since the offload/
++# restructuring) installs libomptarget.so under a host-triple
++# subdirectory (e.g. lib/x86_64-unknown-linux-gnu/).
++# Ask the compiler for the real path so we work with any layout.
++execute_process(
++    COMMAND "${OMP_TARGET_COMPILER}" -print-file-name=libomptarget.so
++    OUTPUT_VARIABLE _omptarget_compiler_path
++    OUTPUT_STRIP_TRAILING_WHITESPACE
++    ERROR_QUIET
++    RESULT_VARIABLE _omptarget_query_rc
++)
++if(_omptarget_query_rc EQUAL 0 AND _omptarget_compiler_path AND NOT _omptarget_compiler_path STREQUAL "libomptarget.so")
++    get_filename_component(_omptarget_compiler_dir "${_omptarget_compiler_path}" DIRECTORY)
++endif()
++
++# Candidate lib directories -- compiler-discovered path first, then static hints
+ set(_LLVM_LIB_HINTS
++    ${_omptarget_compiler_dir}
+     "${ROCmVersion_DIR}/llvm/lib"
+     "${ROCmVersion_DIR}/lib"
+     "${ROCM_ROOT_DIR}/lib"
+-- 
+2.34.1
+
