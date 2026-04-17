@@ -611,17 +611,12 @@ def main():
         "--job",
         default="dev",
         choices=["dev", "nightly", "prerelease", "ci"],
-        help="Job type: dev, nightly, prerelease, or ci (defaults to dev)",
+        help="Job type: dev, nightly, prerelease, or ci",
     )
     parser.add_argument(
         "--s3-prefix",
         required=False,
         help="Override S3 prefix (for backward compatibility, auto-generated if not provided)",
-    )
-    parser.add_argument(
-        "--platform",
-        default="linux",
-        help="Platform name (linux or windows), defaults to linux",
     )
 
     args = parser.parse_args()
@@ -633,7 +628,7 @@ def main():
         prefix = args.s3_prefix
         dedupe = True
     elif args.job in ["nightly", "dev"]:
-        # Dev/Nightly: <pkg_type>/<YYYYMMDD>-<artifact_id>
+        # Legacy behavior: <pkg_type>/<YYYYMMDD>-<artifact_id>
         prefix = f"{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
         dedupe = True
     elif args.job == "prerelease":
@@ -641,12 +636,8 @@ def main():
         prefix = f"v3/packages/{args.pkg_type}"
         dedupe = True
     elif args.job == "ci":
-        # CI builds: <artifact_id>-<platform>/packages/<pkg_type>
-        # For external bucket, include repository prefix (defaults to ROCm-TheRock)
-        if args.s3_bucket == "therock-ci-artifacts-external":
-            prefix = f"ROCm-TheRock/{args.artifact_id}-{args.platform}/packages/{args.pkg_type}"
-        else:
-            prefix = f"{args.artifact_id}-{args.platform}/packages/{args.pkg_type}"
+        # CI builds: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
+        prefix = f"v3/packages/{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
         dedupe = True
     else:
         raise ValueError(f"Unknown job type: {args.job}")
