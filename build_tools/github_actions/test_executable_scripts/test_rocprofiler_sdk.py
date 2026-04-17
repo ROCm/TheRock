@@ -122,22 +122,10 @@ def setup_env():
 
     old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
     environ_vars["LD_LIBRARY_PATH"] = ":".join(ld_lib_paths + old_ld_lib_path)
-    environ_vars["THEROCK_BIN_DIR"] = str(THEROCK_BIN_PATH)
 
     # Avoid conflicting agent visibility; HIP_VISIBLE_DEVICES supersedes.
     if environ_vars.get("HIP_VISIBLE_DEVICES"):
         environ_vars.pop("GPU_DEVICE_ORDINAL", None)
-
-    # Paths for run-therock-ci.py (single source of truth; subprocess inherits these).
-    environ_vars["THEROCK_PATH"] = str(THEROCK_PATH)
-    environ_vars["THEROCK_LIB_PATH"] = str(THEROCK_LIB_PATH)
-    environ_vars["THEROCK_SYSDEPS_PATH"] = str(THEROCK_SYSDEPS_PATH)
-    environ_vars["THEROCK_SYSDEPS_LIB_PATH"] = str(THEROCK_SYSDEPS_LIB_PATH)
-    environ_vars["THEROCK_LLVM_BIN_PATH"] = str(THEROCK_LLVM_BIN_PATH)
-    environ_vars["THEROCK_CLANG_PATH"] = str(THEROCK_CLANG_PATH)
-    environ_vars["THEROCK_CLANG_PLUS_PATH"] = str(THEROCK_CLANG_PLUS_PATH)
-    environ_vars["ROCPROFILER_SDK_PATH"] = str(ROCPROFILER_SDK_PATH)
-    environ_vars["ROCPROFILER_SDK_TESTS_PATH"] = str(ROCPROFILER_SDK_TESTS_PATH)
 
 
 def get_cmake_config_cmd() -> list[str]:
@@ -205,6 +193,12 @@ def get_ctest_cmd() -> list[str]:
     return ctest_cmd
 
 
+def _running_in_ci() -> bool:
+    """True when running on a typical CI runner (GitHub Actions sets CI=true)."""
+    ci = os.environ.get("CI", "").strip().lower()
+    return ci in ("1", "true", "yes")
+
+
 def run_therock_ci(
     cmake_config_cmd: list[str],
     cmake_build_cmd: list[str],
@@ -220,13 +214,31 @@ def run_therock_ci(
     )
     argv = [
         sys.executable,
-        str(SCRIPT_DIR / "run-therock-ci.py"),
+        str(_REPO_ROOT / "rocm-systems/.github/scripts/run-therock-ci.py"),
         "--configure-cmd",
         shlex.join(cmake_config_cmd),
         "--build-cmd",
         shlex.join(cmake_build_cmd),
         "--ctest-args",
         shlex.join(ctest_args),
+        "--rocprofiler-sdk-path",
+        str(ROCPROFILER_SDK_PATH),
+        "--rocprofiler-sdk-tests-path",
+        str(ROCPROFILER_SDK_TESTS_PATH),
+        "--therock-bin-path",
+        str(THEROCK_BIN_PATH),
+        "--therock-clang-path",
+        str(THEROCK_CLANG_PATH),
+        "--therock-clang-plus-path",
+        str(THEROCK_CLANG_PLUS_PATH),
+        "--therock-lib-path",
+        str(THEROCK_LIB_PATH),
+        "--therock-sysdeps-lib-path",
+        str(THEROCK_SYSDEPS_LIB_PATH),
+        "--therock-sysdeps-path",
+        str(THEROCK_SYSDEPS_PATH),
+        "--therock-path",
+        str(THEROCK_PATH),
     ]
     logging.info(f"++ Exec [{_REPO_ROOT}]$ {shlex.join(argv)}")
     subprocess.run(
@@ -282,8 +294,13 @@ def execute_tests():
 
 if __name__ == "__main__":
     setup_env()
-    run_therock_ci(
-        get_cmake_config_cmd(),
-        get_cmake_build_cmd(),
-        get_ctest_cmd(),
-    )
+    if _running_in_ci():
+        run_therock_ci(
+            get_cmake_config_cmd(),
+            get_cmake_build_cmd(),
+            get_ctest_cmd(),
+        )
+    else:
+        cmake_config()
+        cmake_build()
+        execute_tests()
