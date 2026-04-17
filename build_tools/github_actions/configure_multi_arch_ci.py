@@ -121,6 +121,7 @@ class CIInputs:
     commit_ref: str  # GITHUB_REF_NAME value
     base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
+    release_type: str = ""  # "" for CI, or "dev", "nightly", "prerelease" for releases
 
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
@@ -174,8 +175,10 @@ class CIInputs:
         # "inputs" are set for workflow_dispatch, empty otherwise.
         inputs = event.get("inputs") or {}
 
-        # BUILD_VARIANT comes from workflow_call inputs, not the event payload.
+        # BUILD_VARIANT and RELEASE_TYPE come from workflow_call inputs, not
+        # the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
+        release_type = os.environ.get("RELEASE_TYPE", "")
 
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
@@ -197,6 +200,7 @@ class CIInputs:
             commit_ref=commit_ref,
             base_ref=base_ref,
             build_variant=build_variant,
+            release_type=release_type,
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
                 inputs.get("linux_amdgpu_families", "")
@@ -676,10 +680,19 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
     if ci_inputs.is_workflow_dispatch:
         # Manual trigger: caller specifies exact families per platform.
-        # Empty input means "no families for that platform" — the caller
-        # has full control over what runs.
+        # For CI dispatches, empty input means "no families for that
+        # platform" — the caller has full control over what runs.
+        # For release dispatches, empty input defaults to all families
+        # so that release workflows don't need to enumerate every family.
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
+        if ci_inputs.release_type and not linux_names and not windows_names:
+            linux_names = list(all_families.keys())
+            windows_names = list(all_families.keys())
+            print(
+                f"  Release type {ci_inputs.release_type!r} with no "
+                f"explicit families -> all families"
+            )
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (gfx* for individual families, ci:run-all-archs
@@ -752,6 +765,7 @@ def _expand_build_config_for_platform(
     ci_inputs: CIInputs,
     all_families: dict[str, dict],
     variant_config: dict,
+    test_type: str,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -842,6 +856,25 @@ def _expand_build_config_for_platform(
                     f"disabling tests"
                 )
 
+        # If run-full-tests-only is set and test_type is "quick", disable testing
+        if platform_info.get("run-full-tests-only", False) and test_type == "quick":
+            test_runs_on = ""
+            print(
+                f"  {family_name}: run-full-tests-only flag set, "
+                f"disabling tests for quick test run"
+            )
+
+        # If nightly_check_only_for_family is set for schedule runs only
+        if (
+            platform_info.get("nightly_check_only_for_family", False)
+            and not ci_inputs.is_schedule
+        ):
+            test_runs_on = ""
+            print(
+                f"  {family_name}: nightly_check_only_for_family flag set, "
+                f"disabling test runner for non-scheduled runs"
+            )
+
         per_family_info.append(
             {
                 "amdgpu_family": platform_info["family"],
@@ -878,6 +911,7 @@ def _expand_build_config_for_platform(
 def expand_build_configs(
     targets: TargetSelection,
     ci_inputs: CIInputs,
+    test_type: str,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfigs:
@@ -911,6 +945,7 @@ def expand_build_configs(
             ci_inputs=ci_inputs,
             all_families=all_families,
             variant_config=variant_config,
+            test_type=test_type,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
         )
@@ -997,6 +1032,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     builds = expand_build_configs(
         targets=targets,
         ci_inputs=ci_inputs,
+        test_type=jobs.test_rocm.test_type,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
     )
