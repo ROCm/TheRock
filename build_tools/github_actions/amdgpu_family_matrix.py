@@ -99,7 +99,7 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
-            "fetch-gfx-targets": ["gfx1100"],
+            "fetch-gfx-targets": ["gfx1100", "gfx1101"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
