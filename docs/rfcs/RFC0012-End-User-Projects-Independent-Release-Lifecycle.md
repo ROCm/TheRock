@@ -12,7 +12,7 @@ status: draft
 ROCm ships a core SDK through TheRock build system. In addition to the core
 SDK, AMD and the broader community maintain a set of **extras** — tools,
 validation suites, and utility projects — that are compiled *on top of* a
-released ROCm installation but follow their own development and release
+released ROCm Core SDK installation but follow their own development and release
 timelines. These extras are not part of the ROCm Core SDK; they consume
 ROCm as a build dependency and are delivered as independently versioned
 packages.
@@ -31,7 +31,7 @@ release cadence.
 1. **Decouple extras from the ROCm release train** so that bug fixes,
    new test modules, and feature enhancements can ship without waiting for
    the next ROCm Core SDK release.
-2. **Guarantee backward compatibility within a ROCm major version** so
+2. **Guarantee backward compatibility within a ROCm major version release stream** so
    that a single extras build works across every minor and patch release
    of that major version.
 3. **Provide a clear installation layout** that coexists with the ROCm
@@ -39,7 +39,7 @@ release cadence.
    [RFC0009](/docs/rfcs/RFC0009-OS-Packaging-Requirements.md) without
    creating conflicts or ambiguity.
 4. **Enable community and partner contributions** by keeping the extras
-   repositories buildable against any compatible, publicly released ROCm
+   repositories buildable against any compatible, publicly released ROCm Core SDK
    installation.
 
 ### Scope
@@ -63,12 +63,16 @@ release cadence.
 Extras projects follow an **independent release cadence** that is not tied
 to the ROCm Core SDK release schedule.
 
+Each extras project may set an appropriate release cadence for the project in 
+conjunction with its stakeholders.
+
 ### Versioning Scheme
 
-Each end-user project adopts its own semantic version:
+Each end-user project adopts its own semantic version which results in the following
+filename template:
 
 ```
-<project>-<major>.<minor>.<patch>
+<projectname>-<major>.<minor>.<patch>
 ```
 
 For example:
@@ -429,15 +433,15 @@ non-versioned packages.
 
 Key conventions:
 
-- **Naming**: Packages use the `amdrocm-<project>` prefix for AMD
+- **Naming**: Packages use the `amdrocm<rocm-major-ver>-<project>` prefix for AMD
   repository distribution, matching the convention in RFC0009. Distro-native
   packages (e.g., those maintained by Ubuntu or Red Hat) use
-  `rocm-<project>` without the `amd` prefix.
+  `rocm<rocm-major-ver>-<project>` without the `amd` prefix.
 
   | AMD repository package | Distro-native equivalent | Contents |
   | :--- | :--- | :--- |
-  | `amdrocm-rvs` | `rocm-rvs` | RVS runtime — binaries, modules, and configs |
-  | `amdrocm-rvs-devel` | `rocm-rvs-dev` | RVS development headers and CMake files |
+  | `amdrocm7-rvs` | `rocm7-rvs` | RVS runtime — binaries, modules, and configs |
+  | `amdrocm7-rvs-devel` | `rocm7-rvs-dev` | RVS development headers and CMake files |
 - **Runtime vs. development split (optional)**: Projects that expose a
   public API with headers and CMake config files may choose to produce a
   separate `-devel` / `-dev` package. Most extras projects are end-user
@@ -446,15 +450,15 @@ Key conventions:
 Example (RVS on Ubuntu):
 
 ```
-amdrocm-rvs_1.2.0-7_amd64.deb
-amdrocm-rvs-dev_1.2.0-7_amd64.deb
+amdrocm7-rvs_1.2.0_amd64.deb
+amdrocm7-rvs-dev_1.2.0_amd64.deb
 ```
 
 Example (RVS on RHEL):
 
 ```
-amdrocm-rvs-1.2.0-7.x86_64.rpm
-amdrocm-rvs-devel-1.2.0-7.x86_64.rpm
+amdrocm7-rvs-1.2.0.x86_64.rpm
+amdrocm7-rvs-devel-1.2.0.x86_64.rpm
 ```
 
 #### Dependency Resolution
@@ -655,14 +659,14 @@ a `.tar.xz` file with a corresponding `sha256sum`. The archive extracts
 into the flat FHS layout described in Section 4:
 
 ```bash
-tar -xf amdrocm-rvs-1.2.0-rocm7-linux-x86_64.tar.xz \
+tar -xf amdrocm7-rvs-1.2.0-linux-x86_64.tar.xz \
     -C /opt/rocm/extras-7/
 ```
 
 Tarball naming follows the pattern:
 
 ```
-amdrocm-<project>-<version>-rocm<major>-<os>-<arch>.tar.xz
+amdrocm<major>-<project>-<version>-rocm-<os>-<arch>.tar.xz
 ```
 
 #### Installing ROCm Dependencies for Tarball-Based Deployments
