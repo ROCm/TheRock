@@ -410,21 +410,35 @@ kern_return_t ROCmGPUUserClient::CopyClientMemoryForType_Impl(
     uint64_t* options,
     IOMemoryDescriptor** memory)
 {
+    os_log(OS_LOG_DEFAULT, LOG_PREFIX "CopyClientMemoryForType(type=0x%llx) called", type);
+
     if (type <= kROCmGPU_MemType_BAR5) {
         uint8_t memIdx = 0; uint64_t barSz = 0;
-        if (getBarMemoryIndex(ivars->pciDevice, (uint8_t)type, &memIdx, &barSz) != kIOReturnSuccess)
+        kern_return_t ret = getBarMemoryIndex(ivars->pciDevice, (uint8_t)type, &memIdx, &barSz);
+        os_log(OS_LOG_DEFAULT, LOG_PREFIX "  GetBARInfo(%u) ret=0x%x memIdx=%u size=%llu",
+               (unsigned)type, ret, memIdx, barSz);
+        if (ret != kIOReturnSuccess)
             return kIOReturnNotFound;
 
+        // _CopyDeviceMemoryWithIndex's `forClient` parameter must be an
+        // IOService attached to the PCI device. Our UserClient is attached
+        // to the Driver (which is itself attached to the PCI device), so
+        // `this` here would fail with kIOReturnNotAttached (0xE00002CD).
+        // Pass the Driver instead — same approach tinygrad's TinyGPU uses.
         IOMemoryDescriptor* desc = nullptr;
-        kern_return_t ret = ivars->pciDevice->_CopyDeviceMemoryWithIndex(
-            memIdx, &desc, this);
+        ret = ivars->pciDevice->_CopyDeviceMemoryWithIndex(
+            memIdx, &desc, ivars->driver);
+        os_log(OS_LOG_DEFAULT, LOG_PREFIX "  _CopyDeviceMemoryWithIndex(%u) ret=0x%x desc=%p",
+               memIdx, ret, desc);
         if (ret != kIOReturnSuccess || !desc) return kIOReturnError;
 
         *memory = desc;
+        os_log(OS_LOG_DEFAULT, LOG_PREFIX "  OK returning desc=%p for BAR %u", desc, (unsigned)type);
         return kIOReturnSuccess;
 
     } else if (type >= kROCmGPU_MemType_DMABase) {
         uint32_t bufID = (uint32_t)(type - kROCmGPU_MemType_DMABase);
+        os_log(OS_LOG_DEFAULT, LOG_PREFIX "  DMA buffer path, bufID=%u", bufID);
         if (bufID >= MAX_DMA_BUFFERS || !ivars->dmaBuffers[bufID].inUse)
             return kIOReturnNotFound;
 
@@ -433,5 +447,6 @@ kern_return_t ROCmGPUUserClient::CopyClientMemoryForType_Impl(
         return kIOReturnSuccess;
     }
 
+    os_log(OS_LOG_DEFAULT, LOG_PREFIX "  type=0x%llx unrecognized, returning kIOReturnBadArgument", type);
     return kIOReturnBadArgument;
 }
