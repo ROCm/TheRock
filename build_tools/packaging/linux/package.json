@@ -1380,6 +1380,28 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocm-cmake",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "half",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
       }
     ],
 
