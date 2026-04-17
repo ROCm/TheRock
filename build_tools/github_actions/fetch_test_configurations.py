@@ -413,7 +413,7 @@ test_matrix = {
     # MIOpen provider tests
     "miopenprovider": {
         "job_name": "miopenprovider",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 20,
         "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
         "platform": ["linux", "windows"],
@@ -426,7 +426,7 @@ test_matrix = {
     # enabled by default.
     # "fusilliprovider": {
     #     "job_name": "fusilliprovider",
-    #     "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler --tests",
+    #     "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler --hipdnn-integration-tests --tests",
     #     "timeout_minutes": 15,
     #     "test_script": f"python {_get_script_path('test_fusilliprovider.py')}",
     #     "platform": ["linux"],
@@ -435,7 +435,7 @@ test_matrix = {
     # hipBLASLt provider tests
     "hipblasltprovider": {
         "job_name": "hipblasltprovider",
-        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --tests",
+        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_hipblasltprovider.py')}",
         "platform": ["linux", "windows"],
@@ -447,7 +447,7 @@ test_matrix = {
     # Disabled until rocm-libraries bump that has hip-kernel-provider passing
     # "hipkernelprovider": {
     #     "job_name": "hipkernelprovider",
-    #     "fetch_artifact_args": "--hipdnn --hipkernelprovider --tests",
+    #     "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
     #     "timeout_minutes": 15,
     #     "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
     #     "platform": ["linux", "windows"],
