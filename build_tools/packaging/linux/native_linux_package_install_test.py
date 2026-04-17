@@ -12,7 +12,8 @@ Test modes (--test-type):
   verification (steps 1, 2, and 3).
   Steps (invoked one by one from main):
   1. Repo setup and install: set up package-manager repository and install
-     ROCm packages (amdrocm-{gfx_arch}, amdrocm-core-sdk-{gfx_arch}).
+     ROCm packages (for each --gfx-arch value: amdrocm-{arch},
+     amdrocm-core-sdk-{arch}).
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
   3. Full verification: rdhc.py / RDHC test. (Run only for full.)
@@ -245,6 +246,42 @@ class NativeLinuxPackageInstallTest:
                 "Supported profiles: ubuntu*, debian*, rhel*, sles*, almalinux*, centos*, azl*"
             )
 
+    @staticmethod
+    def _normalized_gfx_archs_from_input(
+        gfx_arch: str | list[str] | None,
+    ) -> list[str]:
+        """Normalize GPU arch list: split commas, strip, lowercase, dedupe (order kept).
+
+        Args:
+        gfx_arch: Single arch string, list of arch strings, or None (default gfx94x).
+
+        Returns:
+        Non-empty list of unique architecture tokens (e.g. ['gfx94x', 'gfx110x']).
+        """
+        if gfx_arch is None:
+            tokens: list[str] = ["gfx94x"]
+        elif isinstance(gfx_arch, str):
+            tokens = [gfx_arch] if gfx_arch.strip() else ["gfx94x"]
+        else:
+            tokens = [str(a) for a in gfx_arch if a and str(a).strip()] or ["gfx94x"]
+        expanded: list[str] = []
+        for t in tokens:
+            for part in t.split(","):
+                p = part.strip()
+                if p:
+                    expanded.append(p)
+        if not expanded:
+            expanded = ["gfx94x"]
+        seen: dict[str, None] = {}
+        out: list[str] = []
+        for a in expanded:
+            k = a.lower()
+            if k in seen:
+                continue
+            seen[k] = None
+            out.append(k)
+        return out
+
     def _is_sles(self) -> bool:
         """Check if the OS profile is SLES (SUSE Linux Enterprise Server).
 
@@ -270,7 +307,7 @@ class NativeLinuxPackageInstallTest:
         release_type: Type of release ('nightly' or 'prerelease')
         install_prefix: Installation prefix (default: /opt/rocm/core)
         gfx_arch: GPU architecture(s) as a single value or list (default: gfx94x).
-        Only the first element is used for package name and installation.
+        For each architecture, installs amdrocm-{arch} and amdrocm-core-sdk-{arch}.
         gpg_key_url: GPG key URL
         """
         self.os_profile = os_profile.lower()
@@ -278,16 +315,9 @@ class NativeLinuxPackageInstallTest:
         self.repo_url = repo_url.rstrip("/")
         self.release_type = release_type.lower()
         self.install_prefix = install_prefix
-        # Normalize to list; only the first element is used for now
-        if gfx_arch is None:
-            self.gfx_arch_list: list[str] = ["gfx94x"]
-        elif isinstance(gfx_arch, str):
-            self.gfx_arch_list = [gfx_arch] if gfx_arch.strip() else ["gfx94x"]
-        else:
-            self.gfx_arch_list = [a for a in gfx_arch if a and str(a).strip()] or [
-                "gfx94x"
-            ]
-        self.gfx_arch = self.gfx_arch_list[0].lower()
+        self.gfx_arch_list = self._normalized_gfx_archs_from_input(gfx_arch)
+        # Primary arch (compat / display): first listed after normalization
+        self.gfx_arch = self.gfx_arch_list[0]
         self.gpg_key_url = gpg_key_url
 
         # Packages to install, in order
@@ -295,6 +325,13 @@ class NativeLinuxPackageInstallTest:
             "amdrocm",
             "amdrocm-core-sdk",
         ]
+
+        # Packages to install, in order: per arch, meta then core-sdk (same as single-arch)
+        self.package_names: list[str] = []
+        for arch in self.gfx_arch_list:
+            self.package_names.extend(
+                [f"amdrocm-{arch}", f"amdrocm-core-sdk-{arch}"]
+            )
 
     def setup_gpg_key(self) -> bool:
         """Setup GPG key for repositories that require GPG verification.
@@ -701,6 +738,7 @@ gpgcheck=0
         print("=" * 80)
         print(f"\nOS Profile: {self.os_profile}")
         print(f"Package Type (derived): {self.package_type.upper()}")
+        print(f"GPU Architecture(s): {self.gfx_arch_list}")
         print(f"Repository URL: {self.repo_url}")
         print(f"Packages (in order): {self.package_names}")
 
@@ -946,7 +984,7 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         type=str,
         nargs="+",
         metavar="ARCH",
-        help="GPU architecture(s) as a list. Only the first is used for now. Required for sanity/full; not used for simulate. Examples: gfx94x, gfx110x gfx1151",
+        help="GPU architecture(s). Repeat flag or list multiple values; commas also split (e.g. gfx94x gfx110x or gfx94x,gfx110x). For each arch, installs amdrocm-ARCH and amdrocm-core-sdk-ARCH. Required for sanity/full; not used for simulate.",
     )
     parser.add_argument(
         "--release-type",
@@ -1059,7 +1097,10 @@ def run_tests(args: Namespace) -> int:
     print(f"Package Type (derived): {derived_package_type}")
     print(f"Release Type: {args.release_type}")
     print(f"Repository URL: {args.repo_url}")
-    print(f"GPU Architecture(s): {args.gfx_arch} (using first: {args.gfx_arch[0]})")
+    print(
+        f"GPU Architecture(s): {args.gfx_arch} "
+        f"(normalized: {NativeLinuxPackageInstallTest._normalized_gfx_archs_from_input(args.gfx_arch)})"
+    )
     print(f"Install Prefix: {args.install_prefix}")
     print(f"Test Type: {args.test_type}")
     if args.gpg_key_url:
