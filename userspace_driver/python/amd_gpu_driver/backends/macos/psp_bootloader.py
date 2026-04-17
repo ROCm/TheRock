@@ -229,8 +229,12 @@ def load_sos(client, driver, mp0_base_dw: int, firmware_path: str,
     fw_cpu, fw_bus, fw_handle = driver.alloc_dma(PSP_FW_BUF_SIZE)
 
     try:
+        # Order per drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c::psp_hw_start:
+        #   KDB → SPL → SYS_DRV → SOC_DRV → INTF_DRV → DBG_DRV → RAS_DRV →
+        #   IPKEYMGR_DRV → SOS
         load_order = [
             (FW_TYPE_PSP_KDB,          PSP_BL__LOAD_KEY_DATABASE),
+            (FW_TYPE_PSP_SPL,          PSP_BL__LOAD_TOS_SPL_TABLE),
             (FW_TYPE_PSP_SYS_DRV,      PSP_BL__LOAD_SYSDRV),
             (FW_TYPE_PSP_SOC_DRV,      PSP_BL__LOAD_SOCDRV),
             (FW_TYPE_PSP_INTF_DRV,     PSP_BL__LOAD_INTFDRV),
