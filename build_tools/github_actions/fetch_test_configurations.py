@@ -193,6 +193,15 @@ test_matrix = {
         "total_shards": 1,
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:939b8e35887144d1ca4eca928dc2869991339cab869168790e495fc0a5907bbb",
         "container_options": "--cap-add=SYS_PTRACE",
+        "exclude_family": {
+            # libhipcxx component build is disabled in NPI
+            "linux": [
+                "gfx1250",
+            ],
+            "windows": [
+                "gfx1250",
+            ],
+        },
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
@@ -203,6 +212,15 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        "exclude_family": {
+            # libhipcxx component build is disabled in NPI
+            "linux": [
+                "gfx1250",
+            ],
+            "windows": [
+                "gfx1250",
+            ],
         },
     },
     "rocthrust": {
@@ -454,6 +472,17 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            # libhipcxx component build is disabled in NPI
+            "linux": [
+                "gfx90a",
+                "gfx1250",
+            ],
+            "windows": [
+                "gfx90a",
+                "gfx1250",
+            ],
+        },
     },
     # libhipcxx hiprtc tests
     "libhipcxx_hiprtc": {
@@ -466,7 +495,7 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-      "exclude_family": {
+        "exclude_family": {
             # libhipcxx component build is disabled in NPI
             "linux": [
                 "gfx90a",
