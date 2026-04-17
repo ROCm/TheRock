@@ -112,6 +112,14 @@ test_matrix = {
             ],
         },
     },
+    "origami": {
+        "job_name": "origami",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_origami.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
@@ -242,12 +250,29 @@ test_matrix = {
     "hipsparselt": {
         "job_name": "hipsparselt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
+        # GHA step timeout: max category timeout in hipsparselt should be 6 hours / 6 shards = 60 min per shard
+        # 60 min + 20% margin = 72 min
+        "timeout_minutes": 72,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 1,
+            "linux": 6,
             "windows": 1,
+        },
+        "exclude_family": {
+            # hipsparselt does not plan to support Linux and Windows gfx115X architectures
+            "linux": [
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+            ],
+            "windows": [
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+            ],
         },
     },
     # RAND tests

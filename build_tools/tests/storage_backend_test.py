@@ -677,6 +677,409 @@ class TestS3StorageBackendMaxPoolConnections(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# LocalStorageBackend.list_files
+# ---------------------------------------------------------------------------
+
+
+class TestLocalStorageBackendListFiles(unittest.TestCase):
+    def test_lists_all_files(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+            d = staging_dir / "run-1" / "tarballs"
+            d.mkdir(parents=True)
+            (d / "a.tar.gz").write_bytes(b"a")
+            (d / "b.tar.gz").write_bytes(b"b")
+            (d / "c.log").write_text("log")
+
+            loc = StorageLocation("bucket", "run-1/tarballs")
+            backend = LocalStorageBackend(staging_dir)
+            files = backend.list_files(loc)
+
+            names = [f.relative_path.rsplit("/", 1)[-1] for f in files]
+            self.assertEqual(names, ["a.tar.gz", "b.tar.gz", "c.log"])
+
+    def test_include_filter(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+            d = staging_dir / "run-1" / "tarballs"
+            d.mkdir(parents=True)
+            (d / "a.tar.gz").write_bytes(b"a")
+            (d / "b.tar.gz").write_bytes(b"b")
+            (d / "c.log").write_text("log")
+
+            loc = StorageLocation("bucket", "run-1/tarballs")
+            backend = LocalStorageBackend(staging_dir)
+            files = backend.list_files(loc, include=["*.tar.gz"])
+
+            names = [f.relative_path.rsplit("/", 1)[-1] for f in files]
+            self.assertEqual(names, ["a.tar.gz", "b.tar.gz"])
+
+    def test_empty_directory(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+            d = staging_dir / "run-1" / "tarballs"
+            d.mkdir(parents=True)
+
+            loc = StorageLocation("bucket", "run-1/tarballs")
+            backend = LocalStorageBackend(staging_dir)
+            files = backend.list_files(loc)
+            self.assertEqual(files, [])
+
+    def test_nonexistent_directory(self):
+        with tempfile.TemporaryDirectory() as staging:
+            loc = StorageLocation("bucket", "run-1/tarballs")
+            backend = LocalStorageBackend(Path(staging))
+            files = backend.list_files(loc)
+            self.assertEqual(files, [])
+
+    def test_includes_nested_files(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+            d = staging_dir / "run-1" / "tarballs"
+            d.mkdir(parents=True)
+            (d / "a.tar.gz").write_bytes(b"a")
+            sub = d / "subdir"
+            sub.mkdir()
+            (sub / "nested.tar.gz").write_bytes(b"nested")
+
+            loc = StorageLocation("bucket", "run-1/tarballs")
+            backend = LocalStorageBackend(staging_dir)
+            files = backend.list_files(loc)
+
+            paths = [f.relative_path for f in files]
+            self.assertEqual(
+                paths,
+                [
+                    "run-1/tarballs/a.tar.gz",
+                    "run-1/tarballs/subdir/nested.tar.gz",
+                ],
+            )
+
+
+# ---------------------------------------------------------------------------
+# S3StorageBackend.list_files
+# ---------------------------------------------------------------------------
+
+
+class TestS3StorageBackendListFiles(unittest.TestCase):
+    def _make_backend_with_pages(self, pages):
+        """Create an S3StorageBackend with a mock paginator returning *pages*."""
+        backend = S3StorageBackend()
+        mock_client = mock.MagicMock()
+        mock_paginator = mock.MagicMock()
+        mock_paginator.paginate.return_value = pages
+        mock_client.get_paginator.return_value = mock_paginator
+        backend._s3_client = mock_client
+        return backend
+
+    def test_lists_all_files(self):
+        pages = [
+            {
+                "Contents": [
+                    {"Key": "run-1/tarballs/a.tar.gz"},
+                    {"Key": "run-1/tarballs/b.tar.gz"},
+                ]
+            }
+        ]
+        backend = self._make_backend_with_pages(pages)
+        loc = StorageLocation("bucket", "run-1/tarballs")
+        files = backend.list_files(loc)
+
+        self.assertEqual(len(files), 2)
+        self.assertEqual(files[0].relative_path, "run-1/tarballs/a.tar.gz")
+        self.assertEqual(files[1].relative_path, "run-1/tarballs/b.tar.gz")
+
+    def test_include_filter(self):
+        pages = [
+            {
+                "Contents": [
+                    {"Key": "run-1/tarballs/a.tar.gz"},
+                    {"Key": "run-1/tarballs/index.html"},
+                ]
+            }
+        ]
+        backend = self._make_backend_with_pages(pages)
+        loc = StorageLocation("bucket", "run-1/tarballs")
+        files = backend.list_files(loc, include=["*.tar.gz"])
+
+        self.assertEqual(len(files), 1)
+        self.assertEqual(files[0].relative_path, "run-1/tarballs/a.tar.gz")
+
+    def test_empty_contents(self):
+        pages = [{"Contents": []}]
+        backend = self._make_backend_with_pages(pages)
+        loc = StorageLocation("bucket", "run-1/tarballs")
+        files = backend.list_files(loc)
+        self.assertEqual(files, [])
+
+    def test_no_contents_key(self):
+        pages = [{}]
+        backend = self._make_backend_with_pages(pages)
+        loc = StorageLocation("bucket", "run-1/tarballs")
+        files = backend.list_files(loc)
+        self.assertEqual(files, [])
+
+    def test_skips_prefix_directory_marker(self):
+        pages = [
+            {
+                "Contents": [
+                    {"Key": "run-1/tarballs/"},
+                    {"Key": "run-1/tarballs/a.tar.gz"},
+                ]
+            }
+        ]
+        backend = self._make_backend_with_pages(pages)
+        loc = StorageLocation("bucket", "run-1/tarballs")
+        files = backend.list_files(loc)
+
+        self.assertEqual(len(files), 1)
+        self.assertEqual(files[0].relative_path, "run-1/tarballs/a.tar.gz")
+
+    def test_multiple_pages(self):
+        pages = [
+            {"Contents": [{"Key": "run-1/tarballs/a.tar.gz"}]},
+            {"Contents": [{"Key": "run-1/tarballs/b.tar.gz"}]},
+        ]
+        backend = self._make_backend_with_pages(pages)
+        loc = StorageLocation("bucket", "run-1/tarballs")
+        files = backend.list_files(loc)
+
+        self.assertEqual(len(files), 2)
+
+    def test_paginate_uses_trailing_slash(self):
+        """Prefix should end with / to list directory contents."""
+        backend = self._make_backend_with_pages([{}])
+        mock_paginator = backend._s3_client.get_paginator.return_value
+
+        loc = StorageLocation("bucket", "run-1/tarballs")
+        backend.list_files(loc)
+
+        mock_paginator.paginate.assert_called_once_with(
+            Bucket="bucket", Prefix="run-1/tarballs/"
+        )
+
+
+# ---------------------------------------------------------------------------
+# LocalStorageBackend.copy_directory
+# ---------------------------------------------------------------------------
+
+
+class TestLocalStorageBackendCopyDirectory(unittest.TestCase):
+    def test_copies_filtered_files(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+            src_dir = staging_dir / "run-1" / "tarballs"
+            src_dir.mkdir(parents=True)
+            (src_dir / "a.tar.gz").write_bytes(b"tarball-a")
+            (src_dir / "b.tar.gz").write_bytes(b"tarball-b")
+            (src_dir / "index.html").write_text("<html/>")
+
+            source = StorageLocation("src-bucket", "run-1/tarballs")
+            dest = StorageLocation("dst-bucket", "v3")
+            backend = LocalStorageBackend(staging_dir)
+            count = backend.copy_directory(source, dest, include=["*.tar.gz"])
+
+            self.assertEqual(count, 2)
+            self.assertEqual(
+                (staging_dir / "v3" / "a.tar.gz").read_bytes(), b"tarball-a"
+            )
+            self.assertEqual(
+                (staging_dir / "v3" / "b.tar.gz").read_bytes(), b"tarball-b"
+            )
+            self.assertFalse((staging_dir / "v3" / "index.html").exists())
+
+    def test_copies_all_without_include(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+            src_dir = staging_dir / "run-1" / "tarballs"
+            src_dir.mkdir(parents=True)
+            (src_dir / "a.tar.gz").write_bytes(b"data")
+            (src_dir / "index.html").write_text("<html/>")
+
+            source = StorageLocation("bucket", "run-1/tarballs")
+            dest = StorageLocation("bucket", "v3")
+            backend = LocalStorageBackend(staging_dir)
+            count = backend.copy_directory(source, dest)
+
+            self.assertEqual(count, 2)
+
+    def test_empty_source_copies_nothing(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+            src_dir = staging_dir / "run-1" / "tarballs"
+            src_dir.mkdir(parents=True)
+
+            source = StorageLocation("bucket", "run-1/tarballs")
+            dest = StorageLocation("bucket", "v3")
+            backend = LocalStorageBackend(staging_dir)
+            count = backend.copy_directory(source, dest)
+
+            self.assertEqual(count, 0)
+
+    def test_cross_bucket_locations(self):
+        """Source and dest can have different bucket names."""
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+            src_dir = staging_dir / "run-1" / "tarballs"
+            src_dir.mkdir(parents=True)
+            (src_dir / "a.tar.gz").write_bytes(b"data")
+
+            source = StorageLocation("therock-dev-artifacts", "run-1/tarballs")
+            dest = StorageLocation("therock-dev-tarball", "v3")
+            backend = LocalStorageBackend(staging_dir)
+            count = backend.copy_directory(source, dest, include=["*.tar.gz"])
+
+            self.assertEqual(count, 1)
+            # Local backend ignores bucket names for file paths
+            self.assertTrue((staging_dir / "v3" / "a.tar.gz").is_file())
+
+    def test_preserves_subdirectory_structure(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+            src_dir = staging_dir / "run-1" / "packages"
+            src_dir.mkdir(parents=True)
+            sub = src_dir / "gfx94X-dcgpu"
+            sub.mkdir()
+            (sub / "rocm_sdk-7.10.0.whl").write_bytes(b"wheel")
+            (src_dir / "top.whl").write_bytes(b"top")
+
+            source = StorageLocation("bucket", "run-1/packages")
+            dest = StorageLocation("bucket", "v3")
+            backend = LocalStorageBackend(staging_dir)
+            count = backend.copy_directory(source, dest, include=["*.whl"])
+
+            self.assertEqual(count, 2)
+            self.assertTrue(
+                (staging_dir / "v3" / "gfx94X-dcgpu" / "rocm_sdk-7.10.0.whl").is_file()
+            )
+            self.assertTrue((staging_dir / "v3" / "top.whl").is_file())
+
+    def test_dry_run_does_not_copy(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+            src_dir = staging_dir / "run-1" / "tarballs"
+            src_dir.mkdir(parents=True)
+            (src_dir / "a.tar.gz").write_bytes(b"data")
+
+            source = StorageLocation("bucket", "run-1/tarballs")
+            dest = StorageLocation("bucket", "v3")
+            backend = LocalStorageBackend(staging_dir, dry_run=True)
+            count = backend.copy_directory(source, dest, include=["*.tar.gz"])
+
+            self.assertEqual(count, 1)
+            self.assertFalse((staging_dir / "v3").exists())
+
+
+# ---------------------------------------------------------------------------
+# S3StorageBackend.copy_files
+# ---------------------------------------------------------------------------
+
+
+class TestS3StorageBackendCopyFiles(unittest.TestCase):
+    def test_copies_all_files_in_parallel(self):
+        backend = S3StorageBackend()
+        mock_client = mock.MagicMock()
+        backend._s3_client = mock_client
+
+        files = [
+            (
+                StorageLocation("src", "run-1/a.tar.gz"),
+                StorageLocation("dst", "v3/a.tar.gz"),
+            ),
+            (
+                StorageLocation("src", "run-1/b.tar.gz"),
+                StorageLocation("dst", "v3/b.tar.gz"),
+            ),
+            (
+                StorageLocation("src", "run-1/c.tar.gz"),
+                StorageLocation("dst", "v3/c.tar.gz"),
+            ),
+        ]
+        count = backend.copy_files(files)
+
+        self.assertEqual(count, 3)
+        self.assertEqual(mock_client.copy_object.call_count, 3)
+
+    def test_empty_list_returns_zero(self):
+        backend = S3StorageBackend()
+        mock_client = mock.MagicMock()
+        backend._s3_client = mock_client
+
+        count = backend.copy_files([])
+        self.assertEqual(count, 0)
+        mock_client.copy_object.assert_not_called()
+
+    def test_single_file_skips_thread_pool(self):
+        backend = S3StorageBackend()
+        mock_client = mock.MagicMock()
+        backend._s3_client = mock_client
+
+        files = [
+            (
+                StorageLocation("src", "run-1/a.tar.gz"),
+                StorageLocation("dst", "v3/a.tar.gz"),
+            ),
+        ]
+
+        with mock.patch(
+            "_therock_utils.storage_backend.concurrent.futures.ThreadPoolExecutor"
+        ) as mock_pool:
+            count = backend.copy_files(files)
+
+        self.assertEqual(count, 1)
+        mock_pool.assert_not_called()
+        mock_client.copy_object.assert_called_once()
+
+    def test_dry_run_does_not_call_boto3(self):
+        backend = S3StorageBackend(dry_run=True)
+        mock_client = mock.MagicMock()
+        backend._s3_client = mock_client
+
+        files = [
+            (
+                StorageLocation("src", "run-1/a.tar.gz"),
+                StorageLocation("dst", "v3/a.tar.gz"),
+            ),
+            (
+                StorageLocation("src", "run-1/b.tar.gz"),
+                StorageLocation("dst", "v3/b.tar.gz"),
+            ),
+        ]
+        count = backend.copy_files(files)
+
+        self.assertEqual(count, 2)
+        mock_client.copy_object.assert_not_called()
+
+    def test_error_propagation(self):
+        backend = S3StorageBackend()
+        mock_client = mock.MagicMock()
+
+        def copy_side_effect(**kwargs):
+            if "bad" in kwargs["Key"]:
+                raise Exception("persistent failure")
+
+        mock_client.copy_object.side_effect = copy_side_effect
+        backend._s3_client = mock_client
+
+        files = [
+            (
+                StorageLocation("src", "run-1/good.tar.gz"),
+                StorageLocation("dst", "v3/good.tar.gz"),
+            ),
+            (
+                StorageLocation("src", "run-1/bad.tar.gz"),
+                StorageLocation("dst", "v3/bad.tar.gz"),
+            ),
+        ]
+
+        with mock.patch("_therock_utils.storage_backend.time.sleep"):
+            with self.assertRaises(RuntimeError) as ctx:
+                backend.copy_files(files)
+
+        self.assertIn("bad.tar.gz", str(ctx.exception))
+
+
+# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
