@@ -154,7 +154,11 @@ jobs:
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: ${{ needs.build_wheel.outputs.artifact_name }}
-          path: ${{ github.workspace }}/uccl-wheels
+          path: uccl-wheels
+
+      - name: List downloaded wheel
+        run: |
+          ls -la "${GITHUB_WORKSPACE}/uccl-wheels/"
 
       - name: Set up virtual environment
         run: |
@@ -171,8 +175,15 @@ jobs:
 
       - name: Install UCCL wheel
         run: |
-          pip install --extra-index-url ${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY} \
-            "$(ls ${{ github.workspace }}/uccl-wheels/uccl-*.whl)[rocm]"
+          WHEEL_FILE="$(ls "${GITHUB_WORKSPACE}"/uccl-wheels/uccl-*.whl)"
+          if [ -z "${WHEEL_FILE}" ]; then
+            echo "ERROR: No UCCL wheel found in ${GITHUB_WORKSPACE}/uccl-wheels/"
+            ls -la "${GITHUB_WORKSPACE}/uccl-wheels/" || true
+            exit 1
+          fi
+          echo "Installing UCCL wheel: ${WHEEL_FILE}"
+          pip install --extra-index-url "${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}" \
+            "${WHEEL_FILE}[rocm]"
 
       - name: Install test requirements
         run: |
