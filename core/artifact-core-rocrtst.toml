@@ -3,6 +3,7 @@
 exclude = [
   "bin/**",
   "share/rocrtst/**",
+  "share/therock-scripts/**",
 ]
 [components.dbg."core/rocrtst/stage"]
 [components.dev."core/rocrtst/stage"]
