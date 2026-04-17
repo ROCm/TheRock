@@ -65,10 +65,6 @@ if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
-set(EXTRA_CFLAGS)
-string(APPEND EXTRA_CFLAGS " -fPIC")
-message(STATUS "EXTRA_CFLAGS=${EXTRA_CLFAGS}")
-
 # HACK: elfutils consults pkg-config for cflags for the compression libraries
 # but then does not seem to use them everywhere needed. So we just hard-code
 # paths.
