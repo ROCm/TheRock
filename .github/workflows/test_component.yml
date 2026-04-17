@@ -107,6 +107,11 @@ jobs:
         with:
           repository: "ROCm/TheRock"
 
+      # test_rocprofiler_sdk.py invokes rocm-systems/.github/scripts/run-therock-ci.py (CI path only).
+      # Default checkout does not populate submodules, so initialize this submodule only.
+      - name: Initialize rocm-systems submodule
+        run: git submodule update --init --depth 1 rocm-systems
+
       - name: Run setup test environment workflow
         timeout-minutes: 15
         env:
