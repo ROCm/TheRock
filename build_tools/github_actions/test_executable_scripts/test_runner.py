@@ -48,6 +48,7 @@ COMPONENT_DIR_MAPPING = {
     "miopen_plugin": "miopen_legacy_plugin",
     "rocsparse": "rocsparse",
     "hipsparse": "hipsparse",
+    "hipsparselt": "hipsparselt",
     # Add more mappings as needed
 }
 

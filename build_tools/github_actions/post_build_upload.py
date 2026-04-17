@@ -215,7 +215,7 @@ def write_gha_build_summary(
 
     # Only add artifact links if the job not failed
     if not job_status or job_status == "success":
-        artifact_url = output_root.artifact_index(artifact_group).https_url
+        artifact_url = output_root.artifact_index().https_url
         gha_append_step_summary(f"[Artifacts]({artifact_url})")
 
     manifest_url = output_root.manifest(artifact_group).https_url

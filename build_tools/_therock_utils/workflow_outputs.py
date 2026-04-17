@@ -106,18 +106,8 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/{filename}")
 
-    def artifact_index(self, artifact_group: str) -> StorageLocation:
-        """Location for the per-group artifact index HTML.
-
-        Args:
-            artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
-        """
-        return StorageLocation(
-            self.bucket, f"{self.prefix}/index-{artifact_group}.html"
-        )
-
-    def root_index(self) -> StorageLocation:
-        """Location for the root artifact index HTML (server-side generated)."""
+    def artifact_index(self) -> StorageLocation:
+        """Location for the artifact index HTML (server-side generated)."""
         return StorageLocation(self.bucket, f"{self.prefix}/index.html")
 
     # -- Logs -------------------------------------------------------------------
@@ -138,28 +128,7 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/logs/{artifact_group}")
 
-    def log_file(self, artifact_group: str, filename: str) -> StorageLocation:
-        """Location for a specific file within the log_dir() subtree.
-
-        Args:
-            artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
-            filename: Log filename (e.g., 'build.log', 'ninja_logs.tar.gz')
-        """
-        return StorageLocation(
-            self.bucket, f"{self.prefix}/logs/{artifact_group}/{filename}"
-        )
-
-    def log_index(self, artifact_group: str) -> StorageLocation:
-        """Location for the log directory index HTML (within log_dir())."""
-        return StorageLocation(
-            self.bucket, f"{self.prefix}/logs/{artifact_group}/index.html"
-        )
-
-    def root_log_index(self) -> StorageLocation:
-        """Location for the root log index HTML (server-side generated)."""
-        return StorageLocation(self.bucket, f"{self.prefix}/logs/index.html")
-
-    def stage_log_dir(
+    def log_stage_dir(
         self, stage_name: str, amdgpu_family: str = ""
     ) -> StorageLocation:
         """Location for a multi-arch stage log directory.
@@ -177,6 +146,27 @@ class WorkflowOutputRoot:
                 self.bucket, f"{self.prefix}/logs/{stage_name}/{amdgpu_family}"
             )
         return StorageLocation(self.bucket, f"{self.prefix}/logs/{stage_name}")
+
+    def log_file(self, artifact_group: str, filename: str) -> StorageLocation:
+        """Location for a specific file within the log_dir() subtree.
+
+        Args:
+            artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
+            filename: Log filename (e.g., 'build.log', 'ninja_logs.tar.gz')
+        """
+        return StorageLocation(
+            self.bucket, f"{self.prefix}/logs/{artifact_group}/{filename}"
+        )
+
+    def log_index(self, artifact_group: str) -> StorageLocation:
+        """Location for the log directory index HTML (within log_dir())."""
+        return StorageLocation(
+            self.bucket, f"{self.prefix}/logs/{artifact_group}/index.html"
+        )
+
+    def log_root_index(self) -> StorageLocation:
+        """Location for the root log index HTML (server-side generated)."""
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/index.html")
 
     def build_observability(self, artifact_group: str) -> StorageLocation:
         """Location for build observability HTML (within log_dir())."""
@@ -220,6 +210,12 @@ class WorkflowOutputRoot:
         suffix = f"/{artifact_group}" if artifact_group else ""
         return StorageLocation(self.bucket, f"{self.prefix}/python{suffix}")
 
+    # -- Tarballs ---------------------------------------------------------------
+
+    def tarballs(self) -> StorageLocation:
+        """Location for the tarballs directory."""
+        return StorageLocation(self.bucket, f"{self.prefix}/tarballs")
+
     # -- Factories --------------------------------------------------------------
 
     @classmethod
@@ -230,6 +226,7 @@ class WorkflowOutputRoot:
         github_repository: str | None = None,
         workflow_run: dict | None = None,
         lookup_workflow_run: bool = False,
+        release_type: str | None = None,
     ) -> "WorkflowOutputRoot":
         """Create from CI workflow context.
 
@@ -249,6 +246,8 @@ class WorkflowOutputRoot:
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
+            release_type: Release type override (e.g. "dev", "nightly"). If
+                None, falls back to the RELEASE_TYPE environment variable.
         """
         workflow_run_id = (
             run_id if lookup_workflow_run and workflow_run is None else None
@@ -257,6 +256,7 @@ class WorkflowOutputRoot:
             github_repository=github_repository,
             workflow_run_id=workflow_run_id,
             workflow_run=workflow_run,
+            release_type=release_type,
         )
         return cls(
             bucket=bucket,
@@ -293,6 +293,7 @@ def _retrieve_bucket_info(
     github_repository: str | None = None,
     workflow_run_id: str | None = None,
     workflow_run: dict | None = None,
+    release_type: str | None = None,
 ) -> tuple[str, str]:
     """Determine S3 bucket and external_repo prefix for a workflow run.
 
@@ -309,6 +310,7 @@ def _retrieve_bucket_info(
 
     artifact_bucket_config = get_artifacts_bucket_config_for_workflow_run(
         github_repository=github_repository,
+        release_type=release_type,
         workflow_run_id=workflow_run_id,
         workflow_run=workflow_run,
     )
