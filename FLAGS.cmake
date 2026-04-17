@@ -21,6 +21,16 @@ therock_declare_flag(
   DESCRIPTION "Split target-specific artifacts into generic and arch-specific components"
 )
 
+therock_declare_flag(
+  NAME HIP_KERNEL_PROVIDER_ENABLE
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable hip-kernel-provider plugin"
+  CMAKE_VARS
+    HIP_KERNEL_PROVIDER_ENABLE=ON
+  SUB_PROJECTS
+    hipkernelprovider
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on

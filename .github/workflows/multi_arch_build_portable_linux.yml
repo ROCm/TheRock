@@ -122,23 +122,21 @@ jobs:
       id-token: write
 
   # ==========================================================================
-  # STAGE: comm-libs (per-arch, parallel to math-libs)
+  # STAGE: comm-libs (generic, single job parallel to math-libs)
+  # RCCL and rocshmem are both TARGET_NEUTRAL artifacts. RCCL is built for
+  # Instinct/CDNA targets only (https://github.com/ROCm/TheRock/issues/2130).
+  # Running as a single generic job avoids redundant per-arch builds.
   # ==========================================================================
   comm-libs:
     needs: compiler-runtime
     if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'comm-libs') }}
-    strategy:
-      # See comment on math-libs fail-fast above.
-      fail-fast: false
-      matrix:
-        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
       stage_name: comm-libs
-      stage_display_name: "Stage - Comm Libs (${{ matrix.family_info.amdgpu_family }})"
+      stage_display_name: "Stage - Comm Libs"
       timeout_minutes: 240  # 4 hours
-      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
+      amdgpu_family: ""
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
