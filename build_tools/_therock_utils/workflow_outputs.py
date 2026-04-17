@@ -51,12 +51,7 @@ import platform as platform_module
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.storage_location import StorageLocation
-
-
-def _log(*args, **kwargs):
-    """Log to stdout with flush for CI visibility."""
-    print(*args, **kwargs)
-    sys.stdout.flush()
+from _therock_utils.s3_buckets import get_artifacts_bucket_config_for_workflow_run
 
 
 # ---------------------------------------------------------------------------
@@ -111,18 +106,8 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/{filename}")
 
-    def artifact_index(self, artifact_group: str) -> StorageLocation:
-        """Location for the per-group artifact index HTML.
-
-        Args:
-            artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
-        """
-        return StorageLocation(
-            self.bucket, f"{self.prefix}/index-{artifact_group}.html"
-        )
-
-    def root_index(self) -> StorageLocation:
-        """Location for the root artifact index HTML (server-side generated)."""
+    def artifact_index(self) -> StorageLocation:
+        """Location for the artifact index HTML (server-side generated)."""
         return StorageLocation(self.bucket, f"{self.prefix}/index.html")
 
     # -- Logs -------------------------------------------------------------------
@@ -143,28 +128,7 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/logs/{artifact_group}")
 
-    def log_file(self, artifact_group: str, filename: str) -> StorageLocation:
-        """Location for a specific file within the log_dir() subtree.
-
-        Args:
-            artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
-            filename: Log filename (e.g., 'build.log', 'ninja_logs.tar.gz')
-        """
-        return StorageLocation(
-            self.bucket, f"{self.prefix}/logs/{artifact_group}/{filename}"
-        )
-
-    def log_index(self, artifact_group: str) -> StorageLocation:
-        """Location for the log directory index HTML (within log_dir())."""
-        return StorageLocation(
-            self.bucket, f"{self.prefix}/logs/{artifact_group}/index.html"
-        )
-
-    def root_log_index(self) -> StorageLocation:
-        """Location for the root log index HTML (server-side generated)."""
-        return StorageLocation(self.bucket, f"{self.prefix}/logs/index.html")
-
-    def stage_log_dir(
+    def log_stage_dir(
         self, stage_name: str, amdgpu_family: str = ""
     ) -> StorageLocation:
         """Location for a multi-arch stage log directory.
@@ -182,6 +146,27 @@ class WorkflowOutputRoot:
                 self.bucket, f"{self.prefix}/logs/{stage_name}/{amdgpu_family}"
             )
         return StorageLocation(self.bucket, f"{self.prefix}/logs/{stage_name}")
+
+    def log_file(self, artifact_group: str, filename: str) -> StorageLocation:
+        """Location for a specific file within the log_dir() subtree.
+
+        Args:
+            artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
+            filename: Log filename (e.g., 'build.log', 'ninja_logs.tar.gz')
+        """
+        return StorageLocation(
+            self.bucket, f"{self.prefix}/logs/{artifact_group}/{filename}"
+        )
+
+    def log_index(self, artifact_group: str) -> StorageLocation:
+        """Location for the log directory index HTML (within log_dir())."""
+        return StorageLocation(
+            self.bucket, f"{self.prefix}/logs/{artifact_group}/index.html"
+        )
+
+    def log_root_index(self) -> StorageLocation:
+        """Location for the root log index HTML (server-side generated)."""
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/index.html")
 
     def build_observability(self, artifact_group: str) -> StorageLocation:
         """Location for build observability HTML (within log_dir())."""
@@ -225,6 +210,12 @@ class WorkflowOutputRoot:
         suffix = f"/{artifact_group}" if artifact_group else ""
         return StorageLocation(self.bucket, f"{self.prefix}/python{suffix}")
 
+    # -- Tarballs ---------------------------------------------------------------
+
+    def tarballs(self) -> StorageLocation:
+        """Location for the tarballs directory."""
+        return StorageLocation(self.bucket, f"{self.prefix}/tarballs")
+
     # -- Factories --------------------------------------------------------------
 
     @classmethod
@@ -235,6 +226,7 @@ class WorkflowOutputRoot:
         github_repository: str | None = None,
         workflow_run: dict | None = None,
         lookup_workflow_run: bool = False,
+        release_type: str | None = None,
     ) -> "WorkflowOutputRoot":
         """Create from CI workflow context.
 
@@ -254,6 +246,8 @@ class WorkflowOutputRoot:
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
+            release_type: Release type override (e.g. "dev", "nightly"). If
+                None, falls back to the RELEASE_TYPE environment variable.
         """
         workflow_run_id = (
             run_id if lookup_workflow_run and workflow_run is None else None
@@ -262,6 +256,7 @@ class WorkflowOutputRoot:
             github_repository=github_repository,
             workflow_run_id=workflow_run_id,
             workflow_run=workflow_run,
+            release_type=release_type,
         )
         return cls(
             bucket=bucket,
@@ -294,43 +289,11 @@ class WorkflowOutputRoot:
         )
 
 
-# ---------------------------------------------------------------------------
-# Bucket selection logic
-# ---------------------------------------------------------------------------
-
-
-def _is_current_run_pr_from_fork() -> bool:
-    """Check if the current workflow run is a pull request from a fork.
-
-    Reads the GitHub event payload to check the .fork property on the
-    head repo, matching the behavior of the GitHub Actions expression
-    ``github.event.pull_request.head.repo.fork``.
-
-    Returns False for non-pull_request events or if the event payload
-    is not available (e.g. local development).
-    """
-    import json
-
-    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
-    if event_name != "pull_request":
-        return False
-
-    event_path = os.environ.get("GITHUB_EVENT_PATH")
-    if not event_path:
-        return False
-
-    with open(event_path) as f:
-        event = json.load(f)
-
-    return bool(
-        event.get("pull_request", {}).get("head", {}).get("repo", {}).get("fork", False)
-    )
-
-
 def _retrieve_bucket_info(
     github_repository: str | None = None,
     workflow_run_id: str | None = None,
     workflow_run: dict | None = None,
+    release_type: str | None = None,
 ) -> tuple[str, str]:
     """Determine S3 bucket and external_repo prefix for a workflow run.
 
@@ -342,57 +305,19 @@ def _retrieve_bucket_info(
         - external_repo: ``''`` for ROCm/TheRock, or ``'{owner}-{repo}/'``
         - bucket: S3 bucket name
     """
-    _log("Retrieving bucket info...")
-
-    if github_repository:
-        _log(f"  (explicit) github_repository: {github_repository}")
-    else:
+    if not github_repository:
         github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
-        _log(f"  (implicit) github_repository: {github_repository}")
 
-    # Fetch workflow_run from API if not provided but workflow_run_id is set.
-    # Deferred import: github_actions is an optional dependency not available in
-    # all environments (e.g. local dev without the GHA support package installed).
-    if workflow_run is None and workflow_run_id is not None:
-        from github_actions.github_actions_api import gha_query_workflow_run_by_id
-
-        workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
-
-    # Extract metadata from workflow_run if available
-    if workflow_run is not None:
-        _log(f"  workflow_run_id             : {workflow_run['id']}")
-        head_github_repository = workflow_run["head_repository"]["full_name"]
-        is_pr_from_fork = head_github_repository != github_repository
-        _log(f"  head_github_repository      : {head_github_repository}")
-        _log(f"  is_pr_from_fork             : {is_pr_from_fork}")
-    else:
-        is_pr_from_fork = _is_current_run_pr_from_fork()
-        _log(f"  is_pr_from_fork             : {is_pr_from_fork}")
-
+    artifact_bucket_config = get_artifacts_bucket_config_for_workflow_run(
+        github_repository=github_repository,
+        release_type=release_type,
+        workflow_run_id=workflow_run_id,
+        workflow_run=workflow_run,
+    )
     owner, repo_name = github_repository.split("/")
     external_repo = (
-        ""
-        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
-        else f"{owner}-{repo_name}/"
+        f"{owner}-{repo_name}/"
+        if artifact_bucket_config.name == "therock-ci-artifacts-external"
+        else ""
     )
-
-    release_type = os.environ.get("RELEASE_TYPE")
-    if release_type:
-        _VALID_RELEASE_TYPES = {"dev", "nightly", "prerelease"}
-        if release_type not in _VALID_RELEASE_TYPES:
-            raise ValueError(
-                f"Invalid RELEASE_TYPE={release_type!r}, "
-                f"expected one of {sorted(_VALID_RELEASE_TYPES)}"
-            )
-        _log(f"  (implicit) RELEASE_TYPE: {release_type}")
-        bucket = f"therock-{release_type}-artifacts"
-    else:
-        if external_repo == "":
-            bucket = "therock-ci-artifacts"
-        else:
-            bucket = "therock-ci-artifacts-external"
-
-    _log("Retrieved bucket info:")
-    _log(f"  external_repo: {external_repo}")
-    _log(f"  bucket       : {bucket}")
-    return (external_repo, bucket)
+    return (external_repo, artifact_bucket_config.name)
