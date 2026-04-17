@@ -148,6 +148,10 @@ jobs:
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
+      - name: Test Packaging
+        run: |
+          ctest --test-dir build --output-on-failure
+
       - name: Configure AWS credentials for artifact uploads
         if: ${{ always() }}
         uses: ./.github/actions/configure_aws_artifacts_credentials
