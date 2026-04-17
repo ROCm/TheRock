@@ -114,7 +114,7 @@ def build_configure(build_dir, manylinux=False):
             # Related issues:
             # * multi-arch kpack parent: https://github.com/ROCm/TheRock/issues/3323
             # * multi-arch opt-in: https://github.com/ROCm/TheRock/issues/3338
-            "-DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=ON",
+            "-DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF",
         ]
     )
 
