@@ -62,8 +62,7 @@ def _format_rpath_for_log(rpath: str) -> str:
     if not rpath:
         return rpath
     return ":".join(
-        "<pad>" if PATCHELF_PAD_MARKER in entry else entry
-        for entry in rpath.split(":")
+        "<pad>" if PATCHELF_PAD_MARKER in entry else entry for entry in rpath.split(":")
     )
 
 
