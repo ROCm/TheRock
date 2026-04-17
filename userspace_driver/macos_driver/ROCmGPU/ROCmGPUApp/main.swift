@@ -164,8 +164,11 @@ func status() {
 
 // --- Main ---
 
-let args = CommandLine.arguments
-let command = args.count > 1 ? args[1] : "install"
+// Xcode's Run action auto-injects flag args like -NSDocumentRevisionsDebugMode.
+// Skip those and take the first non-flag positional arg as the command.
+// Default to "install" when none is present (typical dev inner loop).
+let positionalArgs = CommandLine.arguments.dropFirst().filter { !$0.hasPrefix("-") }
+let command = positionalArgs.first ?? "install"
 
 switch command {
 case "install":
@@ -176,7 +179,7 @@ case "status":
     status()
 default:
     print("Usage: ROCmGPUApp [install|uninstall|status]")
-    print("  install   — Activate the ROCmGPU DriverKit extension")
+    print("  install   — Activate the ROCmGPU DriverKit extension (default)")
     print("  uninstall — Deactivate the DEXT")
     print("  status    — Check if DEXT is loaded")
     exit(1)

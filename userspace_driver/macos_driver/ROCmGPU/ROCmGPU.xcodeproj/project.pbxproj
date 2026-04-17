@@ -7,13 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D0000001 /* ROCmGPUDriver.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A0000001; };
-		D0000002 /* ROCmGPUUserClient.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A0000002; };
-		D0000003 /* ROCmGPUDriver.iig in Sources */ = {isa = PBXBuildFile; fileRef = A0000003; };
-		D0000004 /* ROCmGPUUserClient.iig in Sources */ = {isa = PBXBuildFile; fileRef = A0000004; };
-		D0000010 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000010; };
+		D0000001 /* ROCmGPUDriver.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A0000001 /* ROCmGPUDriver.cpp */; };
+		D0000002 /* ROCmGPUUserClient.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A0000002 /* ROCmGPUUserClient.cpp */; };
+		D0000003 /* ROCmGPUDriver.iig in Sources */ = {isa = PBXBuildFile; fileRef = A0000003 /* ROCmGPUDriver.iig */; };
+		D0000004 /* ROCmGPUUserClient.iig in Sources */ = {isa = PBXBuildFile; fileRef = A0000004 /* ROCmGPUUserClient.iig */; };
+		D0000010 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000010 /* main.swift */; };
 		D0000020 /* ROCmGPUDriver.dext in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = B0000002 /* ROCmGPUDriver.dext */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		G0000002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = P0000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = T0000001;
+			remoteInfo = ROCmGPUDriver;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		C0000020 /* Embed System Extensions */ = {
@@ -28,27 +38,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		C0000030 /* Create generated symlink */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Create generated symlink";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# Create 'generated' symlink so #include \"generated/ROCmGPUDriver.h\" finds the iig output\n# DERIVED_FILE_DIR = .../DerivedSources; iig headers are in ROCmGPUDriver/ subdirectory\nln -sfn \"${DERIVED_FILE_DIR}/ROCmGPUDriver\" \"${SRCROOT}/ROCmGPUDriver/generated\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A0000001 /* ROCmGPUDriver.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ROCmGPUDriver.cpp; sourceTree = "<group>"; };
@@ -68,14 +57,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		C0000003 /* Frameworks (DEXT) */ = {
+		C0000003 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		C0000013 /* Frameworks (App) */ = {
+		C0000013 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -85,7 +74,7 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		E0000001 /* ROCmGPU */ = {
+		E0000001 = {
 			isa = PBXGroup;
 			children = (
 				E0000002 /* ROCmGPUDriver */,
@@ -134,11 +123,11 @@
 /* Begin PBXNativeTarget section */
 		T0000001 /* ROCmGPUDriver */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = F0000001;
+			buildConfigurationList = F0000001 /* Build configuration list for PBXNativeTarget "ROCmGPUDriver" */;
 			buildPhases = (
 				C0000030 /* Create generated symlink */,
 				C0000001 /* Sources */,
-				C0000003 /* Frameworks (DEXT) */,
+				C0000003 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -146,15 +135,15 @@
 			);
 			name = ROCmGPUDriver;
 			productName = ROCmGPUDriver;
-			productReference = B0000002;
+			productReference = B0000002 /* ROCmGPUDriver.dext */;
 			productType = "com.apple.product-type.driver-extension";
 		};
 		T0000002 /* ROCmGPUApp */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = F0000002;
+			buildConfigurationList = F0000002 /* Build configuration list for PBXNativeTarget "ROCmGPUApp" */;
 			buildPhases = (
 				C0000011 /* Sources */,
-				C0000013 /* Frameworks (App) */,
+				C0000013 /* Frameworks */,
 				C0000020 /* Embed System Extensions */,
 			);
 			buildRules = (
@@ -164,7 +153,7 @@
 			);
 			name = ROCmGPUApp;
 			productName = ROCmGPUApp;
-			productReference = B0000001;
+			productReference = B0000001 /* ROCmGPUApp.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -176,7 +165,7 @@
 				BuildIndependentTargetsInParallel = 1;
 				LastUpgradeCheck = 1500;
 			};
-			buildConfigurationList = F0000003;
+			buildConfigurationList = F0000003 /* Build configuration list for PBXProject "ROCmGPU" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -185,7 +174,7 @@
 				Base,
 			);
 			mainGroup = E0000001;
-			productRefGroup = E0000004;
+			productRefGroup = E0000004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -194,6 +183,27 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		C0000030 /* Create generated symlink */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Create generated symlink";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Create 'generated' symlink so #include \"generated/ROCmGPUDriver.h\" finds the iig output\n# DERIVED_FILE_DIR = .../DerivedSources; iig headers are in ROCmGPUDriver/ subdirectory\nln -sfn \"${DERIVED_FILE_DIR}/ROCmGPUDriver\" \"${SRCROOT}/ROCmGPUDriver/generated\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		C0000001 /* Sources */ = {
@@ -225,75 +235,74 @@
 		};
 /* End PBXTargetDependency section */
 
-/* Begin PBXContainerItemProxy section */
-		G0000002 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = P0000001;
-			proxyType = 1;
-			remoteGlobalIDString = T0000001;
-			remoteInfo = ROCmGPUDriver;
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin XCBuildConfiguration section */
-		/* ---- DEXT Debug ---- */
 		X0000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ROCmGPUDriver/ROCmGPUDriver.entitlements;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 3TD7AHFFV3;
 				DRIVERKIT_DEPLOYMENT_TARGET = 21.0;
-				INFOPLIST_FILE = ROCmGPUDriver/Info.plist;
-				PRODUCT_BUNDLE_IDENTIFIER = "ai.rocm.gpu.driver";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = driverkit;
-				SKIP_INSTALL = YES;
-				SYSTEM_HEADER_SEARCH_PATHS = "$(SDKROOT)/System/Library/Frameworks/DriverKit.framework/Headers $(SDKROOT)/System/Library/Frameworks/PCIDriverKit.framework/Headers";
 				HEADER_SEARCH_PATHS = "$(DERIVED_FILE_DIR)";
-				SYSTEM_FRAMEWORK_SEARCH_PATHS = "$(SDKROOT)/System/DriverKit/System/Library/Frameworks";
+				INFOPLIST_FILE = ROCmGPUDriver/Info.plist;
 				OTHER_LDFLAGS = (
 					"-framework",
 					DriverKit,
 					"-framework",
 					PCIDriverKit,
 				);
+				PRODUCT_BUNDLE_IDENTIFIER = ai.rocm.gpu.driver;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = driverkit;
+				SKIP_INSTALL = YES;
+				SYSTEM_FRAMEWORK_SEARCH_PATHS = "$(SDKROOT)/System/DriverKit/System/Library/Frameworks";
+				SYSTEM_HEADER_SEARCH_PATHS = (
+					"$(SDKROOT)/System/Library/Frameworks/DriverKit.framework/Headers",
+					"$(SDKROOT)/System/Library/Frameworks/PCIDriverKit.framework/Headers",
+				);
 			};
 			name = Debug;
 		};
-		/* ---- DEXT Release ---- */
 		X0000002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ROCmGPUDriver/ROCmGPUDriver.entitlements;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 3TD7AHFFV3;
 				DRIVERKIT_DEPLOYMENT_TARGET = 21.0;
-				INFOPLIST_FILE = ROCmGPUDriver/Info.plist;
-				PRODUCT_BUNDLE_IDENTIFIER = "ai.rocm.gpu.driver";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = driverkit;
-				SKIP_INSTALL = YES;
-				SYSTEM_HEADER_SEARCH_PATHS = "$(SDKROOT)/System/Library/Frameworks/DriverKit.framework/Headers $(SDKROOT)/System/Library/Frameworks/PCIDriverKit.framework/Headers";
 				HEADER_SEARCH_PATHS = "$(DERIVED_FILE_DIR)";
-				SYSTEM_FRAMEWORK_SEARCH_PATHS = "$(SDKROOT)/System/DriverKit/System/Library/Frameworks";
+				INFOPLIST_FILE = ROCmGPUDriver/Info.plist;
 				OTHER_LDFLAGS = (
 					"-framework",
 					DriverKit,
 					"-framework",
 					PCIDriverKit,
 				);
+				PRODUCT_BUNDLE_IDENTIFIER = ai.rocm.gpu.driver;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = driverkit;
+				SKIP_INSTALL = YES;
+				SYSTEM_FRAMEWORK_SEARCH_PATHS = "$(SDKROOT)/System/DriverKit/System/Library/Frameworks";
+				SYSTEM_HEADER_SEARCH_PATHS = (
+					"$(SDKROOT)/System/Library/Frameworks/DriverKit.framework/Headers",
+					"$(SDKROOT)/System/Library/Frameworks/PCIDriverKit.framework/Headers",
+				);
 			};
 			name = Release;
 		};
-		/* ---- App Debug ---- */
 		X0000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ROCmGPUApp/ROCmGPUApp.entitlements;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 3TD7AHFFV3;
 				INFOPLIST_FILE = ROCmGPUApp/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 12.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "ai.rocm.gpu.app";
+				PRODUCT_BUNDLE_IDENTIFIER = ai.rocm.gpu.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -301,16 +310,19 @@
 			};
 			name = Debug;
 		};
-		/* ---- App Release ---- */
 		X0000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ROCmGPUApp/ROCmGPUApp.entitlements;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 3TD7AHFFV3;
 				INFOPLIST_FILE = ROCmGPUApp/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 12.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "ai.rocm.gpu.app";
+				PRODUCT_BUNDLE_IDENTIFIER = ai.rocm.gpu.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -318,7 +330,6 @@
 			};
 			name = Release;
 		};
-		/* ---- Project Debug ---- */
 		X0000005 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -337,7 +348,6 @@
 			};
 			name = Debug;
 		};
-		/* ---- Project Release ---- */
 		X0000006 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -354,7 +364,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		F0000001 /* DEXT configs */ = {
+		F0000001 /* Build configuration list for PBXNativeTarget "ROCmGPUDriver" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				X0000001 /* Debug */,
@@ -363,7 +373,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		F0000002 /* App configs */ = {
+		F0000002 /* Build configuration list for PBXNativeTarget "ROCmGPUApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				X0000003 /* Debug */,
@@ -372,7 +382,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		F0000003 /* Project configs */ = {
+		F0000003 /* Build configuration list for PBXProject "ROCmGPU" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				X0000005 /* Debug */,
@@ -382,7 +392,6 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
-
 	};
-	rootObject = P0000001;
+	rootObject = P0000001 /* Project object */;
 }

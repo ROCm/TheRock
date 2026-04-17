@@ -7,20 +7,34 @@
     <key>com.apple.developer.driverkit</key>
     <true/>
 
-    <!-- PCI transport entitlement is commented out until Apple approves the
-         request. Restore from ROCmGPUDriver.entitlements.with-pci once the
-         entitlement request for team 3TD7AHFFV3 / ai.rocm.gpu.driver is
-         approved. Without this key the DEXT will load but cannot match any
-         PCI device — useful for validating the sysext install pipeline. -->
-    <!--
+    <!-- PCI transport entitlement, development variant.
+         The "DriverKit PCI (development)" capability (self-provisionable
+         on the App ID in the developer portal for paid Apple Developer
+         Program members) grants only the wildcard "any external PCI
+         device" match: 0xFFFFFFFF&0x00000000. The signed entitlement
+         must be a subset of what the provisioning profile grants, so
+         we mirror that wildcard here. Narrower vendor matching happens
+         in Info.plist IOPCIPrimaryMatch, which stays AMD-specific.
+         The development variant is restricted to non-"Built In"
+         devices — fine for eGPU use (target has IOPCITunnelled=Yes).
+         For production/distribution builds with a narrower match
+         (0x00001002&0x0000FFFF), request the managed entitlement via
+         developer.apple.com/system-extensions/ and use
+         ROCmGPUDriver.entitlements.with-pci. -->
     <key>com.apple.developer.driverkit.transport.pci</key>
     <array>
-        <string>0x00001002&amp;0x0000FFFF</string>
+        <dict>
+            <key>IOPCIPrimaryMatch</key>
+            <string>0xFFFFFFFF&amp;0x00000000</string>
+        </dict>
     </array>
-    -->
 
     <!-- Allow any userspace process to connect (not just the host app).
-         Required for the Python driver to communicate with the DEXT. -->
+         On a paid Apple Developer Program team, Xcode's auto-generated
+         development provisioning profile grants this by default (visible
+         in the profile's Entitlements dict even when the portal shows
+         "no requests"). The Python driver needs this to open an IOKit
+         connection without being an Apple-signed app. -->
     <key>com.apple.developer.driverkit.allow-any-userclient-access</key>
     <true/>
 </dict>
