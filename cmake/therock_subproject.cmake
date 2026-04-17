@@ -340,7 +340,7 @@ endfunction()
 #   for packaged test-script execution. Relative paths are resolved against
 #   EXTERNAL_SOURCE_DIR.
 # INSTALL_TEST_SCRIPT_DESTINATION: Install-tree destination for packaged test
-#   scripts. Defaults to share/therock/tests.
+#   scripts. Defaults to share/therock-scripts.
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
@@ -375,7 +375,7 @@ function(therock_cmake_subproject_declare target_name)
     cmake_path(APPEND _cmake_source_dir "${ARG_CMAKE_LISTS_RELPATH}")
   endif()
   if(NOT ARG_INSTALL_TEST_SCRIPT_DESTINATION)
-    set(ARG_INSTALL_TEST_SCRIPT_DESTINATION "share/therock/tests")
+    set(ARG_INSTALL_TEST_SCRIPT_DESTINATION "share/therock-scripts")
   endif()
   foreach(_install_test_script_file IN LISTS ARG_INSTALL_TEST_SCRIPT_FILES)
     cmake_path(IS_ABSOLUTE _install_test_script_file _install_test_script_file_is_absolute)

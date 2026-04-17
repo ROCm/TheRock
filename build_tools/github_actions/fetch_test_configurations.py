@@ -33,7 +33,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Installed artifact location for test scripts that are packaged into component
 # test artifacts.
-PACKAGED_SCRIPT_DIR = Path("./build/share/therock/tests")
+PACKAGED_SCRIPT_DIR = Path("./build/share/therock-scripts")
 # Repository checkout location for scripts that still execute directly from the
 # TheRock source tree.
 REPO_SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
