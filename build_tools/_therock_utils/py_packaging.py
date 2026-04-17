@@ -52,6 +52,21 @@ ENABLED_VLOG_LEVEL: int = 5
 PATCHELF_PAD_MARKER = "__therock_patchelf_pad__"
 
 
+def _format_rpath_for_log(rpath: str) -> str:
+    """Collapse the pad filler to '<pad>' for readable REWRITE_RPATH logs.
+
+    The pad entry is ~1KB of X's and dumping it unmodified into every log line
+    makes `py_packaging.log` unreadable and spooks users watching the build
+    (issue #4271). The on-disk value is untouched; this only affects logging.
+    """
+    if not rpath:
+        return rpath
+    return ":".join(
+        "<pad>" if PATCHELF_PAD_MARKER in entry else entry
+        for entry in rpath.split(":")
+    )
+
+
 def log(*args, vlog: int = 0, **kwargs):
     if vlog > ENABLED_VLOG_LEVEL:
         return
@@ -499,7 +514,10 @@ class PopulatedDistPackage:
         if new_rpath == existing_rpath:
             return
 
-        log(f"  REWRITE_RPATH: {file_path}: {existing_rpath!r} -> {new_rpath!r}")
+        log(
+            f"  REWRITE_RPATH: {file_path}: "
+            f"{_format_rpath_for_log(existing_rpath)!r} -> {new_rpath!r}"
+        )
         subprocess.check_call(
             [
                 "patchelf",

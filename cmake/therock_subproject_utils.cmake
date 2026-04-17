@@ -97,12 +97,17 @@ function(therock_set_install_rpath)
       list(APPEND _rpath "$ORIGIN${path_suffix}")
     endif()
   endforeach()
-  # Append the patchelf pad on ELF platforms so py_packaging can rewrite
-  # RPATHs in place (see long comment above).
+  # Log the user-meaningful RPATH before appending the patchelf pad. The pad
+  # is ~1KB of filler and dumping it into every "Set RPATH" status line would
+  # drown out from-source build logs (issue #4271).
+  set(_rpath_log_suffix "")
   if(NOT CMAKE_SYSTEM_NAME MATCHES "Darwin" AND THEROCK_INSTALL_RPATH_PAD)
+    set(_rpath_log_suffix " (+patchelf pad)")
+  endif()
+  message(STATUS "Set RPATH ${_rpath}${_rpath_log_suffix} on ${ARG_TARGETS}")
+  if(_rpath_log_suffix)
     list(APPEND _rpath "${THEROCK_INSTALL_RPATH_PAD}")
   endif()
-  message(STATUS "Set RPATH ${_rpath} on ${ARG_TARGETS}")
   set_target_properties(${ARG_TARGETS} PROPERTIES INSTALL_RPATH "${_rpath}")
 endfunction()
 
