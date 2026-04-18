@@ -14,6 +14,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from _therock_utils.s3_buckets import (
     get_artifacts_bucket_config,
     get_artifacts_bucket_config_for_workflow_run,
+    get_release_bucket_config,
 )
 
 
@@ -28,6 +29,10 @@ class TestGetArtifactsBucketConfig(unittest.TestCase):
             release_type="", repository="ROCm/TheRock", is_pr_from_fork=False
         )
         self.assertEqual(config.name, "therock-ci-artifacts")
+        self.assertEqual(
+            config.write_access_iam_role,
+            "arn:aws:iam::692859939525:role/therock-ci",
+        )
 
     def test_ci_fork_pr(self):
         config = get_artifacts_bucket_config(
@@ -71,6 +76,54 @@ class TestGetArtifactsBucketConfig(unittest.TestCase):
                 is_pr_from_fork=False,
             )
         self.assertIn("ROCm/rocm-libraries", str(cm.exception))
+
+
+# ---------------------------------------------------------------------------
+# get_release_bucket_config
+# ---------------------------------------------------------------------------
+
+
+class TestGetReleaseBucketConfig(unittest.TestCase):
+    def test_dev_tarball(self):
+        config = get_release_bucket_config(release_type="dev", bucket_type="tarball")
+        self.assertEqual(config.name, "therock-dev-tarball")
+        self.assertEqual(config.iam_role, "therock-dev")
+        self.assertEqual(
+            config.write_access_iam_role,
+            "arn:aws:iam::692859939525:role/therock-dev",
+        )
+
+    def test_nightly_python(self):
+        config = get_release_bucket_config(release_type="nightly", bucket_type="python")
+        self.assertEqual(config.name, "therock-nightly-python")
+        self.assertEqual(config.iam_role, "therock-nightly")
+
+    def test_prerelease_packages(self):
+        config = get_release_bucket_config(
+            release_type="prerelease", bucket_type="packages"
+        )
+        self.assertEqual(config.name, "therock-prerelease-packages")
+        self.assertEqual(config.iam_role, "therock-prerelease")
+
+    def test_all_combinations_exist(self):
+        for release_type in ("dev", "nightly", "prerelease"):
+            for bucket_type in ("tarball", "python", "packages"):
+                config = get_release_bucket_config(release_type, bucket_type)
+                self.assertEqual(config.name, f"therock-{release_type}-{bucket_type}")
+
+    def test_invalid_release_type_raises(self):
+        with self.assertRaises(ValueError) as cm:
+            get_release_bucket_config(release_type="bogus", bucket_type="tarball")
+        self.assertIn("bogus", str(cm.exception))
+
+    def test_empty_release_type_raises(self):
+        with self.assertRaises(ValueError):
+            get_release_bucket_config(release_type="", bucket_type="tarball")
+
+    def test_invalid_bucket_type_raises(self):
+        with self.assertRaises(ValueError) as cm:
+            get_release_bucket_config(release_type="dev", bucket_type="wheels")
+        self.assertIn("wheels", str(cm.exception))
 
 
 # ---------------------------------------------------------------------------
