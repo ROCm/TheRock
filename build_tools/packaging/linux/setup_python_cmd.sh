@@ -96,23 +96,17 @@ else
 fi
 
 # Install Python and pip with apt/zypper/dnf
+# SLES uses zypper names python313, not deb-style python3.13).
 install_python_runtime() {
     local os_profile="$1"
 
     if [[ "$os_profile" == ubuntu* ]] || [[ "$os_profile" == debian* ]]; then
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -qq >&2
-        if [[ -n "$PY_MM" ]]; then
-            apt-get install -y --no-install-recommends \
-                "python${PY_MM}" \
-                "python${PY_MM}-venv" \
-                "python${PY_MM}-pip" >&2
-        else
-            apt-get install -y --no-install-recommends \
-                python3 \
-                python3-venv \
-                python3-pip >&2
-        fi
+        apt-get install -y --no-install-recommends \
+            "$PYTHON_CMD" \
+            "${PYTHON_CMD}-venv" \
+            "${PYTHON_CMD}-pip" >&2
     elif [[ "$os_profile" == sles* ]]; then
         if [[ -n "$PY_MM" ]]; then
             echo "Warning: --python-version is not applied on SLES; using python313 stack" >&2
@@ -123,15 +117,9 @@ install_python_runtime() {
             python313-pip >&2
     else
         # dnf: UBI 9 / RHEL 9 default python3 may be < 3.12; use --python-version 3.12 when needed
-        if [[ -n "$PY_MM" ]]; then
-            dnf install -y --allowerasing \
-                "python${PY_MM}" \
-                "python${PY_MM}-pip" >&2
-        else
-            dnf install -y --allowerasing \
-                python3 \
-                python3-pip >&2
-        fi
+        dnf install -y --allowerasing \
+            "$PYTHON_CMD" \
+            "${PYTHON_CMD}-pip" >&2
     fi
 }
 
