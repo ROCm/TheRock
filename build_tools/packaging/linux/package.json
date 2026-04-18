@@ -526,7 +526,14 @@
               "doc"
             ]
           },
-
+          {
+            "Name": "origami",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          },
           {
             "Name": "hipBLASLt",
             "Components": [
@@ -1370,6 +1377,28 @@
             "Name": "rocminfo",
             "Components": [
               "run"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocm-cmake",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "half",
+            "Components": [
+              "dev"
             ]
           }
         ]

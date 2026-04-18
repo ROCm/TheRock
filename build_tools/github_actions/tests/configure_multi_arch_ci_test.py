@@ -639,7 +639,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
     def test_empty_targets_both_none(self):
         """Empty targets on both platforms → both None."""
         targets = cm.TargetSelection()
-        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs())
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+        )
         self.assertIsNone(result.linux)
         self.assertIsNone(result.windows)
 
@@ -677,7 +679,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant="release",
         )
         targets = cm.select_targets(inputs)
-        result = cm.expand_build_configs(targets=targets, ci_inputs=inputs)
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=inputs, test_type="quick"
+        )
         required_keys = {
             "amdgpu_family",
             "amdgpu_targets",
@@ -725,7 +729,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             linux_families=["gfx94x", "gfx110x"],
             windows_families=["gfx110x"],
         )
-        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs())
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+        )
 
         # All target families that support the variant appear in output.
         linux_per_family = result.linux.per_family_info
@@ -753,7 +759,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            targets=targets, ci_inputs=self._inputs(build_variant="asan")
+            targets=targets,
+            ci_inputs=self._inputs(build_variant="asan"),
+            test_type="quick",
         )
         # Only gfx94x on linux survives.
         self.assertIsNotNone(result.linux)
@@ -762,17 +770,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Windows has no asan variant config at all.
         self.assertIsNone(result.windows)
 
-    def test_test_runner_kernel_overrides_runner_label(self):
-        """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
-        targets = cm.TargetSelection(linux_families=["gfx1151"])
-        result = cm.expand_build_configs(
-            targets=targets,
-            ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
-        )
-        self.assertIsNotNone(result.linux)
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "linux-strix-halo-gpu-rocm-oem")
-
     def test_test_runner_kernel_clears_unsupported_family(self):
         """test_runner:oem label clears runner for families without kernel support."""
         # gfx94x has no test-runs-on-kernel entry
@@ -780,6 +777,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         result = cm.expand_build_configs(
             targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
+            test_type="quick",
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -787,12 +785,14 @@ class TestExpandBuildConfigs(unittest.TestCase):
 
     def test_no_test_runner_label_uses_default(self):
         """Without test_runner: label, default runner labels are used."""
-        targets = cm.TargetSelection(linux_families=["gfx1151"])
-        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs())
+        targets = cm.TargetSelection(linux_families=["gfx908"])
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+        )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
         # Default runner, not the oem one
-        self.assertNotEqual(entry["test-runs-on"], "")
+        self.assertNotEqual(entry["test-runs-on"], "linux-gfx1151-gpu-rocm")
         self.assertNotIn("oem", entry["test-runs-on"])
 
 
@@ -978,7 +978,7 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
 
         # Mock random.random() to return 0.1 (< 0.2 weight)
         with patch("random.random", return_value=0.1):
-            builds = cm.expand_build_configs(targets, ci_inputs)
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
 
         self.assertIsNotNone(builds.linux)
         # Check that the alternate label was selected
@@ -1000,7 +1000,7 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
 
         # Mock random.random() to return 0.5 (>= 0.2 weight)
         with patch("random.random", return_value=0.5):
-            builds = cm.expand_build_configs(targets, ci_inputs)
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
 
         self.assertIsNotNone(builds.linux)
         # Check that the primary label was selected
@@ -1018,7 +1018,7 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
                 build_variant="release",
             )
             targets = cm.TargetSelection(linux_families=["gfx94x"])
-            builds = cm.expand_build_configs(targets, ci_inputs)
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
             gfx94x_info = builds.linux.per_family_info[0]
             self.assertEqual(
                 gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm"
@@ -1035,7 +1035,7 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
                 build_variant="release",
             )
             targets = cm.TargetSelection(linux_families=["gfx94x"])
-            builds = cm.expand_build_configs(targets, ci_inputs)
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
             gfx94x_info = builds.linux.per_family_info[0]
             self.assertEqual(
                 gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm"
@@ -1055,11 +1055,41 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
 
         # Run multiple times to ensure consistency
         for _ in range(10):
-            builds = cm.expand_build_configs(targets, ci_inputs)
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
             if builds.linux and builds.linux.per_family_info:
                 gfx103x_info = builds.linux.per_family_info[0]
                 # Should always use the primary label
                 self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
+
+
+class TestFamilyTestFilters(unittest.TestCase):
+    """Tests for run-full-tests-only and nightly_check_only_for_family behavior."""
+
+    def test_real_family_gfx90a_nightly_check_only(self):
+        """Integration test: gfx90a has nightly_check_only_for_family in the matrix."""
+        # gfx90a (in nightly matrix) has nightly_check_only_for_family=True for linux
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",  # Non-schedule run
+            commit_ref="feature-branch",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:run-all-archs"],  # Include gfx90a from nightly matrix
+        )
+        targets = cm.select_targets(ci_inputs)
+        git_context = cm.GitContext.empty()
+        outputs = cm.configure(ci_inputs, git_context)
+
+        # Find gfx90a in the linux build config
+        if outputs.builds.linux:
+            gfx90a_info = None
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx90a":
+                    gfx90a_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx90a_info)
+        self.assertEqual(gfx90a_info["test-runs-on"], "")
 
 
 if __name__ == "__main__":

@@ -77,6 +77,8 @@ _BUCKET_CONFIGS_BY_NAME = {c.name: c for c in s3_bucket_configs}
 
 _ALLOWED_RELEASE_TYPES = {"dev", "nightly", "prerelease"}
 
+_ALLOWED_RELEASE_BUCKET_TYPES = {"tarball", "python", "packages"}
+
 # Repositories allowed to use release_type. Only these repositories are trusted
 # to assume release IAM roles that grant write access to release buckets.
 _ALLOWED_RELEASE_REPOS = {"ROCm/TheRock", "ROCm/rockrel"}
@@ -93,6 +95,9 @@ def get_artifacts_bucket_config(
         release_type: "" for CI builds, or "dev", "nightly", "prerelease".
         repository: GitHub repository (e.g. "ROCm/TheRock").
         is_pr_from_fork: Whether this is a PR from a fork.
+
+    Raises:
+        ValueError: If release_type is invalid.
     """
     if release_type:
         if release_type not in _ALLOWED_RELEASE_TYPES:
@@ -112,6 +117,36 @@ def get_artifacts_bucket_config(
             bucket_name = "therock-ci-artifacts-external"
         else:
             bucket_name = "therock-ci-artifacts"
+    return _BUCKET_CONFIGS_BY_NAME[bucket_name]
+
+
+def get_release_bucket_config(
+    release_type: str,
+    bucket_type: str,
+) -> S3BucketConfig:
+    """Look up the release bucket config for a given release type and bucket type.
+
+    Args:
+        release_type: "dev", "nightly", or "prerelease".
+        bucket_type: "tarball", "python", or "packages".
+
+    Returns:
+        S3BucketConfig for the bucket ``therock-{release_type}-{bucket_type}``.
+
+    Raises:
+        ValueError: If release_type or bucket_type is invalid.
+    """
+    if release_type not in _ALLOWED_RELEASE_TYPES:
+        raise ValueError(
+            f"release_type={release_type!r} is invalid, "
+            f"expected one of {_ALLOWED_RELEASE_TYPES}"
+        )
+    if bucket_type not in _ALLOWED_RELEASE_BUCKET_TYPES:
+        raise ValueError(
+            f"bucket_type={bucket_type!r} is invalid, "
+            f"expected one of {_ALLOWED_RELEASE_BUCKET_TYPES}"
+        )
+    bucket_name = f"therock-{release_type}-{bucket_type}"
     return _BUCKET_CONFIGS_BY_NAME[bucket_name]
 
 
