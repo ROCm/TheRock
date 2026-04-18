@@ -6,9 +6,9 @@
 TensileLite Python unit test runner for TheRock CI.
 
 Runs TensileLite and rocisa Python unit tests using uv for environment
-management. The hipblaslt cmake root and Python source tree are bundled
-as test artifacts during the build via CMake install rules and staged
-into share/hipblaslt-test-src/.
+management. The rocm-libraries source tree is checked out by the CI
+workflow; this script finds the tensilelite directory relative to the
+TheRock checkout and runs tests directly from source.
 
 Environment variables used:
   AMDGPU_FAMILIES: GPU architecture string (e.g., "gfx94X-dcgpu"), logged only
@@ -26,7 +26,6 @@ from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-# repo + dirs
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR", "")
@@ -46,18 +45,16 @@ OUTPUT_ARTIFACTS_PATH = (
     Path(OUTPUT_ARTIFACTS_DIR).resolve() if OUTPUT_ARTIFACTS_DIR else Path(ROCM_PATH)
 )
 
-# hipblaslt cmake root staged as a build artifact.
-HIPBLASLT_SOURCE_DIR = OUTPUT_ARTIFACTS_PATH / "share" / "hipblaslt-test-src"
-# TensileLite Python sources are staged under the hipblaslt source tree.
-TENSILELITE_DIR = HIPBLASLT_SOURCE_DIR / "tensilelite"
+# TensileLite sources live in the rocm-libraries submodule.
+TENSILELITE_DIR = (
+    SCRIPT_DIR.parents[2] / "rocm-libraries" / "projects" / "hipblaslt" / "tensilelite"
+)
 
 # Set up env with ROCM_PATH so rocisa's cmake build can find
 # amdclang++ and HIP headers during `uv sync`.
 env = os.environ.copy()
 env["ROCM_PATH"] = ROCM_PATH
-# Tell rocisa/setup.py where the staged hipblaslt cmake root is,
-# so `cmake --preset rocisa -S<source_dir>` finds CMakePresets.json.
-env["HIPBLASLT_SOURCE_DIR"] = str(HIPBLASLT_SOURCE_DIR)
+env["HIPBLASLT_SOURCE_DIR"] = str(TENSILELITE_DIR.parent)
 
 
 def run_command(cmd, cwd=None, check=True):
@@ -70,7 +67,7 @@ def main():
     if not TENSILELITE_DIR.is_dir():
         raise FileNotFoundError(
             f"TensileLite test sources not found at {TENSILELITE_DIR}. "
-            "Ensure the blas test artifact is unpacked."
+            "Ensure the rocm-libraries submodule is checked out."
         )
 
     logging.info(f"# TENSILELITE_DIR: {TENSILELITE_DIR}")
@@ -86,20 +83,6 @@ def main():
 
     failed = False
 
-    # Build tensilelite-client to pick up any C++ changes.
-    # This uses 'invoke build-client' which runs cmake --preset tensilelite.
-    logging.info("=== Building tensilelite client ===")
-    result = run_command(
-        ["uv", "run", "invoke", "build-client"],
-        cwd=TENSILELITE_DIR,
-        check=False,
-    )
-    if result.returncode != 0:
-        logging.error(
-            f"tensilelite client build failed with return code {result.returncode}"
-        )
-        failed = True
-
     # Run TensileLite unit tests (CPU only, no GPU required)
     logging.info("=== Running TensileLite unit tests ===")
     result = run_command(
@@ -108,10 +91,6 @@ def main():
             "run",
             "pytest",
             "-v",
-            "--junit-xml=tensilelite-unit-tests.xml",
-            "--junit-prefix=tensilelite-unit",
-            "-n",
-            "auto",
             "Tensile/Tests/unit",
         ],
         cwd=TENSILELITE_DIR,
@@ -131,10 +110,6 @@ def main():
             "run",
             "pytest",
             "-v",
-            "--junit-xml=rocisa-tests.xml",
-            "--junit-prefix=rocisa",
-            "-n",
-            "auto",
             "rocisa/test",
         ],
         cwd=TENSILELITE_DIR,

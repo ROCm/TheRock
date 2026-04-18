@@ -146,7 +146,7 @@ test_matrix = {
     "tensilelite": {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 45,
+        "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_tensilelite.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
