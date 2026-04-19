@@ -153,9 +153,9 @@ artifact_groups = ["math-libs", "ml-libs"]
 type = "per-arch"
 
 [build_stages.comm-libs]
-description = "Communication libraries per architecture (can run parallel to math-libs)"
+description = "Communication libraries (generic, single job parallel to math-libs)"
 artifact_groups = ["comm-libs"]
-type = "per-arch"
+type = "generic"
 
 [build_stages.debug-tools]
 description = "ROCm debug tools"
@@ -218,7 +218,7 @@ source_sets = ["rocm-systems"]
 [artifact_groups.core-amdsmi]
 description = "AMD SMI tool (amdsmi)"
 type = "generic"
-artifact_group_deps = ["base", "third-party-sysdeps"]
+artifact_group_deps = ["base", "third-party-sysdeps", "compiler"]
 source_sets = ["rocm-systems"]
 
 [artifact_groups.compiler]
@@ -268,7 +268,7 @@ source_sets = ["rocm-libraries", "ml-frameworks"]
 
 [artifact_groups.comm-libs]
 description = "Communication libraries"
-type = "per-arch"
+type = "generic"
 artifact_group_deps = ["hip-runtime"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
 source_sets = ["comm-libs", "rocm-systems"]
@@ -364,6 +364,20 @@ feature_group = "CORE"
 disable_platforms = ["windows"]
 
 [artifacts.sysdeps-ncurses]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-libmnl]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-libnl]
 artifact_group = "third-party-sysdeps"
 type = "target-neutral"
 artifact_deps = []
@@ -473,7 +487,7 @@ disable_platforms = ["windows"]
 [artifacts.core-amdsmi]
 artifact_group = "core-amdsmi"
 type = "target-neutral"
-artifact_deps = ["base", "sysdeps"]
+artifact_deps = ["base", "sysdeps", "sysdeps-libnl", "sysdeps-libmnl", "amd-llvm"]
 feature_name = "CORE_AMDSMI"
 feature_group = "CORE"
 disable_platforms = ["windows"]
@@ -492,10 +506,18 @@ artifact_deps = ["core-runtime", "amd-llvm", "core-kpack"]
 feature_name = "HIP_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
 
-[artifacts.core-ocl]
+[artifacts.core-ocl-icd]
 artifact_group = "opencl-runtime"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "amd-llvm"]
+feature_name = "OCL_ICD"
+feature_group = "CORE"  # Part of core, enabled by default
+
+
+[artifacts.core-ocl]
+artifact_group = "opencl-runtime"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "amd-llvm", "core-ocl-icd"]
 feature_name = "OCL_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
 
@@ -530,20 +552,20 @@ type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
 split_databases = ["rocblas", "hipblaslt"]
 
-[artifacts.fft]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "fftw3", "rocprofiler-sdk"]
-
 [artifacts.rand]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
 
+[artifacts.fft]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "fftw3", "rand", "rocprofiler-sdk"]
+
 [artifacts.prim]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip"]
+artifact_deps = ["core-runtime", "core-hip", "rand"]
 
 [artifacts.sparse]
 artifact_group = "math-libs"
@@ -564,7 +586,6 @@ artifact_deps = ["core-runtime", "core-hip", "blas"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
-disable_platforms = ["windows"]
 
 [artifacts.support]
 artifact_group = "math-libs"
@@ -603,6 +624,12 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
+
+# Disabled until rocm-libraries bump that has hip-kernel-provider passing
+[artifacts.hipkernelprovider]
+artifact_group = "ml-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
 
 # --- IREE Integration ---
 

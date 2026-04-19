@@ -45,7 +45,7 @@ Table of contents:
 We recommend installing ROCm and projects like PyTorch and JAX via `pip`, the
 [Python package installer](https://packaging.python.org/en/latest/guides/tool-recommendations/).
 
-We currently support Python 3.10, 3.11, 3.12, and 3.13.
+We currently support Python 3.10, 3.11, 3.12, 3.13, and 3.14 (PyTorch 2.9+ only).
 
 > [!TIP]
 > We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html):
@@ -405,10 +405,11 @@ also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
 >
 > - If you want to install other versions, the currently supported versions are:
 >
->   | jax version | jaxlib version |
->   | ----------- | -------------- |
->   | 0.8.2       | 0.8.2          |
->   | 0.8.0       | 0.8.0          |
+>   | jax version | jaxlib version   |
+>   | ----------- | ---------------- |
+>   | 0.9.1       | 0.9.1 (upstream) |
+>   | 0.8.2       | 0.8.2            |
+>   | 0.8.0       | 0.8.0            |
 >
 >   See also
 >
