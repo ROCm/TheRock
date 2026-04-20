@@ -73,6 +73,14 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       TEATIME_FORCE_INTERACTIVE: 0
       RELEASE_TYPE: ${{ inputs.release_type }}
+      SCCACHE_BUCKET: "therock-${{ inputs.release_type }}-sccache"
+      SCCACHE_REGION: us-east-2
+      SCCACHE_S3_KEY_PREFIX: "linux/${{ inputs.amdgpu_family }}/"
+      SCCACHE_S3_USE_SSL: "true"
+      SCCACHE_LOG: error
+      SCCACHE_DIR: ${{ github.workspace }}/output/sccache_cache
+      SCCACHE_DIRECT: true
+      SCCACHE_SLOPPY_STATS: true
 
     steps:
       - name: Checkout Repository
@@ -86,12 +94,16 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
-      - name: Setup ccache
+      - name: Configure AWS credentials for artifact uploads
+        if: ${{ always() }}
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ${{ inputs.release_type }}
+
+      - name: Setup sccache
         run: |
-          ./build_tools/setup_ccache.py \
-            --release-type "${{ inputs.release_type }}" \
-            --dir "$(dirname $CCACHE_CONFIGPATH)" \
-            --local-path "$CACHE_DIR/ccache"
+          sccache --start-server
+          sccache --show-stats
 
       - name: Runner health status
         run: |
@@ -130,8 +142,8 @@ jobs:
         run: |
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
@@ -143,16 +155,11 @@ jobs:
       - name: Report
         if: ${{ !cancelled() }}
         run: |
-          echo "CCache Stats:"
-          ccache -s -v
+          echo "sccache stats after build"
+          echo "-----------------------"
+          sccache --show-stats
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
-
-      - name: Configure AWS credentials for artifact uploads
-        if: ${{ always() }}
-        uses: ./.github/actions/configure_aws_artifacts_credentials
-        with:
-          release_type: ${{ inputs.release_type }}
 
       # TODO(#3336): Attempt upload `always()`?
       #   * If some part of the build failed, partial artifacts may be useful for debugging.

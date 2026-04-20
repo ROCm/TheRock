@@ -33,3 +33,5 @@ runs:
         aws-region: ${{ steps.iam.outputs.aws_region }}
         role-to-assume: ${{ steps.iam.outputs.iam_role }}
         special-characters-workaround: ${{ runner.os == 'Windows' }}
+        # 12 hours, to cover the longest build jobs without needing to refresh credentials.
+        role-duration-seconds: 43200
