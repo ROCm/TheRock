@@ -133,7 +133,7 @@ def _is_current_run_pr_from_fork() -> bool:
     if not event_path:
         return False
 
-    with open(event_path) as f:
+    with open(event_path, encoding="utf-8") as f:
         event = json.load(f)
 
     return bool(

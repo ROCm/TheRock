@@ -167,7 +167,7 @@ class CIInputs:
 
         # Read the full event webhook payload (common to all event triggers).
         event_path = os.environ["GITHUB_EVENT_PATH"]
-        with open(event_path) as f:
+        with open(event_path, encoding="utf-8") as f:
             event = json.load(f)
 
         # Extract additional fields based on event type.
