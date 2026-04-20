@@ -53,14 +53,12 @@ def main():
 
     # The recipe is not idempotent: re-running after SMU features are
     # already enabled leaves PSP refusing to re-load SMU via
-    # LOAD_IP_FW. Detect that case and bail out with guidance instead
-    # of timing out on the PSP fence and hanging the SMU.
-    MP1 = 0x16200
-    smu_mailbox_alive = c.mmio_read32(5, (MP1 + 0x40 + 90) * 4) != 0
-    if smu_mailbox_alive:
-        print("SMU mailbox already has a nonzero C2PMSG_90 — SMU is likely "
-              "already bootstrapped from a previous run. Unplug/replug "
-              "(or sudo-kill the DEXT) before rerunning this smoke test.")
+    # LOAD_IP_FW. PSP C2PMSG_81 (SOS sign-of-life) is the authoritative
+    # "no previous bring-up" signal — MP1 C2PMSG_90 often carries a
+    # stale 0x1 across replugs and can't be trusted on its own.
+    if c.mmio_read32(5, (0x16000 + 0x40 + 81) * 4) != 0:
+        print("SOS already alive — previous bring-up state survived. "
+              "Unplug/replug (or sudo-kill the DEXT) before rerunning.")
         sys.exit(0)
 
     drv = _DriverShim(c)

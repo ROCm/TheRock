@@ -59,8 +59,11 @@ def main():
     info = c.get_info()
     print(f"device=0x{info.device_id:04x} rev=0x{info.revision_id:02x}")
 
-    if c.mmio_read32(5, (MP1 + 0x40 + 90) * 4) != 0:
-        print("SMU mailbox already bootstrapped — replug first.")
+    # Fresh-card gate: PSP C2PMSG_81 (SOS sign-of-life) is the
+    # authoritative "no previous bring-up" signal. MP1 C2PMSG_90 can
+    # carry a leftover 0x1 across replugs, so it's not reliable alone.
+    if c.mmio_read32(5, (0x16000 + 0x40 + 81) * 4) != 0:
+        print("SOS already alive — replug first for a clean test.")
         sys.exit(0)
 
     drv = _DriverShim(c)
