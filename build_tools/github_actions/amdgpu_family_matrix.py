@@ -89,19 +89,17 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx110x": {
         "linux": {
-            # TODO(#3298): Re-enable machine once HSA_STATUS_ERROR_OUT_OF_RESOURCES issues are resolved
-            # Label is linux-gfx110X-gpu-rocm, fetch-gfx-targets should be ["gfx1100"]
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
             "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
-            "fetch-gfx-targets": ["gfx1100"],
+            "fetch-gfx-targets": ["gfx1100", "gfx1101"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
@@ -116,7 +114,7 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1151"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
@@ -131,23 +129,20 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx120x": {
         "linux": {
-            # TODO(#2683): Re-enable label once stable
-            # Label is linux-gfx120X-gpu-rocm
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
         "windows": {
-            # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-            # Label is windows-gfx120X-gpu-rocm, fetch-gfx-targets should be ["gfx1200", "gfx1201"]
-            "test-runs-on": "",
+            "test-runs-on": "windows-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
             "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
         },
     },
 }
@@ -180,7 +175,6 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx900",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     # gfx906/908/90a split into separate families - each has different instruction
@@ -200,7 +194,6 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx906",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     "gfx908": {
@@ -217,7 +210,6 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx908",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     "gfx90a": {
@@ -233,7 +225,6 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx90a",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     "gfx101x": {
@@ -256,27 +247,23 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx103X-dgpu",
             "fetch-gfx-targets": ["gfx1030"],
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
         "windows": {
-            # TODO(#3200): Re-enable machine once it is stable
-            # Label is "windows-gfx1030-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "windows-gfx1030-gpu-rocm",
             "family": "gfx103X-dgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
     },
     "gfx1150": {
         "linux": {
-            # TODO(#3199): Re-enable machine once it is stable
-            # Label is "linux-gfx1150-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1150-gpu-rocm",
             "family": "gfx1150",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -301,13 +288,11 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx1153": {
         "linux": {
-            # TODO(#2682): Re-enable machine once it is stable
-            # Label is "linux-gfx1153-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1153-gpu-rocm",
             "family": "gfx1153",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
