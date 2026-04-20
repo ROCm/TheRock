@@ -1,16 +1,19 @@
 """GFX-engine firmware loading via PSP for gfx1201 (gc_12_0_1).
 
-Loads the firmware blobs that SMU's GFX power domain requires before
-EnableAllSmuFeatures(FEATURE_PWR_GFX) can succeed:
+Status (2026-04-20):
+  - IMU via PSP LOAD_IP_FW works (types 68/69).
+  - RLC_G via PSP LOAD_IP_FW FAILS with status 0xFFFF0000 on gfx12.
 
-  - IMU (gc_12_0_1_imu.bin)  — IRAM + DRAM halves
-  - RLC (gc_12_0_1_rlc.bin)  — main RLC_G ucode + the 10 sub-firmwares
-                                from rlc_firmware_header_v2_4
+gfx12 migrated RLC (and most GFX firmware) to a "backdoor autoload"
+mechanism: the driver allocates a VRAM autoload buffer, copies each
+firmware blob into it at TOC-specified offsets, and triggers RLC
+self-load via MMIO. See `gfx_v12_0.c::gfx_v12_0_rlc_backdoor_autoload_*`
+and `SOC24_FIRMWARE_ID_*`. That is the path we need next — this
+module's RLC loader is retained for reference / gfx11 parity but is
+not usable on gfx1201.
 
-The CP engines (PFP, ME, MEC) and MES are **not** loaded here. They
-have more complex RS64 stack requirements and aren't strictly needed
-to unblock SMU feature enable — that's gated on RLC, which in turn
-needs IMU to program its boot registers.
+What **does** work here:
+  - IMU (gc_12_0_1_imu.bin)  — IRAM + DRAM halves via PSP LOAD_IP_FW.
 
 Each sub-firmware is copied into a DMA-mapped buffer, and a PSP
 `LOAD_IP_FW` command is submitted for each. All sub-firmwares share
@@ -75,14 +78,23 @@ def _parse_common_header(blob: bytes) -> dict:
 # --- Header parsers for the two file formats we handle here ---
 
 def parse_imu(blob: bytes) -> list[_SubFw]:
-    """imu_firmware_header_v1_0: common header + {iram,dram} size/offset."""
+    """imu_firmware_header_v1_0: common header + {iram,dram} size/offset.
+
+    IMU's iram_offset / dram_offset are **relative to
+    ucode_array_offset_bytes**, unlike RLC where they're absolute. See
+    `amdgpu_ucode.c::amdgpu_ucode_init_ucode_addr` (the IMU_I/IMU_D
+    cases compute `fw->data + ucode_array_offset_bytes` and the DRAM
+    pointer is then + iram_size). amdgpu actually ignores the
+    imu_{iram,dram}_offset_bytes fields in the header entirely.
+    """
     hdr = _parse_common_header(blob)
-    # After the common header (32 bytes) come four u32s: iram_size,
-    # iram_off, dram_size, dram_off.
-    iram_size, iram_off, dram_size, dram_off = struct.unpack_from("<IIII", blob, 32)
+    iram_size, _iram_off, dram_size, _dram_off = struct.unpack_from("<IIII", blob, 32)
+    base = hdr["ucode_off"]
+    iram_start = base
+    dram_start = base + iram_size
     return [
-        _SubFw("IMU_I", GFX_FW_TYPE_IMU_I, blob[iram_off:iram_off + iram_size]),
-        _SubFw("IMU_D", GFX_FW_TYPE_IMU_D, blob[dram_off:dram_off + dram_size]),
+        _SubFw("IMU_I", GFX_FW_TYPE_IMU_I, blob[iram_start:iram_start + iram_size]),
+        _SubFw("IMU_D", GFX_FW_TYPE_IMU_D, blob[dram_start:dram_start + dram_size]),
     ]
 
 
