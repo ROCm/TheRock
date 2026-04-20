@@ -173,6 +173,15 @@ def ring_create(client, driver, mp0_base_dw: int,
     if verbose:
         print(f"  Ring created OK: C2PMSG_64 = 0x{v:08x}")
 
+    # 9. Reset the wptr (C2PMSG_67) to 0. Without this, if the caller
+    # recreated the ring on a card whose C2PMSG_67 still held the stale
+    # wptr from a previous submit (e.g. after a Thunderbolt reconnect
+    # that left the MMIO state intact), the next submit would write at
+    # the stale index — PSP's fresh rptr=0 would then read an all-zero
+    # frame and the fence would never fire.
+    c67 = c2pmsg_dw(mp0_base_dw, 67) * 4
+    client.mmio_write32(5, c67, 0)
+
     return PSPRing(
         ring_cpu=ring_cpu,
         ring_bus=ring_bus,
