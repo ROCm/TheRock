@@ -133,8 +133,14 @@ jobs:
 
   test_python_packages_per_family:
     needs: [build_python_packages]
+<<<<<<< HEAD
     name: Test Python ${{ matrix.family_info.amdgpu_family }}
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && !success() }} # skipping all ci test
+=======
+
+    name: Test Python ${{ matrix.family_info.amdgpu_family }} | ${{ matrix.image.name }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && !success()}}
+>>>>>>> 4d7fd4a2 (testting sccache in multi arch ci)
     strategy:
       fail-fast: false
       matrix:
