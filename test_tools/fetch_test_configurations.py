@@ -23,8 +23,14 @@ import sys
 from pathlib import Path
 from copy import deepcopy
 
-# Add tests directory to path for extended_tests imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
+# This script lives at <repo>/test_tools/; add the directories we need to
+# import from to sys.path:
+#   - <repo>/build_tools/github_actions: for github_actions_api, amdgpu_family_matrix
+#   - <repo>/tests: for extended_tests.*
+_THEROCK_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_THEROCK_DIR / "build_tools" / "github_actions"))
+sys.path.insert(0, str(_THEROCK_DIR / "tests"))
+
 from github_actions_api import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from extended_tests.functional.functional_test_matrix import functional_matrix
@@ -35,8 +41,10 @@ from amdgpu_family_matrix import (
 
 logging.basicConfig(level=logging.INFO)
 
-# Note: these paths are relative to the repository root. We could make that
-# more explicit, or use absolute paths.
+# Note: this path is relative to the repository root (CI sets cwd to the repo
+# root before invoking this script). It points at the component test runner
+# scripts which currently still live under build_tools/github_actions/ — see
+# RFC0010 for the separate migration of those scripts out of TheRock.
 SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
 
 

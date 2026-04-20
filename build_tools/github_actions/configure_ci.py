@@ -54,6 +54,13 @@ from pathlib import Path
 import sys
 from typing import Iterable, List, Optional
 import string
+
+THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
+
+# fetch_test_configurations lives in <repo>/test_tools/ (outside build_tools).
+sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
+
 from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
@@ -68,9 +75,6 @@ from configure_ci_path_filters import (
     is_ci_run_required,
 )
 from github_actions_api import *
-
-THIS_SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 
 # --------------------------------------------------------------------------- #
 # Matrix creation logic based on PR, push, or workflow_dispatch

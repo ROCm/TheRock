@@ -73,7 +73,7 @@ See [installing_artifacts.md](installing_artifacts.md) for detailed instructions
 
 ## Test Phase
 
-Tests are defined in [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_configurations.py), which generates a test matrix for parallel execution across multiple runners.
+Tests are defined in [`fetch_test_configurations.py`](../../test_tools/fetch_test_configurations.py), which generates a test matrix for parallel execution across multiple runners.
 
 ```mermaid
 graph LR

@@ -11,7 +11,7 @@ GITHUB_STEP_SUMMARY file.
 
 The script can be tested locally with inputs like this:
 
-    python ./build_tools/github_actions/summarize_test_pytorch_workflow.py \
+    python ./test_tools/summarize_test_pytorch_workflow.py \
       --pytorch-git-ref=release/2.7 \
       --index-url=https://rocm.nightlies.amd.com/v2-staging \
       --index-subdir=gfx110X-dgpu \
@@ -21,7 +21,15 @@ The script can be tested locally with inputs like this:
 import argparse
 import os
 import platform
+import sys
+from pathlib import Path
 
+# github_actions_api lives in build_tools/github_actions/ (kept alongside the
+# compilation-oriented GitHub Actions helpers).
+sys.path.insert(
+    0,
+    str(Path(__file__).resolve().parent.parent / "build_tools" / "github_actions"),
+)
 from github_actions_api import *
 
 
