@@ -162,6 +162,9 @@ jobs:
       rocm_version: ${{ inputs.rocm_package_version }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
+      # Windows runs natively without a container image.
+      container_image_name: native
+      container_image_url: ""
 
   # NOTE: Per-family PyTorch builds — each family gets its own wheel built
   # against that family's ROCm package index slice.
