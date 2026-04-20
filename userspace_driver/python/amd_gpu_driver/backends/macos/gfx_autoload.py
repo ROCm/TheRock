@@ -61,12 +61,22 @@ SOC24_FIRMWARE_ID_RLC_SRM_ARAM   = 4
 SOC24_FIRMWARE_ID_RLX6_UCODE     = 7
 SOC24_FIRMWARE_ID_RLX6_DRAM_BOOT = 9
 SOC24_FIRMWARE_ID_SDMA_UCODE_TH0 = 11
+SOC24_FIRMWARE_ID_RS64_MES_P0    = 16
+SOC24_FIRMWARE_ID_RS64_MES_P1    = 17
 SOC24_FIRMWARE_ID_RS64_PFP       = 18
 SOC24_FIRMWARE_ID_RS64_ME        = 19
 SOC24_FIRMWARE_ID_RS64_MEC       = 20
-SOC24_FIRMWARE_ID_RS64_MES_P0    = 16
-SOC24_FIRMWARE_ID_RS64_MES_P1    = 17
-SOC24_FIRMWARE_ID_MAX            = 43
+SOC24_FIRMWARE_ID_RS64_MES_P0_STACK = 21
+SOC24_FIRMWARE_ID_RS64_MES_P1_STACK = 22
+SOC24_FIRMWARE_ID_RS64_PFP_P0_STACK = 23
+SOC24_FIRMWARE_ID_RS64_PFP_P1_STACK = 24
+SOC24_FIRMWARE_ID_RS64_ME_P0_STACK  = 25
+SOC24_FIRMWARE_ID_RS64_ME_P1_STACK  = 26
+SOC24_FIRMWARE_ID_RS64_MEC_P0_STACK = 27
+SOC24_FIRMWARE_ID_RS64_MEC_P1_STACK = 28
+SOC24_FIRMWARE_ID_RS64_MEC_P2_STACK = 29
+SOC24_FIRMWARE_ID_RS64_MEC_P3_STACK = 30
+SOC24_FIRMWARE_ID_MAX               = 43
 
 # gfx_v12_0.c:
 #   RLC_TOC_OFFSET_DWUNIT = 8     (offset field is in 8-DWORD units = 32 bytes)
@@ -179,13 +189,14 @@ def extract_rlc_subfw(rlc_blob: bytes) -> dict[int, bytes]:
 
 
 def extract_sdma(sdma_blob: bytes) -> bytes:
-    """SDMA v3_0: common header + ucode_size/off at +32/+36."""
-    uoff = _common_ucode_off(sdma_blob)
-    # sdma_firmware_header_v3_0 stores a per-layout ucode_size/off at
-    # offset 32/36 after the common header. Just use the common ucode
-    # fields — that's the TH0 instruction stream.
-    usz = struct.unpack_from("<I", sdma_blob, 20)[0]
-    return sdma_blob[uoff:uoff + usz]
+    """SDMA v3_0 (gfx12): common header + ucode_feature_version +
+    ucode_offset_bytes + ucode_size_bytes.
+
+    Those gfx12-specific fields live at +32, +36, +40 respectively.
+    """
+    u_off = struct.unpack_from("<I", sdma_blob, 36)[0]
+    u_sz  = struct.unpack_from("<I", sdma_blob, 40)[0]
+    return sdma_blob[u_off:u_off + u_sz]
 
 
 def extract_rs64_gfx(cpv2_blob: bytes) -> tuple[bytes, bytes]:
@@ -238,19 +249,28 @@ def build_autoload_buffer(client, firmware_dir: str,
             f"0x{vram_bar_size:x}; implement VRAM BAR re-windowing first"
         )
     # Zero the full buffer region so untouched slots are benign.
-    ctypes.memset(vram_cpu, 0, layout.buffer_size)
+    # ctypes.memset on the VRAM BAR mapping triggers SIGBUS on Apple
+    # Silicon once the region crosses ~1 MB — but a slice-copy of the
+    # same size works. Use a slice-copy of zeros.
+    (ctypes.c_ubyte * layout.buffer_size).from_address(vram_cpu)[:] = \
+        b"\x00" * layout.buffer_size
 
     by_id = {e.id: e for e in layout.toc_entries}
 
     # Load individual firmware files and extract sub-payloads.
     def _read(name): return open(os.path.join(firmware_dir, name), "rb").read()
+    def _read_opt(name):
+        p = os.path.join(firmware_dir, name)
+        return open(p, "rb").read() if os.path.exists(p) else None
     rlc_blob = _read("gc_12_0_1_rlc.bin")
-    sdma_blob = _read("sdma_7_0_0.bin") if os.path.exists(
-        os.path.join(firmware_dir, "sdma_7_0_0.bin")) else None
+    # gfx1201 wants SDMA 7.0.1 (per IP discovery). 7.0.0 is the wrong
+    # ASIC and SMU / IMU won't accept it.
+    sdma_blob = _read_opt("sdma_7_0_1.bin")
     pfp_blob = _read("gc_12_0_1_pfp.bin")
     me_blob  = _read("gc_12_0_1_me.bin")
     mec_blob = _read("gc_12_0_1_mec.bin")
-    mes_blob = _read("gc_12_0_1_mes.bin")
+    mes_blob  = _read("gc_12_0_1_mes.bin")
+    mes1_blob = _read_opt("gc_12_0_1_mes1.bin")
 
     def _place(fwid: int, data: bytes, label: str) -> None:
         if fwid not in by_id:
@@ -274,17 +294,30 @@ def build_autoload_buffer(client, firmware_dir: str,
     if sdma_blob is not None:
         _place(SOC24_FIRMWARE_ID_SDMA_UCODE_TH0, extract_sdma(sdma_blob), "SDMA_TH0")
 
-    # RS64 CP (PFP, ME, MEC) — instructions only. Stack slots are zero-filled.
-    pfp_u, _pfp_d = extract_rs64_gfx(pfp_blob)
-    me_u,  _me_d  = extract_rs64_gfx(me_blob)
-    mec_u, _mec_d = extract_rs64_gfx(mec_blob)
+    # RS64 CP (PFP, ME, MEC) — Linux copies instruction + data, and
+    # duplicates the data into P0_STACK/P1_STACK (and P2/P3 for MEC).
+    pfp_u, pfp_d = extract_rs64_gfx(pfp_blob)
+    me_u,  me_d  = extract_rs64_gfx(me_blob)
+    mec_u, mec_d = extract_rs64_gfx(mec_blob)
     _place(SOC24_FIRMWARE_ID_RS64_PFP, pfp_u, "RS64_PFP")
+    _place(SOC24_FIRMWARE_ID_RS64_PFP_P0_STACK, pfp_d, "PFP_P0_STACK")
+    _place(SOC24_FIRMWARE_ID_RS64_PFP_P1_STACK, pfp_d, "PFP_P1_STACK")
     _place(SOC24_FIRMWARE_ID_RS64_ME,  me_u,  "RS64_ME")
+    _place(SOC24_FIRMWARE_ID_RS64_ME_P0_STACK,  me_d,  "ME_P0_STACK")
+    _place(SOC24_FIRMWARE_ID_RS64_ME_P1_STACK,  me_d,  "ME_P1_STACK")
     _place(SOC24_FIRMWARE_ID_RS64_MEC, mec_u, "RS64_MEC")
+    _place(SOC24_FIRMWARE_ID_RS64_MEC_P0_STACK, mec_d, "MEC_P0_STACK")
+    _place(SOC24_FIRMWARE_ID_RS64_MEC_P1_STACK, mec_d, "MEC_P1_STACK")
+    _place(SOC24_FIRMWARE_ID_RS64_MEC_P2_STACK, mec_d, "MEC_P2_STACK")
+    _place(SOC24_FIRMWARE_ID_RS64_MEC_P3_STACK, mec_d, "MEC_P3_STACK")
 
-    # MES ucode+data (pipe 0 only for a minimum viable try).
-    mes_u, mes_d = extract_mes(mes_blob)
-    _place(SOC24_FIRMWARE_ID_RS64_MES_P0, mes_u, "RS64_MES_P0")
+    # MES pipes 0 and 1 — if mes1.bin isn't present, reuse mes for P1.
+    mes_u,  mes_d  = extract_mes(mes_blob)
+    mes1_u, mes1_d = extract_mes(mes1_blob) if mes1_blob else (mes_u, mes_d)
+    _place(SOC24_FIRMWARE_ID_RS64_MES_P0,       mes_u,  "RS64_MES_P0")
+    _place(SOC24_FIRMWARE_ID_RS64_MES_P0_STACK, mes_d,  "MES_P0_STACK")
+    _place(SOC24_FIRMWARE_ID_RS64_MES_P1,       mes1_u, "RS64_MES_P1")
+    _place(SOC24_FIRMWARE_ID_RS64_MES_P1_STACK, mes1_d, "MES_P1_STACK")
 
     # Finally, the TOC itself. gfx_v12_0_rlc_backdoor_autoload_copy_toc_ucode
     # patches the last DWORD with RLC_TOC_FORMAT_API << 24 | 0x1 before copying.
