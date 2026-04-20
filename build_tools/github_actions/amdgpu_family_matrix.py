@@ -73,11 +73,11 @@ amdgpu_family_info_matrix_presubmit = {
             # TODO: Remove alternative weight once we get dedicated set of machines
             # As we are bringing back up mi325, we are using a dual-label configuration to distribute load
             "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
-            "test-runs-on-alternate": "linux-gfx942-1gpu-ccs-ossci-rocm",
-            "test-runs-on-alternate-weight": 0.35,  # 35% chance of using alternate
+            "test-runs-on-alternate": "linux-gfx942-1gpu-core42-ossci-rocm.test",
+            "test-runs-on-alternate-weight": 1.00,  # 35% chance of using alternate
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
-            "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
+            "test-runs-on-multi-gpu": "linux-gfx942-8gpu-core42-ossci-rocm.test",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
