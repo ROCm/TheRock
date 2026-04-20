@@ -38,7 +38,10 @@ GFX_CMD_ID_LOAD_IP_FW   = 0x00000006
 GFX_CMD_ID_LOAD_TOC     = 0x00000020
 GFX_CMD_ID_BOOT_CFG     = 0x00000022
 
-# ---- GFX_FW_TYPE enum (subset we need) ----
+# ---- GFX_FW_TYPE enum (from psp_gfx_if.h — authoritative) ----
+# Values evolved across GPU families; these are correct for SOC21/SOC22
+# (gfx11/gfx12 — Navi 31/48). Some of the small-value types (CP_ME,
+# CP_PFP, RLC_G, etc.) originated for older cards but stayed stable.
 GFX_FW_TYPE_NONE        = 0
 GFX_FW_TYPE_CP_ME       = 1
 GFX_FW_TYPE_CP_PFP      = 2
@@ -48,17 +51,46 @@ GFX_FW_TYPE_CP_MEC_ME1  = 5
 GFX_FW_TYPE_CP_MEC_ME2  = 6
 GFX_FW_TYPE_RLC_V       = 7
 GFX_FW_TYPE_RLC_G       = 8
-GFX_FW_TYPE_RLC_SRLC    = 9
-GFX_FW_TYPE_RLC_SRLG    = 10
-GFX_FW_TYPE_RLC_SRLS    = 11
-GFX_FW_TYPE_SMU         = 18  # SMU / SMC — the microcode we need
-GFX_FW_TYPE_SDMA0       = 20
-GFX_FW_TYPE_IMU_I       = 50
-GFX_FW_TYPE_IMU_D       = 51
-GFX_FW_TYPE_MES_FW      = 29
-GFX_FW_TYPE_RS64_PFP    = 58
-GFX_FW_TYPE_RS64_ME     = 59
-GFX_FW_TYPE_RS64_MEC    = 60
+# 9-17 are older-family SDMA/DMCU/VCN/UVD/VCE/ISP/ACP — unused here.
+GFX_FW_TYPE_SMU         = 18
+# RLC save/restore-list sub-firmwares (from rlc_firmware_header_v2_1):
+GFX_FW_TYPE_RLC_RESTORE_LIST_GPM_MEM  = 20   # SRLG
+GFX_FW_TYPE_RLC_RESTORE_LIST_SRM_MEM  = 21   # SRLS
+GFX_FW_TYPE_RLC_RESTORE_LIST_SRM_CNTL = 22   # SRLC
+GFX_FW_TYPE_TOC         = 24
+GFX_FW_TYPE_RLC_P       = 25
+GFX_FW_TYPE_RLC_IRAM    = 26
+# Tap-delay sub-firmwares live in RLC v2_4 containers:
+GFX_FW_TYPE_GLOBAL_TAP_DELAYS          = 27
+GFX_FW_TYPE_SE0_TAP_DELAYS             = 28
+GFX_FW_TYPE_SE1_TAP_DELAYS             = 29
+GFX_FW_TYPE_GLOBAL_SE0_SE1_SKEW_DELAYS = 30
+GFX_FW_TYPE_CP_MES                     = 33
+# SOC21+ (gfx11/gfx12) types:
+GFX_FW_TYPE_IMU_I       = 68
+GFX_FW_TYPE_IMU_D       = 69
+GFX_FW_TYPE_SDMA_UCODE_TH0 = 71
+GFX_FW_TYPE_SDMA_UCODE_TH1 = 72
+GFX_FW_TYPE_PPTABLE     = 73
+GFX_FW_TYPE_RS64_MES    = 76
+GFX_FW_TYPE_RS64_MES_STACK = 77
+GFX_FW_TYPE_RS64_KIQ    = 78
+GFX_FW_TYPE_RS64_KIQ_STACK = 79
+GFX_FW_TYPE_RS64_PFP    = 87
+GFX_FW_TYPE_RS64_ME     = 88
+GFX_FW_TYPE_RS64_MEC    = 89
+GFX_FW_TYPE_RS64_PFP_P0_STACK = 90
+GFX_FW_TYPE_RS64_PFP_P1_STACK = 91
+GFX_FW_TYPE_RS64_ME_P0_STACK  = 92
+GFX_FW_TYPE_RS64_ME_P1_STACK  = 93
+GFX_FW_TYPE_RS64_MEC_P0_STACK = 94
+GFX_FW_TYPE_RS64_MEC_P1_STACK = 95
+GFX_FW_TYPE_RS64_MEC_P2_STACK = 96
+GFX_FW_TYPE_RS64_MEC_P3_STACK = 97
+GFX_FW_TYPE_SE2_TAP_DELAYS    = 65
+GFX_FW_TYPE_SE3_TAP_DELAYS    = 66
+GFX_FW_TYPE_SE2_MUX_SELECT_RAM = 43
+GFX_FW_TYPE_SE3_MUX_SELECT_RAM = 44
 
 # ---- Layout constants ----
 PSP_GFX_CMD_BUF_VERSION = 0x00000001
