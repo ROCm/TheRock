@@ -339,7 +339,7 @@ test_matrix = {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
         "timeout_minutes": 15,
-        "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
