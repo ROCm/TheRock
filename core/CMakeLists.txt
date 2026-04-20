@@ -10,6 +10,21 @@
 set(_system_toolchain "amd-llvm")
 if(WIN32)
   set(_system_toolchain "")
+
+  # Compute the versioned Comgr DLL name for CLR builds. Must match what Comgr
+  # produces (set in compiler/pre_hook_amd-comgr.cmake). Old CLR ignores this;
+  # new CLR (post rocm-systems#4211) uses it via COMGR_DLL_NAME compile def.
+  # TODO: Remove once both submodules include their respective upstream changes,
+  # at which point both default to amd_comgr.dll.
+  set(_comgr_major "${THEROCK_HIP_MAJOR_VERSION}")
+  set(_comgr_minor "${THEROCK_HIP_MINOR_VERSION}")
+  if(_comgr_major LESS_EQUAL 9)
+    set(_comgr_major "0${_comgr_major}")
+  endif()
+  if(_comgr_minor LESS_EQUAL 9)
+    set(_comgr_minor "0${_comgr_minor}")
+  endif()
+  set(_comgr_dll_name "amd_comgr${_comgr_major}${_comgr_minor}.dll")
 endif()
 
 ################################################################################
@@ -194,6 +209,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "-D__HIP_ENABLE_RTC=1"
       "-DROCR_DLL_LOAD=0"
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
+      "-DCOMGR_DLL_NAME=${_comgr_dll_name}"
     )
   else()
     # Non-Windows CLR options.
@@ -393,6 +409,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       "-DROCCLR_ENABLE_LC=ON"
       "-DROCR_DLL_LOAD=OFF"
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
+      "-DCOMGR_DLL_NAME=${_comgr_dll_name}"
     )
   else()
     # Non-Windows CLR options.
