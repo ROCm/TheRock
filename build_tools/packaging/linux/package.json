@@ -1854,7 +1854,7 @@
       }
     ],
 
-    "Gfxarch": "True",
+    "Gfxarch": "False",
     "DisablePackaging": "True"
   },
 
@@ -1899,7 +1899,7 @@
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
 
   {
@@ -1939,7 +1939,7 @@
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
 
   {
