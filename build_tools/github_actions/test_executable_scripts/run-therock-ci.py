@@ -16,10 +16,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 parser = argparse.ArgumentParser(
     description="CDash dashboard run for ROCProfiler SDK tests in TheRock.",
 )
+
 parser.add_argument(
     "--configure-cmd",
     metavar="CMD",
@@ -36,75 +36,30 @@ parser.add_argument(
     help="Arguments for ctest (CMAKE_CTEST_ARGUMENTS), without leading 'ctest'",
 )
 parser.add_argument(
-    "--rocprofiler-sdk-path",
-    type=Path,
-    help="ROCProfiler SDK share tree (metrics, etc.)",
-)
-parser.add_argument(
-    "--rocprofiler-sdk-tests-path",
-    type=Path,
-    help="ROCProfiler SDK tests source directory (-S for CMake)",
-)
-parser.add_argument(
     "--therock-bin-path",
     type=Path,
     help="TheRock install bin directory (THEROCK_BIN_DIR)",
 )
-parser.add_argument(
-    "--therock-clang-path",
-    type=Path,
-    help="Path to amdclang",
-)
-parser.add_argument(
-    "--therock-clang-plus-path",
-    type=Path,
-    help="Path to amdclang++",
-)
-parser.add_argument(
-    "--therock-lib-path",
-    type=Path,
-    help="TheRock install lib directory",
-)
-parser.add_argument(
-    "--therock-sysdeps-lib-path",
-    type=Path,
-    help="rocm_sysdeps lib directory (for LD_LIBRARY_PATH)",
-)
-parser.add_argument(
-    "--therock-sysdeps-path",
-    type=Path,
-    help="rocm_sysdeps prefix (CMAKE_PREFIX_PATH)",
-)
-parser.add_argument(
-    "--therock-path",
-    type=Path,
-    help="TheRock ROCm install root (ROCM_PATH, HIP_PATH, CMAKE_PREFIX_PATH)",
-)
 
 args = parser.parse_args()
 
+# Base Paths
+THEROCK_BIN_PATH = args.therock_bin_path
+THEROCK_PATH = THEROCK_BIN_PATH.parent
 
-(
-    ROCPROFILER_SDK_PATH,
-    ROCPROFILER_SDK_TESTS_PATH,
-    THEROCK_BIN_PATH,
-    THEROCK_CLANG_PATH,
-    THEROCK_CLANG_PLUS_PATH,
-    THEROCK_LIB_PATH,
-    THEROCK_SYSDEPS_LIB_PATH,
-    THEROCK_SYSDEPS_PATH,
-    THEROCK_PATH,
-) = (
-    args.rocprofiler_sdk_path,
-    args.rocprofiler_sdk_tests_path,
-    args.therock_bin_path,
-    args.therock_clang_path,
-    args.therock_clang_plus_path,
-    args.therock_lib_path,
-    args.therock_sysdeps_lib_path,
-    args.therock_sysdeps_path,
-    args.therock_path,
-)
+# LIB Paths
+THEROCK_LIB_PATH = THEROCK_PATH / "lib"
+THEROCK_SYSDEPS_PATH = THEROCK_LIB_PATH / "rocm_sysdeps"
+THEROCK_SYSDEPS_LIB_PATH = THEROCK_SYSDEPS_PATH / "lib"
+
+# LLVM Paths
+THEROCK_LLVM_BIN_PATH = THEROCK_PATH / "llvm" / "bin"
+THEROCK_CLANG_PATH = THEROCK_LLVM_BIN_PATH / "amdclang"
+THEROCK_CLANG_PLUS_PATH = THEROCK_LLVM_BIN_PATH / "amdclang++"
+
+# SDK Paths
+ROCPROFILER_SDK_PATH = THEROCK_PATH / "share" / "rocprofiler-sdk"
+ROCPROFILER_SDK_TESTS_PATH = ROCPROFILER_SDK_PATH / "tests"
 
 logging.basicConfig(level=logging.INFO)
 
