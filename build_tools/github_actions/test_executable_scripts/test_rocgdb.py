@@ -271,6 +271,18 @@ def parse_arguments() -> argparse.Namespace:
         default=100,
         help="Timeout value in seconds for individual tests (max: 600). Default is 100.",
     )
+    parser.add_argument(
+        "--check-type",
+        type=str,
+        choices=["check", "check-read1", "check-readmore"],
+        default="check",
+        help="Which GDB testsuite target to invoke. 'check' is the normal run."
+        "'check-read1' runs under an LD_PRELOAD shim that forces read(2) to"
+        "return 1 byte at a time (stress-tests GDB's incremental I/O parsing)."
+        "'check-readmore' forces large reads (the opposite extreme). These"
+        "are upstream GDB testsuite modes and can surface real GDB bugs that"
+        "'check' alone misses. Default: 'check'.",
+    )
 
     args = parser.parse_args()
 
@@ -1228,7 +1240,7 @@ def run_tests(
 
         cmd = [
             "make",
-            "check",
+            args.check_type,
             f"RUNTESTFLAGS={runtestflags_str}",
             f"TESTS={current_tests}",
         ]
@@ -1529,6 +1541,7 @@ def print_configuration(
     logger.info(f"  Testsuite Directory:  {testsuite_dir}")
     logger.info(f"  Configure Script:     {configure_script}")
     logger.info(f"  Tests:                {' '.join(args.tests)}")
+    logger.info(f"  Check Type:           {args.check_type}")
     logger.info(f"  Parallel Execution:   {'Enabled' if args.parallel else 'Disabled'}")
     logger.info(f"  Use FAIL ignore list: {'Not using' if args.no_xfail else 'Using'}")
     logger.info(
