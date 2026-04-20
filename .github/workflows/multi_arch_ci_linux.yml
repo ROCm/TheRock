@@ -134,7 +134,7 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python ${{ matrix.family_info.amdgpu_family }}
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && !success() }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && !success() }} # skipping all ci tests
     strategy:
       fail-fast: false
       matrix:
