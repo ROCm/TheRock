@@ -47,19 +47,19 @@ DEFAULT_LOG_DIR = REPO_ROOT / "build" / "logs" / "ccache"
 # so that Windows workflows can direct logs to BUILD_DIR/logs/ccache/ (B:\build)
 # instead of REPO_ROOT/build/logs/ccache/ (C: drive).
 CONFIG_PRESETS_MAP = {
-    "local": {},
+    "local": {"max_size": "10G"},
     # Dev and release use separate cache servers to avoid cache pollution.
     # We may later split these further into presubmit (PR) vs postsubmit
     # (post-merge) presets — presubmit serves varied code at mixed trust
     # levels while postsubmit serves a uniform stream of approved commits,
     # so separating them improves both cache hit rates and data integrity.
     "github-oss-dev": {
-        "secondary_storage": CACHE_SRV_DEV,
-        "max_size": "5G",
+        "remote_storage": CACHE_SRV_DEV,
+        "max_size": "10G",
     },
     "github-oss-release": {
-        "secondary_storage": CACHE_SRV_REL,
-        "max_size": "5G",
+        "remote_storage": CACHE_SRV_REL,
+        "max_size": "10G",
     },
 }
 
@@ -123,7 +123,7 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     #   creation for another sub-project.
     # pch_defines, time_macros:
     #   amd-llvm uses PCH on Windows builds by default, CMake will correctly
-    #   use the appropriate compilation flags that ccache understands. See 
+    #   use the appropriate compilation flags that ccache understands. See
     #   https://ccache.dev/manual/4.7.html#_precompiled_headers for details.
     lines.append(f"sloppiness = include_file_ctime,pch_defines,time_macros")
 
