@@ -214,7 +214,7 @@ def run_therock_ci(
     )
     argv = [
         sys.executable,
-        str(_REPO_ROOT / "rocm-systems/.github/scripts/run-therock-ci.py"),
+        str(_REPO_ROOT / "build_tools/github_actions/test_executable_scripts/run-therock-ci.py"),
         "--configure-cmd",
         shlex.join(cmake_config_cmd),
         "--build-cmd",
