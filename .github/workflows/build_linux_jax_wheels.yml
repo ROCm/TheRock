@@ -340,7 +340,7 @@ jobs:
           echo "  JAX_PJRT_VERSION=${JAX_PJRT_VERSION}"
           JAXLIB_INCLUDE=""
           if [ -n "${JAXLIB_VERSION}" ]; then
-            JAXLIB_INCLUDE="--include jaxlib-${JAXLIB_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl"
+            JAXLIB_INCLUDE="--include jaxlib-${JAXLIB_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl"
           fi
           aws s3 cp \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
