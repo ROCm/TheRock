@@ -551,7 +551,7 @@ class ConfigureCITest(unittest.TestCase):
         self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
         entry = gfx94x_entries[0]
         # Should select the alternate CCS label
-        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm")
+        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm")
 
     def test_gfx94x_primary_label_selected_when_random_above_weight(self):
         """When random() >= weight, primary label should be selected."""
