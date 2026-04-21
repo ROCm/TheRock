@@ -155,9 +155,18 @@ def main():
         _try(c, PPSMC_MSG_OverridePcieParameters, arg,
              f"OverridePcieParameters(level={level}, gen=2, width=3)", timeout=5000)
 
-    print("\n== 7: EnableAll(PWR_ALL=0) ==")
+    # Try to warm up SMU's feature engine with PWR_SOC first — that's
+    # the one domain we've consistently gotten accepted on a bare
+    # post-FW-load SMU. Then escalate to PWR_GFX, then PWR_ALL.
+    print("\n== 7a: EnableAll(PWR_SOC=3) ==")
+    _try(c, PPSMC_MSG_EnableAllSmuFeatures, 3,
+         "EnableAll(PWR_SOC=3)", timeout=5000)
+    print("\n== 7b: EnableAll(PWR_GFX=4) ==")
+    _try(c, PPSMC_MSG_EnableAllSmuFeatures, 4,
+         "EnableAll(PWR_GFX=4)", timeout=15000)
+    print("\n== 7c: EnableAll(PWR_ALL=0) ==")
     _try(c, PPSMC_MSG_EnableAllSmuFeatures, FEATURE_PWR_ALL,
-         "EnableAll(PWR_ALL=0)", timeout=10000)
+         "EnableAll(PWR_ALL=0)", timeout=15000)
 
     print("\n== 8: poll BOOTLOAD_COMPLETE (5s) ==")
     GC_B1 = 0xA000
