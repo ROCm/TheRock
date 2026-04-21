@@ -27,6 +27,32 @@ if(THEROCK_ENABLE_RCCL)
   ##############################################################################
   set(_rccl_subproject_names)
 
+  if(THEROCK_SANITIZER STREQUAL "ASAN")
+    set(_rccl_asan_gpu_target "gfx942")
+    get_property(_rccl_all_gpu_targets GLOBAL PROPERTY THEROCK_AMDGPU_TARGETS)
+    foreach(_rccl_gpu_target ${_rccl_all_gpu_targets})
+      if(_rccl_gpu_target STREQUAL "")
+        continue()
+      endif()
+      if(_rccl_gpu_target STREQUAL _rccl_asan_gpu_target)
+        continue()
+      endif()
+      foreach(_rccl_project rccl rccl-tests)
+        set(_rccl_property "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${_rccl_project}")
+        get_property(_rccl_existing GLOBAL PROPERTY "${_rccl_property}")
+        set(_rccl_existing_list ${_rccl_existing})
+        list(FIND _rccl_existing_list "${_rccl_gpu_target}" _rccl_found_index)
+        if(_rccl_found_index EQUAL -1)
+          set_property(GLOBAL APPEND PROPERTY "${_rccl_property}" "${_rccl_gpu_target}")
+        endif()
+      endforeach()
+    endforeach()
+    unset(_rccl_existing)
+    unset(_rccl_existing_list)
+    unset(_rccl_found_index)
+    unset(_rccl_property)
+  endif()
+
   therock_cmake_subproject_declare(rccl
     # Build all GPU targets in a single target-neutral artifact as long as the
     # host code isn't fully target agnostic.
