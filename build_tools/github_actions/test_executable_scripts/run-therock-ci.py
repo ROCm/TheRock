@@ -146,7 +146,7 @@ def _cdash_build_name() -> str:
         refname = os.getenv("GITHUB_REF_NAME", "").strip()
         if refname:
             safe = re.sub(r"[^\w.\-]+", "-", refname).strip("-")
-            safe = f"[Branch: {safe}]"
+            safe = f" [Branch: {safe}]"
             prefix = f"Manual_" if safe else ""
         else:
             prefix = ""
