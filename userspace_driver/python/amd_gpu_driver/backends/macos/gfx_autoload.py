@@ -394,7 +394,7 @@ def run_imu_boot(client, firmware_dir: str,
                  layout: AutoloadLayout,
                  imu_fw_name: str = "gc_12_0_1_imu.bin") -> None:
     """Steps 4-8 from the module docstring."""
-    import time
+    import time  # noqa: F401  (also used by diagnostic sampler)
     # (4) point IMU at the RLC_G_UCODE region inside the autoload buffer
     # (at VRAM offset 0 + rlc_g_offset, since we parked the buffer at 0).
     gpu_addr = layout.rlc_g_offset
@@ -426,8 +426,26 @@ def run_imu_boot(client, firmware_dir: str,
     # (7) Clear halt bit 0 of IMU_CORE_CTRL to start the IMU.
     core_ctrl = _gc_rd(client, regGFX_IMU_CORE_CTRL)
     _gc_wr(client, regGFX_IMU_CORE_CTRL, core_ctrl & 0xFFFFFFFE)
-    logger.info("IMU_CORE_CTRL: was 0x%08x, now 0x%08x",
-                core_ctrl, core_ctrl & 0xFFFFFFFE)
+    # Immediate read-back: did the write stick?
+    post_ctrl = _gc_rd(client, regGFX_IMU_CORE_CTRL)
+    logger.info("IMU_CORE_CTRL: was 0x%08x, wrote 0x%08x, read-back 0x%08x",
+                core_ctrl, core_ctrl & 0xFFFFFFFE, post_ctrl)
+    # Tight loop sampling CORE_CTRL and RESET_CTRL for 100 ms to see
+    # what IMU does immediately after unhalt — does it run then halt
+    # itself, or does it stay halted from the start?
+    samples = []
+    for _ in range(50):
+        c1 = _gc_rd(client, regGFX_IMU_CORE_CTRL)
+        r1 = _gc_rd(client, regGFX_IMU_GFX_RESET_CTRL)
+        samples.append((c1, r1))
+        time.sleep(0.002)
+    # Compress adjacent identical samples.
+    compressed = [samples[0]]
+    for s in samples[1:]:
+        if s != compressed[-1]:
+            compressed.append(s)
+    logger.info("IMU early samples (first 100 ms, distinct transitions): %s",
+                " | ".join(f"CORE=0x{c:x}/RST=0x{r:x}" for c, r in compressed))
 
     # (8) wait for GFX_IMU_GFX_RESET_CTRL & 0x1F == 0x1F. Linux uses
     # usec_timeout (typ. 5 s). Log value changes so we can see IMU
