@@ -73,6 +73,21 @@ The soft links allow for an independent directory structure for ROCm expansions,
 /opt/rocm/hpc/ -> /opt/rocm/hpc-26.2.0
 ```
 
+#### Backward Compatibility with Legacy Directory Structure
+
+To maintain backward compatibility with applications built against previous ROCm versions (pre-8.0), `update-alternatives` symlinks are created in `/opt/rocm` that preserve the traditional directory layout. These symlinks point to `/etc/alternatives/rocm-*` paths, which in turn reference the versioned core directories:
+
+```
+/opt/rocm/bin -> /etc/alternatives/rocm-bin -> /opt/rocm/core-8.1/bin
+/opt/rocm/lib -> /etc/alternatives/rocm-lib -> /opt/rocm/core-8.1/lib
+/opt/rocm/include -> /etc/alternatives/rocm-include -> /opt/rocm/core-8.1/include
+/opt/rocm/llvm -> /etc/alternatives/rocm-llvm -> /opt/rocm/core-8.1/llvm
+/opt/rocm/amdgcn -> /etc/alternatives/rocm-amdgcn -> /opt/rocm/core-8.1/amdgcn
+/opt/rocm/libexec -> /etc/alternatives/rocm-libexec -> /opt/rocm/core-8.1/libexec
+```
+
+This approach allows legacy applications to find expected directory structures without modification while supporting the new versioned installation scheme.
+
 ### RPATH and Relocatability
 
 - All ROCm packages must be built and shipped with `$ORIGIN`-based RPATH
