@@ -155,18 +155,42 @@ def main():
         _try(c, PPSMC_MSG_OverridePcieParameters, arg,
              f"OverridePcieParameters(level={level}, gen=2, width=3)", timeout=5000)
 
-    # Try to warm up SMU's feature engine with PWR_SOC first — that's
-    # the one domain we've consistently gotten accepted on a bare
-    # post-FW-load SMU. Then escalate to PWR_GFX, then PWR_ALL.
-    print("\n== 7a: EnableAll(PWR_SOC=3) ==")
-    _try(c, PPSMC_MSG_EnableAllSmuFeatures, 3,
-         "EnableAll(PWR_SOC=3)", timeout=5000)
-    print("\n== 7b: EnableAll(PWR_GFX=4) ==")
-    _try(c, PPSMC_MSG_EnableAllSmuFeatures, 4,
-         "EnableAll(PWR_GFX=4)", timeout=15000)
-    print("\n== 7c: EnableAll(PWR_ALL=0) ==")
-    _try(c, PPSMC_MSG_EnableAllSmuFeatures, FEATURE_PWR_ALL,
-         "EnableAll(PWR_ALL=0)", timeout=15000)
+    # Send EnableAll(PWR_ALL=0) and while it pends, poll RLC state
+    # every 100 ms for 60 s. If RLC is doing slow work we'll see
+    # bits 6..30 or 31 of BOOTLOAD_STATUS progress over time. If
+    # nothing changes in 60 s, the problem isn't a slow-completion.
+    import time as _time
+    GC_B1 = 0xA000
+    def _rlc(o): return c.mmio_read32(5, (GC_B1 + o) * 4)
+    MP1 = 0x16200
+    c90 = (MP1 + 0x40 + 90) * 4
+    c82 = (MP1 + 0x40 + 82) * 4
+    c66 = (MP1 + 0x40 + 66) * 4
+
+    print("\n== 7: EnableAll(PWR_ALL=0) with 60 s RLC watch ==")
+    c.mmio_write32(5, c90, 0)
+    c.mmio_write32(5, c82, FEATURE_PWR_ALL)
+    c.mmio_write32(5, c66, PPSMC_MSG_EnableAllSmuFeatures)
+    deadline = _time.time() + 60
+    last = None
+    got_resp = False
+    while _time.time() < deadline:
+        resp = c.mmio_read32(5, c90)
+        bl = _rlc(0x4e7c); rst = _rlc(0x40bc); core = _rlc(0x40b6)
+        snap = (resp, bl, rst, core)
+        if snap != last:
+            t = _time.time() - deadline + 60
+            print(f"  t={t:5.2f}s  C2PMSG_90=0x{resp:08x}  CORE=0x{core:x}  "
+                  f"RESET=0x{rst:08x}  BOOTLOAD=0x{bl:08x}")
+            last = snap
+        if resp != 0:
+            arg_out = c.mmio_read32(5, c82)
+            print(f"  EnableAll ACK: resp=0x{resp:x} arg_out=0x{arg_out:x}")
+            got_resp = True
+            break
+        _time.sleep(0.1)
+    if not got_resp:
+        print(f"  No SMU response in 60 s.")
 
     print("\n== 8: poll BOOTLOAD_COMPLETE (5s) ==")
     GC_B1 = 0xA000
