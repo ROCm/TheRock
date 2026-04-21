@@ -53,8 +53,6 @@ all_build_variants = {
 """
 amdgpu_family_info_matrix dictionary fields:
 - test-runs-on: (required) GitHub runner label for this architecture
-- test-runs-on-alternate: (optional) Alternate runner label for load balancing across runner pools
-- test-runs-on-alternate-weight: (optional) Probability (0.0-1.0) of selecting the alternate runner.
 - test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture
 - benchmark-runs-on: (optional) GitHub runner label for benchmarks for this architecture
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
@@ -73,8 +71,6 @@ amdgpu_family_info_matrix_presubmit = {
             # TODO: Remove alternative weight once we get dedicated set of machines
             # As we are bringing back up mi325, we are using a dual-label configuration to distribute load
             "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
-            "test-runs-on-alternate": "linux-gfx942-1gpu-ccs-ossci-rocm",
-            "test-runs-on-alternate-weight": 0.35,  # 35% chance of using alternate
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
