@@ -93,6 +93,31 @@ def run_command_with_search(
     log(f"{command}: command not found")
 
 
+def print_sysfs_firmware_versions() -> None:
+    """
+    Print per-component firmware versions from /sys/class/drm/card*/device/fw_version/.
+
+    These sysfs files are world-readable and exposed by amdgpu without
+    needing debugfs, so they are reliable inside CI containers. They include
+    mes_fw_version and mes_kiq_fw_version, which are useful when diagnosing
+    MES-related dispatch hangs.
+    """
+    log("\n=== sysfs firmware versions ===")
+    cards = sorted(Path("/sys/class/drm").glob("card*/device/fw_version"))
+    if not cards:
+        log("/sys/class/drm/card*/device/fw_version: not found")
+        return
+    for fw_dir in cards:
+        card = fw_dir.parent.parent.name
+        log(f"-- {card} ({fw_dir})")
+        for entry in sorted(fw_dir.iterdir()):
+            try:
+                value = entry.read_text().strip()
+            except OSError as e:
+                value = f"<read error: {e}>"
+            log(f"  {entry.name}: {value}")
+
+
 def run_sanity(os_name: str) -> None:
     THIS_SCRIPT_DIR = Path(__file__).resolve().parent
     THEROCK_DIR = THIS_SCRIPT_DIR.parent
@@ -130,7 +155,10 @@ def run_sanity(os_name: str) -> None:
             args=["-r"],
             extra_command_search_paths=[bin_dir],
         )
-        # Print per-component firmware versions (useful for debugging hangs)
+        # Print per-component firmware versions (useful for debugging hangs).
+        # Read sysfs first: it works regardless of amd-smi support and always
+        # includes mes_fw_version / mes_kiq_fw_version for diagnosing MES hangs.
+        print_sysfs_firmware_versions()
         if AMDGPU_FAMILIES not in unsupported_amdsmi_families:
             run_command_with_search(
                 label="amd-smi firmware",
