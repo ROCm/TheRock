@@ -962,7 +962,7 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
         self.assertEqual(gfx94x_linux["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
         self.assertEqual(
             gfx94x_linux["test-runs-on-alternate"],
-            "linux-gfx942-1gpu-ccs-ossci-rocm",
+            "linux-gfx942-1gpu-core42-ossci-rocm.test",
         )
 
     def test_alternate_label_selected_when_random_below_weight(self):
@@ -984,7 +984,7 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
         # Check that the alternate label was selected
         gfx94x_info = builds.linux.per_family_info[0]
         self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm"
+            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm.test"
         )
 
     def test_primary_label_selected_when_random_above_weight(self):
@@ -1038,7 +1038,7 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
             builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
             gfx94x_info = builds.linux.per_family_info[0]
             self.assertEqual(
-                gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm"
+                gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm.test"
             )
 
     def test_families_without_alternate_use_primary_only(self):
