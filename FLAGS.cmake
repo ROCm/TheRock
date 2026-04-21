@@ -17,7 +17,7 @@ include(therock_flag_utils)
 
 therock_declare_flag(
   NAME KPACK_SPLIT_ARTIFACTS
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON
   DESCRIPTION "Split target-specific artifacts into generic and arch-specific components"
 )
 
