@@ -135,7 +135,7 @@ jobs:
       release_type: ci
     permissions:
       contents: read
-      id-token: write
+      id-token: none
 
   build_native_rpm_packages:
     needs: [build_multi_arch_stages]
