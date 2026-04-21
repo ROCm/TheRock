@@ -25,6 +25,7 @@ from amd_gpu_driver.backends.macos.iokit_client import IOKitClient
 from amd_gpu_driver.backends.macos.smu import (
     FEATURE_PWR_GFX,
     FEATURE_PWR_SOC,
+    PPSMC_MSG_DisallowGfxOff,
     PPSMC_MSG_EnableAllSmuFeatures,
     PPSMC_MSG_GetRunningSmuFeaturesHi,
     PPSMC_MSG_GetRunningSmuFeaturesLo,
@@ -74,6 +75,12 @@ def main():
 
     print("\n== Step 3: build autoload buffer in VRAM (via BAR0) ==")
     build_autoload_buffer(c, FIRMWARE_DIR, layout, toc_blob)
+
+    # Keep GFX out of GfxOff for the IMU boot — otherwise SMU may
+    # gate the GFX power rail and IMU can't drive HARD_RESETB high.
+    print("\n== Pre-IMU: DisallowGfxOff ==")
+    r, _ = smu_send(c, PPSMC_MSG_DisallowGfxOff, 0, timeout_ms=1500)
+    print(f"  DisallowGfxOff -> resp=0x{r:x}")
 
     print("\n== Step 4-8: IMU boot ==")
     try:

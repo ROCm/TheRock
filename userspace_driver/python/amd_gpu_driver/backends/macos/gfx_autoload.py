@@ -410,15 +410,24 @@ def run_imu_boot(client, firmware_dir: str,
     logger.info("IMU_CORE_CTRL: was 0x%08x, now 0x%08x",
                 core_ctrl, core_ctrl & 0xFFFFFFFE)
 
-    # (8) wait for GFX_IMU_GFX_RESET_CTRL & 0x1F == 0x1F
-    deadline = time.time() + 2.0
-    last = 0
+    # (8) wait for GFX_IMU_GFX_RESET_CTRL & 0x1F == 0x1F. Linux uses
+    # usec_timeout (typ. 5 s). Log value changes so we can see IMU
+    # make progress if it's slow.
+    deadline = time.time() + 5.0
+    last = _gc_rd(client, regGFX_IMU_GFX_RESET_CTRL)
+    logger.info("IMU wait: initial GFX_IMU_GFX_RESET_CTRL = 0x%08x", last)
     while time.time() < deadline:
-        last = _gc_rd(client, regGFX_IMU_GFX_RESET_CTRL)
-        if (last & 0x1F) == 0x1F:
-            logger.info("IMU ready: GFX_IMU_GFX_RESET_CTRL = 0x%08x", last)
+        v = _gc_rd(client, regGFX_IMU_GFX_RESET_CTRL)
+        if v != last:
+            logger.info("  GFX_IMU_GFX_RESET_CTRL: 0x%08x -> 0x%08x", last, v)
+            last = v
+        if (v & 0x1F) == 0x1F:
+            logger.info("IMU ready: GFX_IMU_GFX_RESET_CTRL = 0x%08x", v)
             return
         time.sleep(0.002)
+    # Also dump CORE_CTRL so we can see if IMU self-reset.
+    core = _gc_rd(client, regGFX_IMU_CORE_CTRL)
     raise TimeoutError(
-        f"IMU did not reach reset-ready state (GFX_IMU_GFX_RESET_CTRL = 0x{last:08x})"
+        f"IMU did not reach reset-ready state "
+        f"(GFX_IMU_GFX_RESET_CTRL=0x{last:08x}, CORE_CTRL=0x{core:08x})"
     )
