@@ -349,21 +349,26 @@ def _gc_rd(client, dw_off: int) -> int:
     return client.mmio_read32(_MMIO_BAR, (GC_BASE_IDX1_DW + dw_off) * 4)
 
 
-def _stream_imu(client, iram: bytes, dram: bytes) -> None:
-    """Stream IMU IRAM+DRAM into IMU's internal SRAM (via MMIO)."""
+def _stream_imu(client, iram: bytes, dram: bytes, fw_version: int) -> None:
+    """Stream IMU IRAM+DRAM into IMU's internal SRAM via MMIO.
+
+    Linux (`imu_v12_0_load_microcode`) finishes each stream by writing
+    `regGFX_IMU_{I,D}_RAM_ADDR = adev->gfx.imu_fw_version`. That's a
+    seal/commit — the IMU loader validates integrity against this
+    version stamp. Skipping it leaves IMU halted at reset status 0x30.
+    """
     if len(iram) % 4 or len(dram) % 4:
         raise ValueError("IMU ucode not DWORD-aligned")
     _gc_wr(client, regGFX_IMU_I_RAM_ADDR, 0)
     for i in range(0, len(iram), 4):
         word = struct.unpack_from("<I", iram, i)[0]
         _gc_wr(client, regGFX_IMU_I_RAM_DATA, word)
-    # Linux writes fw_version at the end to lock it down.
-    _gc_wr(client, regGFX_IMU_I_RAM_ADDR, 0)
+    _gc_wr(client, regGFX_IMU_I_RAM_ADDR, fw_version)
     _gc_wr(client, regGFX_IMU_D_RAM_ADDR, 0)
     for i in range(0, len(dram), 4):
         word = struct.unpack_from("<I", dram, i)[0]
         _gc_wr(client, regGFX_IMU_D_RAM_DATA, word)
-    _gc_wr(client, regGFX_IMU_D_RAM_ADDR, 0)
+    _gc_wr(client, regGFX_IMU_D_RAM_ADDR, fw_version)
 
 
 def run_imu_boot(client, firmware_dir: str,
@@ -381,16 +386,19 @@ def run_imu_boot(client, firmware_dir: str,
 
     # (5) stream IMU firmware via MMIO
     imu_blob = open(os.path.join(firmware_dir, imu_fw_name), "rb").read()
-    # IMU header parsing — iram starts at ucode_array_offset_bytes,
-    # dram follows iram (see amdgpu_ucode.c — the header's iram/dram
-    # offset fields are ignored).
+    # IMU header: common header (32 bytes) with ucode_version at +16,
+    # then iram_size, iram_off, dram_size, dram_off at +32/+36/+40/+44.
+    # The iram/dram offset fields are ignored by amdgpu — iram starts
+    # at ucode_array_offset_bytes, dram follows iram.
     uoff = _common_ucode_off(imu_blob)
+    fw_version = struct.unpack_from("<I", imu_blob, 16)[0]
     iram_sz = struct.unpack_from("<I", imu_blob, 32)[0]
     dram_sz = struct.unpack_from("<I", imu_blob, 40)[0]
     iram = imu_blob[uoff:uoff + iram_sz]
     dram = imu_blob[uoff + iram_sz:uoff + iram_sz + dram_sz]
-    logger.info("Streaming IMU: iram=%d bytes, dram=%d bytes", len(iram), len(dram))
-    _stream_imu(client, iram, dram)
+    logger.info("Streaming IMU: fw_version=0x%x iram=%d dram=%d",
+                fw_version, len(iram), len(dram))
+    _stream_imu(client, iram, dram, fw_version)
 
     # (6) IMU access control
     _gc_wr(client, regGFX_IMU_C2PMSG_ACCESS_CTRL0, 0xFFFFFF)
