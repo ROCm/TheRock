@@ -126,15 +126,39 @@ def main():
         print(f"  PSP rejected AUTOLOAD_RLC; raw_resp[0..32] = {resp['raw_resp'][:32].hex()}")
         sys.exit(3)
 
-    print("\n== Step 6: post-autoload state ==")
+    print("\n== Step 6: wait for BOOTLOAD_COMPLETE ==")
+    GC_B0 = 0x1260
     GC_B1 = 0xA000
-    def gc_rd(off):
-        return c.mmio_read32(5, (GC_B1 + off) * 4)
-    print(f"  GFX_IMU_CORE_CTRL       = 0x{gc_rd(0x40b6):08x}")
-    print(f"  GFX_IMU_GFX_RESET_CTRL  = 0x{gc_rd(0x40bc):08x}")
-    print(f"  RLC_CNTL                = 0x{gc_rd(0x4c00):08x}")
-    print(f"  RLC_GPM_THREAD_ENABLE   = 0x{gc_rd(0x4c45):08x}")
-    print(f"  GRBM_STATUS (idx0)      = 0x{c.mmio_read32(5, (0x1260 + 0x0da4) * 4):08x}")
+    import time
+    def gc_rd(base, off):
+        return c.mmio_read32(5, (base + off) * 4)
+    t0 = time.time()
+    deadline = t0 + 10.0
+    last = None
+    complete = False
+    while time.time() < deadline:
+        core     = gc_rd(GC_B1, 0x40b6)
+        reset    = gc_rd(GC_B1, 0x40bc)
+        rlc_cntl = gc_rd(GC_B1, 0x4c00)
+        bootload = gc_rd(GC_B1, 0x4e7c)
+        cp_stat  = gc_rd(GC_B0, 0x0f40)
+        grbm     = gc_rd(GC_B0, 0x0da4)
+        snapshot = (core, reset, rlc_cntl, bootload, cp_stat, grbm)
+        if snapshot != last:
+            t = time.time() - t0
+            print(f"  t={t:5.2f}s  IMU_CORE=0x{core:08x} IMU_RESET=0x{reset:08x} "
+                  f"RLC_CNTL=0x{rlc_cntl:08x} BOOTLOAD=0x{bootload:08x} "
+                  f"CP_STAT=0x{cp_stat:08x} GRBM=0x{grbm:08x}")
+            last = snapshot
+        if (bootload & 0x80000000) and cp_stat == 0:
+            complete = True
+            break
+        time.sleep(0.05)
+    if complete:
+        print("  BOOTLOAD_COMPLETE ✓")
+    else:
+        print(f"  BOOTLOAD_COMPLETE never set within {(time.time()-t0):.2f}s "
+              f"(final BOOTLOAD_STATUS=0x{last[3]:08x})")
 
     print("\n== Step 7: EnableAllSmuFeatures(FEATURE_PWR_GFX) ==")
     try:
