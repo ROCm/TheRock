@@ -14,6 +14,7 @@ import argparse
 import logging
 import os
 import platform
+import re
 import shlex
 import subprocess
 import tempfile
@@ -143,10 +144,11 @@ def run_list_engines_test():
             "skipping engine output validation (will only verify return code)"
         )
 
-    # Expected engines that must be present in the output (only checked if plugin exists)
-    expected_engines = [
-        "MIOPEN_ENGINE (0x15B46865C717A122)",
-        "MIOPEN_ENGINE_DETERMINISTIC (0xA258541A6DAA1DE3)",
+    # Expected engine patterns that must be present in the output (only checked if plugin exists)
+    # Each pattern matches a line containing the engine name and its ID
+    expected_engine_patterns = [
+        r"MIOPEN_ENGINE.*0x15B46865C717A122",
+        r"MIOPEN_ENGINE_DETERMINISTIC.*0xA258541A6DAA1DE3",
     ]
 
     def run_and_validate(cmd: list, description: str) -> None:
@@ -181,13 +183,13 @@ def run_list_engines_test():
                 f"hipdnn_list_engines ({description}) output missing 'Loaded engines:'"
             )
 
-        for engine in expected_engines:
-            if engine not in result.stdout:
+        for pattern in expected_engine_patterns:
+            if not re.search(pattern, result.stdout):
                 logging.error(
                     f"Unexpected output from hipdnn_list_engines:\n{result.stdout}"
                 )
                 raise RuntimeError(
-                    f"hipdnn_list_engines ({description}) output missing expected engine: {engine}"
+                    f"hipdnn_list_engines ({description}) output missing expected engine pattern: {pattern}"
                 )
 
     # Run 1: Test with explicit --plugin-dir argument
