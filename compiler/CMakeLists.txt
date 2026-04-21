@@ -141,7 +141,31 @@ if(THEROCK_ENABLE_COMPILER)
   therock_cmake_subproject_provide_package(amd-llvm Clang lib/llvm/lib/cmake/clang)
   therock_cmake_subproject_provide_package(amd-llvm LLD lib/llvm/lib/cmake/lld)
   therock_cmake_subproject_provide_package(amd-llvm LLVM lib/llvm/lib/cmake/llvm)
+  therock_cmake_subproject_provide_package(amd-llvm OpenMP lib/llvm/lib/cmake/openmp-compat)
   therock_cmake_subproject_activate(amd-llvm)
+
+  # Stage an OpenMP compatibility shim alongside LLVM's CONFIG export. TheRock's
+  # dependency provider always resolves find_package() in CONFIG-style, but the
+  # upstream openmp-config.cmake only defines OpenMP::omp. The shim includes it
+  # and adds OpenMP::OpenMP_C, OpenMP::OpenMP_CXX, OpenMP::OpenMP_Fortran so
+  # subprojects that expect CMake's FindOpenMP target names (for example
+  # dyninst inside rocprofiler-systems) resolve cleanly to the in-tree OpenMP.
+  get_target_property(_amd_llvm_stamp_dir amd-llvm THEROCK_STAMP_DIR)
+  get_target_property(_amd_llvm_dist_dir amd-llvm THEROCK_DIST_DIR)
+  set(_openmp_compat_src_dir "${CMAKE_CURRENT_SOURCE_DIR}/openmp-compat")
+  set(_openmp_compat_dst_dir "${_amd_llvm_dist_dir}/lib/llvm/lib/cmake/openmp-compat")
+  add_custom_command(
+    OUTPUT "${_amd_llvm_stamp_dir}/stage.stamp"
+    APPEND
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${_openmp_compat_dst_dir}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+      "${_openmp_compat_src_dir}/openmp-config.cmake"
+      "${_openmp_compat_src_dir}/FindOpenMP.cmake"
+      "${_openmp_compat_dst_dir}/"
+    DEPENDS
+      "${_openmp_compat_src_dir}/openmp-config.cmake"
+      "${_openmp_compat_src_dir}/FindOpenMP.cmake"
+  )
 
 
   ##############################################################################
