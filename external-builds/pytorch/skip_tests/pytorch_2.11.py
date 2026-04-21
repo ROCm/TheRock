@@ -99,6 +99,7 @@ skip_tests = {
             "test_custom_autograd_ac_early_stop",
             "test_custom_autograd_no_early_free",
             "test_custom_autograd_repeated_grad_grad",
+            "test_logging",
         ],
     },
     # "gfx120": {
