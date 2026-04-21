@@ -25,16 +25,7 @@ import random
 
 
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
-    """Select a runner label based on weighted random selection.
-
-    Args:
-        labels_config: List of dicts with "label" and "weight" keys.
-                       Weights should sum to 1.0.
-        context_name: Name for logging context (e.g. family name).
-
-    Returns:
-        Selected label string.
-    """
+    """Select a runner label based on weighted random selection."""
     rand_val = random.random()
     cumulative = 0.0
     for config in labels_config:
