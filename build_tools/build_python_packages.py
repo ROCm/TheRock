@@ -370,10 +370,10 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
 
 
 def profiler_artifact_filter(an: ArtifactName) -> bool:
-    return  an.name in [
-            "rocprofiler-compute",
-            "rocprofiler-systems",
-        ] and an.component in ["lib", "run"]
+    return an.name in [
+        "rocprofiler-compute",
+        "rocprofiler-systems",
+    ] and an.component in ["lib", "run"]
     
 
 def device_artifact_filter(target: str, an: ArtifactName) -> bool:
