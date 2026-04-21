@@ -338,23 +338,22 @@ def build_autoload_buffer(client, firmware_dir: str,
     _place(SOC24_FIRMWARE_ID_RS64_MES_P1,       mes1_u, "RS64_MES_P1")
     _place(SOC24_FIRMWARE_ID_RS64_MES_P1_STACK, mes1_d, "MES_P1_STACK")
 
-    # Finally, the TOC itself. gfx_v12_0_rlc_backdoor_autoload_copy_toc_ucode
-    # patches the last DWORD with RLC_TOC_FORMAT_API << 24 | 0x1 before copying.
+    # Finally, the TOC itself. `gfx_v12_0_rlc_backdoor_autoload_copy_toc_ucode`
+    # patches the **second-to-last** DWORD (offset `size - 8`, not `size - 4`)
+    # with `(RLC_TOC_FORMAT_API << 24) | 0x1` before copying:
+    #   toc_ptr = (uint32_t *)data + size / 4 - 2;
+    #   *toc_ptr = (RLC_TOC_FORMAT_API << 24) | 0x1;
     toc_slot = by_id.get(SOC24_FIRMWARE_ID_RLC_TOC)
     if toc_slot is not None:
         toc_copy = bytearray(toc_blob)
-        # Overwrite the last 4 bytes of the region PSP gave us (size of the
-        # TOC slot in VRAM — not the .bin file size). The driver patches
-        # (RLC_TOC_FORMAT_API << 24) | 0x1 at that position.
-        if toc_slot.size >= 4:
+        if toc_slot.size >= 8:
             patched = (RLC_TOC_FORMAT_API << 24) | 0x1
             copy_size = min(len(toc_copy), toc_slot.size)
-            # Pad to toc_slot.size with zeros, then patch tail.
             if copy_size < toc_slot.size:
                 toc_copy += b"\x00" * (toc_slot.size - copy_size)
-            struct.pack_into("<I", toc_copy, toc_slot.size - 4, patched)
+            struct.pack_into("<I", toc_copy, toc_slot.size - 8, patched)
             _memcpy_to_vram(vram_cpu, toc_slot.offset, bytes(toc_copy[:toc_slot.size]))
-            logger.info("  %-20s: off=0x%08x size=0x%x (patched last DW = 0x%08x)",
+            logger.info("  %-20s: off=0x%08x size=0x%x (patched DW[size-8] = 0x%08x)",
                         "RLC_TOC", toc_slot.offset, toc_slot.size, patched)
 
 
