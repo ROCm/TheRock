@@ -158,7 +158,7 @@ def _cdash_build_name() -> str:
     )
     if not run_key:
         return f"{prefix}{label}{safe}"
-    return f"{prefix}{label} [RUN_ID: {run_key}]"
+    return f"{prefix}{label} [RUN_ID: {run_key}]{safe}"
 
 
 def _which_cmake() -> str:
