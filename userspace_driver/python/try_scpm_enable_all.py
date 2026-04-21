@@ -182,26 +182,31 @@ def main():
     print("\n== 7a: EnableAll(PWR_SOC=3) ==")
     _try(c, PPSMC_MSG_EnableAllSmuFeatures, 3, "EnableAll(PWR_SOC=3)", timeout=5000)
 
-    # Try EnableSmuFeaturesLow with just a FEW safe bits first.
-    # FEATURE_FW_DATA_READ_BIT = 0
-    # FEATURE_DPM_UCLK_BIT = 3  (memory clock DPM)
-    # FEATURE_DPM_FCLK_BIT = 4
-    # FEATURE_DPM_SOCCLK_BIT = 5
-    # FEATURE_DPM_LINK_BIT = 6
-    # FEATURE_DPM_DCN_BIT = 7 (display — probably safe to skip on headless)
-    # Try just bits already running (running_low & FeaturesToRun[0]) plus
-    # a couple we want (GFXCLK) to see if they can be added individually.
-    #
-    # Start with only GFXCLK + GFX_POWER_OPTIMIZER:
-    #   FEATURE_DPM_GFXCLK_BIT              = 1  → 0x2
-    #   FEATURE_DPM_GFX_POWER_OPTIMIZER_BIT = 2  → 0x4
-    gfx_only_mask = (1 << 1) | (1 << 2)
-    print(f"\n== 7b: EnableSmuFeaturesLow(GFXCLK+OPT = 0x{gfx_only_mask:x}) ==")
-    _try(c, 0x08, gfx_only_mask,
-         f"EnableSmuFeaturesLow(0x{gfx_only_mask:x})", timeout=10000)
-
-    print("\n== 7c: EnableAll(PWR_GFX=4) ==")
-    _try(c, PPSMC_MSG_EnableAllSmuFeatures, 4, "EnableAll(PWR_GFX=4)", timeout=15000)
+    # Previous run showed EnableSmuFeaturesLow(0x6) returns arg_out=0x2
+    # — bit 1 (DPM_GFXCLK) stuck, bit 2 (DPM_GFX_POWER_OPTIMIZER)
+    # didn't. So individual feature enables via 0x08 work even though
+    # PWR_GFX/PWR_ALL hang. Try enabling every bit in
+    # FeaturesToRun[0] one at a time, logging which ones stick and
+    # which hang SMU. Each call has a short timeout to avoid a
+    # per-bit hang taking out the whole probe.
+    print("\n== 7b: per-bit EnableSmuFeaturesLow probe ==")
+    running_lo = 0
+    for bit in range(32):
+        bit_mask = 1 << bit
+        if not (feat_low & bit_mask):
+            continue  # pptable doesn't want this feature
+        if running_lo & bit_mask:
+            continue  # already enabled via PWR_SOC warm-up
+        try:
+            r, arg_out = smu_send(c, 0x08, bit_mask, timeout_ms=2000)
+            tag = "enabled" if (arg_out & bit_mask) else "refused"
+            print(f"  bit {bit:2d} (0x{bit_mask:08x}): resp=0x{r:x} arg_out=0x{arg_out:08x}  {tag}")
+            if arg_out & bit_mask:
+                running_lo |= bit_mask
+        except TimeoutError:
+            print(f"  bit {bit:2d} (0x{bit_mask:08x}): HUNG — this bit triggered a hang")
+            break
+    print(f"\n  Final low-mask enabled via EnableSmuFeaturesLow: 0x{running_lo:08x}")
 
     print("\n== 8: poll BOOTLOAD_COMPLETE (5s) ==")
     GC_B1 = 0xA000
