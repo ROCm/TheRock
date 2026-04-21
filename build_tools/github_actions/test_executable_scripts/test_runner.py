@@ -47,6 +47,7 @@ COMPONENT_DIR_MAPPING = {
     "hipdnn-samples": "hipdnn_samples",
     "miopen_plugin": "miopen_legacy_plugin",
     "hipsparselt": "hipsparselt",
+    "hipblas": "hipblas",
     # Add more mappings as needed
 }
 
