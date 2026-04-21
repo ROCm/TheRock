@@ -130,7 +130,7 @@ def _cdash_build_name() -> str:
     * If ``ARTIFACT_RUN_ID`` is non-empty, append `` [RUN_ID: ...]``.
     * If ``GITHUB_REF`` is a pull request, prefix the label with ``PR_<n>_``.
     * Otherwise, for a non-empty ``GITHUB_REF_NAME`` (e.g. manual ``workflow_dispatch``),
-      prefix with ``Manual_<sanitized-branch>_``.
+      prefix with ``Manual[label[Branch: <sanitized-branch>]``.
 
     Example::
 
