@@ -12,6 +12,7 @@ include = [
 [components.doc."comm-libs/rccl/stage"]
 [components.test."comm-libs/rccl/stage"]
 include = [
+  "bin/rccl/**",
   "bin/rccl-UnitTests",
 ]
 
