@@ -1,5 +1,4 @@
 # Dockerfile for Spack integration on Ubuntu 24.04
-# This image includes Spack for ROCm package management and builds
 
 FROM ubuntu:24.04
 
