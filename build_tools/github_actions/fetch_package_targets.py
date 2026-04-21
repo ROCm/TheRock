@@ -54,12 +54,43 @@ jobs:
 
 import os
 import json
+import random
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
 )
 import string
 
 from github_actions_api import *
+
+
+def _select_weighted_label(labels_config: list[dict], context_name: str) -> str:
+    """Select a runner label based on weighted random selection.
+
+    Args:
+        labels_config: List of dicts with "label" and "weight" keys.
+                       Weights should sum to 1.0.
+        context_name: Name for logging context (e.g. family name).
+
+    Returns:
+        Selected label string.
+    """
+    rand_val = random.random()
+    cumulative = 0.0
+    for config in labels_config:
+        cumulative += config["weight"]
+        if rand_val < cumulative:
+            print(
+                f"  {context_name}: selected runner (weight={config['weight']}): "
+                f"{config['label']}"
+            )
+            return config["label"]
+    # Fallback to last label if rounding errors
+    selected = labels_config[-1]
+    print(
+        f"  {context_name}: selected runner (weight={selected['weight']}): "
+        f"{selected['label']}"
+    )
+    return selected["label"]
 
 
 def determine_package_targets(args):
@@ -99,6 +130,13 @@ def determine_package_targets(args):
 
         family = platform_for_key.get("family")
         test_machine = platform_for_key.get("test-runs-on")
+
+        # Handle multi-label configuration with weighted random selection.
+        if "test-runs-on-labels" in platform_for_key:
+            test_machine = _select_weighted_label(
+                platform_for_key["test-runs-on-labels"], family
+            )
+
         sanity_check_only_for_family = platform_for_key.get(
             "sanity_check_only_for_family", False
         )
