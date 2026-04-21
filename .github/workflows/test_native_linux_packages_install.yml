@@ -85,51 +85,45 @@ permissions:
 run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
 
 jobs:
-  compute_repo_url:
-    name: Determine package type, repo URL, and GPU architecture
+  prepare_install_context:
+    name: Prepare install context (package type, GPU arch)
     runs-on: ubuntu-24.04
     outputs:
-      repo_url: ${{ steps.set-repo-params.outputs.repo_url }}
-      pkg_type: ${{ steps.set-repo-params.outputs.pkg_type }}
-      gfx_arch: ${{ steps.set-gfx-arch.outputs.gfx_arch }}
+      pkg_type: ${{ steps.derive.outputs.pkg_type }}
+      gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Set repo parameters
-        id: set-repo-params
+      - name: Derive package type and GPU architecture
+        id: derive
         run: |
           case "${{ inputs.os_profile }}" in
             ubuntu*|debian*) PKG_TYPE="deb" ;;
             *) PKG_TYPE="rpm" ;;
           esac
           echo "pkg_type=${PKG_TYPE}" >> $GITHUB_OUTPUT
-          echo "repo_url=${{ inputs.package_install_url }}" >> $GITHUB_OUTPUT
-
-      - name: Set gfx_arch
-        id: set-gfx-arch
-        run: |
           python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch \
             --artifact-group "${{ inputs.artifact_group }}" >> $GITHUB_OUTPUT
 
   test_native_linux_packages_install:
     name: Test Native Linux Packages Installation - ${{ inputs.os_profile }}
-    needs: [compute_repo_url]
+    needs: [prepare_install_context]
     strategy:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-gfx942-1gpu-ossci-rocm' || 'ubuntu-24.04' }}
     container:
-      # Images by OS profile: sles* -> SUSE BCI 16; ubuntu*/debian* -> ubuntu:24.04; other rpm (e.g. rhel10) -> RHEL UBI 9.4.
-      image: ${{ startsWith(inputs.os_profile, 'sles') && 'registry.suse.com/bci/bci-base:16.0' || ((startsWith(inputs.os_profile, 'ubuntu') || startsWith(inputs.os_profile, 'debian')) && 'ubuntu:24.04') || 'registry.access.redhat.com/ubi9/ubi:9.4' }}
+      # Images by OS profile: sles* -> SUSE BCI 16; ubuntu*/debian* -> ubuntu:24.04; other rpm (non-SLES, e.g. rhel10) -> RHEL UBI 10.
+      image: ${{ startsWith(inputs.os_profile, 'sles') && 'registry.suse.com/bci/bci-base:16.0' || ((startsWith(inputs.os_profile, 'ubuntu') || startsWith(inputs.os_profile, 'debian')) && 'ubuntu:24.04') || 'registry.access.redhat.com/ubi10/ubi:10.1' }}
       options: --ipc host
         --privileged
     env:
-      REPO_URL: ${{ needs.compute_repo_url.outputs.repo_url }}
+      REPO_URL: ${{ inputs.package_install_url }}
       GPG_KEY_URL: ${{ inputs.gpg_key_url || '' }}
       OS_PROFILE: ${{ inputs.os_profile }}
-      PKG_TYPE: ${{ needs.compute_repo_url.outputs.pkg_type }}
+      PKG_TYPE: ${{ needs.prepare_install_context.outputs.pkg_type }}
       RELEASE_TYPE: ${{ inputs.release_type }}
-      GFX_ARCH: ${{ needs.compute_repo_url.outputs.gfx_arch }}
+      GFX_ARCH: ${{ needs.prepare_install_context.outputs.gfx_arch }}
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
       TEST_TYPE: ${{ inputs.test_type || 'sanity' }}
     steps:
@@ -166,7 +160,7 @@ jobs:
               zypper install -y pciutils kmod
             fi
           else
-            # rpm (non-SLES, e.g. rhel10): RHEL UBI 9.4; Use --allowerasing to handle curl-minimal conflict on RHEL UBI 9.4
+            # rpm (non-SLES on UBI 10); --allowerasing for curl vs curl-minimal on UBI
             dnf install -y --allowerasing \
               bash \
               wget \
@@ -194,8 +188,8 @@ jobs:
         run: |
           # Use venv for all distros for consistency and future-proofing (PEP 668)
           $PYTHON_CMD -m venv /tmp/test-venv
-          /tmp/test-venv/bin/pip install --upgrade pip
-          /tmp/test-venv/bin/pip install -r build_tools/packaging/linux/tests/requirements.txt
+          /tmp/test-venv/bin/python -m pip install --upgrade pip
+          /tmp/test-venv/bin/python -m pip install -r build_tools/packaging/linux/tests/requirements.txt
           echo "PYTHON_CMD=/tmp/test-venv/bin/python" >> $GITHUB_ENV
 
       - name: Package Installation Test

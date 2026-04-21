@@ -209,8 +209,8 @@ def main(argv):
         "--package-type",
         type=str,
         choices=["wheel", "deb", "rpm"],
-        default=None,
-        help="The type of package. If not specified, computes versions for all types (wheel, deb, rpm)",
+        default="wheel",
+        help="The type of package (default: wheel)",
     )
 
     release_type_group = parser.add_mutually_exclusive_group()
@@ -240,16 +240,8 @@ def main(argv):
 
     args = parser.parse_args(argv)
 
-    # Determine which package types to compute
-    if args.package_type is None:
-        # Compute all types
-        package_types = ["wheel", "deb", "rpm"]
-    else:
-        # Compute only the specified type
-        package_types = [args.package_type]
-
     # Validation
-    if args.release_type == "release" and "wheel" in package_types:
+    if args.release_type == "release" and args.package_type == "wheel":
         parser.error("'release' type is only valid for deb/rpm packages, not wheel")
 
     if args.release_type != "prerelease" and args.prerelease_version:
@@ -259,24 +251,21 @@ def main(argv):
             "--prerelease-version is required when release type is 'prerelease'"
         )
 
-    # Compute versions for all requested package types
-    outputs = {}
-    for pkg_type in package_types:
-        version = compute_version(
-            pkg_type,
-            args.release_type,
-            args.custom_version_suffix,
-            args.prerelease_version,
-            args.override_base_version,
+    rocm_package_version = compute_version(
+        args.package_type,
+        args.release_type,
+        args.custom_version_suffix,
+        args.prerelease_version,
+        args.override_base_version,
+    )
+
+    # Set appropriate output variable based on package type
+    if args.package_type == "wheel":
+        gha_set_output({"rocm_package_version": rocm_package_version})
+    else:  # deb or rpm
+        gha_set_output(
+            {f"rocm_{args.package_type}_package_version": rocm_package_version}
         )
-
-        # Set appropriate output variable based on package type
-        if pkg_type == "wheel":
-            outputs["rocm_package_version"] = version
-        else:  # deb or rpm
-            outputs[f"rocm_{pkg_type}_package_version"] = version
-
-    gha_set_output(outputs)
 
 
 if __name__ == "__main__":

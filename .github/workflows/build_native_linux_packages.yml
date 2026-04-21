@@ -41,11 +41,6 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
-      verify_package:
-        description: When true, run get_install_test_profiles and test_native_linux_packages_install after the build. When false, only build and upload (skip install verification matrix).
-        required: false
-        type: boolean
-        default: false
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -81,10 +76,6 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
-      verify_package:
-        description: When true, run install verification jobs after the build. When false, build and upload only.
-        type: boolean
-        default: false
 
 permissions:
   id-token: write
@@ -102,7 +93,7 @@ jobs:
       s3_prefix: ${{ steps.s3_config.outputs.s3_prefix }}
       package_install_url: ${{ steps.s3_config.outputs.package_repository_url }}
     env:
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
+      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || '' }}
       OUTPUT_DIR: ${{ github.workspace }}/output
@@ -177,7 +168,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !inputs.skip_package_upload }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
@@ -196,64 +187,3 @@ jobs:
             --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
             --job ${{ steps.s3_config.outputs.job_type }} \
             --s3-prefix "${{ steps.s3_config.outputs.s3_prefix }}"
-
-  get_install_test_profiles:
-    name: Get Install test OS profiles for ${{ inputs.native_package_type }}
-    if: ${{ inputs.verify_package }}
-    runs-on: ubuntu-24.04
-    needs: [build_native_packages]
-    outputs:
-      os_profiles: ${{ steps.set-os-profiles.outputs.os_profiles }}
-      package_install_url: ${{ needs.build_native_packages.outputs.package_install_url }}
-      gpg_key_url: ${{ steps.set-gpg-url.outputs.gpg_key_url }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Set OS profiles
-        id: set-os-profiles
-        run: |
-          PKG_TYPE="${{ inputs.native_package_type }}"
-          RELEASE_TYPE="${{ inputs.release_type }}"
-
-          # OS profiles based on release type
-          if [[ "$RELEASE_TYPE" == "release" || "$RELEASE_TYPE" == "prerelease" ]]; then
-            OS_PROFILES='["ubuntu2404","rhel10"]'
-          elif [ "$PKG_TYPE" = "deb" ]; then
-            OS_PROFILES='["ubuntu2404"]'
-          else
-            OS_PROFILES='["rhel10","sles16"]'
-          fi
-
-          echo "os_profiles=${OS_PROFILES}" >> $GITHUB_OUTPUT
-
-      - name: Set GPG key URL
-        id: set-gpg-url
-        run: |
-          RELEASE_TYPE="${{ inputs.release_type }}"
-          PACKAGE_URL="${{ needs.build_native_packages.outputs.package_install_url }}"
-
-          if [[ "$RELEASE_TYPE" == "prerelease" || "$RELEASE_TYPE" == "release" ]]; then
-            # Get GPG key URL from package_install_url using Python
-            python build_tools/packaging/linux/get_url_repo_params.py get-gpg-url \
-              --from-url "$PACKAGE_URL" >> $GITHUB_OUTPUT
-          else
-            echo "gpg_key_url=" >> $GITHUB_OUTPUT
-          fi
-
-  test_native_linux_packages_install:
-    name: Test Native Linux Packages Install - ${{ matrix.os_profile }}
-    if: ${{ inputs.verify_package }}
-    needs: [build_native_packages, get_install_test_profiles]
-    strategy:
-      fail-fast: false
-      matrix:
-        os_profile: ${{ fromJson(needs.get_install_test_profiles.outputs.os_profiles) }}
-    uses: ./.github/workflows/test_native_linux_packages_install.yml
-    with:
-      package_install_url: ${{ needs.get_install_test_profiles.outputs.package_install_url }}
-      release_type: ${{ inputs.release_type }}
-      os_profile: ${{ matrix.os_profile }}
-      gpg_key_url: ${{ needs.get_install_test_profiles.outputs.gpg_key_url }}
-      artifact_group: ${{ inputs.artifact_group }}
-      install_prefix: ${{ '/opt/rocm/core' }}
