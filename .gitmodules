@@ -17,7 +17,7 @@
 [submodule "rocm-libraries"]
 	path = rocm-libraries
 	url = https://github.com/ROCm/rocm-libraries
-	branch = develop
+	branch = users/dahawkin/hipdnn-sdpa-feature-flag-2
 [submodule "rocm-systems"]
 	path = rocm-systems
 	url = https://github.com/ROCm/rocm-systems.git
