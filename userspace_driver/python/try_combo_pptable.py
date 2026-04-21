@@ -67,16 +67,18 @@ class _DriverShim:
     def free_dma(self, h): self.client.free_dma(h)
 
 
-def mmindex_read_bytes(client, mc_addr: int, size: int) -> bytes:
-    """Read VRAM via MM_INDEX/MM_DATA at byte offsets 0x00/0x04/0x18."""
-    out = bytearray()
-    for off in range(0, size, 4):
-        a = mc_addr + off
-        client.mmio_write32(5, 0x00, 0x80000000 | (a & 0xFFFFFFFF))
-        client.mmio_write32(5, 0x18, (a >> 32) & 0xFFFFFFFF)
-        v = client.mmio_read32(5, 0x04)
-        out += struct.pack("<I", v)
-    return bytes(out)
+def bar0_read_vram(client, vram_off: int, size: int) -> bytes:
+    """Read VRAM via BAR0 CPU mapping. Assumes BAR0 is windowing low
+    VRAM so `vram_off` lies inside the mapped aperture (default: 256 MB).
+    """
+    import ctypes
+    cpu, bar_size = client.map_bar(0)
+    if vram_off + size > bar_size:
+        raise RuntimeError(
+            f"VRAM offset 0x{vram_off:x}+0x{size:x} exceeds BAR0 size 0x{bar_size:x}"
+        )
+    buf = (ctypes.c_ubyte * size).from_address(cpu + vram_off)
+    return bytes(buf)
 
 
 def main():
@@ -92,7 +94,11 @@ def main():
     print("\n== 1: smu_bring_up (no EnableAll) ==")
     result = smu_bring_up(c, drv, firmware_dir=FIRMWARE_DIR, enable_domain=None)
     tbl_mc = result.driver_table_mc
-    print(f"  driver_table MC = 0x{tbl_mc:x}")
+    # Compute VRAM offset (tbl_mc - fb_base). With the new _vram_tbl_mc
+    # placement this is 0x1800000 (24 MB), inside BAR0's window.
+    fb_base = (c.mmio_read32(5, (0x1A000 + 0x0554) * 4) & 0xFFFFFF) << 24
+    tbl_vram_off = tbl_mc - fb_base
+    print(f"  driver_table MC = 0x{tbl_mc:x}  (VRAM offset 0x{tbl_vram_off:x})")
 
     ctx = alloc_cmd_ctx(drv)
 
@@ -117,14 +123,12 @@ def main():
     resp = submit_autoload_rlc(c, drv, MP0_BASE_DW, result.ring, ctx)
     print(f"  status = 0x{resp['status']:08x}")
 
-    # Zero the driver table first via MM_INDEX/MM_DATA so we can tell
-    # whether SMU wrote anything.
-    print("\n== 3: zero 512 bytes of driver table (MM_INDEX) ==")
-    for off in range(0, 512, 4):
-        a = tbl_mc + off
-        c.mmio_write32(5, 0x00, 0x80000000 | (a & 0xFFFFFFFF))
-        c.mmio_write32(5, 0x18, (a >> 32) & 0xFFFFFFFF)
-        c.mmio_write32(5, 0x04, 0)
+    # Zero the driver table via BAR0 (the VRAM CPU window), since the
+    # table is now inside the low-VRAM BAR0 aperture.
+    print("\n== 3: zero 16KB of driver table (BAR0) ==")
+    import ctypes
+    bar0_cpu, _ = c.map_bar(0)
+    (ctypes.c_ubyte * 0x4000).from_address(bar0_cpu + tbl_vram_off)[:] = b"\x00" * 0x4000
 
     print("\n== 4: UseDefaultPPTable (might be a prereq) ==")
     try:
@@ -141,9 +145,9 @@ def main():
     except TimeoutError as e:
         print(f"  TIMEOUT: {e}")
 
-    # Read back the driver table
-    print("\n== 6: read first 256 bytes of driver table ==")
-    data = mmindex_read_bytes(c, tbl_mc, 256)
+    # Read back the driver table via BAR0
+    print("\n== 6: read first 256 bytes of driver table (BAR0) ==")
+    data = bar0_read_vram(c, tbl_vram_off, 256)
     for i in range(0, 256, 16):
         hex_s = " ".join(f"{b:02x}" for b in data[i:i+16])
         print(f"  0x{i:03x}: {hex_s}")

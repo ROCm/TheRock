@@ -151,15 +151,17 @@ def _parse_ucode(blob: bytes) -> tuple[int, int, int]:
 def _vram_tbl_mc(client) -> int:
     """Pick an MC address inside the FB aperture for the SMU driver table.
 
-    We park it 128 KB below the top of VRAM so we don't collide with the
-    IP discovery region (which lives at VRAM_SIZE - 64 KB).
+    We park it at VRAM offset 0x1800000 (24 MB) — just past the 23-MB
+    gfx12 autoload buffer (gfx_autoload.build_autoload_buffer) and
+    well within the 256 MB BAR0 VRAM window. This way the CPU can
+    read the table back via BAR0 after SMU writes to it (e.g. for
+    TransferTableSmu2Dram); an earlier location near VRAM_SIZE -
+    128 KB worked but was outside BAR0's window, forcing MM_INDEX
+    reads that only cover SMN-mapped regions.
     """
     fb_base_val = _mmhub_rd(client, regMMMC_VM_FB_LOCATION_BASE) & 0xFFFFFF
-    fb_top_val  = _mmhub_rd(client, regMMMC_VM_FB_LOCATION_TOP) & 0xFFFFFF
     fb_start_mc = fb_base_val << 24
-    fb_end_mc   = (fb_top_val + 1) << 24
-    vram_size   = fb_end_mc - fb_start_mc
-    return fb_start_mc + vram_size - 0x20000
+    return fb_start_mc + 0x1800000
 
 
 def _smu_load_firmware(client, driver, ring: PSPRing,
