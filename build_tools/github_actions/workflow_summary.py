@@ -88,6 +88,10 @@ def parse_needs_json(needs_json: str) -> list[JobResult]:
     Returns:
         A list of `JobResult` for each upstream job.
     """
+    needs_json = (needs_json or "").strip()
+    if not needs_json:
+        needs_json = "{}"
+
     data = json.loads(needs_json)
     assert isinstance(data, dict), f"Expected a JSON object, got {type(data).__name__}"
 
@@ -228,8 +232,11 @@ def main(argv: list[str]) -> int:
     )
     parser.add_argument(
         "--needs-json",
-        required=True,
-        help="Raw JSON string from ${{ toJSON(needs) }}.",
+        default=None,
+        help=(
+            "Raw JSON string from ${{ toJSON(needs) }}. "
+            "If omitted or empty, defaults to an empty object."
+        ),
     )
     parser.add_argument(
         "--github-repository",
