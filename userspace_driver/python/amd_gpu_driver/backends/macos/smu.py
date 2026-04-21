@@ -54,19 +54,27 @@ MMHUB_BASE_DW = 0x1A000
 C2PMSG_BASE_DW = 0x40
 
 # ---- PPSMC message IDs (smu_v14_0_2_ppsmc.h) ----
-PPSMC_MSG_TestMessage             = 0x01
-PPSMC_MSG_GetSmuVersion           = 0x02
-PPSMC_MSG_GetDriverIfVersion      = 0x03
-# 0x04 / 0x05 are SetAllowedFeaturesMaskLow/High — NOT SetDriverDramAddr.
-PPSMC_MSG_EnableAllSmuFeatures    = 0x06
-PPSMC_MSG_EnableSmuFeaturesLow    = 0x08
-PPSMC_MSG_EnableSmuFeaturesHigh   = 0x09
-PPSMC_MSG_GetRunningSmuFeaturesLo = 0x0C
-PPSMC_MSG_GetRunningSmuFeaturesHi = 0x0D
-PPSMC_MSG_SetDriverDramAddrHigh   = 0x0E
-PPSMC_MSG_SetDriverDramAddrLow    = 0x0F
-PPSMC_MSG_AllowGfxOff             = 0x28
-PPSMC_MSG_DisallowGfxOff          = 0x29
+PPSMC_MSG_TestMessage                 = 0x01
+PPSMC_MSG_GetSmuVersion               = 0x02
+PPSMC_MSG_GetDriverIfVersion          = 0x03
+PPSMC_MSG_SetAllowedFeaturesMaskLow   = 0x04
+PPSMC_MSG_SetAllowedFeaturesMaskHigh  = 0x05
+PPSMC_MSG_EnableAllSmuFeatures        = 0x06
+PPSMC_MSG_EnableSmuFeaturesLow        = 0x08
+PPSMC_MSG_EnableSmuFeaturesHigh       = 0x09
+PPSMC_MSG_GetRunningSmuFeaturesLo     = 0x0C
+PPSMC_MSG_GetRunningSmuFeaturesHi     = 0x0D
+PPSMC_MSG_SetDriverDramAddrHigh       = 0x0E
+PPSMC_MSG_SetDriverDramAddrLow        = 0x0F
+PPSMC_MSG_SetToolsDramAddrHigh        = 0x10
+PPSMC_MSG_SetToolsDramAddrLow         = 0x11
+PPSMC_MSG_TransferTableSmu2Dram       = 0x12
+PPSMC_MSG_TransferTableDram2Smu       = 0x13
+PPSMC_MSG_UseDefaultPPTable           = 0x14
+PPSMC_MSG_SetSystemVirtualDramAddrHigh = 0x30
+PPSMC_MSG_SetSystemVirtualDramAddrLow  = 0x31
+PPSMC_MSG_AllowGfxOff                 = 0x28
+PPSMC_MSG_DisallowGfxOff              = 0x29
 
 # ---- FEATURE_PWR_DOMAIN_e (smu14_driver_if_v14_0.h) ----
 # Selector, not a bitmask. Passed as the arg to EnableAllSmuFeatures.
