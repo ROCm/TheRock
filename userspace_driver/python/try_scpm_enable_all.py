@@ -141,16 +141,19 @@ def main():
     print("\n== 5: RunDcBtc ==")
     _try(c, PPSMC_MSG_RunDcBtc, 0, "RunDcBtc", timeout=5000)
 
-    # OverridePcieParameters takes a param packed with link level + pcie gen + width.
-    # Linux's smu_v14_0_2_update_pcie_parameters walks per-link-level and sends one
-    # message per link level. For a Thunderbolt-connected card running PCIe 3.0 x4,
-    # we want: gen=2 (PCIe 3.0), width=4 (x4). Encoding per Linux:
-    #   param = (link_level << 16) | (pcie_gen << 8) | (pcie_width)
-    # For a first try use level 0 only.
-    pcie_param = (0 << 16) | (2 << 8) | 4
-    print(f"\n== 6: OverridePcieParameters(0x{pcie_param:x}) ==")
-    _try(c, PPSMC_MSG_OverridePcieParameters, pcie_param,
-         f"OverridePcieParameters(level=0, gen=2, width=4)", timeout=5000)
+    # OverridePcieParameters param layout (from Linux
+    # smu_v14_0_2_update_pcie_parameters):
+    #   smu_pcie_arg = (link_level << 16) | (pcie_gen << 8) | pcie_width
+    #
+    # PcieGenSpeed enum:  0=Gen1  1=Gen2  2=Gen3  3=Gen4  4=Gen5
+    # PcieLaneCount enum: 1=x1  2=x2  3=x4  4=x8  5=x12  6=x16
+    # NUM_LINK_LEVELS = 3 — Linux sends one message per level.
+    # Thunderbolt eGPU is effectively PCIe 3.0 x4 → gen=2, width=3.
+    print("\n== 6: OverridePcieParameters × 3 levels (gen=2 Gen3, width=3 x4) ==")
+    for level in range(3):
+        arg = (level << 16) | (2 << 8) | 3
+        _try(c, PPSMC_MSG_OverridePcieParameters, arg,
+             f"OverridePcieParameters(level={level}, gen=2, width=3)", timeout=5000)
 
     print("\n== 7: EnableAll(PWR_ALL=0) ==")
     _try(c, PPSMC_MSG_EnableAllSmuFeatures, FEATURE_PWR_ALL,
