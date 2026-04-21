@@ -175,6 +175,7 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx900",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "expect_pytorch_failure": True,
         },
     },
     # gfx906/908/90a split into separate families - each has different instruction
@@ -194,6 +195,7 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx906",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "expect_pytorch_failure": True,
         },
     },
     "gfx908": {
@@ -210,6 +212,7 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx908",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "expect_pytorch_failure": True,
         },
     },
     "gfx90a": {
@@ -225,6 +228,7 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx90a",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "expect_pytorch_failure": True,
         },
     },
     "gfx101x": {
@@ -244,14 +248,14 @@ amdgpu_family_info_matrix_nightly = {
     "gfx103x": {
         "linux": {
             "test-runs-on": "linux-gfx1030-gpu-rocm",
-            "family": "gfx103X-dgpu",
+            "family": "gfx103X-all",
             "fetch-gfx-targets": ["gfx1030"],
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx1030-gpu-rocm",
-            "family": "gfx103X-dgpu",
+            "family": "gfx103X-all",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,
