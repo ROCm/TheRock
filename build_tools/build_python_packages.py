@@ -49,6 +49,22 @@ def load_therock_manifest(artifact_dir: Path) -> dict:
         )
     return json.loads(manifest_path.read_text())
 
+def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
+    """Recreate unversioned profiler library symlinks expected by dlopen()."""
+    profiler_lib_dir = profiler.platform_dir / "lib"
+
+    symlink_pairs = [
+        ("librocprof-sys.so", "librocprof-sys.so.1"),
+        ("librocprof-sys-dl.so", "librocprof-sys-dl.so.1"),
+        ("librocprof-sys-rt.so", "librocprof-sys-rt.so.1"),
+        ("librocprof-sys-user.so", "librocprof-sys-user.so.1"),
+    ]
+
+    for link_name, target_name in symlink_pairs:
+        target = profiler_lib_dir / target_name
+        link = profiler_lib_dir / link_name
+        if target.exists() and not link.exists():
+            link.symlink_to(target_name)
 
 def run(args: argparse.Namespace):
     manifest = load_therock_manifest(args.artifact_dir)
@@ -89,6 +105,7 @@ def run(args: argparse.Namespace):
     profiler = PopulatedDistPackage(params, logical_name="profiler")
     profiler.rpath_dep(core, "lib")
     profiler.rpath_dep(core, "lib/llvm/lib")
+    profiler.rpath_dep(core, "lib/rocm_sysdeps/lib")
     profiler.populate_runtime_files(
         params.filter_artifacts(
             profiler_artifact_filter,
@@ -104,11 +121,10 @@ def run(args: argparse.Namespace):
                 # rocprofiler-compute
                 "bin/rocprof-*",
                 "libexec/rocprofiler-compute/**",
-                # rocprofiler-systems sysdeps
-                "lib/rocm_sysdeps/lib/**",
             ],
         ),
     )
+    ensure_profiler_library_symlinks(profiler)
 
     # The rocprofiler-compute artifact installs the launcher as a symlink:
     # bin/rocprof-compute -> ../libexec/rocprofiler-compute/rocprof-compute
@@ -361,7 +377,7 @@ def profiler_artifact_filter(an: ArtifactName) -> bool:
             "rocprofiler-systems",
         ]
         and an.component in ["lib", "run"]
-    ) or (an.name == "sysdeps" and an.component == "lib")
+    )
 
 
 def device_artifact_filter(target: str, an: ArtifactName) -> bool:
