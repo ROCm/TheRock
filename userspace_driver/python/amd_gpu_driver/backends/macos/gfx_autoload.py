@@ -248,6 +248,25 @@ def build_autoload_buffer(client, firmware_dir: str,
             f"Autoload size 0x{layout.buffer_size:x} exceeds BAR0 window "
             f"0x{vram_bar_size:x}; implement VRAM BAR re-windowing first"
         )
+    # Sanity-check VRAM BAR writes by punching a sentinel pattern at
+    # the start of the buffer and reading it back via MM_INDEX/MM_DATA
+    # (the independent indirect path). If this mismatches, HDP hasn't
+    # flushed CPU stores to VRAM and IMU will see stale data later.
+    sentinel = [0xDEADBEEF, 0xCAFEBABE, 0x12345678, 0xBABAFACE]
+    (ctypes.c_uint32 * 4).from_address(vram_cpu)[:] = sentinel
+    for i, expected in enumerate(sentinel):
+        client.mmio_write32(_MMIO_BAR, 0x00, 0x80000000 | (i * 4))
+        client.mmio_write32(_MMIO_BAR, 0x18, 0)
+        got = client.mmio_read32(_MMIO_BAR, 0x04)
+        if got != expected:
+            raise RuntimeError(
+                f"VRAM BAR/MMIO coherency check failed at offset {i*4}: "
+                f"wrote 0x{expected:08x}, read 0x{got:08x}. "
+                "The BAR write is not visible to the GPU — possibly the "
+                "BAR window isn't pointing at offset 0 of VRAM, or HDP "
+                "flush is needed."
+            )
+
     # Zero the full buffer region so untouched slots are benign.
     # ctypes.memset on the VRAM BAR mapping triggers SIGBUS on Apple
     # Silicon once the region crosses ~1 MB — but a slice-copy of the
