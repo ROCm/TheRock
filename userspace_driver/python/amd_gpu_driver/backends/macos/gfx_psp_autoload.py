@@ -154,11 +154,16 @@ def _build_autoload_rlc_cmd(ctx) -> None:
 
 
 def _load_one(client, driver, mp0_base_dw: int, ring: PSPRing, ctx,
-              payload: bytes, fw_type: int, label: str) -> None:
-    """Stage + PSP LOAD_IP_FW + free. Raises on status != 0."""
+              payload: bytes, fw_type: int, label: str,
+              *, strict: bool = False) -> int:
+    """Stage + PSP LOAD_IP_FW + free. Returns the PSP status.
+
+    If `strict` is True, raises on non-zero. Otherwise just logs the
+    status so the caller can continue probing other fw_types.
+    """
     if not payload:
-        logger.warning("  %-20s: empty payload, skipping", label)
-        return
+        logger.warning("  %-20s: empty payload, skipped", label)
+        return 0
     size = (len(payload) + 0xFFF) & ~0xFFF
     cpu, bus, handle = driver.alloc_dma(size)
     try:
@@ -169,11 +174,16 @@ def _load_one(client, driver, mp0_base_dw: int, ring: PSPRing, ctx,
     finally:
         driver.free_dma(handle)
     status = resp["status"]
-    if status != 0:
-        raise RuntimeError(
-            f"PSP LOAD_IP_FW({label}, type={fw_type}) returned 0x{status:08x}"
-        )
-    logger.info("  %-20s: type=%-3d size=%-7d OK", label, fw_type, len(payload))
+    if status == 0:
+        logger.info("  %-20s: type=%-3d size=%-7d OK", label, fw_type, len(payload))
+    else:
+        logger.warning("  %-20s: type=%-3d size=%-7d STATUS=0x%08x",
+                       label, fw_type, len(payload), status)
+        if strict:
+            raise RuntimeError(
+                f"PSP LOAD_IP_FW({label}, type={fw_type}) returned 0x{status:08x}"
+            )
+    return status
 
 
 def submit_autoload_rlc(client, driver, mp0_base_dw: int, ring: PSPRing, ctx,
@@ -218,39 +228,44 @@ def psp_load_gfx_and_autoload(client, driver, mp0_base_dw: int,
     mes_u, mes_d = _extract_mes(mes_blob)
     sdma_ucode   = _extract_sdma_v3(sdma_blob)
 
-    # --- Load order matches Linux amdgpu: SDMA, RLC (main + sub), ---
-    # --- RS64 CP (PFP/ME/MEC + stacks), MES, IMU — then AUTOLOAD_RLC. --
-    logger.info("PSP LOAD_IP_FW sequence:")
-
-    _load_one(client, driver, mp0_base_dw, ring, ctx, sdma_ucode,
-              GFX_FW_TYPE_SDMA_UCODE_TH0, "SDMA_TH0")
-
-    # RLC main ucode and its sub-firmwares in the order they appear in the header.
+    # Probe-style list: continue on error so we map every fw_type that
+    # is or isn't accepted by PSP in the current state.
+    logger.info("PSP LOAD_IP_FW probe:")
+    items = []
+    items.append((sdma_ucode, GFX_FW_TYPE_SDMA_UCODE_TH0, "SDMA_TH0"))
     for fw_type, payload, label in rlc_subs:
-        _load_one(client, driver, mp0_base_dw, ring, ctx, payload, fw_type, label)
+        items.append((payload, fw_type, label))
+    items.append((pfp_u, GFX_FW_TYPE_RS64_PFP,          "RS64_PFP"))
+    items.append((pfp_d, GFX_FW_TYPE_RS64_PFP_P0_STACK, "RS64_PFP_P0"))
+    items.append((pfp_d, GFX_FW_TYPE_RS64_PFP_P1_STACK, "RS64_PFP_P1"))
+    items.append((me_u,  GFX_FW_TYPE_RS64_ME,           "RS64_ME"))
+    items.append((me_d,  GFX_FW_TYPE_RS64_ME_P0_STACK,  "RS64_ME_P0"))
+    items.append((me_d,  GFX_FW_TYPE_RS64_ME_P1_STACK,  "RS64_ME_P1"))
+    items.append((mec_u, GFX_FW_TYPE_RS64_MEC,          "RS64_MEC"))
+    items.append((mec_d, GFX_FW_TYPE_RS64_MEC_P0_STACK, "RS64_MEC_P0"))
+    items.append((mec_d, GFX_FW_TYPE_RS64_MEC_P1_STACK, "RS64_MEC_P1"))
+    items.append((mec_d, GFX_FW_TYPE_RS64_MEC_P2_STACK, "RS64_MEC_P2"))
+    items.append((mec_d, GFX_FW_TYPE_RS64_MEC_P3_STACK, "RS64_MEC_P3"))
+    items.append((mes_u, GFX_FW_TYPE_RS64_MES,          "RS64_MES"))
+    items.append((mes_d, GFX_FW_TYPE_RS64_MES_STACK,    "RS64_MES_STACK"))
+    items.append((imu_iram, GFX_FW_TYPE_IMU_I, "IMU_I"))
+    items.append((imu_dram, GFX_FW_TYPE_IMU_D, "IMU_D"))
+    results = []
+    for payload, fw_type, label in items:
+        status = _load_one(client, driver, mp0_base_dw, ring, ctx,
+                           payload, fw_type, label, strict=False)
+        results.append((label, fw_type, status))
 
-    # RS64 CP engines — Linux loads instruction + data + each per-pipe stack.
-    _load_one(client, driver, mp0_base_dw, ring, ctx, pfp_u, GFX_FW_TYPE_RS64_PFP,          "RS64_PFP")
-    _load_one(client, driver, mp0_base_dw, ring, ctx, pfp_d, GFX_FW_TYPE_RS64_PFP_P0_STACK, "RS64_PFP_P0")
-    _load_one(client, driver, mp0_base_dw, ring, ctx, pfp_d, GFX_FW_TYPE_RS64_PFP_P1_STACK, "RS64_PFP_P1")
-    _load_one(client, driver, mp0_base_dw, ring, ctx, me_u,  GFX_FW_TYPE_RS64_ME,           "RS64_ME")
-    _load_one(client, driver, mp0_base_dw, ring, ctx, me_d,  GFX_FW_TYPE_RS64_ME_P0_STACK,  "RS64_ME_P0")
-    _load_one(client, driver, mp0_base_dw, ring, ctx, me_d,  GFX_FW_TYPE_RS64_ME_P1_STACK,  "RS64_ME_P1")
-    _load_one(client, driver, mp0_base_dw, ring, ctx, mec_u, GFX_FW_TYPE_RS64_MEC,          "RS64_MEC")
-    _load_one(client, driver, mp0_base_dw, ring, ctx, mec_d, GFX_FW_TYPE_RS64_MEC_P0_STACK, "RS64_MEC_P0")
-    _load_one(client, driver, mp0_base_dw, ring, ctx, mec_d, GFX_FW_TYPE_RS64_MEC_P1_STACK, "RS64_MEC_P1")
-    _load_one(client, driver, mp0_base_dw, ring, ctx, mec_d, GFX_FW_TYPE_RS64_MEC_P2_STACK, "RS64_MEC_P2")
-    _load_one(client, driver, mp0_base_dw, ring, ctx, mec_d, GFX_FW_TYPE_RS64_MEC_P3_STACK, "RS64_MEC_P3")
+    oks    = [(l, t) for l, t, s in results if s == 0]
+    fails  = [(l, t, s) for l, t, s in results if s != 0]
+    logger.info("Summary: %d OK, %d failed", len(oks), len(fails))
+    for label, fw_type, status in fails:
+        logger.info("  FAILED type=%-3d %-20s status=0x%08x", fw_type, label, status)
 
-    # MES (pipe 0 only; mes1.bin for pipe 1 is optional)
-    _load_one(client, driver, mp0_base_dw, ring, ctx, mes_u, GFX_FW_TYPE_RS64_MES,       "RS64_MES")
-    _load_one(client, driver, mp0_base_dw, ring, ctx, mes_d, GFX_FW_TYPE_RS64_MES_STACK, "RS64_MES_STACK")
-
-    # IMU last — it's the thing that actually runs the autoload once
-    # we signal AUTOLOAD_RLC. Loading it earlier was harmless in
-    # testing, but matching tinygrad order avoids surprises.
-    _load_one(client, driver, mp0_base_dw, ring, ctx, imu_iram, GFX_FW_TYPE_IMU_I, "IMU_I")
-    _load_one(client, driver, mp0_base_dw, ring, ctx, imu_dram, GFX_FW_TYPE_IMU_D, "IMU_D")
+    if fails:
+        raise RuntimeError(
+            f"{len(fails)} firmware type(s) rejected by PSP — cannot proceed to AUTOLOAD_RLC"
+        )
 
     logger.info("All firmware loaded via PSP; sending AUTOLOAD_RLC...")
     resp = submit_autoload_rlc(client, driver, mp0_base_dw, ring, ctx)
