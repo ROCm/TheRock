@@ -28,6 +28,7 @@ from dataclasses import dataclass
 
 from amd_gpu_driver.backends.macos.psp_cmd import (
     GFX_CMD_ID_AUTOLOAD_RLC,
+    GFX_CMD_ID_LOAD_TOC,
     GFX_FW_TYPE_IMU_D,
     GFX_FW_TYPE_IMU_I,
     GFX_FW_TYPE_RLC_G,
@@ -196,6 +197,52 @@ def submit_autoload_rlc(client, driver, mp0_base_dw: int, ring: PSPRing, ctx,
     _build_autoload_rlc_cmd(ctx)
     return submit(client, driver, mp0_base_dw, ring, ctx,
                   timeout_ms=timeout_ms, verbose=True)
+
+
+def submit_load_toc(client, driver, mp0_base_dw: int, ring: PSPRing, ctx,
+                    toc_bytes: bytes, *, timeout_ms: int = 20000) -> dict:
+    """Send GFX_CMD_ID_LOAD_TOC (0x20) with the PSP TOC blob extracted
+    from the SOS container (fw_type = PSP_TOC = 4).
+
+    Required on gfx12 before GFX_CMD_ID_AUTOLOAD_RLC — without it SOS
+    returns TEEC_ERROR_BAD_STATE (0xFFFF0007) for AUTOLOAD_RLC.
+    """
+    # Stage TOC into a DMA buffer.
+    size = (len(toc_bytes) + 0xFFF) & ~0xFFF
+    cpu, bus, handle = driver.alloc_dma(size)
+    try:
+        ctypes.memset(cpu, 0, size)
+        (ctypes.c_ubyte * len(toc_bytes)).from_address(cpu)[:] = toc_bytes
+        # Build the psp_gfx_cmd_resp: cmd_id + load_toc { addr_lo, addr_hi, size }.
+        ctypes.memset(ctx.cmd_cpu, 0, 1024)
+        hdr = struct.pack(
+            "<IIIIIII",
+            1024,                         # buf_size
+            1,                            # buf_version (PSP_GFX_CMD_BUF_VERSION)
+            GFX_CMD_ID_LOAD_TOC,
+            0, 0, 0, 0,                   # resp_buf_addr_lo/hi, resp_offset, resp_buf_size
+        )
+        (ctypes.c_ubyte * len(hdr)).from_address(ctx.cmd_cpu)[:] = hdr
+        # cmd_load_toc struct at offset 28: lo, hi, size (3 u32).
+        load_toc = struct.pack(
+            "<III",
+            bus & 0xFFFFFFFF,
+            (bus >> 32) & 0xFFFFFFFF,
+            len(toc_bytes),
+        )
+        (ctypes.c_ubyte * len(load_toc)).from_address(ctx.cmd_cpu + 28)[:] = load_toc
+        resp = submit(client, driver, mp0_base_dw, ring, ctx,
+                      timeout_ms=timeout_ms, verbose=False)
+    finally:
+        driver.free_dma(handle)
+    status = resp["status"]
+    if status != 0:
+        raise RuntimeError(
+            f"PSP LOAD_TOC returned status 0x{status:08x} "
+            f"(raw_resp[0..16]={resp['raw_resp'][:16].hex()})"
+        )
+    logger.info("LOAD_TOC OK — TOC (%d bytes) accepted", len(toc_bytes))
+    return resp
 
 
 # --- Top-level ---------------------------------------------------------

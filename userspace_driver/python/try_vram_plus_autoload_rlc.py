@@ -26,7 +26,9 @@ from amd_gpu_driver.backends.macos.gfx_psp_autoload import (
     _extract_imu,
     _load_one,
     submit_autoload_rlc,
+    submit_load_toc,
 )
+from amd_gpu_driver.backends.macos.psp_bootloader import parse_psp_firmware
 from amd_gpu_driver.backends.macos.iokit_client import IOKitClient
 from amd_gpu_driver.backends.macos.psp_cmd import (
     GFX_FW_TYPE_IMU_D,
@@ -88,14 +90,30 @@ def main():
     print("\n== Step 3: build VRAM autoload buffer (via BAR0) ==")
     build_autoload_buffer(c, FIRMWARE_DIR, layout, toc_blob)
 
-    print("\n== Step 4: PSP LOAD_IP_FW(IMU_I, IMU_D) ==")
     ctx = alloc_cmd_ctx(drv)
+
+    print("\n== Step 4a: GFX_CMD_ID_LOAD_TOC (PSP TOC from SOS container) ==")
+    sos_blob = open(os.path.join(FIRMWARE_DIR, "psp_14_0_3_sos.bin"), "rb").read()
+    toc_comp = next(
+        (c for c in parse_psp_firmware(sos_blob) if c.name == "TOC"),
+        None,
+    )
+    if toc_comp is None:
+        print("  WARN: no TOC component in SOS container; skipping LOAD_TOC")
+    else:
+        try:
+            submit_load_toc(c, drv, MP0_BASE_DW, result.ring, ctx, toc_comp.data)
+        except RuntimeError as e:
+            print(f"  LOAD_TOC FAILED: {e}")
+            sys.exit(6)
+
+    print("\n== Step 4b: PSP LOAD_IP_FW(IMU_I, IMU_D) ==")
     imu_blob = open(os.path.join(FIRMWARE_DIR, "gc_12_0_1_imu.bin"), "rb").read()
     iram, dram = _extract_imu(imu_blob)
-    s = _load_one(c, drv, MP0_BASE_DW, result.ring, ctx, iram,
-                  GFX_FW_TYPE_IMU_I, "IMU_I", strict=True)
-    s = _load_one(c, drv, MP0_BASE_DW, result.ring, ctx, dram,
-                  GFX_FW_TYPE_IMU_D, "IMU_D", strict=True)
+    _load_one(c, drv, MP0_BASE_DW, result.ring, ctx, iram,
+              GFX_FW_TYPE_IMU_I, "IMU_I", strict=True)
+    _load_one(c, drv, MP0_BASE_DW, result.ring, ctx, dram,
+              GFX_FW_TYPE_IMU_D, "IMU_D", strict=True)
 
     print("\n== Step 5: GFX_CMD_ID_AUTOLOAD_RLC ==")
     try:
