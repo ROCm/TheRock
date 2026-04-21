@@ -73,7 +73,7 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       TEATIME_FORCE_INTERACTIVE: 0
       RELEASE_TYPE: ${{ inputs.release_type }}
-      SCCACHE_BUCKET: "therock-${{ inputs.release_type }}-sccache"
+      SCCACHE_BUCKET: "therock-dev-sccache"
       SCCACHE_REGION: us-east-2
       SCCACHE_S3_KEY_PREFIX: "linux/${{ inputs.amdgpu_family }}/"
       SCCACHE_S3_USE_SSL: "true"
