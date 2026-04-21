@@ -69,7 +69,7 @@ we need to determine what are the next steps in this process for fully integrati
 
 #### Directory structure of all relevant files
 ```
-/opt/rocm/core
+/opt/rocm/core-[major.minor]
 |---/bin
 |   |---/amdcuid_daemon
 |   |---/amdcuid_tool
