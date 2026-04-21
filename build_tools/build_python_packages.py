@@ -49,6 +49,7 @@ def load_therock_manifest(artifact_dir: Path) -> dict:
         )
     return json.loads(manifest_path.read_text())
 
+
 def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
     """Recreate unversioned profiler library symlinks expected by dlopen()."""
     profiler_lib_dir = profiler.platform_dir / "lib"
@@ -65,6 +66,7 @@ def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
         link = profiler_lib_dir / link_name
         if target.exists() and not link.exists():
             link.symlink_to(target_name)
+
 
 def run(args: argparse.Namespace):
     manifest = load_therock_manifest(args.artifact_dir)
@@ -374,7 +376,7 @@ def profiler_artifact_filter(an: ArtifactName) -> bool:
         "rocprofiler-compute",
         "rocprofiler-systems",
     ] and an.component in ["lib", "run"]
-    
+
 
 def device_artifact_filter(target: str, an: ArtifactName) -> bool:
     """Selects per-ISA library artifacts for a specific GFX target.
