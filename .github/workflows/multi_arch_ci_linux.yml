@@ -150,7 +150,7 @@ jobs:
       release_type: ci
     permissions:
       contents: read
-      id-token: write
+      id-token: none
 
   test_native_packages:
     needs: [build_native_deb_packages, build_native_rpm_packages]
