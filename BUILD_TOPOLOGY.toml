@@ -732,7 +732,7 @@ disable_platforms = ["windows"]
 [artifacts.amd-dbgapi]
 artifact_group = "debug-tools"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "core-runtime", "sysdeps"]
+artifact_deps = ["amd-llvm", "sysdeps"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
 
