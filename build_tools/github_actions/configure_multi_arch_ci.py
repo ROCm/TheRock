@@ -47,7 +47,6 @@ Outputs (written to GITHUB_OUTPUT):
 import enum
 import json
 import os
-import random
 import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
@@ -56,7 +55,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _therock_utils.build_topology import get_topology
 
-from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
+from amdgpu_family_matrix import (
+    all_build_variants,
+    get_all_families_for_trigger_types,
+    select_weighted_label,
+)
 from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
@@ -759,36 +762,6 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 # ---------------------------------------------------------------------------
 
 
-def _select_weighted_label(labels_config: list[dict], context_name: str) -> str:
-    """Select a runner label based on weighted random selection.
-
-    Args:
-        labels_config: List of dicts with "label" and "weight" keys.
-                       Weights should sum to 1.0.
-        context_name: Name for logging context (e.g. family name).
-
-    Returns:
-        Selected label string.
-    """
-    rand_val = random.random()
-    cumulative = 0.0
-    for config in labels_config:
-        cumulative += config["weight"]
-        if rand_val < cumulative:
-            print(
-                f"  {context_name}: selected runner (weight={config['weight']}): "
-                f"{config['label']}"
-            )
-            return config["label"]
-    # Fallback to last label if rounding errors
-    selected = labels_config[-1]
-    print(
-        f"  {context_name}: selected runner (weight={selected['weight']}): "
-        f"{selected['label']}"
-    )
-    return selected["label"]
-
-
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
@@ -841,7 +814,7 @@ def _expand_build_config_for_platform(
         # Handle multi-label configuration with weighted random selection.
         # Some families (e.g. gfx94x) have multiple runner labels available.
         if "test-runs-on-labels" in platform_info:
-            test_runs_on = _select_weighted_label(
+            test_runs_on = select_weighted_label(
                 platform_info["test-runs-on-labels"], family_name
             )
 

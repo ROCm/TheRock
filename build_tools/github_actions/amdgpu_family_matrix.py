@@ -3,6 +3,7 @@
 
 """
 This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
+Also provides the select_weighted_label utility for weighted runner selection.
 
 * Each entry determines which families and test runners are available to use
 * Each group determines which entries run by default on workflow triggers
@@ -19,6 +20,39 @@ TODO(#2200): clarify AMD GPU family selection
 #############################################################################################
 # NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
 #############################################################################################
+
+import random
+
+
+def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
+    """Select a runner label based on weighted random selection.
+
+    Args:
+        labels_config: List of dicts with "label" and "weight" keys.
+                       Weights should sum to 1.0.
+        context_name: Name for logging context (e.g. family name).
+
+    Returns:
+        Selected label string.
+    """
+    rand_val = random.random()
+    cumulative = 0.0
+    for config in labels_config:
+        cumulative += config["weight"]
+        if rand_val < cumulative:
+            print(
+                f"  {context_name}: selected runner (weight={config['weight']}): "
+                f"{config['label']}"
+            )
+            return config["label"]
+    # Fallback to last label if rounding errors
+    selected = labels_config[-1]
+    print(
+        f"  {context_name}: selected runner (weight={selected['weight']}): "
+        f"{selected['label']}"
+    )
+    return selected["label"]
+
 
 all_build_variants = {
     "linux": {
