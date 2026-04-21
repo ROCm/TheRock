@@ -192,7 +192,7 @@ def smu_bring_up(client, driver, *,
                  firmware_dir: str,
                  sos_fw: str = "psp_14_0_3_sos.bin",
                  smu_fw: str = "smu_14_0_3.bin",
-                 enable_domain: int = FEATURE_PWR_SOC,
+                 enable_domain: int | None = FEATURE_PWR_SOC,
                  ring: PSPRing | None = None) -> SmuBringUpResult:
     """Cold-boot the SMU to the point where SOC DPM is running.
 
@@ -252,21 +252,25 @@ def smu_bring_up(client, driver, *,
     if resp != PPSMC_Result_OK:
         raise RuntimeError(f"SetDriverDramAddrLow returned 0x{resp:x}")
 
-    # 7. Enable the requested power domain. Keep the timeout short — a
-    # hang here is terminal until the GPU is reset, so we'd rather fail
-    # fast than wait 10 s.
-    resp, arg_out = smu_send(client, PPSMC_MSG_EnableAllSmuFeatures,
-                             enable_domain, timeout_ms=3000)
-    if resp != PPSMC_Result_OK:
-        raise RuntimeError(
-            f"EnableAllSmuFeatures({enable_domain}) returned 0x{resp:x}"
-        )
-    logger.info("EnableAllSmuFeatures(%d) OK, arg_out=0x%x", enable_domain, arg_out)
-
-    # 8. Query running features for the result.
-    _, run_lo = smu_send(client, PPSMC_MSG_GetRunningSmuFeaturesLo, 0)
-    _, run_hi = smu_send(client, PPSMC_MSG_GetRunningSmuFeaturesHi, 0)
-    logger.info("RunningFeatures: low=0x%x high=0x%x", run_lo, run_hi)
+    # 7. Enable the requested power domain (or skip if caller wants to
+    # defer EnableAllSmuFeatures until after GFX autoload — Linux's
+    # order is smu_system_features_control() AFTER all firmware is in
+    # place). Keep the timeout short — a hang here is terminal until
+    # the GPU is reset, so we'd rather fail fast than wait 10 s.
+    if enable_domain is None:
+        logger.info("Skipping EnableAllSmuFeatures (caller will drive it later)")
+        run_lo = run_hi = 0
+    else:
+        resp, arg_out = smu_send(client, PPSMC_MSG_EnableAllSmuFeatures,
+                                 enable_domain, timeout_ms=3000)
+        if resp != PPSMC_Result_OK:
+            raise RuntimeError(
+                f"EnableAllSmuFeatures({enable_domain}) returned 0x{resp:x}"
+            )
+        logger.info("EnableAllSmuFeatures(%d) OK, arg_out=0x%x", enable_domain, arg_out)
+        _, run_lo = smu_send(client, PPSMC_MSG_GetRunningSmuFeaturesLo, 0)
+        _, run_hi = smu_send(client, PPSMC_MSG_GetRunningSmuFeaturesHi, 0)
+        logger.info("RunningFeatures: low=0x%x high=0x%x", run_lo, run_hi)
 
     return SmuBringUpResult(
         sos_alive=c81,
