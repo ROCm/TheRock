@@ -129,6 +129,8 @@ def _cdash_build_name() -> str:
     * Label from :func:`_default_cdash_matrix_label`.
     * If ``ARTIFACT_RUN_ID`` is non-empty, append `` [RUN_ID: ...]``.
     * If ``GITHUB_REF`` is a pull request, prefix the label with ``PR_<n>_``.
+    * Otherwise, for a non-empty ``GITHUB_REF_NAME`` (e.g. manual ``workflow_dispatch``),
+      prefix with ``Manual_<sanitized-branch>_``.
 
     Example::
 
@@ -142,7 +144,7 @@ def _cdash_build_name() -> str:
         refname = os.getenv("GITHUB_REF_NAME", "").strip()
         if refname:
             safe = re.sub(r"[^\w.\-]+", "-", refname).strip("-")
-            prefix = f"{safe}_" if safe else ""
+            prefix = f"Manual_" if safe else ""
         else:
             prefix = ""
     label = _default_cdash_matrix_label() or os.getenv("THEROCK_CDASH_LABEL")
@@ -152,7 +154,7 @@ def _cdash_build_name() -> str:
         or os.getenv("ARTIFACT_RUN_ID")
     )
     if not run_key:
-        return f"{prefix}{label}"
+        return f"{prefix}{label}[Branch: {safe}]"
     return f"{prefix}{label} [RUN_ID: {run_key}]"
 
 
