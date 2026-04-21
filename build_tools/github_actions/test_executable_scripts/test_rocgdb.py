@@ -889,14 +889,25 @@ def check_executables(executables: List[str]) -> None:
         _log_error_and_exit(f"Missing {len(missing)} executables required for testing.")
 
 
-def set_core_file_limit() -> bool:
+def setup_core_file_info() -> bool:
     """
-    Set system core file size limit to unlimited.
+    Set system core file size limit to unlimited and display core file pattern.
 
     Returns:
         True if successfully set to unlimited, False otherwise.
     """
-    print_section("Core file size")
+    print_section("Core file information")
+
+    # Display current core file pattern.
+    core_pattern_file = Path("/proc/sys/kernel/core_pattern")
+    try:
+        if core_pattern_file.exists():
+            core_pattern = core_pattern_file.read_text().strip()
+            logger.info(f"System core file pattern: {core_pattern}")
+        else:
+            logger.info("System core file pattern: N/A (file not found)")
+    except (PermissionError, IOError) as e:
+        logger.info(f"System core file pattern: N/A (unable to read: {e})")
 
     try:
         resource.setrlimit(
@@ -1351,8 +1362,8 @@ def main() -> None:
     )
 
     if platform.system() == "Linux":
-        # Set core dump file limit.
-        set_core_file_limit()
+        # Set core dump file limit and display info.
+        setup_core_file_info()
 
     # Prepare environment for tests.
     env_vars = setup_environment(artifacts_dir)
