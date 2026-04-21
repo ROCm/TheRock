@@ -51,6 +51,7 @@
 import json
 import os
 from pathlib import Path
+import random
 import sys
 from typing import Iterable, List, Optional
 import string
@@ -73,6 +74,36 @@ THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 # --------------------------------------------------------------------------- #
 # Matrix creation logic based on PR, push, or workflow_dispatch
 # --------------------------------------------------------------------------- #
+
+
+def _select_weighted_label(labels_config: list[dict], context_name: str) -> str:
+    """Select a runner label based on weighted random selection.
+
+    Args:
+        labels_config: List of dicts with "label" and "weight" keys.
+                       Weights should sum to 1.0.
+        context_name: Name for logging context (e.g. target name).
+
+    Returns:
+        Selected label string.
+    """
+    rand_val = random.random()
+    cumulative = 0.0
+    for config in labels_config:
+        cumulative += config["weight"]
+        if rand_val < cumulative:
+            print(
+                f"  {context_name}: selected runner (weight={config['weight']}): "
+                f"{config['label']}"
+            )
+            return config["label"]
+    # Fallback to last label if rounding errors
+    selected = labels_config[-1]
+    print(
+        f"  {context_name}: selected runner (weight={selected['weight']}): "
+        f"{selected['label']}"
+    )
+    return selected["label"]
 
 
 def get_pr_labels(args) -> List[str]:
@@ -404,6 +435,18 @@ def matrix_generator(
                 if build_variant_suffix:
                     artifact_group += f"-{build_variant_suffix}"
                 matrix_row["artifact_group"] = artifact_group
+
+                # Handle multi-label configuration with weighted random selection.
+                # Some families (e.g. gfx94x) have multiple runner labels available.
+                if "test-runs-on-labels" in platform_info:
+                    matrix_row["test-runs-on"] = _select_weighted_label(
+                        platform_info["test-runs-on-labels"], target_name
+                    )
+                if "test-runs-on-multi-gpu-labels" in platform_info:
+                    matrix_row["test-runs-on-multi-gpu"] = _select_weighted_label(
+                        platform_info["test-runs-on-multi-gpu-labels"],
+                        f"{target_name} (multi-gpu)",
+                    )
 
                 # We retrieve labels from both PR and workflow_dispatch to customize the build and test jobs
                 label_options = []

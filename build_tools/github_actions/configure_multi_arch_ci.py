@@ -47,6 +47,7 @@ Outputs (written to GITHUB_OUTPUT):
 import enum
 import json
 import os
+import random
 import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
@@ -758,6 +759,36 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 # ---------------------------------------------------------------------------
 
 
+def _select_weighted_label(labels_config: list[dict], context_name: str) -> str:
+    """Select a runner label based on weighted random selection.
+
+    Args:
+        labels_config: List of dicts with "label" and "weight" keys.
+                       Weights should sum to 1.0.
+        context_name: Name for logging context (e.g. family name).
+
+    Returns:
+        Selected label string.
+    """
+    rand_val = random.random()
+    cumulative = 0.0
+    for config in labels_config:
+        cumulative += config["weight"]
+        if rand_val < cumulative:
+            print(
+                f"  {context_name}: selected runner (weight={config['weight']}): "
+                f"{config['label']}"
+            )
+            return config["label"]
+    # Fallback to last label if rounding errors
+    selected = labels_config[-1]
+    print(
+        f"  {context_name}: selected runner (weight={selected['weight']}): "
+        f"{selected['label']}"
+    )
+    return selected["label"]
+
+
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
@@ -806,6 +837,13 @@ def _expand_build_config_for_platform(
 
         # Determine test runner label.
         test_runs_on = platform_info["test-runs-on"]
+
+        # Handle multi-label configuration with weighted random selection.
+        # Some families (e.g. gfx94x) have multiple runner labels available.
+        if "test-runs-on-labels" in platform_info:
+            test_runs_on = _select_weighted_label(
+                platform_info["test-runs-on-labels"], family_name
+            )
 
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
