@@ -167,30 +167,41 @@ def main():
     c82 = (MP1 + 0x40 + 82) * 4
     c66 = (MP1 + 0x40 + 66) * 4
 
-    print("\n== 7: EnableAll(PWR_ALL=0) with 60 s RLC watch ==")
-    c.mmio_write32(5, c90, 0)
-    c.mmio_write32(5, c82, FEATURE_PWR_ALL)
-    c.mmio_write32(5, c66, PPSMC_MSG_EnableAllSmuFeatures)
-    deadline = _time.time() + 60
-    last = None
-    got_resp = False
-    while _time.time() < deadline:
-        resp = c.mmio_read32(5, c90)
-        bl = _rlc(0x4e7c); rst = _rlc(0x40bc); core = _rlc(0x40b6)
-        snap = (resp, bl, rst, core)
-        if snap != last:
-            t = _time.time() - deadline + 60
-            print(f"  t={t:5.2f}s  C2PMSG_90=0x{resp:08x}  CORE=0x{core:x}  "
-                  f"RESET=0x{rst:08x}  BOOTLOAD=0x{bl:08x}")
-            last = snap
-        if resp != 0:
-            arg_out = c.mmio_read32(5, c82)
-            print(f"  EnableAll ACK: resp=0x{resp:x} arg_out=0x{arg_out:x}")
-            got_resp = True
-            break
-        _time.sleep(0.1)
-    if not got_resp:
-        print(f"  No SMU response in 60 s.")
+    # Parse FeaturesToRun from the pptable SMU wrote into our driver
+    # table. We'll try enabling specific feature bits via
+    # EnableSmuFeaturesLow/High instead of the big hammer EnableAll.
+    bar0_cpu, _ = c.map_bar(0)
+    base = bar0_cpu + (tbl_mc - fb_base)
+    dw1 = (ctypes.c_uint32 * 1).from_address(base + 4)[0]
+    pp_off = (dw1 >> 16) & 0xFFFF
+    feat_low  = (ctypes.c_uint32 * 1).from_address(base + pp_off + 4)[0]
+    feat_high = (ctypes.c_uint32 * 1).from_address(base + pp_off + 8)[0]
+    print(f"\n  Pptable FeaturesToRun: low=0x{feat_low:08x} high=0x{feat_high:08x}")
+
+    # First warm up SOC (known to work) so SMU's feature engine is live.
+    print("\n== 7a: EnableAll(PWR_SOC=3) ==")
+    _try(c, PPSMC_MSG_EnableAllSmuFeatures, 3, "EnableAll(PWR_SOC=3)", timeout=5000)
+
+    # Try EnableSmuFeaturesLow with just a FEW safe bits first.
+    # FEATURE_FW_DATA_READ_BIT = 0
+    # FEATURE_DPM_UCLK_BIT = 3  (memory clock DPM)
+    # FEATURE_DPM_FCLK_BIT = 4
+    # FEATURE_DPM_SOCCLK_BIT = 5
+    # FEATURE_DPM_LINK_BIT = 6
+    # FEATURE_DPM_DCN_BIT = 7 (display — probably safe to skip on headless)
+    # Try just bits already running (running_low & FeaturesToRun[0]) plus
+    # a couple we want (GFXCLK) to see if they can be added individually.
+    #
+    # Start with only GFXCLK + GFX_POWER_OPTIMIZER:
+    #   FEATURE_DPM_GFXCLK_BIT              = 1  → 0x2
+    #   FEATURE_DPM_GFX_POWER_OPTIMIZER_BIT = 2  → 0x4
+    gfx_only_mask = (1 << 1) | (1 << 2)
+    print(f"\n== 7b: EnableSmuFeaturesLow(GFXCLK+OPT = 0x{gfx_only_mask:x}) ==")
+    _try(c, 0x08, gfx_only_mask,
+         f"EnableSmuFeaturesLow(0x{gfx_only_mask:x})", timeout=10000)
+
+    print("\n== 7c: EnableAll(PWR_GFX=4) ==")
+    _try(c, PPSMC_MSG_EnableAllSmuFeatures, 4, "EnableAll(PWR_GFX=4)", timeout=15000)
 
     print("\n== 8: poll BOOTLOAD_COMPLETE (5s) ==")
     GC_B1 = 0xA000
