@@ -208,6 +208,19 @@ def main():
             break
     print(f"\n  Final low-mask enabled via EnableSmuFeaturesLow: 0x{running_lo:08x}")
 
+    # After enabling DPM_GFXCLK (bit 1) and friends, SMU gates the
+    # GFX block → GRBM/EA/UTCL2/SDMA re-enter reset and RLC loses its
+    # bootload state. DisallowGfxOff tells SMU to wake and keep GFX
+    # up so bootload can resume.
+    print("\n== 7c: DisallowGfxOff (wake GFX after DPM enable) ==")
+    from amd_gpu_driver.backends.macos.smu import PPSMC_MSG_DisallowGfxOff
+    _try(c, PPSMC_MSG_DisallowGfxOff, 0, "DisallowGfxOff", timeout=3000)
+
+    # Also enable the high-mask features that the pptable wants.
+    print("\n== 7d: EnableSmuFeaturesHigh(FeaturesToRun[1]) ==")
+    _try(c, 0x09, feat_high,
+         f"EnableSmuFeaturesHigh(0x{feat_high:x})", timeout=5000)
+
     print("\n== 8: poll BOOTLOAD_COMPLETE (5s) ==")
     GC_B1 = 0xA000
     def gc_rd(o): return c.mmio_read32(5, (GC_B1 + o) * 4)
