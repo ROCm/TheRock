@@ -140,10 +140,12 @@ def _cdash_build_name() -> str:
     ref = os.getenv("GITHUB_REF", "")
     m = re.match(r"refs/pull/(\d+)/", ref)
     prefix = f"PR_{m.group(1)}_" if m else ""
+    safe = ""
     if not prefix:
         refname = os.getenv("GITHUB_REF_NAME", "").strip()
         if refname:
             safe = re.sub(r"[^\w.\-]+", "-", refname).strip("-")
+            safe = f"[Branch: {safe}]"
             prefix = f"Manual_" if safe else ""
         else:
             prefix = ""
@@ -154,7 +156,7 @@ def _cdash_build_name() -> str:
         or os.getenv("ARTIFACT_RUN_ID")
     )
     if not run_key:
-        return f"{prefix}{label}[Branch: {safe}]"
+        return f"{prefix}{label}{safe}"
     return f"{prefix}{label} [RUN_ID: {run_key}]"
 
 
