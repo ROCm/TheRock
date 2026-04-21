@@ -36,6 +36,7 @@ GFX_CMD_ID_LOAD_ASD     = 0x00000004
 GFX_CMD_ID_SETUP_TMR    = 0x00000005
 GFX_CMD_ID_LOAD_IP_FW   = 0x00000006
 GFX_CMD_ID_LOAD_TOC     = 0x00000020
+GFX_CMD_ID_AUTOLOAD_RLC = 0x00000021   # "all graphics fw loaded, start RLC autoload"
 GFX_CMD_ID_BOOT_CFG     = 0x00000022
 
 # ---- GFX_FW_TYPE enum (from psp_gfx_if.h — authoritative) ----
