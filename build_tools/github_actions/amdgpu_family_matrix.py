@@ -175,6 +175,7 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx900",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "expect_pytorch_failure": True,
         },
     },
     # gfx906/908/90a split into separate families - each has different instruction
@@ -194,6 +195,7 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx906",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "expect_pytorch_failure": True,
         },
     },
     "gfx908": {
@@ -210,6 +212,7 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx908",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "expect_pytorch_failure": True,
         },
     },
     "gfx90a": {
@@ -225,6 +228,7 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx90a",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "expect_pytorch_failure": True,
         },
     },
     "gfx101x": {

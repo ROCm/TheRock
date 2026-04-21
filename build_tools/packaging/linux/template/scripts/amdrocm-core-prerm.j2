@@ -1,6 +1,6 @@
 #!/bin/bash
 
-binaries=( hipcc rocminfo amd-smi rocm_agent_enumerator rocm-smi rocprofv3  )
+binaries=( hipcc hipconfig hipify-clang roc-obj roc-obj-extract roc-obj-ls rocminfo amd-smi rocm_agent_enumerator rocm-smi rocprofv3 rocprofv3-avail rocgdb rocpd MIOpenDriver)
 
 is_debian_like() {
     local id_like="$1"
@@ -39,10 +39,11 @@ do_update_alternatives(){
     update-alternatives --remove "rocm-lib" "$PKG_INSTALL_PREFIX/lib"
     update-alternatives --remove "rocm-include" "$PKG_INSTALL_PREFIX/include"
 
-    # Remove /opt/rocm/llvm, /opt/rocm/amdgcn, and /opt/rocm/libexec soft links
+    # Remove /opt/rocm/llvm, /opt/rocm/amdgcn, /opt/rocm/libexec, and /opt/rocm/share  soft links
     update-alternatives --remove "rocm-llvm" "$PKG_INSTALL_PREFIX/llvm"
     update-alternatives --remove "rocm-amdgcn" "$PKG_INSTALL_PREFIX/amdgcn"
     update-alternatives --remove "rocm-libexec" "$PKG_INSTALL_PREFIX/libexec"
+    update-alternatives --remove "rocm-share" "$PKG_INSTALL_PREFIX/share"
 }
 
 if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE:-$ID}"
