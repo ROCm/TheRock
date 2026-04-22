@@ -48,7 +48,6 @@ import enum
 import json
 import os
 import sys
-import random
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
@@ -765,6 +764,7 @@ def _expand_build_config_for_platform(
     ci_inputs: CIInputs,
     all_families: dict[str, dict],
     variant_config: dict,
+    test_type: str,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -807,23 +807,6 @@ def _expand_build_config_for_platform(
         # Determine test runner label.
         test_runs_on = platform_info["test-runs-on"]
 
-        # Handle dual-label configuration with weighted random selection.
-        # Some families (e.g. gfx94x) have multiple runner labels available.
-        if "test-runs-on-alternate" in platform_info:
-            alternate_label = platform_info["test-runs-on-alternate"]
-            alternate_weight = platform_info.get("test-runs-on-alternate-weight", 0.5)
-            if random.random() < alternate_weight:
-                test_runs_on = alternate_label
-                print(
-                    f"  {family_name}: selected alternate runner (weight={alternate_weight}): "
-                    f"{test_runs_on}"
-                )
-            else:
-                print(
-                    f"  {family_name}: selected primary runner (weight={1-alternate_weight}): "
-                    f"{test_runs_on}"
-                )
-
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
         # this family (the default runner may not have the right kernel).
@@ -854,6 +837,25 @@ def _expand_build_config_for_platform(
                     f"  {family_name}: no ASAN sandbox runner available, "
                     f"disabling tests"
                 )
+
+        # If run-full-tests-only is set and test_type is "quick", disable testing
+        if platform_info.get("run-full-tests-only", False) and test_type == "quick":
+            test_runs_on = ""
+            print(
+                f"  {family_name}: run-full-tests-only flag set, "
+                f"disabling tests for quick test run"
+            )
+
+        # If nightly_check_only_for_family is set for schedule runs only
+        if (
+            platform_info.get("nightly_check_only_for_family", False)
+            and not ci_inputs.is_schedule
+        ):
+            test_runs_on = ""
+            print(
+                f"  {family_name}: nightly_check_only_for_family flag set, "
+                f"disabling test runner for non-scheduled runs"
+            )
 
         per_family_info.append(
             {
@@ -891,6 +893,7 @@ def _expand_build_config_for_platform(
 def expand_build_configs(
     targets: TargetSelection,
     ci_inputs: CIInputs,
+    test_type: str,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfigs:
@@ -924,6 +927,7 @@ def expand_build_configs(
             ci_inputs=ci_inputs,
             all_families=all_families,
             variant_config=variant_config,
+            test_type=test_type,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
         )
@@ -1010,6 +1014,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     builds = expand_build_configs(
         targets=targets,
         ci_inputs=ci_inputs,
+        test_type=jobs.test_rocm.test_type,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
     )

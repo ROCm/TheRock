@@ -526,7 +526,14 @@
               "doc"
             ]
           },
-
+          {
+            "Name": "origami",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          },
           {
             "Name": "hipBLASLt",
             "Components": [
@@ -1074,6 +1081,53 @@
     "Gfxarch": "True"
   },
   {
+    "Package": "amdrocm-ccl-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-ccl-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-ccl-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm primitive library test files",
+    "Description_Long": "Contains rocprim, hipcub and rocthrust test files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "prim",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocPRIM_tests",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "hipCUB",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "rocThrust",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
     "Package": "amdrocm-ccl-devel",
     "Version": "",
     "Architecture": "amd64",
@@ -1370,6 +1424,28 @@
             "Name": "rocminfo",
             "Components": [
               "run"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocm-cmake",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "half",
+            "Components": [
+              "dev"
             ]
           }
         ]
@@ -1778,7 +1854,7 @@
       }
     ],
 
-    "Gfxarch": "True",
+    "Gfxarch": "False",
     "DisablePackaging": "True"
   },
 
@@ -1823,7 +1899,7 @@
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
 
   {
@@ -1863,7 +1939,7 @@
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
 
   {
@@ -2487,6 +2563,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
+    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
