@@ -86,6 +86,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      MIOPEN_LOG_LEVEL: "5"
+      MIOPEN_ENABLE_LOGGING_CMD: "1"
 
     steps:
       - name: Checkout
