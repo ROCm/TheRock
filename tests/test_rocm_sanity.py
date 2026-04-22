@@ -219,7 +219,7 @@ class TestROCmSanity:
                 "linux": [
                     "amdsmitstReadWrite.FanReadWrite",
                 ]
-            }
+            },
         }
 
         platform_key = "windows" if is_windows() else "linux"
