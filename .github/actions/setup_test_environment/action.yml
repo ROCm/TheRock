@@ -56,7 +56,7 @@ runs:
     - name: Install test requirements
       shell: bash
       run: |
-        uv pip install -r requirements-test.txt
+        uv pip install -r requirements-test.txt --no-cache
         uv pip freeze
 
     - name: Install Choco tools
