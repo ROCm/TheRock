@@ -29,7 +29,8 @@ on:
         type: string
       uccl_git_ref:
         type: string
-        default: "main"
+        # TODO: revert to "main" before merging to TheRock main.
+        default: "ep-therock"
       artifact_name:
         description: Name of the GHA artifact to upload the wheel under.
         type: string
@@ -69,7 +70,8 @@ on:
       uccl_git_ref:
         description: UCCL ref to checkout (e.g. "main")
         type: string
-        default: "main"
+        # TODO: revert to "main" before merging to TheRock main.
+        default: "ep-therock"
       artifact_name:
         description: Name of the GHA artifact to upload the wheel under.
         type: string
@@ -117,8 +119,12 @@ jobs:
           docker info
 
       - name: Checkout UCCL source
+        # TODO: drop --gitrepo-origin (revert to upstream default) before
+        # merging to TheRock main. Currently pinned to a personal fork that
+        # carries the EP-on-therock build fixes.
         run: |
           python external-builds/uccl/uccl_repo.py checkout \
+            --gitrepo-origin https://github.com/adityakankariya/uccl.git \
             --repo-hashtag ${UCCL_GIT_REF}
 
       - name: Build UCCL wheel

@@ -67,9 +67,8 @@ def uccl_ep_available() -> bool:
     """Return True if the `uccl.ep` module is importable.
 
     UCCL's upstream build.sh currently skips the EP build for the "therock"
-    target (see build_inner.sh: "Skipping GPU-driven build on therock (no
-    GPU-driven support yet)"). When uccl.ep is not present, the intranode
-    test cannot run and we exit 0 with a skip message so CI stays green.
+    target. When uccl.ep is not present, the intranode test cannot run and 
+    we exit 0 with a skip message so CI stays green.
     """
     check_script = "import uccl.ep"
     result = subprocess.run(
