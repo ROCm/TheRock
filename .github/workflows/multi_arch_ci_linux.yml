@@ -152,28 +152,45 @@ jobs:
       contents: read
       id-token: write
 
-  test_native_packages:
-    needs: [build_native_deb_packages, build_native_rpm_packages]
-    name: Test ${{ matrix.pkg_type }} Install - ${{ matrix.os_profile }}
+  test_native_packages_ubuntu2404:
+    needs: [build_native_deb_packages]
+    name: Test DEB Install - ubuntu2404
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - pkg_type: deb
-            os_profile: ubuntu2404
-            package_url: ${{ needs.build_native_deb_packages.outputs.package_repository_url }}
-          - pkg_type: rpm
-            os_profile: rhel10
-            package_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
-          - pkg_type: rpm
-            os_profile: sles16
-            package_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
-      package_install_url: ${{ matrix.package_url }}
+      package_install_url: ${{ needs.build_native_deb_packages.outputs.package_repository_url }}
       release_type: ci
-      os_profile: ${{ matrix.os_profile }}
+      os_profile: ubuntu2404
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      test_type: sanity
+    permissions:
+      contents: read
+      id-token: write
+
+  test_native_packages_rhel10:
+    needs: [build_native_rpm_packages]
+    name: Test RPM Install - rhel10
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    uses: ./.github/workflows/test_native_linux_packages_install.yml
+    with:
+      package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
+      release_type: ci
+      os_profile: rhel10
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      test_type: sanity
+    permissions:
+      contents: read
+      id-token: write
+
+  test_native_packages_sles16:
+    needs: [build_native_rpm_packages]
+    name: Test RPM Install - sles16
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    uses: ./.github/workflows/test_native_linux_packages_install.yml
+    with:
+      package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
+      release_type: ci
+      os_profile: sles16
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       test_type: sanity
     permissions:
