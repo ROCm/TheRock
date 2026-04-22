@@ -116,6 +116,7 @@ import argparse
 from datetime import datetime, timezone
 from fetch_artifacts import main as fetch_artifacts_main
 import json
+import os
 from pathlib import Path
 import platform
 import re
@@ -124,6 +125,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 from typing import Optional
 
 PLATFORM = platform.system().lower()
@@ -149,10 +151,6 @@ def _fetch_remote_listing(base_url: str, prefix: str = "") -> list[dict]:
     containing a JSON array of files. The format is:
         const files = [{"name": "filename.tar.gz", "mtime": 1234567890.0}, ...]
 
-    # TODO: The distribution server currently returns HTML with embedded JSON.
-    # Once a standalone JSON manifest (e.g., index.json) is available,
-    # switch to fetching that directly instead of parsing HTML.
-
     Args:
         base_url: Base distribution URL (e.g., https://rocm.nightlies.amd.com/tarball)
         prefix: Optional prefix to filter files by name
@@ -163,12 +161,20 @@ def _fetch_remote_listing(base_url: str, prefix: str = "") -> list[dict]:
     # URL must end with "/" for directory listing
     listing_url = base_url.rstrip("/") + "/"
 
-    response = requests.get(listing_url, timeout=60)
-    response.raise_for_status()
+    try:
+        response = requests.get(listing_url, timeout=60)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        log(f"Warning: Failed to fetch remote listing from {listing_url}: {e}")
+        return []
+
+    content = response.text
+    if not content:
+        log("Warning: Empty response from remote listing")
+        return []
 
     # Extract the JSON array from the HTML response
     # Format: const files = [{"name": "...", "mtime": ...}, ...]
-    content = response.text
     match = re.search(r"const files = (\[.*?\]);", content, re.DOTALL)
     if not match:
         log("Warning: Could not find files listing in remote response")
@@ -180,10 +186,16 @@ def _fetch_remote_listing(base_url: str, prefix: str = "") -> list[dict]:
         log(f"Warning: Failed to parse remote files listing: {e}")
         return []
 
+    if not isinstance(files_json, list):
+        log("Warning: Remote files listing is not a JSON array")
+        return []
+
     objects: list[dict] = []
     for file_info in files_json:
+        if not isinstance(file_info, dict):
+            continue
         name = file_info.get("name", "")
-        if not name:
+        if not name or not isinstance(name, str):
             continue
 
         # Apply prefix filter if specified
@@ -192,8 +204,11 @@ def _fetch_remote_listing(base_url: str, prefix: str = "") -> list[dict]:
 
         obj = {"Key": name}
         mtime = file_info.get("mtime")
-        if mtime:
+        if mtime and isinstance(mtime, (int, float)):
             obj["LastModified"] = datetime.fromtimestamp(mtime, tz=timezone.utc)
+        else:
+            # Fallback to current time if mtime is missing or invalid
+            obj["LastModified"] = datetime.now(tz=timezone.utc)
         objects.append(obj)
 
     return objects
@@ -201,11 +216,11 @@ def _fetch_remote_listing(base_url: str, prefix: str = "") -> list[dict]:
 
 def _download_artifact(base_url: str, asset_name: str, destination: Path):
     """
-    Download a file from the remote tarball distribution.
+    Download a tarball from the remote distribution.
 
     Args:
         base_url: Base distribution URL (e.g., https://rocm.nightlies.amd.com/tarball)
-        asset_name: Name of the asset to download
+        asset_name: Tarball filename to download (e.g., "therock-dist-linux-gfx110X-all-7.11.0a20251124.tar.gz")
         destination: Local path to save the downloaded file
     """
     url = f"{base_url}/{asset_name}"
@@ -216,10 +231,12 @@ def _download_artifact(base_url: str, asset_name: str, destination: Path):
 
     # Download to a temporary file first, then rename on success.
     # This prevents partial/corrupt files from being left on disk
-    # if the download is interrupted.
-    tmp_destination = destination.with_suffix(destination.suffix + ".tmp")
+    # if the download is interrupted. Using mkstemp ensures a unique,
+    # random filename so parallel processes do not collide.
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=destination.parent, suffix=".tmp")
+    tmp_destination = Path(tmp_path)
     try:
-        with open(tmp_destination, "wb") as f:
+        with os.fdopen(tmp_fd, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
         tmp_destination.rename(destination)
@@ -254,61 +271,69 @@ def extract_version_from_asset_name(
     return None
 
 
-def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str]:
+def list_available_gpu_families(
+    platform_str: str = PLATFORM,
+    base_url: str = TARBALL_NIGHTLY_URL,
+) -> set[str]:
     """
-    Query the remote distribution to find all GPU families that have nightly releases.
+    Query the remote distribution to find all GPU families that have releases.
     Useful for error messages when an invalid GPU family is specified.
+
+    Args:
+        platform_str: Platform identifier (e.g., 'linux', 'windows')
+        base_url: Base distribution URL to query. Defaults to nightly.
+
+    Returns:
+        Set of GPU family strings (e.g., {'gfx110X-all', 'gfx94X-dcgpu'}).
     """
     prefix = f"therock-dist-{platform_str}-"
     families: set[str] = set()
 
-    try:
-        objects = _fetch_remote_listing(TARBALL_NIGHTLY_URL, prefix)
-        for obj in objects:
-            # Extract family from: therock-dist-linux-{family}-{version}.tar.gz
-            match = re.match(rf"{prefix}([\w-]+)-", obj["Key"])
-            if match:
-                families.add(match.group(1))
-    except requests.RequestException as e:
-        log(f"Warning: Failed to list GPU families from remote: {e}")
+    objects = _fetch_remote_listing(base_url, prefix)
+    for obj in objects:
+        # Extract family from: therock-dist-linux-{family}-{version}.tar.gz
+        match = re.match(rf"{prefix}([\w-]+)-", obj["Key"])
+        if match:
+            families.add(match.group(1))
 
     return families
 
 
-def _fetch_and_sort_nightly_releases(
+def _fetch_and_sort_releases(
     artifact_group: str,
     platform_str: str = PLATFORM,
+    base_url: str = TARBALL_NIGHTLY_URL,
 ) -> list[dict]:
     """
-    Fetch and sort nightly releases from the remote distribution for a given artifact group.
+    Fetch and sort releases from the remote distribution for a given artifact group.
+
+    Args:
+        artifact_group: The artifact group (e.g., 'gfx110X-all')
+        platform_str: Platform identifier (e.g., 'linux', 'windows')
+        base_url: Base distribution URL to query. Defaults to nightly.
 
     Returns:
-        List of dicts with keys: version, asset_name, last_modified, size, parsed_date
+        List of dicts with keys: version, asset_name, last_modified, parsed_date
         Sorted by recency (newest first).
     """
     prefix = f"therock-dist-{platform_str}-{artifact_group}-"
     releases: list[dict] = []
 
-    try:
-        objects = _fetch_remote_listing(TARBALL_NIGHTLY_URL, prefix)
-        for obj in objects:
-            key = obj["Key"]
-            if not key.endswith(".tar.gz"):
-                continue
-            version = extract_version_from_asset_name(key, artifact_group, platform_str)
-            if version:
-                releases.append(
-                    {
-                        "version": version,
-                        "asset_name": key,
-                        "last_modified": obj.get("LastModified", datetime.min),
-                        "size": obj.get("Size", 0),
-                        "parsed_date": parse_nightly_version(version),
-                    }
-                )
-    except requests.RequestException as e:
-        log(f"Warning: Failed to fetch releases from remote: {e}")
-        return []
+    objects = _fetch_remote_listing(base_url, prefix)
+    for obj in objects:
+        key = obj["Key"]
+        if not key.endswith(".tar.gz"):
+            continue
+        version = extract_version_from_asset_name(key, artifact_group, platform_str)
+        if version:
+            releases.append(
+                {
+                    "version": version,
+                    "asset_name": key,
+                    "last_modified": obj["LastModified"],
+                    "parsed_date": parse_nightly_version(version),
+                }
+            )
 
     # Sort by parsed date (newest first), falling back to last_modified
     releases.sort(
@@ -325,14 +350,20 @@ def _fetch_and_sort_nightly_releases(
 def discover_latest_release(
     artifact_group: str,
     platform_str: str = PLATFORM,
+    base_url: str = TARBALL_NIGHTLY_URL,
 ) -> Optional[tuple[str, str]]:
     """
-    Query the remote distribution to find the latest nightly release for given artifact group.
+    Query the remote distribution to find the latest release for given artifact group.
+
+    Args:
+        artifact_group: The artifact group (e.g., 'gfx110X-all')
+        platform_str: Platform identifier (e.g., 'linux', 'windows')
+        base_url: Base distribution URL to query. Defaults to nightly.
 
     Returns:
         Tuple of (version_string, full_asset_name) or None if not found.
     """
-    releases = _fetch_and_sort_nightly_releases(artifact_group, platform_str)
+    releases = _fetch_and_sort_releases(artifact_group, platform_str, base_url)
     if not releases:
         return None
     return (releases[0]["version"], releases[0]["asset_name"])
@@ -372,20 +403,21 @@ def _retrieve_remote_assets(
     base_url: str, artifact_group: str, release_version: str, output_dir: Path
 ):
     """
-    Downloads release assets from the remote tarball distribution.
+    Retrieve and extract a release tarball matching the artifact group and version
+    from the remote distribution.
 
     Args:
         base_url: Base distribution URL for the release type
         artifact_group: The artifact group (e.g., 'gfx110X-all')
         release_version: The release version string
-        output_dir: Directory to save and extract the assets
+        output_dir: Directory to save and extract the tarball
     """
-    asset_name = f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
-    destination = output_dir / asset_name
+    tarball_name = f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
+    destination = output_dir / tarball_name
 
-    _download_artifact(base_url, asset_name, destination)
+    _download_artifact(base_url, tarball_name, destination)
 
-    # After downloading the asset, untar-ing the file
+    # After downloading the tarball, extract it
     _untar_files(output_dir, destination)
 
 
@@ -587,10 +619,10 @@ def retrieve_artifacts_by_release(args):
         log("This script requires a nightly-tarball or dev-tarball version.")
         log("Please retrieve the correct release version from:")
         log(
-            f"\t - {TARBALL_NIGHTLY_URL} (nightly-tarball examples: 6.4.0rc20250416, 7.10.0a20251024)"
+            f"\t - {TARBALL_NIGHTLY_URL} (nightly-tarball examples: 7.10.0a20251024, 7.12.0a20260422)"
         )
         log(
-            f"\t - {TARBALL_DEV_URL} (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
+            f"\t - {TARBALL_DEV_URL} (dev-tarball example: 7.12.0.dev0+fd2db42de1e0e4a98f76dadba07d2dfb6bd7d38b)"
         )
         log("Exiting...")
         return
@@ -598,6 +630,9 @@ def retrieve_artifacts_by_release(args):
     base_url = TARBALL_NIGHTLY_URL if nightly_release else TARBALL_DEV_URL
     release_version = args.release
 
+    release_type = "nightly" if nightly_release else "dev"
+    log(f"Detected {release_type} release: {release_version}")
+    log(f"Artifact group: {artifact_group}")
     log(f"Retrieving artifacts from {base_url}")
 
     if args.dry_run:
@@ -643,23 +678,31 @@ def retrieve_artifacts_by_input_dir(args):
 
 def retrieve_artifacts_by_latest_release(args):
     """
-    Find and retrieve the latest nightly release from the remote distribution.
+    Find and retrieve the latest release of the specified type from the remote distribution.
     """
-    log(f"Finding latest nightly release for {args.artifact_group}...")
+    base_url = RELEASE_TYPE_TO_URL.get(args.latest_release_type, TARBALL_NIGHTLY_URL)
+    log(
+        f"Finding latest {args.latest_release_type} release for {args.artifact_group}..."
+    )
 
-    result = discover_latest_release(artifact_group=args.artifact_group)
+    result = discover_latest_release(
+        artifact_group=args.artifact_group,
+        base_url=base_url,
+    )
 
     if result is None:
-        log(f"ERROR: No nightly release found for '{args.artifact_group}'")
+        log(
+            f"ERROR: No {args.latest_release_type} release found for '{args.artifact_group}'"
+        )
         log("")
-        log("Available GPU families in the nightly distribution:")
-        available = list_available_nightly_gpu_families()
+        log(f"Available GPU families in the {args.latest_release_type} distribution:")
+        available = list_available_gpu_families(base_url=base_url)
         for family in sorted(available):
             log(f"  - {family}")
         sys.exit(1)
 
     version, asset_name = result
-    log(f"Found latest release: {version}")
+    log(f"Found latest {args.latest_release_type} release: {version}")
 
     if args.dry_run:
         log(f"[DRY RUN] Would download: {asset_name} (version {version})")
@@ -667,7 +710,7 @@ def retrieve_artifacts_by_latest_release(args):
 
     # Reuse existing download logic
     _retrieve_remote_assets(
-        base_url=TARBALL_NIGHTLY_URL,
+        base_url=base_url,
         artifact_group=args.artifact_group,
         release_version=version,
         output_dir=args.output_dir,
@@ -728,7 +771,15 @@ def main(argv):
     group.add_argument(
         "--latest-release",
         action="store_true",
-        help="Install the latest nightly release (built daily from main branch)",
+        help="Install the latest release (built daily from main branch)",
+    )
+
+    parser.add_argument(
+        "--latest-release-type",
+        type=str,
+        choices=["nightly", "prerelease"],
+        default="nightly",
+        help="Type of release to fetch when using --latest-release (default: nightly)",
     )
 
     parser.add_argument(
