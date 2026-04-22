@@ -315,8 +315,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
         "lib/rocprofiler-systems"
         "lib/llvm/lib"
         "lib/rocm_sysdeps/lib"
-        "lib/../llvm/lib" # For Dyninst libraries to find dependencies in /lib/llvm/lib
-        "lib/../rocm_sysdeps/lib" # For Dyninst libraries to find dependencies in rocm_sysdeps/lib
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
       BUILD_DEPS
