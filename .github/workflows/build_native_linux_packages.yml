@@ -114,7 +114,7 @@ jobs:
 
       - name: Install Python requirements
         run: |
-          pip install pyelftools boto3 jinja2
+          pip install pyelftools boto3 jinja2 pyzstd
 
       - name: Determine S3 bucket and prefix
         id: s3_config
