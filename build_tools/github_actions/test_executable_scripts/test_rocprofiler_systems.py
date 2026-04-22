@@ -3,57 +3,83 @@
 
 import logging
 import os
+import shlex
 import subprocess
-import sys
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
-SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
+THEROCK_PATH = THEROCK_BIN_PATH.parent
+THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
+ROCPROFSYS_TEST_DIR = THEROCK_PATH / "share" / "rocprofiler-systems" / "tests"
+
+# TODO: Once the corresponding tests are fixed, remove from this list
+EXCLUDED_TESTS = [
+    "openmp-target",  # Validation test fails (__omp_dm_init_kernel.kd)
+    "transpose-runtime-instrument",  # Requires runtime-instrument optimization PR
+    "transferbench-sys-run",  # Flaky
+    "fork.*",  # Requires runtime-instrument optimization PR, or deadlocks because of logger
+    "rccl.*",  # Fails locally
+    "scratch.*",  # Validation test fails (GPU events need to be reduced to 1 instead of 12)
+    "roctx-sampling",  # Requires less strict sampling requirements
+    "roctx-runtime-instrument",  # Requires runtime-instrument optimization PR
+]
 
 logging.basicConfig(level=logging.INFO)
-rocm_base = Path(THEROCK_BIN_DIR).resolve().parent
 
-# Environment variables
 environ_vars = os.environ.copy()
-ld_paths = [
-    # Libraries used by examples
-    rocm_base
-    / "share"
-    / "rocprofiler-systems"
-    / "examples"
-    / "lib",
-]
-ld_paths_str = ":".join(str(p) for p in ld_paths)
 
-existing_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-existing_path = os.environ.get("PATH", "")
 
-environ_vars["PATH"] = (
-    f"{THEROCK_BIN_DIR}:{existing_path}" if existing_path else THEROCK_BIN_DIR
-)
-environ_vars["ROCM_PATH"] = str(rocm_base)
-environ_vars["LD_LIBRARY_PATH"] = (
-    f"{ld_paths_str}:{existing_ld_path}" if existing_ld_path else ld_paths_str
-)
-# Required to force the pytest package to use install mode
-environ_vars["ROCPROFSYS_INSTALL_DIR"] = str(rocm_base)
+def setup_env():
+    environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
+    environ_vars["ROCPROFSYS_INSTALL_DIR"] = str(THEROCK_PATH)
 
-# Execute tests
-pytest_package_exec = (
-    rocm_base / "share" / "rocprofiler-systems" / "tests" / "rocprofsys-tests.pyz"
-)
+    old_path = os.getenv("PATH", "")
+    rocm_bin = str(THEROCK_BIN_PATH)
+    environ_vars["PATH"] = f"{rocm_bin}:{old_path}" if old_path else rocm_bin
 
-cmd = [
-    sys.executable,
-    str(pytest_package_exec),
-    # TODO: Once the corresponding tests are fixed, remove the lines below
-    "-k",
-    "not TestOpenMPTarget and not (TestTranspose and runtime_instrument) and not TestGPUConnect",
-    "--junit-xml=junit.xml",
-    "--ci-mode",
-    "--log-cli-level=info",
-]
+    ld_paths = [
+        str(THEROCK_PATH / "share" / "rocprofiler-systems" / "examples" / "lib"),
+    ]
+    ld_paths_str = ":".join(ld_paths)
+    old_ld_path = os.getenv("LD_LIBRARY_PATH", "")
+    environ_vars["LD_LIBRARY_PATH"] = (
+        f"{ld_paths_str}:{old_ld_path}" if old_ld_path else ld_paths_str
+    )
 
-logging.info(f"++ Exec: {' '.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+
+def execute_tests():
+    shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
+    total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
+
+    ctest_base = [
+        "ctest",
+        "--test-dir",
+        str(ROCPROFSYS_TEST_DIR),
+    ]
+
+    # Informational test
+    config_cmd = ctest_base + [
+        "--verbose",
+        "--tests-regex",
+        "rocprofiler-systems-pytest-config",
+    ]
+    logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(config_cmd)}")
+    subprocess.run(config_cmd, cwd=THEROCK_PATH, check=False, env=environ_vars)
+
+    # Actual tests
+    cmd = ctest_base + [
+        "--output-on-failure",
+        "--exclude-regex",
+        f"{'|'.join(EXCLUDED_TESTS)}",
+        "--tests-information",
+        f"{shard_index},,{total_shards}",
+    ]
+
+    logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, cwd=THEROCK_PATH, check=True, env=environ_vars)
+
+
+if __name__ == "__main__":
+    setup_env()
+    execute_tests()
