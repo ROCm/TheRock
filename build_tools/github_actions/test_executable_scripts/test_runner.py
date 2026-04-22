@@ -86,39 +86,51 @@ ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
 
-# Component-specific overrides applied on top of defaults.
-# - test_dir_from_rocm: path parts relative to ROCM_PATH to override the test directory
-# - env_prepend: env var name -> list of path-part lists (each relative to ROCM_PATH)
-#                to prepend to the existing value
+# Component-specific ENV VARs/PATHs applied on top of defaults.
+#
+# - test_dir: The default TEST_DIR for ctest is THEROCK_BIN_DIR/TEST_COMPONENT.
+#   If any component needs to override the default TEST_DIR, it can use test_dir
+#   by specifying the path relative to ROCM_PATH.
+#
+# - additional_env_paths: Additional paths to prepend to the existing PATH, LD_LIBRARY_PATH, etc.
+#   relative to ROCM_PATH
+
 COMPONENT_OVERRIDES = {
+    # For rocprofiler-compute, we need the following additional paths:
+    # - PATH=ROCM_PATH/bin:$PATH
+    # - LD_LIBRARY_PATH=ROCM_PATH/lib:ROCM_PATH/lib/rocm_sysdeps/lib:$LD_LIBRARY_PATH
     "rocprofiler-compute": {
-        "test_dir_from_rocm": ["libexec", "rocprofiler-compute"],
-        "env_prepend": {
+        "test_dir": ["libexec", "rocprofiler-compute"],
+        "additional_env_paths": {
             "PATH": [["bin"]],
-            "LD_LIBRARY_PATH": [["lib"], ["lib", "rocm_sysdeps", "lib"]],
+            "LD_LIBRARY_PATH": [
+                ["lib"],
+                ["lib", "rocm_sysdeps", "lib"],
+            ],
         },
     },
 }
 
 
-def _prepend_env_paths(env, base_path, prepend_dict):
+def _prepend_env_paths(env, base_path, additional_paths_dict):
     """Prepend paths (relative to base_path) to environment variables."""
-    for env_key, path_parts_list in prepend_dict.items():
+    for env_key, path_parts_list in additional_paths_dict.items():
         new_paths = [str(base_path.joinpath(*parts)) for parts in path_parts_list]
-        existing = env.get(env_key, "")
-        env[env_key] = ":".join(filter(None, new_paths + [existing]))
+        existing_path = env.get(env_key, "")
+        env[env_key] = ":".join(filter(None, new_paths + [existing_path]))
 
 
-def apply_component_overrides(job_name, rocm_path, test_dir, env):
+def apply_component_overrides(job_name, rocm_path, default_test_dir, env):
     """Apply component-specific overrides for test_dir and environment variables."""
     overrides = COMPONENT_OVERRIDES.get(job_name)
     if not overrides:
-        return test_dir
+        return default_test_dir
 
-    if "test_dir_from_rocm" in overrides:
-        test_dir = str(rocm_path.joinpath(*overrides["test_dir_from_rocm"]))
+    test_dir = default_test_dir
+    if "test_dir" in overrides:
+        test_dir = str(rocm_path.joinpath(*overrides["test_dir"]))
 
-    _prepend_env_paths(env, rocm_path, overrides.get("env_prepend", {}))
+    _prepend_env_paths(env, rocm_path, overrides.get("additional_env_paths", {}))
     return test_dir
 
 
