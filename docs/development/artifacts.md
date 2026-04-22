@@ -209,7 +209,7 @@ Each component has default include patterns that determine what it matches (defi
 | `dbg`     | `.build-id/**/*.debug`                                                                             | Debug symbol files                                                                                    |
 | `dev`     | `**/*.a`, `**/*.lib`, `**/cmake/**`, `**/include/**`, `**/share/modulefiles/**`, `**/pkgconfig/**` | Build-time dependencies                                                                               |
 | `doc`     | `**/share/doc/**`                                                                                  | Documentation                                                                                         |
-| `sys`     | `**/etc/ld.so.conf.d/**`, `**/etc/OpenCL/vendors/**`, `**/usr/lib/systemd/system/**`              | OS-managed system config files (ldconfig drop-ins, OpenCL ICD registrations, systemd units, etc.)    |
+| `sys`     | `**/etc/ld.so.conf.d/**`, `**/etc/OpenCL/vendors/**`, `**/usr/lib/systemd/system/**`               | OS-managed system config files (ldconfig drop-ins, OpenCL ICD registrations, systemd units, etc.)     |
 | `test`    | *(none)*                                                                                           | Only matches files not claimed by earlier components                                                  |
 
 When a descriptor specifies `include` patterns for a component, those patterns are **added to** the defaults (not replacing them). To override defaults, set `default_patterns = false`. Use `exclude` patterns to carve out files that would otherwise match.
