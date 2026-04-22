@@ -25,6 +25,20 @@ include("${CMAKE_CURRENT_LIST_DIR}/../openmp/openmp-config.cmake")
 # to locate omp.h via its own resource dir, so dropping this export is safe.
 set_target_properties(OpenMP::omp PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "")
 
+# Strip clang-only link options when the consumer is not clang. Upstream's
+# config unconditionally appends -fno-openmp-implicit-rpath, which GCC rejects
+# with an unrecognized-option error. rocprofiler-systems builds with GCC
+# (enforced by its own CMake) and transitively links OpenMP::omp through
+# Dyninst, so leaving this in place breaks that subproject.
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+  get_target_property(_therock_openmp_link_opts OpenMP::omp INTERFACE_LINK_OPTIONS)
+  if(_therock_openmp_link_opts)
+    list(REMOVE_ITEM _therock_openmp_link_opts "-fno-openmp-implicit-rpath")
+    set_target_properties(OpenMP::omp PROPERTIES INTERFACE_LINK_OPTIONS "${_therock_openmp_link_opts}")
+  endif()
+  unset(_therock_openmp_link_opts)
+endif()
+
 foreach(_therock_openmp_lang IN ITEMS C CXX Fortran)
   if(NOT TARGET OpenMP::OpenMP_${_therock_openmp_lang})
     # GLOBAL makes the imported target visible outside the directory scope
@@ -38,8 +52,15 @@ foreach(_therock_openmp_lang IN ITEMS C CXX Fortran)
     )
   endif()
   set(OpenMP_${_therock_openmp_lang}_FOUND TRUE)
-  set(OpenMP_${_therock_openmp_lang}_FLAGS "-fopenmp")
-  set(OpenMP_${_therock_openmp_lang}_LIB_NAMES "omp")
+  # Guard legacy variables: defer to upstream if it ever starts defining them.
+  # The authoritative compile/link options live on OpenMP::omp already; these
+  # strings only matter for consumers that read the variables directly.
+  if(NOT DEFINED OpenMP_${_therock_openmp_lang}_FLAGS)
+    set(OpenMP_${_therock_openmp_lang}_FLAGS "-fopenmp")
+  endif()
+  if(NOT DEFINED OpenMP_${_therock_openmp_lang}_LIB_NAMES)
+    set(OpenMP_${_therock_openmp_lang}_LIB_NAMES "omp")
+  endif()
 endforeach()
 unset(_therock_openmp_lang)
 
