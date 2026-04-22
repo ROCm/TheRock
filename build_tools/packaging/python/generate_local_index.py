@@ -28,6 +28,7 @@ Usage as a script:
 import argparse
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 
 def generate_simple_index(
@@ -85,18 +86,51 @@ def generate_simple_index(
     # Add local files with ./ prefix
     for file_path in sorted(local_files):
         filename = file_path.name
-        html_parts.append(f'  <a href="./{filename}">{filename}</a><br>')
+        html_parts.append(f'  <a href="./{quote(filename)}">{filename}</a><br>')
 
     # Add parent files with ../ prefix
     for file_path in sorted(parent_files):
         filename = file_path.name
-        html_parts.append(f'  <a href="../{filename}">{filename}</a><br>')
+        html_parts.append(f'  <a href="../{quote(filename)}">{filename}</a><br>')
 
     html_parts.extend(["</body>", "</html>", ""])  # Trailing newline
 
     output_path.write_text("\n".join(html_parts), encoding="utf-8")
     print(
         f"Generated {output_path}: {len(local_files)} local, {len(parent_files)} parent files"
+    )
+
+
+def generate_flat_index(dist_dir: Path, patterns: list[str] | None = None) -> None:
+    """Generate a single flat index.html for kpack-split builds.
+
+    In kpack-split mode all packages (core, libraries, device-per-target, devel,
+    meta) are placed directly in dist/ at the top level — there are no family
+    subdirectories. This function generates a single index.html covering all
+    top-level files so that pip --find-links can discover all wheels.
+
+    Only top-level files are scanned; subdirectories are ignored.
+
+    Args:
+        dist_dir: dist/ directory containing packages at the top level
+        patterns: File patterns to include (default: ["*.whl", "*.tar.gz"])
+    """
+    if patterns is None:
+        patterns = ["*.whl", "*.tar.gz"]
+
+    local_files = []
+    for pattern in patterns:
+        local_files.extend([f for f in dist_dir.glob(pattern) if f.is_file()])
+
+    print(
+        f"Generating flat index for kpack-split build: {len(local_files)} files in {dist_dir}"
+    )
+
+    generate_simple_index(
+        output_path=dist_dir / "index.html",
+        local_files=local_files,
+        parent_files=None,
+        title="ROCm Python Packages",
     )
 
 

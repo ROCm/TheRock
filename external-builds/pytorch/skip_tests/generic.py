@@ -9,6 +9,15 @@ skip_tests = {
         }
     },
     "common": {
+        "cuda": [
+            # RuntimeError: Error building extension 'dummy_allocator'
+            # Skipped across all PyTorch versions; the hipblas.h include error
+            # persists in the ROCm SDK environment.
+            "test_mempool_empty_cache_inactive",
+            # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
+            "test_memory_snapshot",
+            "test_memory_plots",
+        ],
         "autograd": [
             # Stream comparison mismatch on ROCm (non-default stream vs default stream)
             #   AssertionError: <torch.cuda.Stream ...> != <torch.cuda.Stream cuda_stream=0x0>
@@ -45,6 +54,10 @@ skip_tests = {
             #   * https://github.com/ROCm/pytorch/pull/2742
             #   * https://github.com/ROCm/pytorch/pull/2873
             "test_preferred_blas_library_settings",
+            # Python 3.14: PEP 649 changed __annotations__ behavior
+            # AttributeError: 'Model' object has no attribute '__annotations__'
+            # https://github.com/ROCm/TheRock/issues/2985
+            "test_autocast_cat_jit",
             # ----------------
             # maybe failing
             # ----------------
@@ -71,6 +84,11 @@ skip_tests = {
             # FLAKY!! AssertionError: 'tensor([2.3000+4.j, 7.0000+6.j])' != 'tensor([2.30000+4.j, 7.00000+6.j])'
             # (Note: this will also skip "test_print" in all other test modules)
             "test_print",
+            # Python 3.14: PEP 649 changed storage deallocation behavior
+            # AssertionError: False is not true
+            # https://github.com/ROCm/TheRock/issues/2985
+            "test_storage_dealloc_subclass_resurrected",
+            "test_storage_dealloc_subclass_zombie",
             # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
             # TypeError: 'CustomDecompTable' object is not a mapping
             "test_fx_memory_profiler_augmentation",

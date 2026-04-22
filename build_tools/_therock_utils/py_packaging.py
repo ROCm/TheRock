@@ -74,11 +74,13 @@ class Parameters:
         version: str,
         version_suffix: str,
         artifacts: ArtifactCatalog,
+        kpack_split: bool = False,
     ):
         self.dest_dir = dest_dir
         self.version = version
         self.version_suffix = version_suffix
         self.artifacts = artifacts
+        self.kpack_split = kpack_split
         self.all_target_families = artifacts.all_target_families
         _sorted_families = sorted(self.all_target_families)
         self.default_target_family: str | None = (
@@ -99,6 +101,17 @@ class Parameters:
         # Full: base extended with all families. Used by most packages and by
         # the dynamically loaded self.dist_info module below.
         dist_info_contents = dist_info_base
+
+        # In kpack-split mode, the libraries package is arch-neutral (no family
+        # suffix). Override its dist_package_template so that
+        # get_py_package_name(target_family=None) works for both the libraries
+        # wheel itself and the device wheel overlay.
+        if kpack_split:
+            dist_info_contents += (
+                'ALL_PACKAGES["libraries"].dist_package_template = '
+                '"rocm-sdk-libraries"\n'
+            )
+
         if self.default_target_family is not None:
             dist_info_contents += (
                 f"DEFAULT_TARGET_FAMILY = '{self.default_target_family}'\n"
@@ -176,6 +189,21 @@ class PopulatedDistPackage:
                 f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
             )
 
+        # Device packages need to know the libraries package name so their
+        # setup.py can declare the correct install_requires and overlay dir.
+        if logical_name == "device":
+            libraries_entry = self.params.dist_info.ALL_PACKAGES["libraries"]
+            libraries_dist_name = libraries_entry.get_dist_package_name(
+                target_family=None
+            )
+            libraries_py_package_name = libraries_entry.get_py_package_name(
+                target_family=None
+            )
+            dist_info_contents += f"LIBRARIES_DIST_NAME = {repr(libraries_dist_name)}\n"
+            dist_info_contents += (
+                f"LIBRARIES_PY_PACKAGE_NAME = {repr(libraries_py_package_name)}\n"
+            )
+
         # Populate from template.
         self.path = self._copy_package_template(
             self.params.dest_dir,
@@ -185,9 +213,21 @@ class PopulatedDistPackage:
             dest_name=self.entry.get_dist_package_name(target_family=target_family),
         )
 
-        self._platform_dir = (
-            self.path / "platform" / self.entry.get_py_package_name(self.target_family)
-        )
+        # Device packages overlay into the libraries package's platform dir
+        # so .kpack files land alongside host .so files in site-packages.
+        if logical_name == "device":
+            libraries_entry = self.params.dist_info.ALL_PACKAGES["libraries"]
+            self._platform_dir = (
+                self.path
+                / "platform"
+                / libraries_entry.get_py_package_name(target_family=None)
+            )
+        else:
+            self._platform_dir = (
+                self.path
+                / "platform"
+                / self.entry.get_py_package_name(self.target_family)
+            )
 
     @property
     def pure_dir(self) -> Path:
@@ -291,6 +331,34 @@ class PopulatedDistPackage:
                         continue
                 # Otherwise, just copy the file.
                 self._populate_file(relpath, dest_path, dir_entry, resolve_src=True)
+        self.params.populated_packages.append(self)
+        return self
+
+    def populate_device_files(
+        self, artifacts: ArtifactCatalog
+    ) -> "PopulatedDistPackage":
+        """Populates device files into the platform directory.
+
+        Device artifacts are a mix of opaque binary data (.kpack archives,
+        .co/.dat/.hsaco kernels, MIOpen DBs) and per-arch ELF shared
+        libraries (e.g. libMIOpenCKGroupedConv_gfx1201.so). Data files
+        are copied verbatim; ELF .so/exe files go through the same
+        RPATH-patching path as populate_runtime_files() so their
+        dynamic deps resolve across the kpack-split wheel layout.
+        """
+        log(
+            f"::: Populating device files {self.logical_name}[{self.target_family}]: "
+            f"{self.path}"
+        )
+        for an, an_path in artifacts.artifact_basedirs:
+            log(f"  + {an}: {an_path}")
+
+        package_dest_dir = self.platform_dir
+        for relpath, dir_entry in artifacts.pm.matches():
+            if self.files.has(relpath):
+                continue
+            dest_path = package_dest_dir / relpath
+            self._populate_file(relpath, dest_path, dir_entry, resolve_src=True)
         self.params.populated_packages.append(self)
         return self
 
@@ -417,6 +485,7 @@ class PopulatedDistPackage:
         self,
         *,
         addl_artifact_names: Sequence[str] = (),
+        exclude_components: Sequence[str] = (),
         tarball_compression: bool = True,
     ):
         """Populates all files that have not yet been materialized and symlink the rest."""
@@ -425,12 +494,15 @@ class PopulatedDistPackage:
         # any emitted runtime artifacts plus additional requested.
         devel_artifact_names = set(self.params.runtime_artifact_names)
         devel_artifact_names.update(addl_artifact_names)
+        excluded = set(exclude_components)
         log(f":: Devel artifact inclusions: {devel_artifact_names}")
 
         def _devel_artifact_filter(an: ArtifactName) -> bool:
             if an.name not in devel_artifact_names:
                 # We didn't generate a runtime artifact for it, so no devel
                 # artifact.
+                return False
+            if an.component in excluded:
                 return False
             if an.target_family != "generic" and an.target_family != self.target_family:
                 # Only include artifacts for this devel package's target family.

@@ -10,18 +10,24 @@ Output is always KEY=value (suitable for GITHUB_OUTPUT).
 Subcommands (get operations):
 
   get-base-url         Get base URL (scheme + netloc) from an input URL. Prints repo_base_url=<value>.
+  get-gpg-url          Get GPG key URL for GITHUB_OUTPUT. With --release-type, emits a non-empty URL only for prerelease/release; otherwise gpg_key_url=. Without --release-type, always derives from --from-url (legacy).
   get-repo-sub-folder  Get repo_sub_folder from an S3 prefix (last segment if YYYYMMDD-<id>, else empty). Prints repo_sub_folder=<value>.
   get-repo-url         Get full repo URL from components(release_type, native_package_type, repo_base_url, os_profile, repo_sub_folder). Prints repo_url=<value>.
+  extract-gfx-arch     Extract and normalize GPU architecture from artifact group. Prints gfx_arch=<value>.
 
 Usage:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url <url>
+  python build_tools/packaging/linux/get_url_repo_params.py get-gpg-url --from-url <url> [--release-type <type>]
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix <prefix>
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url ...
+  python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch --artifact-group <group>
 
 Examples:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url https://example.com/v2/whl
+  python build_tools/packaging/linux/get_url_repo_params.py get-gpg-url --release-type prerelease --from-url https://rocm.prereleases.amd.com/packages/ubuntu2404
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix v3/packages/deb/20260204-12345
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --native-package-type deb --repo-base-url https://x.com --os-profile ubuntu2404 --repo-sub-folder ''
+  python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch --artifact-group gfx94X-dcgpu
 """
 
 import argparse
@@ -48,6 +54,52 @@ def cmd_base_url(args: argparse.Namespace) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     print(f"repo_base_url={base_url}")
+    return 0
+
+
+# --- gpg_key_url ---
+
+
+def get_gpg_key_url(package_url: str) -> str:
+    """
+    Get GPG key URL from package repository URL.
+
+    Extracts base URL and appends /gpg/rocm.gpg path.
+
+    Examples:
+        https://rocm.prereleases.amd.com/packages/ubuntu2404 -> https://rocm.prereleases.amd.com/gpg/rocm.gpg
+        https://repo.amd.com/rocm/packages/rhel10/x86_64/ -> https://repo.amd.com/gpg/rocm.gpg
+    """
+    base_url = get_base_url(package_url)
+    return f"{base_url}/gpg/rocm.gpg"
+
+
+def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
+    """
+    Whether install workflows should use a repo GPG key URL for this release line.
+
+    When release_type is None, callers treat this as "legacy / unspecified" and always
+    derive the GPG URL from the package URL.
+
+    When release_type is set (e.g. from GitHub Actions), only prerelease and release
+    lines use signed-repo GPG keys; dev/nightly/ci/etc. omit it (empty gpg_key_url).
+    """
+    if release_type is None:
+        return True
+    rt = release_type.strip().lower()
+    return rt in ("prerelease", "release")
+
+
+def cmd_gpg_key_url(args: argparse.Namespace) -> int:
+    if not gpg_key_url_needed_for_release_type(args.release_type):
+        print("gpg_key_url=")
+        return 0
+    try:
+        gpg_url = get_gpg_key_url(args.from_url)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    print(f"gpg_key_url={gpg_url}")
     return 0
 
 
@@ -116,6 +168,50 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
     return 0
 
 
+# --- extract-gfx-arch ---
+
+
+def extract_gfx_arch(artifact_group: str) -> str:
+    """
+    Extract and normalize GPU architecture from artifact group(s).
+
+    Supports both single and comma/semicolon-separated artifact groups.
+    Output is always comma-separated.
+
+    Examples:
+        gfx94X-dcgpu -> gfx94x
+        gfx1100-consumer -> gfx1100
+        GFX942-server -> gfx942
+        gfx94X-dcgpu,gfx1100-consumer -> gfx94x,gfx1100
+        gfx94X-dcgpu;gfx1100-consumer -> gfx94x,gfx1100
+    """
+    if not artifact_group:
+        raise ValueError("artifact_group cannot be empty")
+
+    # Split on comma or semicolon to handle multiple groups
+    # Replace semicolons with commas for consistent splitting
+    normalized = artifact_group.replace(";", ",")
+    groups = [g.strip() for g in normalized.split(",")]
+
+    # Extract first segment (before dash) and lowercase each
+    archs = [g.split("-")[0].lower() for g in groups if g]
+
+    if not archs:
+        raise ValueError("artifact_group cannot be empty after parsing")
+
+    return ",".join(archs)
+
+
+def cmd_extract_gfx_arch(args: argparse.Namespace) -> int:
+    try:
+        gfx_arch = extract_gfx_arch(args.artifact_group)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    print(f"gfx_arch={gfx_arch}")
+    return 0
+
+
 # --- main ---
 
 
@@ -140,6 +236,26 @@ def main(argv: list[str] | None = None) -> int:
         help="Any URL to derive base URL from (scheme + netloc only; e.g. https://example.com/v2/whl → https://example.com)",
     )
     p_base.set_defaults(func=cmd_base_url)
+
+    # get-gpg-url: get GPG key URL from package repository URL
+    p_gpg = subparsers.add_parser(
+        "get-gpg-url",
+        help="Print gpg_key_url= for GITHUB_OUTPUT. With --release-type, only prerelease/release get a non-empty URL; otherwise gpg_key_url=. Omit --release-type to always derive from --from-url.",
+    )
+    p_gpg.add_argument(
+        "--from-url",
+        type=str,
+        required=True,
+        metavar="URL",
+        help="Package repository URL to derive GPG key URL from when needed (e.g. https://rocm.prereleases.amd.com/packages/ubuntu2404 → https://rocm.prereleases.amd.com/gpg/rocm.gpg)",
+    )
+    p_gpg.add_argument(
+        "--release-type",
+        type=str,
+        default=None,
+        help="If set, emit non-empty GPG URL only for 'prerelease' or 'release'; for dev/nightly/etc. print gpg_key_url=. If omitted, always derive from --from-url.",
+    )
+    p_gpg.set_defaults(func=cmd_gpg_key_url)
 
     # get-repo-sub-folder: get repo_sub_folder from S3 prefix
     p_repo = subparsers.add_parser(
@@ -190,6 +306,20 @@ def main(argv: list[str] | None = None) -> int:
         help="Repo subfolder (e.g. YYYYMMDD-<id> for dev/nightly; empty for prerelease)",
     )
     p_url.set_defaults(func=cmd_repo_url)
+
+    # extract-gfx-arch: extract GPU architecture from artifact group
+    p_gfx = subparsers.add_parser(
+        "extract-gfx-arch",
+        help="Extract and normalize GPU architecture from artifact group (e.g. gfx94X-dcgpu → gfx94x).",
+    )
+    p_gfx.add_argument(
+        "--artifact-group",
+        type=str,
+        required=True,
+        metavar="GROUP",
+        help="Artifact group to extract gfx_arch from (e.g. gfx94X-dcgpu, gfx1100-consumer)",
+    )
+    p_gfx.set_defaults(func=cmd_extract_gfx_arch)
 
     args = parser.parse_args(argv)
     return args.func(args)
