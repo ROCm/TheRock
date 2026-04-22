@@ -316,6 +316,40 @@ class ConfigureCITest(unittest.TestCase):
             base_args, {"amdgpu_families": "gfx94X"}, {"amdgpu_families": "gfx110X"}
         )
 
+    @patch("subprocess.run")
+    def test_pr_release_branch_ci_run(self, mock_run):
+        base_args = {
+            "build_variant": "release",
+            "github_event_name": "pull_request",
+            "branch_name": "release/therock-7.9",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml"
+        mock_run.return_value = mock_process
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            configure_ci.main(base_args, {}, {})
+        self.assertIn('"test_type": "full"', captured_out.getvalue())
+
+    @patch("subprocess.run")
+    def test_push_release_branch_ci_run(self, mock_run):
+        base_args = {
+            "build_variant": "release",
+            "github_event_name": "push",
+            "branch_name": "release/therock-7.9",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml"
+        mock_run.return_value = mock_process
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            configure_ci.main(base_args, {}, {})
+        self.assertIn('"test_type": "full"', captured_out.getvalue())
+
     def test_skip_ci_label(self):
         base_args = {
             "pr_labels": '{"labels":[{"name":"ci:skip"},{"name":"test:hipblaslt"},{"name":"test:rocblas"},{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"},{"name":"test_runner:oem"}]}',

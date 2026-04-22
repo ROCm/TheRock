@@ -532,8 +532,6 @@ def main(base_args, linux_families, windows_families):
             combined_test_labels = list(set(linux_test_output + windows_test_output))
             test_type = "full"
             test_type_reason = f"test label(s) specified: {combined_test_labels}"
-            # Functional tests run on nightly/scheduled builds
-            run_functional_tests = True
     else:
         # Conditionally build and conditionally run full tests for other
         # triggers (pull_request), based on modified paths and other inputs.
@@ -591,6 +589,12 @@ def main(base_args, linux_families, windows_families):
                     test_type = filter_type
                     test_type_reason = f"test filter label specified: {label}"
                     break
+
+        # If the branch is "release/therock-*", we run full tests
+        branch_name = base_args.get("branch_name", "")
+        if branch_name.startswith("release/therock-"):
+            test_type = "full"
+            test_type_reason = f"branch name '{branch_name}' indicates release branch -> running full tests"
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
