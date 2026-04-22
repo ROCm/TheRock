@@ -1970,7 +1970,6 @@
           {
             "Name": "rocshmem",
             "Components": [
-              "lib",
               "run",
               "doc"
             ]
@@ -1979,7 +1978,7 @@
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
 
   {
@@ -2016,7 +2015,7 @@
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
 
   {
