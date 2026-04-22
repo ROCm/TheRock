@@ -601,7 +601,8 @@ def run():
 
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
-        if key != "sanity" and test_labels and key not in test_labels:
+        parsed_test_labels = [c.split("test:")[-1] for c in test_labels]
+        if key != "sanity" and parsed_test_labels and key not in parsed_test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 
