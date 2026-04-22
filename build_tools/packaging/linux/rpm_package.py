@@ -165,6 +165,9 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     pkg_name = update_package_name(pkg_name, config)
 
+    # Check if any source directories contain etc files
+    has_etc_files = any((Path(src_dir) / "etc").exists() for src_dir in sourcedir_list)
+
     env = Environment(
         loader=FileSystemLoader(str(SCRIPT_DIR)),
         autoescape=select_autoescape(
@@ -196,6 +199,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
         "exclude_libpython_requires": exclude_libpython_requires,
+        "has_etc_files": has_etc_files,
     }
 
     with open(specfile, "w", encoding="utf-8") as f:
