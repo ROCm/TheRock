@@ -161,12 +161,12 @@ jobs:
       #   3. Everything else uses the standard test runner
       test_runs_on: >-
         ${{
-          matrix.components.is_benchmark == true &&
+          (matrix.components.is_benchmark == true &&
             inputs.benchmark_runs_on != '' &&
-            inputs.benchmark_runs_on ||
-          matrix.components.multi_gpu_runner != '' &&
-            matrix.components.multi_gpu_runner ||
-            inputs.test_runs_on
+            inputs.benchmark_runs_on) ||
+          (matrix.components.multi_gpu_runner != '' &&
+            matrix.components.multi_gpu_runner) ||
+          inputs.test_runs_on
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ toJSON(matrix.components) }}
