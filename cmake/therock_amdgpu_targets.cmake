@@ -210,7 +210,6 @@ therock_add_amdgpu_target(gfx1036 "AMD Raphael iGPU" FAMILY igpu-all gfx103X-all
 therock_add_amdgpu_target(gfx1100 "AMD RX 7900 XTX" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
-    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
     rccl-tests
@@ -218,7 +217,6 @@ therock_add_amdgpu_target(gfx1100 "AMD RX 7900 XTX" FAMILY dgpu-all gfx110X-all 
 therock_add_amdgpu_target(gfx1101 "AMD RX 7800 XT" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
-    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
     rccl-tests
@@ -227,7 +225,6 @@ therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
-    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
     rccl-tests
@@ -237,7 +234,6 @@ therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all 
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl # https://github.com/ROCm/TheRock/issues/150
     rccl-tests
-    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 
@@ -247,7 +243,6 @@ therock_add_amdgpu_target(gfx1150 "AMD Strix Point iGPU" FAMILY igpu-all gfx115X
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl # https://github.com/ROCm/TheRock/issues/150
     rccl-tests
-    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
@@ -255,7 +250,6 @@ therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl # https://github.com/ROCm/TheRock/issues/150
     rccl-tests
-    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1152 "AMD Krackan 1 iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
@@ -263,7 +257,6 @@ therock_add_amdgpu_target(gfx1152 "AMD Krackan 1 iGPU" FAMILY igpu-all gfx115X-a
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl # https://github.com/ROCm/TheRock/issues/150
     rccl-tests
-    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1153 "AMD Radeon 820M iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
@@ -271,7 +264,6 @@ therock_add_amdgpu_target(gfx1153 "AMD Radeon 820M iGPU" FAMILY igpu-all gfx115X
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl # https://github.com/ROCm/TheRock/issues/150
     rccl-tests
-    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 
@@ -279,7 +271,6 @@ therock_add_amdgpu_target(gfx1153 "AMD Radeon 820M iGPU" FAMILY igpu-all gfx115X
 therock_add_amdgpu_target(gfx1200 "AMD RX 9060 / XT" FAMILY dgpu-all gfx120X-all
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
-    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
     rccl-tests
@@ -287,7 +278,6 @@ therock_add_amdgpu_target(gfx1200 "AMD RX 9060 / XT" FAMILY dgpu-all gfx120X-all
 therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
-    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
     rccl-tests

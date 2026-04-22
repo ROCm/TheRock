@@ -27,7 +27,7 @@ cmd = [
     f"{THEROCK_BIN_DIR}/hiptensor",
     "--output-on-failure",
     "--parallel",
-    "8",
+    "1",
     "--timeout",
     timeout,
 ]
