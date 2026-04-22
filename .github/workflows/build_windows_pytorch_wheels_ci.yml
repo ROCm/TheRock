@@ -211,6 +211,16 @@ jobs:
           set "ROCM_EXTRAS_FLAG="
           if not "${{ steps.device_extras.outputs.value }}"=="" set "ROCM_EXTRAS_FLAG=--rocm-extras ${{ steps.device_extras.outputs.value }}"
 
+          REM Only multi-arch callers (multi_arch_ci_windows.yml) populate
+          REM inputs.amdgpu_targets today. Legacy single-family CI
+          REM (ci_windows.yml) leaves it empty and falls back to
+          REM `rocm-sdk targets` inside build_prod_wheels.py.
+          REM TODO(#4687): Make --pytorch-rocm-arch required here once every
+          REM caller plumbs the value through and the fallback in
+          REM build_prod_wheels.py::get_rocm_sdk_targets is removed.
+          set "PYTORCH_ROCM_ARCH_FLAG="
+          if not "${{ inputs.amdgpu_targets }}"=="" set "PYTORCH_ROCM_ARCH_FLAG=--pytorch-rocm-arch ${{ inputs.amdgpu_targets }}"
+
           echo "Building PyTorch wheels for ${{ inputs.artifact_group }} (cache: ${{ inputs.cache_type }})"
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
@@ -222,6 +232,7 @@ jobs:
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             %CACHE_FLAG% ^
             %ROCM_EXTRAS_FLAG% ^
+            %PYTORCH_ROCM_ARCH_FLAG% ^
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats

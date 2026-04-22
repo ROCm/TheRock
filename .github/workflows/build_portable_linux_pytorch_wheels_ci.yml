@@ -193,6 +193,18 @@ jobs:
             rocm_extras_flag="--rocm-extras ${{ steps.device_extras.outputs.value }}"
           fi
 
+          # Only multi-arch callers (multi_arch_ci_linux.yml) populate
+          # inputs.amdgpu_targets today. Legacy single-family CI (ci_linux.yml)
+          # leaves it empty and falls back to `rocm-sdk targets` inside
+          # build_prod_wheels.py.
+          # TODO(#4687): Make --pytorch-rocm-arch required here once every
+          # caller plumbs the value through and the fallback in
+          # build_prod_wheels.py::get_rocm_sdk_targets is removed.
+          pytorch_rocm_arch_flag=""
+          if [ -n "${{ inputs.amdgpu_targets }}" ]; then
+            pytorch_rocm_arch_flag="--pytorch-rocm-arch ${{ inputs.amdgpu_targets }}"
+          fi
+
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
@@ -201,6 +213,7 @@ jobs:
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
             ${rocm_extras_flag} \
+            ${pytorch_rocm_arch_flag} \
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats
