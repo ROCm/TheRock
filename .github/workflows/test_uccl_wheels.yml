@@ -147,6 +147,18 @@ jobs:
         run: |
           git config --global core.longpaths true
 
+      # uccl/ep.abi3.so is dynamically linked against libibverbs / libnl /
+      # libnuma. The wheel build container (AlmaLinux 8 manylinux) had these
+      # via rdma-core-devel/libnl3-devel/numactl-devel, but the test container
+      # (no_rocm_image_ubuntu24_04) ships with none of them, so `import uccl.ep`
+      # fails at runtime with "libibverbs.so.1: cannot open shared object file".
+      # Install the runtime (-no -dev) Ubuntu equivalents.
+      - name: Install RDMA runtime libraries
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            libibverbs1 libnl-3-200 libnl-route-3-200 libnuma1
+
       - name: Checkout UCCL source (for test scripts)
         # TODO: drop --gitrepo-origin (revert to upstream default) before
         # merging to TheRock main. Currently pinned to a personal fork that
