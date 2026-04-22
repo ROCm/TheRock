@@ -135,7 +135,7 @@ jobs:
       release_type: ci
     permissions:
       contents: read
-      id-token: none
+      id-token: write
 
   build_native_rpm_packages:
     needs: [build_multi_arch_stages]
@@ -150,7 +150,7 @@ jobs:
       release_type: ci
     permissions:
       contents: read
-      id-token: none
+      id-token: write
 
   test_native_packages:
     needs: [build_native_deb_packages, build_native_rpm_packages]
@@ -176,6 +176,9 @@ jobs:
       os_profile: ${{ matrix.os_profile }}
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       test_type: sanity
+    permissions:
+      contents: read
+      id-token: write
 
   build_python_packages:
     needs: [build_multi_arch_stages]
