@@ -162,6 +162,10 @@ jobs:
         run: |
           # Pass the target families as-is (semicolon-separated)
           # build_package.py's normalize_target_list() handles all separators
+          KPACK_FLAG=""
+          if [[ "${{ steps.kpack_detection.outputs.enable_kpack }}" == "true" ]]; then
+            KPACK_FLAG="--enable-kpack"
+          fi
           python ./build_tools/packaging/linux/build_package.py \
             --dest-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --rocm-version  "${{ inputs.rocm_version }}" \
@@ -169,7 +173,7 @@ jobs:
             --artifacts-dir "${{ env.ARTIFACTS_DIR }}"/artifacts/ \
             --pkg-type "${{ inputs.native_package_type }}" \
             --version-suffix "${{ env.ARTIFACT_RUN_ID }}" \
-            --enable-kpack=${{ steps.kpack_detection.outputs.enable_kpack }}
+            $KPACK_FLAG
 
       - name: Configure AWS Credentials
         # Only assume OIDC role for authorized repositories (ROCm/TheRock, ROCm/rockrel).
