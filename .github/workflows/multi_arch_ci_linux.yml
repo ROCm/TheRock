@@ -132,7 +132,7 @@ jobs:
       artifact_run_id: ${{ github.run_id }}
       rocm_version: ${{ inputs.rocm_deb_package_version }}
       native_package_type: deb
-      release_type: ci
+      release_type: ""
     permissions:
       contents: read
       id-token: write
@@ -147,7 +147,7 @@ jobs:
       artifact_run_id: ${{ github.run_id }}
       rocm_version: ${{ inputs.rocm_rpm_package_version }}
       native_package_type: rpm
-      release_type: ci
+      release_type: ""
     permissions:
       contents: read
       id-token: write
