@@ -219,10 +219,6 @@ skip_tests = {
             # TestLinalgCUDA - tunableop_rocm addmm relu
             "test_addmm_relu_tunableop_rocm_cuda_float32",
         ],
-        "scaled_matmul": [
-            # TestFP8MatmulCUDA - deepseek error messages
-            "test_scaled_mm_deepseek_error_messages_bfloat16_lhs_block_128_rhs_block_1_M_256_N_256_K_256_cuda",
-        ],
         "modules": [
             # TestModuleCUDA - CTCLoss cpu/gpu parity scalar mismatch
             "test_cpu_gpu_parity_nn_CTCLoss_cuda_float32",
