@@ -233,3 +233,35 @@ jobs:
         run: |
           python external-builds/pytorch/sanity_check_wheel.py \
             ${{ env.PACKAGE_DIST_DIR }}/
+
+      # The kpack wheel splitter takes the fat torch wheel and produces a
+      # smaller host wheel plus one device wheel per gfx target. Source-install
+      # from the TheRock checkout — kpack has no published wheel today.
+      - name: Install kpack tooling
+        if: ${{ inputs.kpack_split == 'true' }}
+        run: |
+          pip install \
+            rocm-systems/python/rocm-bootstrap \
+            rocm-systems/shared/kpack
+
+      - name: Split PyTorch fat wheel
+        if: ${{ inputs.kpack_split == 'true' }}
+        run: |
+          # The splitter writes the host wheel under the same filename as the
+          # input, so relocate the fat wheel out of PACKAGE_DIST_DIR first.
+          FAT_STAGE="${RUNNER_TEMP:-/tmp}/pytorch-fat"
+          mkdir -p "${FAT_STAGE}"
+          mv ${{ env.PACKAGE_DIST_DIR }}/torch-*.whl "${FAT_STAGE}/"
+
+          python -m rocm_kpack.tools.split_python_wheels \
+            --input "${FAT_STAGE}"/torch-*.whl \
+            --output-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --device-package-prefix amd-torch-device \
+            --overlay-root torch/ \
+            --wheel-type torch-fat \
+            --compression zstd \
+            -j "$(nproc)"
+
+          rm -rf "${FAT_STAGE}"
+          echo "Post-split contents of ${{ env.PACKAGE_DIST_DIR }}:"
+          ls -lh "${{ env.PACKAGE_DIST_DIR }}/"
