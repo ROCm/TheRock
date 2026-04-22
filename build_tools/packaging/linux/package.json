@@ -1502,6 +1502,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {

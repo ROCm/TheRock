@@ -61,7 +61,30 @@ mkdir -p $RPM_BUILD_ROOT{{ install_prefix }}
 }
 {% endfor %}
 
+# Move etc files to system /etc directory
+if [ -d "$RPM_BUILD_ROOT{{ install_prefix }}/etc" ]; then
+    mkdir -p $RPM_BUILD_ROOT/etc
+    cp -R "$RPM_BUILD_ROOT{{ install_prefix }}/etc"/* $RPM_BUILD_ROOT/etc/
+    rm -rf "$RPM_BUILD_ROOT{{ install_prefix }}/etc"
+
+    # Rename and edit OpenCL configuration files with version
+    if [ -f "$RPM_BUILD_ROOT/etc/ld.so.conf.d/10-rocm-opencl.conf" ]; then
+        # Update content to use /opt/rocm/core/lib/opencl
+        echo "/opt/rocm/core/lib/opencl" > "$RPM_BUILD_ROOT/etc/ld.so.conf.d/10-rocm-opencl.conf"
+        # Rename with version
+        mv "$RPM_BUILD_ROOT/etc/ld.so.conf.d/10-rocm-opencl.conf" \
+           "$RPM_BUILD_ROOT/etc/ld.so.conf.d/10-rocm{{ version }}-opencl-{{ release }}.conf"
+    fi
+    if [ -f "$RPM_BUILD_ROOT/etc/OpenCL/vendors/amdocl64.icd" ]; then
+        mv "$RPM_BUILD_ROOT/etc/OpenCL/vendors/amdocl64.icd" \
+           "$RPM_BUILD_ROOT/etc/OpenCL/vendors/amdocl64_{{ version }}_{{ release }}.icd"
+    fi
+fi
+
 %files
+{%- if has_etc_files %}
+/etc
+{%- endif %}
 {{ install_prefix }}
 
 %clean

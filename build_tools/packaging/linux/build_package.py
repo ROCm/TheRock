@@ -167,6 +167,18 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         if build_config.enable_rpath:
             convert_runpath_to_rpath(package_dir)
 
+        # Move etc files to system /etc location
+        etc_source = dest_dir / "etc"
+        if etc_source.exists() and etc_source.is_dir():
+            etc_dest = package_dir / "etc"
+            etc_dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(etc_source), str(etc_dest))
+
+            # Rename OpenCL configuration files with version
+            rename_etc_files_with_version(
+                etc_dest, build_config.rocm_version, build_config.version_suffix
+            )
+
         # Generate install file after copying, so we can check for hidden files
         generate_install_file(pkg_info, deb_dir, build_config, dest_dir)
 
@@ -249,6 +261,10 @@ def generate_install_file(pkg_info, deb_dir, config: PackageConfig, dest_dir=Non
             else:
                 has_regular_files = True
 
+    # Check if etc files exist at the package root (moved from install_prefix/etc)
+    package_dir = Path(deb_dir).parent
+    has_etc_files = (package_dir / "etc").exists()
+
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_install.j2")
     # Prepare your context dictionary
@@ -256,6 +272,7 @@ def generate_install_file(pkg_info, deb_dir, config: PackageConfig, dest_dir=Non
         "path": config.install_prefix,
         "has_hidden_files": has_hidden_files,
         "has_regular_files": has_regular_files,
+        "has_etc_files": has_etc_files,
     }
 
     with install_file.open("w", encoding="utf-8") as f:
@@ -404,6 +421,45 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
             with script_file.open("w", encoding="utf-8") as f:
                 f.write(template.render(context))
             os.chmod(script_file, 0o755)
+
+
+def rename_etc_files_with_version(etc_dir, version, version_suffix):
+    """Rename OpenCL configuration files to include ROCm version and version suffix.
+
+    Parameters:
+    etc_dir : Path to the etc directory
+    version : ROCm version string
+    version_suffix : Version suffix string
+
+    Returns: None
+    """
+    print_function_name()
+
+    etc_path = Path(etc_dir)
+    if not etc_path.exists():
+        return
+
+    # Rename and edit ld.so.conf.d file
+    ldso_conf = etc_path / "ld.so.conf.d" / "10-rocm-opencl.conf"
+    if ldso_conf.exists():
+        # Update content to use /opt/rocm/core/lib/opencl
+        with ldso_conf.open("w", encoding="utf-8") as f:
+            f.write("/opt/rocm/core/lib/opencl\n")
+
+        # Rename with version
+        new_name = f"10-rocm{version}-opencl-{version_suffix}.conf"
+        new_path = ldso_conf.parent / new_name
+        ldso_conf.rename(new_path)
+        print(f"Renamed: {ldso_conf.name} -> {new_name}")
+        print(f"Updated content to: /opt/rocm/core/lib/opencl")
+
+    # Rename OpenCL ICD file
+    icd_file = etc_path / "OpenCL" / "vendors" / "amdocl64.icd"
+    if icd_file.exists():
+        new_name = f"amdocl64_{version}_{version_suffix}.icd"
+        new_path = icd_file.parent / new_name
+        icd_file.rename(new_path)
+        print(f"Renamed: {icd_file.name} -> {new_name}")
 
 
 def copy_package_contents(source_dir, destination_dir):
@@ -618,6 +674,9 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     pkg_name = update_package_name(pkg_name, config)
 
+    # Check if any source directories contain etc files
+    has_etc_files = any((Path(src_dir) / "etc").exists() for src_dir in sourcedir_list)
+
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/rpm_specfile.j2")
     context = {
@@ -642,6 +701,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
         "exclude_libpython_requires": exclude_libpython_requires,
+        "has_etc_files": has_etc_files,
     }
 
     with open(specfile, "w", encoding="utf-8") as f:
