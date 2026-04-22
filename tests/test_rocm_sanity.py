@@ -208,7 +208,7 @@ class TestROCmSanity:
                     "amdsmitstReadWrite.FanReadWrite",
                 ]
             },
-            "gfx103x": {
+            "gfx103X-all": {
                 # TODO(#2963): Re-enable once amdsmi tests are fixed for gfx103x
                 "linux": [
                     "amdsmitstReadWrite.FanReadWrite",
