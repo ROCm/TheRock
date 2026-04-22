@@ -80,15 +80,16 @@ Some ROCm packages install system-level configuration files that must reside in 
 Examples:
 
 ```
-/etc/ld.so.conf.d/10-rocm7.12-opencl.conf
+/etc/ld.so.conf.d/10-rocm7.12-43-opencl.conf
 /etc/OpenCL/vendors/amdocl64_70200_43.icd
+/usr/lib/systemd/system/amdcuid_daemon.service
 ```
 
 #### ROCm Path References in Config File Contents
 
 Any ROCm path referenced inside a `sys` config file must point to the **unversioned symlink** `/opt/rocm/core` rather than a versioned path (e.g. `/opt/rocm/core-7.12`). This ensures the config remains valid across patch updates and supports side-by-side multi-version installs, where the active version is controlled by the symlink.
 
-Example — correct content for `/etc/ld.so.conf.d/10-rocm7.12-opencl.conf`:
+Example — correct content for `/etc/ld.so.conf.d/10-rocm7.12-43-opencl.conf`:
 
 ```
 /opt/rocm/core/lib/opencl
@@ -102,12 +103,12 @@ Not:
 
 #### Handling During Packaging and Installation
 
-When a `sys` component is present, the packaging and install tooling must **copy** these files to the corresponding system directory. A post install script can install these files to system folders. Symlinks must not be used because:
+When a `sys` component is present, the packaging and install tooling must **copy** these files to the corresponding system directory. Symlinks must not be used because:
 
-- OS package managers (`apt`, `dnf`, `zypper`) always copy files into `/etc`
-- Symlinks pointing into `/opt/rocm/` break in container and chroot environments
-- `ldconfig` silently skips broken symlinks in `ld.so.conf.d/`
-- Symlinks become dangling if ROCm is removed before the config files are cleaned up
+- Package managers treat `/etc` files as *conffiles* — preserving user edits on upgrade and removing them cleanly on uninstall. This mechanism is defined for regular files; behavior with symlinks is implementation-dependent and unreliable.
+- `ldconfig` silently ignores broken symlinks in `ld.so.conf.d/`, leaving ROCm library paths absent from `/etc/ld.so.cache` with no error — producing "library not found" failures that are difficult to diagnose.
+- Symlinks are invalidated by any operation that removes or relocates the target: ROCm upgrades, partial uninstalls, or manual cleanup. The broken entry persists in `/etc`, invisible to the package manager.
+- On SELinux-enforcing systems (RHEL and derivatives), symlinks in `/etc` whose targets fall outside the expected security context may trigger policy denials.
 
 When installing from tarballs or artifacts directly (without an OS package manager), the user/installer must copy `sys` component files to the appropriate system paths (requires elevated privileges) and run `ldconfig` after copying any `ld.so.conf.d/` entries.
 

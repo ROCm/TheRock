@@ -185,7 +185,7 @@ While artifacts can be defined with any component type mnemonic, the following a
 - `dbg`: Platform-specific debug-symbol files. These are typically produced in a platform specific way by the build system and bundled into one component.
 - `dev`: Files needed in order to depend on the artifact's contents at build time. This typically includes static libraries, CMake package config files, pkgconfig files, modulefiles, and any tools needed at build time. Notably it does not include shared libraries but does include import libraries (Windows). It is expected that the `dev` component is combined with the `lib` component to produce a fully functional development tree.
 - `doc`: Documentation files (typically under `share/doc/`).
-- `sys`: System-level configuration files that must be installed into OS-managed directories to enable correct runtime behavior. This includes ldconfig drop-in files (e.g. `/etc/ld.so.conf.d/10-rocm7.12-opencl.conf`) and OpenCL ICD registrations (e.g. `/etc/OpenCL/vendors/amdocl64_70200_43.icd`). /etc and /usr configuration needed by the module are included in this. User or installer can copy these files to actual system folder for functionality.
+- `sys`: System-level configuration files that must be installed into OS-managed directories to enable correct runtime behavior. This includes ldconfig drop-in files (e.g. `/etc/ld.so.conf.d/10-rocm7.12-43-opencl.conf`), OpenCL ICD registrations (e.g. `/etc/OpenCL/vendors/amdocl64_70200_43.icd`), and systemd unit files (e.g. `/usr/lib/systemd/system/amdcuid_daemon.service`). /etc and /usr configuration needed by the module are included in this. User or installer can copy these files to actual system folder for functionality.
 - `test`: Additional files needed in order to run tests, build test projects, etc. This typically includes test binaries, data file dependencies, and standalone test project trees.
 
 ### Component Extends Chain
@@ -193,7 +193,7 @@ While artifacts can be defined with any component type mnemonic, the following a
 Components are processed in a defined order via an *extends chain*. Each component extends its predecessor, meaning it will not include files already claimed by an earlier component:
 
 ```
-lib → run → dbg → dev → doc → sys → test
+lib → run → dbg → dev → sys → doc → test
 ```
 
 This ordering ensures that components are **disjoint** — each file in a stage directory appears in exactly one component. The mechanism works through `transitive_relpaths`: when a component is processed, it inherits the set of file paths already claimed by all components it extends (directly or transitively) and skips those files.
@@ -209,7 +209,7 @@ Each component has default include patterns that determine what it matches (defi
 | `dbg`     | `.build-id/**/*.debug`                                                                             | Debug symbol files                                                                                    |
 | `dev`     | `**/*.a`, `**/*.lib`, `**/cmake/**`, `**/include/**`, `**/share/modulefiles/**`, `**/pkgconfig/**` | Build-time dependencies                                                                               |
 | `doc`     | `**/share/doc/**`                                                                                  | Documentation                                                                                         |
-| `sys`     | `**/etc/ld.so.conf.d/**`, `**/etc/OpenCL/vendors/**`                                              | OS-managed system config files (ldconfig drop-ins, OpenCL ICD registrations, etc.)                   |
+| `sys`     | `**/etc/ld.so.conf.d/**`, `**/etc/OpenCL/vendors/**`, `**/usr/lib/systemd/system/**`              | OS-managed system config files (ldconfig drop-ins, OpenCL ICD registrations, systemd units, etc.)    |
 | `test`    | *(none)*                                                                                           | Only matches files not claimed by earlier components                                                  |
 
 When a descriptor specifies `include` patterns for a component, those patterns are **added to** the defaults (not replacing them). To override defaults, set `default_patterns = false`. Use `exclude` patterns to carve out files that would otherwise match.
