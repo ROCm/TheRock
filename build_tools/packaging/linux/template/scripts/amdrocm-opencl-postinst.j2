@@ -1,0 +1,24 @@
+#!/bin/bash
+
+set -e
+
+{% if target == "deb" %}
+do_ldconfig() {
+  ldconfig
+}
+
+case "$1" in
+  abort-deconfigure|abort-remove|abort-upgrade)
+    echo "$1"
+  ;;
+  configure)
+    do_ldconfig
+  ;;
+  *)
+    exit 0
+  ;;
+esac
+{% else %}
+# RPM post-install
+ldconfig
+{% endif %}
