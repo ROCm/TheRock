@@ -110,7 +110,6 @@ PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 # cannot catch (e.g. hanging during import or in C extensions).
 # TODO: investigate the root cause and narrow the exclusions.
 EXCLUDED_TEST_MODULES: list[str] = [
-    "nn/test_convolution",  # hangs for 5+ hours, see run 53 shards 7 & 10
     "inductor/test_max_autotune",
     "inductor/test_torchinductor_opinfo_properties",
     "inductor/test_compiled_autograd",
@@ -120,7 +119,6 @@ EXCLUDED_TEST_MODULES: list[str] = [
     "distributed/_composable/test_replicate",
     "distributed/tensor/test_view_ops",
     "dynamo/test_dynamic_shapes",
-    "functorch/test_control_flow",
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
