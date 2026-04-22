@@ -134,7 +134,7 @@ if(THEROCK_ENABLE_COMPILER)
   )
   # LLVM is too large to glob by default; opt in with THEROCK_DEV_PROJECTS.
   if(THEROCK_DEV_PROJECTS AND "amd-llvm" IN_LIST THEROCK_DEV_PROJECTS)
-    therock_cmake_subproject_glob_c_sources(amd-llvm)
+    therock_cmake_subproject_glob_c_sources(amd-llvm SUBDIRS .)
   endif()
 
   therock_cmake_subproject_provide_package(amd-llvm AMDDeviceLibs lib/llvm/lib/cmake/AMDDeviceLibs)

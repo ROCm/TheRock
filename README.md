@@ -62,11 +62,16 @@ instructions and configurations for alternatives.
 ```bash
 # Install Ubuntu dependencies
 sudo apt update
-sudo apt install gfortran git ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev texinfo bison flex
+sudo apt install gfortran git ninja-build cmake g++ pkg-config xxd automake libtool python3-venv python3-dev libegl1-mesa-dev texinfo bison flex
 
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
 cd TheRock
+
+# Install a patched patchelf from source. For details see
+# https://github.com/ROCm/TheRock/blob/main/docs/environment_setup_guide.md#patchelf
+sudo apt install curl make
+sudo env INSTALL_PREFIX=/usr/local ./dockerfiles/install_pinned_patchelf.sh
 
 # Init python virtual environment and install python dependencies
 python3 -m venv .venv && source .venv/bin/activate
