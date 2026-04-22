@@ -12,54 +12,11 @@ import platform
 import re
 import shutil
 import socket
+import string
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-
-parser = argparse.ArgumentParser(
-    description="CDash dashboard run for ROCProfiler SDK tests in TheRock.",
-)
-
-parser.add_argument(
-    "--configure-cmd",
-    metavar="CMD",
-    help="Full configure command line (CTEST_CONFIGURE_COMMAND), shell form",
-)
-parser.add_argument(
-    "--build-cmd",
-    metavar="CMD",
-    help="Full build command line (CTEST_BUILD_COMMAND), shell form",
-)
-parser.add_argument(
-    "--ctest-args",
-    metavar="ARGS",
-    help="Arguments for ctest (CMAKE_CTEST_ARGUMENTS), without leading 'ctest'",
-)
-parser.add_argument(
-    "--therock-bin-path",
-    type=Path,
-    help="TheRock install bin directory (THEROCK_BIN_DIR)",
-)
-
-args = parser.parse_args()
-
-# Base Paths
-THEROCK_BIN_PATH = args.therock_bin_path
-THEROCK_PATH = THEROCK_BIN_PATH.parent
-
-# LIB Paths
-THEROCK_LIB_PATH = THEROCK_PATH / "lib"
-THEROCK_SYSDEPS_PATH = THEROCK_LIB_PATH / "rocm_sysdeps"
-THEROCK_SYSDEPS_LIB_PATH = THEROCK_SYSDEPS_PATH / "lib"
-
-# LLVM Paths
-THEROCK_LLVM_BIN_PATH = THEROCK_PATH / "llvm" / "bin"
-THEROCK_CLANG_PATH = THEROCK_LLVM_BIN_PATH / "amdclang"
-THEROCK_CLANG_PLUS_PATH = THEROCK_LLVM_BIN_PATH / "amdclang++"
-
-# SDK Paths
-ROCPROFILER_SDK_PATH = THEROCK_PATH / "share" / "rocprofiler-sdk"
-ROCPROFILER_SDK_TESTS_PATH = ROCPROFILER_SDK_PATH / "tests"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -67,26 +24,105 @@ logging.basicConfig(level=logging.INFO)
 _DEFAULT_PROJECT_NAME = "rocprofiler-sdk-alt"
 _DEFAULT_BASE_URL = "my.cdash.org"
 
-# Define paths to output artifacts directory and script directory
-OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 
-# Defaults; overridden by --source-dir/--binary-dir when provided
-SOURCE_DIR = str(ROCPROFILER_SDK_TESTS_PATH)
-BINARY_DIR = str(ROCPROFILER_SDK_TESTS_PATH / "build")
+class _CMakeTemplate(string.Template):
+    """Generated CMake snippets: only ``@python_key`` is expanded by ``.substitute()``.
 
-# Set up environment variables
-environ_vars = os.environ.copy()
-environ_vars["ROCM_PATH"] = os.path.realpath(str(THEROCK_PATH))
-environ_vars["HIP_PATH"] = os.path.realpath(str(THEROCK_PATH))
-environ_vars["ROCPROFILER_METRICS_PATH"] = str(ROCPROFILER_SDK_PATH)
-environ_vars["HIP_PLATFORM"] = "amd"
-environ_vars["THEROCK_BIN_DIR"] = str(THEROCK_BIN_PATH)
+    CMake ``${VAR}`` / ``${{VAR}}`` text stays literal (avoids Python f-string
+    interpolation turning those into empty strings).
+    """
 
-# Set up LD_LIBRARY_PATH (same layout as test_rocprofiler_sdk.setup_env).
-old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
-environ_vars["LD_LIBRARY_PATH"] = ":".join(
-    [str(THEROCK_LIB_PATH), str(THEROCK_SYSDEPS_LIB_PATH)] + old_ld_lib_path
-)
+    delimiter = "@"
+
+
+@dataclass(frozen=True, slots=True)
+class TheRockCiPaths:
+    """Resolved install layout + env derived from ``THEROCK_BIN_PATH``."""
+
+    THEROCK_BIN_PATH: Path
+    THEROCK_PATH: Path
+    THEROCK_LIB_PATH: Path
+    THEROCK_SYSDEPS_PATH: Path
+    THEROCK_SYSDEPS_LIB_PATH: Path
+    THEROCK_LLVM_BIN_PATH: Path
+    THEROCK_CLANG_PATH: Path
+    THEROCK_CLANG_PLUS_PATH: Path
+    ROCPROFILER_SDK_PATH: Path
+    ROCPROFILER_SDK_TESTS_PATH: Path
+    SOURCE_DIR: str
+    BINARY_DIR: str
+    environ_vars: dict[str, str]
+
+
+def therock_ci_paths_from_bin(therock_bin_path: Path) -> TheRockCiPaths:
+    """Build :class:`TheRockCiPaths` from the TheRock install *bin* directory."""
+    THEROCK_BIN_PATH = Path(therock_bin_path).resolve()
+    THEROCK_PATH = THEROCK_BIN_PATH.parent
+    THEROCK_LIB_PATH = THEROCK_PATH / "lib"
+    THEROCK_SYSDEPS_PATH = THEROCK_LIB_PATH / "rocm_sysdeps"
+    THEROCK_SYSDEPS_LIB_PATH = THEROCK_SYSDEPS_PATH / "lib"
+    THEROCK_LLVM_BIN_PATH = THEROCK_PATH / "llvm" / "bin"
+    THEROCK_CLANG_PATH = THEROCK_LLVM_BIN_PATH / "amdclang"
+    THEROCK_CLANG_PLUS_PATH = THEROCK_LLVM_BIN_PATH / "amdclang++"
+    ROCPROFILER_SDK_PATH = THEROCK_PATH / "share" / "rocprofiler-sdk"
+    ROCPROFILER_SDK_TESTS_PATH = ROCPROFILER_SDK_PATH / "tests"
+    SOURCE_DIR = str(ROCPROFILER_SDK_TESTS_PATH)
+    BINARY_DIR = str(ROCPROFILER_SDK_TESTS_PATH / "build")
+
+    environ_vars = os.environ.copy()
+    environ_vars["ROCM_PATH"] = os.path.realpath(str(THEROCK_PATH))
+    environ_vars["HIP_PATH"] = os.path.realpath(str(THEROCK_PATH))
+    environ_vars["ROCPROFILER_METRICS_PATH"] = str(ROCPROFILER_SDK_PATH)
+    environ_vars["HIP_PLATFORM"] = "amd"
+    environ_vars["THEROCK_BIN_DIR"] = str(THEROCK_BIN_PATH)
+    old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
+    environ_vars["LD_LIBRARY_PATH"] = ":".join(
+        [str(THEROCK_LIB_PATH), str(THEROCK_SYSDEPS_LIB_PATH)] + old_ld_lib_path
+    )
+
+    return TheRockCiPaths(
+        THEROCK_BIN_PATH=THEROCK_BIN_PATH,
+        THEROCK_PATH=THEROCK_PATH,
+        THEROCK_LIB_PATH=THEROCK_LIB_PATH,
+        THEROCK_SYSDEPS_PATH=THEROCK_SYSDEPS_PATH,
+        THEROCK_SYSDEPS_LIB_PATH=THEROCK_SYSDEPS_LIB_PATH,
+        THEROCK_LLVM_BIN_PATH=THEROCK_LLVM_BIN_PATH,
+        THEROCK_CLANG_PATH=THEROCK_CLANG_PATH,
+        THEROCK_CLANG_PLUS_PATH=THEROCK_CLANG_PLUS_PATH,
+        ROCPROFILER_SDK_PATH=ROCPROFILER_SDK_PATH,
+        ROCPROFILER_SDK_TESTS_PATH=ROCPROFILER_SDK_TESTS_PATH,
+        SOURCE_DIR=SOURCE_DIR,
+        BINARY_DIR=BINARY_DIR,
+        environ_vars=environ_vars,
+    )
+
+
+def _build_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="CDash dashboard run for ROCProfiler SDK tests in TheRock.",
+    )
+    parser.add_argument(
+        "--configure-cmd",
+        metavar="CMD",
+        help="Full configure command line (CTEST_CONFIGURE_COMMAND), shell form",
+    )
+    parser.add_argument(
+        "--build-cmd",
+        metavar="CMD",
+        help="Full build command line (CTEST_BUILD_COMMAND), shell form",
+    )
+    parser.add_argument(
+        "--ctest-args",
+        metavar="ARGS",
+        help="Arguments for ctest (CMAKE_CTEST_ARGUMENTS), without leading 'ctest'",
+    )
+    parser.add_argument(
+        "--therock-bin-path",
+        type=Path,
+        required=True,
+        help="TheRock install bin directory (THEROCK_BIN_DIR)",
+    )
+    return parser
 
 
 def _os_release_id_version() -> str:
@@ -147,7 +183,7 @@ def _cdash_build_name() -> str:
         if refname:
             safe = re.sub(r"[^\w.\-]+", "-", refname).strip("-")
             safe = f" [Branch: {safe}]"
-            prefix = f"Manual_" if safe else ""
+            prefix = f"Manual_"
         else:
             prefix = ""
     label = _default_cdash_matrix_label() or os.getenv("THEROCK_CDASH_LABEL")
@@ -173,6 +209,7 @@ def _which_ctest() -> str:
 
 def _generate_ctest_custom(
     cmake_cmd: str,
+    paths: TheRockCiPaths,
     *,
     configure_cmd: str | None = None,
     build_cmd: str | None = None,
@@ -187,6 +224,7 @@ def _generate_ctest_custom(
 
     Args:
         cmake_cmd: Path or command name for the CMake executable.
+        paths: Resolved TheRock install paths and ``environ_vars``-related layout.
         configure_cmd: Full configure shell command; if None, built from cmake_cmd.
         build_cmd: Full build shell command; if None, built from cmake_cmd.
         ctest_args_str: Arguments for ctest (CMAKE_CTEST_ARGUMENTS); if None, default.
@@ -196,49 +234,42 @@ def _generate_ctest_custom(
     """
 
     def _esc(s: str) -> str:
+        """Escape special characters in a string for use in a CMake script."""
         return s.replace("\\", "\\\\").replace('"', '\\"')
 
     # Configure cmake commands and ctest arguments
     if configure_cmd is None:
         # Must use explicit -S/-B: CTest runs this with cwd=binary dir (CMake 3.14+).
         configure_cmd = (
-            f"{cmake_cmd} -S {SOURCE_DIR} -B {BINARY_DIR} --fresh -G Ninja "
-            f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_SYSDEPS_PATH} "
-            f"-DCMAKE_HIP_COMPILER={THEROCK_CLANG_PLUS_PATH} "
-            f"-DCMAKE_C_COMPILER={THEROCK_CLANG_PATH} "
-            f"-DCMAKE_CXX_COMPILER={THEROCK_CLANG_PLUS_PATH} "
+            f"{cmake_cmd} -S {paths.SOURCE_DIR} -B {paths.BINARY_DIR} --fresh -G Ninja "
+            f"-DCMAKE_PREFIX_PATH={paths.THEROCK_PATH};{paths.THEROCK_SYSDEPS_PATH} "
+            f"-DCMAKE_HIP_COMPILER={paths.THEROCK_CLANG_PLUS_PATH} "
+            f"-DCMAKE_C_COMPILER={paths.THEROCK_CLANG_PATH} "
+            f"-DCMAKE_CXX_COMPILER={paths.THEROCK_CLANG_PLUS_PATH} "
             f"-DPython3_EXECUTABLE={sys.executable}"
         )
     if build_cmd is None:
-        build_cmd = f"{cmake_cmd} --build {BINARY_DIR} -j"
+        build_cmd = f"{cmake_cmd} --build {paths.BINARY_DIR} -j"
     if ctest_args_str is None:
-        ctest_args_str = (
-            f"--test-dir {BINARY_DIR} --output-on-failure -j {os.cpu_count() or 1}"
-        )
+        ctest_args_str = f"--test-dir {paths.BINARY_DIR} --output-on-failure -j {os.cpu_count() or 1}"
 
-    # CDash build name: PR_<n>_<label> [<run id>] (see _cdash_build_name).
-    NAME = _cdash_build_name()
-
-    # Specify dashboard URL and site/host name for CDash submission
-    URL = f"https://{_DEFAULT_BASE_URL}/submit.php?project={_DEFAULT_PROJECT_NAME}"
-    SITE = os.getenv("RUNNER_NAME") or os.getenv("HOSTNAME") or socket.gethostname()
-
-    return f"""# CTestCustom.cmake content for ROCProfiler SDK tests. Generated by run-therock-ci.py.
-set(CTEST_PROJECT_NAME "{_DEFAULT_PROJECT_NAME}")
+    return _CMakeTemplate(
+        """# CTestCustom.cmake content for ROCProfiler SDK tests. Generated by run-therock-ci.py.
+set(CTEST_PROJECT_NAME "@project_name")
 set(CTEST_NIGHTLY_START_TIME "05:00:00 UTC")
 
 set(CTEST_DROP_METHOD "https")
 set(CTEST_DROP_SITE_CDASH TRUE)
-set(CTEST_SUBMIT_URL "{URL}")
+set(CTEST_SUBMIT_URL "@submit_url")
 
 set(CTEST_UPDATE_TYPE git)
 set(CTEST_UPDATE_VERSION_ONLY TRUE)
-set(CTEST_GIT_COMMAND "{shutil.which('git') or 'git'}")
+set(CTEST_GIT_COMMAND "@git_command")
 set(CTEST_GIT_INIT_SUBMODULES FALSE)
 
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
 set(CTEST_USE_LAUNCHERS TRUE)
-set(CMAKE_CTEST_ARGUMENTS "{_esc(ctest_args_str)}")
+set(CMAKE_CTEST_ARGUMENTS "@ctest_args")
 
 set(CTEST_CUSTOM_MAXIMUM_NUMBER_OF_ERRORS "100")
 set(CTEST_CUSTOM_MAXIMUM_NUMBER_OF_WARNINGS "100")
@@ -249,55 +280,57 @@ set(CTEST_MEMORYCHECK_TYPE "")
 set(CTEST_MEMORYCHECK_SUPPRESSIONS_FILE "")
 set(CTEST_MEMORYCHECK_SANITIZER_OPTIONS "")
 
-set(CTEST_SITE "{SITE}")
-set(CTEST_BUILD_NAME "{_esc(NAME)}")
+set(CTEST_SITE "@site")
+set(CTEST_BUILD_NAME "@build_name")
 
-set(CTEST_SOURCE_DIRECTORY "{SOURCE_DIR}")
-set(CTEST_BINARY_DIRECTORY "{BINARY_DIR}")
+set(CTEST_SOURCE_DIRECTORY "@source_directory")
+set(CTEST_BINARY_DIRECTORY "@binary_directory")
 
-set(CTEST_CONFIGURE_COMMAND "{_esc(configure_cmd)}")
-set(CTEST_BUILD_COMMAND "{_esc(build_cmd)}")
-set(CTEST_COVERAGE_COMMAND "{shutil.which('gcov') or 'gcov'}")
+set(CTEST_CONFIGURE_COMMAND "@configure_command")
+set(CTEST_BUILD_COMMAND "@build_command")
+set(CTEST_COVERAGE_COMMAND "@gcov_command")
 """
+    ).substitute(
+        project_name=_DEFAULT_PROJECT_NAME,
+        submit_url=f"https://{_DEFAULT_BASE_URL}/submit.php?project={_DEFAULT_PROJECT_NAME}",
+        git_command=shutil.which("git") or "git",
+        gcov_command=shutil.which("gcov") or "gcov",
+        ctest_args=_esc(ctest_args_str),
+        site=os.getenv("RUNNER_NAME") or os.getenv("HOSTNAME") or socket.gethostname(),
+        build_name=_esc(_cdash_build_name()),
+        source_directory=paths.SOURCE_DIR,
+        binary_directory=paths.BINARY_DIR,
+        configure_command=_esc(configure_cmd),
+        build_command=_esc(build_cmd),
+    )
 
 
-def _generate_dashboard(cmake_cmd: str) -> str:
+def _generate_dashboard(paths: TheRockCiPaths) -> str:
     """Generate dashboard.cmake for CDash.
 
     Script includes CTestCustom.cmake, then runs configure, build, test,
     and submit stages.
 
     Args:
-        cmake_cmd: Path or command name for the CMake executable.
+        paths: Resolved TheRock install paths (uses ``BINARY_DIR``).
 
     Returns:
         CMake script content for dashboard.cmake.
     """
 
-    # Define variables for dashboard submission
-    submit = "1"  # Submit to CDash or not
-    model = "Experimental"  # Mode (Nightly, Experimental, Continuous, etc.)
-    group = "TheRock"  # Group for the dashboard
-    ARGN = "${ARGN}"  # Arguments for dashboard submission
-
-    # TheRock superproject root (run-therock-ci.py lives at rocm-systems/.github/scripts/).
-    repo_source_dir = str(Path(__file__).resolve().parents[3])
-    # Generate initial dashboard.cmake content with minimum necessary version and dashboard_submit macro
-    _script = f"""
+    return _CMakeTemplate(
+        """
     cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 
     macro(dashboard_submit)
-        if("{submit}" GREATER 0)
-            ctest_submit({ARGN}
+        if("@submit" GREATER 0)
+            ctest_submit(${ARGN}
                             RETRY_COUNT 0
                             RETRY_DELAY 10
                             CAPTURE_CMAKE_ERROR _cdash_submit_err)
         endif()
     endmacro()
-    """
 
-    # Include custom CTest config and define a macro for standardized error handling and submit on error
-    _script += """
     include("${CMAKE_CURRENT_LIST_DIR}/CTestCustom.cmake")
 
     macro(handle_error _message _ret)
@@ -306,16 +339,13 @@ def _generate_dashboard(cmake_cmd: str) -> str:
             message(FATAL_ERROR "${_message} failed: ${${_ret}}")
         endif()
     endmacro()
-    """
 
-    # Run stages for configure, build, test, and submit to CDash
-    _script += f"""
     set(STAGES "START;UPDATE;CONFIGURE;BUILD;TEST;SUBMIT")
 
-    ctest_start({model} GROUP {group})
-    ctest_update(SOURCE "{repo_source_dir}" RETURN_VALUE _update_ret
+    ctest_start(@model GROUP @group)
+    ctest_update(SOURCE "@repo_source_dir" RETURN_VALUE _update_ret
                     CAPTURE_CMAKE_ERROR _update_err)
-    ctest_configure(BUILD "{BINARY_DIR}" RETURN_VALUE _configure_ret)
+    ctest_configure(BUILD "@BINARY_DIR" RETURN_VALUE _configure_ret)
     dashboard_submit(PARTS Start Update Configure RETURN_VALUE _submit_ret)
 
     if(NOT _update_err EQUAL 0)
@@ -325,27 +355,26 @@ def _generate_dashboard(cmake_cmd: str) -> str:
     handle_error("Configure" _configure_ret)
 
     if("BUILD" IN_LIST STAGES)
-        ctest_build(BUILD "{BINARY_DIR}" RETURN_VALUE _build_ret)
+        ctest_build(BUILD "@BINARY_DIR" RETURN_VALUE _build_ret)
         dashboard_submit(PARTS Build RETURN_VALUE _submit_ret)
         handle_error("Build" _build_ret)
     endif()
 
     if("TEST" IN_LIST STAGES)
-        ctest_test(BUILD "{BINARY_DIR}" RETURN_VALUE _test_ret)
+        ctest_test(BUILD "@BINARY_DIR" RETURN_VALUE _test_ret)
         dashboard_submit(PARTS Test RETURN_VALUE _submit_ret)
-        if(NOT _test_ret EQUAL 0)
-            if(_test_ret EQUAL -1)
-                message(WARNING "ctest_test finished with code ${{_test_ret}} (test failures); not treating as dashboard failure")
-            else()
-                handle_error("Testing" _test_ret)
-            endif()
-        endif()
+        handle_error("Testing" _test_ret)
     endif()
 
     dashboard_submit(PARTS Done RETURN_VALUE _submit_ret)
     """
-
-    return _script
+    ).substitute(
+        submit="1",
+        model="Experimental",
+        group="TheRock",
+        repo_source_dir=paths.THEROCK_BIN_PATH,
+        BINARY_DIR=paths.BINARY_DIR,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -362,24 +391,29 @@ def main(argv: list[str] | None = None) -> int:
         Exit code from ctest (0 on success).
     """
 
+    parser = _build_argument_parser()
+    args = parser.parse_args(argv)
+    paths = therock_ci_paths_from_bin(args.therock_bin_path)
+
     # Get path to cmake executable
     cmake_cmd = _which_cmake()
 
     # Create binary directory if it doesn't exist
-    os.makedirs(BINARY_DIR, exist_ok=True)
+    os.makedirs(paths.BINARY_DIR, exist_ok=True)
 
     # Generate CTestCustom.cmake and dashboard.cmake scripts
     ctest_custom = _generate_ctest_custom(
         cmake_cmd,
+        paths,
         configure_cmd=args.configure_cmd,
         build_cmd=args.build_cmd,
         ctest_args_str=args.ctest_args,
     )
-    dashboard = _generate_dashboard(cmake_cmd)
+    dashboard = _generate_dashboard(paths)
 
     # Write CTestCustom.cmake and dashboard.cmake scripts to binary directory
-    ctest_custom_path = os.path.join(BINARY_DIR, "CTestCustom.cmake")
-    dashboard_path = os.path.join(BINARY_DIR, "dashboard.cmake")
+    ctest_custom_path = os.path.join(paths.BINARY_DIR, "CTestCustom.cmake")
+    dashboard_path = os.path.join(paths.BINARY_DIR, "dashboard.cmake")
 
     with open(ctest_custom_path, "w") as f:
         f.write(ctest_custom)
@@ -389,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ctest_cmd = _which_ctest()
 
-    # Configure ctest run commmand
+    # Configure ctest run command
     ctest_argv = [
         ctest_cmd,
         "-S",
@@ -401,13 +435,16 @@ def main(argv: list[str] | None = None) -> int:
 
     # Run ctest with the generated dashboard.cmake script
     try:
-        r = subprocess.run(ctest_argv, cwd=SOURCE_DIR, check=True, env=environ_vars)
+        r = subprocess.run(
+            ctest_argv, cwd=paths.SOURCE_DIR, check=True, env=paths.environ_vars
+        )
+        return r.returncode
 
     # Log error
     except subprocess.CalledProcessError as e:
         logging.error(f"ctest failed: {e}")
+        return e.returncode
 
 
 if __name__ == "__main__":
-    main()
-    sys.exit(0)
+    sys.exit(main())
