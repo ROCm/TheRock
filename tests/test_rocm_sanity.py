@@ -214,6 +214,12 @@ class TestROCmSanity:
                     "amdsmitstReadWrite.FanReadWrite",
                 ]
             },
+            "gfx120X-all": {
+                # TODO(#2963): Re-enable once amdsmi tests are fixed for gfx120X-all
+                "linux": [
+                    "amdsmitstReadWrite.FanReadWrite",
+                ]
+            }
         }
 
         platform_key = "windows" if is_windows() else "linux"
