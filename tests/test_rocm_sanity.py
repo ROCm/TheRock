@@ -208,6 +208,12 @@ class TestROCmSanity:
                     "amdsmitstReadWrite.FanReadWrite",
                 ]
             },
+            "gfx103x": {
+                # TODO(#2963): Re-enable once amdsmi tests are fixed for gfx103x
+                "linux": [
+                    "amdsmitstReadWrite.FanReadWrite",
+                ]
+            },
         }
 
         platform_key = "windows" if is_windows() else "linux"
