@@ -54,18 +54,12 @@ def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
     """Recreate unversioned profiler library symlinks expected by dlopen()."""
     profiler_lib_dir = profiler.platform_dir / "lib"
 
-    symlink_pairs = [
-        ("librocprof-sys.so", "librocprof-sys.so.1"),
-        ("librocprof-sys-dl.so", "librocprof-sys-dl.so.1"),
-        ("librocprof-sys-rt.so", "librocprof-sys-rt.so.1"),
-        ("librocprof-sys-user.so", "librocprof-sys-user.so.1"),
-    ]
-
-    for link_name, target_name in symlink_pairs:
-        target = profiler_lib_dir / target_name
-        link = profiler_lib_dir / link_name
-        if target.exists() and not link.exists():
-            link.symlink_to(target_name)
+    for target in profiler_lib_dir.glob("librocprof-sys*.so.*"):
+        if target.is_symlink():
+            continue
+        link = target.with_suffix("")
+        if not link.exists():
+            link.symlink_to(target.name)
 
 
 def run(args: argparse.Namespace):
