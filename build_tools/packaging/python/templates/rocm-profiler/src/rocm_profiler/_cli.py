@@ -6,62 +6,53 @@
 
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 from pathlib import Path
 import platform
 
+from ._dist_info import ALL_PACKAGES
 
-def _find_platform_root() -> Path:
-    """
-    Locate the packaged ROCm platform root inside this wheel.
 
-    Phase 3 will populate runtime files into a subdirectory that contains `bin/`.
-    This function finds it dynamically to avoid hard-coding the exact platform tag.
-    """
-    pkg_dir = Path(__file__).resolve().parent
-    children = list(pkg_dir.iterdir())
-    direct_candidates: list[Path] = [
-        child for child in children if child.is_dir() and (child / "bin").is_dir()
-    ]
-    if len(direct_candidates) == 1:
-        return direct_candidates[0]
-    if len(direct_candidates) > 1:
-        raise RuntimeError(
-            "Ambiguous packaged ROCm profiler binaries: found multiple direct "
-            f"candidates with bin/: {sorted(str(p) for p in direct_candidates)}"
-        )
+PROFILER_PACKAGE = ALL_PACKAGES["profiler"]
+PROFILER_PY_PACKAGE_NAME = PROFILER_PACKAGE.get_py_package_name()
 
-    nested_candidates: list[Path] = []
-    for child in children:
-        if not child.is_dir():
-            continue
-        for grand in child.iterdir():
-            if grand.is_dir() and (grand / "bin").is_dir():
-                nested_candidates.append(grand)
 
-    if len(nested_candidates) == 1:
-        return nested_candidates[0]
-    if len(nested_candidates) > 1:
-        raise RuntimeError(
-            "Ambiguous packaged ROCm profiler binaries: found multiple nested "
-            f"candidates with bin/: {sorted(str(p) for p in nested_candidates)}"
-        )
+def _extend_ld_library_path() -> None:
+    if platform.system() == "Windows":
+        return
 
-    raise FileNotFoundError(
-        "Could not locate packaged ROCm profiler binaries. "
-        "Expected a directory containing `bin/` under the installed "
-        "rocm_profiler package."
-    )
+    try:
+        sdk_module = importlib.import_module("_rocm_sdk_core")
+    except ModuleNotFoundError:
+        return
+
+    sdk_path = Path(sdk_module.__file__).parent
+    sysdeps_path = sdk_path / "lib" / "rocm_sysdeps" / "lib"
+    if not sysdeps_path.exists():
+        return
+
+    existing = os.environ.get("LD_LIBRARY_PATH", "")
+    existing_parts = [p for p in existing.split(":") if p]
+    sysdeps_str = str(sysdeps_path)
+
+    if sysdeps_str not in existing_parts:
+        os.environ["LD_LIBRARY_PATH"] = ":".join([sysdeps_str, *existing_parts])
+
+
+def _get_profiler_module_path() -> Path:
+    profiler_module = importlib.import_module(PROFILER_PY_PACKAGE_NAME)
+    return Path(profiler_module.__file__).parent
 
 
 def _exec(relpath: str) -> None:
-
     if platform.system() == "Windows":
         raise RuntimeError("rocm-profiler is not supported on Windows.")
 
-    root = _find_platform_root()
-    full_path = root / relpath
+    _extend_ld_library_path()
+
+    full_path = _get_profiler_module_path() / relpath
     if not full_path.exists():
         raise FileNotFoundError(f"Profiler tool not found: {full_path}")
     os.execv(str(full_path), [str(full_path)] + sys.argv[1:])
