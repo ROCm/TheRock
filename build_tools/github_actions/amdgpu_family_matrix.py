@@ -204,6 +204,7 @@ amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
             "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
+            "test-runs-on-multi-gpu": "linux-mi355-8gpu-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
             "build_variants": ["release", "asan", "tsan"],
