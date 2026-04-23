@@ -654,6 +654,11 @@ def do_build(args: argparse.Namespace):
             "Please specify --pytorch-rocm-arch (e.g., gfx942)."
         )
 
+    # PyTorch's CMake consumes PYTORCH_ROCM_ARCH as a CMake-style list, so any
+    # comma-separated input needs to be rewritten with semicolons before
+    # CMake runs — otherwise the whole string is treated as one arch.
+    pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
+
     env = _setup_common_build_env(
         cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
     )
