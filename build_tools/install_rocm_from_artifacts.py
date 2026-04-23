@@ -442,6 +442,10 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocprofiler-systems")
             # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
             argv.append("rocprofiler-systems_run")
+            # The rocprofiler-systems-examples contains binaries required for
+            # rocprofiler-systems tests
+            if args.tests:
+                argv.append("rocprofiler-systems-examples_test")
         if args.rocrtst:
             extra_artifacts.append("rocrtst")
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)

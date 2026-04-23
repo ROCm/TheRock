@@ -17,12 +17,17 @@ ROCPROFSYS_TEST_DIR = THEROCK_PATH / "share" / "rocprofiler-systems" / "tests"
 EXCLUDED_TESTS = [
     "openmp-target",  # Validation test fails (__omp_dm_init_kernel.kd)
     "transpose-runtime-instrument",  # Requires runtime-instrument optimization PR
-    "transferbench-sys-run",  # Flaky
+    "transferbench-sys-run",  # Requires multi-gpu system
     "fork.*",  # Requires runtime-instrument optimization PR, or deadlocks because of logger
-    "rccl.*",  # Fails locally
     "scratch.*",  # Validation test fails (GPU events need to be reduced to 1 instead of 12)
     "roctx-sampling",  # Requires less strict sampling requirements
     "roctx-runtime-instrument",  # Requires runtime-instrument optimization PR
+]
+
+EXCLUDED_LABELS = [
+    "mpi",  # Currently unsupported
+    "julia",  # Unsupported
+    "kfd",  # No SDK version can be found yet
 ]
 
 logging.basicConfig(level=logging.INFO)
@@ -72,6 +77,8 @@ def execute_tests():
         "--output-on-failure",
         "--exclude-regex",
         f"{'|'.join(EXCLUDED_TESTS)}",
+        "--label-exclude",
+        f"{'|'.join(EXCLUDED_LABELS)}",
         "--tests-information",
         f"{shard_index},,{total_shards}",
     ]
