@@ -26,6 +26,7 @@ on:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
         type: string
         default: ""
+      # For workflow_call, default to empty and trust the calling workflow to be explicit or pass "all".
       linux_amdgpu_families:
         description: 'Comma-separated list of Linux GPU families. "all" = all, "none" or empty = skip.'
         type: string
@@ -48,6 +49,8 @@ on:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
         type: string
         default: ""
+      # For workflow_dispatch, default to a single GPU family to limit CI load for most workflow runs.
+      # Note: empty string will be converted to the default by github, so we need an explicit "none".
       linux_amdgpu_families:
         description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
         type: string
@@ -102,5 +105,5 @@ jobs:
       release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
-      actions: write
-      id-token: write
+      actions: write  # Added permission to trigger workflows
+      id-token: write  # Added permission for AWS S3 upload
