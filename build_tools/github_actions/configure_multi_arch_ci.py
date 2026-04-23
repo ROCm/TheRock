@@ -173,13 +173,9 @@ class CIInputs:
         with open(event_path) as f:
             event = json.load(f)
 
-        # Extract additional fields based on event type.
-
-        # "inputs" are set for workflow_dispatch, empty otherwise.
-        inputs = event.get("inputs") or {}
-
-        # BUILD_VARIANT and RELEASE_TYPE come from workflow_call inputs, not
-        # the event payload.
+        # Workflow inputs are passed as environment variables by
+        # setup_multi_arch.yml. GitHub-specific context (PR labels,
+        # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
         release_type = os.environ.get("RELEASE_TYPE", "")
 
@@ -206,17 +202,19 @@ class CIInputs:
             release_type=release_type,
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
-                inputs.get("linux_amdgpu_families", "")
+                os.environ.get("LINUX_AMDGPU_FAMILIES", "")
             ),
             windows_amdgpu_families=_parse_comma_list(
-                inputs.get("windows_amdgpu_families", "")
+                os.environ.get("WINDOWS_AMDGPU_FAMILIES", "")
             ),
-            linux_test_labels=_parse_comma_list(inputs.get("linux_test_labels", "")),
+            linux_test_labels=_parse_comma_list(
+                os.environ.get("LINUX_TEST_LABELS", "")
+            ),
             windows_test_labels=_parse_comma_list(
-                inputs.get("windows_test_labels", "")
+                os.environ.get("WINDOWS_TEST_LABELS", "")
             ),
-            prebuilt_stages=inputs.get("prebuilt_stages", ""),
-            baseline_run_id=inputs.get("baseline_run_id", ""),
+            prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
+            baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
         )
 
 
