@@ -56,7 +56,9 @@ PACKAGES_PER_PROJECT = {
     "pillow": {"versions": ["latest"], "project": "torch"},
     # 3.4.2 for Python 3.10, latest for Python 3.11+
     "networkx": {"versions": ["3.4.2", "latest"], "project": "torch"},
-    "numpy": {"versions": ["latest"], "project": "torch"},
+    # NumPy dropped cp310 wheels in newer releases; keep 2.2.6 mirrored for
+    # Python 3.10 while also mirroring the latest stable for newer Pythons.
+    "numpy": {"versions": ["2.2.6", "latest"], "project": "torch"},
     "jinja2": {"versions": ["latest"], "project": "torch"},
     "markupsafe": {"versions": ["latest"], "project": "torch"},
     "filelock": {"versions": ["latest"], "project": "torch"},
