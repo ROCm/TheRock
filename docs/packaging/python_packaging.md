@@ -89,6 +89,15 @@ patching via patchelf. On Linux, it is recommended to run this in the same
 portable container as was used to build the SDK (so as to avoid the possibility
 of accidentally referencing too-new glibc symbols).
 
+If running on a host rather than the portable container, make sure the host
+`patchelf` carries the [PR #544](https://github.com/NixOS/patchelf/pull/544)
+PHDR-relocation fix. A stock distro `patchelf`
+(for example Ubuntu's `apt install patchelf`) will silently corrupt the
+kpack-split libraries produced by TheRock, yielding wheels whose shared
+objects fail to load at install time. See
+[environment_setup_guide.md#patchelf](../environment_setup_guide.md#patchelf)
+for supported install paths.
+
 ### Building from CI Artifacts
 
 You can also build packages from artifacts uploaded by CI workflows:

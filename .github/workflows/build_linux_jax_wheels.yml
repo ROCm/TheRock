@@ -59,7 +59,7 @@ on:
         type: choice
         options:
           - gfx101X-dgpu
-          - gfx103X-dgpu
+          - gfx103X-all
           - gfx110X-all
           - gfx1150
           - gfx1151
@@ -184,7 +184,9 @@ jobs:
         run: |
           ls -lah
           pushd rocm-jax
-          [[ "${{ inputs.jax_ref }}" != *"0.8.0"* && "${{ inputs.build_jaxlib }}" == "true" ]] && SOURCE_ARG="--jax-source-dir=${{ github.workspace }}/jax" || SOURCE_ARG=""
+          # --jax-source-dir is only needed when building jaxlib from source
+          # (JAX <= 0.9.0). For JAX >= 0.9.1, jaxlib comes from upstream PyPI.
+          [[ "${{ inputs.build_jaxlib }}" == "true" ]] && SOURCE_ARG="--jax-source-dir=${{ github.workspace }}/jax" || SOURCE_ARG=""
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_version }}" \
@@ -340,7 +342,7 @@ jobs:
           echo "  JAX_PJRT_VERSION=${JAX_PJRT_VERSION}"
           JAXLIB_INCLUDE=""
           if [ -n "${JAXLIB_VERSION}" ]; then
-            JAXLIB_INCLUDE="--include jaxlib-${JAXLIB_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl"
+            JAXLIB_INCLUDE="--include jaxlib-${JAXLIB_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl"
           fi
           aws s3 cp \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \

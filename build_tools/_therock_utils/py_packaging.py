@@ -494,6 +494,27 @@ class PopulatedDistPackage:
         # any emitted runtime artifacts plus additional requested.
         devel_artifact_names = set(self.params.runtime_artifact_names)
         devel_artifact_names.update(addl_artifact_names)
+        # Exclude profiler-owned artifacts from the devel package.
+        #
+        # The profiler runtime (rocprofiler-compute and rocprofiler-systems)
+        # is now packaged in the separate `rocm-profiler` wheel. However,
+        # devel packaging automatically includes all runtime artifacts via
+        # `runtime_artifact_names`, which would otherwise pull these profiler
+        # artifacts back into the devel package.
+        #
+        # This leads to CI failures where devel tests attempt to load profiler
+        # shared libraries without their full dependency closure (e.g. missing
+        # rocprofiler-sdk or libomp resolution).
+        #
+        # Explicitly removing them here ensures correct package ownership:
+        #   - rocm-profiler → owns profiler runtime
+        #   - rocm-sdk-devel → does NOT include profiler runtime
+        devel_artifact_names.difference_update(
+            {
+                "rocprofiler-compute",
+                "rocprofiler-systems",
+            }
+        )
         excluded = set(exclude_components)
         log(f":: Devel artifact inclusions: {devel_artifact_names}")
 
