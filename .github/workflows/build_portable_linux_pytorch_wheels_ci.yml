@@ -44,11 +44,13 @@ on:
         required: false
         type: string
         default: "none"
-      amdgpu_targets:
+      amdgpu_families:
         description: >-
-          Comma-separated individual gfx targets for kpack-split builds
-          (e.g. 'gfx942' or 'gfx1200,gfx1201'). Used to install the correct
-          per-target device wheels. Leave empty for legacy per-family builds.
+          Semicolon-separated list of AMD GPU families to build PyTorch for
+          (e.g. 'gfx94X-dcgpu;gfx120X-all'). Expanded to gfx targets at
+          build time via cmake/therock_amdgpu_targets.cmake. Leave empty
+          for legacy callers that rely on build_prod_wheels.py's
+          `rocm-sdk targets` fallback.
         type: string
         default: ""
       kpack_split:
@@ -168,16 +170,14 @@ jobs:
           echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
           echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX}"
 
-      - name: Compute ROCm device extras
-        id: device_extras
+      - name: Expand amdgpu families to gfx targets
+        if: ${{ inputs.amdgpu_families != '' }}
+        id: expand
         run: |
-          if [ "${{ inputs.kpack_split }}" = "true" ] && [ -n "${{ inputs.amdgpu_targets }}" ]; then
-            # Prefix each comma-separated target with "device-": gfx942,gfx1201 -> device-gfx942,device-gfx1201
-            extras=$(echo "${{ inputs.amdgpu_targets }}" | sed 's/\(^\|,\)/\1device-/g')
-            echo "value=${extras}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=" >> "$GITHUB_OUTPUT"
-          fi
+          targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${{ inputs.amdgpu_families }}")
+          echo "Expanded families '${{ inputs.amdgpu_families }}' -> '${targets}'"
+          echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
       - name: Build PyTorch wheels
         run: |
@@ -188,21 +188,15 @@ jobs:
             cache_flag="--use-ccache"
           fi
 
-          rocm_extras_flag=""
-          if [ -n "${{ steps.device_extras.outputs.value }}" ]; then
-            rocm_extras_flag="--rocm-extras ${{ steps.device_extras.outputs.value }}"
-          fi
-
-          # Only multi-arch callers (multi_arch_ci_linux.yml) populate
-          # inputs.amdgpu_targets today. Legacy single-family CI (ci_linux.yml)
-          # leaves it empty and falls back to `rocm-sdk targets` inside
-          # build_prod_wheels.py.
+          # inputs.amdgpu_families is only populated by the multi-arch caller
+          # today. Legacy single-family CI (ci_linux.yml) leaves it empty and
+          # falls back to `rocm-sdk targets` inside build_prod_wheels.py.
           # TODO(#4687): Make --pytorch-rocm-arch required here once every
           # caller plumbs the value through and the fallback in
           # build_prod_wheels.py::get_rocm_sdk_targets is removed.
           pytorch_rocm_arch_flag=""
-          if [ -n "${{ inputs.amdgpu_targets }}" ]; then
-            pytorch_rocm_arch_flag="--pytorch-rocm-arch ${{ inputs.amdgpu_targets }}"
+          if [ -n "${{ steps.expand.outputs.targets }}" ]; then
+            pytorch_rocm_arch_flag="--pytorch-rocm-arch ${{ steps.expand.outputs.targets }}"
           fi
 
           ./external-builds/pytorch/build_prod_wheels.py \
@@ -212,7 +206,6 @@ jobs:
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
-            ${rocm_extras_flag} \
             ${pytorch_rocm_arch_flag} \
             ${{ env.optional_build_prod_arguments }}
 
@@ -253,12 +246,15 @@ jobs:
           mkdir -p "${FAT_STAGE}"
           mv ${{ env.PACKAGE_DIST_DIR }}/torch-*.whl "${FAT_STAGE}/"
 
+          ROCM_SDK_VERSION="$(python -m rocm_sdk version)"
+
           python -m rocm_kpack.tools.split_python_wheels \
             --input "${FAT_STAGE}"/torch-*.whl \
             --output-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --device-package-prefix amd-torch-device \
             --overlay-root torch/ \
             --wheel-type torch-fat \
+            --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
             --compression zstd \
             -j "$(nproc)"
 
