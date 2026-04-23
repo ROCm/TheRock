@@ -45,50 +45,55 @@ spack:
     build_stage: /home/spack/spack-stage
     source_cache: /home/spack/spack-cache
 
-
   view:
     default:
       root: /home/spack/spack-view
       link: roots
 
+  definitions:
+  - rocm_specs:
+    - matrix:
+      - - amdsmi
+        - comgr
+        - composable-kernel
+        - hip
+        - hipblas
+        - hipblas-common
+        - hipblaslt
+        - hipcub
+        - hipdnn
+        - hipfft
+        - hipify-clang
+        - hiprand
+        - hipsolver
+        - hipsparse
+        - hipsparselt
+        - hsa-rocr-dev
+        - hsa-amd-aqlprofile
+        - llvm-amdgpu
+        - miopen-hip
+        - rccl
+        - rocblas
+        - rocdecode
+        - rocm-cmake
+        - rocm-core
+        - rocm-smi-lib
+        - rocfft
+        - rocminfo
+        - rocmlir
+        - rocprim
+        - rocprofiler-compute
+        - rocprofiler-dev
+        - rocprofiler-register
+        - rocprofiler-sdk
+        - rocprofiler-systems
+        - rocrand
+        - rocsolver
+        - rocsparse
+        - rocthrust
+        - roctracer-dev
+        - roctracer-dev-api
+      - - '@develop'
+
   specs:
-  - amdsmi@develop
-  - comgr@develop
-  - composable-kernel@develop
-  - hip@develop
-  - hipblas@develop
-  - hipblas-common@develop
-  - hipblaslt@develop
-  - hipcub@develop
-  - hipdnn@develop
-  - hipfft@develop
-  - hipify-clang@develop
-  - hiprand@develop
-  - hipsolver@develop
-  - hipsparse@develop
-  - hipsparselt@develop
-  - hsa-rocr-dev@develop
-  - hsa-amd-aqlprofile@develop
-  - llvm-amdgpu@develop
-  - miopen-hip@develop
-  - rccl@develop
-  - rocblas@develop
-  - rocdecode@develop
-  - rocm-cmake@develop
-  - rocm-core@develop
-  - rocm-smi-lib@develop
-  - rocfft@develop
-  - rocminfo@develop
-  - rocmlir@develop
-  - rocprim@develop
-  - rocprofiler-compute@develop
-  - rocprofiler-dev@develop
-  - rocprofiler-register@develop
-  - rocprofiler-sdk@develop
-  - rocprofiler-systems@develop
-  - rocrand@develop
-  - rocsolver@develop
-  - rocsparse@develop
-  - rocthrust@develop
-  - roctracer-dev@develop
-  - roctracer-dev-api@develop
+  - $rocm_specs
