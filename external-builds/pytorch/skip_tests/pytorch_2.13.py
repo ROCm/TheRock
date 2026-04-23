@@ -593,10 +593,6 @@ skip_tests = {
             "test_replicate_pp_ScheduleClass4_bfloat16",
             # ReplicateFullyShardInit - pytest-timeout (>900s)
             "test_replicate_device_id",
-            # DistConvolutionOpsTest - scalar mismatch (depthwise)
-            "test_depthwise_convolution",
-            # TestFSDPMemory - memory accounting mismatch
-            "test_fsdp_memory_ckpt_ckpt",
             # ProcessGroupNCCLGroupTest - error code 10
             "test_resume",
             "test_get_memory_stats",
@@ -614,14 +610,9 @@ skip_tests = {
             "test_compute_dtype",
             "test_cached_state_dict",
             "test_explicit_prefetching",
-            # TestParityWithDDPCUDA - error code 10
-            "test_mixture_of_experts_offload_true_shard_grad_op_cuda",
-            # TestFullyShardHSDP3DTraining - error code 10
-            "test_3d_mlp_with_nd_mesh",
-            # DistMathOpsTest - error code 10
+            # DistMathOpsTest - RuntimeError: Calling torch.linalg.eig with MAGMA requires
+            # compiling PyTorch with MAGMA. TODO: Revisit once MAGMA is supported in TheRock
             "test_linalg_ops",
-            # TestDistBackendWithSpawn - post_localSGD reload
-            "test_post_localSGD_optimizer_step_reload",
             # TestFullyShardCommunication - communication count mismatch
             "test_fully_shard_communication_count",
             # TestFullyShard1DTrainingCore - shard_largest_dim parity
