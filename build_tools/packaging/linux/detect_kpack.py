@@ -35,6 +35,26 @@ def find_manifest_files(artifacts_dir: Path) -> list[Path]:
     return list(artifacts_dir.rglob("therock_manifest.json"))
 
 
+def find_flag(obj: object, key: str) -> bool:
+    """
+    Recursively search for a boolean flag in a nested JSON structure.
+
+    Args:
+        obj: JSON object (dict, list, or scalar)
+        key: Flag name to search for
+
+    Returns:
+        True if the key exists and its value is True, False otherwise
+    """
+    if isinstance(obj, dict):
+        if key in obj:
+            return obj[key] is True
+        return any(find_flag(v, key) for v in obj.values())
+    if isinstance(obj, list):
+        return any(find_flag(item, key) for item in obj)
+    return False
+
+
 def check_kpack_enabled(manifest_path: Path) -> bool:
     """
     Check if KPACK_SPLIT_ARTIFACTS is set to true in a manifest file.
@@ -48,8 +68,7 @@ def check_kpack_enabled(manifest_path: Path) -> bool:
     try:
         with open(manifest_path, "r") as f:
             manifest = json.load(f)
-            flags = manifest.get("flags", {})
-            return flags.get("KPACK_SPLIT_ARTIFACTS", False) is True
+            return find_flag(manifest, "KPACK_SPLIT_ARTIFACTS")
     except (json.JSONDecodeError, OSError) as e:
         print(f"Warning: Failed to read {manifest_path}: {e}", file=sys.stderr)
         return False

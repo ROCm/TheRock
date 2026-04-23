@@ -31,7 +31,7 @@ class TestDetectKpack(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _create_manifest(self, subdir: str, kpack_enabled: bool):
-        """Helper to create a therock_manifest.json file."""
+        """Helper to create a therock_manifest.json file with top-level flag."""
         manifest_dir = self.artifacts_dir / subdir
         manifest_dir.mkdir(parents=True, exist_ok=True)
         manifest_path = manifest_dir / "therock_manifest.json"
@@ -46,7 +46,7 @@ class TestDetectKpack(unittest.TestCase):
         return manifest_path
 
     def test_kpack_enabled(self):
-        """Test detection when KPACK_SPLIT_ARTIFACTS is true."""
+        """Test detection when KPACK_SPLIT_ARTIFACTS is true at top level."""
         self._create_manifest("comp1/stage/share/therock", kpack_enabled=True)
 
         enabled, manifest_path = detect_kpack.detect_kpack(self.artifacts_dir)
@@ -95,6 +95,44 @@ class TestDetectKpack(unittest.TestCase):
         enabled, _ = detect_kpack.detect_kpack(self.artifacts_dir)
 
         self.assertFalse(enabled)
+
+    def test_kpack_enabled_nested_flags(self):
+        """Test detection when KPACK_SPLIT_ARTIFACTS is nested under flags key."""
+        manifest_dir = self.artifacts_dir / "comp1/stage/share/therock"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = manifest_dir / "therock_manifest.json"
+
+        manifest_data = {
+            "flags": {
+                "KPACK_SPLIT_ARTIFACTS": True,
+            }
+        }
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        enabled, _ = detect_kpack.detect_kpack(self.artifacts_dir)
+
+        self.assertTrue(enabled)
+
+    def test_kpack_enabled_deeply_nested(self):
+        """Test detection when KPACK_SPLIT_ARTIFACTS is deeply nested."""
+        manifest_dir = self.artifacts_dir / "comp1/stage/share/therock"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = manifest_dir / "therock_manifest.json"
+
+        manifest_data = {
+            "build_config": {
+                "flags": {
+                    "KPACK_SPLIT_ARTIFACTS": True,
+                }
+            }
+        }
+        with open(manifest_path, "w") as f:
+            json.dump(manifest_data, f)
+
+        enabled, _ = detect_kpack.detect_kpack(self.artifacts_dir)
+
+        self.assertTrue(enabled)
 
 
 if __name__ == "__main__":
