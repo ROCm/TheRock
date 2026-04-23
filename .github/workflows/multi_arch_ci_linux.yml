@@ -161,7 +161,7 @@ jobs:
       package_install_url: ${{ needs.build_native_deb_packages.outputs.package_repository_url }}
       release_type: ci
       os_profile: ubuntu2404
-      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
     permissions:
       contents: read
@@ -176,7 +176,7 @@ jobs:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
       release_type: ci
       os_profile: rhel10
-      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
     permissions:
       contents: read
@@ -191,7 +191,7 @@ jobs:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
       release_type: ci
       os_profile: sles16
-      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
     permissions:
       contents: read
