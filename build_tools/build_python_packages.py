@@ -118,6 +118,9 @@ def run(args: argparse.Namespace):
                 # rocprofiler-compute
                 "bin/rocprof-*",
                 "libexec/rocprofiler-compute/**",
+                "lib/rocprofiler-compute/**",
+                "share/**/rocprofiler-compute/**",
+
             ],
         ),
     )
