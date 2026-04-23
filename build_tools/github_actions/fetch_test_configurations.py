@@ -482,8 +482,8 @@ test_matrix = {
     },
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",
-        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
-        "timeout_minutes": 15,
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --tests",
+        "timeout_minutes": 60,  # TODO: REVERT, THIS IS TEMPORARY TO VERIFY TESTS
         "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
