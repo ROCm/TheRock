@@ -1,0 +1,142 @@
+From 21dd9430b1c0740aeb27bcaa7a5e1a5eb2d34e04 Mon Sep 17 00:00:00 2001
+From: Jacob Lambert <jacob.lambert@amd.com>
+Date: Wed, 18 Mar 2026 19:07:35 -0700
+Subject: [PATCH] [CLR] Use CMake-configurable Comgr DLL name instead of
+ runtime versioning
+
+Replace the runtime is_versioned parameter in Comgr::LoadLib with a
+CMake cache variable COMGR_DLL_NAME. This simplifies the DLL loading
+logic and allows the DLL name to be configured at build time rather
+than computed at runtime based on HIP version numbers.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ projects/clr/hipamd/src/hip_comgr_helper.cpp |  3 +-
+ projects/clr/rocclr/cmake/ROCclrLC.cmake     | 12 ++----
+ projects/clr/rocclr/device/comgrctx.cpp      | 43 +++++---------------
+ projects/clr/rocclr/device/comgrctx.hpp      |  2 +-
+ projects/clr/rocclr/device/device.cpp        |  4 +-
+ 5 files changed, 17 insertions(+), 47 deletions(-)
+
+diff --git a/projects/clr/hipamd/src/hip_comgr_helper.cpp b/projects/clr/hipamd/src/hip_comgr_helper.cpp
+index 3ef3cce3d9..9ae37e6373 100644
+--- a/projects/clr/hipamd/src/hip_comgr_helper.cpp
++++ b/projects/clr/hipamd/src/hip_comgr_helper.cpp
+@@ -758,8 +758,7 @@ std::vector<std::string> getLinkOptions(const LinkArguments& args) {
+ 
+ // RTC Program Member Functions
+ RTCProgram::RTCProgram(const std::string &name) : name_(name) {
+-  constexpr bool kComgrVersioned = true;
+-  std::call_once(amd::Comgr::initialized, amd::Comgr::LoadLib, kComgrVersioned);
++  std::call_once(amd::Comgr::initialized, amd::Comgr::LoadLib);
+   if (exec_input_.Create() != AMD_COMGR_STATUS_SUCCESS) {
+     guarantee(false, "Failed to allocate internal hiprtc structure");
+   }
+diff --git a/projects/clr/rocclr/cmake/ROCclrLC.cmake b/projects/clr/rocclr/cmake/ROCclrLC.cmake
+index a11bf0d00e..f2aba62422 100644
+--- a/projects/clr/rocclr/cmake/ROCclrLC.cmake
++++ b/projects/clr/rocclr/cmake/ROCclrLC.cmake
+@@ -27,12 +27,8 @@ if(_amd_comgr_lib_type STREQUAL "SHARED_LIBRARY")
+ endif()
+ target_link_libraries(rocclr PUBLIC amd_comgr)
+ 
+-if(CLR_BUILD_HIP)
+-  # Temporary hack for versioned comgr needed by hiprtc
+-  file(STRINGS ${HIP_COMMON_DIR}/VERSION VERSION_LIST REGEX "^[0-9]+")
+-  list(GET VERSION_LIST 0 HIP_VERSION_MAJOR)
+-  list(GET VERSION_LIST 1 HIP_VERSION_MINOR)
+-
+-  add_definitions(-DHIP_MAJOR_VERSION=${HIP_VERSION_MAJOR})
+-  add_definitions(-DHIP_MINOR_VERSION=${HIP_VERSION_MINOR})
++# Comgr DLL name for Windows dynamic loading
++if(WIN32)
++  set(COMGR_DLL_NAME "amd_comgr.dll" CACHE STRING "Windows Comgr DLL name for dynamic loading")
++  target_compile_definitions(rocclr PRIVATE COMGR_DLL_NAME="${COMGR_DLL_NAME}")
+ endif()
+diff --git a/projects/clr/rocclr/device/comgrctx.cpp b/projects/clr/rocclr/device/comgrctx.cpp
+index 1ebb8c2f31..3d42b8d423 100644
+--- a/projects/clr/rocclr/device/comgrctx.cpp
++++ b/projects/clr/rocclr/device/comgrctx.cpp
+@@ -13,41 +13,18 @@ std::once_flag Comgr::initialized;
+ ComgrEntryPoints Comgr::cep_;
+ bool Comgr::is_ready_ = false;
+ 
+-bool Comgr::LoadLib(bool is_versioned) {
++bool Comgr::LoadLib() {
+ #if defined(COMGR_DYN_DLL)
+-
+-  if (is_versioned) {
+-#if defined(HIP_MAJOR_VERSION) && defined(HIP_MAJOR_VERSION)
+-    std::string comgr_versioned_name, major_version, minor_version;
+-    const std::string kComgrPrefix = "amd_comgr";
+-
+-    if (HIP_MAJOR_VERSION > 9) {
+-      major_version = std::to_string(HIP_MAJOR_VERSION);
+-    } else {
+-      major_version = "0" + std::to_string(HIP_MAJOR_VERSION);
+-    }
+-
+-    if (HIP_MINOR_VERSION > 9) {
+-      minor_version = std::to_string(HIP_MINOR_VERSION);
+-    } else {
+-      minor_version = "0" + std::to_string(HIP_MINOR_VERSION);
+-    }
+-
+-    comgr_versioned_name = kComgrPrefix + major_version + minor_version + std::string(".dll");
+-
+-    static const char* comgr_lib_name =
+-        LP64_SWITCH(WINDOWS_SWITCH("amd_comgr32.dll", "libamd_comgr32.so.3"),
+-                    WINDOWS_SWITCH(comgr_versioned_name.c_str(), "libamd_comgr.so.3"));
+-    cep_.handle = Os::loadLibrary(comgr_lib_name);
++#if defined(_WIN64) && defined(COMGR_DLL_NAME)
++  // Use CMake-configured DLL name on 64-bit Windows
++  static const char* comgr_lib_name = COMGR_DLL_NAME;
++#else
++  // Default names for other platforms
++  static const char* comgr_lib_name =
++      LP64_SWITCH(WINDOWS_SWITCH("amd_comgr32.dll", "libamd_comgr32.so.3"),
++                  WINDOWS_SWITCH("amd_comgr.dll", "libamd_comgr.so.3"));
+ #endif
+-  } else {
+-    std::string comgr_major_dll =
+-        "amd_comgr_" + std::to_string(AMD_COMGR_INTERFACE_VERSION_MAJOR) + ".dll";
+-    static const char* comgr_lib_name =
+-        LP64_SWITCH(WINDOWS_SWITCH("amd_comgr32.dll", "libamd_comgr32.so.3"),
+-                    WINDOWS_SWITCH(comgr_major_dll.c_str(), "libamd_comgr.so.3"));
+-    cep_.handle = Os::loadLibrary(comgr_lib_name);
+-  }
++  cep_.handle = Os::loadLibrary(comgr_lib_name);
+   if (nullptr == cep_.handle) {
+     ClPrint(amd::LOG_ERROR, amd::LOG_CODE, "Failed to load COMGR library.");
+     return false;
+diff --git a/projects/clr/rocclr/device/comgrctx.hpp b/projects/clr/rocclr/device/comgrctx.hpp
+index 77178d5108..0610cd6dd2 100644
+--- a/projects/clr/rocclr/device/comgrctx.hpp
++++ b/projects/clr/rocclr/device/comgrctx.hpp
+@@ -205,7 +205,7 @@ class Comgr : public amd::AllStatic {
+  public:
+   static std::once_flag initialized;
+ 
+-  static bool LoadLib(bool is_versioned = false);
++  static bool LoadLib();
+ 
+   static bool IsReady() { return is_ready_; }
+ 
+diff --git a/projects/clr/rocclr/device/device.cpp b/projects/clr/rocclr/device/device.cpp
+index 9da8f88324..2478c248d2 100644
+--- a/projects/clr/rocclr/device/device.cpp
++++ b/projects/clr/rocclr/device/device.cpp
+@@ -793,9 +793,7 @@ Device::~Device() {
+ }
+ 
+ bool Device::ValidateComgr() {
+-  // use versioned comgr for HIP, unversioned for Opencl
+-  const bool kComgrVersioned = amd::IS_HIP;
+-  std::call_once(amd::Comgr::initialized, amd::Comgr::LoadLib, kComgrVersioned);
++  std::call_once(amd::Comgr::initialized, amd::Comgr::LoadLib);
+   return amd::Comgr::IsReady();
+ }
+ 
+-- 
+2.51.0
+
