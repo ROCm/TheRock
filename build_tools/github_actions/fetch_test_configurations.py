@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_api import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from extended_tests.functional.functional_test_matrix import functional_matrix
-from amdgpu_family_matrix import get_all_families_for_trigger_types
+from amdgpu_family_matrix import get_all_families_for_trigger_types, select_weighted_label
 
 logging.basicConfig(level=logging.INFO)
 
@@ -695,9 +695,19 @@ def run():
                     shortened_amdgpu_families_name = amdgpu_families.split("-")[
                         0
                     ].lower()
-                    multi_gpu_runner = amdgpu_families_matrix[
+                    platform_info = amdgpu_families_matrix[
                         shortened_amdgpu_families_name
-                    ][platform]["test-runs-on-multi-gpu"]
+                    ][platform]
+
+                    # Use weighted random selection if test-runs-on-multi-gpu-labels is available
+                    if "test-runs-on-multi-gpu-labels" in platform_info:
+                        multi_gpu_runner = select_weighted_label(
+                            platform_info["test-runs-on-multi-gpu-labels"],
+                            f"{shortened_amdgpu_families_name}-multi-gpu",
+                        )
+                    else:
+                        multi_gpu_runner = platform_info["test-runs-on-multi-gpu"]
+
                     logging.info(
                         f"Including job {job_name} since multi GPU testing is available for family {amdgpu_families} with runner {multi_gpu_runner}"
                     )
