@@ -415,6 +415,13 @@ feature_name = "HOST_SUITE_SPARSE"
 feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by default)
 disable_platforms = ["windows"]
 
+[artifacts.elfio]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.fftw3]
 artifact_group = "third-party-libs"
 type = "target-neutral"
@@ -610,15 +617,20 @@ artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "spdlog"]
 
+[artifacts.hipdnn-integration-tests]
+artifact_group = "ml-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+
 [artifacts.miopenprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "hipdnn-integration-tests"]
 
 [artifacts.hipblasltprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
+artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn", "hipdnn-integration-tests"]
 
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
@@ -629,7 +641,7 @@ artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
 
 # --- IREE Integration ---
 
@@ -643,7 +655,7 @@ feature_group = "IREE_LIBS"
 [artifacts.fusilliprovider]
 artifact_group = "fusilli-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn", "iree-compiler"]
+artifact_deps = ["core-runtime", "core-hip", "hipdnn", "iree-compiler", "hipdnn-integration-tests"]
 disable_platforms = ["windows"]
 feature_group = "IREE_LIBS"
 
@@ -692,7 +704,7 @@ disable_platforms = ["windows"]
 [artifacts.rocprofiler-sdk]
 artifact_group = "profiler-core"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "base", "aqlprofile"]  # rocprofiler-register is in base
+artifact_deps = ["core-runtime", "base", "aqlprofile", "elfio"]  # rocprofiler-register is in base
 feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
@@ -732,7 +744,7 @@ disable_platforms = ["windows"]
 [artifacts.amd-dbgapi]
 artifact_group = "debug-tools"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "core-runtime", "sysdeps"]
+artifact_deps = ["amd-llvm", "sysdeps"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
 

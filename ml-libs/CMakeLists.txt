@@ -212,6 +212,56 @@ if(THEROCK_ENABLE_HIPDNN)
   )
 endif(THEROCK_ENABLE_HIPDNN)
 
+if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
+  ##############################################################################
+  # hipDNN integration tests
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipdnn_integration_tests
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/integration-tests"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipdnn_integration_tests"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DENABLE_CLANG_TIDY=OFF
+      -DENABLE_CLANG_FORMAT=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      therock-googletest
+    RUNTIME_DEPS
+      hip-clr
+      hipDNN
+      therock-flatbuffers
+      therock-nlohmann-json
+  )
+  therock_cmake_subproject_glob_c_sources(hipdnn_integration_tests
+  SUBDIRS
+    .
+  )
+
+  therock_cmake_subproject_provide_package(hipdnn_integration_tests hipdnn_integration_tests lib/cmake/hipdnn_integration_tests)
+
+  therock_cmake_subproject_activate(hipdnn_integration_tests)
+
+  therock_provide_artifact(hipdnn-integration-tests
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-hipdnn-integration-tests.toml
+    COMPONENTS
+      dbg
+      run
+      test
+    SUBPROJECT_DEPS
+      hipdnn_integration_tests
+  )
+
+endif(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
+
 if(THEROCK_ENABLE_MIOPENPROVIDER)
   ##############################################################################
   # hipDNN MIOpen provider
@@ -238,6 +288,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
       therock-flatbuffers
       therock-nlohmann-json
     RUNTIME_DEPS
+      hipdnn_integration_tests
       MIOpen
   )
   therock_cmake_subproject_glob_c_sources(miopenprovider
@@ -284,6 +335,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
     RUNTIME_DEPS
       hipBLAS-common
       hipBLASLt
+      hipdnn_integration_tests
   )
   therock_cmake_subproject_glob_c_sources(hipblasltprovider
   SUBDIRS
@@ -331,6 +383,7 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
         therock-nlohmann-json
       RUNTIME_DEPS
         hip-clr
+        hipdnn_integration_tests
     )
     therock_cmake_subproject_glob_c_sources(hipkernelprovider
     SUBDIRS
