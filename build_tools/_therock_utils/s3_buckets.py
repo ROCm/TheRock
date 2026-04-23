@@ -7,7 +7,6 @@ See docs/development/s3_buckets.md.
 """
 
 from dataclasses import dataclass, field
-import json
 import os
 import sys
 
@@ -168,8 +167,11 @@ def _is_current_run_pr_from_fork() -> bool:
     if not event_path:
         return False
 
-    with open(event_path, encoding="utf-8") as f:
-        event = json.load(f)
+    # Deferred import: github_actions is optional in some environments; only
+    # needed when resolving fork state from the on-disk event payload.
+    from github_actions.github_actions_api import gha_load_github_event
+
+    event = gha_load_github_event(event_path)
 
     return bool(
         event.get("pull_request", {}).get("head", {}).get("repo", {}).get("fork", False)
