@@ -48,7 +48,8 @@ def check_kpack_enabled(manifest_path: Path) -> bool:
     try:
         with open(manifest_path, "r") as f:
             manifest = json.load(f)
-            return manifest.get("KPACK_SPLIT_ARTIFACTS", False) is True
+            flags = manifest.get("flags", {})
+            return flags.get("KPACK_SPLIT_ARTIFACTS", False) is True
     except (json.JSONDecodeError, OSError) as e:
         print(f"Warning: Failed to read {manifest_path}: {e}", file=sys.stderr)
         return False
