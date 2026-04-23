@@ -24,10 +24,10 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
-      -> s3://therock-dev-python/v3/rocm-7.13.0.tar.gz
-      -> s3://therock-dev-python/v3/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
-      -> s3://therock-dev-python/v3/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
-      -> s3://therock-dev-python/v3/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-dev-python/v4/whl/rocm-7.13.0.tar.gz
+      -> s3://therock-dev-python/v4/whl/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-dev-python/v4/whl/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-dev-python/v4/whl/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
 
 Test usage:
     python build_tools/github_actions/publish_rocm_to_release_buckets.py \\
@@ -86,15 +86,15 @@ def publish_python_packages(
 
     With kpack split disabled (per-family subdirs):
         s3://therock-dev-artifacts/12345-linux/python/gfx110X-all/*.whl
-          -> s3://therock-dev-python/v3/gfx110X-all/*.whl
+          -> s3://therock-dev-python/v3/whl/gfx110X-all/*.whl
 
     With kpack split enabled (flat):
         s3://therock-dev-artifacts/12345-linux/python/*.whl
-          -> s3://therock-dev-python/v3-multi-arch/*.whl
+          -> s3://therock-dev-python/v4/whl/*.whl
     """
     source = artifacts_root.python_packages()
     dest_bucket = get_release_bucket_config(release_type, "python")
-    s3_subdir = "v3-multi-arch" if kpack_split else "v3"
+    s3_subdir = "v4/whl" if kpack_split else "v3/whl"
     dest = StorageLocation(dest_bucket.name, s3_subdir)
 
     logger.info("Python packages: %s -> %s", source.s3_uri, dest.s3_uri)

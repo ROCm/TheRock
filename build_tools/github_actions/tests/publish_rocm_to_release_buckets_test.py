@@ -42,7 +42,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(python_source.bucket, "therock-dev-artifacts")
         self.assertEqual(python_source.relative_path, "123-linux/python")
         self.assertEqual(python_dest.bucket, "therock-dev-python")
-        self.assertEqual(python_dest.relative_path, "v3")
+        self.assertEqual(python_dest.relative_path, "v3/whl")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_nightly_windows_copies_to_correct_buckets(self, mock_copy):
@@ -70,7 +70,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(python_dest.bucket, "therock-nightly-python")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
-    def test_kpack_split_uses_multi_arch_prefix(self, mock_copy):
+    def test_kpack_split_uses_v4(self, mock_copy):
         mock_copy.return_value = 2
         main(
             [
@@ -87,7 +87,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         )
 
         python_source, python_dest = mock_copy.call_args_list[1].args
-        self.assertEqual(python_dest.relative_path, "v3-multi-arch")
+        self.assertEqual(python_dest.relative_path, "v4/whl")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_raises_when_no_tarballs_found(self, mock_copy):
