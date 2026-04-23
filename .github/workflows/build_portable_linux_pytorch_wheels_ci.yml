@@ -249,8 +249,8 @@ jobs:
         if: ${{ inputs.kpack_split == 'true' }}
         run: |
           pip install \
-            rocm-systems/python/rocm-bootstrap \
-            rocm-systems/shared/kpack
+            -e rocm-systems/python/rocm-bootstrap \
+            -e rocm-systems/shared/kpack
 
       - name: Split PyTorch fat wheel
         if: ${{ inputs.kpack_split == 'true' }}
