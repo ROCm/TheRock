@@ -24,6 +24,11 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_cmake_subproject_provide_package(rocprof-trace-decoder rocprof-trace-decoder lib/cmake/rocprof-trace-decoder)
   therock_cmake_subproject_activate(rocprof-trace-decoder)
 
+  therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder/dist/lib
+    LIB_NAMES
+      librocprof-trace-decoder.so
+  )
+
   ##############################################################################
   # aqlprofile
   ##############################################################################
