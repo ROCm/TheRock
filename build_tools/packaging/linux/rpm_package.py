@@ -180,6 +180,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     context = {
         "pkg_name": pkg_name,
         "version": version,
+        "version_str": version_to_str(version),
         "release": config.version_suffix,
         "build_arch": pkg_info.get("BuildArch"),
         "description_short": pkg_info.get("Description_Short"),

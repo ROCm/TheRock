@@ -399,6 +399,42 @@ def remove_dir(dir_name):
         logger.debug(f"Directory does not exist: {dir_path}")
 
 
+def version_to_str(version_str):
+    """Convert a ROCm version string to a numeric representation.
+
+    This function transforms a ROCm version from its dotted format
+    (e.g., "7.1.0") into a numeric string (e.g., "70100")
+    Ex : 7.10.0 -> 71000
+         10.1.0 - > 100100
+         7.1 -> 70100
+         7.1.1.1 -> 70101
+         7.10.0~rc2 -> 71000
+         7.10.0~20251021 -> 71000
+
+    Parameters:
+    version_str: ROCm version separated by dots
+
+    Returns: Numeric string
+    """
+
+    parts = version_str.split(".")
+    # Ensure we have exactly 3 parts: major, minor, patch
+    while len(parts) < 3:
+        parts.append("0")  # Default missing parts to "0"
+
+    # Use only the leading digits of each part so package version suffixes
+    # (e.g. "0~rc2", "0~20251021") are ignored
+    numbers = []
+    for part in parts[:3]:  # Ignore extra parts
+        match = re.match(r"^\d+", part)
+        if not match:
+            raise ValueError(f"Unable to parse version string '{version_str}'")
+        numbers.append(int(match.group()))
+    major, minor, patch = numbers
+
+    return f"{major:01d}{minor:02d}{patch:02d}"
+
+
 def update_package_name(pkg_name, config: PackageConfig):
     """Update the package name by adding ROCm version and graphics architecture.
 
