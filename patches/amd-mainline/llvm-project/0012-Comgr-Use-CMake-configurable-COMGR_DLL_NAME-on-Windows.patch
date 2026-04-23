@@ -1,0 +1,84 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jacob Lambert <jacob.lambert@amd.com>
+Date: Thu, 2 Apr 2026 08:14:19 -0700
+Subject: [PATCH] [Comgr][Windows] Simplify DLL naming to amd_comgr.dll with
+ override option
+
+Replace the hardcoded DLL naming logic with a COMGR_DLL_NAME cache
+variable that defaults to amd_comgr.dll. This allows build systems
+to override the DLL name (e.g., -DCOMGR_DLL_NAME=amd_comgr_3.dll)
+without patching the source.
+
+Upstream PR: https://github.com/ROCm/llvm-project/pull/1278
+
+diff --git a/amd/comgr/CMakeLists.txt b/amd/comgr/CMakeLists.txt
+index c4b76db2b020..a92277c08a2d 100644
+--- a/amd/comgr/CMakeLists.txt
++++ b/amd/comgr/CMakeLists.txt
+@@ -84,20 +84,11 @@ set(SOURCES
+   src/comgr-unbundle-command.cpp
+   src/time-stat/time-stat.cpp)
+ 
++# Add Windows resource file for version info
+ if(WIN32)
+-  # TODO: Evaluate whether this should be set from the super-project?
+-  # NOTE: This is quite ugly and requires some hacks as of now.
+-  #       Eventually, we would like for the DLL name to be set uniformly across all build platforms.
+-  if (DEFINED THEROCK_HIP_MAJOR_VERSION AND DEFINED THEROCK_HIP_MINOR_VERSION)
+-    set(AMD_COMGR_BUILD_SOURCE "TheRock")
+-    set(COMGR_DLL_NAME "amd_comgr0${THEROCK_HIP_MAJOR_VERSION}0${THEROCK_HIP_MINOR_VERSION}.dll")
+-  else()
+-    set(AMD_COMGR_BUILD_SOURCE "Driver")
+-    set(COMGR_DLL_NAME "amd_comgr_${amd_comgr_VERSION_MAJOR}.dll")
+-  endif()
++  # Allow users to override the DLL name via -DCOMGR_DLL_NAME
++  set(COMGR_DLL_NAME "amd_comgr.dll" CACHE STRING "Windows DLL output name")
+   string(TIMESTAMP COMGR_BUILD_YEAR "%Y")
+-
+-  # Add Windows resource file for version info
+   set(COMGR_MANIFEST_NAME "AMD.ROCM.Comgr")
+   configure_file(
+     cmake/${COMGR_MANIFEST_NAME}.MANIFEST.in
+@@ -305,12 +296,6 @@ include(bc2h)
+ include(opencl_header)
+ include(DeviceLibs)
+ 
+-# Add major version to the name on windows, including Win64
+-if (WIN32)
+-  set_target_properties(amd_comgr PROPERTIES
+-    OUTPUT_NAME "amd_comgr_${amd_comgr_VERSION_MAJOR}")
+-endif()
+-
+ set_target_properties(amd_comgr PROPERTIES
+   CXX_STANDARD 17
+   CXX_STANDARD_REQUIRED Yes
+@@ -328,6 +313,12 @@ if (CMAKE_SIZEOF_VOID_P EQUAL 4)
+   set_target_properties(amd_comgr PROPERTIES OUTPUT_NAME "amd_comgr32")
+ endif()
+ 
++# Set the DLL output name on Windows based on COMGR_DLL_NAME
++if (WIN32)
++  string(REGEX REPLACE "\\.dll$" "" COMGR_OUTPUT_NAME "${COMGR_DLL_NAME}")
++  set_target_properties(amd_comgr PROPERTIES OUTPUT_NAME "${COMGR_OUTPUT_NAME}")
++endif()
++
+ option(LLVM_BUILD_INSTRUMENTED_COVERAGE "Build LLVM and tools with Code Coverage instrumentation" Off)
+ mark_as_advanced(LLVM_BUILD_INSTRUMENTED_COVERAGE)
+ if(LLVM_BUILD_INSTRUMENTED_COVERAGE)
+diff --git a/amd/comgr/README.md b/amd/comgr/README.md
+index dba9e0417e56..806b2b1222c6 100644
+--- a/amd/comgr/README.md
++++ b/amd/comgr/README.md
+@@ -85,6 +85,10 @@ super-project, you can statically link LLVM/Clang into Comgr by passing
+ `-DCOMGR_STATIC_LLVM=ON`. By default (`OFF`), Comgr respects the existing
+ `LLVM_LINK_LLVM_DYLIB` and `CLANG_LINK_CLANG_DYLIB` settings.
+ 
++**Windows DLL Name:** On Windows, the DLL is named `amd_comgr.dll` by default.
++To override this, pass `-DCOMGR_DLL_NAME=<name>.dll` during the Comgr `cmake`
++step (e.g., `-DCOMGR_DLL_NAME=amd_comgr_3.dll`).
++
+ **SPIRV Support:** To enable SPIRV support, checkout
+ [SPIRV-LLVM-Translator](https://github.com/ROCm/SPIRV-LLVM-Translator) in
+ `llvm/projects` or `llvm/tools` and build using the above instructions, with the
+--
+2.43.0
