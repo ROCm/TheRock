@@ -27,7 +27,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_api import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from extended_tests.functional.functional_test_matrix import functional_matrix
-from amdgpu_family_matrix import get_all_families_for_trigger_types, select_weighted_label
+from amdgpu_family_matrix import (
+    get_all_families_for_trigger_types,
+    select_weighted_label,
+)
 
 logging.basicConfig(level=logging.INFO)
 
