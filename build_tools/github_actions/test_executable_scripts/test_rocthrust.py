@@ -88,6 +88,15 @@ QUICK_TESTS = [
 # Example: if AMDGPU_FAMILIES == "gfx1153": ctest_parallel_count = 4
 ctest_parallel_count = 1
 
+# Allow external consumers (e.g. FFM runners with tighter resource budgets) to
+# override ctest timeout and parallelism without modifying this script. Defaults
+# preserve the existing (possibly platform-adjusted) values so TheRock's own CI
+# is unaffected.
+ctest_parallel_count = int(
+    os.getenv("CTEST_PARALLEL_OVERRIDE", str(ctest_parallel_count))
+)
+ctest_timeout = int(os.getenv("CTEST_TIMEOUT_OVERRIDE", "300"))
+
 # Generate the resource spec file for ctest
 rocm_base = Path(THEROCK_BIN_DIR).resolve().parent
 ld_paths = [
