@@ -133,12 +133,18 @@ jobs:
 
   test_python_packages_per_family:
     needs: [build_python_packages]
-    name: Test Python ${{ matrix.family_info.amdgpu_family }}
+    name: Test Python ${{ matrix.family_info.amdgpu_family }} | ${{ matrix.image.name }}
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
     strategy:
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
+        # Fan out wheel tests across multiple base images to catch distro-specific regressions.
+        image:
+          - name: ubuntu24.04
+            url: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
+          - name: ubi10
+            url: ghcr.io/rocm/no_rocm_image_ubi10@sha256:a10f34d6006a20d02cf688982de9dea147710927ed405a3b0d5c73b58a6030c0
     uses: ./.github/workflows/test_rocm_wheels.yml
     with:
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
@@ -157,6 +163,8 @@ jobs:
       rocm_version: ${{ inputs.rocm_package_version }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
+      container_image_name: ${{ matrix.image.name }}
+      container_image_url: ${{ matrix.image.url }}
 
   # NOTE: Per-family PyTorch builds — each family gets its own wheel built
   # against that family's ROCm package index slice.

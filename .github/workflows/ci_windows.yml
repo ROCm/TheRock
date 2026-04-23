@@ -174,6 +174,9 @@ jobs:
       package_find_links_url: ${{ needs.build_windows_python_packages.outputs.package_find_links_url }}
       python_version: "3.12"
       rocm_version: ${{ inputs.rocm_package_version }}
+      # Windows runs natively without a container image.
+      container_image_name: native
+      container_image_url: ""
 
   build_windows_pytorch_wheels_ci:
     needs: [build_windows_python_packages]

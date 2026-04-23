@@ -48,7 +48,6 @@ import enum
 import json
 import os
 import sys
-import random
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
@@ -56,7 +55,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _therock_utils.build_topology import get_topology
 
-from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
+from amdgpu_family_matrix import (
+    all_build_variants,
+    get_all_families_for_trigger_types,
+    select_weighted_label,
+)
 from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
@@ -808,22 +811,12 @@ def _expand_build_config_for_platform(
         # Determine test runner label.
         test_runs_on = platform_info["test-runs-on"]
 
-        # Handle dual-label configuration with weighted random selection.
+        # Handle multi-label configuration with weighted random selection.
         # Some families (e.g. gfx94x) have multiple runner labels available.
-        if "test-runs-on-alternate" in platform_info:
-            alternate_label = platform_info["test-runs-on-alternate"]
-            alternate_weight = platform_info.get("test-runs-on-alternate-weight", 0.5)
-            if random.random() < alternate_weight:
-                test_runs_on = alternate_label
-                print(
-                    f"  {family_name}: selected alternate runner (weight={alternate_weight}): "
-                    f"{test_runs_on}"
-                )
-            else:
-                print(
-                    f"  {family_name}: selected primary runner (weight={1-alternate_weight}): "
-                    f"{test_runs_on}"
-                )
+        if "test-runs-on-labels" in platform_info:
+            test_runs_on = select_weighted_label(
+                platform_info["test-runs-on-labels"], family_name
+            )
 
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
