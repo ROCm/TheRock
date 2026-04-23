@@ -74,6 +74,9 @@ skip_tests = {
             # "test_hip_device_count"
             # "test_nvtx"
             # ----------------
+            #
+            # Multi-processing error in py3.14
+            "test_is_pinned_no_context",
         ],
         "nn": [
             # external-builds/pytorch/pytorch/test/test_nn.py::TestNN::test_RNN_dropout_state MIOpen(HIP): Error [Compile] 'hiprtcCompileProgram(prog.get(), c_options.size(), c_options.data())' MIOpenDropoutHIP.cpp: HIPRTC_ERROR_COMPILATION (6)
