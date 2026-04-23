@@ -75,7 +75,7 @@ skip_tests = {
             # "test_nvtx"
             # ----------------
             #
-            # Multi-processing error in py3.14
+            # Multi-processing error in py3.14 - https://github.com/ROCm/TheRock/issues/4197
             "test_is_pinned_no_context",
         ],
         "nn": [
