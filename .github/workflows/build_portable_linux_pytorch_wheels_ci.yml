@@ -230,6 +230,13 @@ jobs:
       # The kpack wheel splitter takes the fat torch wheel and produces a
       # smaller host wheel plus one device wheel per gfx target. Source-install
       # from the TheRock checkout — kpack has no published wheel today.
+      # The outer actions/checkout skips submodules for speed, so pull in
+      # rocm-systems only when we actually need it.
+      - name: Init rocm-systems submodule
+        if: ${{ inputs.kpack_split == 'true' }}
+        run: |
+          git submodule update --init --depth=1 rocm-systems
+
       - name: Install kpack tooling
         if: ${{ inputs.kpack_split == 'true' }}
         run: |
