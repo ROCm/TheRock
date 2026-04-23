@@ -7,7 +7,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     set(_openmpi_optional_dep therock-openmpi)
   endif()
 
-  
+
   set(_rocprofiler_build_yaml_cpp ON)
   if(THEROCK_BUNDLED_YAMLCPP)
     set(_rocprofiler_build_yaml_cpp OFF)
@@ -120,7 +120,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprof-trace-decoder
       rocprofiler-register
       ${THEROCK_BUNDLED_YAMLCPP}
-      ${_rocprofiler_sdk_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
