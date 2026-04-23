@@ -102,15 +102,21 @@ shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
 total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
 
 
+# Allow external consumers (e.g. FFM runners with tighter resource budgets) to
+# override ctest timeout and parallelism without modifying this script. Defaults
+# preserve the existing hardcoded values so TheRock's own CI is unaffected.
+ctest_timeout = int(os.getenv("CTEST_TIMEOUT_OVERRIDE", "900"))
+ctest_parallel = int(os.getenv("CTEST_PARALLEL_OVERRIDE", "8"))
+
 cmd = [
     "ctest",
     "--test-dir",
     f"{THEROCK_BIN_DIR}/rocprim",
     "--output-on-failure",
     "--parallel",
-    "8",
+    str(ctest_parallel),
     "--timeout",
-    "900",
+    str(ctest_timeout),
     "--repeat",
     "until-pass:6",
     # shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)
