@@ -524,6 +524,169 @@ class ConfigureCITest(unittest.TestCase):
         entry = linux_target_output[0]
         self.assertEqual(entry["test-runs-on"], "rocm-asan-mi325-sandbox")
 
+    ###########################################################################
+    # Tests for multi-label runner selection
+
+    def test_gfx94x_multi_label_selects_first_when_random_low(self):
+        """When random() is very low, first label should be selected."""
+        base_args = {"build_variant": "release"}
+        build_families = {"amdgpu_families": "gfx94X"}
+
+        # Mock random.random() to return 0.1 (< 0.59 first weight)
+        with patch("random.random", return_value=0.1):
+            linux_target_output, _ = configure_ci.matrix_generator(
+                is_pull_request=True,
+                is_workflow_dispatch=False,
+                is_push=False,
+                is_schedule=False,
+                base_args=base_args,
+                families=build_families,
+                platform="linux",
+            )
+
+        # Find the gfx94X entry
+        gfx94x_entries = [
+            e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"
+        ]
+        self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
+        entry = gfx94x_entries[0]
+        # Should select the first (vultr) label
+        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
+
+    def test_gfx94x_multi_label_selects_second_when_random_medium(self):
+        """When random() is in middle range, second label should be selected."""
+        base_args = {"build_variant": "release"}
+        build_families = {"amdgpu_families": "gfx94X"}
+
+        # Mock random.random() to return 0.65 (>= 0.59, < 0.59+0.14=0.73)
+        with patch("random.random", return_value=0.65):
+            linux_target_output, _ = configure_ci.matrix_generator(
+                is_pull_request=True,
+                is_workflow_dispatch=False,
+                is_push=False,
+                is_schedule=False,
+                base_args=base_args,
+                families=build_families,
+                platform="linux",
+            )
+
+        # Find the gfx94X entry
+        gfx94x_entries = [
+            e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"
+        ]
+        self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
+        entry = gfx94x_entries[0]
+        # Should select the second (cirrascale) label
+        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm")
+
+    def test_gfx94x_multi_label_selects_third_when_random_high(self):
+        """When random() is high, third label should be selected."""
+        base_args = {"build_variant": "release"}
+        build_families = {"amdgpu_families": "gfx94X"}
+
+        # Mock random.random() to return 0.8 (>= 0.59+0.14=0.73)
+        with patch("random.random", return_value=0.8):
+            linux_target_output, _ = configure_ci.matrix_generator(
+                is_pull_request=True,
+                is_workflow_dispatch=False,
+                is_push=False,
+                is_schedule=False,
+                base_args=base_args,
+                families=build_families,
+                platform="linux",
+            )
+
+        # Find the gfx94X entry
+        gfx94x_entries = [
+            e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"
+        ]
+        self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
+        entry = gfx94x_entries[0]
+        # Should select the third (core42) label
+        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm")
+
+    def test_gfx94x_multi_gpu_label_selects_first_when_random_low(self):
+        """When random() is low, first multi-gpu label should be selected."""
+        base_args = {"build_variant": "release"}
+        build_families = {"amdgpu_families": "gfx94X"}
+
+        # Mock random.random() to return 0.3 (< 0.61 first weight)
+        with patch("random.random", return_value=0.3):
+            linux_target_output, _ = configure_ci.matrix_generator(
+                is_pull_request=True,
+                is_workflow_dispatch=False,
+                is_push=False,
+                is_schedule=False,
+                base_args=base_args,
+                families=build_families,
+                platform="linux",
+            )
+
+        # Find the gfx94X entry
+        gfx94x_entries = [
+            e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"
+        ]
+        self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
+        entry = gfx94x_entries[0]
+        # Should select the first (cirrascale) multi-gpu label
+        self.assertEqual(
+            entry["test-runs-on-multi-gpu"], "linux-gfx942-8gpu-ossci-rocm"
+        )
+
+    def test_gfx94x_multi_gpu_label_selects_second_when_random_high(self):
+        """When random() is high, second multi-gpu label should be selected."""
+        base_args = {"build_variant": "release"}
+        build_families = {"amdgpu_families": "gfx94X"}
+
+        # Mock random.random() to return 0.7 (>= 0.61)
+        with patch("random.random", return_value=0.7):
+            linux_target_output, _ = configure_ci.matrix_generator(
+                is_pull_request=True,
+                is_workflow_dispatch=False,
+                is_push=False,
+                is_schedule=False,
+                base_args=base_args,
+                families=build_families,
+                platform="linux",
+            )
+
+        # Find the gfx94X entry
+        gfx94x_entries = [
+            e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"
+        ]
+        self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
+        entry = gfx94x_entries[0]
+        # Should select the second (core42) multi-gpu label
+        self.assertEqual(
+            entry["test-runs-on-multi-gpu"], "linux-gfx942-8gpu-core42-ossci-rocm"
+        )
+
+    def test_families_without_multi_label_always_use_primary(self):
+        """Families without multi-label config should always use primary label."""
+        base_args = {"build_variant": "release"}
+        build_families = {"amdgpu_families": "gfx103X"}
+
+        # Run multiple times to ensure consistency (no multi-label config exists)
+        for _ in range(5):
+            linux_target_output, _ = configure_ci.matrix_generator(
+                is_pull_request=False,
+                is_workflow_dispatch=False,
+                is_push=False,
+                is_schedule=True,
+                base_args=base_args,
+                families=build_families,
+                platform="linux",
+            )
+
+            # Find the gfx103X entry
+            gfx103x_entries = [
+                e for e in linux_target_output if e["family"] == "gfx103X-all"
+            ]
+            if gfx103x_entries:
+                entry = gfx103x_entries[0]
+                # Should always use the same primary label
+                self.assertEqual(entry["test-runs-on"], "linux-gfx1030-gpu-rocm")
+
 
 if __name__ == "__main__":
     unittest.main()

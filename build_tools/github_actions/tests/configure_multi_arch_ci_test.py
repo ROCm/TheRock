@@ -968,5 +968,144 @@ class TestFamilyTestFilters(unittest.TestCase):
         self.assertEqual(gfx90a_info["test-runs-on"], "")
 
 
+# ---------------------------------------------------------------------------
+# Multi-label runner selection
+# ---------------------------------------------------------------------------
+
+
+class TestMultiLabelRunnerSelection(unittest.TestCase):
+    """Test weighted random selection of multi-label runner configurations."""
+
+    def test_gfx94x_has_multi_label_config(self):
+        """Verify gfx94x has the multi-label configuration."""
+        from amdgpu_family_matrix import get_all_families_for_trigger_types
+
+        all_families = get_all_families_for_trigger_types(["presubmit"])
+        self.assertIn("gfx94x", all_families)
+
+        gfx94x_linux = all_families["gfx94x"].get("linux", {})
+        self.assertIn("test-runs-on", gfx94x_linux)
+        self.assertIn("test-runs-on-labels", gfx94x_linux)
+        self.assertIn("test-runs-on-multi-gpu-labels", gfx94x_linux)
+
+        # Verify we have 3 labels for 1-gpu
+        labels = gfx94x_linux["test-runs-on-labels"]
+        self.assertEqual(len(labels), 3)
+
+        # Verify label names
+        label_names = [l["label"] for l in labels]
+        self.assertIn("linux-gfx942-1gpu-ossci-rocm", label_names)
+        self.assertIn("linux-gfx942-1gpu-ccs-ossci-rocm", label_names)
+        self.assertIn("linux-gfx942-1gpu-core42-ossci-rocm", label_names)
+
+        # Verify weights sum to ~1.0
+        total_weight = sum(l["weight"] for l in labels)
+        self.assertAlmostEqual(total_weight, 1.0, places=1)
+
+    def test_gfx94x_multi_gpu_has_dual_label_config(self):
+        """Verify gfx94x has the multi-gpu dual-label configuration."""
+        from amdgpu_family_matrix import get_all_families_for_trigger_types
+
+        all_families = get_all_families_for_trigger_types(["presubmit"])
+        gfx94x_linux = all_families["gfx94x"].get("linux", {})
+
+        # Verify we have 2 labels for 8-gpu
+        labels = gfx94x_linux["test-runs-on-multi-gpu-labels"]
+        self.assertEqual(len(labels), 2)
+
+        # Verify label names
+        label_names = [l["label"] for l in labels]
+        self.assertIn("linux-gfx942-8gpu-ossci-rocm", label_names)
+        self.assertIn("linux-gfx942-8gpu-core42-ossci-rocm", label_names)
+
+        # Verify weights sum to 1.0
+        total_weight = sum(l["weight"] for l in labels)
+        self.assertAlmostEqual(total_weight, 1.0, places=1)
+
+    def test_first_label_selected_when_random_low(self):
+        """When random() < first weight, first label should be selected."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+
+        # Mock random.random() to return 0.1 (< 0.59 first weight)
+        with patch("random.random", return_value=0.1):
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
+
+        self.assertIsNotNone(builds.linux)
+        # Check that the first label was selected
+        gfx94x_info = builds.linux.per_family_info[0]
+        self.assertEqual(gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
+
+    def test_second_label_selected_when_random_medium(self):
+        """When random() is in second range, second label should be selected."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+
+        # Mock random.random() to return 0.65 (>= 0.59, < 0.73)
+        with patch("random.random", return_value=0.65):
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
+
+        self.assertIsNotNone(builds.linux)
+        # Check that the second label was selected
+        gfx94x_info = builds.linux.per_family_info[0]
+        self.assertEqual(
+            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm"
+        )
+
+    def test_third_label_selected_when_random_high(self):
+        """When random() >= first two weights, third label should be selected."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+
+        # Mock random.random() to return 0.8 (>= 0.59+0.14=0.73)
+        with patch("random.random", return_value=0.8):
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
+
+        self.assertIsNotNone(builds.linux)
+        # Check that the third label was selected
+        gfx94x_info = builds.linux.per_family_info[0]
+        self.assertEqual(
+            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
+        )
+
+    def test_families_without_multi_label_use_primary_only(self):
+        """Families without multi-label config should only use primary label."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        # gfx103x doesn't have multi-label config
+        targets = cm.TargetSelection(linux_families=["gfx103x"])
+
+        # Run multiple times to ensure consistency
+        for _ in range(10):
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="full")
+            if builds.linux and builds.linux.per_family_info:
+                gfx103x_info = builds.linux.per_family_info[0]
+                # Should always use the primary label
+                self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
+
+
 if __name__ == "__main__":
     unittest.main()
