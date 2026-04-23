@@ -112,6 +112,14 @@ test_matrix = {
             ],
         },
     },
+    "origami": {
+        "job_name": "origami",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_origami.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
@@ -242,12 +250,29 @@ test_matrix = {
     "hipsparselt": {
         "job_name": "hipsparselt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
+        # GHA step timeout: max category timeout in hipsparselt should be 6 hours / 6 shards = 60 min per shard
+        # 60 min + 20% margin = 72 min
+        "timeout_minutes": 72,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 1,
+            "linux": 6,
             "windows": 1,
+        },
+        "exclude_family": {
+            # hipsparselt does not plan to support Linux and Windows gfx115X architectures
+            "linux": [
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+            ],
+            "windows": [
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+            ],
         },
     },
     # RAND tests
@@ -361,6 +386,18 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # hipDNN integration tests (unit tests for the integration test harness)
+    "hipdnn-integration-tests": {
+        "job_name": "hipdnn-integration-tests",
+        "fetch_artifact_args": "--hipdnn --hipdnn-integration-tests --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_hipdnn_integration_tests.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # hipDNN samples tests
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",
@@ -376,7 +413,7 @@ test_matrix = {
     # MIOpen provider tests
     "miopenprovider": {
         "job_name": "miopenprovider",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 20,
         "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
         "platform": ["linux", "windows"],
@@ -385,20 +422,18 @@ test_matrix = {
             "windows": 1,
         },
     },
-    # TODO(iree-org/fusilli/issues/57): Enable fusilli tests once build is
-    # enabled by default.
-    # "fusilliprovider": {
-    #     "job_name": "fusilliprovider",
-    #     "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler --tests",
-    #     "timeout_minutes": 15,
-    #     "test_script": f"python {_get_script_path('test_fusilliprovider.py')}",
-    #     "platform": ["linux"],
-    #     "total_shards": 1,
-    # },
+    "fusilliprovider": {
+        "job_name": "fusilliprovider",
+        "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler  --hipdnn-integration-tests --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fusilliprovider.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {"linux": 1},
+    },
     # hipBLASLt provider tests
     "hipblasltprovider": {
         "job_name": "hipblasltprovider",
-        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --tests",
+        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_hipblasltprovider.py')}",
         "platform": ["linux", "windows"],
@@ -407,6 +442,18 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # Disabled until rocm-libraries bump that has hip-kernel-provider passing
+    # "hipkernelprovider": {
+    #     "job_name": "hipkernelprovider",
+    #     "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
+    #     "timeout_minutes": 15,
+    #     "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
+    #     "platform": ["linux", "windows"],
+    #     "total_shards_dict": {
+    #         "linux": 1,
+    #         "windows": 1,
+    #     },
+    # },
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",
@@ -449,7 +496,7 @@ test_matrix = {
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_libhipcxx_hipcc.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
@@ -566,7 +613,8 @@ def run():
 
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
-        if key != "sanity" and test_labels and key not in test_labels:
+        parsed_test_labels = [c.split("test:")[-1] for c in test_labels]
+        if key != "sanity" and parsed_test_labels and key not in parsed_test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 
@@ -577,6 +625,45 @@ def run():
             key == "sanity" or key in project_array or "*" in project_array
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
+
+            # Hip-tests on Windows run twice: PAL (pass/fail) and ROCR (informational)
+            # for parity tracking until ROCR is the pass/fail path. See:
+            # https://github.com/ROCm/TheRock/issues/3587
+            if key == "hip-tests" and platform == "windows":
+                base = selected_matrix[key]
+                total_shards = base.get("total_shards_dict", {}).get(platform, 1)
+                if test_type == "quick":
+                    total_shards = 1
+                shard_arr = list(range(1, total_shards + 1))
+
+                pal_entry = {
+                    "job_name": "hip-tests (PAL)",
+                    "fetch_artifact_args": base["fetch_artifact_args"],
+                    "timeout_minutes": base["timeout_minutes"],
+                    "test_script": base["test_script"],
+                    "platform": base["platform"],
+                    "total_shards": total_shards,
+                    "test_type": test_type,
+                    "shard_arr": shard_arr,
+                    "gpu_enable_pal": "1",
+                }
+                all_components.append(pal_entry)
+
+                rocr_entry = {
+                    "job_name": "hip-tests (ROCR)",
+                    "fetch_artifact_args": base["fetch_artifact_args"],
+                    "timeout_minutes": base["timeout_minutes"],
+                    "test_script": base["test_script"],
+                    "platform": base["platform"],
+                    "total_shards": total_shards,
+                    "test_type": test_type,
+                    "shard_arr": shard_arr,
+                    "expect_failure": True,
+                    "gpu_enable_pal": "0",
+                }
+                all_components.append(rocr_entry)
+                continue
+
             job_config_data = selected_matrix[key]
             job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
