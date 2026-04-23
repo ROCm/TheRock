@@ -49,6 +49,20 @@ skip_tests = {
             "test_cpp_warnings_have_python_context_cuda",
         ],
     },
+    "gfx1151": {
+        "nn": [
+            # Flaky tolerance failure (fp32) caused by non-deterministic atomic
+            # accumulation in Embedding backward on GPU. test_noncontig in
+            # torch/testing/_internal/common_nn.py runs the same backward 4
+            # times with different contig/noncontig input/grad combinations and
+            # compares the resulting parameter gradients with default fp32
+            # tolerance (atol=1e-5, rtol=1.3e-6). Differences of ~1.3e-5
+            # occasionally exceed it (failure rate ~30% locally on gfx1151).
+            # See https://github.com/ROCm/TheRock/issues/4744
+            # AssertionError: Tensor-likes are not close!
+            "test_Embedding_discontiguous_cuda",
+        ],
+    },
     # "gfx120": {
     #     "unary_ufuncs": [
     #         # this failed only once. maybe python version dependent? probably the run was python 3.13
