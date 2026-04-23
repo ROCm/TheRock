@@ -56,7 +56,8 @@ release cadence.
 - ROCm Core SDK packaging (covered by RFC0009)
 - GPU driver packaging
 - Internal CI/CD pipeline specifics of individual extras projects
-
+- ROCm Expansion SDK requirements need a parallel RFC to the requirements in this PR. 
+- These requirements is for software that releases individually and islimited to one version installed per major ROCm version.
 ## 2. Release Cadence
 
 Extras projects follow an **independent release cadence** that is not tied
