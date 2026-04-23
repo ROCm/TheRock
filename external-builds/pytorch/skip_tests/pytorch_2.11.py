@@ -61,7 +61,7 @@ skip_tests = {
             "test_resnet",
             # RuntimeError: miopenStatusUnknownError
             "test_graph_cudnn_dropout",
-            #Fatal Python error: Segmentation fault - https://github.com/ROCm/TheRock/issues/4745
+            # Fatal Python error: Segmentation fault - https://github.com/ROCm/TheRock/issues/4745
             "test_snapshot_include_traces",
         ],
         "nn": [
@@ -75,7 +75,7 @@ skip_tests = {
     },
     "gfx1151": {
         "nn": [
-            #AssertionError: Tensor-likes are not close! - https://github.com/ROCm/TheRock/issues/4744
+            # AssertionError: Tensor-likes are not close! - https://github.com/ROCm/TheRock/issues/4744
             "test_Embedding_discontiguous_cuda",
         ],
     },
