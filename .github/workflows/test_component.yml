@@ -152,6 +152,12 @@ jobs:
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
+      # Set GPU_ENABLE_PAL for Windows hip-tests (PAL=1, ROCR=0) (Issue #3587)
+      - name: Set GPU_ENABLE_PAL for Windows hip-tests
+        if: ${{ fromJSON(inputs.component).gpu_enable_pal != '' }}
+        shell: bash
+        run: echo "GPU_ENABLE_PAL=${{ fromJSON(inputs.component).gpu_enable_pal }}" >> $GITHUB_ENV
+
       - name: Test
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
@@ -161,9 +167,6 @@ jobs:
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
-          # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
-          # leave it empty. #3587
-          GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal }}
           RETRY_THIS_STEP: "true"
           RETRY_COUNT: "1"
           RETRY_DELAY: "7"
