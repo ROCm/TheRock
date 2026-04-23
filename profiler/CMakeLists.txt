@@ -11,7 +11,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # rocprof-trace-decoder
   # The trace decoder is responsible for decoding advanced thread traces from the
   # GPU and is used at runtime by `rocprofv3 --att`.
-  # See: https://github.com/ROCm/rocprof-trace-decoder/
   ##############################################################################
   therock_cmake_subproject_declare(rocprof-trace-decoder
     # The build infrastructure requires generic stages to pass through
