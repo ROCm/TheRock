@@ -39,6 +39,7 @@ environ_vars = os.environ.copy()
 def setup_env():
     environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
     environ_vars["ROCPROFSYS_INSTALL_DIR"] = str(THEROCK_PATH)
+    environ_vars["ROCPROFSYS_MAX_THREADS"] = "64"
 
     old_path = os.getenv("PATH", "")
     rocm_bin = str(THEROCK_BIN_PATH)

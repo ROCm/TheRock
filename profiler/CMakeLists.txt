@@ -349,10 +349,13 @@ if(THEROCK_ENABLE_ROCPROFV3)
 
       if(${THEROCK_BUILD_TESTING})
 
-        if(THEROCK_DIST_AMDGPU_TARGETS STREQUAL "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND")
-          set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
-        else()
-          string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_DIST_AMDGPU_TARGETS}")
+        # Examples read ROCPROFSYS_GFX_TARGETS. Fail fast if it is
+        # unset so we don't silently build CPU-only example binaries.
+        if(NOT THEROCK_DIST_AMDGPU_TARGETS
+           OR THEROCK_DIST_AMDGPU_TARGETS MATCHES "-NOTFOUND$")
+          message(FATAL_ERROR
+            "rocprofiler-systems-examples requires THEROCK_DIST_AMDGPU_TARGETS to be set "
+            "(set THEROCK_DIST_AMDGPU_FAMILIES or THEROCK_AMDGPU_FAMILIES).")
         endif()
 
         therock_cmake_subproject_declare(rocprofiler-systems-examples
@@ -361,8 +364,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
           BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems-examples"
           BACKGROUND_BUILD
           CMAKE_ARGS
-            -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
-            -DROCPROFSYS_DISABLE_EXAMPLES="lulesh"
+            "-DROCPROFSYS_GFX_TARGETS=\"${THEROCK_DIST_AMDGPU_TARGETS}\""
+            -DROCPROFSYS_DISABLE_EXAMPLES=lulesh
           INSTALL_RPATH_DIRS
             "lib"
             "lib/rocprofiler-systems"
