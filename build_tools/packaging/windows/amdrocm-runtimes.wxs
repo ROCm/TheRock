@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="ROCm Runtime" Version="7.13.0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890" Language="1033" Codepage="1252" InstallerVersion="500" Compressed="yes">
+    <SummaryInformation Keywords="ROCm HIP AMD GPU runtime" Description="ROCm 7.13.0 Runtime (bin + lib)" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of ROCm Runtime is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Property Id="ENABLE_LONG_PATHS" Secure="yes" />
+    <SetProperty Id="CMD_EXE" Value="[System64Folder]cmd.exe" Before="RemoveLegacyROCmDlls" Sequence="execute" />
+    <CustomAction Id="RemoveLegacyROCmDlls" Property="CMD_EXE" ExeCommand="/c del /f /q &quot;[System64Folder]amdhip64_*.dll&quot; &quot;[System64Folder]amd_comgr_*.dll&quot; 2&gt;nul" Execute="deferred" Impersonate="no" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="RemoveLegacyROCmDlls" After="InstallInitialize" />
+    </InstallExecuteSequence>
+    <StandardDirectory Id="ProgramFilesFolder">
+      <Directory Id="ROCmDir" Name="AMD">
+        <Directory Id="ROCmVerDir" Name="ROCm">
+          <Directory Id="RuntimeDir" Name="runtimes-7.13.0">
+            <Directory Id="Dir_bin" Name="bin">
+              <Component Id="c_bin__hipVersion_31818a3f" Guid="D25C6586-6ED2-5AB4-BE42-897A9AE51607">
+                <File Id="f_bin__hipVersion_31818a3f" Source="C:\Dev\TheRock\build\dist\rocm\bin\.hipVersion" Name=".hipVersion" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_AMD_ROCM_Comgr_MANIFEST_9f4df360" Guid="0AA42D37-E172-563C-B803-617D41D8BBDD">
+                <File Id="f_bin_AMD_ROCM_Comgr_MANIFEST_9f4df360" Source="C:\Dev\TheRock\build\dist\rocm\bin\AMD.ROCM.Comgr.MANIFEST" Name="AMD.ROCM.Comgr.MANIFEST" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_amd_comgr0702_dll_d0cf73e1" Guid="467FD54F-D4CA-5726-926D-56A2B03BF969">
+                <File Id="f_bin_amd_comgr0702_dll_d0cf73e1" Source="C:\Dev\TheRock\build\dist\rocm\bin\amd_comgr0702.dll" Name="amd_comgr0702.dll" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_amdhip64_7_dll_435eacc5" Guid="4D52A1C8-E900-5E14-A7D4-A58BD405B79D">
+                <File Id="f_bin_amdhip64_7_dll_435eacc5" Source="C:\Dev\TheRock\build\dist\rocm\bin\amdhip64_7.dll" Name="amdhip64_7.dll" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_fftw3_dll_d2596108" Guid="399BA146-58A7-5870-B07F-87E1F6CDA1DC">
+                <File Id="f_bin_fftw3_dll_d2596108" Source="C:\Dev\TheRock\build\dist\rocm\bin\fftw3.dll" Name="fftw3.dll" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_fftw3f_dll_291d5e01" Guid="A135C069-2306-52C6-8618-A15C9CAD8DA5">
+                <File Id="f_bin_fftw3f_dll_291d5e01" Source="C:\Dev\TheRock\build\dist\rocm\bin\fftw3f.dll" Name="fftw3f.dll" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_flatc_exe_d40d7319" Guid="A4AFB2B4-70B2-545A-9491-F006B2EF1FB7">
+                <File Id="f_bin_flatc_exe_d40d7319" Source="C:\Dev\TheRock\build\dist\rocm\bin\flatc.exe" Name="flatc.exe" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_hipcc_bat_2ca32b55" Guid="FED6E37A-DB89-560B-ABCA-96F9653B3A77">
+                <File Id="f_bin_hipcc_bat_2ca32b55" Source="C:\Dev\TheRock\build\dist\rocm\bin\hipcc.bat" Name="hipcc.bat" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_hipcc_exe_b1be16c4" Guid="F1805C29-590E-5371-9758-A8D2AEE2E682">
+                <File Id="f_bin_hipcc_exe_b1be16c4" Source="C:\Dev\TheRock\build\dist\rocm\bin\hipcc.exe" Name="hipcc.exe" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_hipcc_cmake_linker_helper_fc928b92" Guid="13E89E4C-5E43-5091-896E-919154DAD4AB">
+                <File Id="f_bin_hipcc_cmake_linker_helper_fc928b92" Source="C:\Dev\TheRock\build\dist\rocm\bin\hipcc_cmake_linker_helper" Name="hipcc_cmake_linker_helper" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_hipconfig_bat_203a8359" Guid="44CA3D1E-8413-5526-9785-7A9341069473">
+                <File Id="f_bin_hipconfig_bat_203a8359" Source="C:\Dev\TheRock\build\dist\rocm\bin\hipconfig.bat" Name="hipconfig.bat" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_hipconfig_exe_25dfd0d2" Guid="5DF6F46F-2511-51A8-8F78-FBC331A8233A">
+                <File Id="f_bin_hipconfig_exe_25dfd0d2" Source="C:\Dev\TheRock\build\dist\rocm\bin\hipconfig.exe" Name="hipconfig.exe" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_hipdemangleatp_cb404282" Guid="24213FCB-DA63-553F-A939-42FB0468F80D">
+                <File Id="f_bin_hipdemangleatp_cb404282" Source="C:\Dev\TheRock\build\dist\rocm\bin\hipdemangleatp" Name="hipdemangleatp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_hipInfo_exe_fb4e633a" Guid="B45A51B3-0C8E-57ED-9044-4E02622F26C2">
+                <File Id="f_bin_hipInfo_exe_fb4e633a" Source="C:\Dev\TheRock\build\dist\rocm\bin\hipInfo.exe" Name="hipInfo.exe" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_hiprtc_builtins0702_dll_01e682d6" Guid="115B1148-A9B0-54D8-9A6E-5AFD5C1C77E9">
+                <File Id="f_bin_hiprtc_builtins0702_dll_01e682d6" Source="C:\Dev\TheRock\build\dist\rocm\bin\hiprtc-builtins0702.dll" Name="hiprtc-builtins0702.dll" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_hiprtc0702_dll_e68a49e7" Guid="D2CC6FED-2BDF-5C21-B296-AAB16ABBA26E">
+                <File Id="f_bin_hiprtc0702_dll_e68a49e7" Source="C:\Dev\TheRock\build\dist\rocm\bin\hiprtc0702.dll" Name="hiprtc0702.dll" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_roc_obj_8c19e6c6" Guid="22D016B7-E27A-5B9C-AE8D-7FC20A5A2BC2">
+                <File Id="f_bin_roc_obj_8c19e6c6" Source="C:\Dev\TheRock\build\dist\rocm\bin\roc-obj" Name="roc-obj" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_roc_obj_extract_0b9e62ba" Guid="A83EBB13-0543-5DA2-AA2D-FFCE340D9E7E">
+                <File Id="f_bin_roc_obj_extract_0b9e62ba" Source="C:\Dev\TheRock\build\dist\rocm\bin\roc-obj-extract" Name="roc-obj-extract" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_roc_obj_extract_bat_336d561f" Guid="030BF529-67C2-55BB-A247-62003DD76BC4">
+                <File Id="f_bin_roc_obj_extract_bat_336d561f" Source="C:\Dev\TheRock\build\dist\rocm\bin\roc-obj-extract.bat" Name="roc-obj-extract.bat" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_roc_obj_ls_2b9cb8ff" Guid="466FB4E2-1A17-557B-A4CC-35A93875A479">
+                <File Id="f_bin_roc_obj_ls_2b9cb8ff" Source="C:\Dev\TheRock\build\dist\rocm\bin\roc-obj-ls" Name="roc-obj-ls" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_roc_obj_ls_bat_9855de39" Guid="A7A0031D-61EF-5F50-BB89-688A6EAA2C96">
+                <File Id="f_bin_roc_obj_ls_bat_9855de39" Source="C:\Dev\TheRock\build\dist\rocm\bin\roc-obj-ls.bat" Name="roc-obj-ls.bat" KeyPath="yes" />
+              </Component>
+              <Component Id="c_bin_rocm_kpack_dll_a28e6c10" Guid="3B0ABC25-EFC9-5F40-A5A3-3F02E2FDBD56">
+                <File Id="f_bin_rocm_kpack_dll_a28e6c10" Source="C:\Dev\TheRock\build\dist\rocm\bin\rocm_kpack.dll" Name="rocm_kpack.dll" KeyPath="yes" />
+              </Component>
+            </Directory>
+            <Directory Id="Dir_lib" Name="lib">
+              <Component Id="c_lib__hipInfo_4df7b530" Guid="307465E9-8A98-5BF6-A693-C005FBED3DD1">
+                <File Id="f_lib__hipInfo_4df7b530" Source="C:\Dev\TheRock\build\dist\rocm\lib\.hipInfo" Name=".hipInfo" KeyPath="yes" />
+              </Component>
+              <Component Id="c_lib_amd_comgr0702_lib_227bc48c" Guid="723932A4-4970-5405-91D8-68882EE28EA8">
+                <File Id="f_lib_amd_comgr0702_lib_227bc48c" Source="C:\Dev\TheRock\build\dist\rocm\lib\amd_comgr0702.lib" Name="amd_comgr0702.lib" KeyPath="yes" />
+              </Component>
+              <Component Id="c_lib_amdhip64_lib_bd95b0ff" Guid="3B9121EC-5453-571A-B73F-BD9D5BF7E7FF">
+                <File Id="f_lib_amdhip64_lib_bd95b0ff" Source="C:\Dev\TheRock\build\dist\rocm\lib\amdhip64.lib" Name="amdhip64.lib" KeyPath="yes" />
+              </Component>
+              <Component Id="c_lib_fftw3_lib_a94f8647" Guid="96E02C37-E1C6-58BE-9D1E-A38415674E0E">
+                <File Id="f_lib_fftw3_lib_a94f8647" Source="C:\Dev\TheRock\build\dist\rocm\lib\fftw3.lib" Name="fftw3.lib" KeyPath="yes" />
+              </Component>
+              <Component Id="c_lib_fftw3f_lib_69254bda" Guid="6B0F0DE3-F706-52CF-911B-B8DA8CE62AD6">
+                <File Id="f_lib_fftw3f_lib_69254bda" Source="C:\Dev\TheRock\build\dist\rocm\lib\fftw3f.lib" Name="fftw3f.lib" KeyPath="yes" />
+              </Component>
+              <Component Id="c_lib_flatbuffers_lib_421542c6" Guid="68178525-E34E-5439-91B3-1A62799856F4">
+                <File Id="f_lib_flatbuffers_lib_421542c6" Source="C:\Dev\TheRock\build\dist\rocm\lib\flatbuffers.lib" Name="flatbuffers.lib" KeyPath="yes" />
+              </Component>
+              <Component Id="c_lib_hiprtc_builtins_lib_cb0c171e" Guid="8AB2F475-F1C9-5566-905A-D95E207424EE">
+                <File Id="f_lib_hiprtc_builtins_lib_cb0c171e" Source="C:\Dev\TheRock\build\dist\rocm\lib\hiprtc-builtins.lib" Name="hiprtc-builtins.lib" KeyPath="yes" />
+              </Component>
+              <Component Id="c_lib_hiprtc_lib_aa6c75fa" Guid="AEEDFA8F-597F-5FCE-952A-A54231AF6E81">
+                <File Id="f_lib_hiprtc_lib_aa6c75fa" Source="C:\Dev\TheRock\build\dist\rocm\lib\hiprtc.lib" Name="hiprtc.lib" KeyPath="yes" />
+              </Component>
+              <Component Id="c_lib_rocm_core_lib_1a499f2d" Guid="76F3E677-19DC-52AF-B7A0-4996397BF0C1">
+                <File Id="f_lib_rocm_core_lib_1a499f2d" Source="C:\Dev\TheRock\build\dist\rocm\lib\rocm-core.lib" Name="rocm-core.lib" KeyPath="yes" />
+              </Component>
+              <Component Id="c_lib_rocm_kpack_lib_c3cd2c0b" Guid="23B53903-DD1A-59DE-A1FA-88A11F03EAB4">
+                <File Id="f_lib_rocm_kpack_lib_c3cd2c0b" Source="C:\Dev\TheRock\build\dist\rocm\lib\rocm_kpack.lib" Name="rocm_kpack.lib" KeyPath="yes" />
+              </Component>
+              <Component Id="c_lib_rocmmod_643bc92c" Guid="AF5B8509-E103-5F16-A653-B85C9BDF843D">
+                <File Id="f_lib_rocmmod_643bc92c" Source="C:\Dev\TheRock\build\dist\rocm\lib\rocmmod" Name="rocmmod" KeyPath="yes" />
+              </Component>
+            </Directory>
+            <Component Id="EnvPath" Guid="6FF92CF4-A19C-5009-93FB-80EF957D03D5">
+              <Environment Id="ROCmBinPath" Name="PATH" Value="[RuntimeDir]bin" Permanent="no" Part="last" Action="set" System="yes" />
+              <RegistryValue Root="HKLM" Key="Software\AMD\ROCm\7.13.0" Name="InstallDir" Value="[RuntimeDir]" Type="string" KeyPath="yes" />
+            </Component>
+            <Component Id="LongPathsEnable" Guid="9C1B178A-F85D-5123-A6EA-4F6E68950C97">
+              <RegistryValue Root="HKLM" Key="SYSTEM\CurrentControlSet\Control\FileSystem" Name="LongPathsEnabled" Value="1" Type="integer" KeyPath="yes" />
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+    <Feature Id="Runtime" Title="ROCm Runtime" Level="1">
+      <ComponentRef Id="c_bin__hipVersion_31818a3f" />
+      <ComponentRef Id="c_bin_AMD_ROCM_Comgr_MANIFEST_9f4df360" />
+      <ComponentRef Id="c_bin_amd_comgr0702_dll_d0cf73e1" />
+      <ComponentRef Id="c_bin_amdhip64_7_dll_435eacc5" />
+      <ComponentRef Id="c_bin_fftw3_dll_d2596108" />
+      <ComponentRef Id="c_bin_fftw3f_dll_291d5e01" />
+      <ComponentRef Id="c_bin_flatc_exe_d40d7319" />
+      <ComponentRef Id="c_bin_hipcc_bat_2ca32b55" />
+      <ComponentRef Id="c_bin_hipcc_exe_b1be16c4" />
+      <ComponentRef Id="c_bin_hipcc_cmake_linker_helper_fc928b92" />
+      <ComponentRef Id="c_bin_hipconfig_bat_203a8359" />
+      <ComponentRef Id="c_bin_hipconfig_exe_25dfd0d2" />
+      <ComponentRef Id="c_bin_hipdemangleatp_cb404282" />
+      <ComponentRef Id="c_bin_hipInfo_exe_fb4e633a" />
+      <ComponentRef Id="c_bin_hiprtc_builtins0702_dll_01e682d6" />
+      <ComponentRef Id="c_bin_hiprtc0702_dll_e68a49e7" />
+      <ComponentRef Id="c_bin_roc_obj_8c19e6c6" />
+      <ComponentRef Id="c_bin_roc_obj_extract_0b9e62ba" />
+      <ComponentRef Id="c_bin_roc_obj_extract_bat_336d561f" />
+      <ComponentRef Id="c_bin_roc_obj_ls_2b9cb8ff" />
+      <ComponentRef Id="c_bin_roc_obj_ls_bat_9855de39" />
+      <ComponentRef Id="c_bin_rocm_kpack_dll_a28e6c10" />
+      <ComponentRef Id="c_lib__hipInfo_4df7b530" />
+      <ComponentRef Id="c_lib_amd_comgr0702_lib_227bc48c" />
+      <ComponentRef Id="c_lib_amdhip64_lib_bd95b0ff" />
+      <ComponentRef Id="c_lib_fftw3_lib_a94f8647" />
+      <ComponentRef Id="c_lib_fftw3f_lib_69254bda" />
+      <ComponentRef Id="c_lib_flatbuffers_lib_421542c6" />
+      <ComponentRef Id="c_lib_hiprtc_builtins_lib_cb0c171e" />
+      <ComponentRef Id="c_lib_hiprtc_lib_aa6c75fa" />
+      <ComponentRef Id="c_lib_rocm_core_lib_1a499f2d" />
+      <ComponentRef Id="c_lib_rocm_kpack_lib_c3cd2c0b" />
+      <ComponentRef Id="c_lib_rocmmod_643bc92c" />
+      <ComponentRef Id="EnvPath" />
+    </Feature>
+    <Feature Id="LongPaths" Title="Enable Long Paths" Level="0">
+      <Level Value="1" Condition="ENABLE_LONG_PATHS" />
+      <ComponentRef Id="LongPathsEnable" />
+    </Feature>
+  </Package>
+</Wix>
