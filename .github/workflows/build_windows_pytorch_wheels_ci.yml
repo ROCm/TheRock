@@ -263,6 +263,7 @@ jobs:
       - name: Init rocm-systems submodule
         if: ${{ inputs.kpack_split == 'true' }}
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git submodule update --init --depth=1 rocm-systems
 
       - name: Install kpack tooling
