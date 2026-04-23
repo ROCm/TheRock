@@ -57,6 +57,7 @@ import string
 from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
+    select_weighted_label,
 )
 from fetch_test_configurations import test_matrix, functional_matrix
 
@@ -404,6 +405,18 @@ def matrix_generator(
                 if build_variant_suffix:
                     artifact_group += f"-{build_variant_suffix}"
                 matrix_row["artifact_group"] = artifact_group
+
+                # Handle multi-label configuration with weighted random selection.
+                # Some families (e.g. gfx94x) have multiple runner labels available.
+                if "test-runs-on-labels" in platform_info:
+                    matrix_row["test-runs-on"] = select_weighted_label(
+                        platform_info["test-runs-on-labels"], target_name
+                    )
+                if "test-runs-on-multi-gpu-labels" in platform_info:
+                    matrix_row["test-runs-on-multi-gpu"] = select_weighted_label(
+                        platform_info["test-runs-on-multi-gpu-labels"],
+                        f"{target_name} (multi-gpu)",
+                    )
 
                 # We retrieve labels from both PR and workflow_dispatch to customize the build and test jobs
                 label_options = []

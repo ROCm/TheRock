@@ -9,6 +9,7 @@ import importlib.util
 import os
 from pathlib import Path
 import platform
+import sysconfig
 
 from setuptools import find_packages, setup
 
@@ -31,9 +32,14 @@ def _load_local_dist_info():
     return module
 
 
+dist_info = _load_local_dist_info()
+my_package = dist_info.ALL_PACKAGES["profiler"]
+packages = find_packages(where="./src")
+platform_package_name = my_package.get_py_package_name()
+packages.append(platform_package_name)
+
 version = os.environ.get("ROCM_SDK_VERSION")
 if version is None:
-    dist_info = _load_local_dist_info()
     version = dist_info.__version__
 
 if version == "DEFAULT":
@@ -44,10 +50,20 @@ setup(
     name="rocm-profiler",
     version=version,
     description="ROCm profiler applications (rocprofiler-systems and rocprofiler-compute)",
-    packages=find_packages(where="src"),
-    package_dir={"": "src"},
+    packages=packages,
+    package_dir={
+        "": "src",
+        platform_package_name: f"platform/{platform_package_name}",
+    },
     include_package_data=True,
     zip_safe=False,
+    options={
+        "bdist_wheel": {
+            "plat_name": os.getenv(
+                "ROCM_SDK_WHEEL_PLATFORM_TAG", sysconfig.get_platform()
+            ),
+        },
+    },
     entry_points={
         "console_scripts": (
             [
