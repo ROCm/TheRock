@@ -447,7 +447,8 @@ def rename_etc_files_with_version(etc_dir, version, version_suffix):
             f.write("/opt/rocm/core/lib/opencl\n")
 
         # Rename with version
-        new_name = f"10-rocm{version}-opencl-{version_suffix}.conf"
+        version_str = version_to_str(version)
+        new_name = f"10-rocm{version_str}-{version_suffix}-opencl.conf"
         new_path = ldso_conf.parent / new_name
         ldso_conf.rename(new_path)
         print(f"Renamed: {ldso_conf.name} -> {new_name}")
@@ -456,7 +457,8 @@ def rename_etc_files_with_version(etc_dir, version, version_suffix):
     # Rename OpenCL ICD file
     icd_file = etc_path / "OpenCL" / "vendors" / "amdocl64.icd"
     if icd_file.exists():
-        new_name = f"amdocl64_{version}_{version_suffix}.icd"
+        version_str = version_to_str(version)
+        new_name = f"amdocl64_{version_str}_{version_suffix}.icd"
         new_path = icd_file.parent / new_name
         icd_file.rename(new_path)
         print(f"Renamed: {icd_file.name} -> {new_name}")
@@ -682,6 +684,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     context = {
         "pkg_name": pkg_name,
         "version": version,
+        "version_str": version_to_str(version),
         "release": config.version_suffix,
         "build_arch": pkg_info.get("BuildArch"),
         "description_short": pkg_info.get("Description_Short"),

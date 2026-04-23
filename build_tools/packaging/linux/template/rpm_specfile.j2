@@ -73,11 +73,11 @@ if [ -d "$RPM_BUILD_ROOT{{ install_prefix }}/etc" ]; then
         echo "/opt/rocm/core/lib/opencl" > "$RPM_BUILD_ROOT/etc/ld.so.conf.d/10-rocm-opencl.conf"
         # Rename with version
         mv "$RPM_BUILD_ROOT/etc/ld.so.conf.d/10-rocm-opencl.conf" \
-           "$RPM_BUILD_ROOT/etc/ld.so.conf.d/10-rocm{{ version }}-opencl-{{ release }}.conf"
+           "$RPM_BUILD_ROOT/etc/ld.so.conf.d/10-rocm{{ version_str }}-{{ release }}-opencl.conf"
     fi
     if [ -f "$RPM_BUILD_ROOT/etc/OpenCL/vendors/amdocl64.icd" ]; then
         mv "$RPM_BUILD_ROOT/etc/OpenCL/vendors/amdocl64.icd" \
-           "$RPM_BUILD_ROOT/etc/OpenCL/vendors/amdocl64_{{ version }}_{{ release }}.icd"
+           "$RPM_BUILD_ROOT/etc/OpenCL/vendors/amdocl64_{{ version_str }}_{{ release }}.icd"
     fi
 fi
 
