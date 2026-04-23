@@ -135,6 +135,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "urllib3",
     "xformers",
     "executorch",
+    "flydsl",
     "setuptools",
     "setuptools_scm",
     "wheel",

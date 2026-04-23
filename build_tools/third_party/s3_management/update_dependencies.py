@@ -63,6 +63,7 @@ PACKAGES_PER_PROJECT = {
     "fsspec": {"versions": ["latest"], "project": "torch"},
     "typing-extensions": {"versions": ["latest"], "project": "torch"},
     "setuptools": {"versions": ["latest"], "project": "rocm"},
+    "flydsl": {"versions": ["latest"], "project": "rocm"},
 }
 
 
