@@ -19,6 +19,7 @@ The default install path is controlled at build time via this script's flags
 """
 
 import argparse
+import os
 import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -559,9 +560,10 @@ def build_wxs(args: argparse.Namespace) -> None:
             )
             ET.SubElement(comp_el, f"{{{ns}}}File",
                 Id=file_id,
-                # Source is the path on the build machine where WiX reads the
-                # file from; backslashes are required by the WiX compiler.
-                Source=str(fpath).replace("/", "\\"),
+                # Source is resolved by WiX relative to the working directory
+                # from which `wix build` is invoked (the repo root), so use
+                # a CWD-relative path rather than an absolute one.
+                Source=os.path.relpath(fpath),
                 Name=fpath.name,
                 KeyPath="yes",
             )
