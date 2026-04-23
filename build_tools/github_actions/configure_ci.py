@@ -51,13 +51,13 @@
 import json
 import os
 from pathlib import Path
-import random
 import sys
 from typing import Iterable, List, Optional
 import string
 from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
+    select_weighted_label,
 )
 from fetch_test_configurations import test_matrix, functional_matrix
 
@@ -406,24 +406,17 @@ def matrix_generator(
                     artifact_group += f"-{build_variant_suffix}"
                 matrix_row["artifact_group"] = artifact_group
 
-                # Handle dual-label configuration with weighted random selection.
+                # Handle multi-label configuration with weighted random selection.
                 # Some families (e.g. gfx94x) have multiple runner labels available.
-                if "test-runs-on-alternate" in platform_info:
-                    alternate_label = platform_info["test-runs-on-alternate"]
-                    alternate_weight = platform_info.get(
-                        "test-runs-on-alternate-weight", 0.5
+                if "test-runs-on-labels" in platform_info:
+                    matrix_row["test-runs-on"] = select_weighted_label(
+                        platform_info["test-runs-on-labels"], target_name
                     )
-                    if random.random() < alternate_weight:
-                        matrix_row["test-runs-on"] = alternate_label
-                        print(
-                            f"  {target_name}: selected alternate runner (weight={alternate_weight}): "
-                            f"{alternate_label}"
-                        )
-                    else:
-                        print(
-                            f"  {target_name}: selected primary runner (weight={1-alternate_weight}): "
-                            f"{matrix_row['test-runs-on']}"
-                        )
+                if "test-runs-on-multi-gpu-labels" in platform_info:
+                    matrix_row["test-runs-on-multi-gpu"] = select_weighted_label(
+                        platform_info["test-runs-on-multi-gpu-labels"],
+                        f"{target_name} (multi-gpu)",
+                    )
 
                 # We retrieve labels from both PR and workflow_dispatch to customize the build and test jobs
                 label_options = []
@@ -594,12 +587,6 @@ def main(base_args, linux_families, windows_families):
             # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a quick test type
             if matrix_row.get("run-full-tests-only", False) and test_type == "quick":
                 matrix_row["test-runs-on"] = ""
-            # For nightly_check_only_for_family architectures, we want to run only full tests during nightly (scheduled) run
-            # Otherwise, we run sanity checks in all other scenarios (presubmit/postsubmit)
-            if matrix_row.get("nightly_check_only_for_family", False) and (
-                is_pull_request or is_push
-            ):
-                matrix_row["sanity_check_only_for_family"] = True
 
         # If a test filter label is included, we set the "test_type" to the designated filter
         if pr_labels and any("test_filter:" in label for label in pr_labels):

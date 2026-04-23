@@ -35,7 +35,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(source.bucket, "therock-dev-artifacts")
         self.assertEqual(source.relative_path, "123-linux/tarballs")
         self.assertEqual(dest.bucket, "therock-dev-tarball")
-        self.assertEqual(dest.relative_path, "v3/tarball")
+        self.assertEqual(dest.relative_path, "v4/tarball")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_nightly_windows_copies_from_artifacts_to_tarball_bucket(self, mock_copy):
@@ -56,7 +56,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(source.bucket, "therock-nightly-artifacts")
         self.assertEqual(source.relative_path, "99-windows/tarballs")
         self.assertEqual(dest.bucket, "therock-nightly-tarball")
-        self.assertEqual(dest.relative_path, "v3/tarball")
+        self.assertEqual(dest.relative_path, "v4/tarball")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_raises_when_no_tarballs_found(self, mock_copy):

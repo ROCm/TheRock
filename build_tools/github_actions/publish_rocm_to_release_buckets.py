@@ -14,7 +14,7 @@ These release file types are supported:
 Example with ``--run-id 12345 --platform linux --release-type dev``:
 
     s3://therock-dev-artifacts/12345-linux/tarballs/therock-dist-linux-gfx94X-dcgpu-7.10.0.tar.gz
-      -> s3://therock-dev-tarball/v3/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0.tar.gz
+      -> s3://therock-dev-tarball/v4/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0.tar.gz
 
 Test usage:
     python build_tools/github_actions/publish_rocm_to_release_buckets.py \\
@@ -47,14 +47,14 @@ def publish_tarballs(
 
     Example:
         s3://therock-dev-artifacts/12345-linux/tarballs/
-          -> s3://therock-dev-tarball/v3/tarball/
+          -> s3://therock-dev-tarball/v4/tarball/
 
     Returns:
         Number of tarballs copied.
     """
     source = artifacts_root.tarballs()
     dest_bucket = get_release_bucket_config(release_type, "tarball")
-    dest = StorageLocation(dest_bucket.name, "v3/tarball")
+    dest = StorageLocation(dest_bucket.name, "v4/tarball")
 
     logger.info("Tarballs: %s -> %s", source.s3_uri, dest.s3_uri)
     count = backend.copy_directory(source, dest, include=["*.tar.gz"])
