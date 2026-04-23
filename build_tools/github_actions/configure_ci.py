@@ -532,8 +532,8 @@ def main(base_args, linux_families, windows_families):
             combined_test_labels = list(set(linux_test_output + windows_test_output))
             test_type = "full"
             test_type_reason = f"test label(s) specified: {combined_test_labels}"
-            # Extended tests (functional + benchmarks) run on workflow dispatch with test labels
-            run_extended_tests = True
+        # Extended tests (functional + benchmarks) run on workflow dispatch with test labels
+        run_extended_tests = True
     else:
         # Conditionally build and conditionally run full tests for other
         # triggers (pull_request), based on modified paths and other inputs.
