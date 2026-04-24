@@ -78,8 +78,12 @@ def execute_tests():
     subprocess.run(config_cmd, cwd=THEROCK_PATH, check=False, env=environ_vars)
 
     # Actual tests
+    # NOTE: using --verbose (not --output-on-failure) so we always see the per-test
+    # output, including pytest SKIPPED reasons. This is intentionally noisy and
+    # should be reverted to --output-on-failure once the GPU-target skip issue
+    # in rocprofiler-systems-examples is fully resolved.
     cmd = ctest_base + [
-        "--output-on-failure",
+        "--verbose",
         "--exclude-regex",
         f"{'|'.join(EXCLUDED_TESTS)}",
         "--label-exclude",
