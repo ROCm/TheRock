@@ -151,38 +151,40 @@ if(THEROCK_ENABLE_ROCPROFV3)
   ##############################################################################
   # rocprofiler-compute
   ##############################################################################
-  therock_cmake_subproject_declare(rocprofiler-compute
-    USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
-    BACKGROUND_BUILD
-    DEFAULT_GPU_TARGETS
-      gfx942
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      -DENABLE_TESTS=${THEROCK_BUILD_TESTING}
-      -DINSTALL_TESTS=${THEROCK_BUILD_TESTING}
-      -DTEST_FROM_INSTALL=${THEROCK_BUILD_TESTING}
-      -DCHECK_PYTHON_DEPS=OFF
-    CMAKE_INCLUDES
-      therock_explicit_finders.cmake
-    COMPILER_TOOLCHAIN
-      amd-hip
-    RUNTIME_DEPS
-      rocprofiler-sdk
-      aqlprofile
-      hip-clr
-      rocprofiler-register
-      ${THEROCK_BUNDLED_ELFUTILS}
-      ${THEROCK_BUNDLED_LIBDRM}
-      ${THEROCK_BUNDLED_SQLITE3}
-      ${_openmpi_optional_dep}
-    )
-    therock_cmake_subproject_glob_c_sources(rocprofiler-compute
-      SUBDIRS .
-    )
+  if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
+    therock_cmake_subproject_declare(rocprofiler-compute
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
+      BACKGROUND_BUILD
+      DEFAULT_GPU_TARGETS
+        gfx942
+      CMAKE_ARGS
+        -DHIP_PLATFORM=amd
+        -DENABLE_TESTS=${THEROCK_BUILD_TESTING}
+        -DINSTALL_TESTS=${THEROCK_BUILD_TESTING}
+        -DTEST_FROM_INSTALL=${THEROCK_BUILD_TESTING}
+        -DCHECK_PYTHON_DEPS=OFF
+      CMAKE_INCLUDES
+        therock_explicit_finders.cmake
+      COMPILER_TOOLCHAIN
+        amd-hip
+      RUNTIME_DEPS
+        rocprofiler-sdk
+        aqlprofile
+        hip-clr
+        rocprofiler-register
+        ${THEROCK_BUNDLED_ELFUTILS}
+        ${THEROCK_BUNDLED_LIBDRM}
+        ${THEROCK_BUNDLED_SQLITE3}
+        ${_openmpi_optional_dep}
+      )
+      therock_cmake_subproject_glob_c_sources(rocprofiler-compute
+        SUBDIRS .
+      )
 
-    therock_cmake_subproject_activate(rocprofiler-compute)
+      therock_cmake_subproject_activate(rocprofiler-compute)
+  endif()
 
   ##############################################################################
   # roctracer
@@ -239,21 +241,23 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprof-trace-decoder
   )
 
-  therock_provide_artifact(rocprofiler-compute
-    TARGET_NEUTRAL
-    DESCRIPTOR artifact-rocprofiler-compute.toml
-    COMPONENTS
-      dbg
-      dev
-      doc
-      lib
-      run
-      test
-    SUBPROJECT_DEPS
-      aqlprofile
-      rocprofiler-sdk
-      rocprofiler-compute
-  )
+  if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
+    therock_provide_artifact(rocprofiler-compute
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-rocprofiler-compute.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+        test
+      SUBPROJECT_DEPS
+        aqlprofile
+        rocprofiler-sdk
+        rocprofiler-compute
+    )
+  endif()
 
   ##############################################################################
   # rocprofiler-systems
