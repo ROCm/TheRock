@@ -46,12 +46,10 @@ on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". All developer-triggered jobs should use "dev"!'
+        description: 'Release type. All developer-triggered jobs should use "dev"!'
         type: choice
         options:
           - dev
-          - nightly
-          - prerelease
         default: dev
       prerelease_version:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
