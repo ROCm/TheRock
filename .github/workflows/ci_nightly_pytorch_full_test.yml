@@ -17,6 +17,11 @@
 #       workflows (build_portable_linux_pytorch_wheels.yml /
 #       release_portable_linux_packages.yml) so tests only run after a
 #       successful build, or use a workflow_dispatch trigger / Quartz.
+#
+# Scheduled runs alternate the PyTorch source/wheel pair by UTC day-of-year:
+#   - odd day  -> nightly (latest wheel + upstream nightly sources)
+#   - even day -> release/2.11 (latest 2.11.x wheel + release/2.11 sources)
+# workflow_dispatch runs honor the pytorch_git_ref input as-is.
 
 name: CI Nightly PyTorch Full Test
 
@@ -42,7 +47,7 @@ on:
         type: string
         default: "https://rocm.nightlies.amd.com/v2-staging"
       torch_version:
-        description: "Torch version to test (leave empty to auto-detect latest nightly)"
+        description: "Torch version to test (leave empty to auto-detect latest for selected git ref)"
         type: string
         default: ""
       pytorch_git_ref:
@@ -68,7 +73,7 @@ permissions:
 run-name: >-
   CI Nightly PyTorch Full Test
   (${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }},
-   ${{ inputs.pytorch_git_ref || 'nightly' }})
+   ${{ github.event_name == 'schedule' && 'alternating' || (inputs.pytorch_git_ref || 'nightly') }})
 
 env:
   AMDGPU_FAMILY: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
@@ -76,7 +81,7 @@ env:
   TEST_RUNS_ON_MULTI_GPU: ${{ inputs.test_runs_on_multi_gpu || 'linux-gfx942-8gpu-ossci-rocm' }}
   PACKAGE_INDEX_URL: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
   TORCH_VERSION_INPUT: ${{ inputs.torch_version || '' }}
-  PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref || 'nightly' }}
+  PYTORCH_GIT_REF_INPUT: ${{ inputs.pytorch_git_ref || 'nightly' }}
   PYTORCH_GIT_REPO: ${{ inputs.pytorch_git_repo || 'pytorch/pytorch' }}
   TEST_CONFIGS: ${{ inputs.test_configs || 'default distributed inductor' }}
   PYTHON_VERSION: ${{ inputs.python_version || '3.12' }}
@@ -86,9 +91,36 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       torch_version: ${{ steps.resolve.outputs.torch_version }}
+      pytorch_git_ref: ${{ steps.select_ref.outputs.pytorch_git_ref }}
     steps:
-      - name: Resolve latest nightly torch version
+      - name: Select PyTorch git ref
+        id: select_ref
+        run: |
+          # Scheduled runs alternate between nightly and release/2.11 by UTC
+          # day-of-year parity. workflow_dispatch runs honor the input as-is.
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            DAY_OF_YEAR="$(date -u +%j)"
+            # Strip leading zeros to avoid base-8 interpretation in $(( ... )).
+            DAY_OF_YEAR="${DAY_OF_YEAR#0}"
+            DAY_OF_YEAR="${DAY_OF_YEAR#0}"
+            if [ $(( DAY_OF_YEAR % 2 )) -eq 1 ]; then
+              REF="nightly"
+              REASON="schedule odd UTC day-of-year (${DAY_OF_YEAR})"
+            else
+              REF="release/2.11"
+              REASON="schedule even UTC day-of-year (${DAY_OF_YEAR})"
+            fi
+          else
+            REF="${PYTORCH_GIT_REF_INPUT}"
+            REASON="${GITHUB_EVENT_NAME} input"
+          fi
+          echo "Selected pytorch_git_ref=${REF} (${REASON})"
+          echo "pytorch_git_ref=${REF}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve torch version
         id: resolve
+        env:
+          PYTORCH_GIT_REF: ${{ steps.select_ref.outputs.pytorch_git_ref }}
         run: |
           INDEX_URL="${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}"
 
@@ -104,13 +136,38 @@ jobs:
           # might later be replaced by a Windows runner for cross-platform support).
           # TODO: When adding Windows support, pass --platform win_amd64 for
           # Windows targets or derive the platform from amdgpu_family/runner.
-          TORCH_VERSION=$(pip index versions torch \
+          AVAILABLE=$(pip index versions torch \
             --pre \
             --index-url "${INDEX_URL}" \
             --python-version "${PYTHON_VERSION}" \
             --platform linux_x86_64 2>/dev/null \
-            | head -1 \
-            | sed 's/torch (\(.*\))/\1/')
+            | grep -E '^(torch \(|Available versions:)')
+
+          # When testing a release branch, pin the wheel version to the matching
+          # X.Y minor series so we don't accidentally pull a newer nightly wheel
+          # whose ABI/APIs don't match the release/X.Y test sources.
+          case "${PYTORCH_GIT_REF}" in
+            release/*)
+              MINOR="${PYTORCH_GIT_REF#release/}"
+              TORCH_VERSION=$(printf '%s\n' "${AVAILABLE}" \
+                | sed -n 's/^Available versions: //p' \
+                | tr ',' '\n' \
+                | sed 's/^ *//;s/ *$//' \
+                | grep "^${MINOR}\." \
+                | head -1)
+              if [ -z "${TORCH_VERSION}" ]; then
+                echo "::error::No torch version matching ${MINOR}.* in ${INDEX_URL} for ref ${PYTORCH_GIT_REF}"
+                echo "${AVAILABLE}"
+                exit 1
+              fi
+              ;;
+            *)
+              TORCH_VERSION=$(printf '%s\n' "${AVAILABLE}" \
+                | grep '^torch (' \
+                | head -1 \
+                | sed 's/torch (\(.*\))/\1/')
+              ;;
+          esac
 
           if [ -z "${TORCH_VERSION}" ]; then
             echo "::error::Failed to resolve torch version from ${INDEX_URL}"
@@ -118,7 +175,7 @@ jobs:
           fi
 
           echo "torch_version=${TORCH_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Resolved torch_version: ${TORCH_VERSION}"
+          echo "Resolved torch_version for ${PYTORCH_GIT_REF}: ${TORCH_VERSION}"
 
   run_full_tests:
     needs: resolve_torch_version
@@ -131,6 +188,6 @@ jobs:
       python_version: ${{ inputs.python_version || '3.12' }}
       torch_version: ${{ needs.resolve_torch_version.outputs.torch_version }}
       pytorch_git_repo: ${{ inputs.pytorch_git_repo || 'pytorch/pytorch' }}
-      pytorch_git_ref: ${{ inputs.pytorch_git_ref || 'nightly' }}
+      pytorch_git_ref: ${{ needs.resolve_torch_version.outputs.pytorch_git_ref }}
       test_configs: ${{ inputs.test_configs || 'default distributed inductor' }}
       tests_to_include: ""
