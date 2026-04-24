@@ -14,8 +14,8 @@
       "amdrocm-sysdeps"
     ],
     "Maintainer": "AMD-SMILib Support <amd-smi.support@amd.com>",
-    "Description_Short": "AMD System Management libraries",
-    "Description_Long": "Runtime components of the library",
+    "Description_Short": "AMD GPU system management library for monitoring and control",
+    "Description_Long": "AMD System Management Interface (AMDSMI) provides programmatic access to AMD GPU metrics, telemetry, and device control. Includes runtime libraries for querying GPU utilization, temperature, power consumption, and clock frequencies. Ships with library binaries, runtime components, development headers, and documentation for building GPU monitoring and management applications.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -68,10 +68,9 @@
       "g++",
       "g++-multilib"
     ],
-
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm LLVM compiler",
-    "Description_Long": "ROCm LLVM compiler with rocm-llvm and hipcc",
+    "Description_Short": "ROCm LLVM compiler toolchain with HIP compilation support",
+    "Description_Long": "LLVM-based compiler infrastructure optimized for AMD GPUs. Provides rocm-llvm compiler with AMD GPU backend support and hipcc (HIP compiler driver) for compiling HIP C++ code. Includes runtime libraries and documentation for heterogeneous computing development on ROCm platforms.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -147,8 +146,8 @@
       "g++-multilib"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD LLVM compiler libraries",
-    "Description_Long": "Contains rocm-llvm and  hipcc development files",
+    "Description_Short": "ROCm LLVM compiler development headers and libraries",
+    "Description_Long": "Development package for ROCm LLVM compiler infrastructure. Contains header files, static libraries, and build configuration files for rocm-llvm and hipcc. Required for building applications that integrate with the ROCm LLVM toolchain or extend compiler functionality.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -193,8 +192,8 @@
       "amdrocm-llvm"
     ],
     "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
-    "Description_Short": "AMD HIP Runtime for ROCm platforms",
-    "Description_Long": "AMD HIP Runtime for ROCm platforms",
+    "Description_Short": "AMD HIP runtime libraries for GPU execution on ROCm platforms",
+    "Description_Long": "HIP (Heterogeneous-compute Interface for Portability) runtime libraries providing GPU kernel execution, memory management, and device control APIs. Enables portable GPU computing across AMD and NVIDIA platforms. Includes runtime binaries, shared libraries, and documentation for developing GPU-accelerated applications.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -270,8 +269,8 @@
       "amdrocm-llvm-devel"
     ],
     "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
-    "Description_Short": "AMD HIP runtime development files for ROCm platforms",
-    "Description_Long": "AMD HIP runtime development files for ROCm platforms",
+    "Description_Short": "AMD HIP runtime development headers and build files",
+    "Description_Long": "Development package for HIP runtime. Contains C++ header files, CMake configuration, and static libraries required for building HIP applications. Provides APIs for device management, kernel launches, memory operations, and stream control on AMD GPUs.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -341,8 +340,8 @@
       "amdrocm-rand"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm FFT test files",
-    "Description_Long": "rocfft and hipfft test files",
+    "Description_Short": "ROCm FFT library test suite and validation binaries",
+    "Description_Long": "Comprehensive test suite for rocFFT and hipFFT libraries. Includes unit tests, performance benchmarks, and correctness validation tools for Fast Fourier Transform operations on AMD GPUs. Provides test binaries and verification utilities for FFT algorithm implementation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -397,8 +396,8 @@
       "amdrocm-sysdeps"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm FFT library",
-    "Description_Long": "rocfft and hipfft library files",
+    "Description_Short": "ROCm Fast Fourier Transform libraries for GPU computation",
+    "Description_Long": "High-performance FFT library implementations for AMD GPUs. Provides rocFFT (native ROCm FFT library) and hipFFT (portable FFT API). Supports 1D, 2D, and 3D transforms with optimized kernels for various data sizes and precision levels. Includes runtime libraries and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -443,8 +442,8 @@
       "amdrocm-fft"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm FFT library",
-    "Description_Long": "rocfft and hipfft developement header files",
+    "Description_Short": "ROCm FFT development headers and build configuration files",
+    "Description_Long": "Development package for rocFFT and hipFFT libraries. Contains header files, CMake modules, and static libraries for integrating FFT functionality into applications. Provides C and C++ APIs for configuring and executing FFT operations on AMD GPUs.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -470,7 +469,6 @@
         ]
       }
     ],
-
     "Gfxarch": "True"
   },
   {
@@ -490,8 +488,8 @@
       "amdrocm-profiler-base"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD library for BLAS in ROCm",
-    "Description_Long": "BLAS libraries which includes hipBlAS, rocBLAS, hipBLASLt and hipSPARSELt",
+    "Description_Short": "ROCm Basic Linear Algebra Subprograms libraries for GPUs",
+    "Description_Long": "Comprehensive BLAS implementation optimized for AMD GPUs. Includes hipBLAS (portable BLAS API), rocBLAS (optimized native implementation), hipBLASLt (GEMM-focused library), and hipSPARSELt (sparse matrix operations). Provides Level 1, 2, and 3 BLAS routines with runtime libraries and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -569,8 +567,8 @@
       "amdrocm-solver-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD test files for solver in ROCm",
-    "Description_Long": "rocsolver and hipsolver test files ",
+    "Description_Short": "ROCm linear algebra solver test suite and validation tools",
+    "Description_Long": "Test suite for rocSOLVER and hipSOLVER libraries. Includes unit tests, numerical accuracy validation, and performance benchmarks for linear system solvers, eigenvalue problems, and matrix factorizations. Provides test executables for verifying LAPACK-equivalent functionality on AMD GPUs.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -612,8 +610,8 @@
       "amdrocm-sparse-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD test files for sparse  in ROCm",
-    "Description_Long": "rocSPARSE and hipSPARSE test files",
+    "Description_Short": "ROCm sparse matrix library test suite and benchmarks",
+    "Description_Long": "Comprehensive test suite for rocSPARSE and hipSPARSE libraries. Contains unit tests, correctness validation, and performance benchmarks for sparse matrix operations including SpMV, SpMM, and sparse linear solvers. Provides test binaries for verifying sparse BLAS functionality.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -663,8 +661,8 @@
       "amdrocm-blas-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD test files for BLAS in ROCm",
-    "Description_Long": "BLAS test files which includes hipBlAS, rocBLAS, and hipBLASLt",
+    "Description_Short": "ROCm BLAS library test suite and validation executables",
+    "Description_Long": "Test suite for hipBLAS, rocBLAS, and hipBLASLt libraries. Includes unit tests, numerical accuracy validation, and performance benchmarks for BLAS Level 1, 2, and 3 operations. Provides test executables for verifying matrix operations, GEMM variants, and linear algebra routines on AMD GPUs.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -693,7 +691,6 @@
               "test"
             ]
           },
-
           {
             "Name": "hipBLASLt",
             "Components": [
@@ -705,7 +702,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-blas-devel",
     "Version": "",
@@ -719,8 +715,8 @@
       "amdrocm-blas"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD library for BLAS in ROCm",
-    "Description_Long": "BLAS development files",
+    "Description_Short": "ROCm BLAS development headers and static libraries",
+    "Description_Long": "Development package for ROCm BLAS libraries. Contains header files, CMake configuration, and static libraries for hipBLAS, rocBLAS, hipBLASLt, and hipSPARSELt. Provides C and C++ APIs for integrating high-performance linear algebra operations into GPU-accelerated applications.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -760,7 +756,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-sparse",
     "Version": "",
@@ -778,8 +773,8 @@
       "amdrocm-runtime"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD library for sparse  in ROCm",
-    "Description_Long": "rocSPARSE and hipSPARSE libraries",
+    "Description_Short": "ROCm sparse matrix computation libraries for AMD GPUs",
+    "Description_Long": "Optimized sparse matrix libraries for AMD GPUs. Includes rocSPARSE (native sparse BLAS implementation) and hipSPARSE (portable sparse matrix API). Supports sparse matrix-vector operations, format conversions, sparse linear solvers, and preconditioners. Ships with runtime libraries and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -811,7 +806,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-sparse-devel",
     "Version": "",
@@ -825,8 +819,8 @@
       "amdrocm-sparse"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD library for Sparse  in ROCm",
-    "Description_Long": "Sparse development files",
+    "Description_Short": "ROCm sparse matrix library development headers and build files",
+    "Description_Long": "Development package for rocSPARSE and hipSPARSE libraries. Contains header files, CMake modules, and static libraries for integrating sparse matrix operations into applications. Provides APIs for CSR, COO, ELL matrix formats and sparse linear algebra routines.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -854,7 +848,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-solver",
     "Version": "",
@@ -872,8 +865,8 @@
       "amdrocm-blas"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD library for solver in ROCm",
-    "Description_Long": "rocsolver and hipsolver libraries ",
+    "Description_Short": "ROCm LAPACK-equivalent linear algebra solver libraries",
+    "Description_Long": "GPU-accelerated linear algebra solver libraries for AMD GPUs. Includes rocSOLVER (LAPACK functionality for ROCm) and hipSOLVER (portable solver API). Provides dense matrix factorizations, linear system solvers, eigenvalue decompositions, and SVD. Ships with runtime libraries and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -905,7 +898,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-solver-devel",
     "Version": "",
@@ -919,8 +911,8 @@
       "amdrocm-solver"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD library for solver in ROCm",
-    "Description_Long": "rocsolver and hipsolver development files",
+    "Description_Short": "ROCm solver library development headers and configuration",
+    "Description_Long": "Development package for rocSOLVER and hipSOLVER libraries. Contains header files, CMake configuration, and static libraries for building applications with GPU-accelerated LAPACK functionality. Provides APIs for matrix factorizations, linear solvers, and eigenvalue problems.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -948,7 +940,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-rand",
     "Version": "",
@@ -962,8 +953,8 @@
       "amdrocm-runtime"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": " ROCm random number generation library",
-    "Description_Long": "Contains rocrand and hiprand libraries",
+    "Description_Short": "ROCm pseudo-random and quasi-random number generation libraries",
+    "Description_Long": "High-performance random number generation libraries for AMD GPUs. Includes rocRAND (native ROCm RNG library) and hipRAND (portable RNG API). Supports multiple algorithms (XORWOW, MRG32k3a, MTGP32, Philox, Sobol) for pseudo-random and quasi-random sequences. Ships with runtime libraries and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -995,7 +986,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-rand-test",
     "Version": "",
@@ -1009,8 +999,8 @@
       "amdrocm-rand-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm random number generation library test files",
-    "Description_Long": "Contains rocrand and hiprand developement header files and test files",
+    "Description_Short": "ROCm random number generation test suite and benchmarks",
+    "Description_Long": "Test suite for rocRAND and hipRAND libraries. Includes statistical validation tests, performance benchmarks, and correctness verification for random number generators. Provides test executables for validating distribution quality and generation performance across different RNG algorithms.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1051,8 +1041,8 @@
       "amdrocm-rand"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm random number generation library",
-    "Description_Long": "Contains rocrand and hiprand developement header files",
+    "Description_Short": "ROCm RNG development headers and build configuration files",
+    "Description_Long": "Development package for rocRAND and hipRAND libraries. Contains header files, CMake modules, and static libraries for integrating random number generation into GPU applications. Provides C and C++ APIs for configuring RNG algorithms and generating random sequences.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1092,8 +1082,8 @@
       "amdrocm-ccl-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm primitive library test files",
-    "Description_Long": "Contains rocprim, hipcub and rocthrust test files",
+    "Description_Short": "ROCm GPU compute primitives test suite and validation tools",
+    "Description_Long": "Test suite for rocPRIM, hipCUB, and rocThrust libraries. Includes unit tests, algorithm correctness validation, and performance benchmarks for parallel primitives such as scan, reduce, sort, and transform. Provides test executables for verifying GPU compute primitive functionality.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1140,8 +1130,8 @@
       "python3"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm primitive header files",
-    "Description_Long": "Contains rocprim, hipcub and rocthrust developement files",
+    "Description_Short": "ROCm parallel primitive development headers and templates",
+    "Description_Long": "Development package for rocPRIM, hipCUB, and rocThrust libraries. Contains header-only C++ template libraries providing GPU-accelerated parallel primitives. Includes algorithms for sorting, scanning, reduction, and transformation operations optimized for AMD GPU architectures.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1184,7 +1174,6 @@
         ]
       }
     ],
-
     "Gfxarch": "True"
   },
   {
@@ -1196,8 +1185,8 @@
       "libc6"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm profiler tools ",
-    "Description_Long": "Contains rocprofiler-sdk, aqlprofile, roctracer and rocprof-trace-decoder",
+    "Description_Short": "ROCm foundational profiling tools and tracing infrastructure",
+    "Description_Long": "Base profiling infrastructure for ROCm applications. Includes rocprofiler-sdk (profiling API framework), aqlprofile (low-level AQL packet profiling), roctracer (API tracing library), and rocprof-trace-decoder (trace analysis utilities). Provides runtime libraries, development headers, and documentation for building performance analysis tools.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1261,10 +1250,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-profiler",
     "Version": "",
@@ -1284,8 +1271,8 @@
       "amdrocm-profiler-base"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm profiler tools ",
-    "Description_Long": "Contains rocprofiler-compute and rocprofiler-systems",
+    "Description_Short": "ROCm application profiling and performance analysis tools",
+    "Description_Long": "Comprehensive profiling tools for ROCm GPU applications. Includes rocprofiler-compute (compute workload profiler) and rocprofiler-systems (system-level performance analysis). Provides kernel profiling, hardware counter collection, API tracing, and timeline analysis. Ships with profiler executables, libraries, and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1322,7 +1309,6 @@
         ]
       }
     ],
-
     "Gfxarch": "False",
     "Disable_DWZ": "True"
   },
@@ -1334,8 +1320,8 @@
     "DEBDepends": [],
     "RPMRequires": [],
     "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
-    "Description_Short": "Hipify CUDA source",
-    "Description_Long": "This tool translates CUDA source code into portable HIP C++ automatically",
+    "Description_Short": "Automated CUDA to HIP source code translation tool",
+    "Description_Long": "HIPIFY is a source-to-source translation tool that automatically converts CUDA C++ code to portable HIP C++. Supports CUDA Runtime API, CUDA Driver API, cuBLAS, cuFFT, cuRAND, cuSPARSE, and other CUDA libraries. Enables migration of CUDA applications to run on both AMD and NVIDIA GPUs through the HIP abstraction layer.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1356,7 +1342,6 @@
       }
     ],
     "Gfxarch": "False"
-
   },
   {
     "Package": "amdrocm-base",
@@ -1375,8 +1360,8 @@
       "amdrocm-runtime"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "The ROCm-base package contains essential ROCm utilities",
-    "Description_Long": "ROCm base contains components like rocm_smi, rocm-core, rocminfo and rocprofiler-register",
+    "Description_Short": "ROCm essential utilities and system management components",
+    "Description_Long": "Core ROCm platform utilities and system components. Includes rocm-smi (system management interface CLI), rocm-core (base runtime components), rocminfo (device capability query tool), and rocprofiler-register (profiler registration utilities). Provides essential tools for GPU discovery, monitoring, and platform initialization with runtime libraries, development files, and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1396,7 +1381,6 @@
               "doc"
             ]
           },
-
           {
             "Name": "rocm-core",
             "Components": [
@@ -1451,10 +1435,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-opencl",
     "Version": "",
@@ -1469,8 +1451,8 @@
       "amdrocm-sysdeps"
     ],
     "Maintainer": "ROCm OpenCL Support <rocm-opencl.support@amd.com>",
-    "Description_Short": "AMD ROCm opencl libraries",
-    "Description_Long": "AMD ROCm opencl libraries.",
+    "Description_Short": "AMD ROCm OpenCL runtime implementation for GPU compute",
+    "Description_Long": "OpenCL 2.2 runtime implementation for AMD GPUs on ROCm platform. Provides ICD (Installable Client Driver) for executing OpenCL kernels, managing GPU devices, and interoperating with other ROCm components. Includes runtime libraries and OpenCL platform layer for cross-platform GPU computing.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1518,8 +1500,8 @@
       "amdrocm-opencl"
     ],
     "Maintainer": "ROCm OpenCL Support <rocm-opencl.support@amd.com>",
-    "Description_Short": "AMD ROCm opencl development files.",
-    "Description_Long": "AMD ROCm opencl development files.",
+    "Description_Short": "AMD ROCm OpenCL development headers and build configuration",
+    "Description_Long": "Development package for ROCm OpenCL implementation. Contains OpenCL C/C++ header files, ICD loader configuration, and build tools for developing OpenCL applications targeting AMD GPUs. Provides OpenCL 2.2 API declarations and platform-specific extensions.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1550,8 +1532,8 @@
       "libc6"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm system dependencies ",
-    "Description_Long": "ROCm system dependencies ",
+    "Description_Short": "ROCm platform system dependencies and required packages",
+    "Description_Long": "System-level dependencies and prerequisite packages for ROCm platform. Aggregates required kernel drivers, compiler toolchains, system libraries, and runtime dependencies needed for ROCm functionality. Ensures proper environment configuration for GPU computing on AMD platforms.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1599,7 +1581,6 @@
           }
         ]
       },
-
       {
         "Artifact": "sysdeps-mpfr",
         "Artifact_Subdir": [
@@ -1614,7 +1595,6 @@
           }
         ]
       },
-
       {
         "Artifact": "sysdeps-gmp",
         "Artifact_Subdir": [
@@ -1629,7 +1609,6 @@
           }
         ]
       },
-
       {
         "Artifact": "sysdeps-expat",
         "Artifact_Subdir": [
@@ -1645,24 +1624,20 @@
         ]
       }
     ],
-
     "Gfxarch": "False",
     "Disable_DWZ": "True",
     "Disable_DEB_STRIP": "True"
   },
-
   {
     "Package": "amdrocm-hipblas-common-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
-    "DEBDepends": [
-    ],
-    "RPMRequires": [
-    ],
+    "DEBDepends": [],
+    "RPMRequires": [],
     "Maintainer": "hipBLAS Maintainer <hipblas-maintainer@amd.com>",
-    "Description_Short": "Common files for hipBLAS libraries",
-    "Description_Long": "hipBLAS-common is a header-only library that provides common files for hipBLAS and hipBLASLt",
+    "Description_Short": "Shared hipBLAS header files for BLAS library variants",
+    "Description_Long": "Header-only library providing common declarations and interfaces for hipBLAS and hipBLASLt. Contains shared C++ headers, type definitions, and API declarations used across hipBLAS library variants. Required for building applications using hipBLAS-family libraries.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1682,7 +1657,6 @@
         ]
       }
     ],
-
     "Gfxarch": "True"
   },
   {
@@ -1690,13 +1664,11 @@
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
-    "DEBDepends": [
-    ],
-    "RPMRequires": [
-    ],
+    "DEBDepends": [],
+    "RPMRequires": [],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "Common files for math library",
-    "Description_Long": "Contains host suite sparse libraries",
+    "Description_Short": "Shared math library components and sparse matrix utilities",
+    "Description_Long": "Common mathematical library components for ROCm ecosystem. Includes host-side sparse matrix utilities, shared data structures, and auxiliary functions used across ROCm math libraries. Provides runtime libraries, development headers, and documentation for mathematical computing infrastructure.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1743,10 +1715,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-ck",
     "Version": "",
@@ -1755,8 +1725,8 @@
     "DEBDepends": [],
     "RPMRequires": [],
     "Maintainer": "MIOpen Kernels Dev Team <dl.MIOpen@amd.com>",
-    "Description_Short": "High Performance Composable Kernel for AMD GPUs",
-    "Description_Long": "The Composable Kernel (CK) library provides a programming model for writing performance-critical kernels for machine learning workloads across multiple architectures.",
+    "Description_Short": "Composable Kernel library for high-performance ML primitives",
+    "Description_Long": "Composable Kernel (CK) provides a C++ template library and kernel generator for writing performance-critical machine learning kernels. Delivers optimized GEMM, convolution, normalization, and attention operations across multiple AMD GPU architectures. Includes runtime binaries, development headers, and documentation for ML framework integration.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1792,8 +1762,8 @@
       "amdrocm-composablekernel"
     ],
     "Maintainer": "MIOpen Kernels Dev Team <dl.MIOpen@amd.com>",
-    "Description_Short": "High Performance Composable Kernel for AMD GPUs",
-    "Description_Long": "Provides development files for CK library",
+    "Description_Short": "Composable Kernel development headers and build files",
+    "Description_Long": "Development package for Composable Kernel library. Contains C++ template headers, CMake configuration, and build utilities for creating custom high-performance GPU kernels. Provides composable kernel abstractions for building ML primitives optimized for AMD GPU architectures.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1808,7 +1778,6 @@
     "Gfxarch": "True",
     "DisablePackaging": "True"
   },
-
   {
     "Package": "amdrocm-rccl-test",
     "Version": "",
@@ -1826,8 +1795,8 @@
       "amdrocm-rccl-devel"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
-    "Description_Short": "ROCm Communication Collectives test files. Optimized primitives for collective multi-GPU communication",
-    "Description_Long": "ROCm Communication Collectives test files. Optimized primitives for collective multi-GPU communication",
+    "Description_Short": "RCCL collective communication test suite and benchmarks",
+    "Description_Long": "Test suite for ROCm Communication Collectives Library. Includes multi-GPU communication tests, collective operation validation, and performance benchmarks for AllReduce, AllGather, Broadcast, Reduce, and ReduceScatter. Provides test executables for verifying distributed GPU communication functionality.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1853,11 +1822,9 @@
         ]
       }
     ],
-
     "Gfxarch": "False",
     "DisablePackaging": "True"
   },
-
   {
     "Package": "amdrocm-rccl",
     "Version": "",
@@ -1875,8 +1842,8 @@
       "amdrocm-profiler-base"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
-    "Description_Short": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
-    "Description_Long": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
+    "Description_Short": "ROCm multi-GPU collective communication library for distributed computing",
+    "Description_Long": "RCCL (ROCm Communication Collectives Library) provides optimized primitives for multi-GPU and multi-node collective operations. Implements high-bandwidth communication patterns (AllReduce, AllGather, Broadcast, Reduce, ReduceScatter) for distributed deep learning and HPC workloads. Includes runtime libraries and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1898,10 +1865,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-rccl-devel",
     "Version": "",
@@ -1917,8 +1882,8 @@
       "amdrocm-rccl"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
-    "Description_Short": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
-    "Description_Long": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
+    "Description_Short": "RCCL development headers and build configuration files",
+    "Description_Long": "Development package for ROCm Communication Collectives Library. Contains header files, CMake modules, and static libraries for integrating multi-GPU collective operations into distributed applications. Provides C and C++ APIs for configuring communication patterns and topologies.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1938,10 +1903,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-rocshmem",
     "Version": "",
@@ -1955,8 +1918,8 @@
       "amdrocm-base"
     ],
     "Maintainer": "rocSHMEM Maintainer <rocshmem-maintainer@amd.com>",
-    "Description_Short": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
-    "Description_Long": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Description_Short": "ROCm OpenSHMEM library for GPU-centric intra-kernel networking",
+    "Description_Long": "rocSHMEM implements the OpenSHMEM specification for GPU-initiated communication. Enables symmetric memory access patterns and one-sided communication directly from GPU kernels without CPU intervention. Provides partitioned global address space (PGAS) programming model for distributed GPU computing with runtime libraries and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1977,10 +1940,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-rocshmem-devel",
     "Version": "",
@@ -1993,8 +1954,8 @@
       "amdrocm-rocshmem"
     ],
     "Maintainer": "rocSHMEM Maintainer <rocshmem-maintainer@amd.com>",
-    "Description_Short": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
-    "Description_Long": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Description_Short": "rocSHMEM development headers and build configuration",
+    "Description_Long": "Development package for rocSHMEM library. Contains header files and build configuration for developing applications using GPU-initiated OpenSHMEM communication. Provides device-side APIs for symmetric memory operations, atomics, and collective communications in distributed GPU environments.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2014,10 +1975,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-dnn",
     "Version": "",
@@ -2036,8 +1995,8 @@
       "amdrocm-sysdeps"
     ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
-    "Description_Short": "AMD DNN Library",
-    "Description_Long": "MIOpen is AMD's library for high-performance machine learning primitives",
+    "Description_Short": "MIOpen deep neural network primitives library for AMD GPUs",
+    "Description_Long": "MIOpen is AMD's library for high-performance deep learning primitives. Provides optimized implementations of convolutions, pooling, normalization, activation functions, RNN/LSTM layers, and other neural network operations. Includes multiple algorithm variants with auto-tuning capabilities for optimal performance across AMD GPU architectures.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2071,10 +2030,8 @@
         ]
       }
     ],
-
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-dnn-test",
     "Version": "",
@@ -2093,8 +2050,8 @@
       "amdrocm-sysdeps"
     ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
-    "Description_Short": "AMD DNN test files",
-    "Description_Long": "Provides test files for miopen library",
+    "Description_Short": "MIOpen deep learning library test suite and validation tools",
+    "Description_Long": "Comprehensive test suite for MIOpen library. Includes unit tests, numerical accuracy validation, and performance benchmarks for convolution algorithms, activation functions, pooling operations, and recurrent layers. Provides test executables for verifying deep learning primitive correctness.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2128,7 +2085,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-dnn-devel",
     "Version": "",
@@ -2141,8 +2097,8 @@
       "amdrocm-dnn"
     ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
-    "Description_Short": "AMD DNN Library",
-    "Description_Long": "Provides development files for miopen library",
+    "Description_Short": "MIOpen development headers and build files for DNN applications",
+    "Description_Long": "Development package for MIOpen deep neural network library. Contains C/C++ header files, CMake configuration, and static libraries for integrating GPU-accelerated deep learning primitives. Provides APIs for configuring convolution algorithms, managing tensor descriptors, and executing neural network operations.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2196,8 +2152,8 @@
       "amdrocm-sysdeps"
     ],
     "Maintainer": "RDC Support <rdc.support@amd.com>",
-    "Description_Short": "ROCm Data Center Tools",
-    "Description_Long": "RDC offers a suite of features to enhance GPU management and monitoring.",
+    "Description_Short": "ROCm Data Center management and GPU telemetry collection tools",
+    "Description_Long": "ROCm Data Center Tools (RDC) provides enterprise-grade GPU management, monitoring, and diagnostics. Features include health monitoring, telemetry collection, job statistics, policy enforcement, and administrative controls for data center GPU deployments. Ships with runtime services, development libraries, and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2221,7 +2177,6 @@
       }
     ],
     "Gfxarch": "False"
-
   },
   {
     "Package": "amdrocm-debugger",
@@ -2235,8 +2190,8 @@
       "amdrocm-sysdeps"
     ],
     "Maintainer": "ROCm Debugger Support <rocm-gdb.support@amd.com>",
-    "Description_Short": "ROCm debugger",
-    "Description_Long": "AMD ROCm source-level debugger for Linux,based on GDB, the GNU source-level debugger",
+    "Description_Short": "ROCm source-level GPU debugger based on GDB infrastructure",
+    "Description_Long": "ROCgdb is AMD's source-level debugger for GPU kernels on Linux. Built on GDB infrastructure with AMD GPU architecture support for kernel debugging, wavefront inspection, and memory examination. Provides breakpoints, single-stepping, variable inspection, and backtrace functionality for HIP and OpenCL kernels with runtime libraries and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2271,7 +2226,6 @@
           }
         ]
       },
-
       {
         "Artifact": "amd-dbgapi",
         "Artifact_Subdir": [
@@ -2285,7 +2239,6 @@
           }
         ]
       }
-
     ],
     "Gfxarch": "False"
   },
@@ -2301,8 +2254,8 @@
       "amdrocm-decode-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm video decode test files",
-    "Description_Long": "Test files for rocdecode",
+    "Description_Short": "rocDecode video decoding library test suite and samples",
+    "Description_Long": "Test suite and sample applications for rocDecode library. Includes unit tests, codec validation, and example programs demonstrating GPU-accelerated video decoding workflows. Provides test executables for verifying H.264, H.265, VP9, and AV1 decoding functionality using VA-API backend.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2339,8 +2292,8 @@
       "amdrocm-sysdeps"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm video decode library",
-    "Description_Long": "rocdecode provides high-performance video decoding on AMD GPUs using VA-API",
+    "Description_Short": "GPU-accelerated video decode library using VA-API backend",
+    "Description_Long": "rocDecode provides high-performance video decoding on AMD GPUs through VA-API integration. Supports H.264, H.265/HEVC, VP9, and AV1 codecs with hardware-accelerated decode pipelines. Enables efficient video processing workflows with GPU compute integration. Includes runtime libraries and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2376,8 +2329,8 @@
       "amdrocm-decode"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm video decode library development files",
-    "Description_Long": "rocdecode development header files",
+    "Description_Short": "rocDecode development headers and build configuration files",
+    "Description_Long": "Development package for rocDecode video decoding library. Contains C/C++ header files, CMake modules, and API declarations for integrating GPU-accelerated video decode into applications. Provides interfaces for decoder initialization, format configuration, and decoded frame access.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2411,8 +2364,8 @@
       "amdrocm-jpeg-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm JPEG decode library",
-    "Description_Long": "rocjpeg provides high-performance JPEG decoding on AMD GPUs using VA-API",
+    "Description_Short": "rocJPEG library test suite and validation executables",
+    "Description_Long": "Test suite for rocJPEG library. Includes unit tests, decoding correctness validation, and performance benchmarks for JPEG baseline and progressive formats. Provides test executables for verifying GPU-accelerated JPEG decode functionality using VA-API backend.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2449,8 +2402,8 @@
       "amdrocm-sysdeps"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm JPEG decode library",
-    "Description_Long": "rocjpeg provides high-performance JPEG decoding on AMD GPUs using VA-API",
+    "Description_Short": "GPU-accelerated JPEG decode library using VA-API backend",
+    "Description_Long": "rocJPEG provides high-performance JPEG image decoding on AMD GPUs through VA-API integration. Supports baseline and progressive JPEG formats with hardware-accelerated decode pipelines. Optimized for batch image processing and computer vision workflows. Includes runtime libraries and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2486,8 +2439,8 @@
       "amdrocm-jpeg"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm JPEG decode library development files",
-    "Description_Long": "rocjpeg development header files",
+    "Description_Short": "rocJPEG development headers and build configuration",
+    "Description_Long": "Development package for rocJPEG library. Contains C/C++ header files, CMake configuration, and API declarations for integrating GPU-accelerated JPEG decoding. Provides interfaces for decoder configuration, batch processing, and decoded image buffer management.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2509,7 +2462,6 @@
     ],
     "Gfxarch": "False"
   },
-
   {
     "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages.",
     "Package": "amdrocm-core",
@@ -2557,8 +2509,8 @@
       "amdrocm-jpeg"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm core metapackage",
-    "Description_Long": "ROCm core runtime and libraries",
+    "Description_Short": "ROCm core runtime metapackage with essential GPU libraries",
+    "Description_Long": "Metapackage aggregating core ROCm runtime components and libraries. Installs essential runtime dependencies for GPU computing including HIP runtime, base utilities, and fundamental libraries. Provides complete runtime environment for executing ROCm applications without development tools.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2581,8 +2533,8 @@
       "amdrocm-core"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm metapackage",
-    "Description_Long": "ROCm core runtime and libraries",
+    "Description_Short": "ROCm core runtime metapackage with essential GPU libraries",
+    "Description_Long": "Metapackage aggregating core ROCm runtime components and libraries. Installs essential runtime dependencies for GPU computing including HIP runtime, base utilities, and fundamental libraries. Provides complete runtime environment for executing ROCm applications without development tools.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2634,8 +2586,8 @@
       "amdrocm-jpeg-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm core development metapackage",
-    "Description_Long": "ROCm core development files",
+    "Description_Short": "ROCm core development metapackage with headers and build tools",
+    "Description_Long": "Metapackage aggregating core ROCm development components. Installs compiler toolchains, runtime development headers, CMake modules, and build utilities required for developing ROCm applications. Provides complete development environment for building GPU-accelerated software.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2664,8 +2616,8 @@
       "amdrocm-profiler"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm development tools metapackage",
-    "Description_Long": "ROCm development tools",
+    "Description_Short": "ROCm development tools metapackage with profiling and debugging",
+    "Description_Long": "Metapackage aggregating ROCm developer tools and utilities. Installs profilers (rocprofiler, rocprof), debugger (rocgdb), code translation tools (hipify), and performance analysis utilities. Provides complete toolchain for optimizing and debugging GPU applications.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2687,8 +2639,8 @@
       "amdrocm-llvm"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm Fortran",
-    "Description_Long": "ROCm Fortran",
+    "Description_Short": "ROCm Fortran compiler and runtime support metapackage",
+    "Description_Long": "Metapackage for ROCm Fortran programming support. Aggregates Fortran compiler infrastructure, runtime libraries, and language-specific utilities for GPU-accelerated Fortran applications. Enables Fortran HPC workloads on AMD GPUs through ROCm platform.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2713,8 +2665,8 @@
       "amdrocm-opencl"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm opencl",
-    "Description_Long": "ROCm opencl",
+    "Description_Short": "ROCm OpenCL platform metapackage with runtime and development",
+    "Description_Long": "Metapackage aggregating complete OpenCL environment for ROCm. Installs OpenCL runtime (ICD), development headers, and platform utilities. Provides full OpenCL 2.2 implementation for cross-platform GPU computing on AMD hardware.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2739,8 +2691,8 @@
       "amdrocm-runtime"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm openmp metapackage",
-    "Description_Long": "ROCm openmp",
+    "Description_Short": "ROCm OpenMP offload support metapackage for GPU parallelism",
+    "Description_Long": "Metapackage for OpenMP GPU offloading on ROCm platform. Aggregates compiler support for OpenMP target directives, runtime libraries for GPU execution, and offload infrastructure. Enables directive-based GPU parallelism for C, C++, and Fortran applications.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2769,8 +2721,8 @@
       "amdrocm-opencl"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD ROCm core sdk metapackage",
-    "Description_Long": "ROCm core, developer tools and opencl",
+    "Description_Short": "Complete ROCm SDK metapackage with development tools and OpenCL",
+    "Description_Long": "Comprehensive ROCm SDK metapackage aggregating development environment and tools. Combines core runtime/development packages, developer tools (profilers, debugger), and OpenCL support. Provides complete software development kit for building, optimizing, and debugging GPU-accelerated applications on ROCm platform.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2780,5 +2732,4 @@
     "Metapackage": "True",
     "Gfxarch": "True"
   }
-
 ]
