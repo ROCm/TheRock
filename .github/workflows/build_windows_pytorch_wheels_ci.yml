@@ -317,7 +317,7 @@ jobs:
             --wheel-type torch-fat \
             --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
             --compression zstd \
-            -j "$(nproc)"
+            -j 32
 
           rm -rf "${FAT_STAGE}"
           echo "Post-split contents of ${DIST_DIR}:"
