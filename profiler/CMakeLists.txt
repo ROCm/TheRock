@@ -105,6 +105,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprofiler-sdk-roctx
       rocprofiler-sdk-rocpd
       rocprofiler-sdk-tests
+      SQLite3
     COMPILER_TOOLCHAIN
       amd-hip
     RUNTIME_DEPS
