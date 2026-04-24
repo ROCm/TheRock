@@ -53,7 +53,7 @@ jobs:
     name: Build ${{ inputs.native_package_type }} packages
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     outputs:
-      package_repository_url: ${{ steps.s3_config.outputs.package_repository_url }}
+      package_repository_url: ${{ steps.upload-packages.outputs.package_repository_url }}
     env:
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
       DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -87,52 +87,24 @@ jobs:
           sudo apt install -y rpm debhelper-compat build-essential
           sudo apt install -y dpkg-dev createrepo-c
 
-      - name: Determine S3 bucket and prefix
-        id: s3_config
-        # Selects S3 bucket and public URL based on release type and repository:
-        # - CI builds: therock-ci-artifacts (ROCm/TheRock) or external bucket (forks)
-        # - dev/nightly: therock-{type}-packages with dated subfolder
-        # - prerelease/release: therock-{type}-packages with stable path
-        # See get_s3_config.py for full decision tree
-        run: |
-          python ./build_tools/packaging/linux/get_s3_config.py \
-            --release-type "${{ env.RELEASE_TYPE }}" \
-            --repository "${{ github.repository }}" \
-            --is-fork "${{ github.event.pull_request.head.repo.fork || 'false' }}" \
-            --pkg-type "${{ inputs.native_package_type }}" \
-            --artifact-id "${{ env.ARTIFACT_RUN_ID }}" \
-            --rocm-version "${{ inputs.rocm_version }}" \
-            --platform linux \
-            --output-format github >> $GITHUB_OUTPUT
-
       - name: Determine IAM role
         id: iam_role
         run: |
           # ================================================================
           # IAM Role Selection Logic
           # ================================================================
-          # Determines which AWS IAM role to assume based on job_type from s3_config step.
-          #
-          # Role Mapping:
-          #   ├─ IF job_type == "ci"
-          #   │  └─ Use: therock-ci role
-          #   │     (For all CI buckets: therock-ci-artifacts, therock-ci-artifacts-external, therock-artifacts-internal)
-          #   │
-          #   └─ ELSE (job_type == dev/nightly/prerelease/release)
-          #      └─ Use: therock-${job_type} role
-          #         (For package buckets: therock-dev-packages, therock-nightly-packages, etc.)
-          #
+          # CI builds (empty RELEASE_TYPE) use therock-ci role for the
+          # artifacts bucket. Release builds (dev/nightly/prerelease) use
+          # the matching therock-{type} role for the packages bucket.
           # ================================================================
 
-          JOB_TYPE="${{ steps.s3_config.outputs.job_type }}"
+          RELEASE_TYPE="${{ env.RELEASE_TYPE }}"
 
-          if [[ "${JOB_TYPE}" == "ci" ]]; then
-            # CI builds use the shared CI role (for all artifact buckets)
+          if [[ -z "${RELEASE_TYPE}" ]]; then
             IAM_ROLE="arn:aws:iam::692859939525:role/therock-ci"
             echo "✓ Using CI role: ${IAM_ROLE}"
           else
-            # Release builds use release-type-specific roles (for package buckets)
-            IAM_ROLE="arn:aws:iam::692859939525:role/therock-${JOB_TYPE}"
+            IAM_ROLE="arn:aws:iam::692859939525:role/therock-${RELEASE_TYPE}"
             echo "✓ Using release-type role: ${IAM_ROLE}"
           fi
 
@@ -150,30 +122,19 @@ jobs:
             --amdgpu-families="${{ env.DIST_AMDGPU_FAMILIES }}" \
             --output-dir="${{ env.OUTPUT_DIR }}"
 
-      - name: Detect KPACK split artifacts
-        id: kpack_detection
-        run: |
-          python ./build_tools/packaging/linux/detect_kpack.py \
-            --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
-            --output-format github >> $GITHUB_OUTPUT
-
       - name: Build Packages
         id: build-packages
         run: |
           # Pass the target families as-is (semicolon-separated)
           # build_package.py's normalize_target_list() handles all separators
-          KPACK_FLAG=""
-          if [[ "${{ steps.kpack_detection.outputs.enable_kpack }}" == "true" ]]; then
-            KPACK_FLAG="--enable-kpack"
-          fi
+          # KPACK_SPLIT_ARTIFACTS is auto-detected from therock_manifest.json
           python ./build_tools/packaging/linux/build_package.py \
             --dest-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --rocm-version  "${{ inputs.rocm_version }}" \
             --target "${{ env.DIST_AMDGPU_FAMILIES }}" \
             --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
             --pkg-type "${{ inputs.native_package_type }}" \
-            --version-suffix "${{ env.ARTIFACT_RUN_ID }}" \
-            $KPACK_FLAG
+            --version-suffix "${{ env.ARTIFACT_RUN_ID }}"
 
       - name: Configure AWS Credentials
         # Only assume OIDC role for authorized repositories (ROCm/TheRock, ROCm/rockrel).
@@ -189,7 +150,4 @@ jobs:
         run: |
           python ./build_tools/packaging/linux/upload_package_repo.py \
             --pkg-type "${{ inputs.native_package_type }}" \
-            --s3-bucket "${{ steps.s3_config.outputs.multi_arch_s3_bucket }}" \
-            --artifact-id "${{ env.ARTIFACT_RUN_ID }}" \
-            --job "${{ steps.s3_config.outputs.job_type }}" \
-            --s3-prefix "${{ steps.s3_config.outputs.multi_arch_s3_prefix }}"
+            --run-id "${{ env.ARTIFACT_RUN_ID }}"
