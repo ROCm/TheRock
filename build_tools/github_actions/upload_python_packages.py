@@ -101,8 +101,14 @@ def generate_index(dist_dir: Path, multiarch: bool = False, dry_run: bool = Fals
             log("[INFO] Multi-arch legacy mode: generating per-family indexes")
             generate_multiarch_indexes(dist_dir)
         else:
-            log("[INFO] kpack-split flat mode: generating single top-level index")
-            generate_flat_index(dist_dir)
+            # kpack-split flat mode: multiple jobs may append to the same
+            # prefix (ROCm wheels + pytorch wheels). therock-ci-artifacts
+            # generates index.html server-side, so a client-side flat index
+            # would just race with (and briefly shadow) the server view.
+            log(
+                "[INFO] kpack-split flat mode: skipping client-side index "
+                "generation (server-side indexing handles it)"
+            )
     else:
         # Single-arch mode: use existing indexer.py for top-level
         log("[INFO] Single-arch mode: using indexer.py")

@@ -20,7 +20,7 @@ on:
     inputs:
       linux_amdgpu_families:
         type: string
-        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X"
+        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X (empty = skip linux)"
         default: ""
       linux_test_labels:
         type: string
@@ -28,7 +28,7 @@ on:
         default: ""
       windows_amdgpu_families:
         type: string
-        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx120X"
+        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx120X (empty = skip windows)"
         default: ""
       windows_test_labels:
         type: string
@@ -64,6 +64,12 @@ jobs:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
+      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
+      windows_amdgpu_families: ${{ inputs.windows_amdgpu_families || '' }}
+      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
+      windows_test_labels: ${{ inputs.windows_test_labels || '' }}
+      prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
+      baseline_run_id: ${{ inputs.baseline_run_id || '' }}
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
