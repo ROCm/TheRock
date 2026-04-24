@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import os
 import struct
 from pathlib import Path
 from typing import Any, Sequence
@@ -25,6 +26,7 @@ from amd_gpu_driver.gpu.registers import (
     COMPUTE_PGM_RSRC1,
     COMPUTE_PGM_RSRC2,
     COMPUTE_PGM_RSRC3,
+    COMPUTE_PGM_RSRC3_GFX12,
     COMPUTE_RESOURCE_LIMITS,
     COMPUTE_RESTART_X,
     COMPUTE_START_X,
@@ -103,9 +105,11 @@ class Program:
         """
         # Build kernarg buffer (explicit args + implicit dispatch packet)
         kernarg_data = self._build_kernargs(args, grid, block)
+        is_macos_backend = self._backend.__class__.__module__.endswith(".macos.device")
+        kernarg_location = MemoryLocation.VRAM if is_macos_backend else MemoryLocation.GTT
         kernarg_mem = self._backend.alloc_memory(
             max(len(kernarg_data), 4096),
-            MemoryLocation.GTT,
+            kernarg_location,
             uncached=True,
         )
         # Write kernarg data
@@ -127,9 +131,10 @@ class Program:
             CP_COHER_CNTL_SH_KCACHE_ACTION,
             CP_COHER_CNTL_TCL1_ACTION,
         )
-        pm4.acquire_mem(
-            coher_cntl=CP_COHER_CNTL_SH_KCACHE_ACTION | CP_COHER_CNTL_TCL1_ACTION,
-        )
+        if not is_macos_backend or os.environ.get("AMD_GPU_MACOS_ENABLE_ACQUIRE_MEM") == "1":
+            pm4.acquire_mem(
+                coher_cntl=CP_COHER_CNTL_SH_KCACHE_ACTION | CP_COHER_CNTL_TCL1_ACTION,
+            )
 
         # 2. Program address (shifted right by 8 bits, LO and HI consecutive)
         pgm_addr = code_entry_addr >> 8
@@ -147,8 +152,13 @@ class Program:
         )
 
         # 4. RSRC3 (required for gfx942/CDNA3)
+        pgm_rsrc3_reg = (
+            COMPUTE_PGM_RSRC3_GFX12
+            if self._family.gfx_version[0] >= 12
+            else COMPUTE_PGM_RSRC3
+        )
         pm4.set_sh_reg(
-            sh_reg_offset(COMPUTE_PGM_RSRC3),
+            sh_reg_offset(pgm_rsrc3_reg),
             self._descriptor.compute_pgm_rsrc3,
         )
 
@@ -178,7 +188,12 @@ class Program:
         )
 
         # 10. Dispatch
-        pm4.dispatch_direct(grid[0], grid[1], grid[2])
+        dispatch_initiator = 0x5
+        if self._family.gfx_version[0] >= 7:
+            dispatch_initiator |= 1 << 6  # ORDER_MODE
+        if self._family.wave_size == 32:
+            dispatch_initiator |= 1 << 15  # CS_W32_EN
+        pm4.dispatch_direct(grid[0], grid[1], grid[2], initiator=dispatch_initiator)
 
         # 11. CS_PARTIAL_FLUSH after dispatch (ensures shader completion)
         pm4.event_write(CS_PARTIAL_FLUSH, EVENT_INDEX_CS_PARTIAL_FLUSH)

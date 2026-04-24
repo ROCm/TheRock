@@ -34,19 +34,21 @@ from amd_gpu_driver.backends.macos.events import MacOSEventManager
 from amd_gpu_driver.backends.macos.iokit_client import IOKitClient
 from amd_gpu_driver.backends.macos.memory import MacOSMemoryManager
 from amd_gpu_driver.backends.macos.queue import MacOSQueueManager
+from amd_gpu_driver.gpu import get_gpu_family
+from amd_gpu_driver.gpu.family import GPUFamilyConfig
 
 
 # Known AMD device IDs -> GFX target versions
 _DEVICE_TO_GFX: dict[int, int] = {
     # RDNA4
-    0x7551: 120100,  # RX 9070 XT -> gfx1201
-    0x7550: 120100,  # RX 9070 -> gfx1201
+    0x7551: 120001,  # RX 9070 XT -> gfx1201
+    0x7550: 120001,  # RX 9070 -> gfx1201
     # RDNA3
     0x744C: 110000,  # RX 7900 XTX -> gfx1100
     0x7448: 110000,  # RX 7900 XT -> gfx1100
-    0x7480: 110100,  # RX 7800 XT -> gfx1101
-    0x7483: 110100,  # RX 7700 XT -> gfx1101
-    0x7460: 110200,  # RX 7600 -> gfx1102
+    0x7480: 110001,  # RX 7800 XT -> gfx1101
+    0x7483: 110001,  # RX 7700 XT -> gfx1101
+    0x7460: 110002,  # RX 7600 -> gfx1102
 }
 
 
@@ -65,6 +67,7 @@ class MacOSDevice(DeviceBackend):
         self._memory: MacOSMemoryManager | None = None
         self._queues: MacOSQueueManager | None = None
         self._events: MacOSEventManager | None = None
+        self._family: GPUFamilyConfig | None = None
         self._device_index: int = 0
         self._opened = False
 
@@ -72,6 +75,7 @@ class MacOSDevice(DeviceBackend):
         """Open the AMD GPU via the ROCmGPU DEXT."""
         self._device_index = device_index
         self._client, self._discovered = open_device(device_index)
+        self._family = get_gpu_family(self._discovered.gfx_version)
 
         # Initialize subsystems
         self._memory = MacOSMemoryManager(
@@ -118,6 +122,7 @@ class MacOSDevice(DeviceBackend):
 
         self._memory = None
         self._queues = None
+        self._family = None
         self._opened = False
 
     @property
@@ -267,7 +272,7 @@ class MacOSDevice(DeviceBackend):
 
     @property
     def gfx_target_version(self) -> int:
-        """GFX target version integer (e.g., 120100 for gfx1201)."""
+        """GFX target version integer (e.g., 120001 for gfx1201)."""
         if self._discovered is None:
             return 0
         return self._discovered.gfx_version
@@ -285,6 +290,11 @@ class MacOSDevice(DeviceBackend):
         if self._discovered is not None:
             return self._discovered.device_name
         return "Unknown AMD GPU"
+
+    @property
+    def family(self) -> GPUFamilyConfig | None:
+        """GPU family configuration for program loading."""
+        return self._family
 
     def __repr__(self) -> str:
         if self._discovered:

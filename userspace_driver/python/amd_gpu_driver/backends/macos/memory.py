@@ -27,6 +27,11 @@ from dataclasses import dataclass, field
 from amd_gpu_driver.backends.base import MemoryHandle, MemoryLocation
 from amd_gpu_driver.backends.macos.iokit_client import DMAAllocation, IOKitClient
 
+_MMIO_BAR = 5
+_VRAM_BAR = 0
+_MMHUB_B0 = 0x1A000
+_REG_MMC_VM_FB_LOCATION_BASE = 0x0554
+
 
 @dataclass
 class MacOSMemoryAllocation:
@@ -52,14 +57,17 @@ class MacOSMemoryManager:
         # VRAM state (populated during bringup)
         self._vram_bar_addr: int = 0    # CPU virtual address of VRAM BAR
         self._vram_bar_size: int = 0    # Size of mapped VRAM region
+        self._vram_mc_base: int = 0      # GPU MC address for BAR offset 0
         self._vram_offset: int = 0      # Next free offset in VRAM BAR
 
-    def set_vram_bar(self, addr: int, size: int) -> None:
+    def set_vram_bar(self, addr: int, size: int, mc_base: int | None = None) -> None:
         """Set the VRAM BAR mapping (called during bringup)."""
         self._vram_bar_addr = addr
         self._vram_bar_size = size
-        # Reserve first 1MB for firmware/metadata
-        self._vram_offset = 1024 * 1024
+        self._vram_mc_base = self._read_framebuffer_base() if mc_base is None else mc_base
+        # Reserve the low scratch range used by the current bring-up probes
+        # and direct compute prototype.
+        self._vram_offset = 32 * 1024 * 1024
 
     def alloc(
         self,
@@ -117,6 +125,7 @@ class MacOSMemoryManager:
         Simple bump allocator for VRAM. Real implementation would
         need a proper allocator with free list.
         """
+        self._ensure_vram_bar()
         if self._vram_bar_addr == 0:
             raise RuntimeError(
                 "VRAM BAR not mapped — call set_vram_bar() during bringup"
@@ -136,7 +145,7 @@ class MacOSMemoryManager:
 
         handle = MemoryHandle(
             kfd_handle=handle_id,
-            gpu_addr=offset,  # BAR-relative, will be remapped via page tables
+            gpu_addr=self._vram_mc_base + offset,
             cpu_addr=cpu_addr,
             size=size,
             location=MemoryLocation.VRAM,
@@ -151,6 +160,22 @@ class MacOSMemoryManager:
         )
 
         return handle
+
+    def _ensure_vram_bar(self) -> None:
+        """Map BAR0 lazily for code/data allocations if bringup did not."""
+        if self._vram_bar_addr:
+            return
+        addr, size = self._client.map_bar(_VRAM_BAR)
+        self.set_vram_bar(addr, size)
+
+    def _read_framebuffer_base(self) -> int:
+        return (
+            self._client.mmio_read32(
+                _MMIO_BAR,
+                (_MMHUB_B0 + _REG_MMC_VM_FB_LOCATION_BASE) * 4,
+            )
+            & 0xFFFFFF
+        ) << 24
 
     def free(self, handle: MemoryHandle) -> None:
         """Free a previously allocated memory region."""

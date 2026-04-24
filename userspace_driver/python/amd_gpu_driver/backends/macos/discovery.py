@@ -18,14 +18,14 @@ from amd_gpu_driver.backends.macos.iokit_client import (
 # Known AMD device IDs and their properties
 _DEVICE_TABLE: dict[int, tuple[str, int]] = {
     # RDNA4 (gfx1201)
-    0x7551: ("AMD Radeon RX 9070 XT", 120100),
-    0x7550: ("AMD Radeon RX 9070", 120100),
+    0x7551: ("AMD Radeon RX 9070 XT", 120001),
+    0x7550: ("AMD Radeon RX 9070", 120001),
     # RDNA3 (gfx1100 / gfx1101 / gfx1102)
     0x744C: ("AMD Radeon RX 7900 XTX", 110000),
     0x7448: ("AMD Radeon RX 7900 XT", 110000),
-    0x7480: ("AMD Radeon RX 7800 XT", 110100),
-    0x7483: ("AMD Radeon RX 7700 XT", 110100),
-    0x7460: ("AMD Radeon RX 7600", 110200),
+    0x7480: ("AMD Radeon RX 7800 XT", 110001),
+    0x7483: ("AMD Radeon RX 7700 XT", 110001),
+    0x7460: ("AMD Radeon RX 7600", 110002),
 }
 
 
@@ -35,7 +35,7 @@ class DiscoveredDevice:
     index: int
     info: DeviceInfo
     device_name: str
-    gfx_version: int  # e.g., 120100 for gfx1201
+    gfx_version: int  # e.g., 120001 for gfx1201
 
 
 def discover_devices() -> list[DiscoveredDevice]:

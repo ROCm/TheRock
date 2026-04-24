@@ -9,6 +9,7 @@ PACKET3_NOP = 0x10
 PACKET3_WAIT_REG_MEM = 0x3C
 PACKET3_DISPATCH_DIRECT = 0x15
 PACKET3_EVENT_WRITE = 0x46
+PACKET3_WRITE_DATA = 0x37
 PACKET3_RELEASE_MEM = 0x49
 PACKET3_ACQUIRE_MEM = 0x58
 PACKET3_SET_SH_REG = 0x76
@@ -44,6 +45,12 @@ WAIT_REG_MEM_MEM_SPACE_MEM = 1
 
 # ACQUIRE_MEM engine
 ACQUIRE_MEM_ENGINE_ME = 0
+
+# WRITE_DATA dst_sel values
+WRITE_DATA_DST_SEL_MEM_MAPPED = 1
+WRITE_DATA_DST_SEL_MEM_ASYNC = 5
+WRITE_DATA_WR_CONFIRM = 1 << 20
+WRITE_DATA_ENGINE_SEL_ME = 0
 
 # Cache operations for ACQUIRE_MEM
 CP_COHER_CNTL_TC_ACTION = 1 << 23
@@ -219,6 +226,28 @@ class PM4PacketBuilder:
         """EVENT_WRITE: emit a GPU event (e.g. CS_PARTIAL_FLUSH)."""
         dw0 = (event_type & 0x3F) | ((event_index & 0xF) << 8)
         self._pkt3(PACKET3_EVENT_WRITE, dw0)
+        return self
+
+    def write_data(
+        self,
+        addr: int,
+        values: list[int] | tuple[int, ...],
+        *,
+        dst_sel: int = WRITE_DATA_DST_SEL_MEM_ASYNC,
+        wr_confirm: bool = True,
+        engine_sel: int = WRITE_DATA_ENGINE_SEL_ME,
+    ) -> PM4PacketBuilder:
+        """WRITE_DATA: write DWORD values to a GPU memory address."""
+        control = ((dst_sel & 0xF) << 8) | ((engine_sel & 0x3) << 30)
+        if wr_confirm:
+            control |= WRITE_DATA_WR_CONFIRM
+        self._pkt3(
+            PACKET3_WRITE_DATA,
+            control,
+            addr & 0xFFFFFFFF,
+            (addr >> 32) & 0xFFFFFFFF,
+            *(value & 0xFFFFFFFF for value in values),
+        )
         return self
 
     def build(self) -> bytes:

@@ -4,7 +4,9 @@ Uses a 16-byte GPU memory allocation:
   - bytes 0-7: signal value (uint64)
   - bytes 8-15: timestamp (uint64, reserved)
 
-The GPU writes to the signal value via RELEASE_MEM packets.
+The GPU writes to the signal value via RELEASE_MEM packets on KFD/Windows.
+The macOS direct-compute prototype uses WRITE_DATA into VRAM instead because
+RELEASE_MEM and DEXT-backed GTT bus addresses are not reliable there yet.
 The CPU waits by either spin-polling the memory or using KFD events.
 """
 
@@ -28,10 +30,12 @@ class TimelineSemaphore:
 
     def __init__(self, backend: DeviceBackend) -> None:
         self._backend = backend
-        # Allocate 16-byte signal memory (GTT for CPU+GPU access)
+        self._is_macos_backend = backend.__class__.__module__.endswith(".macos.device")
+        # Allocate 16-byte signal memory. macOS uses VRAM because the current
+        # DEXT DMA/GTT path does not provide reliable unique GPU addresses.
         self._signal_mem = backend.alloc_memory(
             4096,  # Minimum page size
-            MemoryLocation.GTT,
+            MemoryLocation.VRAM if self._is_macos_backend else MemoryLocation.GTT,
             uncached=True,
         )
         self._signal_addr = self._signal_mem.gpu_addr
@@ -72,7 +76,15 @@ class TimelineSemaphore:
         if value is None:
             value = self.next_value()
 
-        # Optionally create a KFD event for interrupt-based waiting
+        if self._is_macos_backend:
+            builder = PM4PacketBuilder()
+            builder.write_data(
+                self._signal_addr,
+                [value & 0xFFFFFFFF, (value >> 32) & 0xFFFFFFFF],
+            )
+            return builder.build()
+
+        # Optionally create a KFD event for interrupt-based waiting.
         event_id = 0
         if self._kfd_event is None:
             self._kfd_event = self._backend.create_signal()

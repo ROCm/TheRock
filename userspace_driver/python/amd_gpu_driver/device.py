@@ -51,6 +51,13 @@ class AMDDevice:
                 )
             from amd_gpu_driver.backends.windows import WindowsDevice
             self._backend = WindowsDevice()
+        elif backend == "macos":
+            if sys.platform != "darwin":
+                raise RuntimeError(
+                    "macOS backend is only available on macOS."
+                )
+            from amd_gpu_driver.backends.macos import MacOSDevice
+            self._backend = MacOSDevice()
         else:
             raise ValueError(f"Unknown backend: {backend!r}")
 
@@ -95,10 +102,7 @@ class AMDDevice:
         Returns:
             A Program object ready for dispatch.
         """
-        from amd_gpu_driver.backends.kfd import KFDDevice
-        if not isinstance(self._backend, KFDDevice):
-            raise RuntimeError("load_program requires KFD backend")
-        family = self._backend.family
+        family = getattr(self._backend, "family", None)
         if family is None:
             raise RuntimeError("GPU family not identified")
         return load_program(self._backend, path, family, kernel_name=kernel_name)
@@ -148,6 +152,9 @@ class AMDDevice:
         from amd_gpu_driver.backends.kfd import KFDDevice
         if isinstance(self._backend, KFDDevice) and self._backend.node:
             return self._backend.node.gfx_name
+        family = getattr(self._backend, "family", None)
+        if family is not None:
+            return family.name
         return "unknown"
 
     @property

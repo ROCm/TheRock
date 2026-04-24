@@ -189,14 +189,14 @@ class WindowsDevice(DeviceBackend):
         """GFX target version integer.
 
         Determined from PCI device ID. For RX 9070 XT (0x7551),
-        this is gfx1201 = 120100.
+        this is gfx1201 = 120001.
         """
         if self._device_info is None:
             return 0
         # Map known device IDs to GFX target versions
         device_to_gfx = {
-            0x7551: 120100,  # RX 9070 XT → gfx1201
-            0x7550: 120100,  # RX 9070 → gfx1201
+            0x7551: 120001,  # RX 9070 XT → gfx1201
+            0x7550: 120001,  # RX 9070 → gfx1201
         }
         return device_to_gfx.get(self._device_info.device_id, 0)
 
