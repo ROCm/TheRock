@@ -459,29 +459,71 @@ def gha_query_workflow_runs_for_commit(
     return runs
 
 
-def gha_query_last_successful_workflow_run(
+def gha_query_last_workflow_run(
     github_repository: str = "ROCm/TheRock",
     workflow_name: str = "ci.yml",
     branch: str = "main",
+    accepted_statuses: set[str] | None = None,
 ) -> dict | None:
-    """Find the last successful run of a specific workflow on the specified branch.
+    """Find the last completed run of a workflow whose conclusion is accepted.
+
+    Queries with ``status=completed`` so that in-progress runs (including the
+    caller's own run when invoked from a workflow) are excluded. Results are
+    then filtered client-side against ``accepted_statuses``.
 
     Args:
         github_repository: Repository in format "owner/repo"
         workflow_name: Name of the workflow file (e.g., "ci_nightly.yml")
         branch: Branch to filter by (defaults to "main")
+        accepted_statuses: Set of acceptable values for a run's
+            ``conclusion`` field (e.g. ``{"success"}`` or
+            ``{"success", "failure"}``). Defaults to ``{"success"}`` so the
+            default behavior matches "find last successful run".
 
     Returns:
-        The full workflow run object of the most recent successful run on the specified branch,
-        or None if no successful runs are found.
+        The full workflow run object of the most recent completed run on the
+        specified branch whose conclusion is in ``accepted_statuses``, or
+        ``None`` if no such run is found.
+
+    Raises:
+        ValueError: If ``accepted_statuses`` contains values outside the
+            GitHub REST API workflow run conclusion vocabulary.
     """
-    # Use GitHub API query parameters to pre-filter for successful runs on the specified branch
-    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?status=success&branch={branch}&per_page=100&sort=created&direction=desc"
+    # Valid values for a workflow run's "conclusion" field per the GitHub
+    # REST API. See:
+    # https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-workflow
+    valid_statuses = {
+        "success",
+        "failure",
+        "cancelled",
+        "skipped",
+        "timed_out",
+        "neutral",
+        "action_required",
+        "stale",
+    }
+
+    if accepted_statuses is None:
+        accepted_statuses = {"success"}
+
+    invalid = accepted_statuses - valid_statuses
+    if invalid:
+        raise ValueError(
+            f"Invalid status value(s): {sorted(invalid)}. "
+            f"Valid values are: {sorted(valid_statuses)}"
+        )
+
+    # Use status=completed to exclude in-progress/queued runs (including the
+    # caller's own run). Filter by conclusion client-side because the GitHub
+    # API's status filter cannot express a set of conclusions in one call.
+    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?status=completed&branch={branch}&per_page=100&sort=created&direction=desc"
     response = gha_send_request(url)
 
-    # Return the first (most recent) successful run
-    if response and response.get("workflow_runs"):
-        return response["workflow_runs"][0]
+    if not response:
+        return None
+    for run in response.get("workflow_runs", []):
+        if run.get("conclusion") in accepted_statuses:
+            return run
     return None
 
 

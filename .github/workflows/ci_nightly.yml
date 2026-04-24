@@ -138,8 +138,9 @@ jobs:
     name: Generate Manifest Diff Report
     uses: ./.github/workflows/manifest-diff.yml
     with:
-      end_commit: ${{ github.sha }}
-      find_last_successful: "ci_nightly.yml"
+      end_ref: ${{ github.sha }}
+      find_last_run: "ci_nightly.yml"
+      accepted_statuses: "success,failure"
     permissions:
       contents: read
       id-token: write

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       start_ref:
-        description: 'Start commit SHA or workflow run ID (required when using workflow mode or commit SHA mode without find-last-successful)'
+        description: 'Start commit SHA or workflow run ID (required when using workflow mode or commit SHA mode without find-last-run)'
         required: false
         type: string
       end_ref:
@@ -16,10 +16,20 @@ on:
         required: false
         type: boolean
         default: false
-      find_last_successful:
-        description: 'Workflow file to find last successful run (e.g., ci_nightly.yml)'
+      find_last_run:
+        description: 'Workflow file to find last completed run (e.g., ci_nightly.yml)'
         required: false
         type: string
+      accepted_statuses:
+        description: 'Comma-separated conclusions accepted for find_last_run (default: success; e.g. success,failure)'
+        required: false
+        type: string
+        default: 'success'
+      branch:
+        description: 'Branch to search when using find_last_run (default: main)'
+        required: false
+        type: string
+        default: 'main'
   workflow_call:
     inputs:
       start_ref:
@@ -32,9 +42,17 @@ on:
         required: false
         type: boolean
         default: false
-      find_last_successful:
+      find_last_run:
         required: false
         type: string
+      accepted_statuses:
+        required: false
+        type: string
+        default: 'success'
+      branch:
+        required: false
+        type: string
+        default: 'main'
 
 permissions:
   contents: read
@@ -59,7 +77,9 @@ jobs:
           python3 build_tools/generate_manifest_diff_report.py \
             --end "${{ inputs.end_ref }}" \
             --start "${{ inputs.start_ref || '' }}" \
-            --find-last-successful "${{ inputs.find_last_successful || '' }}" \
+            --find-last-run "${{ inputs.find_last_run || '' }}" \
+            --accepted-statuses "${{ inputs.accepted_statuses }}" \
+            --branch "${{ inputs.branch }}" \
             ${{ inputs.workflow_mode && '--workflow-mode' || '' }} \
             --output-dir reports
 

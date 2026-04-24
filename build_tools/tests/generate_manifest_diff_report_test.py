@@ -18,6 +18,7 @@ from generate_manifest_diff_report import (
     get_api_base_from_url,
     is_revert,
     ManifestDiff,
+    parse_accepted_statuses,
     parse_args,
     resolve_commits,
     Submodule,
@@ -230,19 +231,75 @@ class ResolveCommitsTest(unittest.TestCase):
         self.assertEqual(end_sha, "789xyz000111")
         self.assertEqual(mock_query.call_count, 2)
 
-    def test_find_last_successful_resolves_start(self):
-        """--find-last-successful finds last successful run for start commit."""
-        args = parse_args(["--end", "def456", "--find-last-successful", "ci.yml"])
+    def test_find_last_run_default_statuses_resolves_start(self):
+        """--find-last-run defaults to accepted_statuses={"success"} for start commit."""
+        args = parse_args(["--end", "def456", "--find-last-run", "ci.yml"])
 
         with mock.patch(
-            "generate_manifest_diff_report.gha_query_last_successful_workflow_run"
+            "generate_manifest_diff_report.gha_query_last_workflow_run"
         ) as mock_query:
-            mock_query.return_value = {"head_sha": "last_successful_sha"}
+            mock_query.return_value = {"head_sha": "last_run_sha"}
             start_sha, end_sha = resolve_commits(args)
 
-        self.assertEqual(start_sha, "last_successful_sha")
+        self.assertEqual(start_sha, "last_run_sha")
         self.assertEqual(end_sha, "def456")
         mock_query.assert_called_once()
+        # accepted_statuses defaults to {"success"} when --accepted-statuses not given.
+        _, kwargs = mock_query.call_args
+        self.assertEqual(kwargs["accepted_statuses"], {"success"})
+
+    def test_find_last_run_with_accepted_statuses_forwards_set(self):
+        """--accepted-statuses parses into the set passed to the helper."""
+        args = parse_args(
+            [
+                "--end",
+                "def456",
+                "--find-last-run",
+                "ci_nightly.yml",
+                "--accepted-statuses",
+                "success,failure",
+            ]
+        )
+
+        with mock.patch(
+            "generate_manifest_diff_report.gha_query_last_workflow_run"
+        ) as mock_query:
+            mock_query.return_value = {"head_sha": "last_run_sha"}
+            start_sha, _end_sha = resolve_commits(args)
+
+        self.assertEqual(start_sha, "last_run_sha")
+        _args, kwargs = mock_query.call_args
+        self.assertEqual(kwargs["accepted_statuses"], {"success", "failure"})
+
+    def test_find_last_run_no_matching_run_raises(self):
+        """resolve_commits raises a clear error when no matching run is found."""
+        args = parse_args(
+            [
+                "--end",
+                "def456",
+                "--find-last-run",
+                "ci_nightly.yml",
+                "--accepted-statuses",
+                "success,failure",
+            ]
+        )
+
+        with mock.patch(
+            "generate_manifest_diff_report.gha_query_last_workflow_run",
+            return_value=None,
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                resolve_commits(args)
+
+        self.assertIn("ci_nightly.yml", str(ctx.exception))
+        self.assertIn("success", str(ctx.exception))
+
+    def test_missing_start_and_find_last_run_raises(self):
+        """resolve_commits requires either --start or --find-last-run."""
+        args = parse_args(["--end", "def456"])
+        with self.assertRaises(ValueError) as ctx:
+            resolve_commits(args)
+        self.assertIn("--find-last-run", str(ctx.exception))
 
     def test_direct_commit_shas_no_api_calls(self):
         """Direct commit SHAs don't require API calls."""
@@ -263,6 +320,29 @@ class ResolveCommitsTest(unittest.TestCase):
         """--output-dir defaults to None when not specified."""
         args = parse_args(["--start", "abc", "--end", "def"])
         self.assertIsNone(args.output_dir)
+
+
+class ParseAcceptedStatusesTest(unittest.TestCase):
+    """Tests for parse_accepted_statuses() (pure CSV parsing, no validation)."""
+
+    def test_default_is_success(self):
+        """None/empty input falls back to {"success"}."""
+        self.assertEqual(parse_accepted_statuses(None), {"success"})
+        self.assertEqual(parse_accepted_statuses(""), {"success"})
+        self.assertEqual(parse_accepted_statuses("   "), {"success"})
+
+    def test_single_value(self):
+        self.assertEqual(parse_accepted_statuses("failure"), {"failure"})
+
+    def test_multiple_values_and_whitespace(self):
+        self.assertEqual(
+            parse_accepted_statuses("success, failure ,cancelled"),
+            {"success", "failure", "cancelled"},
+        )
+
+    def test_unknown_values_pass_through(self):
+        """The CSV parser does not validate; the helper does."""
+        self.assertEqual(parse_accepted_statuses("bogus"), {"bogus"})
 
 
 # =============================================================================

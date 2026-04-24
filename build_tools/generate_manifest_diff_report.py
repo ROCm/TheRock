@@ -4,14 +4,17 @@ Compares submodule versions and generates HTML reports showing commit changes
 for each component between builds.
 
 Arguments:
-  --start                  Start commit SHA or workflow run ID (required unless using --find-last-successful)
-  --end                    End commit SHA or workflow run ID (required)
-  --find-last-successful   Workflow file to find last successful run (e.g., 'ci_nightly.yml')
-  --workflow-mode          Treat --start and --end as workflow run IDs instead of commit SHAs
+  --start                Start commit SHA or workflow run ID (required unless using --find-last-run)
+  --end                  End commit SHA or workflow run ID (required)
+  --find-last-run        Workflow file to find last completed run (e.g., 'ci_nightly.yml')
+  --accepted-statuses    Comma-separated conclusions accepted for --find-last-run
+                         (default: 'success'; e.g. 'success,failure')
+  --workflow-mode        Treat --start and --end as workflow run IDs instead of commit SHAs
 
 Example usage:
   python build_tools/generate_manifest_diff_report.py --start abc123 --end def456
-  python build_tools/generate_manifest_diff_report.py --end def456 --find-last-successful ci_nightly.yml
+  python build_tools/generate_manifest_diff_report.py --end def456 --find-last-run ci_nightly.yml
+  python build_tools/generate_manifest_diff_report.py --end def456 --find-last-run ci_nightly.yml --accepted-statuses success,failure
   python build_tools/generate_manifest_diff_report.py --start 12345 --end 67890 --workflow-mode
 """
 
@@ -34,7 +37,7 @@ sys.path.insert(0, str(THIS_SCRIPT_DIR))
 from generate_therock_manifest import build_manifest_schema
 from github_actions.github_actions_api import (
     gha_append_step_summary,
-    gha_query_last_successful_workflow_run,
+    gha_query_last_workflow_run,
     gha_query_workflow_run_by_id,
     gha_send_request,
 )
@@ -181,8 +184,16 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--end", required=True, help="End workflow ID or commit SHA")
     parser.add_argument(
-        "--find-last-successful",
-        help="Workflow name to find last successful run (e.g., 'ci_nightly.yml')",
+        "--find-last-run",
+        help="Workflow name to find last completed run (e.g., 'ci_nightly.yml')",
+    )
+    parser.add_argument(
+        "--accepted-statuses",
+        default="success",
+        help=(
+            "Comma-separated conclusions accepted for --find-last-run "
+            "(default: 'success'; e.g. 'success,failure')"
+        ),
     )
     parser.add_argument(
         "--workflow-mode",
@@ -192,7 +203,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--branch",
         default="main",
-        help="Branch to search for last successful workflow run (default: main)",
+        help="Branch to search for last workflow run (default: main)",
     )
     parser.add_argument(
         "--output-dir",
@@ -214,16 +225,28 @@ def _optional_str(val: str | None) -> str | None:
     return s if s else None
 
 
+def parse_accepted_statuses(raw: str | None) -> set[str]:
+    """Parse a comma-separated list of workflow run conclusions into a set.
+
+    Empty/None falls back to ``{"success"}``. Values are not validated here;
+    ``gha_query_last_workflow_run`` is the source of truth for the accepted
+    vocabulary and will raise ``ValueError`` on unknown values.
+    """
+    text = _optional_str(raw)
+    if text is None:
+        return {"success"}
+    values = {v.strip() for v in text.split(",") if v.strip()}
+    return values or {"success"}
+
+
 def resolve_commits(args: argparse.Namespace) -> tuple[str, str]:
     """Resolve start and end commit SHAs from arguments."""
     start = _optional_str(args.start)
-    find_last = _optional_str(args.find_last_successful)
+    find_last = _optional_str(args.find_last_run)
     end = _optional_str(args.end)
 
     if start is None and find_last is None:
-        raise ValueError(
-            "--start is required unless --find-last-successful is provided"
-        )
+        raise ValueError("--start is required unless --find-last-run is provided")
     if end is None:
         raise ValueError("--end is required")
 
@@ -231,11 +254,18 @@ def resolve_commits(args: argparse.Namespace) -> tuple[str, str]:
 
     # Resolve start commit
     if find_last is not None:
-        last_run = gha_query_last_successful_workflow_run(
-            therock_repo_full, find_last, branch=args.branch
+        accepted_statuses = parse_accepted_statuses(args.accepted_statuses)
+        last_run = gha_query_last_workflow_run(
+            therock_repo_full,
+            find_last,
+            branch=args.branch,
+            accepted_statuses=accepted_statuses,
         )
         if not last_run:
-            raise ValueError(f"No previous successful run found for {find_last}")
+            raise ValueError(
+                f"No previous run found for {find_last} with conclusion in "
+                f"{sorted(accepted_statuses)}"
+            )
         start_sha = last_run["head_sha"]
     elif args.workflow_mode:
         workflow_info = gha_query_workflow_run_by_id(therock_repo_full, start)
