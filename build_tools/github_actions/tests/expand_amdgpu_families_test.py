@@ -26,9 +26,7 @@ _SAMPLE_MAP: dict[str, list[str]] = {
 
 class ExpandFamiliesTest(unittest.TestCase):
     def test_single_family_expands(self):
-        self.assertEqual(
-            expand_families(["gfx94X-dcgpu"], _SAMPLE_MAP), ["gfx942"]
-        )
+        self.assertEqual(expand_families(["gfx94X-dcgpu"], _SAMPLE_MAP), ["gfx942"])
 
     def test_multiple_families_preserve_order(self):
         self.assertEqual(

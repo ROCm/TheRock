@@ -73,6 +73,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 # Component types that artifacts are split into
 ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
 
+
 def log(msg: str):
     """Print message and flush."""
     print(msg, flush=True)
@@ -148,9 +149,7 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
             output_families.extend(input_families)
             if args.expand_family_to_targets:
                 family_map = amdgpu_family_map()
-                for target in expand_families(
-                    input_families, family_map, strict=False
-                ):
+                for target in expand_families(input_families, family_map, strict=False):
                     if target not in output_families:
                         output_families.append(target)
         if args.amdgpu_targets:
