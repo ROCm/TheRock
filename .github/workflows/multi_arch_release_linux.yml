@@ -20,7 +20,6 @@ on:
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
-        default: ""
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
