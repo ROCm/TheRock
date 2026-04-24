@@ -13,7 +13,6 @@ repo.amd.com's open source software release publications need standardization. I
 
 ## Definitions
 
-*
 * nightly - nightly builds from the develop branch
 * prerelease - builds from the release candidate branches
 * stable - GA releases of ROCm with a short term support lifecycle, tagged as ROCm releases.
