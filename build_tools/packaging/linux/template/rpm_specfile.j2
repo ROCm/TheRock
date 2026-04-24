@@ -2,14 +2,20 @@
 {% if disable_rpm_strip %}
 %global __strip   /bin/true
 {% else %}
-%global __strip   /usr/bin/llvm-strip
+%global __strip   /usr/bin/llvm-strip-20
 {% endif %}
-%global __objcopy /usr/bin/llvm-objcopy
+%global __objcopy /usr/bin/llvm-objcopy-20
 
-
+%global _buildshell /bin/bash
 %global _debugsource_template %{nil}
 %global debug_package %{nil}          # disables -debuginfo
+# Move build-id to debuginfo package
+%global _build_id_links alldebug
 %define __brp_mangle_shebangs %{nil}
+# Exclue libpython requirements. Used for amdrocm-debugger
+{%- if exclude_libpython_requires %}
+%define __requires_exclude libpython*.*
+{%- endif %}
 
 Name: {{ pkg_name }}
 Version: {{ version }}
@@ -49,7 +55,10 @@ Conflicts: {{ conflicts }}
 %install
 mkdir -p $RPM_BUILD_ROOT{{ install_prefix }}
 {% for path in sourcedir_list %}
-cp -R {{ path }}/* $RPM_BUILD_ROOT{{ install_prefix }}
+{
+   shopt -s dotglob
+   cp -R "{{ path }}"/* "$RPM_BUILD_ROOT{{ install_prefix }}/"
+}
 {% endfor %}
 
 %files

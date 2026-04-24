@@ -1,7 +1,11 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -9,6 +13,10 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 platform = os.getenv("RUNNER_OS").lower()
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+# Importing is_asan from github_actions_api.py
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_api import is_asan
 
 logging.basicConfig(level=logging.INFO)
 
@@ -20,7 +28,11 @@ environ_vars = os.environ.copy()
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
-# If smoke tests are enabled, we run smoke tests only.
+if is_asan():
+    environ_vars["HSA_XNACK"] = "1"
+    environ_vars["OMP_NUM_THREADS"] = "1"
+
+# If quick tests are enabled, we run quick tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 
@@ -29,7 +41,7 @@ if AMDGPU_FAMILIES == "gfx1151" and platform == "windows":
     test_type = "quick"
 
 test_filter = []
-if test_type == "smoke":
+if test_type == "quick":
     test_filter.append("--gtest_filter=*smoke*")
 elif test_type == "quick":
     test_filter.append("--gtest_filter=*quick*")

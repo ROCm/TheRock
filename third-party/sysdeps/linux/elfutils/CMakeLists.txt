@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
@@ -100,6 +103,7 @@ add_custom_target(
       --
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
+      --libdir "${CMAKE_INSTALL_PREFIX}/lib"
       --disable-debuginfod
       --enable-install-elfh
       --with-bzlib --with-zlib --with-zstd

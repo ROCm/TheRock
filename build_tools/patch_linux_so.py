@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Performs various surgical operations on linux shared libraries."""
 
 import argparse

@@ -113,8 +113,8 @@ In this prior state, it was easier to see which of the above directories contain
   - Artifacts:
     - `rccl`
   - Sub-projects:
-    - `rccl` (submodule)
-    - `rccl-tests` (submodule)
+    - `rccl` (link to `../rocm-systems/projects/rccl`)
+    - `rccl-tests` (link to `../rocm-systems/projects/rccl-tests`)
 - `math-libs/`:
   - Artifacts:
     - `fft`

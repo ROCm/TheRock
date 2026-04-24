@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Builds TheRock in a manylinux based container.
 
 Example usage:
@@ -69,6 +72,7 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
         "EXTRA_C_COMPILER_LAUNCHER",
         "EXTRA_CXX_COMPILER_LAUNCHER",
         "THEROCK_BUILD_PROF_LOG_DIR",
+        "MANYLINUX",
     ]
     for var in passthrough_env_vars:
         if var in os.environ:
@@ -141,7 +145,7 @@ def main(argv: list[str]):
     p.add_argument("--docker", default="docker", help="Docker or podman binary")
     p.add_argument(
         "--image",
-        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb",
+        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421",
         help="Build docker image",
     )
     p.add_argument(

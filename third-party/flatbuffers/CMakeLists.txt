@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-flatbuffers-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/google/flatbuffers/archive/refs/tags/v25.9.23.tar.gz

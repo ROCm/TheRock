@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-catch2-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/catchorg/Catch2/archive/refs/tags/v3.8.1.tar.gz

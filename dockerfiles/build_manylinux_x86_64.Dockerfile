@@ -29,6 +29,11 @@ WORKDIR /install-ccache
 COPY install_ccache.sh ./
 RUN ./install_ccache.sh "4.11.2" && rm -rf /install-ccache
 
+######## SCCache ########
+WORKDIR /install-sccache
+COPY install_sccache.sh ./
+RUN ./install_sccache.sh "0.14.0" && rm -rf /install-sccache
+
 ######## CMake ########
 WORKDIR /install-cmake
 ENV CMAKE_VERSION="3.27.9"
@@ -62,7 +67,6 @@ RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googlete
 #
 # Development tool dependencies:
 #   texinfo, flag: rocprofiler-systems
-#   texinfo-tex: rocgdb
 RUN yum install -y epel-release && \
     yum remove -y gcc-toolset* && \
     yum install -y \
@@ -72,27 +76,25 @@ RUN yum install -y epel-release && \
       gcc-toolset-13-gcc-gfortran \
       gcc-toolset-13-libatomic-devel \
       gcc-toolset-13-libstdc++-devel \
-      patchelf \
       vim-common \
       git-lfs \
     && yum install -y \
       texinfo \
-      texinfo-tex \
       flex \
     && yum clean all && \
     rm -rf /var/cache/yum
-
 
 ######## DVC via pip ######
 # dvc's rpm package includes .so dependencies built against glib 2.29
 # settling for pip install for now, but it installs modules not needed for dvc pull
 # more dvc features may be used in upcoming sequenced builds
-# Also pinning pathspec because a new version of it breaks the private _DIR_MARK
-# API that dvc uses. When upgrading past ~3.64.0, then pin can likely be removed.
+# Pin aiobotocore explicitly so rebuilds resolve a deterministic botocore
+# window. Without this, dvc's loose `aiobotocore` bound lets future pip
+# resolutions drift botocore out of the boto3 pin in requirements.txt.
 #
-# Note: dvc[s3] version locking currently limits boto3>=1.41.0,<1.42.0
-#       in requirements.txt
-RUN pip install 'pathspec<0.13.0' 'dvc[s3]==3.62.0' && \
+# Note: aiobotocore==3.4.0 requires botocore>=1.42.79,<1.42.85; keep the
+#       boto3 pin in requirements.txt aligned with that window.
+RUN pip install 'dvc[s3]==3.67.1' 'aiobotocore==3.4.0' && \
     which dvc && dvc --version || true
 
 ######## Enable GCC Toolset and verify ########
@@ -113,6 +115,13 @@ ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-13/root/usr/lib64:/opt/rh/gcc-toolset-1
 RUN which gcc && gcc --version && \
     which g++ && g++ --version && \
     which clang++ || true
+
+######## PatchELF ########
+# Note: requires newer gcc toolset so after gcc activation
+WORKDIR /install-patchelf
+ENV PATCHELF_GIT_REF="d0f70eea5397606c486857e0a105e53ec123904a"
+COPY install_patchelf.sh ./
+RUN ./install_patchelf.sh "${PATCHELF_GIT_REF}" && rm -rf /install-patchelf
 
 ######## Shared Python Interpreters ########
 # Build Python with --enable-shared for embedding (e.g., rocgdb).

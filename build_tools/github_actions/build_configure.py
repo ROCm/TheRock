@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 This script runs the Linux and Windows build configurations
 
@@ -24,6 +27,8 @@ import platform
 import shlex
 import subprocess
 
+from manylinux_config import DIST_PYTHON_EXECUTABLES, SHARED_PYTHON_EXECUTABLES
+
 logging.basicConfig(level=logging.INFO)
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
@@ -34,8 +39,6 @@ cmake_preset = os.getenv("cmake_preset")
 amdgpu_families = os.getenv("amdgpu_families")
 package_version = os.getenv("package_version")
 extra_cmake_options = os.getenv("extra_cmake_options")
-build_dir = os.getenv("BUILD_DIR")
-vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
 extra_c_compiler_launcher = os.getenv("EXTRA_C_COMPILER_LAUNCHER", "")
 extra_cxx_compiler_launcher = os.getenv("EXTRA_CXX_COMPILER_LAUNCHER", "")
@@ -77,15 +80,12 @@ def build_compiler_launcher(
 
 platform_options = {
     "windows": [
-        f"-DCMAKE_C_COMPILER={vctools_install_dir}/bin/Hostx64/x64/cl.exe",
-        f"-DCMAKE_CXX_COMPILER={vctools_install_dir}/bin/Hostx64/x64/cl.exe",
-        f"-DCMAKE_LINKER={vctools_install_dir}/bin/Hostx64/x64/link.exe",
         "-DTHEROCK_BACKGROUND_BUILD_JOBS=4",
     ],
 }
 
 
-def build_configure(manylinux=False):
+def build_configure(build_dir, manylinux=False):
     logging.info(f"Building package {package_version}")
 
     cmd = [
@@ -104,10 +104,17 @@ def build_configure(manylinux=False):
     cmd.extend(
         [
             f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}",
-            f"-DTHEROCK_PACKAGE_VERSION='{package_version}'",
+            f"-DTHEROCK_PACKAGE_VERSION={package_version}",
             f"-DCMAKE_C_COMPILER_LAUNCHER={c_launcher}",
             f"-DCMAKE_CXX_COMPILER_LAUNCHER={cxx_launcher}",
             "-DBUILD_TESTING=ON",
+            # Opt-out of KPACK_SPLIT_ARTIFACTS for non-multi-arch CI/CD.
+            # * Multi-arch CI/CD uses configure_stage.py instead of this script
+            # * Local developer builds will use the flag default value
+            # Related issues:
+            # * multi-arch kpack parent: https://github.com/ROCm/TheRock/issues/3323
+            # * multi-arch opt-in: https://github.com/ROCm/TheRock/issues/3338
+            "-DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF",
         ]
     )
 
@@ -116,23 +123,14 @@ def build_configure(manylinux=False):
 
     # Adding manylinux Python executables if --manylinux is set
     if manylinux:
-        python_executables = (
-            "/opt/python/cp38-cp38/bin/python;"
-            "/opt/python/cp39-cp39/bin/python;"
-            "/opt/python/cp310-cp310/bin/python;"
-            "/opt/python/cp311-cp311/bin/python;"
-            "/opt/python/cp312-cp312/bin/python;"
-            "/opt/python/cp313-cp313/bin/python"
-        )
-        cmd.append(f"-DTHEROCK_DIST_PYTHON_EXECUTABLES={python_executables}")
+        cmd.append(f"-DTHEROCK_DIST_PYTHON_EXECUTABLES={DIST_PYTHON_EXECUTABLES}")
         cmd.append("-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON")
+        cmd.append("-DTHEROCK_ENABLE_ROCDECODE=ON")
+        cmd.append("-DTHEROCK_ENABLE_ROCJPEG=ON")
 
-    if PLATFORM == "windows":
-        # VCToolsInstallDir is required for build. Throwing an error if environment variable doesn't exist
-        if not vctools_install_dir:
-            raise Exception(
-                "Environment variable VCToolsInstallDir is not set. Please see https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md#important-tool-settings about Windows tool configurations. Exiting."
-            )
+        # Python executables with shared libpython support. This is needed for
+        # ROCgdb.
+        cmd.append(f"-DTHEROCK_SHARED_PYTHON_EXECUTABLES={SHARED_PYTHON_EXECUTABLES}")
 
     # Splitting cmake options into an array (ex: "-flag X" -> ["-flag", "X"]) for subprocess.run
     cmake_options_arr = extra_cmake_options.split()
@@ -149,9 +147,15 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable manylinux build with multiple Python versions",
     )
+    parser.add_argument(
+        "--build-dir",
+        type=str,
+        default=os.getenv("BUILD_DIR", ""),
+        help="Directory to use for build files",
+    )
     args = parser.parse_args()
 
     # Support both command-line flag and environment variable
     manylinux = args.manylinux or os.getenv("MANYLINUX") in ["1", "true"]
 
-    build_configure(manylinux=manylinux)
+    build_configure(args.build_dir, manylinux=manylinux)

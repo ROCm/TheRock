@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
@@ -80,6 +83,7 @@ add_custom_target(
       --
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
+      --libdir "${CMAKE_INSTALL_PREFIX}/lib"
       --enable-host-shared
   COMMAND
     make -j "${PAR_JOBS}" V=1

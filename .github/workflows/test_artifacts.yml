@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Test Artifacts
 
 on:
@@ -10,8 +13,14 @@ on:
         default: ""
       amdgpu_families:
         type: string
+      amdgpu_targets:
+        type: string
+        default: ""
       test_runs_on:
         type: string
+      benchmark_runs_on:
+        type: string
+        default: ""
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -19,6 +28,13 @@ on:
         type: string
       test_labels:
         type: string
+      run_extended_tests:
+        type: string
+        default: 'false'
+      release_type:
+        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_group:
@@ -28,8 +44,14 @@ on:
         default: ""
       amdgpu_families:
         type: string
+      amdgpu_targets:
+        type: string
+        default: ""
       test_runs_on:
         type: string
+      benchmark_runs_on:
+        type: string
+        default: ""
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -37,6 +59,12 @@ on:
         type: string
       test_labels:
         type: string
+      run_extended_tests:
+        type: string
+        default: 'false'
+      release_type:
+        type: string
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -51,6 +79,7 @@ jobs:
     if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
     outputs:
+      sanity_component: ${{ steps.configure.outputs.sanity_component }}
       components: ${{ steps.configure.outputs.components }}
       platform: ${{ steps.configure.outputs.platform }}
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
@@ -84,40 +113,61 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
+          RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
   test_sanity_check:
     name: 'Test Sanity Check'
     needs: configure_test_matrix
-    uses: './.github/workflows/test_sanity_check.yml'
-    with:
-      artifact_group: ${{ inputs.artifact_group }}
-      artifact_run_id: ${{ inputs.artifact_run_id }}
-      amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.test_runs_on }}
-      platform: ${{ needs.configure_test_matrix.outputs.platform }}
-
-  test_components:
-    name: 'Test ${{ matrix.components.job_name }}'
-    needs: [test_sanity_check, configure_test_matrix]
-    # skip tests if no test matrix to run and sanity check only requested
-    if: ${{ needs.configure_test_matrix.outputs.components != '[]' && !inputs.sanity_check_only_for_family }}
-    strategy:
-      fail-fast: false
-      matrix:
-        components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
     uses: './.github/workflows/test_component.yml'
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
-      # If the test requires a multi GPU, use the multi GPU test runner
-      # Otherwise, use the standard test runner
+      amdgpu_targets: ${{ inputs.amdgpu_targets }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      platform: ${{ needs.configure_test_matrix.outputs.platform }}
+      component: ${{ needs.configure_test_matrix.outputs.sanity_component }}
+      release_type: ${{ inputs.release_type }}
+
+  test_components:
+    name: 'Test ${{ matrix.components.job_name }}'
+    needs: [test_sanity_check, configure_test_matrix]
+    # Run when:
+    #   - sanity check passed
+    #   - there are components to test
+    #   - sanity_check_only_for_family is not set
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        needs.configure_test_matrix.outputs.components != '[]' &&
+        !inputs.sanity_check_only_for_family
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
+    uses: './.github/workflows/test_component.yml'
+    secrets: inherit
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      artifact_group: ${{ inputs.artifact_group }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      amdgpu_targets: ${{ inputs.amdgpu_targets }}
+      # Route to the appropriate runner:
+      #   1. Benchmark components use the dedicated benchmark runner
+      #   2. Multi-GPU components use the multi-GPU runner
+      #   3. Everything else uses the standard test runner
       test_runs_on: >-
         ${{
-          matrix.components.multi_gpu_runner != '' &&
-            matrix.components.multi_gpu_runner ||
-            inputs.test_runs_on
+          (matrix.components.is_benchmark == true &&
+            inputs.benchmark_runs_on != '' &&
+            inputs.benchmark_runs_on) ||
+          (matrix.components.multi_gpu_runner != '' &&
+            matrix.components.multi_gpu_runner) ||
+          inputs.test_runs_on
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ toJSON(matrix.components) }}
+      release_type: ${{ inputs.release_type }}

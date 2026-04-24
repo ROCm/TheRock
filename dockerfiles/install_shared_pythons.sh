@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Installs Python interpreters with shared library support.
 # These are required for embedding Python (e.g., in rocgdb).
 #

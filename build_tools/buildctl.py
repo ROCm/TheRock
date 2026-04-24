@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """CLI tool for managing the 'prebuilt' state of project components.
 
 In TheRock terminology, 'prebuilt' refers to a project component that has had

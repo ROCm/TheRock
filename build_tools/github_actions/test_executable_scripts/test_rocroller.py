@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
@@ -67,9 +70,9 @@ if platform == "linux":
 # TEST_TYPE → gtest filter
 TEST_TYPE = os.getenv("TEST_TYPE", "full").lower()
 test_filter_arg = None
-if TEST_TYPE == "smoke":
+if TEST_TYPE == "quick":
     # keep this subset (TODO: add more tests)
-    smoke_tests = [
+    quick_tests = [
         "ErrorFixtureDeathTest.*",
         "ArgumentLoaderTest.*",
         "AssemblerTest.*",
@@ -77,7 +80,7 @@ if TEST_TYPE == "smoke":
         "CommandTest.*",
         "ComponentTest.*",
     ]
-    test_filter_arg = "--gtest_filter=" + ":".join(smoke_tests)
+    test_filter_arg = "--gtest_filter=" + ":".join(quick_tests)
 elif TEST_TYPE == "quick":
     test_filter_arg = "--gtest_filter=*quick*"
 

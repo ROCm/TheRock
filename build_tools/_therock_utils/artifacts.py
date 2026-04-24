@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Manipulates artifact directories.
 
 See `artifact_builder` for tools to construct artifacts from descriptors.

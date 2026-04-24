@@ -1,5 +1,9 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
+Also provides the select_weighted_label utility for weighted runner selection.
 
 * Each entry determines which families and test runners are available to use
 * Each group determines which entries run by default on workflow triggers
@@ -13,10 +17,33 @@ For presubmit, postsubmit and nightly family selection:
 TODO(#2200): clarify AMD GPU family selection
 """
 
-from github_actions_utils import str2bool
+#############################################################################################
+# NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
+#############################################################################################
 
-import json
-import os
+import random
+
+
+def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
+    """Select a runner label based on weighted random selection."""
+    rand_val = random.random()
+    cumulative = 0.0
+    for config in labels_config:
+        cumulative += config["weight"]
+        if rand_val < cumulative:
+            print(
+                f"  {context_name}: selected runner (weight={config['weight']}): "
+                f"{config['label']}"
+            )
+            return config["label"]
+    # Fallback to last label if rounding errors
+    selected = labels_config[-1]
+    print(
+        f"  {context_name}: selected runner (weight={selected['weight']}): "
+        f"{selected['label']}"
+    )
+    return selected["label"]
+
 
 all_build_variants = {
     "linux": {
@@ -32,13 +59,11 @@ all_build_variants = {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
-            "expect_failure": True,
         },
         "tsan": {
             "build_variant_label": "tsan",
             "build_variant_suffix": "tsan",
             "build_variant_cmake_preset": "linux-release-tsan",
-            "expect_failure": True,
         },
     },
     "windows": {
@@ -50,34 +75,85 @@ all_build_variants = {
     },
 }
 
+"""
+amdgpu_family_info_matrix dictionary fields:
+- test-runs-on: (required) GitHub runner label for this architecture
+- test-runs-on-labels: (optional) List of runner label configs for load balancing across pools.
+    Each entry is a dict with "label" and "weight" (probability 0.0-1.0). Weights must sum to 1.0.
+    When present, overrides test-runs-on for runner selection.
+- test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture
+- test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
+    Same format as test-runs-on-labels.
+- benchmark-runs-on: (optional) GitHub runner label for benchmarks for this architecture
+- test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
+- family: (required) AMD GPU family name, used for test selection and artifact fetching
+- fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
+- build_variants: (optional) list of build variants to test for this architecture (e.g. ["release", "asan"])
+- bypass_tests_for_releases: (optional) if enabled, bypass tests for release builds (e.g. by skipping test steps in the workflow, or by not running tests on release builds in test scripts)
+- sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
+- run-full-tests-only: (optional) if enabled, only run full tests for this architecture
+- nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
+"""
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
-            "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
+            # TODO: Remove multi-label config once we get dedicated set of machines
+            # As we are bringing up mi325, we are using a multi-label configuration to distribute load
+            # 1-GPU distribution: 17N (vultr) + 4N (cirrascale) + 8N (core42)
+            "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
+            "test-runs-on-labels": [
+                {
+                    "label": "linux-gfx942-1gpu-ossci-rocm",
+                    "weight": 0.59,
+                },  # vultr (17/29)
+                {
+                    "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
+                    "weight": 0.14,
+                },  # cirrascale (4/29)
+                {
+                    "label": "linux-gfx942-1gpu-core42-ossci-rocm",
+                    "weight": 0.27,
+                },  # core42 (8/29)
+            ],
+            # TODO(#3433): Remove sandbox label once ASAN tests are passing
+            "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
+            # 8-GPU distribution: 11N (cirrascale) + 7N (core42)
+            "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
+            "test-runs-on-multi-gpu-labels": [
+                {
+                    "label": "linux-gfx942-8gpu-ossci-rocm",
+                    "weight": 0.61,
+                },  # cirrascale (11/18)
+                {
+                    "label": "linux-gfx942-8gpu-core42-ossci-rocm",
+                    "weight": 0.39,
+                },  # core42 (7/18)
+            ],
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
+            "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
+            # Individual GPU target(s) on the test runner, for fetching split artifacts.
+            # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
+            "fetch-gfx-targets": ["gfx942"],
             "build_variants": ["release", "asan", "tsan"],
         }
     },
     "gfx110x": {
         "linux": {
-            # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
-            # Label is "linux-gfx110X-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
+            "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
+            "fetch-gfx-targets": ["gfx1100", "gfx1101"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
     },
     "gfx1151": {
@@ -87,33 +163,38 @@ amdgpu_family_info_matrix_presubmit = {
                 "oem": "linux-strix-halo-gpu-rocm-oem",
             },
             "family": "gfx1151",
+            "fetch-gfx-targets": ["gfx1151"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
+            "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
+            # TODO(#3299): Re-enable quick tests once capacity is available for Windows gfx1151
+            "nightly_check_only_for_family": True,
         },
     },
     "gfx120x": {
         "linux": {
             "test-runs-on": "linux-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
+            "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
         "windows": {
-            # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-            # Label is windows-gfx120X-gpu-rocm
-            "test-runs-on": "",
+            "test-runs-on": "windows-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
+            "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
         },
     },
 }
@@ -124,6 +205,7 @@ amdgpu_family_info_matrix_postsubmit = {
         "linux": {
             "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
             "family": "gfx950-dcgpu",
+            "fetch-gfx-targets": ["gfx950"],
             "build_variants": ["release", "asan", "tsan"],
         }
     },
@@ -131,68 +213,114 @@ amdgpu_family_info_matrix_postsubmit = {
 
 # The 'nightly' matrix runs on 'schedule' triggers.
 amdgpu_family_info_matrix_nightly = {
-    "gfx90x": {
+    "gfx900": {
         "linux": {
-            "test-runs-on": "linux-gfx90X-gpu-rocm",
-            "family": "gfx90X-dcgpu",
+            # Disabled due to hardware availability
+            "test-runs-on": "",
+            "family": "gfx900",
+            "fetch-gfx-targets": [],
+            "sanity_check_only_for_family": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx900",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
+    # gfx906/908/90a split into separate families - each has different instruction
+    # support (e.g., fp8 variants, WMMA) so CK/MIOpen need to build/test individually.
+    "gfx906": {
+        "linux": {
+            # Disabled due to hardware availability
+            "test-runs-on": "",
+            "family": "gfx906",
+            "fetch-gfx-targets": [],
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
         },
         # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`, to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
-            "family": "gfx90X-dcgpu",
+            "family": "gfx906",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
+        },
+    },
+    "gfx908": {
+        "linux": {
+            # Disabled due to hardware availability
+            "test-runs-on": "",
+            "family": "gfx908",
+            "fetch-gfx-targets": [],
+            "sanity_check_only_for_family": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx908",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
+    "gfx90a": {
+        "linux": {
+            "test-runs-on": "linux-gfx90a-gpu-rocm",
+            "family": "gfx90a",
+            "fetch-gfx-targets": ["gfx90a"],
+            "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx90a",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
         },
     },
     "gfx101x": {
-        # TODO(#1926): Resolve bgemm kernel hip file generation error, to enable PyTorch builds
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
-            "expect_failure": True,
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
-        # TODO(#1925): Enable arch for aotriton to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     "gfx103x": {
         "linux": {
-            # TODO(#2740): Re-enable machine once it is stable
-            # Label is "linux-gfx1030-gpu-rocm"
-            "test-runs-on": "",
-            "family": "gfx103X-dgpu",
+            "test-runs-on": "linux-gfx1030-gpu-rocm",
+            "family": "gfx103X-all",
+            "fetch-gfx-targets": ["gfx1030"],
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
         "windows": {
-            # TODO(#3200): Re-enable machine once it is stable
-            # Label is "windows-gfx1030-gpu-rocm"
-            "test-runs-on": "",
-            "family": "gfx103X-dgpu",
+            "test-runs-on": "windows-gfx1030-gpu-rocm",
+            "family": "gfx103X-all",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
     },
     "gfx1150": {
         "linux": {
-            # TODO(#3199): Re-enable machine once it is stable
-            # Label is "linux-gfx1150-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1150-gpu-rocm",
             "family": "gfx1150",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1150",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
     },
@@ -200,66 +328,32 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx1152",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1152",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
     },
     "gfx1153": {
         "linux": {
-            # TODO(#2682): Re-enable machine once it is stable
-            # Label is "linux-gfx1153-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1153-gpu-rocm",
             "family": "gfx1153",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1153",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
     },
 }
-
-
-def load_test_runner_from_gh_variables():
-    """
-    As test runner names are frequently updated, we are pulling the runner label data from the ROCm organization variable called "ROCM_THEROCK_TEST_RUNNERS"
-
-    For more info, go to 'docs/development/test_runner_info.md'
-    """
-    test_runner_json_str = os.getenv("ROCM_THEROCK_TEST_RUNNERS", "{}")
-    test_runner_dict = json.loads(test_runner_json_str)
-    for key in test_runner_dict.keys():
-        for platform in test_runner_dict[key].keys():
-            # Checking in presubmit dictionary
-            if (
-                key in amdgpu_family_info_matrix_presubmit
-                and platform in amdgpu_family_info_matrix_presubmit[key]
-            ):
-                amdgpu_family_info_matrix_presubmit[key][platform]["test-runs-on"] = (
-                    test_runner_dict[key][platform]
-                )
-            # Checking in postsubmit dictionary
-            if (
-                key in amdgpu_family_info_matrix_postsubmit
-                and platform in amdgpu_family_info_matrix_postsubmit[key]
-            ):
-                amdgpu_family_info_matrix_postsubmit[key][platform]["test-runs-on"] = (
-                    test_runner_dict[key][platform]
-                )
-            # Checking in nightly dictionary
-            if (
-                key in amdgpu_family_info_matrix_nightly
-                and platform in amdgpu_family_info_matrix_nightly[key]
-            ):
-                amdgpu_family_info_matrix_nightly[key][platform]["test-runs-on"] = (
-                    test_runner_dict[key][platform]
-                )
 
 
 def get_all_families_for_trigger_types(trigger_types):
@@ -267,12 +361,6 @@ def get_all_families_for_trigger_types(trigger_types):
     Returns a combined family matrix for the specified trigger types.
     trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
     """
-    # Load in test runners from ROCm organization variable "ROCM_THEROCK_TEST_RUNNERS"
-    load_test_runners_from_var = str2bool(
-        os.getenv("LOAD_TEST_RUNNERS_FROM_VAR", "true")
-    )
-    if load_test_runners_from_var:
-        load_test_runner_from_gh_variables()
     result = {}
     matrix_map = {
         "presubmit": amdgpu_family_info_matrix_presubmit,

@@ -10,67 +10,23 @@ from urllib.error import HTTPError
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from generate_manifest_diff_report import (
-    compare_manifests,
+    create_table,
     determine_status,
     fetch_commits_in_range,
     format_commit_date,
+    generate_non_superrepo_html,
     get_api_base_from_url,
     is_revert,
+    ManifestDiff,
     parse_args,
-    parse_gitmodules,
     resolve_commits,
+    Submodule,
 )
-from github_actions.github_actions_utils import is_authenticated_github_api_available
-
-
-def _skip_unless_authenticated_github_api_is_available(test_func):
-    """Decorator to skip tests unless GitHub API is available."""
-    return unittest.skipUnless(
-        is_authenticated_github_api_available(),
-        "No authenticated GitHub API auth available (need GITHUB_TOKEN or authenticated gh CLI)",
-    )(test_func)
 
 
 # =============================================================================
 # Pure Function Unit Tests
 # =============================================================================
-
-
-class ParseGitmodulesTest(unittest.TestCase):
-    """Tests for parse_gitmodules function."""
-
-    def test_parse_single_submodule(self):
-        """Parse a single submodule entry."""
-        content = """[submodule "llvm-project"]
-    path = llvm-project
-    url = https://github.com/ROCm/llvm-project.git
-"""
-        result = parse_gitmodules(content)
-
-        self.assertEqual(len(result), 1)
-        self.assertIn("llvm-project", result)
-        self.assertEqual(result["llvm-project"]["name"], "llvm-project")
-        self.assertEqual(
-            result["llvm-project"]["url"], "https://github.com/ROCm/llvm-project.git"
-        )
-        self.assertEqual(result["llvm-project"]["branch"], "main")  # Default
-
-    def test_parse_multiple_submodules_with_branch(self):
-        """Parse multiple submodules including one with explicit branch."""
-        content = """[submodule "llvm-project"]
-    path = llvm-project
-    url = https://github.com/ROCm/llvm-project.git
-
-[submodule "rocm-libraries"]
-    path = rocm-libraries
-    url = https://github.com/ROCm/rocm-libraries.git
-    branch = develop
-"""
-        result = parse_gitmodules(content)
-
-        self.assertEqual(len(result), 2)
-        self.assertEqual(result["llvm-project"]["branch"], "main")
-        self.assertEqual(result["rocm-libraries"]["branch"], "develop")
 
 
 class GetApiBaseFromUrlTest(unittest.TestCase):
@@ -250,60 +206,6 @@ class FetchCommitsInRangeTest(unittest.TestCase):
 
 
 # =============================================================================
-# Integration Tests (Real API Calls)
-# =============================================================================
-
-
-class ManifestDiffIntegrationTest(unittest.TestCase):
-    """Integration tests using real API calls with documented test cases."""
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_superrepo_changed(self):
-        """Test Case 1: rocm-libraries changed with component commits."""
-        diff = compare_manifests("e3fb7163", "5ff856ba")
-
-        self.assertIn("rocm-libraries", diff.superrepos)
-        superrepo = diff.superrepos["rocm-libraries"]
-        self.assertEqual(superrepo.status, "changed")
-        self.assertTrue(len(superrepo.all_commits) > 0)
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_superrepo_unchanged(self):
-        """Test Case 4: All superrepos unchanged."""
-        diff = compare_manifests("c7bc0b40", "cf13cfdc")
-
-        for name, superrepo in diff.superrepos.items():
-            self.assertEqual(
-                superrepo.status, "unchanged", f"{name} should be unchanged"
-            )
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_submodule_changed(self):
-        """Test Case 5: libhipcxx submodule changed."""
-        diff = compare_manifests("3a6cbc2a", "02946b22")
-
-        self.assertIn("libhipcxx", diff.submodules)
-        self.assertEqual(diff.submodules["libhipcxx"].status, "changed")
-        self.assertTrue(len(diff.submodules["libhipcxx"].commits) > 0)
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_submodule_reverted(self):
-        """Test Case 7: libhipcxx submodule reverted (swapped commits from Case 5)."""
-        diff = compare_manifests("02946b22", "3a6cbc2a")
-
-        self.assertIn("libhipcxx", diff.submodules)
-        self.assertEqual(diff.submodules["libhipcxx"].status, "reverted")
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_submodule_added(self):
-        """Test Case 10: libhipcxx submodule added."""
-        diff = compare_manifests("f5552032", "bcc9df4b")
-
-        self.assertIn("libhipcxx", diff.submodules)
-        self.assertEqual(diff.submodules["libhipcxx"].status, "added")
-
-
-# =============================================================================
 # CLI Options Tests (Mocked)
 # =============================================================================
 
@@ -353,9 +255,9 @@ class ResolveCommitsTest(unittest.TestCase):
         self.assertEqual(end_sha, "def456")
 
     def test_output_dir_argument_parsed(self):
-        """--output-dir argument is parsed correctly."""
+        """--output-dir argument is parsed as Path."""
         args = parse_args(["--start", "abc", "--end", "def", "--output-dir", "reports"])
-        self.assertEqual(args.output_dir, "reports")
+        self.assertEqual(args.output_dir, Path("reports"))
 
     def test_output_dir_defaults_to_none(self):
         """--output-dir defaults to None when not specified."""
@@ -364,39 +266,36 @@ class ResolveCommitsTest(unittest.TestCase):
 
 
 # =============================================================================
-# CLI Options Integration Tests (Real API Calls)
+# HTML Report Structure Tests
 # =============================================================================
 
 
-class ResolveCommitsIntegrationTest(unittest.TestCase):
-    """Integration tests for CLI options with real API calls."""
+class HtmlReportStructureTest(unittest.TestCase):
+    """Tests that generated HTML includes semantic row classes and data attributes."""
 
-    @_skip_unless_authenticated_github_api_is_available
-    def test_workflow_mode_with_real_run_id(self):
-        """Test --workflow-mode with a real workflow run ID."""
-        # Using workflow run ID from existing tests in github_actions_utils_test.py
-        # https://github.com/ROCm/TheRock/actions/runs/18022609292
-        args = parse_args(
-            ["--start", "18022609292", "--end", "18022609292", "--workflow-mode"]
+    def test_create_table_includes_header_row_class(self):
+        """Report tables have header row with class report-table-header-row."""
+        html = create_table(["Component", "Commits"], [])
+        self.assertIn("report-table-header-row", html)
+
+    def test_non_superrepo_html_includes_component_row_and_data_component(self):
+        """Non-superrepo table rows have component-row class and data-component attribute."""
+        sub = Submodule(
+            name="test-submodule",
+            sha="abc123",
+            api_base="https://api.github.com/repos/ROCm/test",
+            branch="main",
+            status="unchanged",
         )
-
-        start_sha, end_sha = resolve_commits(args)
-
-        # Should resolve to actual commit SHAs (40 hex chars)
-        self.assertEqual(len(start_sha), 40)
-        self.assertTrue(all(c in "0123456789abcdef" for c in start_sha))
-        self.assertEqual(start_sha, end_sha)  # Same workflow = same SHA
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_find_last_successful_with_real_workflow(self):
-        """Test --find-last-successful with ci_nightly.yml."""
-        args = parse_args(["--end", "main", "--find-last-successful", "ci_nightly.yml"])
-
-        start_sha, end_sha = resolve_commits(args)
-
-        # Should resolve start to a commit SHA from last successful nightly
-        self.assertEqual(len(start_sha), 40)
-        self.assertTrue(all(c in "0123456789abcdef" for c in start_sha))
+        diff = ManifestDiff(
+            start_commit="start",
+            end_commit="end",
+            submodules={"test-submodule": sub},
+        )
+        html = generate_non_superrepo_html(diff)
+        self.assertIn("component-row", html)
+        self.assertIn("data-component=", html)
+        self.assertIn("test-submodule", html)
 
 
 if __name__ == "__main__":

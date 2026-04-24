@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Installs a limited subset of boost sufficient to build ROCM subprojects.
 # Currently, this includes:
 #   atomic

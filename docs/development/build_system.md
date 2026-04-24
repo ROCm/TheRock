@@ -84,6 +84,9 @@ Sub-project directories:
   projects like [hipBLASLt](https://github.com/ROCm/hipBLASLt).
 - [`ml-libs/`](/ml-libs/) : Machine learning library sub-projects like
   [MIOpen](https://github.com/ROCm/MIOpen).
+- [`media-libs/`](/media-libs/) : Media decoding library sub-projects like
+  [rocDecode](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdecode)
+  and [rocJPEG](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocjpeg).
 - [`profiler/`](/profiler/) : Profiler sub-projects
 
 Note that there is nothing in the build system which ensures naming consistency,
@@ -148,7 +151,10 @@ Each sub-project, by default, uses a standard directory layout for its build:
 
 ## CMake Configuration Options
 
-TODO
+### `THEROCK_DEV_PROJECTS`
+
+Subprojects that opt in to source file globbing even when otherwise skipped
+(e.g. `-DTHEROCK_DEV_PROJECTS=amd-llvm`).
 
 ## Developer Cookbook
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """PyTorch Test Skip List Generator.
 
 Creates a list of tests to be skipped or the only ones to be run on for PyTorch's pytest.
@@ -154,11 +157,17 @@ def create_list(
     # Loop over all loaded skip_tests dictionaries from the different pytorch versions
     for skip_test_module_name, skip_tests in dict_skip_tests.items():
         # Apply each filter (common, amdgpu_family)
-        for filter_name in filters:
-            if filter_name in skip_tests:
-                # For each pytorch test module (e.g., test_nn, test_torch) add all the tests
-                for pytorch_test_module in skip_tests[filter_name].keys():
-                    selected_tests += skip_tests[filter_name][pytorch_test_module]
+        for skip_section_name in skip_tests.keys():
+            for filter_name in filters:
+                # skip_tests has entries e.g. ["common", "gfx94"]
+                # filters has entries e.g. ["common", "gfx942", "gfx1201", "windows"]
+                # so check if skip_tests is a substring of filter_name
+                if skip_section_name in filter_name:
+                    # For each pytorch test module (e.g., test_nn, test_torch) add all the tests
+                    for pytorch_test_module in skip_tests[skip_section_name].keys():
+                        selected_tests += skip_tests[skip_section_name][
+                            pytorch_test_module
+                        ]
 
     # Remove duplicates and return
     return list(set(selected_tests))

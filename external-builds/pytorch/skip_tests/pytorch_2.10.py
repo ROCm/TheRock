@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 skip_tests = {
     "common": {
         "autograd": [
@@ -45,19 +48,20 @@ skip_tests = {
             # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
             # TypeError: 'CustomDecompTable' object is not a mapping
             "test_record_stream_on_shifted_view",
+            # AssertionError: Scalars are not close!
+            "test_allocator_settings",
         ],
         "torch": [
             "test_index_add_correctness",
+            # AssertionError: False is not true
+            "test_cpp_warnings_have_python_context_cuda",
         ],
     },
-    "gfx942": {
+    "gfx94": {
         "autograd": [
             # fixed or just good with no caching?
             # "test_reentrant_parent_error_on_cpu_cuda",
             # "test_multi_grad_all_hooks",
-            # flaky, was good some itme
-            "test_side_stream_backward_overlap",
-            "test_side_stream_backward_overlap_cuda"
             #
             #  Test run says they are good????
             # # AttributeError: 'torch._C._autograd.SavedTensor' object has no attribute 'data'
@@ -74,17 +78,6 @@ skip_tests = {
         ],
         "cuda": [
             # "test_cpp_memory_snapshot_pickle",
-            #
-            # what():  HIP error: operation not permitted when stream is capturing
-            # Search for `hipErrorStreamCaptureUnsupported' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__HIPRT__TYPES.html for more information.
-            # HIP kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
-            # For debugging consider passing AMD_SERIALIZE_KERNEL=3
-            # Compile with `TORCH_USE_HIP_DSA` to enable device-side assertions.
-            #
-            # Exception raised from ~CUDAGraph at /__w/TheRock/TheRock/external-builds/pytorch/pytorch/aten/src/ATen/hip/HIPGraph.cpp:320 (most recent call first):
-            # frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x80 (0x7f2316f1bdf0 in /home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/lib/libc10.so)
-            "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_allow_unused_input",
-            "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_not_allow_unused_input",
             "test_graph_concurrent_replay ",
             #
             #
@@ -93,13 +86,10 @@ skip_tests = {
             "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
             # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
             "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
-            # AssertionError: Scalars are not close!
-            "test_allocator_settings",
             # AttributeError: Unknown attribute allow_bf16_reduced_precision_reduction_split_k
             "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
             # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
             "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
-            "test_allocator_settings",
         ],
         "nn": [
             # Is now skipped.. on pytorch side
@@ -112,15 +102,6 @@ skip_tests = {
         ],
         "torch": [
             "test_terminate_handler_on_crash",  # flaky !! hangs forever or works... can need up to 30 sec to pass
-            "test_cpp_warnings_have_python_context_cuda",
-            # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
-            # TypeError: 'CustomDecompTable' object is not a mapping
-            "test_fx_memory_profiler_augmentation",
-        ],
-    },
-    "gfx950": {
-        "cuda": [
-            "test_cpp_warnings_have_python_context_cuda",
         ],
     },
     "windows": {
@@ -130,6 +111,10 @@ skip_tests = {
             "test_grad_scaling_autocast_foreach0_fused0_Adam_cuda_float32",
         ],
         "cuda": [
+            # Flaky? See https://github.com/ROCm/TheRock/issues/3724
+            # ROCm allocator does not raise OOM in the same path as CUDA
+            #   AssertionError: RuntimeError not raised
+            "test_out_of_memory_retry",
             # This test uses subprocess.run, so it hangs.
             # See https://github.com/ROCm/TheRock/issues/999.
             "test_pinned_memory_use_background_threads",

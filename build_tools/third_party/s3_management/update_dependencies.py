@@ -20,23 +20,49 @@ BUCKET = S3.Bucket(getenv("S3_BUCKET_PY", "therock-dev-python"))
 # and the developer wants to more safely cancel the script.
 VERSIONS = ["v2-staging", "v2"]
 
+# Whitelist of allowed wheel platform and Python tags.
+# Wheels not matching both criteria are skipped (not uploaded to S3).
+
+# Exact platform tags that are always allowed.
+_ALLOWED_PLATFORM_TAGS: frozenset[str] = frozenset(
+    {
+        "linux_x86_64",
+        "win_amd64",  # Windows x64 — not excluded by the blacklist
+        "any",  # pure-Python / platform-independent wheels
+    }
+)
+
+# CPython version tags allowed for upload.
+# Pure-Python wheels (python tag starting with "py") are also allowed
+# regardless of version — they carry no CPython ABI dependency.
+_ALLOWED_CPYTHON_TAGS: frozenset[str] = frozenset(
+    {
+        "cp310",
+        "cp311",
+        "cp312",
+        "cp313",
+        "cp314",
+    }
+)
+
 PACKAGES_PER_PROJECT = {
-    "dbus_python": {"version": "latest", "project": "jax"},
-    "flatbuffers": {"version": "latest", "project": "jax"},
-    "ml_dtypes": {"version": "latest", "project": "jax"},
-    "opt_einsum": {"version": "latest", "project": "jax"},
-    "tomli": {"version": "latest", "project": "jax"},
-    "sympy": {"version": "latest", "project": "torch"},
-    "mpmath": {"version": "latest", "project": "torch"},
-    "pillow": {"version": "latest", "project": "torch"},
-    "networkx": {"version": "latest", "project": "torch"},
-    "numpy": {"version": "latest", "project": "torch"},
-    "jinja2": {"version": "latest", "project": "torch"},
-    "markupsafe": {"version": "latest", "project": "torch"},
-    "filelock": {"version": "latest", "project": "torch"},
-    "fsspec": {"version": "latest", "project": "torch"},
-    "typing-extensions": {"version": "latest", "project": "torch"},
-    "setuptools": {"version": "latest", "project": "rocm"},
+    "dbus_python": {"versions": ["latest"], "project": "jax"},
+    "flatbuffers": {"versions": ["latest"], "project": "jax"},
+    "ml_dtypes": {"versions": ["latest"], "project": "jax"},
+    "opt_einsum": {"versions": ["latest"], "project": "jax"},
+    "tomli": {"versions": ["latest"], "project": "jax"},
+    "sympy": {"versions": ["latest"], "project": "torch"},
+    "mpmath": {"versions": ["latest"], "project": "torch"},
+    "pillow": {"versions": ["latest"], "project": "torch"},
+    # 3.4.2 for Python 3.10, latest for Python 3.11+
+    "networkx": {"versions": ["3.4.2", "latest"], "project": "torch"},
+    "numpy": {"versions": ["latest"], "project": "torch"},
+    "jinja2": {"versions": ["latest"], "project": "torch"},
+    "markupsafe": {"versions": ["latest"], "project": "torch"},
+    "filelock": {"versions": ["latest"], "project": "torch"},
+    "fsspec": {"versions": ["latest"], "project": "torch"},
+    "typing-extensions": {"versions": ["latest"], "project": "torch"},
+    "setuptools": {"versions": ["latest"], "project": "rocm"},
 }
 
 
@@ -73,6 +99,39 @@ def get_wheels_of_version(idx: Dict[str, str], version: str) -> Dict[str, str]:
         for (k, v) in idx.items()
         if k.endswith(".whl") and k.split("-")[1] == version
     }
+
+
+def is_wheel_allowed(pkg: str) -> bool:
+    """Return True if this wheel filename should be uploaded to S3.
+
+    Both criteria must be satisfied:
+    1. Platform tag is "linux_x86_64", "win_amd64", "any", or starts with
+       "manylinux" and ends with "_x86_64" (e.g., "manylinux_2_17_x86_64").
+       This rejects win32, win_arm64, macOS, musllinux, ARM, RISC-V, iOS, etc.
+    2. Python tag is in _ALLOWED_CPYTHON_TAGS, or is exactly "py3"
+       (pure-Python wheels). This rejects PyPy (pp*), cp39, cp313t,
+       cp314, cp314t, py2, py2.py3, etc.
+
+    Per PEP 427, the wheel stem is:
+        {name}-{version}[-{build}]-{python}-{abi}-{platform}
+    The last three fields are always python, abi, platform — regardless of
+    whether the optional build tag is present.
+    """
+    if not pkg.endswith(".whl"):
+        return False
+    parts = pkg[:-4].split("-")
+    if len(parts) < 5:
+        return False  # Malformed — skip rather than guess
+
+    platform_tag = parts[-1]
+    python_tag = parts[-3]
+
+    platform_ok = platform_tag in _ALLOWED_PLATFORM_TAGS or (
+        platform_tag.startswith("manylinux") and platform_tag.endswith("_x86_64")
+    )
+    python_ok = python_tag in _ALLOWED_CPYTHON_TAGS or python_tag == "py3"
+
+    return platform_ok and python_ok
 
 
 def upload_missing_whls(
@@ -113,46 +172,7 @@ def upload_missing_whls(
     for pkg in pypi_latest_packages:
         if pkg in download_latest_packages:
             continue
-        # Skip pp packages
-        if "-pp3" in pkg:
-            continue
-        # Skip win32 packages
-        if "-win32" in pkg:
-            continue
-        # Skip win_arm64 packages
-        if "-win_arm64" in pkg:
-            continue
-        # Skip muslinux packages
-        if "-musllinux" in pkg:
-            continue
-        # Skip macosx packages
-        if "-macosx" in pkg:
-            continue
-        # Skip aarch64 packages
-        if "aarch64" in pkg:
-            continue
-        # Skip i686 packages
-        if "i686" in pkg:
-            continue
-        # Skip iphoneos packages
-        if "iphoneos" in pkg:
-            continue
-        # Skip iphonesimulator packages
-        if "iphonesimulator" in pkg:
-            continue
-        # Skip riscv64 packages
-        if "riscv64" in pkg:
-            continue
-        # Skip unsupported Python version
-        if "cp39" in pkg:
-            continue
-        if "cp310" in pkg:
-            continue
-        if "cp313t" in pkg:
-            continue
-        if "cp314" in pkg:
-            continue
-        if "cp314t" in pkg:
+        if not is_wheel_allowed(pkg):
             continue
         print(f"Downloading {pkg}")
         if dry_run:
@@ -184,9 +204,9 @@ def main() -> None:
     parser.add_argument("--only-pypi", action="store_true")
     args = parser.parse_args()
 
-    SUBFOLDERS =  [
+    SUBFOLDERS = [
         "gfx101X-dgpu",
-        "gfx103X-dgpu",
+        "gfx103X-all",
         "gfx110X-all",
         "gfx1150",
         "gfx1151",
@@ -210,13 +230,14 @@ def main() -> None:
                 else:
                     full_path = f"{VERSION}/{prefix}"
 
-                upload_missing_whls(
-                    pkg_name,
-                    full_path,
-                    dry_run=args.dry_run,
-                    only_pypi=args.only_pypi,
-                    target_version=pkg_info["version"],
-                )
+                for target_version in pkg_info["versions"]:
+                    upload_missing_whls(
+                        pkg_name,
+                        full_path,
+                        dry_run=args.dry_run,
+                        only_pypi=args.only_pypi,
+                        target_version=target_version,
+                    )
 
 
 if __name__ == "__main__":

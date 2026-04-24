@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Main rocm-sdk-core (OS specific)."""
 
 import importlib.util
@@ -75,6 +78,16 @@ setup(
                 "rocm_agent_enumerator=rocm_sdk_core._cli:rocm_agent_enumerator",
                 "rocminfo=rocm_sdk_core._cli:rocm_info",
                 "rocm-smi=rocm_sdk_core._cli:rocm_smi",
+                "roccoremerge=rocm_sdk_core._cli:roccoremerge",
+                "rocgdb=rocm_sdk_core._cli:rocgdb",
+                "rocpd=rocm_sdk_core._cli:rocpd",
+                "rocpd2csv=rocm_sdk_core._cli:rocpd2csv",
+                "rocpd2otf2=rocm_sdk_core._cli:rocpd2otf2",
+                "rocpd2pftrace=rocm_sdk_core._cli:rocpd2pftrace",
+                "rocpd2summary=rocm_sdk_core._cli:rocpd2summary",
+                "rocprofv3=rocm_sdk_core._cli:rocprofv3",
+                "rocprofv3-attach=rocm_sdk_core._cli:rocprofv3_attach",
+                "rocprofv3-avail=rocm_sdk_core._cli:rocprofv3_avail",
             ]
             if platform.system() != "Windows"
             else [

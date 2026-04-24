@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Generate CMake configuration for building a specific stage.
 
 This script uses BUILD_TOPOLOGY.toml to determine which features/artifacts
@@ -27,12 +30,17 @@ The script generates flags like:
 """
 
 import argparse
+import platform as platform_module
 import sys
 from pathlib import Path
 from typing import List, Set
 
 from _therock_utils.build_topology import BuildTopology
-from github_actions.github_actions_utils import gha_set_output
+from github_actions.github_actions_api import gha_set_output
+from github_actions.manylinux_config import (
+    DIST_PYTHON_EXECUTABLES,
+    SHARED_PYTHON_EXECUTABLES,
+)
 
 
 def log(msg: str):
@@ -50,12 +58,16 @@ def get_topology() -> BuildTopology:
     return BuildTopology(str(topology_path))
 
 
-def get_stage_features(topology: BuildTopology, stage_name: str) -> Set[str]:
+def get_stage_features(
+    topology: BuildTopology, stage_name: str, platform_name: str = ""
+) -> Set[str]:
     """Get the set of feature names that should be enabled for a stage.
 
     This includes:
     1. Features for artifacts produced by this stage
     2. Features for artifacts that are inbound dependencies (needed but prebuilt)
+
+    Artifacts whose disable_platforms includes platform_name are excluded.
 
     Note: The inbound dependencies will be marked as prebuilt via buildctl.py bootstrap,
     but CMake still needs their features enabled for dependency resolution.
@@ -77,6 +89,8 @@ def get_stage_features(topology: BuildTopology, stage_name: str) -> Set[str]:
     for artifact_name in all_artifacts:
         if artifact_name in topology.artifacts:
             artifact = topology.artifacts[artifact_name]
+            if platform_name and platform_name in artifact.disable_platforms:
+                continue
             feature_name = topology.get_artifact_feature_name(artifact)
             features.add(feature_name)
 
@@ -89,6 +103,8 @@ def generate_cmake_args(
     dist_amdgpu_families: str,
     topology: BuildTopology,
     include_comments: bool = False,
+    platform_name: str = platform_module.system().lower(),
+    manylinux: bool = False,
 ) -> List[str]:
     """Generate CMake arguments for building a specific stage.
 
@@ -98,6 +114,10 @@ def generate_cmake_args(
         dist_amdgpu_families: Semicolon-separated GPU families for dist targets
         topology: BuildTopology instance
         include_comments: Include comment lines explaining each flag
+        platform_name: Platform name for platform-specific args (e.g., "windows",
+            "linux"). Defaults to the current platform.
+        manylinux: Add manylinux Python executable cmake args (for use inside
+            the manylinux build container).
 
     Returns:
         List of CMake argument strings
@@ -117,6 +137,14 @@ def generate_cmake_args(
     if dist_amdgpu_families:
         args.append(f'-DTHEROCK_DIST_AMDGPU_FAMILIES="{dist_amdgpu_families}"')
 
+    # Manylinux Python executables for per-Python-version builds
+    # Quote values since they contain semicolons (CMake list separator)
+    if manylinux:
+        args.append(f'-DTHEROCK_DIST_PYTHON_EXECUTABLES="{DIST_PYTHON_EXECUTABLES}"')
+        args.append(
+            f'-DTHEROCK_SHARED_PYTHON_EXECUTABLES="{SHARED_PYTHON_EXECUTABLES}"'
+        )
+
     # Disable all features by default, then enable only what we need
     if include_comments:
         args.append("")
@@ -124,7 +152,7 @@ def generate_cmake_args(
     args.append("-DTHEROCK_ENABLE_ALL=OFF")
 
     # Get features to enable for this stage
-    features = get_stage_features(topology, stage_name)
+    features = get_stage_features(topology, stage_name, platform_name=platform_name)
 
     if include_comments:
         args.append("")
@@ -145,7 +173,7 @@ def main(argv: List[str] = None):
     parser.add_argument(
         "--stage",
         type=str,
-        required=True,
+        default=None,
         help="Build stage name (e.g., foundation, compiler-runtime, math-libs)",
     )
     parser.add_argument(
@@ -191,8 +219,23 @@ def main(argv: List[str] = None):
         action="store_true",
         help="Write cmake_args to GITHUB_OUTPUT (for GitHub Actions)",
     )
+    parser.add_argument(
+        "--platform",
+        type=str,
+        default=platform_module.system().lower(),
+        help=f"Platform for platform-specific CMake args (default: {platform_module.system().lower()})",
+    )
+    parser.add_argument(
+        "--manylinux",
+        action="store_true",
+        help="Add manylinux Python executable cmake args (for use inside "
+        "the manylinux build container)",
+    )
 
     args = parser.parse_args(argv)
+
+    if not args.list_stages and args.stage is None:
+        parser.error("--stage is required unless --list-stages is specified")
 
     topology = get_topology()
 
@@ -215,6 +258,8 @@ def main(argv: List[str] = None):
         dist_amdgpu_families=args.dist_amdgpu_families,
         topology=topology,
         include_comments=args.comments and not args.oneline,
+        platform_name=args.platform,
+        manylinux=args.manylinux,
     )
 
     # Filter out comments if not requested
