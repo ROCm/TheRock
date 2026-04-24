@@ -25,9 +25,9 @@ on:
       benchmark_runs_on:
         type: string
         default: ""
-      run_functional_tests:
-        type: boolean
-        default: false
+      run_extended_tests:
+        type: string
+        default: 'false'
       expect_failure:
         type: boolean
       use_prebuilt_artifacts:
@@ -88,41 +88,17 @@ jobs:
         inputs.expect_failure == false
       }}
     uses: ./.github/workflows/test_artifacts.yml
-    with:
-      artifact_group: ${{ inputs.artifact_group }}
-      amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.test_runs_on }}
-      artifact_run_id: ${{ inputs.artifact_run_id }}
-      test_type: ${{ inputs.test_type }}
-      test_labels: ${{ inputs.test_labels }}
-      sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
-      run_functional_tests: ${{ inputs.run_functional_tests }}
-
-  test_linux_benchmarks:
-    needs: [build_portable_linux_artifacts]
-    name: Test Linux Benchmarks
-    # Run benchmarks if:
-    # - Build succeeded (or using prebuilt artifacts)
-    # - Not expecting failure
-    # - Benchmark runner is available (benchmark_runs_on is set)
-    if: >-
-      ${{
-        !failure() &&
-        !cancelled() &&
-        (
-          inputs.use_prebuilt_artifacts == 'false' ||
-          inputs.use_prebuilt_artifacts == 'true'
-        ) &&
-        inputs.expect_failure == false &&
-        inputs.benchmark_runs_on != ''
-      }}
-    uses: ./.github/workflows/test_benchmarks.yml
     secrets: inherit
     with:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.benchmark_runs_on }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      benchmark_runs_on: ${{ inputs.benchmark_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      test_type: ${{ inputs.test_type }}
+      test_labels: ${{ inputs.test_labels }}
+      sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
+      run_extended_tests: ${{ inputs.run_extended_tests }}
 
   build_portable_linux_python_packages:
     needs: [build_portable_linux_artifacts]
@@ -174,6 +150,8 @@ jobs:
       package_find_links_url: ${{ needs.build_portable_linux_python_packages.outputs.package_find_links_url }}
       python_version: "3.12"
       rocm_version: ${{ inputs.rocm_package_version }}
+      container_image_name: ubuntu24.04
+      container_image_url: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
 
   # TODO(#3291): Add test_pytorch_wheels job
   build_portable_linux_pytorch_wheels_ci:

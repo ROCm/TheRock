@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: MIT
 
 # gRPC static library for RDC
+set(THEROCK_GRPC_VERSION "1.78.1" CACHE INTERNAL "gRPC version built by TheRock")
+
 therock_subproject_fetch(therock-grpc-sources
   CMAKE_PROJECT
-  # Originally mirrored from: https://github.com/grpc/grpc.git (git tag v1.67.1)
-  URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/grpc-v1.67.1.tar.gz"
-  URL_HASH "SHA256=ed0051771a1ed0ec6583be4ddb0fe9ee4473bc2f8a59d214ff49290ed5edb4ef"
+  # Originally mirrored from: https://github.com/grpc/grpc.git
+  URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/grpc-v1.78.1.tar.gz"
+  URL_HASH "SHA256=96e1d4c82735a6867b9045d782d3f4f7477224496fec5386ca3adae1f2059796"
 )
 
 set(_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/build")
