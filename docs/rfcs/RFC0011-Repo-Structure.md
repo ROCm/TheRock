@@ -37,7 +37,7 @@ repo.amd.com's open source software release publications need standardization. I
         - zip
         - whl
         - packages
-      - **Linux Distros [a–z]**
+          - **Linux Distros [a–z]**
       - **windows**
         - MSI and EXE files for Windows
       - **expansions [a–z]**
