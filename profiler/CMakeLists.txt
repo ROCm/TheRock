@@ -348,7 +348,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       )
 
       if(${THEROCK_BUILD_TESTING})
-
+        # comment to retrigger CI
         if(NOT THEROCK_DIST_AMDGPU_TARGETS
            OR THEROCK_DIST_AMDGPU_TARGETS MATCHES "-NOTFOUND$")
           message(FATAL_ERROR
