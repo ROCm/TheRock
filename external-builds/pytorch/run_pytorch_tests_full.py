@@ -121,6 +121,40 @@ EXCLUDED_TEST_MODULES: list[str] = [
     "distributed/tensor/test_view_ops",
     "dynamo/test_dynamic_shapes",
     "functorch/test_control_flow",
+    # ---------------------------------------------------------------------
+    # Test-source vs installed-wheel symbol mismatch (CI run 24893492849).
+    # These files fail at import time because the pytorch test tree is
+    # ahead of the installed torch wheel (2.13.0a0+rocm7.13.0a20260420) and
+    # references symbols that don't exist in the wheel.  Can't be filtered
+    # with pytest -k because the ImportError happens before collection.
+    # The proper fix is to sync the pytorch test submodule SHA to match the
+    # wheel build; excluding here so the run_test.py subprocess doesn't
+    # exit non-zero while that sync is pending.
+    #
+    # xfailIfNoAcceleratorTriton missing from torch.testing._internal.common_utils:
+    "dynamo/test_dynamo_decompositions",
+    "higher_order_ops/test_inline_asm_elementwise",
+    "higher_order_ops/test_with_effects",
+    "inductor/test_analysis",
+    "inductor/test_fusion_regions",
+    "inductor/test_inductor_scheduler",
+    "inductor/test_user_streams",
+    "inductor/test_utils",
+    "nn/test_multihead_attention",
+    "profiler/test_profiler",
+    "test_fx",
+    "test_proxy_tensor",
+    "test_transformers",
+    # xfailCUDAIfSM89OrLaterOnWindows missing from torch.testing._internal.common_cuda:
+    "test_cuda",
+    "test_cuda_expandable_segments",
+    "test_dlpack",
+    # run_concurrently missing from torch.testing._internal.common_utils:
+    "test_tsan",
+    # _get_compile_args missing from torch._dynamo.repro.after_aot:
+    "dynamo/test_after_aot",
+    # _FlatLayout missing from torch.distributed._mesh_layout:
+    "distributed/test_device_mesh",
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
