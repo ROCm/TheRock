@@ -47,6 +47,11 @@ skip_tests = {
             "test_triggers",
             # LoggingTests - string comparison mismatch in log output
             "test_logs_out",
+            # --- Added from CI run 24893492849 ---
+            # MiscTests: AssertionError: Unsupported not raised (DataPtrVariable constant comparison)
+            "test_data_ptr_constant_comparison_graph_break",
+            # MiscTests: Unsupported: Builtin operator.* comparison with constant `self` failed on DataPtrVariable
+            "test_data_ptr_detach_equality_fullgraph",
             # --- Added from CI run 24859184370 ---
             # AutogradFunctionTests: AssertionError: RuntimeError not raised
             "test_aliased_intermediate_captured_by_side_effect",
@@ -469,6 +474,11 @@ skip_tests = {
             # --- Added from CI run 24871076312 ---
             # AOTInductorTestABICompatibleCpu: AssertionError: Tensor-likes are not close! Mismatched elements: 2 / 4 (50.0%) (CPU variant)
             "test_update_inactive_constant_buffer_with_interleaved_folded_constants_cpu",
+            # --- Added from CI run 24893492849 ---
+            # TestFastCudaLauncherCompileResult: AttributeError: torch._inductor.config.use_fast_triton_launcher does not exist
+            # (missing upstream config attribute in installed torch wheel)
+            "test_basic_compile",
+            "test_disable_fast_launcher",
         ],
         "linalg": [
             # TestLinalgCUDA - tunableop_rocm addmm relu
