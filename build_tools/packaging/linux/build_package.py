@@ -19,6 +19,7 @@ create RPM and DEB packages and upload to artifactory server
 
 import argparse
 import glob
+import json
 import os
 import shutil
 import subprocess
@@ -772,12 +773,31 @@ def normalize_target_list(targets: list[str]) -> list[str]:
     return [t.strip() for t in normalized if t.strip()]
 
 
+def _load_kpack_from_manifest(artifacts_dir: Path) -> bool:
+    """Detect KPACK_SPLIT_ARTIFACTS flag from any therock_manifest.json in artifacts_dir."""
+    for manifest_path in artifacts_dir.rglob("therock_manifest.json"):
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            if manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False):
+                return True
+        except (json.JSONDecodeError, OSError):
+            pass
+    return False
+
+
 def run(args: argparse.Namespace):
     # Set the global variables
     dest_dir = Path(args.dest_dir).expanduser().resolve()
 
     # Normalize target list to handle various input formats
     normalized_targets = normalize_target_list(args.target)
+
+    # Auto-detect kpack from manifest if not explicitly requested via --enable-kpack
+    artifacts_dir = Path(args.artifacts_dir).resolve()
+    if not args.enable_kpack:
+        args.enable_kpack = _load_kpack_from_manifest(artifacts_dir)
+        if args.enable_kpack:
+            print("Detected KPACK_SPLIT_ARTIFACTS in manifest — producing host + device packages")
 
     # Configure architecture based on multi-arch mode
     if args.enable_kpack:

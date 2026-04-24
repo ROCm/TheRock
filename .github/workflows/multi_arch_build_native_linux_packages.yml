@@ -122,30 +122,19 @@ jobs:
             --amdgpu-families="${{ env.DIST_AMDGPU_FAMILIES }}" \
             --output-dir="${{ env.OUTPUT_DIR }}"
 
-      - name: Detect KPACK split artifacts
-        id: kpack_detection
-        run: |
-          python ./build_tools/packaging/linux/detect_kpack.py \
-            --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
-            --output-format github >> $GITHUB_OUTPUT
-
       - name: Build Packages
         id: build-packages
         run: |
           # Pass the target families as-is (semicolon-separated)
           # build_package.py's normalize_target_list() handles all separators
-          KPACK_FLAG=""
-          if [[ "${{ steps.kpack_detection.outputs.enable_kpack }}" == "true" ]]; then
-            KPACK_FLAG="--enable-kpack"
-          fi
+          # KPACK_SPLIT_ARTIFACTS is auto-detected from therock_manifest.json
           python ./build_tools/packaging/linux/build_package.py \
             --dest-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --rocm-version  "${{ inputs.rocm_version }}" \
             --target "${{ env.DIST_AMDGPU_FAMILIES }}" \
             --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
             --pkg-type "${{ inputs.native_package_type }}" \
-            --version-suffix "${{ env.ARTIFACT_RUN_ID }}" \
-            $KPACK_FLAG
+            --version-suffix "${{ env.ARTIFACT_RUN_ID }}"
 
       - name: Configure AWS Credentials
         # Only assume OIDC role for authorized repositories (ROCm/TheRock, ROCm/rockrel).
