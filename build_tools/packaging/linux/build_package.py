@@ -849,11 +849,19 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
         # Auto-detect from artifact directory
         normalized_targets = get_all_target_families(args.artifacts_dir)
         if not normalized_targets:
-            raise ValueError(
+            print(
                 f"No GFX architectures found in artifact directory: {args.artifacts_dir}. "
                 "Either provide --target explicitly or ensure artifacts are present."
             )
-        print(f"Auto-detected GFX architectures: {normalized_targets}")
+        else:
+            print(f"Auto-detected GFX architectures: {normalized_targets}")
+
+    # Output packaging architecture list to GitHub Actions
+    github_output = os.environ.get("GITHUB_OUTPUT")
+    if github_output and normalized_targets:
+        with open(github_output, "a", encoding="utf-8") as f:
+            targets_str = ",".join(normalized_targets)
+            f.write(f"PACKAGING_ARCH_LIST={targets_str}\n")
 
     # Configure architecture based on multi-arch mode
     if args.enable_kpack:
