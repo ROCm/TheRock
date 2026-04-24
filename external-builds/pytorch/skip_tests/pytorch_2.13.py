@@ -466,6 +466,9 @@ skip_tests = {
             "test_reduction_comprehensive_padding_stride",
             # AOTInductorTestABICompatibleGpu: AssertionError: Tensor-likes are not close! Mismatched elements: 2 / 4 (50.0%) Greatest absolute ...
             "test_update_inactive_constant_buffer_with_interleaved_folded_constants_cuda",
+            # --- Added from CI run 24871076312 ---
+            # AOTInductorTestABICompatibleCpu: AssertionError: Tensor-likes are not close! Mismatched elements: 2 / 4 (50.0%) (CPU variant)
+            "test_update_inactive_constant_buffer_with_interleaved_folded_constants_cpu",
         ],
         "linalg": [
             # TestLinalgCUDA - tunableop_rocm addmm relu
@@ -678,8 +681,18 @@ skip_tests = {
             "test_sync_decision_cross_ranks_different_node_order",
             # TestSyncDecisionCrossRanks: RuntimeError: Process 1 exited with error code 10 and exception: Traceback (most recent call last...
             "test_sync_decision_cross_ranks_invalid_node_error",
+            # --- Added from CI run 24871076312 ---
+            # DistTensorRandomInitTest: RuntimeError: Process exited with error code 10
+            "test_meta_tensor_init",
+            # TestFullyShardCustomForwardMethod: RuntimeError: Process exited with error code 10
+            "test_register_fsdp_forward_method",
         ],
         "autograd": [
+            # --- Added from CI run 24871076312 ---
+            # TestAutogradDeviceTypeCUDA: AssertionError: "Simulate error" does not match
+            # "grad can be implicitly created only for scalar outputs"
+            # (was previously only in windows section of generic.py; now also fails on gfx94X Linux)
+            "test_reentrant_parent_error_on_cpu_cuda",
             # TestSelectiveActivationCheckpoint: AssertionError: Scalars are not equal! Expected 1 but got 2. Absolute difference: 1 Relative diff...
             "test_auto_naming_mode_names",
             # TestAutogradDeviceTypeCUDA: AttributeError: module 'torch.autograd' has no attribute 'enforce_grad_layout_policy'
@@ -755,6 +768,13 @@ skip_tests = {
         "higher_order_ops": [
             # TestInvokeSubgraphCompile: AssertionError: 'aliases an input or output.*clone' does not match 'RuntimeError: Argument 'view'...
             "test_side_effect_with_aliased_intermediate",
+        ],
+        "testing": [
+            # --- Added from CI run 24871076312 ---
+            # TestImports: RuntimeError: Failed to import torch._inductor.mkldnn_lowerings:
+            # partially initialized module has no attribute 'register_onednn_fusion_ops'
+            # (circular import)
+            "test_circular_dependencies",
         ],
     },
 }
