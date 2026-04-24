@@ -112,15 +112,9 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/{filename}")
 
-    def artifact_index(self, artifact_group: str) -> StorageLocation:
-        """Location for the per-group artifact index HTML.
-
-        Args:
-            artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
-        """
-        return StorageLocation(
-            self.bucket, f"{self.prefix}/index-{artifact_group}.html"
-        )
+    def artifact_index(self) -> StorageLocation:
+        """Location for the root artifact index HTML."""
+        return StorageLocation(self.bucket, f"{self.prefix}/index.html")
 
     def root_index(self) -> StorageLocation:
         """Location for the root artifact index HTML (server-side generated)."""
@@ -165,7 +159,7 @@ class WorkflowOutputRoot:
         """Location for the root log index HTML (server-side generated)."""
         return StorageLocation(self.bucket, f"{self.prefix}/logs/index.html")
 
-    def stage_log_dir(
+    def log_stage_dir(
         self, stage_name: str, amdgpu_family: str = ""
     ) -> StorageLocation:
         """Location for a multi-arch stage log directory.

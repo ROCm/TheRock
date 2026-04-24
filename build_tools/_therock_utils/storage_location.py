@@ -47,7 +47,7 @@ class StorageLocation:
     @property
     def https_url(self) -> str:
         """Public HTTPS URL for browser access."""
-        return f"https://{self.bucket}.s3.us-east-2.amazonaws.com/{self.relative_path}"
+        return f"https://{self.bucket}.s3.amazonaws.com/{self.relative_path}"
 
     def local_path(self, staging_dir: Path) -> Path:
         """Local filesystem path for this location.
