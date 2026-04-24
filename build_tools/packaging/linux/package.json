@@ -15,7 +15,7 @@
     ],
     "Maintainer": "AMD-SMILib Support <amd-smi.support@amd.com>",
     "Description_Short": "AMD GPU system management library for monitoring and control",
-    "Description_Long": "AMD System Management Interface (AMDSMI) provides programmatic access to AMD GPU metrics, telemetry, and device control. Includes runtime libraries for querying GPU utilization, temperature, power consumption, and clock frequencies. Ships with library binaries, runtime components, development headers, and documentation for building GPU monitoring and management applications.",
+    "Description_Long": "AMD System Management Interface (AMD-SMI) provides programmatic access to AMD GPU metrics, telemetry, and device control. Includes runtime libraries for querying GPU utilization, temperature, power consumption, and clock frequencies. Ships with library binaries, runtime components, development headers, and documentation for building GPU monitoring and management applications.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
