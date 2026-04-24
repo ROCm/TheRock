@@ -28,7 +28,10 @@ EXCLUDED_LABELS = [
     "mpi",  # Currently unsupported
     "julia",  # Unsupported
     "kfd",  # No SDK version can be found yet
-    "attach",  # Fails
+    "attach",  # Fails - Under investigation
+    "lulesh",  # Target is not built
+    "network",  # NIC unsupported
+    "overflow",  # Requires CAPSYS_ADMIN/PERFMON or perf_event_paranoid <= 3
 ]
 
 logging.basicConfig(level=logging.INFO)
