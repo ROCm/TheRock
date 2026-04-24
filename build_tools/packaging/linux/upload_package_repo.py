@@ -694,11 +694,9 @@ def _resolve_upload_target(
 
     if args.job == "ci":
         if args.s3_bucket == "therock-ci-artifacts-external":
-            prefix = (
-                f"ROCm-TheRock/{args.artifact_id}-{args.platform}/packages/{pkg_type}"
-            )
+            prefix = f"ROCm-TheRock/{args.artifact_id}-linux/packages/{pkg_type}"
         else:
-            prefix = f"{args.artifact_id}-{args.platform}/packages/{pkg_type}"
+            prefix = f"{args.artifact_id}-linux/packages/{pkg_type}"
         return (
             args.s3_bucket,
             prefix,
@@ -736,11 +734,6 @@ def main():
         "--s3-prefix",
         required=False,
         help="Override S3 prefix (legacy, used when --run-id is not provided)",
-    )
-    parser.add_argument(
-        "--platform",
-        default="linux",
-        help="Platform name (linux or windows), defaults to linux",
     )
 
     args = parser.parse_args()
