@@ -128,23 +128,28 @@ Users are encouraged to identify their local GPU architecture and install packag
 
 | Component         | Meta package for all device packages                                                               |
 | :---------------- | :------------------------------------------------------------------------------------------------- |
+| component         | meta pacakge for host + all device packages                                                        |
 | component-host    | Host-only package                                                                                  |
-| component-$device | $device is the llvm gfx architecture; each device package must have no conflict with other devices |
+| component-$device | $device is the llvm gfx architecture; each device package must have no conflict with other devices, is dependent on host|
+| component-dev     | headers, static libraries (if any), cmake, example codes and other utils                           |
 
-Example:
+Example behaviour for amdrocm-blas:
+```
+yum install amdrocm-blas # installs all GPU architectures i.e. is a meta pacakge with host and all device packages
+yum install amdrocm-blas-host # host only, has not dependency. functionality is not guaranteed today, RTC is needed if possible
+yum install amdrocm-blas-gfx90a # is depedent on amdrocm-blas-host
+yum install amdrocm-blas-gfx90a amdrocm-blas-gfx94x # is depedent on amdrocm-blas-host, installs two GPU architectures
+```
+The rules for host, device and dev packages apply to other meta packages including amdrocm. The default behaviour for installing
+the meta package amdrocm is to install all GPU architectures.
 
-```
-yum install miopen-gfx906 miopen-gfx908
-apt intall rocm-gfx906 rocm-gfx-908 # Host + two device architectures
-apt install rocm # Every architecture
-```
+Does not include per package method to install all GPU architectures
 
 All device-specific packages must:
 
 - Not conflict with each other
 - Be independently installable
 - Support meta-packages
-- Allow autodetection of local GPUs
 
 TheRock must provide a GPU detection interface for package managers.
 
@@ -164,7 +169,7 @@ The following table shows the meta packages that will be available:
 
 | Name                    | Content                                                              | Description                                                                   |
 | :---------------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------- |
-| amdrocm & amdrocm-core  | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Needed to run software built with ROCm Core                                   |
+| amdrocm & amdrocm-core (implemented via provides)  | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Needed to run software built with ROCm Core                                   |
 | amdrocm-core-devel      | rocm-core + compiler cmake, static library files, and headers        | Needed to build software with ROCm Core                                       |
 | amdrocm-developer-tools | Profiler, debugger, and related tools                                | Independent set of tools to debug and profile any application built with ROCm |
 | amdrocm-fortran         |                                                                      | Fortran compiler and related components                                       |
