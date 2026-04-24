@@ -120,12 +120,11 @@ jobs:
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
-      # TODO(#3986): uncomment once test_artifacts.yml accepts these inputs
-      # benchmark_runs_on: ${{ matrix.family_info.benchmark-runs-on }}
+      benchmark_runs_on: ${{ matrix.family_info.benchmark-runs-on }}
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
-      # run_extended_tests: ${{ inputs.run_extended_tests }}
+      run_extended_tests: ${{ inputs.run_extended_tests }}
       release_type: ${{ inputs.release_type }}
 
   build_python_packages:
