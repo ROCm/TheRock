@@ -128,6 +128,11 @@ import sys
 import tarfile
 from typing import Optional
 
+from _therock_utils.cmake_amdgpu_targets import (
+    parse_amdgpu_targets_cmake,
+    build_family_to_targets,
+)
+
 PLATFORM = platform.system().lower()
 s3_client = boto3.client(
     "s3",
@@ -140,6 +145,61 @@ s3_client = boto3.client(
 # and this script will need to be updated to use CloudFront URLs instead.
 NIGHTLY_BUCKET_NAME = "therock-nightly-tarball"
 DEV_BUCKET_NAME = "therock-dev-tarball"
+
+# Cache for family-to-targets mapping to avoid re-parsing the cmake file
+_FAMILY_TO_TARGETS_CACHE: Optional[dict[str, list[str]]] = None
+
+
+def get_family_to_targets() -> dict[str, list[str]]:
+    """Parse therock_amdgpu_targets.cmake and return family -> targets mapping.
+
+    Returns a dict where keys are family names (e.g., "gfx110X-all") and values
+    are lists of individual GPU targets (e.g., ["gfx1100", "gfx1101", "gfx1102", "gfx1103"]).
+
+    The result is cached to avoid re-parsing the cmake file on every call.
+    """
+    global _FAMILY_TO_TARGETS_CACHE
+    if _FAMILY_TO_TARGETS_CACHE is None:
+        # Find the cmake file relative to this script
+        script_dir = Path(__file__).parent
+        repo_root = script_dir.parent
+        cmake_path = repo_root / "cmake" / "therock_amdgpu_targets.cmake"
+
+        if not cmake_path.exists():
+            log(
+                f"Warning: Could not find {cmake_path}, "
+                "family-to-targets expansion disabled"
+            )
+            _FAMILY_TO_TARGETS_CACHE = {}
+        else:
+            infos = parse_amdgpu_targets_cmake(cmake_path)
+            _FAMILY_TO_TARGETS_CACHE = build_family_to_targets(infos)
+
+    return _FAMILY_TO_TARGETS_CACHE
+
+
+def resolve_artifact_group_to_targets(artifact_group: str) -> list[str]:
+    """Resolve an artifact group (family name) to individual GPU targets.
+
+    For split/kpack builds, artifacts are created per individual target
+    (e.g., gfx1100, gfx1101) rather than as family archives (e.g., gfx110X-all).
+    This function expands a family name into its constituent targets.
+
+    Args:
+        artifact_group: Family name (e.g., "gfx110X-all") or individual target (e.g., "gfx1100")
+
+    Returns:
+        List of individual GPU targets. If the artifact_group is already an
+        individual target, returns [artifact_group]. If it's a family with
+        known members, returns the list of targets. Otherwise returns empty list.
+    """
+    family_map = get_family_to_targets()
+
+    if artifact_group in family_map:
+        return family_map[artifact_group]
+
+    # Not found in family map - might be an individual target or unknown
+    return []
 
 
 def parse_nightly_version(version: str) -> Optional[datetime]:
@@ -310,8 +370,24 @@ def retrieve_artifacts_by_run_id(args):
         str(args.output_dir),
         "--flatten",
     ]
+
+    # Handle AMDGPU targets: expand family names to individual targets if needed.
+    # This is critical for split/kpack builds where artifacts are per-target
+    # (e.g., rocblas_lib_gfx1100.tar.xz) rather than per-family
+    # (e.g., rocblas_lib_gfx110X-all.tar.xz).
     if args.amdgpu_targets:
+        # User explicitly provided targets - use them as-is
         argv.extend(["--amdgpu-targets", args.amdgpu_targets])
+    else:
+        # Try to expand the artifact_group (family) into individual targets
+        targets = resolve_artifact_group_to_targets(args.artifact_group)
+        if targets:
+            targets_str = ",".join(targets)
+            log(
+                f"Expanded artifact group '{args.artifact_group}' to targets: {targets_str}"
+            )
+            argv.extend(["--amdgpu-targets", targets_str])
+
     if args.dry_run:
         argv.append("--dry-run")
     if args.run_github_repo:
