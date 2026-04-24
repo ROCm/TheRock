@@ -92,6 +92,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND NOT DEFINED THEROCK_BUILD_TESTIN
 endif()
 if(THEROCK_BUILD_TESTING)
   message(STATUS "Enabling building tests")
+  therock_add_convenience_target(build-tests)
 endif()
 
 ################################################################################
