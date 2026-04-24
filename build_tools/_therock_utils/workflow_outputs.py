@@ -44,6 +44,7 @@ Usage::
 import os
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 import platform as platform_module
 
@@ -51,7 +52,12 @@ import platform as platform_module
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.storage_location import StorageLocation
-from _therock_utils.s3_buckets import get_artifacts_bucket_config_for_workflow_run
+
+
+def _log(*args, **kwargs):
+    """Log to stdout with flush for CI visibility."""
+    print(*args, **kwargs)
+    sys.stdout.flush()
 
 
 # ---------------------------------------------------------------------------
@@ -106,8 +112,18 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/{filename}")
 
-    def artifact_index(self) -> StorageLocation:
-        """Location for the artifact index HTML (server-side generated)."""
+    def artifact_index(self, artifact_group: str) -> StorageLocation:
+        """Location for the per-group artifact index HTML.
+
+        Args:
+            artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
+        """
+        return StorageLocation(
+            self.bucket, f"{self.prefix}/index-{artifact_group}.html"
+        )
+
+    def root_index(self) -> StorageLocation:
+        """Location for the root artifact index HTML (server-side generated)."""
         return StorageLocation(self.bucket, f"{self.prefix}/index.html")
 
     # -- Logs -------------------------------------------------------------------
@@ -128,25 +144,6 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/logs/{artifact_group}")
 
-    def log_stage_dir(
-        self, stage_name: str, amdgpu_family: str = ""
-    ) -> StorageLocation:
-        """Location for a multi-arch stage log directory.
-
-        Multi-arch CI uploads logs per stage (and optionally per GPU family)
-        rather than per artifact_group. Generic stages get a single directory;
-        per-arch stages (e.g., math-libs) get a subdirectory per family.
-
-        Args:
-            stage_name: Build stage (e.g., 'foundation', 'math-libs')
-            amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
-        """
-        if amdgpu_family:
-            return StorageLocation(
-                self.bucket, f"{self.prefix}/logs/{stage_name}/{amdgpu_family}"
-            )
-        return StorageLocation(self.bucket, f"{self.prefix}/logs/{stage_name}")
-
     def log_file(self, artifact_group: str, filename: str) -> StorageLocation:
         """Location for a specific file within the log_dir() subtree.
 
@@ -164,9 +161,28 @@ class WorkflowOutputRoot:
             self.bucket, f"{self.prefix}/logs/{artifact_group}/index.html"
         )
 
-    def log_root_index(self) -> StorageLocation:
+    def root_log_index(self) -> StorageLocation:
         """Location for the root log index HTML (server-side generated)."""
         return StorageLocation(self.bucket, f"{self.prefix}/logs/index.html")
+
+    def stage_log_dir(
+        self, stage_name: str, amdgpu_family: str = ""
+    ) -> StorageLocation:
+        """Location for a multi-arch stage log directory.
+
+        Multi-arch CI uploads logs per stage (and optionally per GPU family)
+        rather than per artifact_group. Generic stages get a single directory;
+        per-arch stages (e.g., math-libs) get a subdirectory per family.
+
+        Args:
+            stage_name: Build stage (e.g., 'foundation', 'math-libs')
+            amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
+        """
+        if amdgpu_family:
+            return StorageLocation(
+                self.bucket, f"{self.prefix}/logs/{stage_name}/{amdgpu_family}"
+            )
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/{stage_name}")
 
     def build_observability(self, artifact_group: str) -> StorageLocation:
         """Location for build observability HTML (within log_dir())."""
@@ -196,6 +212,16 @@ class WorkflowOutputRoot:
             f"{self.prefix}/manifests/{artifact_group}/therock_manifest.json",
         )
 
+    # -- Native packages --------------------------------------------------------
+
+    def native_packages(self, pkg_type: str) -> StorageLocation:
+        """Location for the native Linux packages directory.
+
+        Args:
+            pkg_type: Package type ('deb' or 'rpm').
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/packages/{pkg_type}")
+
     # -- Python packages --------------------------------------------------------
 
     def python_packages(self, artifact_group: str = "") -> StorageLocation:
@@ -210,12 +236,6 @@ class WorkflowOutputRoot:
         suffix = f"/{artifact_group}" if artifact_group else ""
         return StorageLocation(self.bucket, f"{self.prefix}/python{suffix}")
 
-    # -- Tarballs ---------------------------------------------------------------
-
-    def tarballs(self) -> StorageLocation:
-        """Location for the tarballs directory."""
-        return StorageLocation(self.bucket, f"{self.prefix}/tarballs")
-
     # -- Factories --------------------------------------------------------------
 
     @classmethod
@@ -226,7 +246,6 @@ class WorkflowOutputRoot:
         github_repository: str | None = None,
         workflow_run: dict | None = None,
         lookup_workflow_run: bool = False,
-        release_type: str | None = None,
     ) -> "WorkflowOutputRoot":
         """Create from CI workflow context.
 
@@ -246,8 +265,6 @@ class WorkflowOutputRoot:
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
-            release_type: Release type override (e.g. "dev", "nightly"). If
-                None, falls back to the RELEASE_TYPE environment variable.
         """
         workflow_run_id = (
             run_id if lookup_workflow_run and workflow_run is None else None
@@ -256,7 +273,6 @@ class WorkflowOutputRoot:
             github_repository=github_repository,
             workflow_run_id=workflow_run_id,
             workflow_run=workflow_run,
-            release_type=release_type,
         )
         return cls(
             bucket=bucket,
@@ -289,11 +305,19 @@ class WorkflowOutputRoot:
         )
 
 
+# ---------------------------------------------------------------------------
+# Bucket selection logic
+# ---------------------------------------------------------------------------
+
+# Cutover date for bucket naming change (TheRock #2046).
+# Workflows before this date used therock-artifacts; after, therock-ci-artifacts.
+_BUCKET_CUTOVER_DATE = datetime.fromisoformat("2025-11-11T16:18:48+00:00")
+
+
 def _retrieve_bucket_info(
     github_repository: str | None = None,
     workflow_run_id: str | None = None,
     workflow_run: dict | None = None,
-    release_type: str | None = None,
 ) -> tuple[str, str]:
     """Determine S3 bucket and external_repo prefix for a workflow run.
 
@@ -305,19 +329,67 @@ def _retrieve_bucket_info(
         - external_repo: ``''`` for ROCm/TheRock, or ``'{owner}-{repo}/'``
         - bucket: S3 bucket name
     """
-    if not github_repository:
-        github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
+    _log("Retrieving bucket info...")
 
-    artifact_bucket_config = get_artifacts_bucket_config_for_workflow_run(
-        github_repository=github_repository,
-        release_type=release_type,
-        workflow_run_id=workflow_run_id,
-        workflow_run=workflow_run,
-    )
+    if github_repository:
+        _log(f"  (explicit) github_repository: {github_repository}")
+    else:
+        github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
+        _log(f"  (implicit) github_repository: {github_repository}")
+
+    # Fetch workflow_run from API if not provided but workflow_run_id is set.
+    # Deferred import: github_actions is an optional dependency not available in
+    # all environments (e.g. local dev without the GHA support package installed).
+    if workflow_run is None and workflow_run_id is not None:
+        from github_actions.github_actions_api import gha_query_workflow_run_by_id
+
+        workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
+
+    # Extract metadata from workflow_run if available
+    curr_commit_dt = None
+    if workflow_run is not None:
+        _log(f"  workflow_run_id             : {workflow_run['id']}")
+        head_github_repository = workflow_run["head_repository"]["full_name"]
+        is_pr_from_fork = head_github_repository != github_repository
+        _log(f"  head_github_repository      : {head_github_repository}")
+        _log(f"  is_pr_from_fork             : {is_pr_from_fork}")
+
+        curr_commit_dt = datetime.strptime(
+            workflow_run["updated_at"], "%Y-%m-%dT%H:%M:%SZ"
+        )
+        curr_commit_dt = curr_commit_dt.replace(tzinfo=timezone.utc)
+    else:
+        is_pr_from_fork = os.environ.get("IS_PR_FROM_FORK", "false") == "true"
+        _log(f"  (implicit) is_pr_from_fork  : {is_pr_from_fork}")
+
     owner, repo_name = github_repository.split("/")
     external_repo = (
-        f"{owner}-{repo_name}/"
-        if artifact_bucket_config.name == "therock-ci-artifacts-external"
-        else ""
+        ""
+        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
+        else f"{owner}-{repo_name}/"
     )
-    return (external_repo, artifact_bucket_config.name)
+
+    release_type = os.environ.get("RELEASE_TYPE")
+    if release_type:
+        _VALID_RELEASE_TYPES = {"dev", "nightly", "prerelease"}
+        if release_type not in _VALID_RELEASE_TYPES:
+            raise ValueError(
+                f"Invalid RELEASE_TYPE={release_type!r}, "
+                f"expected one of {sorted(_VALID_RELEASE_TYPES)}"
+            )
+        _log(f"  (implicit) RELEASE_TYPE: {release_type}")
+        bucket = f"therock-{release_type}-artifacts"
+    else:
+        if external_repo == "":
+            bucket = "therock-ci-artifacts"
+            if curr_commit_dt and curr_commit_dt <= _BUCKET_CUTOVER_DATE:
+                bucket = "therock-artifacts"
+        else:
+            bucket = "therock-ci-artifacts-external"
+            if curr_commit_dt and curr_commit_dt <= _BUCKET_CUTOVER_DATE:
+                bucket = "therock-artifacts-external"
+
+    _log("Retrieved bucket info:")
+    _log(f"  external_repo: {external_repo}")
+    _log(f"  bucket       : {bucket}")
+    return (external_repo, bucket)
