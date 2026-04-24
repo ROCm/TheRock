@@ -128,7 +128,7 @@ Users are encouraged to identify their local GPU architecture and install packag
 
 | Component         | Meta package for all device packages                                                               |
 | :---------------- | :------------------------------------------------------------------------------------------------- |
-| component         | meta pacakge for host + all device packages                                                        |
+| component         | meta package for host + all device packages                                                        |
 | component-host    | Host-only package                                                                                  |
 | component-$device | $device is the llvm gfx architecture; each device package must have no conflict with other devices, is dependent on host|
 | component-dev     | headers, static libraries (if any), cmake, example codes and other utils                           |]
