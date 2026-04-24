@@ -2721,7 +2721,7 @@
       "amdrocm-opencl"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "Complete ROCm SDK metapackage with development tools and OpenCL",
+    "Description_Short": "Complete ROCm Core SDK metapackage with development tools",
     "Description_Long": "Comprehensive ROCm SDK metapackage aggregating development environment and tools. Combines core runtime/development packages, developer tools (profilers, debugger), and OpenCL support. Provides complete software development kit for building, optimizing, and debugging GPU-accelerated applications on ROCm platform.",
     "Section": "devel",
     "Priority": "optional",
