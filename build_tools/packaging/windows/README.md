@@ -146,3 +146,7 @@ Delete any files found, then repair the installation:
 ```bat
 msiexec /fvomus amdrocm-runtimes.msi /qn
 ```
+
+## See Also
+
+- [MSI generator script usage](msi-generator-usage.md)
