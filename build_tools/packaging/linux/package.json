@@ -193,7 +193,7 @@
     ],
     "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
     "Description_Short": "AMD HIP runtime libraries for GPU execution on ROCm platforms",
-    "Description_Long": "HIP (Heterogeneous-compute Interface for Portability) runtime libraries providing GPU kernel execution, memory management, and device control APIs. Enables portable GPU computing across AMD and NVIDIA platforms. Includes runtime binaries, shared libraries, and documentation for developing GPU-accelerated applications.",
+    "Description_Long": "HIP runtime libraries providing GPU kernel execution, memory management, and device control APIs. Enables portable GPU computing across AMD and NVIDIA platforms. Includes runtime binaries, shared libraries, and documentation for developing GPU-accelerated applications.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
