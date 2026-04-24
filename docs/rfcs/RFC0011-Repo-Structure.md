@@ -27,7 +27,7 @@ repo.amd.com's open source software release publications need standardization. I
 - **amdgpu** *(reserved for future use)*  
 - **archives** *(unmaintained releasees, for reference only)*
 - **rocm** (current rocm folder with non production releases, move to archives in 6 months)
-- **rocm-ecosystem**
+- **rocm-platform**
   - **standard**
     - **nightly** *(Retention policy: 30 dev, 120 nightly)*
       - **pyindex** *(central nightly wheel repository for all ROCm components)*
