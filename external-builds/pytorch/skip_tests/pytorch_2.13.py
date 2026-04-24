@@ -31,6 +31,9 @@ skip_tests = {
             # Absolute difference: 0.0008928775787353516 (up to 1e-05 allowed)
             # Relative difference: 0.0002304106921389532 (up to 1.3e-06 allowed)
             "test_CTCLoss_cudnn_cuda",
+            # --- Added from CI run 24859184370 ---
+            # TestNNDeviceTypeCUDA: AssertionError: Tensor-likes are not close! Mismatched elements: 6474 / 48480 (13.4%) Greatest ab...
+            "test_ctc_loss_cudnn_tensor_cuda_cuda",
         ],
         "distributions": [
             # SIGSEGV - OpenBLAS exceeds precompiled 128-thread hard limit
@@ -44,6 +47,108 @@ skip_tests = {
             "test_triggers",
             # LoggingTests - string comparison mismatch in log output
             "test_logs_out",
+            # --- Added from CI run 24859184370 ---
+            # AutogradFunctionTests: AssertionError: RuntimeError not raised
+            "test_aliased_intermediate_captured_by_side_effect",
+            # DictTests: ImportError: cannot import name '_canonical_node_names' from 'torch._functorch.partitioners' (/__...
+            "test_canonical_names_different_models",
+            "test_canonical_names_invariant_to_dict_order",
+            # EnumTests: torch._dynamo.exc.Unsupported: User-defined object with overridden __hash__ Explanation: Found a ...
+            "test_dispatch_key_as_dict_key",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_epilogue_copy_stream_tracking",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_epilogue_copy_streams_inference",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_event_synchronize_tracing",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_event_tracing",
+            # StructuredTraceTest: AssertionError graph module text mismatch
+            "test_example_training_fn",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_external_event_synchronize_threads_inputs",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_grad",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_grad_non_tensor_input",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_grad_over_grad",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_grad_two_tensor_all_grad_has_aux",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_grad_two_tensor_has_aux",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_hessian",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_hessian_argnums",
+            # AutogradFunctionTests: AssertionError: Tensor-likes are not close! Mismatched elements: 8 / 8 (100.0%) Greatest absolute...
+            "test_inplace_op_with_side_effect_wrong_grad",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jacfwd",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jacfwd_has_aux",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jacfwd_randomness",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jacfwd_two_tensors_argnums",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jacrev",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jacrev_has_aux",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jacrev_two_tensors_argnums",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jvp_has_aux",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jvp_jvp",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jvp_simple",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jvp_two_tensors_disable_enable_disable_grad",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jvp_two_tensors_disable_grad",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_jvp_two_tensors_has_aux",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_local_stream_enter_exit",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_local_stream_nested_enter_exit",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_nested_stream_enter_exit",
+            # ActivationCheckpointingNonStrictTracerTests: AttributeError: module 'torch.compiler' has no attribute '_patch_engine_backward'
+            "test_patch_engine_backward_does_not_leak_backward_tag",
+            "test_patch_engine_backward_requires_non_strict_tracing",
+            # EnumTests: torch._dynamo.exc.Unsupported: User-defined object with overridden __hash__ Explanation: Found a ...
+            "test_pybind11_enum_as_dict_key",
+            # EnumTests: torch._dynamo.exc.Unsupported: Builtin `operator.*` comparison with constant `self` failed Explan...
+            "test_pybind11_enum_equality",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_record_stream_problem_basic",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_record_stream_problem_interleaved",
+            # ContextlibContextManagerTests: AssertionError graph module text mismatch
+            "test_retrace_grad",
+            # TestDefaultBackend: AttributeError: module 'torch.compiler' has no attribute 'set_default_backend'
+            "test_set_default_backend",
+            "test_set_default_backend_explicit_override",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_stream_backward_simple",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_stream_backward_sync",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_stream_enter_exit",
+            # TestStreams: AssertionError graph module text mismatch
+            "test_stream_with_mutation",
+            # SubclassTests: RuntimeError: prims::convert_element_type() Expected a value of type 'Tensor' for argument 'a' bu...
+            "test_tensorify_under_disabled_torch_function",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_vjp",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_vjp_has_aux",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_vjp_multiple_outputs",
+            # FuncTorchHigherOrderOpTests: AssertionError graph module text mismatch
+            "test_vjp_multiple_outputs_python_struct",
         ],
         "export": [
             # ROCm does not support inline asm instructions
@@ -66,6 +171,107 @@ skip_tests = {
             "test_fake_export_nonzero_cuda_float32",
             # TestExportOnFakeCudaCUDA - preserve original behavior
             "test_preserve_original_behavior_cuda",
+            # --- Added from CI run 24859184370 ---
+            # TestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_gradient_tracking_tensors",
+            # CppSerdesTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_gradient_tracking_tensors_cpp_serdes",
+            # RetraceExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_gradient_tracking_tensors_retraceability_nonstrict",
+            # RetraceExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_gradient_tracking_tensors_retraceability_strict",
+            # SerDesExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_gradient_tracking_tensors_serdes_nonstrict",
+            # SerDesExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_gradient_tracking_tensors_serdes_strict",
+            # StrictExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_gradient_tracking_tensors_strict",
+            # StrictExportV2TestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_gradient_tracking_tensors_strict_export_v2",
+            # TrainingIRToRunDecompExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_gradient_tracking_tensors_training_ir_to_decomp_nonstrict",
+            # TrainingIRToRunDecompExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_gradient_tracking_tensors_training_ir_to_decomp_strict",
+            # TestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_complex_dtype",
+            # CppSerdesTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_complex_dtype_cpp_serdes",
+            # RetraceExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_complex_dtype_retraceability_nonstrict",
+            # RetraceExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_complex_dtype_retraceability_strict",
+            # SerDesExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_complex_dtype_serdes_nonstrict",
+            # SerDesExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_complex_dtype_serdes_strict",
+            # StrictExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_complex_dtype_strict",
+            # StrictExportV2TestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_complex_dtype_strict_export_v2",
+            # TrainingIRToRunDecompExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_complex_dtype_training_ir_to_decomp_nonstrict",
+            # TrainingIRToRunDecompExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_complex_dtype_training_ir_to_decomp_strict",
+            # TestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_inplace_ops",
+            # CppSerdesTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_inplace_ops_cpp_serdes",
+            # RetraceExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_inplace_ops_retraceability_nonstrict",
+            # RetraceExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_inplace_ops_retraceability_strict",
+            # SerDesExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_inplace_ops_serdes_nonstrict",
+            # SerDesExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_inplace_ops_serdes_strict",
+            # StrictExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_inplace_ops_strict",
+            # StrictExportV2TestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_inplace_ops_strict_export_v2",
+            # TrainingIRToRunDecompExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_inplace_ops_training_ir_to_decomp_nonstrict",
+            # TrainingIRToRunDecompExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_inplace_ops_training_ir_to_decomp_strict",
+            # TestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_multiple_outputs",
+            # CppSerdesTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_multiple_outputs_cpp_serdes",
+            # RetraceExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_multiple_outputs_retraceability_nonstrict",
+            # RetraceExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_multiple_outputs_retraceability_strict",
+            # SerDesExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_multiple_outputs_serdes_nonstrict",
+            # SerDesExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_multiple_outputs_serdes_strict",
+            # StrictExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_multiple_outputs_strict",
+            # StrictExportV2TestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_multiple_outputs_strict_export_v2",
+            # TrainingIRToRunDecompExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_multiple_outputs_training_ir_to_decomp_nonstrict",
+            # TrainingIRToRunDecompExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_multiple_outputs_training_ir_to_decomp_strict",
+            # TestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_nested",
+            # CppSerdesTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_nested_cpp_serdes",
+            # RetraceExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_nested_retraceability_nonstrict",
+            # RetraceExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_nested_retraceability_strict",
+            # SerDesExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_nested_serdes_nonstrict",
+            # SerDesExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_nested_serdes_strict",
+            # StrictExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_nested_strict",
+            # StrictExportV2TestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_nested_strict_export_v2",
+            # TrainingIRToRunDecompExportNonStrictTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_nested_training_ir_to_decomp_nonstrict",
+            # TrainingIRToRunDecompExportTestExport: AssertionError: Expected FakeTensor, got <class 'torch.Tensor'>
+            "test_jvp_export_nested_training_ir_to_decomp_strict",
         ],
         "inductor": [
             # BenchmarkMultiTemplateFusionGpuTest - extern code mismatch
@@ -214,6 +420,52 @@ skip_tests = {
             "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_float32",
             "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_bfloat16",
             "test_binary_ufunc_numerical_remainder_backend_inductor_numerics_cuda_float16",
+            # --- Added from CI run 24859184370 ---
+            # GPUTests: AssertionError: Tensor-likes are not close! Mismatched elements: 1 / 2 (50.0%) Greatest absolute ...
+            "test_adaptive_avg_pool2d_flatten_sum_comprehensive_padding_True_cuda",
+            # TestCustomOpOutLowering: AttributeError: type object 'torch._C.Tag' has no attribute 'out'
+            "test_add_one_lowered_to_out_device_cpu",
+            "test_add_one_lowered_to_out_device_cuda",
+            # AOTInductorTestABICompatibleCpu: torch._inductor.exc.InductorError: CppCompileError: C++ compile error Command: /__w/TheRock/TheRo...
+            "test_aoti_fp8_cpu",
+            # ComboKernelMetadataTests: AssertionError: codegen output missing expected substring
+            "test_combo_inductor_meta_has_optimize_mem",
+            # ComboKernelMetadataTests: AssertionError: codegen output missing expected substring
+            "test_combo_inductor_meta_optimize_mem_false_in_training_forward",
+            # ComboKernelMetadataTests: AssertionError: codegen output missing expected substring
+            "test_combo_triton_meta_has_disable_ftz_disable_ftz_False",
+            # ComboKernelMetadataTests: AssertionError: codegen output missing expected substring
+            "test_combo_triton_meta_has_disable_ftz_disable_ftz_True",
+            # TestInductorOpInfoCUDA: torch._inductor.exc.InductorError: RuntimeError: CUDA driver error: 209 Set TORCHDYNAMO_VERBOSE=1...
+            "test_comprehensive_randint_like_cuda_float64",
+            # PaddingTest: AssertionError: Scalars are not equal! Expected 1 but got 2. Absolute difference: 1 Relative diff...
+            "test_concat_output_no_redundant_copy_with_padding",
+            # DynamicShapesCpuTests: torch._inductor.exc.InductorError: AssertionError: ((s77, 7, 7), (7*s77, 7)) Set TORCHDYNAMO_VERB...
+            "test_group_norm_sdpa_bmm_cpu_cpp_fusion_dynamic_shapes_cpu",
+            # OverFusionTest: AttributeError: torch._inductor.config.triton.mix_order_reduction_max_reads does not exist
+            "test_max_reads_limits_fusion",
+            # TestCustomOpOutLowering: AttributeError: type object 'torch._C.Tag' has no attribute 'out'
+            "test_multi_output_lowered_to_out_device_cpu",
+            "test_multi_output_lowered_to_out_device_cuda",
+            # TestUnbackedSymintsCUDA: torch._dynamo.exc.Unsupported: Observed exception Explanation: Dynamo found no exception handler ...
+            "test_override_optimization_hint_compiled_cuda",
+            "test_override_optimization_hint_compiled_tolist_cuda",
+            # TestUnbackedSymintsCUDA: AttributeError: module 'torch._dynamo' has no attribute 'override_optimization_hint'
+            "test_override_optimization_hint_concrete_int_noop_cuda",
+            "test_override_optimization_hint_eager_cuda",
+            # TestUnbackedSymintsCUDA: torch._dynamo.exc.Unsupported: Observed exception Explanation: Dynamo found no exception handler ...
+            "test_override_optimization_hint_multiple_items_cuda",
+            "test_override_optimization_hint_rejects_backed_symbol_cuda",
+            # TestUnbackedSymintsCUDA: AttributeError: module 'torch._dynamo' has no attribute 'override_optimization_hint'
+            "test_override_optimization_hint_rejects_derived_expression_cuda",
+            "test_override_optimization_hint_rejects_non_int_val_cuda",
+            "test_override_optimization_hint_rejects_wrong_type_cuda",
+            # DeterministicTest: AttributeError: torch._inductor.config.batch_invariant does not exist
+            "test_persistent_reduction_batch_invariance",
+            # PaddingTest: AssertionError: Tensor-likes are not close! Mismatched elements: 3 / 4 (75.0%) Greatest absolute ...
+            "test_reduction_comprehensive_padding_stride",
+            # AOTInductorTestABICompatibleGpu: AssertionError: Tensor-likes are not close! Mismatched elements: 2 / 4 (50.0%) Greatest absolute ...
+            "test_update_inactive_constant_buffer_with_interleaved_folded_constants_cuda",
         ],
         "linalg": [
             # TestLinalgCUDA - tunableop_rocm addmm relu
@@ -274,6 +526,48 @@ skip_tests = {
         "functorch": [
             # TestOperatorsCUDA - conv3d numerical mismatch
             "test_grad_nn_functional_conv3d_cuda_float32",
+            # --- Added from CI run 24859184370 ---
+            # TestCodegenOutputAlias: AssertionError: Scalars are not equal! Expected 1 but got 0. Absolute difference: 1 Relative diff...
+            "test_alias_of_intermediate_save_as_output",
+            "test_codegen_source_contains_gen_alias",
+            "test_codegen_source_noop_handler",
+            # TestAcLogging: TypeError: create_activation_checkpointing_logging_structure_payload() got an unexpected keyword ...
+            "test_create_activation_checkpointing_logging_structure_payload",
+            # TestAcLogging: TypeError: create_structured_trace_for_min_cut_info() got an unexpected keyword argument 'memory_...
+            "test_create_structured_trace_for_min_cut_info",
+            # TestCodegenOutputAlias: AssertionError: Scalars are not equal! Expected 1 but got 0. Absolute difference: 1 Relative diff...
+            "test_cross_dtype_view_alias",
+            "test_mixed_alias_and_non_alias_outputs",
+            "test_multiple_views_of_same_input",
+            # TestVmapOperatorsOpInfoCUDA: RuntimeError: Batching rule not implemented for aten::unbind_copy.int. We could not generate a fa...
+            "test_op_has_batch_rule_unbind_copy_cuda_float32",
+            # TestCodegenOutputAlias: AssertionError: Scalars are not equal! Expected 1 but got 0. Absolute difference: 1 Relative diff...
+            "test_output_alias_with_mutation",
+            "test_output_aliases_intermediate",
+            "test_output_is_input",
+            "test_output_is_view_of_input",
+            "test_training_path_alias_of_intermediate_detach",
+            "test_training_path_is_input",
+            "test_training_path_mixed_requires_grad",
+            "test_training_path_mutation_and_alias",
+            "test_training_path_view_of_input",
+            "test_view_replay_config_false",
+            "test_view_replay_config_true",
+            # TestOperatorsCUDA: RuntimeError: Batching rule not implemented for aten::unbind_copy.int. We could not generate a fa...
+            "test_vjpvmap_unbind_copy_cuda_float32",
+            # TestVmapOperatorsOpInfoCUDA: RuntimeError: Batching rule not implemented for aten::unbind_copy.int. We could not generate a fa...
+            "test_vmap_exhaustive_unbind_copy_cuda_float32",
+            # TestOperatorsCUDA: RuntimeError: Batching rule not implemented for aten::unbind_copy.int. We could not generate a fa...
+            "test_vmapjvpall_has_batch_rule_unbind_copy_cuda_float32",
+            "test_vmapjvpall_unbind_copy_cuda_float32",
+            "test_vmapjvpvjp_unbind_copy_cuda_float32",
+            "test_vmapvjp_has_batch_rule_unbind_copy_cuda_float32",
+            "test_vmapvjp_unbind_copy_cuda_float32",
+            "test_vmapvjpvjp_unbind_copy_cuda_float32",
+            # TestCodegenOutputAlias: AssertionError: Scalars are not equal! Expected 1 but got 0. Absolute difference: 1 Relative diff...
+            "test_xform_aliased_output_tensoralias_wrapping",
+            "test_xform_metadata_only_mutation",
+            "test_xform_unsafe_view_output",
         ],
         "utils": [
             # TestStandaloneCPPJIT - error building extension
@@ -367,6 +661,100 @@ skip_tests = {
             "test_unused_forward_module",
             # TestViewOpsWithLocalTensor - list index out of range
             "test_view_ops",
+            # --- Added from CI run 24859184370 ---
+            # TestNewEmptyStridedUneven: RuntimeError: Process 2 exited with error code 10 and exception: Traceback (most recent call last...
+            "test_backward_partial_grad_with_transpose",
+            # TestZeroRedundancyOptimizerDistributed: RuntimeError: Process 1 exited with error code 10 and exception: Traceback (most recent call last...
+            "test_ddp_zero_overlap_use_gpu_True_use_interleaved_hook_False_gradient_as_bucket_view_True_static_graph_True_shard_buckets_True",
+            # ProcessGroupNCCLGroupTest: RuntimeError: Process 0 exited with error code 10 and exception: Traceback (most recent call last...
+            "test_extra_cuda_context",
+            # DistMathOpsTest: RuntimeError: Process 3 exited with error code 10 and exception: Traceback (most recent call last...
+            "test_interpolation_upsample_ops",
+            # TestNewEmptyStridedUneven: RuntimeError: Process 0 exited with error code 10 and exception: Traceback (most recent call last...
+            "test_new_empty_propagates_partial",
+            # TestDTensorCompile: AssertionError: True is not false : pad_tensor created a guard that concretized the symbolic dim:...
+            "test_pad_tensor_no_guard_on_symbolic_pad_size",
+            # TestSyncDecisionCrossRanks: RuntimeError: Process 0 exited with error code 10 and exception: Traceback (most recent call last...
+            "test_sync_decision_cross_ranks_different_node_order",
+            # TestSyncDecisionCrossRanks: RuntimeError: Process 1 exited with error code 10 and exception: Traceback (most recent call last...
+            "test_sync_decision_cross_ranks_invalid_node_error",
+        ],
+        "autograd": [
+            # TestSelectiveActivationCheckpoint: AssertionError: Scalars are not equal! Expected 1 but got 2. Absolute difference: 1 Relative diff...
+            "test_auto_naming_mode_names",
+            # TestAutogradDeviceTypeCUDA: AttributeError: module 'torch.autograd' has no attribute 'enforce_grad_layout_policy'
+            "test_enforce_grad_layout_policy_cuda",
+            # TestSelectiveActivationCheckpoint: AssertionError: Scalars are not equal! Expected 1 but got 2. Absolute difference: 1 Relative diff...
+            "test_function_with_more_than_one_output",
+            # TestSelectiveActivationCheckpoint: AssertionError: 'invocation index .* not found in storage' does not match 'Trying to backward an ...
+            "test_mismatch_extra_invocation_during_recompute",
+            # TestSelectiveActivationCheckpoint: AssertionError: 'not found in storage' does not match 'torch.utils.checkpoint: trying to save mor...
+            "test_mismatch_new_op_during_recompute",
+            # TestSelectiveActivationCheckpoint: AssertionError: The length of the sequences mismatch: 5 != 3
+            "test_policy_with_state",
+        ],
+        "cpp_extensions": [
+            # FunctionVersionCompatibilityTest: FileNotFoundError: [Errno 2] No such file or directory: 'g++'
+            "test_get_any_data_ptr_requires_2_10",
+            "test_get_template_any_data_ptr_requires_2_10",
+            "test_make_tensor_clones_and_call_foreach_requires_2_10",
+            "test_my__foreach_mul__requires_2_10",
+            "test_my__foreach_mul_requires_2_10",
+            "test_my__foreach_mul_vec_requires_2_10",
+            "test_my_contiguous_requires_2_10",
+            "test_my_empty_requires_2_10",
+            "test_my_from_blob_requires_2_10",
+            "test_my_full_requires_2_10",
+            "test_my_new_empty_zeros_requires_2_10",
+            "test_my_reshape_requires_2_10",
+            "test_my_set_requires_grad_requires_2_10",
+            "test_my_shape_requires_2_10",
+            "test_my_string_op_requires_2_10",
+            "test_my_string_op_variants_requires_2_10",
+            "test_my_subtract_requires_2_10",
+            "test_my_sum_out_requires_2_10",
+            "test_my_sum_requires_2_10",
+            "test_my_to_requires_2_10",
+            "test_my_view_requires_2_10",
+            "test_test_device_constructor_requires_2_10",
+            "test_test_device_equality_requires_2_10",
+            "test_test_device_index_requires_2_10",
+            "test_test_device_is_cpu_requires_2_10",
+            "test_test_device_is_cuda_requires_2_10",
+            "test_test_device_set_index_requires_2_10",
+            "test_test_get_num_threads_requires_2_10",
+            "test_test_parallel_for_requires_2_10",
+            "test_test_tensor_device_requires_2_10",
+        ],
+        "custom_ops": [
+            # TestCustomOpAPI: IndexError: tuple index out of range
+            "test_mutated_optional_arg_default_none",
+        ],
+        "dynamic_shapes": [
+            # TestMaybeFastEvalComparison: torch._dynamo.exc.UserError: Could not guard on data-dependent expression Eq(u4, u2) (unhinted: E...
+            "test_unbacked_slice_assignment_same_bounds",
+        ],
+        "fake_tensor": [
+            # FakeTensorConverterTest: AssertionError: Object comparison failed: torch.bfloat16 != torch.float32
+            "test_grad_dtype_functional_tensor_no_crash",
+            # PropagateRealTensorsFakeTensorConverterTest: AssertionError: Object comparison failed: torch.bfloat16 != torch.float32
+            "test_grad_dtype_functional_tensor_no_crash_propagate_real_tensors",
+            # FakeTensorConverterTest: AssertionError: Object comparison failed: torch.float32 != torch.bfloat16
+            "test_grad_dtype_make_fx",
+            # PropagateRealTensorsFakeTensorConverterTest: AssertionError: Object comparison failed: torch.float32 != torch.bfloat16
+            "test_grad_dtype_make_fx_propagate_real_tensors",
+            # FakeTensorConverterTest: AssertionError: torch.bfloat16 is not None
+            "test_grad_dtype_none_preserved",
+            # PropagateRealTensorsFakeTensorConverterTest: AssertionError: torch.bfloat16 is not None
+            "test_grad_dtype_none_preserved_propagate_real_tensors",
+            # FakeTensorConverterTest: AssertionError: Object comparison failed: torch.bfloat16 != torch.float32
+            "test_grad_dtype_preserved",
+            # PropagateRealTensorsFakeTensorConverterTest: AssertionError: Object comparison failed: torch.bfloat16 != torch.float32
+            "test_grad_dtype_preserved_propagate_real_tensors",
+        ],
+        "higher_order_ops": [
+            # TestInvokeSubgraphCompile: AssertionError: 'aliases an input or output.*clone' does not match 'RuntimeError: Argument 'view'...
+            "test_side_effect_with_aliased_intermediate",
         ],
     },
 }
