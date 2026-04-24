@@ -680,6 +680,16 @@ def filter_components_fromartifactory(
         if "Artifact_Gfxarch" in artifact:
             print(f"{pkg_name} : Artifact_Gfxarch key exists for artifacts {artifact}")
             is_gfxarch = str(artifact["Artifact_Gfxarch"]).lower() == "true"
+
+            # In kpack mode, skip non-gfxarch artifacts when building gfx-specific packages
+            # This prevents generic artifacts from being included in both base and arch-specific packages
+            if enable_kpack and gfx_arch != GFX_GENERIC and not is_gfxarch:
+                print(
+                    f"{pkg_name} : Skipping artifact '{artifact_prefix}' for {gfx_arch} package "
+                    f"(Artifact_Gfxarch=False, should only be in generic package)"
+                )
+                continue
+
             artifact_suffix = gfx_arch if is_gfxarch else "generic"
         else:
             artifact_suffix = dir_suffix
