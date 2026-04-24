@@ -29,44 +29,49 @@ repo.amd.com's open source software release publications need standardization. I
 - **archives** *(unmaintained releasees, for reference only)*
 - **rocm** (current rocm folder with non production releases, move to archives in 6 months)
 - **rocm-ecosystem**
-  - **nightly** *(Retention policy: 30 dev, 120 nightly)*
-    - **pyindex** *(central nightly wheel repository for all ROCm components)*
-    - **core**
-      - tarball
-      - zip
-      - whl
-      - packages
-    - **Linux Distros [a–z]**
-    - **windows**
-      - MSI and EXE files for Windows
-    - **expansions [a–z]**
-      - tarball
-      - whl
-      - packages
-    - **TBD** *(extras or individual releases)*
-      - Structure options:
-        - Flat or per-project folders  
-        - Per-project allows S3 bucket permission granularity by group but complicates duplication on `repo.amd.com`
-      - Flat structure:
-        - All projects share structure
-        - Each project has its own S3 bucket
-        - All projects must have unique product names (→ unique artifact names)
-      - tarball
-      - whl
-      - packages
-    - **pytorch**
-      - tarball *(maybe?)*
-      - whl
-    - **jax**
-    - **onnx-runtime**
+  - **standard**
+    - **nightly** *(Retention policy: 30 dev, 120 nightly)*
+      - **pyindex** *(central nightly wheel repository for all ROCm components)*
+      - **core**
+        - tarball
+        - zip
+        - whl
+        - packages
+      - **Linux Distros [a–z]**
+      - **windows**
+        - MSI and EXE files for Windows
+      - **expansions [a–z]**
+        - tarball
+        - whl
+        - packages
+      - **TBD** *(extras or individual releases)*
+        - Structure options:
+          - Flat or per-project folders  
+          - Per-project allows S3 bucket permission granularity by group but complicates duplication on `repo.amd.com`
+        - Flat structure:
+          - All projects share structure
+          - Each project has its own S3 bucket
+          - All projects must have unique product names (→ unique artifact names)
+        - tarball
+        - whl
+        - packages
+      - **pytorch**
+        - tarball *(maybe?)*
+        - whl
+      - **jax**
+      - **onnx-runtime**
 
   - **prerelease** *(Retention policy: 2 years)*
     - Mirrors nightly folder structure
     - Tested by QA
     - Must match structure of `repo.amd.com`
 
-  - **stable** or **sts** *(short-term support)*
+  - **stable**
     - Current ROCm Core release from TheRock
+    - **standard** or regular (includes debug symbols)
+    - **asan** (includes debug symbols
+    - **standard-rpath**
+    - **asan-rpath**
 
   - **lts**
     - `YYYYMM`
