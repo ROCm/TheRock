@@ -143,7 +143,7 @@ test_matrix = {
             "linux": 6,
             "windows": 1,
         },
-        # Short-term: Windows gfx110X hipBLASLt CI is flaky; re-enable when stable.
+        # Short-term: Windows gfx110X hipBLASLt CI is flaky (tracked in ROCM-23611); re-enable when stable.
         "exclude_family": {
             "windows": ["gfx110X-all"],
         },
