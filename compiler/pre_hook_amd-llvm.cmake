@@ -18,6 +18,15 @@ if(WIN32)
   set(LLVM_ENABLE_LIBCXX OFF)
   set(LLVM_ENABLE_RUNTIMES "compiler-rt" CACHE STRING "Enabled runtimes" FORCE)
   set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
+elseif(APPLE)
+  set(LLVM_BUILD_LLVM_DYLIB ON)
+  set(LLVM_LINK_LLVM_DYLIB ON)
+  set(LLVM_ENABLE_LIBCXX ON)
+  # Keep the Darwin bring-up compiler focused on HIP/COMGR code-object
+  # generation. Flang, OpenMP offload, and amdgcn target runtimes currently
+  # assume Linux HSA/KFD packaging and are not needed for gfx1201 kernels.
+  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
+  set(LLVM_ENABLE_RUNTIMES "" CACHE STRING "Enabled runtimes" FORCE)
 else()
   set(LLVM_BUILD_LLVM_DYLIB ON)
   set(LLVM_LINK_LLVM_DYLIB ON)
@@ -107,7 +116,11 @@ endif()
 # we have never enabled benchmarks,
 # disabling more explicitly after a bug fix enabled.
 set(LLVM_INCLUDE_BENCHMARKS OFF)
-set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
+if(APPLE)
+  set(LLVM_TARGETS_TO_BUILD "AMDGPU;AArch64;X86" CACHE STRING "Enable LLVM Targets" FORCE)
+else()
+  set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
+endif()
 
 # Packaging.
 set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
@@ -142,6 +155,8 @@ set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator" CACHE STRING
 #   primary.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../../../lib;$ORIGIN/../../rocm_sysdeps/lib")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  set(CMAKE_INSTALL_RPATH "@loader_path/../lib;@loader_path/../../../lib")
 endif()
 
 # Disable all implicit LLVM tools by default so that we can allow-list just what

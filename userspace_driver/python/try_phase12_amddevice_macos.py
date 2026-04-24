@@ -7,28 +7,14 @@ address the Buffer by its MemoryHandle.gpu_addr.
 from __future__ import annotations
 
 import ctypes
-import struct
 import time
 
+from amd_gpu_driver.commands.pm4 import PM4PacketBuilder
 from amd_gpu_driver.device import AMDDevice
-
-PACKET3_WRITE_DATA = 0x37
-WRITE_DATA_DST_SEL_MEM_ASYNC = 5
-WRITE_DATA_WR_CONFIRM = 1 << 20
 
 
 def build_write_data(addr: int, values: list[int]) -> bytes:
-    n_body = 3 + len(values)
-    header = (3 << 30) | (((n_body - 1) & 0x3FFF) << 16) | (PACKET3_WRITE_DATA << 8)
-    control = (WRITE_DATA_DST_SEL_MEM_ASYNC << 8) | WRITE_DATA_WR_CONFIRM
-    dwords = [
-        header,
-        control,
-        addr & 0xFFFFFFFF,
-        (addr >> 32) & 0xFFFFFFFF,
-        *values,
-    ]
-    return struct.pack(f"<{len(dwords)}I", *dwords)
+    return PM4PacketBuilder().write_data(addr, values).build()
 
 
 def main() -> None:

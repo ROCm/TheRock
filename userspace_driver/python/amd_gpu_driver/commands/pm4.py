@@ -51,6 +51,10 @@ WRITE_DATA_DST_SEL_MEM_MAPPED = 1
 WRITE_DATA_DST_SEL_MEM_ASYNC = 5
 WRITE_DATA_WR_CONFIRM = 1 << 20
 WRITE_DATA_ENGINE_SEL_ME = 0
+WRITE_DATA_CACHE_POLICY_LRU = 0
+WRITE_DATA_CACHE_POLICY_STREAM = 1
+WRITE_DATA_CACHE_POLICY_NOA = 2
+WRITE_DATA_CACHE_POLICY_BYPASS = 3
 
 # Cache operations for ACQUIRE_MEM
 CP_COHER_CNTL_TC_ACTION = 1 << 23
@@ -236,9 +240,14 @@ class PM4PacketBuilder:
         dst_sel: int = WRITE_DATA_DST_SEL_MEM_ASYNC,
         wr_confirm: bool = True,
         engine_sel: int = WRITE_DATA_ENGINE_SEL_ME,
+        cache_policy: int = WRITE_DATA_CACHE_POLICY_BYPASS,
     ) -> PM4PacketBuilder:
         """WRITE_DATA: write DWORD values to a GPU memory address."""
-        control = ((dst_sel & 0xF) << 8) | ((engine_sel & 0x3) << 30)
+        control = (
+            ((dst_sel & 0xF) << 8)
+            | ((cache_policy & 0x3) << 25)
+            | ((engine_sel & 0x3) << 30)
+        )
         if wr_confirm:
             control |= WRITE_DATA_WR_CONFIRM
         self._pkt3(

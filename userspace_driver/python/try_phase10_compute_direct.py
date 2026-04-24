@@ -68,6 +68,7 @@ COMPUTE_DOORBELL = 0x20
 PACKET3_WRITE_DATA = 0x37
 WRITE_DATA_DST_SEL_MEM_ASYNC = 5
 WRITE_DATA_WR_CONFIRM = 1 << 20
+WRITE_DATA_CACHE_POLICY_BYPASS = 3 << 25
 
 
 def main() -> None:
@@ -118,6 +119,13 @@ def main() -> None:
         (ctypes.c_uint64 * 1).from_address(bar2_cpu + index * 4)[0] = (
             value & 0xFFFFFFFFFFFFFFFF
         )
+
+    def advance_wptr(value):
+        vram_wr64(WPTR_OFF, value)
+        if os.environ.get("PHASE10_MMIO_WPTR") == "1":
+            gc0_wr(regCP_HQD_PQ_WPTR_LO, value & 0xFFFFFFFF)
+            gc0_wr(regCP_HQD_PQ_WPTR_HI, (value >> 32) & 0xFFFFFFFF)
+        doorbell_wr64(COMPUTE_DOORBELL, value)
 
     for base, size in (
         (MQD_OFF, MQD_SIZE),
@@ -240,8 +248,7 @@ def main() -> None:
     # PM4 type-3 NOP: header + one body DW.
     vram_wr32(RING_OFF, 0xC0001000)
     vram_wr32(RING_OFF + 4, 0)
-    vram_wr64(WPTR_OFF, 2)
-    doorbell_wr64(COMPUTE_DOORBELL, 2)
+    advance_wptr(2)
 
     print(f"\n== compute PM4 NOP doorbell index=0x{COMPUTE_DOORBELL:x} wptr=2 ==")
     deadline = time.time() + 5
@@ -285,8 +292,7 @@ def main() -> None:
         for i, word in enumerate(dwords):
             vram_wr32(RING_OFF + (((start + i) % ring_dw) * 4), word)
         end = start + len(dwords)
-        vram_wr64(WPTR_OFF, end)
-        doorbell_wr64(COMPUTE_DOORBELL, end)
+        advance_wptr(end)
 
         print(f"\n== compute RELEASE_MEM fence=0x{fence_mc:x} value=0x{fence_value:x} "
               f"start=0x{start:x} end=0x{end:x} ==")
@@ -318,7 +324,12 @@ def main() -> None:
 
         n_body = 3 + len(values)
         header = (3 << 30) | (((n_body - 1) & 0x3FFF) << 16) | (PACKET3_WRITE_DATA << 8)
-        control = (WRITE_DATA_DST_SEL_MEM_ASYNC << 8) | WRITE_DATA_WR_CONFIRM
+        dst_sel = int(os.environ.get("PHASE10_WRITE_DATA_DST_SEL", str(WRITE_DATA_DST_SEL_MEM_ASYNC)), 0)
+        cache_policy = int(os.environ.get("PHASE10_WRITE_DATA_CACHE_POLICY", "3"), 0)
+        wr_confirm = os.environ.get("PHASE10_WRITE_DATA_WR_CONFIRM", "1") != "0"
+        control = (dst_sel << 8) | ((cache_policy & 0x3) << 25)
+        if wr_confirm:
+            control |= WRITE_DATA_WR_CONFIRM
         dwords = [
             header,
             control,
@@ -331,10 +342,12 @@ def main() -> None:
         for i, word in enumerate(dwords):
             vram_wr32(RING_OFF + (((start + i) % ring_dw) * 4), word)
         end = start + len(dwords)
-        vram_wr64(WPTR_OFF, end)
-        doorbell_wr64(COMPUTE_DOORBELL, end)
+        advance_wptr(end)
 
-        print(f"\n== compute WRITE_DATA addr=0x{write_addr:x} start=0x{start:x} end=0x{end:x} ==")
+        print(
+            f"\n== compute WRITE_DATA addr=0x{write_addr:x} start=0x{start:x} "
+            f"end=0x{end:x} control=0x{control:08x} =="
+        )
         deadline = time.time() + 5
         last = None
         while time.time() < deadline:

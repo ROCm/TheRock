@@ -8,8 +8,13 @@
 # compiler.
 # TODO: Switch windows to use our own clang.
 set(_system_toolchain "amd-llvm")
-if(WIN32)
+if(WIN32 OR APPLE)
   set(_system_toolchain "")
+endif()
+
+set(_therock_shared_library_suffix ".so")
+if(APPLE)
+  set(_therock_shared_library_suffix ".dylib")
 endif()
 
 ################################################################################
@@ -136,7 +141,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
 
   therock_test_validate_shared_lib(
     PATH ROCR-Runtime/dist/lib
-    LIB_NAMES libhsa-runtime64.so
+    LIB_NAMES "libhsa-runtime64${_therock_shared_library_suffix}"
   )
 
   ##############################################################################
@@ -197,6 +202,13 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   else()
     # Non-Windows CLR options.
+    if(APPLE)
+      list(APPEND HIP_CLR_CMAKE_ARGS
+        "-DUSE_PROF_API=OFF"
+        "-DHIP_ENABLE_ROCPROFILER_REGISTER=OFF"
+        "-D__HIP_ENABLE_PCH=OFF"
+      )
+    endif()
     list(APPEND HIP_CLR_RUNTIME_DEPS
       rocminfo  # Various things expect to be able to find the rocminfo tools
       rocprofiler-register
@@ -264,9 +276,9 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   therock_test_validate_shared_lib(
     PATH clr/dist/lib
     LIB_NAMES
-      libamdhip64.so
-      libhiprtc-builtins.so
-      libhiprtc.so
+      "libamdhip64${_therock_shared_library_suffix}"
+      "libhiprtc-builtins${_therock_shared_library_suffix}"
+      "libhiprtc${_therock_shared_library_suffix}"
   )
   if(WIN32)
     ##############################################################################
@@ -457,15 +469,15 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
   therock_test_validate_shared_lib(
     PATH ocl-clr/dist/lib/opencl
     LIB_NAMES
-      libamdocl64.so
+      "libamdocl64${_therock_shared_library_suffix}"
   )
 
   # Ensure runtime dependencies of libamdocl64.so (for example,
   # libamd_comgr_loader.so) are discoverable by the dynamic loader when
   # running the validation test. Some configurations (e.g. Windows) do not
   # register this test, so guard the property update accordingly.
-  if(TEST therock-validate-shared-lib-libamdocl64.so)
-    set_tests_properties(therock-validate-shared-lib-libamdocl64.so
+  if(TEST "therock-validate-shared-lib-libamdocl64${_therock_shared_library_suffix}")
+    set_tests_properties("therock-validate-shared-lib-libamdocl64${_therock_shared_library_suffix}"
       PROPERTIES
         ENVIRONMENT
           "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/core/ocl-clr/dist/lib:$ENV{LD_LIBRARY_PATH}"

@@ -114,6 +114,7 @@ class _DirectComputeQueue:
     eop_mc: int
     rptr_mc: int
     wptr_mc: int
+    wptr: int = 0
 
 
 class MacOSQueueManager:
@@ -346,10 +347,16 @@ class MacOSQueueManager:
             raise RuntimeError("Queue has no ring buffer")
         if len(packets) % 4:
             raise ValueError("compute PM4 packet stream must be DWORD-aligned")
+        meta = self._direct_compute.get(queue.queue_id)
+        if meta is None:
+            raise RuntimeError("missing direct compute queue metadata")
 
         ring_addr = queue.ring_buffer.cpu_addr
         ring_size = queue.ring_size
-        wptr = ctypes.c_uint64.from_address(queue.write_ptr_addr).value
+        # BAR0 CPU reads can return stale data on this eGPU mapping. Keep the
+        # write pointer in host bookkeeping and only use BAR0 as GPU-visible
+        # writeback storage.
+        wptr = meta.wptr
         ring_dw = ring_size // 4
         start_dw = wptr % ring_dw
 
@@ -363,9 +370,21 @@ class MacOSQueueManager:
         new_wptr = wptr + len(packets) // 4
         ctypes.c_uint64.from_address(queue.write_ptr_addr).value = new_wptr
 
+        # Doorbell/WPTR polling is not sufficient with the current macOS BAR
+        # mappings. The proven path explicitly advances the selected HQD WPTR.
+        self._select_hqd(meta.me, meta.pipe, meta.queue)
+        active = self._gc0_rd(regCP_HQD_ACTIVE)
+        if active == 0:
+            self._gc1_wr(regGRBM_GFX_CNTL, 0)
+            raise RuntimeError("direct macOS compute HQD is inactive at submit")
+        self._gc0_wr(regCP_HQD_PQ_WPTR_LO, new_wptr & 0xFFFFFFFF)
+        self._gc0_wr(regCP_HQD_PQ_WPTR_HI, (new_wptr >> 32) & 0xFFFFFFFF)
+        self._gc1_wr(regGRBM_GFX_CNTL, 0)
+
         # Compute/MES doorbells on gfx12 are 64-bit wptr values at BAR2 +
         # doorbell_dword_index * 4.
         ctypes.c_uint64.from_address(queue.doorbell_addr).value = new_wptr
+        meta.wptr = new_wptr
 
     def _ensure_bar_mappings(self) -> None:
         """Map VRAM BAR0 and doorbell BAR2 if bringup did not pre-map them."""
@@ -523,7 +542,13 @@ class MacOSQueueManager:
         self._gc0_wr(regCP_HQD_PQ_DOORBELL_CONTROL, mqd[0x8F])
         self._gc0_wr(regCP_HQD_PERSISTENT_STATE, mqd[0x84])
         self._gc0_wr(regCP_HQD_ACTIVE, 1)
+        time.sleep(0.010)
+        post_active = self._gc0_rd(regCP_HQD_ACTIVE)
         self._gc1_wr(regGRBM_GFX_CNTL, 0)
+        if post_active == 0:
+            raise RuntimeError(
+                "direct macOS compute HQD did not become active after programming"
+            )
 
     def _alloc_doorbell(self) -> int:
         """Allocate a doorbell slot. Returns BAR-relative offset."""

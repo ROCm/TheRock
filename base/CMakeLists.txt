@@ -67,7 +67,7 @@ therock_cmake_subproject_activate(rocm-core)
 # rocm_smi_lib
 ################################################################################
 
-if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
+if(UNIX AND NOT APPLE)  # rocm-smi-lib is Linux sysfs/libdrm based.
 
 therock_cmake_subproject_declare(rocm_smi_lib
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocm-smi-lib"

@@ -812,7 +812,12 @@ function(therock_cmake_subproject_activate target_name)
     endif()
     # Make the link dir visible to CMake find_library.
     string(APPEND _init_contents "list(APPEND CMAKE_LIBRARY_PATH \"${_private_link_dir}\")\n")
-    if(NOT MSVC)
+    if(APPLE)
+      # Darwin ld does not support ELF's -rpath-link; the normal -L lookup is
+      # sufficient for link-time resolution, with install rpaths handled separately.
+      string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L${_private_link_dir}\")\n")
+      string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L${_private_link_dir}\")\n")
+    elseif(NOT MSVC)
       # The normal way.
       string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
       string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")

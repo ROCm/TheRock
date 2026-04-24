@@ -69,9 +69,18 @@ def main():
     _dump_features(c, "after PWR_SOC")
     ring = result.ring
 
-    # --- Step 2: MMHUB init. ---
-    print("\n== Step 2: init_mmhub ==")
-    init_mmhub(c)
+    # --- Step 2: (skipped) MMHUB init. ---
+    # Enabling MMHUB's L1_TLB / L2 cache in init_mmhub broke PSP's
+    # ability to DMA to DART-mapped system addresses for the
+    # cmd/fence buffers (unmapped access = fault once TLB is live).
+    # Load GFX firmware first with MMHUB still in vBIOS-POST
+    # passthrough mode, then do init_mmhub afterward only if needed.
+    do_init_mmhub = os.environ.get("INIT_MMHUB") == "1"
+    if do_init_mmhub:
+        print("\n== Step 2: init_mmhub ==")
+        init_mmhub(c)
+    else:
+        print("\n== Step 2: init_mmhub SKIPPED (set INIT_MMHUB=1 to enable) ==")
 
     # --- Step 3: Load IMU + RLC via PSP. ---
     print("\n== Step 3: load IMU + RLC via PSP LOAD_IP_FW ==")

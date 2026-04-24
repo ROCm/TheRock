@@ -420,6 +420,10 @@ kern_return_t ROCmGPUUserClient::CopyClientMemoryForType_Impl(
         if (ret != kIOReturnSuccess)
             return kIOReturnNotFound;
 
+        if (options) {
+            *options = (*options & ~0xF00ULL) | kIOMemoryMapCacheModeInhibit;
+        }
+
         // _CopyDeviceMemoryWithIndex's `forClient` parameter must be an
         // IOService attached to the PCI device. Our UserClient is attached
         // to the Driver (which is itself attached to the PCI device), so

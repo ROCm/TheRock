@@ -2,6 +2,7 @@ pyproject.toml
 python/amd_gpu_driver/__init__.py
 python/amd_gpu_driver/device.py
 python/amd_gpu_driver/errors.py
+python/amd_gpu_driver/multi_gpu.py
 python/amd_gpu_driver/program.py
 python/amd_gpu_driver/topology.py
 python/amd_gpu_driver.egg-info/PKG-INFO

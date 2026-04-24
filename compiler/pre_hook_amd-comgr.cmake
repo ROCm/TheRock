@@ -13,7 +13,11 @@ else()
   set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
 endif()
 
-set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/llvm/lib;$ORIGIN/rocm_sysdeps/lib")
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  set(CMAKE_INSTALL_RPATH "@loader_path;@loader_path/llvm/lib")
+else()
+  set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/llvm/lib;$ORIGIN/rocm_sysdeps/lib")
+endif()
 
 # See Comgr::LoadLib in clr comgrctx.cpp: On windows, this expects the cmgr
 # library to have a versioned output name, but there does not seem to be a

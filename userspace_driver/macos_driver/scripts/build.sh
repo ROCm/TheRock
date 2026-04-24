@@ -89,7 +89,7 @@ xcodebuild build \
     2>&1 | tail -20
 
 # Find the built products
-DEXT_PATH=$(find "$BUILD_DIR" -name "ROCmGPUDriver.dext" -type d 2>/dev/null | head -1)
+DEXT_PATH=$(find "$BUILD_DIR" -name "*.dext" -type d 2>/dev/null | head -1)
 APP_PATH=$(find "$BUILD_DIR" -name "ROCmGPUApp.app" -type d 2>/dev/null | head -1)
 
 echo ""
