@@ -131,7 +131,8 @@ Users are encouraged to identify their local GPU architecture and install packag
 | component         | meta pacakge for host + all device packages                                                        |
 | component-host    | Host-only package                                                                                  |
 | component-$device | $device is the llvm gfx architecture; each device package must have no conflict with other devices, is dependent on host|
-| component-dev     | headers, static libraries (if any), cmake, example codes and other utils                           |
+| component-dev     | headers, static libraries (if any), cmake, example codes and other utils                           |]
+| component-src     | source files for the component, has dependencies only only other src packages                      |
 
 Example behaviour for amdrocm-blas:
 ```
@@ -176,6 +177,7 @@ The following table shows the meta packages that will be available:
 | amdrocm-opencl          |                                                                      | Components needed to run OpenCL                                               |
 | amdrocm-openmp          |                                                                      | Components needed to build OpenMP                                             |
 | amdrocm-core-sdk        |                                                                      | Everything                                                                    |
+| amdrocm-src             | Inclucludes all src packages in ROCm Core SDK                                   |
 
 ## Package Granularity
 
