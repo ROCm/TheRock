@@ -91,6 +91,25 @@ Optional Fields
 
 ## Building Packages
 
+The `--target` argument specifies the GFX architecture(s) for which packages should be built.
+If not provided, the script will automatically detect available architectures from the artifact directory.
+
+### Auto-detection (Recommended)
+
+```bash
+./build_tools/packaging/linux/build_package.py \
+   --artifacts-dir ./ARTIFACTS_DIR \
+   --dest-dir ./OUTPUT_PKG \
+   --rocm-version 7.1.0 \
+   --pkg-type rpm
+```
+
+The script will scan the artifact directory and automatically detect GFX architectures
+from directory names matching the pattern `{name}_{component}_{target_family}`
+(e.g., `blas_lib_gfx1100`, `miopen_lib_gfx942`).
+
+### Explicit Target Specification
+
 ```bash
 ./build_tools/packaging/linux/build_package.py \
    --artifacts-dir ./ARTIFACTS_DIR \
@@ -99,6 +118,9 @@ Optional Fields
    --rocm-version 7.1.0 \
    --pkg-type rpm
 ```
+
+You can specify one or more targets explicitly if needed. Multiple targets can be provided
+space-separated, comma-separated, or semicolon-separated.
 
 To install locally built packages
 
@@ -127,7 +149,18 @@ pip install -r build_tools/packaging/linux/requirements.txt<br>
 
 ### Usage
 
-RPM package:<br>
+RPM package with auto-detected architectures:<br>
+
+```bash
+./build_tools/packaging/linux/build_package.py \
+   --artifacts-dir ./ARTIFACTS_DIR \
+   --dest-dir ./OUTPUT_PKG \
+   --rocm-version 7.1.0 \
+   --version-suffix build_type \
+   --pkg-type rpm
+```
+
+RPM package with explicit target:<br>
 
 ```bash
 ./build_tools/packaging/linux/build_package.py \
@@ -139,7 +172,18 @@ RPM package:<br>
    --pkg-type rpm
 ```
 
-Debian package:<br>
+Debian package with auto-detected architectures:<br>
+
+```bash
+./build_tools/packaging/linux/build_package.py \
+   --artifacts-dir ./ARTIFACTS_DIR \
+   --dest-dir ./OUTPUT_PKG \
+   --rocm-version 7.1.0 \
+   --version-suffix build_type \
+   --pkg-type deb
+```
+
+Debian package with explicit target:<br>
 
 ```bash
 ./build_tools/packaging/linux/build_package.py \
@@ -151,7 +195,19 @@ Debian package:<br>
    --pkg-type deb
 ```
 
-Debian RPATH package:<br>
+Debian RPATH package with auto-detected architectures:<br>
+
+```bash
+./build_tools/packaging/linux/build_package.py \
+   --artifacts-dir ./ARTIFACTS_DIR \
+   --dest-dir ./OUTPUT_PKG \
+   --rocm-version 7.1.0 \
+   --pkg-type deb \
+   --version-suffix build_type \
+   --rpath-pkg
+```
+
+Debian RPATH package with explicit target:<br>
 
 ```bash
 ./build_tools/packaging/linux/build_package.py \
@@ -161,5 +217,5 @@ Debian RPATH package:<br>
    --rocm-version 7.1.0 \
    --pkg-type deb \
    --version-suffix build_type \
-   --rpath-pkg True
+   --rpath-pkg
 ```
