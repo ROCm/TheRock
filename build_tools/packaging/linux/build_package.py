@@ -797,7 +797,9 @@ def run(args: argparse.Namespace):
     if not args.enable_kpack:
         args.enable_kpack = _load_kpack_from_manifest(artifacts_dir)
         if args.enable_kpack:
-            print("Detected KPACK_SPLIT_ARTIFACTS in manifest — producing host + device packages")
+            print(
+                "Detected KPACK_SPLIT_ARTIFACTS in manifest — producing host + device packages"
+            )
 
     # Configure architecture based on multi-arch mode
     if args.enable_kpack:

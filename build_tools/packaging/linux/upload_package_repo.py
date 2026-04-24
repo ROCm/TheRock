@@ -694,7 +694,9 @@ def _resolve_upload_target(
 
     if args.job == "ci":
         if args.s3_bucket == "therock-ci-artifacts-external":
-            prefix = f"ROCm-TheRock/{args.artifact_id}-{args.platform}/packages/{pkg_type}"
+            prefix = (
+                f"ROCm-TheRock/{args.artifact_id}-{args.platform}/packages/{pkg_type}"
+            )
         else:
             prefix = f"{args.artifact_id}-{args.platform}/packages/{pkg_type}"
         return (
@@ -754,7 +756,9 @@ def main():
         create_rpm_repo(package_dir)
 
     # Upload packages and metadata to S3
-    s3_client, uploaded_packages = upload_to_s3(package_dir, bucket, prefix, dedupe=dedupe)
+    s3_client, uploaded_packages = upload_to_s3(
+        package_dir, bucket, prefix, dedupe=dedupe
+    )
 
     # Efficiently update repository metadata by merging with existing metadata
     regenerate_repo_metadata_from_s3(
