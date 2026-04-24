@@ -99,6 +99,17 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "aux-overlay",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "False",
@@ -158,17 +169,6 @@
             "Name": "hipcc",
             "Components": [
               "dev"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "base",
-        "Artifact_Subdir": [
-          {
-            "Name": "aux-overlay",
-            "Components": [
-              "lib"
             ]
           }
         ]
@@ -1081,6 +1081,53 @@
     "Gfxarch": "True"
   },
   {
+    "Package": "amdrocm-ccl-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-ccl-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-ccl-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm primitive library test files",
+    "Description_Long": "Contains rocprim, hipcub and rocthrust test files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "prim",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocPRIM_tests",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "hipCUB",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "rocThrust",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
     "Package": "amdrocm-ccl-devel",
     "Version": "",
     "Architecture": "amd64",
@@ -1377,6 +1424,28 @@
             "Name": "rocminfo",
             "Components": [
               "run"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocm-cmake",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "half",
+            "Components": [
+              "dev"
             ]
           }
         ]
@@ -1785,7 +1854,7 @@
       }
     ],
 
-    "Gfxarch": "True",
+    "Gfxarch": "False",
     "DisablePackaging": "True"
   },
 
@@ -1830,7 +1899,7 @@
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
 
   {
@@ -1870,7 +1939,83 @@
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "False"
+  },
+
+  {
+    "Package": "amdrocm-rocshmem",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-base"
+    ],
+    "RPMRequires": [
+      "amdrocm-base"
+    ],
+    "Maintainer": "rocSHMEM Maintainer <rocshmem-maintainer@amd.com>",
+    "Description_Short": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Description_Long": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems/",
+    "Artifactory": [
+      {
+        "Artifact": "rocshmem",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocshmem",
+            "Components": [
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      }
+    ],
+
+    "Gfxarch": "False"
+  },
+
+  {
+    "Package": "amdrocm-rocshmem-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-rocshmem"
+    ],
+    "RPMRequires": [
+      "amdrocm-rocshmem"
+    ],
+    "Maintainer": "rocSHMEM Maintainer <rocshmem-maintainer@amd.com>",
+    "Description_Short": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Description_Long": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems/",
+    "Artifactory": [
+      {
+        "Artifact": "rocshmem",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocshmem",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+
+    "Gfxarch": "False"
   },
 
   {
@@ -2384,6 +2529,7 @@
       "amdrocm-ck",
       "amdrocm-dnn",
       "amdrocm-rccl",
+      "amdrocm-rocshmem",
       "amdrocm-math-common",
       "amdrocm-amdsmi",
       "amdrocm-hipify",
@@ -2403,6 +2549,7 @@
       "amdrocm-ck",
       "amdrocm-dnn",
       "amdrocm-rccl",
+      "amdrocm-rocshmem",
       "amdrocm-math-common",
       "amdrocm-amdsmi",
       "amdrocm-hipify",
@@ -2463,6 +2610,7 @@
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
+      "amdrocm-rocshmem-devel",
       "amdrocm-dnn-devel",
       "amdrocm-decode-devel",
       "amdrocm-jpeg-devel"
@@ -2480,6 +2628,7 @@
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
+      "amdrocm-rocshmem-devel",
       "amdrocm-dnn-devel",
       "amdrocm-decode-devel",
       "amdrocm-jpeg-devel"
@@ -2494,6 +2643,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
+    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {

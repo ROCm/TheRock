@@ -21,6 +21,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from copy import deepcopy
 
 # Add tests directory to path for extended_tests imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
@@ -386,6 +387,18 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # hipDNN integration tests (unit tests for the integration test harness)
+    "hipdnn-integration-tests": {
+        "job_name": "hipdnn-integration-tests",
+        "fetch_artifact_args": "--hipdnn --hipdnn-integration-tests --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_hipdnn_integration_tests.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # hipDNN samples tests
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",
@@ -401,7 +414,7 @@ test_matrix = {
     # MIOpen provider tests
     "miopenprovider": {
         "job_name": "miopenprovider",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 20,
         "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
         "platform": ["linux", "windows"],
@@ -410,20 +423,18 @@ test_matrix = {
             "windows": 1,
         },
     },
-    # TODO(iree-org/fusilli/issues/57): Enable fusilli tests once build is
-    # enabled by default.
-    # "fusilliprovider": {
-    #     "job_name": "fusilliprovider",
-    #     "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler --tests",
-    #     "timeout_minutes": 15,
-    #     "test_script": f"python {_get_script_path('test_fusilliprovider.py')}",
-    #     "platform": ["linux"],
-    #     "total_shards": 1,
-    # },
+    "fusilliprovider": {
+        "job_name": "fusilliprovider",
+        "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler  --hipdnn-integration-tests --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fusilliprovider.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {"linux": 1},
+    },
     # hipBLASLt provider tests
     "hipblasltprovider": {
         "job_name": "hipblasltprovider",
-        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --tests",
+        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_hipblasltprovider.py')}",
         "platform": ["linux", "windows"],
@@ -435,7 +446,7 @@ test_matrix = {
     # Disabled until rocm-libraries bump that has hip-kernel-provider passing
     # "hipkernelprovider": {
     #     "job_name": "hipkernelprovider",
-    #     "fetch_artifact_args": "--hipdnn --hipkernelprovider --tests",
+    #     "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
     #     "timeout_minutes": 15,
     #     "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
     #     "platform": ["linux", "windows"],
@@ -561,27 +572,31 @@ def run():
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
-    is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
-    run_functional_tests = str2bool(os.getenv("RUN_FUNCTIONAL_TESTS", "false"))
+    run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
-    # Determine which test matrix to use
-    if is_benchmark_workflow:
-        # For benchmark workflow, use ONLY benchmark_matrix
-        # Benchmarks don't use test_type/test_labels (all have total_shards=1, no filtering)
-        logging.info("Using benchmark_matrix only (benchmark tests)")
-        selected_matrix = benchmark_matrix.copy()
-    else:
-        # For regular workflow, use test_matrix
-        logging.info("Using test_matrix only (regular tests)")
-        selected_matrix = test_matrix.copy()
-        # For nightly/scheduled builds, merge functional tests into the test matrix
-        if run_functional_tests and functional_matrix:
-            logging.info(
-                f"Merging {len(functional_matrix)} functional test(s) into test matrix"
-            )
-            selected_matrix.update(functional_matrix)
+    # Build the selected test matrix:
+    # 1) Start from regular tests
+    # 2) Optionally merge extended tests (functional + benchmarks)
+    selected_matrix: dict = deepcopy(test_matrix)
+    logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
+
+    if run_extended_tests and functional_matrix:
+        logging.info(
+            f"Merging {len(functional_matrix)} functional test(s) into test matrix"
+        )
+        for key, value in functional_matrix.items():
+            selected_matrix[key] = deepcopy(value)
+
+    if run_extended_tests and benchmark_matrix:
+        logging.info(
+            f"Merging {len(benchmark_matrix)} benchmark test(s) into test matrix"
+        )
+        for key, value in benchmark_matrix.items():
+            entry = deepcopy(value)
+            entry["is_benchmark"] = True
+            selected_matrix[key] = entry
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]
@@ -603,7 +618,8 @@ def run():
 
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
-        if key != "sanity" and test_labels and key not in test_labels:
+        parsed_test_labels = [c.split("test:")[-1] for c in test_labels]
+        if key != "sanity" and parsed_test_labels and key not in parsed_test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 

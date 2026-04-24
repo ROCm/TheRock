@@ -17,12 +17,17 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def setUp(self):
         # Save environment so tests don't leak state
         self._orig_env = os.environ.copy()
+        # Save module-level attributes that tests may change
+        self._orig_functional_matrix = fetch_test_configurations.functional_matrix
+        self._orig_benchmark_matrix = fetch_test_configurations.benchmark_matrix
+        self._orig_get_all_families = (
+            fetch_test_configurations.get_all_families_for_trigger_types
+        )
 
         os.environ["RUNNER_OS"] = "Linux"
         os.environ["AMDGPU_FAMILIES"] = "gfx94X-dcgpu"
         os.environ["TEST_TYPE"] = "full"
         os.environ["TEST_LABELS"] = "[]"
-        os.environ["IS_BENCHMARK_WORKFLOW"] = "false"
         os.environ["PROJECTS_TO_TEST"] = "*"
 
         # Capture gha_set_output instead of writing to GitHub
@@ -36,6 +41,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def tearDown(self):
         os.environ.clear()
         os.environ.update(self._orig_env)
+        # Restore module-level attributes
+        fetch_test_configurations.functional_matrix = self._orig_functional_matrix
+        fetch_test_configurations.benchmark_matrix = self._orig_benchmark_matrix
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            self._orig_get_all_families
+        )
 
     def _get_components(self):
         self.assertIn("components", self.gha_output)
@@ -147,13 +158,47 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("rocroller", names)
 
     # -----------------------
-    # Benchmark workflow
+    # Functional test merging via run_extended_tests
     # -----------------------
 
-    def test_benchmark_workflow_uses_benchmark_matrix_only(self):
-        os.environ["IS_BENCHMARK_WORKFLOW"] = "true"
+    def _setup_functional_test(self):
+        """Common setup for functional tests: fake matrix + isolate from other components."""
+        os.environ["PROJECTS_TO_TEST"] = "func1"
+        fetch_test_configurations.functional_matrix = {
+            "func1": {
+                "job_name": "func1",
+                "platform": ["linux"],
+                "total_shards": 1,
+            }
+        }
 
-        # Replace benchmark_matrix with a tiny fake one
+    def test_functional_merged_when_enabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "true"
+        self._setup_functional_test()
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(len(components), 1)
+        self.assertEqual(components[0]["job_name"], "func1")
+
+    def test_functional_not_merged_when_disabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "false"
+        self._setup_functional_test()
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("func1", names)
+
+    # -----------------------
+    # Benchmark merging via run_extended_tests
+    # -----------------------
+
+    def _setup_benchmark_test(self):
+        """Common setup for benchmark tests: fake matrix + isolate from other components."""
+        os.environ["PROJECTS_TO_TEST"] = "bench1"
         fetch_test_configurations.benchmark_matrix = {
             "bench1": {
                 "job_name": "bench1",
@@ -162,11 +207,27 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             }
         }
 
+    def test_benchmarks_merged_when_extended_tests_enabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "true"
+        self._setup_benchmark_test()
+
         fetch_test_configurations.run()
         components = self._get_components()
 
         self.assertEqual(len(components), 1)
         self.assertEqual(components[0]["job_name"], "bench1")
+        self.assertTrue(components[0]["is_benchmark"])
+        self.assertEqual(components[0]["test_type"], "full")
+
+    def test_benchmarks_not_merged_when_extended_tests_disabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "false"
+        self._setup_benchmark_test()
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("bench1", names)
 
     # -----------------------
     # Multi-GPU logic (RCCL)
