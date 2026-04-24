@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| OS | Windows 10 1607 / Windows Server 2016 or later |
+| OS | Windows 11 / Windows Server 2019 or later |
 | Architecture | x86-64 |
 | Privileges | Administrator |
 | Disk space | ~200 MB |
@@ -55,8 +55,8 @@ Passing `ENABLE_LONG_PATHS=1` additionally writes:
 |---|---|---|
 | `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem` | `LongPathsEnabled` | `1` (DWORD) |
 
-This lifts the 260-character `MAX_PATH` limit system-wide. Requires Windows 10
-1607 or later. A reboot is needed for the change to propagate to all running
+This lifts the 260-character `MAX_PATH` limit system-wide. Requires Windows 11
+or Windows Server 2019 or later. A reboot is needed for the change to propagate to all running
 processes; processes started after the installer exits pick it up immediately.
 The key is removed on uninstall.
 
