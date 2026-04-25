@@ -348,19 +348,17 @@ if(THEROCK_ENABLE_ROCPROFV3)
       )
 
       if(${THEROCK_BUILD_TESTING})
-        # comment to retrigger CI
-        if(NOT THEROCK_DIST_AMDGPU_TARGETS
-           OR THEROCK_DIST_AMDGPU_TARGETS MATCHES "-NOTFOUND$")
+        if(NOT THEROCK_TEST_AMDGPU_TARGETS
+           OR THEROCK_TEST_AMDGPU_TARGETS MATCHES "-NOTFOUND$")
           message(FATAL_ERROR
-            "rocprofiler-systems-examples requires THEROCK_DIST_AMDGPU_TARGETS to be set "
-            "(set THEROCK_DIST_AMDGPU_FAMILIES or THEROCK_AMDGPU_FAMILIES).")
+            "THEROCK_TEST_AMDGPU_TARGETS is not set")
         endif()
 
         string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED
-          "${THEROCK_DIST_AMDGPU_TARGETS}")
+          "${THEROCK_TEST_AMDGPU_TARGETS}")
 
         therock_cmake_subproject_declare(rocprofiler-systems-examples
-          USE_DIST_AMDGPU_TARGETS
+          USE_TEST_AMDGPU_TARGETS
           EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems/examples"
           BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems-examples"
           BACKGROUND_BUILD
@@ -381,6 +379,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         therock_cmake_subproject_activate(rocprofiler-systems-examples)
 
         therock_provide_artifact(rocprofiler-systems-examples
+          TARGET_NEUTRAL
           DESCRIPTOR "${CMAKE_SOURCE_DIR}/profiler/artifact-rocprofiler-systems-examples.toml"
           COMPONENTS
             test

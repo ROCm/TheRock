@@ -726,7 +726,9 @@ disable_platforms = ["windows"]
 
 [artifacts.rocprofiler-systems-examples]
 artifact_group = "profiler-apps"
-type = "target-specific"
+# target-neutral (rather than target-specific) so the kpack artifact splitter
+# does not strip per-arch HIP offload bundles out of the example binaries.
+type = "target-neutral"
 artifact_deps = ["rocprofiler-systems"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
