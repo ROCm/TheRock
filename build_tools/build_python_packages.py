@@ -210,6 +210,7 @@ def _run_kpack_split(
             "rocwmma",
             "flatbuffers",
             "nlohmann-json",
+            "rocshmem",
         ],
         exclude_components=["test"],
         tarball_compression=args.devel_tarball_compression,

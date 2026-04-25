@@ -104,3 +104,7 @@ def rocprof_sys_sample() -> None:
 
 def rocprof_sys_python() -> None:
     _exec("bin/rocprof-sys-python")
+
+
+def rocprof_sys_attach() -> None:
+    _exec("bin/rocprof-sys-attach")
