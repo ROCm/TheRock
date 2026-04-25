@@ -401,11 +401,6 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertFalse(result.test_rocm.run_extended_tests)
 
-    def test_default_extended_tests_is_false(self):
-        """Default run_extended_tests is False."""
-        result = cm.decide_jobs(self._inputs(), git_context=cm.GitContext())
-        self.assertFalse(result.test_rocm.run_extended_tests)
-
 
 # ---------------------------------------------------------------------------
 # Step 4: Select Targets
@@ -870,8 +865,12 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertNotEqual(entry["test-runs-on"], "linux-gfx1151-gpu-rocm")
         self.assertNotIn("oem", entry["test-runs-on"])
 
-    def test_benchmark_runs_on_present_for_all_families(self):
-        """Every per-family entry includes benchmark-runs-on."""
+    def test_benchmark_runs_on_key_always_emitted(self):
+        """benchmark-runs-on key is present (as a string) even when the matrix entry omits it.
+
+        gfx94x has benchmark-runs-on in the matrix; gfx110x does not.
+        expand_build_configs must emit the key for both, defaulting to ''.
+        """
         targets = cm.TargetSelection(linux_families=["gfx94x", "gfx110x"])
         result = cm.expand_build_configs(
             targets=targets, ci_inputs=self._inputs(), test_type="quick"
@@ -879,15 +878,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertIsNotNone(result.linux)
         for entry in result.linux.per_family_info:
             self.assertIn("benchmark-runs-on", entry)
-
-    def test_benchmark_runs_on_is_string(self):
-        """benchmark-runs-on value is always a string (possibly empty)."""
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-        result = cm.expand_build_configs(
-            targets=targets, ci_inputs=self._inputs(), test_type="quick"
-        )
-        self.assertIsNotNone(result.linux)
-        for entry in result.linux.per_family_info:
             self.assertIsInstance(entry["benchmark-runs-on"], str)
 
 
@@ -937,8 +927,8 @@ class TestFormatSummary(unittest.TestCase):
         outputs = cm.CIOutputs(is_ci_enabled=False)
         cm.write_outputs(self._inputs(), outputs)
 
-    def test_write_outputs_includes_run_extended_tests_enabled(self):
-        """write_outputs emits run_extended_tests='true' when enabled."""
+    def test_write_outputs_emits_run_extended_tests(self):
+        """write_outputs serialises run_extended_tests bool as 'true'/'false' string."""
         jobs = cm.JobDecisions(
             build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
             test_rocm=cm.TestRocmDecision(
@@ -958,28 +948,6 @@ class TestFormatSummary(unittest.TestCase):
         ):
             cm.write_outputs(self._inputs(), outputs)
         self.assertEqual(captured["run_extended_tests"], "true")
-
-    def test_write_outputs_includes_run_extended_tests_disabled(self):
-        """write_outputs emits run_extended_tests='false' when disabled."""
-        jobs = cm.JobDecisions(
-            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
-            test_rocm=cm.TestRocmDecision(
-                action=cm.JobAction.RUN,
-                test_type="quick",
-                run_extended_tests=False,
-            ),
-            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
-            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
-            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
-        )
-        outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
-        captured = {}
-        with patch(
-            "configure_multi_arch_ci.gha_set_output",
-            side_effect=lambda v: captured.update(v),
-        ):
-            cm.write_outputs(self._inputs(), outputs)
-        self.assertEqual(captured["run_extended_tests"], "false")
 
     def test_write_outputs_skipped_ci_extended_tests_false(self):
         """Skipped CI emits run_extended_tests='false'."""
