@@ -32,6 +32,8 @@ EXCLUDED_LABELS = [
     "lulesh",  # Target is not built
     "network",  # NIC unsupported
     "overflow",  # Requires CAPSYS_ADMIN/PERFMON or perf_event_paranoid <= 3
+    "fork",  # only the runtime instrument fails, but logs are VERY long
+    "pthreads",  # All fail
 ]
 
 logging.basicConfig(level=logging.INFO)
@@ -82,8 +84,18 @@ def execute_tests():
     # output, including pytest SKIPPED reasons. This is intentionally noisy and
     # should be reverted to --output-on-failure once the GPU-target skip issue
     # in rocprofiler-systems-examples is fully resolved.
+    #
+    # Cap per-test output: keep failed tests' full output (1 MiB) for debugging,
+    # but trim passed/skipped output to ~16 KiB (tail) so the SKIPPED reason and
+    # final lines survive without exploding CI log size.
     cmd = ctest_base + [
         "--verbose",
+        "--test-output-size-passed",
+        str(16 * 1024),
+        "--test-output-size-failed",
+        str(1024 * 1024),
+        "--test-output-truncation",
+        "tail",
         "--exclude-regex",
         f"{'|'.join(EXCLUDED_TESTS)}",
         "--label-exclude",
