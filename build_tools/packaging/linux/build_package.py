@@ -8,8 +8,16 @@
 create RPM and DEB packages and upload to artifactory server
 
 ```
+# With explicit target specification:
 ./build_package.py --artifacts-dir ./ARTIFACTS_DIR  \
         --target gfx94X-dcgpu \
+        --dest-dir ./OUTPUT_PKGDIR \
+        --rocm-version 7.1.0 \
+        --pkg-type deb (or rpm) \
+        --version-suffix build_type (daily/master/nightly/release)
+
+# With auto-detection of targets from artifact directory:
+./build_package.py --artifacts-dir ./ARTIFACTS_DIR  \
         --dest-dir ./OUTPUT_PKGDIR \
         --rocm-version 7.1.0 \
         --pkg-type deb (or rpm) \
@@ -29,15 +37,51 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from email.utils import format_datetime
 from jinja2 import Environment, FileSystemLoader, Template
+from pathlib import Path
+
+# Setup paths
+SCRIPT_DIR = Path(__file__).resolve().parent
+BUILD_TOOLS_DIR = SCRIPT_DIR.parent.parent
+
+# Add build_tools directory to Python path to import _therock_utils
+# This allows the script to be run from anywhere: TheRock root or packaging/linux directory
+if str(BUILD_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(BUILD_TOOLS_DIR))
+
 from packaging_summary import *
 from packaging_utils import *
-from pathlib import Path
 from runpath_to_rpath import *
 
+from _therock_utils.artifacts import ArtifactCatalog
 
-SCRIPT_DIR = Path(__file__).resolve().parent
 # Default install prefix
 DEFAULT_INSTALL_PREFIX = "/opt/rocm/core"
+
+
+def get_all_target_families(artifact_dir):
+    """Extract the list of GFX architectures from artifact directory.
+
+    Auto-detects available GFX architectures by scanning the artifact directory
+    for directories matching the pattern {name}_{component}_{target_family}.
+    Used for CLI input detection when --target is not explicitly provided.
+
+    Parameters:
+        artifact_dir : The path to the Artifactory directory
+
+    Returns:
+        list : Sorted list of unique GFX architectures (e.g., ["gfx1100", "gfx942"])
+
+    Raises:
+        ValueError: If artifact directory does not exist
+    """
+    artifact_dir = Path(artifact_dir)
+
+    if not artifact_dir.exists() or not artifact_dir.is_dir():
+        raise ValueError(f"Artifact directory does not exist: {artifact_dir}")
+
+    # Use ArtifactCatalog from _therock_utils to get all target families
+    catalog = ArtifactCatalog(artifact_dir)
+    return sorted(catalog.all_target_families)
 
 
 ################### Debian package creation #######################
@@ -796,7 +840,28 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
         ValueError: If version string is invalid or package type is unsupported
     """
     dest_dir = Path(args.dest_dir).expanduser().resolve()
-    normalized_targets = normalize_target_list(args.target)
+
+    # Determine target architectures
+    if args.target:
+        # Use explicitly provided targets
+        normalized_targets = normalize_target_list(args.target)
+    else:
+        # Auto-detect from artifact directory
+        normalized_targets = get_all_target_families(args.artifacts_dir)
+        if not normalized_targets:
+            print(
+                f"No GFX architectures found in artifact directory: {args.artifacts_dir}. "
+                "Either provide --target explicitly or ensure artifacts are present."
+            )
+        else:
+            print(f"Auto-detected GFX architectures: {normalized_targets}")
+
+    # Output packaging architecture list to GitHub Actions
+    github_output = os.environ.get("GITHUB_OUTPUT")
+    if github_output and normalized_targets:
+        with open(github_output, "a", encoding="utf-8") as f:
+            targets_str = ",".join(normalized_targets)
+            f.write(f"PACKAGING_ARCH_LIST={targets_str}\n")
 
     # Configure architecture based on multi-arch mode
     if args.enable_kpack:
@@ -954,8 +1019,11 @@ def main(argv: list[str]):
         "--target",
         type=str,
         nargs="+",
-        required=True,
-        help="Graphics architecture(s) used for the artifacts (can specify multiple)",
+        required=False,
+        help="Graphics architecture(s) used for the artifacts. "
+        "Multiple targets can be specified space-separated, comma-separated, or semicolon-separated "
+        "(e.g., 'gfx1100 gfx1101', 'gfx1100,gfx1101', or 'gfx1100;gfx1101'). "
+        "If not provided, will auto-detect from artifact directory.",
     )
 
     p.add_argument(

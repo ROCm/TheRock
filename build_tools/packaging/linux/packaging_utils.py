@@ -840,6 +840,11 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
         else:
             artifact_suffix = gfx_arch
 
+        # When checking for a specific gfx architecture (not generic),
+        # skip generic-only artifacts - they don't contribute to gfx-specific packages
+        if gfx_arch != GFX_GENERIC and artifact_suffix == "generic":
+            continue
+
         for subdir in artifact["Artifact_Subdir"]:
             component_list = subdir["Components"]
             for component in component_list:
