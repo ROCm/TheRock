@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Multi-Arch Release Linux
+name: Multi-Arch Release Windows
 
 on:
   workflow_call:
@@ -31,7 +31,7 @@ permissions:
 jobs:
   build_artifacts:
     name: Build Artifacts
-    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
+    uses: ./.github/workflows/multi_arch_build_windows.yml
     secrets: inherit
     with:
       matrix_per_family_json: ${{ toJSON(fromJSON(inputs.build_config).per_family_info) }}
@@ -54,7 +54,7 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_tarballs.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      platform: linux
+      platform: windows
       package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -66,7 +66,7 @@ jobs:
   build_python_packages:
     needs: [build_artifacts]
     name: Build Python Packages
-    uses: ./.github/workflows/build_portable_linux_python_packages.yml
+    uses: ./.github/workflows/build_windows_python_packages.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -78,8 +78,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-
-  # TODO(#3334): build native packages (build_native_linux_packages.yml)
 
   publish_to_release_buckets:
     needs: [build_tarballs, build_python_packages]
@@ -111,13 +109,9 @@ jobs:
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
-            --platform=linux \
+            --platform=windows \
             --release-type="${{ inputs.release_type }}" \
             --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}"
 
-  # TODO: dispatch test artifacts per family (add workflow_dispatch to
-  #   test_artifacts.yml, then use benc-uk/workflow-dispatch here)
-
-  # TODO: dispatch pytorch wheels (release_portable_linux_pytorch_wheels.yml)
-
-  # TODO: dispatch jax wheels (release_portable_linux_jax_wheels.yml)
+  # TODO: dispatch test artifacts per family
+  # TODO: dispatch pytorch wheels

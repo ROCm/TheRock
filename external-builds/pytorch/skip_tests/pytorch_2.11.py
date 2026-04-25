@@ -61,6 +61,8 @@ skip_tests = {
             "test_resnet",
             # RuntimeError: miopenStatusUnknownError
             "test_graph_cudnn_dropout",
+            # Fatal Python error: Segmentation fault - https://github.com/ROCm/TheRock/issues/4745
+            "test_snapshot_include_traces",
         ],
         "nn": [
             # new in 2.11
@@ -69,6 +71,12 @@ skip_tests = {
         ],
         "torch": [
             "test_cpp_warnings_have_python_context_cuda",
+        ],
+    },
+    "gfx1151": {
+        "nn": [
+            # AssertionError: Tensor-likes are not close! - https://github.com/ROCm/TheRock/issues/4744
+            "test_Embedding_discontiguous_cuda",
         ],
     },
     # "gfx120": {

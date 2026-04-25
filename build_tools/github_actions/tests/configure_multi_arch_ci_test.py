@@ -36,12 +36,16 @@ def _run_from_environ(
     *,
     commit_ref: str = "main",
     build_variant: str = "release",
+    extra_env: dict[str, str] | None = None,
 ) -> cm.CIInputs:
     """Call CIInputs.from_environ() with a synthetic event payload.
 
     GitHub Actions sets GITHUB_EVENT_PATH to a JSON file containing the full
     webhook event payload. This helper writes a temporary JSON file and patches
     the environment to simulate that.
+
+    Workflow inputs (families, labels, prebuilt config) are passed via env vars,
+    matching how setup_multi_arch.yml passes them to the script.
 
     See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-environment-variables#default-environment-variables
     """
@@ -57,6 +61,8 @@ def _run_from_environ(
             "GITHUB_REF_NAME": commit_ref,
             "BUILD_VARIANT": build_variant,
         }
+        if extra_env:
+            env.update(extra_env)
         with patch.dict(os.environ, env, clear=False):
             return cm.CIInputs.from_environ()
     finally:
@@ -111,19 +117,18 @@ class TestCIInputsFromEnviron(unittest.TestCase):
     See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-environment-variables#default-environment-variables
     """
 
-    def test_workflow_dispatch_reads_inputs(self):
-        """workflow_dispatch inputs (families, labels, prebuilt config)."""
+    def test_workflow_dispatch_reads_inputs_from_env(self):
+        """Workflow inputs (families, labels, prebuilt config) come from env vars."""
         inputs = _run_from_environ(
             event_name="workflow_dispatch",
-            event_payload={
-                "inputs": {
-                    "linux_amdgpu_families": "gfx94X, gfx120X",
-                    "linux_test_labels": "test:rocprim",
-                    "windows_amdgpu_families": "",
-                    "windows_test_labels": "",
-                    "prebuilt_stages": "foundation,compiler-runtime",
-                    "baseline_run_id": "12345",
-                }
+            event_payload={},
+            extra_env={
+                "LINUX_AMDGPU_FAMILIES": "gfx94X, gfx120X",
+                "LINUX_TEST_LABELS": "test:rocprim",
+                "WINDOWS_AMDGPU_FAMILIES": "",
+                "WINDOWS_TEST_LABELS": "",
+                "PREBUILT_STAGES": "foundation,compiler-runtime",
+                "BASELINE_RUN_ID": "12345",
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
@@ -528,8 +533,8 @@ class TestSelectTargets(unittest.TestCase):
         with self.assertRaises(ValueError):
             cm.select_targets(inputs)
 
-    def test_workflow_dispatch_release_type_defaults_to_all_families(self):
-        """workflow_dispatch with release_type but no explicit families uses all."""
+    def test_workflow_dispatch_all_expands_to_all_families(self):
+        """workflow_dispatch with 'all' expands to all known families."""
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="workflow_dispatch",
@@ -537,11 +542,10 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
             release_type="dev",
+            linux_amdgpu_families=["all"],
+            windows_amdgpu_families=["all"],
         )
         result = cm.select_targets(inputs)
-        # Should have all families for Linux (at least presubmit + postsubmit + nightly)
-        self.assertGreater(len(result.linux_families), 0)
-        # Should include a nightly-only family that wouldn't appear in presubmit defaults
         all_families = get_all_families_for_trigger_types(
             ["presubmit", "postsubmit", "nightly"]
         )
@@ -551,6 +555,29 @@ class TestSelectTargets(unittest.TestCase):
         self.assertEqual(
             sorted(result.linux_families), sorted(linux_families_in_matrix)
         )
+        windows_families_in_matrix = [
+            name for name, info in all_families.items() if "windows" in info
+        ]
+        self.assertEqual(
+            sorted(result.windows_families), sorted(windows_families_in_matrix)
+        )
+
+    def test_workflow_dispatch_empty_means_no_families(self):
+        """workflow_dispatch with empty families builds nothing for that platform."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            release_type="dev",
+            # linux uses "none" sentinel value
+            linux_amdgpu_families=["none"],
+            # (windows omitted)
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(len(result.linux_families), 0)
+        self.assertEqual(len(result.windows_families), 0)
 
     def test_workflow_dispatch_release_type_with_explicit_families(self):
         """workflow_dispatch with release_type AND explicit families uses explicit list."""
