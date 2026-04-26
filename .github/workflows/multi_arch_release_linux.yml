@@ -11,6 +11,12 @@ on:
         description: JSON object with build configuration for this platform.
       rocm_package_version:
         type: string
+      rocm_deb_package_version:
+        type: string
+        description: ROCm DEB package version for native packages (e.g., 8.0.0).
+      rocm_rpm_package_version:
+        type: string
+        description: ROCm RPM package version for native packages (e.g., 8.0.0).
       test_type:
         type: string
       release_type:
@@ -78,10 +84,40 @@ jobs:
       contents: read
       id-token: write
 
-  # TODO(#3334): build native packages (build_native_linux_packages.yml)
+  build_native_deb_packages:
+    needs: [build_artifacts]
+    name: Build DEB Packages
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    with:
+      dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      artifact_run_id: ${{ github.run_id }}
+      rocm_version: ${{ inputs.rocm_deb_package_version }}
+      native_package_type: deb
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
+  build_native_rpm_packages:
+    needs: [build_artifacts]
+    name: Build RPM Packages
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    with:
+      dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      artifact_run_id: ${{ github.run_id }}
+      rocm_version: ${{ inputs.rocm_rpm_package_version }}
+      native_package_type: rpm
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
 
   publish_to_release_buckets:
-    needs: [build_tarballs, build_python_packages]
+    needs: [build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages]
     name: Publish to Release Buckets
     runs-on: ubuntu-24.04
     permissions:
