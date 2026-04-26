@@ -332,6 +332,7 @@ class S3Backend(ArtifactBackend):
 
 def create_backend_from_env(
     run_id: Optional[str] = None,
+    github_repository: Optional[str] = None,
     platform: Optional[str] = None,
 ) -> ArtifactBackend:
     """Create the appropriate backend based on environment variables.
@@ -362,6 +363,6 @@ def create_backend_from_env(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=run_id, platform=platform_name
+        run_id=run_id, platform=platform_name, github_repository=github_repository
     )
     return S3Backend(output_root=output_root)
