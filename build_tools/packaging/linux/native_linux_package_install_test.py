@@ -835,11 +835,8 @@ gpgcheck=0
 
         print(f"\n[PASS] rdhc.py found at: {rdhc_script}")
 
-        # Check if script is executable or can be run with python
-        if os.access(rdhc_script, os.X_OK):
-            cmd = [str(rdhc_script)]
-        else:
-            cmd = [sys.executable, str(rdhc_script)]
+        # Always run rdhc with this process's interpreter.
+        cmd = [sys.executable, str(rdhc_script)]
 
         # Set RDHC arguments for full test
         test_args = ["--rocm-install-prefix", rocm_install_prefix_arg, "--all"]
