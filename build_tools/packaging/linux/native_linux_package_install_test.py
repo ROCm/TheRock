@@ -285,8 +285,8 @@ class NativeLinuxPackageInstallTest:
 
         # Packages to install, in order
         self.package_names = [
-            f"amdrocm",
-            f"amdrocm-core-sdk",
+            "amdrocm",
+            "amdrocm-core-sdk",
         ]
 
     def setup_gpg_key(self) -> bool:
