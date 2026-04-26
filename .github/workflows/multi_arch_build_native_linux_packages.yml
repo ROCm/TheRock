@@ -120,18 +120,18 @@ jobs:
             --run-id="${{ env.ARTIFACT_RUN_ID }}" \
             --stage=all \
             --amdgpu-families="${{ env.DIST_AMDGPU_FAMILIES }}" \
+            --expand-family-to-targets \
             --output-dir="${{ env.OUTPUT_DIR }}"
 
       - name: Build Packages
         id: build-packages
         run: |
-          # Pass the target families as-is (semicolon-separated)
-          # build_package.py's normalize_target_list() handles all separators
-          # KPACK_SPLIT_ARTIFACTS is auto-detected from therock_manifest.json
+          # GFX architectures are auto-detected from the artifact directory
+          # (populated by --expand-family-to-targets in the fetch step).
+          # KPACK_SPLIT_ARTIFACTS is auto-detected from therock_manifest.json.
           python ./build_tools/packaging/linux/build_package.py \
             --dest-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --rocm-version  "${{ inputs.rocm_version }}" \
-            --target "${{ env.DIST_AMDGPU_FAMILIES }}" \
+            --rocm-version "${{ inputs.rocm_version }}" \
             --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
             --pkg-type "${{ inputs.native_package_type }}" \
             --version-suffix "${{ env.ARTIFACT_RUN_ID }}"
