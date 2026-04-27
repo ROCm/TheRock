@@ -20,6 +20,38 @@ on:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
         type: string
         default: ""
+      linux_amdgpu_families:
+        description: 'Comma-separated Linux GPU families. "all" = all, "none" or empty = skip.'
+        type: string
+        default: ""
+      windows_amdgpu_families:
+        description: 'Comma-separated Windows GPU families. "all" = all, "none" or empty = skip.'
+        type: string
+        default: ""
+      linux_test_labels:
+        description: "Comma-separated list of test labels for Linux."
+        type: string
+        default: ""
+      windows_test_labels:
+        description: "Comma-separated list of test labels for Windows."
+        type: string
+        default: ""
+      prebuilt_stages:
+        description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
+        type: string
+        default: ""
+      baseline_run_id:
+        description: "Workflow run ID to copy prebuilt stage artifacts from."
+        type: string
+        default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -61,16 +93,26 @@ jobs:
       - name: Checking out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
           # We need the parent commit to do a diff
           fetch-depth: 2
 
-      # The script reads GITHUB_EVENT_PATH directly for PR labels and
-      # workflow_dispatch inputs — no env var pass-through needed.
+      # Note: the script reads PR labels, the base ref, etc. from the event
+      # payload (GITHUB_EVENT_PATH). That is the original event that started
+      # the workflow run, which may not directly map to the "inputs" on
+      # the "workflow_call" trigger for this file.
       - name: Configuring CI options
         id: configure
         env:
           BUILD_VARIANT: ${{ inputs.build_variant }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
+          WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
+          LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
+          WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
+          PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
+          BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.
