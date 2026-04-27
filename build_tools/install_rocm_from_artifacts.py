@@ -25,6 +25,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--fft | --no-fft]
     [--composablekernel | --no-composablekernel]
     [--hipdnn | --no-hipdnn]
+    [--hipdnn-integration-tests | --no-hipdnn-integration-tests]
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
     [--miopenprovider | --no-miopenprovider]
@@ -348,6 +349,7 @@ def retrieve_artifacts_by_run_id(args):
             args.fft,
             args.composablekernel,
             args.hipdnn,
+            args.hipdnn_integration_tests,
             args.hipdnn_samples,
             args.miopen,
             args.miopenprovider,
@@ -395,6 +397,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("composable-kernel")
         if args.hipdnn:
             extra_artifacts.append("hipdnn")
+        if args.hipdnn_integration_tests:
+            extra_artifacts.append("hipdnn-integration-tests")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.miopen:
@@ -688,6 +692,13 @@ def main(argv):
         "--hipdnn",
         default=False,
         help="Include 'hipdnn' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hipdnn-integration-tests",
+        default=False,
+        help="Include 'hipdnn-integration-tests' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

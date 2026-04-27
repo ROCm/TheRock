@@ -42,6 +42,20 @@ on:
         description: "'true' if this is a kpack-split flat build."
         type: string
         default: "false"
+      container_image_name:
+        description: >-
+          Short, human-readable label for the container image (e.g. 'ubuntu24.04',
+          'ubi10', 'native'). Use 'native' (with an empty container_image_url) for
+          native runners like Windows.
+        type: string
+        default: "ubuntu24.04"
+      container_image_url:
+        description: >-
+          Container image reference (e.g. 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:...').
+          Only applied when test_runs_on targets Linux. Leave empty to run directly
+          on the runner (required for Windows and native Linux runners).
+        type: string
+        default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26"
 
   workflow_call:
     inputs:
@@ -72,6 +86,21 @@ on:
         description: "'true' if this is a kpack-split flat build."
         type: string
         default: "false"
+      container_image_name:
+        description: >-
+          Short, human-readable label for the container image (e.g. 'ubuntu24.04',
+          'ubi10', 'native'). Callers must pass this explicitly so this workflow
+          stays image-agnostic. Use 'native' (with an empty container_image_url)
+          for native runners like Windows.
+        required: true
+        type: string
+      container_image_url:
+        description: >-
+          Container image reference. Only applied when test_runs_on targets Linux.
+          Pass an empty string to run directly on the runner (required for Windows
+          and native Linux runners).
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -80,12 +109,12 @@ run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.rocm_version
 
 jobs:
   test_wheels:
-    name: Test ROCm wheels | ${{ inputs.amdgpu_family }}
+    name: Test ROCm wheels | ${{ inputs.amdgpu_family }} | ${{ inputs.container_image_name }}
     if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 30
     container:
-      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      image: ${{ contains(inputs.test_runs_on, 'linux') && inputs.container_image_url != '' && inputs.container_image_url || null }}
       options: --ipc host
         --group-add video
         --device /dev/kfd
@@ -94,8 +123,6 @@ jobs:
         --group-add 110
         --env-file /etc/podinfo/gha-gpu-isolation-settings
         --user 0:0 # Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
-    strategy:
-      fail-fast: false
     defaults:
       run:
         shell: bash
@@ -106,7 +133,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
+      # actions/setup-python only has prebuilt binaries for Ubuntu
       - name: Set up Python
+        if: ${{ inputs.container_image_url == '' || contains(inputs.container_image_name, 'ubuntu') }}
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ inputs.python_version }}

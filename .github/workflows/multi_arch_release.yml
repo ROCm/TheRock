@@ -26,44 +26,53 @@ on:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
         type: string
         default: ""
+      # For workflow_call, default to empty and trust the calling workflow to be explicit or pass "all".
       linux_amdgpu_families:
-        description: "Comma-separated list of Linux GPU families. Empty = all families."
+        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" or empty = skip.'
         type: string
         default: ""
       windows_amdgpu_families:
-        description: "Comma-separated list of Windows GPU families. Empty = all families."
+        description: 'Comma-separated list of Windows GPU families. "all" = all, "none" or empty = skip.'
+        type: string
+        default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". All developer-triggered jobs should use "dev"!'
+        description: 'Release type. All developer-triggered jobs should use "dev"!'
         type: choice
         options:
           - dev
-          - nightly
-          - prerelease
         default: dev
       prerelease_version:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
         type: string
         default: ""
+      # For workflow_dispatch, default to a single GPU family to limit CI load for most workflow runs.
+      # Note: empty string will be converted to the default by github, so we need an explicit "none".
       linux_amdgpu_families:
-        description: "Comma-separated list of Linux GPU families. Empty = all families."
+        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
         type: string
-        default: ""
+        default: "gfx94x"
       windows_amdgpu_families:
-        description: "Comma-separated list of Windows GPU families. Empty = all families."
+        description: 'Comma-separated list of Windows GPU families. "all" = all, "none" = skip platform.'
         type: string
-        default: ""
+        default: "gfx110x"
 
 permissions:
   contents: read
 
 run-name: >-
-  Multi-Arch Release (Linux ${{
-    inputs.linux_amdgpu_families || 'all families'
-  }}, ${{ inputs.release_type }})
+  Multi-Arch Release (${{ inputs.release_type }})
+  | Linux: ${{ inputs.linux_amdgpu_families || 'none' }}
+  | Windows: ${{ inputs.windows_amdgpu_families || 'none' }}
 
 jobs:
   setup:
@@ -72,6 +81,10 @@ jobs:
       build_variant: "release"
       release_type: ${{ inputs.release_type }}
       prerelease_version: ${{ inputs.prerelease_version }}
+      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families }}
+      windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}
 
   linux_release:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -84,9 +97,27 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
       id-token: write  # Added permission for AWS S3 upload
 
-  # TODO(#3334): multi_release_arch_windows.yml (and update run-name)
+  windows_release:
+    name: Windows::${{ fromJSON(needs.setup.outputs.windows_build_config || '{}').build_variant_label || 'skip' }}
+    needs: setup
+    if: ${{ needs.setup.outputs.windows_build_config != '' }}
+    uses: ./.github/workflows/multi_arch_release_windows.yml
+    secrets: inherit
+    with:
+      build_config: ${{ needs.setup.outputs.windows_build_config }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      test_type: ${{ needs.setup.outputs.test_type }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      actions: write  # Added permission to trigger workflows
+      id-token: write  # Added permission for AWS S3 upload
