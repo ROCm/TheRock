@@ -10,7 +10,6 @@
 #   - No S3 upload, staging, testing, or promotion — just build + sanity check
 #
 # TODO(#3291): Build more packages (torchvision, torchaudio, etc.)
-# TODO(#3291): Upload packages to S3 (via upload_python_packages.py?)
 #
 # Both workflows share build_prod_wheels.py for the actual build logic.
 # See https://github.com/ROCm/TheRock/issues/3291 for convergence plans.
@@ -208,6 +207,13 @@ jobs:
 
       # Using 'cmd' here is load bearing! There are configuration issues when
       # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
+      #
+      # inputs.amdgpu_families is only populated by the multi-arch caller
+      # today. Legacy single-family CI (ci_linux.yml) leaves it empty and
+      # falls back to `rocm-sdk targets` inside build_prod_wheels.py.
+      # TODO(#4687): Make --pytorch-rocm-arch required here once every
+      # caller plumbs the value through and the fallback in
+      # build_prod_wheels.py::get_rocm_sdk_targets is removed.
       - name: Build PyTorch wheels
         shell: cmd
         run: |
@@ -215,12 +221,6 @@ jobs:
           if "${{ inputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
           if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
 
-          REM inputs.amdgpu_families is only populated by the multi-arch caller
-          REM today. Legacy single-family CI (ci_windows.yml) leaves it empty
-          REM and falls back to `rocm-sdk targets` inside build_prod_wheels.py.
-          REM TODO(#4687): Make --pytorch-rocm-arch required here once every
-          REM caller plumbs the value through and the fallback in
-          REM build_prod_wheels.py::get_rocm_sdk_targets is removed.
           set "PYTORCH_ROCM_ARCH_FLAG="
           if not "${{ steps.expand.outputs.targets }}"=="" set "PYTORCH_ROCM_ARCH_FLAG=--pytorch-rocm-arch ${{ steps.expand.outputs.targets }}"
 
@@ -291,7 +291,7 @@ jobs:
           # llvm-readelf.exe, so stage copies under the unprefixed names.
           # TODO: drop this shim once rocm-kpack's Toolchain adds llvm-*
           # fallbacks for objcopy/readelf (parallels its existing objdump
-          # pattern). See tasks/active/kpack-binutils-llvm-fallback.md.
+          # pattern). See https://github.com/ROCm/rocm-systems/issues/5506.
           SHIMS="$(cygpath -u "${RUNNER_TEMP}")/kpack-shims"
           mkdir -p "${SHIMS}"
           cp "${LLVM_BIN}/llvm-objcopy.exe" "${SHIMS}/objcopy.exe"

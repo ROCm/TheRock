@@ -11,7 +11,6 @@
 #   - Uses sccache with S3-backed storage (configurable via cache_type input)
 #
 # TODO(#3291): Build more packages (torchvision, torchaudio, triton, etc.)
-# TODO(#3291): Upload packages to S3 (via upload_python_packages.py?)
 #
 # Both workflows share build_prod_wheels.py for the actual build logic.
 # See https://github.com/ROCm/TheRock/issues/3291 for convergence plans.
@@ -186,6 +185,12 @@ jobs:
           echo "Expanded families '${{ inputs.amdgpu_families }}' -> '${targets}'"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
+      # inputs.amdgpu_families is only populated by the multi-arch caller
+      # today. Legacy single-family CI (ci_linux.yml) leaves it empty and
+      # falls back to `rocm-sdk targets` inside build_prod_wheels.py.
+      # TODO(#4687): Make --pytorch-rocm-arch required here once every
+      # caller plumbs the value through and the fallback in
+      # build_prod_wheels.py::get_rocm_sdk_targets is removed.
       - name: Build PyTorch wheels
         run: |
           cache_flag=""
@@ -195,12 +200,6 @@ jobs:
             cache_flag="--use-ccache"
           fi
 
-          # inputs.amdgpu_families is only populated by the multi-arch caller
-          # today. Legacy single-family CI (ci_linux.yml) leaves it empty and
-          # falls back to `rocm-sdk targets` inside build_prod_wheels.py.
-          # TODO(#4687): Make --pytorch-rocm-arch required here once every
-          # caller plumbs the value through and the fallback in
-          # build_prod_wheels.py::get_rocm_sdk_targets is removed.
           pytorch_rocm_arch_flag=""
           if [ -n "${{ steps.expand.outputs.targets }}" ]; then
             pytorch_rocm_arch_flag="--pytorch-rocm-arch ${{ steps.expand.outputs.targets }}"
