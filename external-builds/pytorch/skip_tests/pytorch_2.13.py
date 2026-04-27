@@ -615,10 +615,6 @@ skip_tests = {
             "test_linalg_ops",
             # TestFullyShardCommunication - communication count mismatch
             "test_fully_shard_communication_count",
-            # TestFullyShard1DTrainingCore - shard_largest_dim parity
-            "test_train_parity_single_group_shard_largest_dim",
-            # TestMultiProc - compiler collectives dynamic tensor
-            "test_compiler_collectives_automatic_dynamic_tensor",
             # TestFullyShardAutograd - 300s per-process timeout
             "test_nontensor_activations",
             # TestFullyShardDTensor - 300s per-process timeout
@@ -657,14 +653,10 @@ skip_tests = {
             "test_replicate_pp_grads_ScheduleClass4",
             # ReplicateFullyShardInit - pytest-timeout (>900s)
             "test_replicate_move_args_kwargs_to_device",
-            # ReplicateFullyShardInit - multi module init failure
-            "test_replicate_multi_module",
             # ReplicateFullyShardInit - pytest-timeout (>900s)
             "test_replicate_single_module",
             # TestFullyShardAutograd - 300s per-process timeout
             "test_unused_forward_module",
-            # TestViewOpsWithLocalTensor - list index out of range
-            "test_view_ops",
             # --- Added from CI run 24859184370 ---
             # TestNewEmptyStridedUneven: RuntimeError: Process 2 exited with error code 10 and exception: Traceback (most recent call last...
             "test_backward_partial_grad_with_transpose",
