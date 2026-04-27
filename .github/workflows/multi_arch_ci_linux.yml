@@ -176,6 +176,9 @@ jobs:
       os_profile: ${{ matrix.os_profile }}
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       test_type: sanity
+    permissions:
+      contents: read
+      id-token: write
 
   build_python_packages:
     needs: [build_multi_arch_stages]
