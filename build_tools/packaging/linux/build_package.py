@@ -27,6 +27,7 @@ create RPM and DEB packages and upload to artifactory server
 
 import argparse
 import glob
+import json
 import os
 import shutil
 import subprocess
@@ -56,6 +57,21 @@ from _therock_utils.artifacts import ArtifactCatalog
 
 # Default install prefix
 DEFAULT_INSTALL_PREFIX = "/opt/rocm/core"
+
+
+def _load_kpack_from_manifest(artifacts_dir: Path) -> bool:
+    """Detect kpack mode by scanning therock_manifest.json files in artifact directory.
+
+    Returns True if any manifest has KPACK_SPLIT_ARTIFACTS set to True.
+    """
+    for manifest_path in artifacts_dir.rglob("therock_manifest.json"):
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            if manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False):
+                return True
+        except (json.JSONDecodeError, OSError):
+            pass
+    return False
 
 
 def get_all_target_families(artifact_dir):
@@ -862,6 +878,15 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
         with open(github_output, "a", encoding="utf-8") as f:
             targets_str = ",".join(normalized_targets)
             f.write(f"PACKAGING_ARCH_LIST={targets_str}\n")
+
+    # Auto-detect kpack from manifest if not explicitly requested via --enable-kpack
+    artifacts_dir = Path(args.artifacts_dir).resolve()
+    if not args.enable_kpack:
+        args.enable_kpack = _load_kpack_from_manifest(artifacts_dir)
+        if args.enable_kpack:
+            print(
+                "Detected KPACK_SPLIT_ARTIFACTS in manifest — producing host + device packages"
+            )
 
     # Configure architecture based on multi-arch mode
     if args.enable_kpack:
