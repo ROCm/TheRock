@@ -3,6 +3,54 @@
 
 set(DEBUG_TOOLS_DIR "${THEROCK_SOURCE_DIR}/debug-tools")
 
+# If set, propagate DEBUG_TOOLS_BUILD_TYPE to all debug-tools components.
+if(DEBUG_TOOLS_BUILD_TYPE)
+  message(STATUS "Setting all debug-tools components to CMAKE_BUILD_TYPE=${DEBUG_TOOLS_BUILD_TYPE}")
+  if(NOT amd-dbgapi_BUILD_TYPE)
+    set(amd-dbgapi_BUILD_TYPE "${DEBUG_TOOLS_BUILD_TYPE}")
+  endif()
+  if(NOT rocr-debug-agent_BUILD_TYPE)
+    set(rocr-debug-agent_BUILD_TYPE "${DEBUG_TOOLS_BUILD_TYPE}")
+  endif()
+  if(NOT rocgdb_BUILD_TYPE)
+    set(rocgdb_BUILD_TYPE "${DEBUG_TOOLS_BUILD_TYPE}")
+  endif()
+endif()
+
+# Allow custom debug flags for debug-tools components.
+# Example: -DDEBUG_TOOLS_C_FLAGS_DEBUG="-O0 -g3"
+#          -DDEBUG_TOOLS_CXX_FLAGS_DEBUG="-O0 -g3"
+if(DEBUG_TOOLS_C_FLAGS_DEBUG OR DEBUG_TOOLS_CXX_FLAGS_DEBUG)
+  set(_debug_tools_cmake_args)
+  if(DEBUG_TOOLS_C_FLAGS_DEBUG)
+    message(STATUS "Setting debug-tools CMAKE_C_FLAGS_DEBUG=${DEBUG_TOOLS_C_FLAGS_DEBUG}")
+    list(APPEND _debug_tools_cmake_args "-DCMAKE_C_FLAGS_DEBUG=${DEBUG_TOOLS_C_FLAGS_DEBUG}")
+  endif()
+  if(DEBUG_TOOLS_CXX_FLAGS_DEBUG)
+    message(STATUS "Setting debug-tools CMAKE_CXX_FLAGS_DEBUG=${DEBUG_TOOLS_CXX_FLAGS_DEBUG}")
+    list(APPEND _debug_tools_cmake_args "-DCMAKE_CXX_FLAGS_DEBUG=${DEBUG_TOOLS_CXX_FLAGS_DEBUG}")
+  endif()
+
+  # Propagate to all components CMAKE_ARGS.
+  if(NOT amd-dbgapi_CMAKE_ARGS)
+    set(amd-dbgapi_CMAKE_ARGS "${_debug_tools_cmake_args}")
+  else()
+    list(APPEND amd-dbgapi_CMAKE_ARGS ${_debug_tools_cmake_args})
+  endif()
+
+  if(NOT rocr-debug-agent_CMAKE_ARGS)
+    set(rocr-debug-agent_CMAKE_ARGS "${_debug_tools_cmake_args}")
+  else()
+    list(APPEND rocr-debug-agent_CMAKE_ARGS ${_debug_tools_cmake_args})
+  endif()
+
+  if(NOT rocgdb_CMAKE_ARGS)
+    set(rocgdb_CMAKE_ARGS "${_debug_tools_cmake_args}")
+  else()
+    list(APPEND rocgdb_CMAKE_ARGS ${_debug_tools_cmake_args})
+  endif()
+endif()
+
 if(THEROCK_ENABLE_AMD_DBGAPI)
   ##############################################################################
   # amd-dbgapi
