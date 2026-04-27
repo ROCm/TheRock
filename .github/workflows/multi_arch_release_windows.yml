@@ -114,20 +114,16 @@ jobs:
 
   # TODO: dispatch test artifacts per family
 
-  dispatch_pytorch_wheels:
+  # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
+  #   bucket if the job order is not altered.
+  build_pytorch_wheels:
     needs: [build_artifacts, build_python_packages]
-    name: Dispatch PyTorch Wheels
+    name: Build PyTorch Wheels
     runs-on: ubuntu-24.04
     permissions:
       actions: write
     steps:
-      # benc-uk/workflow-dispatch dispatches via the GitHub API; no local
-      # checkout needed. ref: selects which version of the workflow YAML
-      # to run (branch or tag name; SHAs may be rejected). The "ref"
-      # input inside `inputs:` is plumbed through to the dispatched
-      # workflow's actions/checkout, which accepts branches, tags, or
-      # SHAs.
-      - name: Dispatch multi_arch_release_windows_pytorch_wheels.yml
+      - name: Trigger PyTorch Build
         uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
         with:
           workflow: multi_arch_release_windows_pytorch_wheels.yml
