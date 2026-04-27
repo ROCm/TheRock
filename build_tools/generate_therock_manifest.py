@@ -25,7 +25,12 @@ def git_root() -> Path:
     Determine the repo root strictly from this script's location:
       <repo>/build_tools/generate_therock_manifest.py  ->  <repo>
     """
-    here = Path(__file__).resolve()
+    try:
+        here = Path(__file__).resolve()
+    except OSError:
+        # On Windows virtiofs mounts, resolve() can fail with WinError 1005.
+        # Fall back to using the unresolved path.
+        here = Path(__file__).absolute()
     repo_root = here.parents[1]  # .../build_tools -> repo root
     if not ((repo_root / ".git").exists() or (repo_root / ".gitmodules").exists()):
         raise RuntimeError(
@@ -180,9 +185,13 @@ def main():
     args = ap.parse_args()
 
     repo_root = git_root()
-    the_rock_commit = _run(["git", "rev-parse", args.commit], cwd=repo_root)
-
-    manifest = build_manifest_schema(repo_root, the_rock_commit)
+    the_rock_commit = _run(["git", "rev-parse", args.commit], cwd=repo_root, check=False)
+    if not the_rock_commit:
+        the_rock_commit = "unknown"
+        # Git not available (e.g. virtiofs mount) — generate minimal manifest
+        manifest = {"the_rock_commit": the_rock_commit, "submodules": []}
+    else:
+        manifest = build_manifest_schema(repo_root, the_rock_commit)
 
     # Decide output path
     # if not provided, write to repo_root / "therock_manifest.json"

@@ -64,15 +64,28 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   ##############################################################################
 
   # On Windows with wddm_lite, we don't need libdrm or numactl
-  set(_ROCR_CMAKE_ARGS "-DBUILD_SHARED_LIBS=ON")
+  if(WIN32)
+    # CLR on Windows statically links hsa-runtime64 (hsa-runtime64_static target)
+    set(_ROCR_CMAKE_ARGS "-DBUILD_SHARED_LIBS=OFF")
+  else()
+    set(_ROCR_CMAKE_ARGS "-DBUILD_SHARED_LIBS=ON")
+  endif()
   set(_ROCR_RUNTIME_DEPS
-    rocprofiler-register
     ${THEROCK_BUNDLED_ELFUTILS}
   )
   if(WIN32)
     list(APPEND _ROCR_CMAKE_ARGS "-DHSAKMT_WDDM_LITE=ON")
+    # Point to the bundled libelf in the amdgpu-windows-interop folder and
+    # pre-set LIBELF_FOUND to skip the module find (which has add_subdirectory
+    # issues in the subproject system).
+    set(_interop_libelf "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop/hsail-compiler/lib/loaders/elf/utils/libelf")
+    list(APPEND _ROCR_CMAKE_ARGS
+      "-DAMD_LIBELF_PATH=${_interop_libelf}"
+      "-DLIBELF_FOUND=ON"
+      "-DUSE_AMD_LIBELF=yes")
   else()
     list(APPEND _ROCR_RUNTIME_DEPS
+      rocprofiler-register
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_NUMACTL}
     )
@@ -90,6 +103,8 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     BUILD_DEPS
       amd-llvm
       therock-simde
+      ${THEROCK_BUNDLED_ZLIB}
+      ${THEROCK_BUNDLED_ZSTD}
     RUNTIME_DEPS
       ${_ROCR_RUNTIME_DEPS}
     INTERFACE_LINK_DIRS

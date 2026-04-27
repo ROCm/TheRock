@@ -86,7 +86,8 @@ AmdGpuComputeCleanup(_Inout_ AMDGPU_ADAPTER *pAdapter)
     for (i = 0; i < AMDGPU_MAX_GPU_EVENTS; i++) {
         if (cs->Events[i].InUse) {
             if (cs->Events[i].KernelEvent) {
-                ObDereferenceObject(cs->Events[i].KernelEvent);
+                ExFreePoolWithTag(cs->Events[i].KernelEvent, AMDGPU_POOL_TAG);
+                cs->Events[i].KernelEvent = NULL;
             }
             cs->Events[i].InUse = FALSE;
         }

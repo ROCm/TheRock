@@ -801,6 +801,21 @@ AmdGpuEscape(
                 (AMDGPU_ESCAPE_GET_PHYS_PAGES_DATA *)pEscape->pPrivateDriverData);
         break;
 
+    case AMDGPU_ESCAPE_RESET_COMPUTE:
+        /*
+         * Reset all compute state: free leaked events, allocs, queues.
+         * Called by hsaKmtOpenKFD to recover from previous session crashes.
+         */
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_HEADER))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else {
+            AmdGpuComputeCleanup(pAdapter);
+            Status = STATUS_SUCCESS;
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_INFO_LEVEL,
+                       "amdgpu_wddm: compute state reset\n");
+        }
+        break;
+
     default:
         Status = STATUS_INVALID_PARAMETER;
         break;
