@@ -99,12 +99,11 @@ The primary OS root folder will include the following distributions where the pa
 | sles15     |                          |
 | azl3       |                          |
 
-ASAN packages may be separated into:
-
+ASAN packages coexist in the same folder structure as the standard build packages.
+ASAN packages follow the same naming conventions as standard packages but the 
+contain an additional prefix after amd-rocm
 ```
-repo.amd.com/rocm/packages/$OS/$package-type
-
-Package-type = standard, asan, future variant
+amdrocm-asan-[regular package naming]
 ```
 
 This will reduce the number of packages visible via the package manager.
