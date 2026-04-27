@@ -73,3 +73,14 @@ repo.amd.com's open source software release publications need standardization. I
   - **lts**
     - `YYYYMM`
       - Mirrors stable folder structure
+
+## Repository Package
+
+Allow users to install the ROCm repositories via a convienient package. The package provides
+all the repository files. Example, the rpm repo file will add files to /etc/yum.repos.d/. The
+repo file will also provide the gpg key, ideally prompting the user to accept the key. Updating
+the repo file will update the gpg key to the latest.
+
+- rocm-repo.rpm
+- rocm-repo-rpath.rpm
+- rocm-repo.deb
