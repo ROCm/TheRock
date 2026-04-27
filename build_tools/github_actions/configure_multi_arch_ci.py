@@ -20,7 +20,7 @@ The CI pipeline is a DAG of job groups:
 
     build-rocm → test-rocm
                → build-rocm-python → build-pytorch → test-pytorch
-                                   → build-jax     → test-jax (future)
+                                   → build-jax     → test-jax
                → build-native-linux   → test-native-linux   (future)
                → build-native-windows → test-native-windows (future)
 
@@ -386,6 +386,8 @@ class JobDecisions:
     build_rocm_python: JobGroupDecision
     build_pytorch: JobGroupDecision
     test_pytorch: JobGroupDecision
+    build_jax: JobGroupDecision
+    test_jax: JobGroupDecision
 
     def log(self) -> None:
         """Log job decisions for CI diagnostics."""
@@ -399,7 +401,8 @@ class JobDecisions:
         print(f"  build_rocm_python: {self.build_rocm_python.action.value}")
         print(f"  build_pytorch: {self.build_pytorch.action.value}")
         print(f"  test_pytorch: {self.test_pytorch.action.value}")
-
+        print(f"  build_jax: {self.build_jax.action.value}")
+        print(f"  test_jax: {self.test_jax.action.value}")
 
 @dataclass(frozen=True)
 class BuildConfig:
@@ -611,6 +614,7 @@ def decide_jobs(
 
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
+    enable_jax = ci_inputs.is_pull_request and "ci:build-jax" in ci_inputs.pr_labels
 
     return JobDecisions(
         build_rocm=build_rocm,
@@ -618,6 +622,12 @@ def decide_jobs(
         build_rocm_python=JobGroupDecision(action=JobAction.RUN),
         build_pytorch=JobGroupDecision(action=JobAction.RUN),
         test_pytorch=JobGroupDecision(action=JobAction.RUN),
+        build_jax=JobGroupDecision(
+            action=JobAction.RUN if enable_jax else JobAction.SKIP
+        ),
+        test_jax=JobGroupDecision(
+            action=JobAction.RUN if enable_jax else JobAction.SKIP
+        ),
     )
 
 
@@ -975,6 +985,7 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        "build_jax": outputs.jobs.build_jax.action.value if outputs.jobs else "skip",
     }
     gha_set_output(output_vars)
 

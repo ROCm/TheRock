@@ -90,6 +90,45 @@ jobs:
       contents: read
       id-token: write
 
+  linux_build_tarballs:
+    needs: [setup, linux_build_and_test]
+    if: >-
+      ${{
+        needs.setup.outputs.linux_build_config != '' &&
+        needs.setup.outputs.enable_build_jobs == 'true' &&
+        needs.setup.outputs.build_jax == 'run'
+      }}
+    uses: ./.github/workflows/multi_arch_build_tarballs.yml
+    secrets: inherit
+    with:
+      artifact_run_id: ${{ github.run_id }}
+      artifact_github_repo: ${{ github.repository }}
+      dist_amdgpu_families: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
+      platform: linux
+      package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      release_type: dev
+
+  linux_build_jax:
+    name: Linux JAX | ${{ matrix.family.amdgpu_family }}
+    needs: [setup, linux_build_tarballs]
+    if: >-
+      ${{
+        needs.setup.outputs.linux_build_config != '' &&
+        needs.setup.outputs.build_jax == 'run'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family: ${{ fromJSON(needs.setup.outputs.linux_build_config).per_family_info }}
+    uses: ./.github/workflows/build_linux_jax_from_tarball.yml
+    secrets: inherit
+    with:
+      artifact_run_id: ${{ github.run_id }}
+      amdgpu_family: ${{ matrix.family.amdgpu_family }}
+      dist_amdgpu_families: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
+      package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      release_type: dev
+
   windows_build_and_test:
     name: Windows::${{ fromJSON(needs.setup.outputs.windows_build_config || '{}').build_variant_label || 'skip' }}
     needs: setup
@@ -115,6 +154,8 @@ jobs:
     needs:
       - setup
       - linux_build_and_test
+      - linux_build_tarballs
+      - linux_build_jax
       - windows_build_and_test
     runs-on: ubuntu-24.04
     steps:

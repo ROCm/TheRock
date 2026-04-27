@@ -250,6 +250,17 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.build_rocm_python.action, cm.JobAction.RUN)
         self.assertEqual(result.build_pytorch.action, cm.JobAction.RUN)
         self.assertEqual(result.test_pytorch.action, cm.JobAction.RUN)
+        self.assertEqual(result.build_jax.action, cm.JobAction.SKIP)
+        self.assertEqual(result.test_jax.action, cm.JobAction.SKIP)
+
+    def test_ci_build_jax_label_enables_jax_jobs(self):
+        """PR with ci:build-jax label enables JAX job groups."""
+        result = cm.decide_jobs(
+            self._inputs(pr_labels=["ci:build-jax"]),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.build_jax.action, cm.JobAction.RUN)
+        self.assertEqual(result.test_jax.action, cm.JobAction.RUN)
 
     def test_default_test_type_is_quick(self):
         """Default test_type for PR/push with no special conditions."""
@@ -858,6 +869,8 @@ class TestFormatSummary(unittest.TestCase):
             build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
             build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
             test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+            test_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
         )
         outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
         result = format_summary(self._inputs(), outputs)

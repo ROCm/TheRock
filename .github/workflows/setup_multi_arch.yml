@@ -74,7 +74,9 @@ on:
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
-
+      build_jax:
+        description: Whether to run JAX build jobs.
+        value: ${{ jobs.setup.outputs.build_jax }}
 permissions:
   contents: read
 
@@ -89,6 +91,7 @@ jobs:
       linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+      build_jax: ${{ steps.configure.outputs.build_jax }}
     steps:
       - name: Checking out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

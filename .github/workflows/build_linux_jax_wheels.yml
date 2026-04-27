@@ -53,6 +53,14 @@ on:
         description: "Whether to build jaxlib from source. Set to false for JAX >= 0.9.1 where jaxlib is installed from upstream PyPI."
         type: boolean
         default: true
+      run_tests:
+        description: "Whether to run JAX wheel tests"
+        type: boolean
+        default: true
+      upload_wheels:
+        description: "Whether to upload/promote JAX wheels"
+        type: boolean
+        default: true        
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -117,6 +125,14 @@ on:
         default: "rocm-jaxlib-v0.8.2"
       build_jaxlib:
         description: Whether to build jaxlib from source. Set to false for JAX >= 0.9.1.
+        type: boolean
+        default: true
+      run_tests:
+        description: "Whether to run JAX wheel tests"
+        type: boolean
+        default: true
+      upload_wheels:
+        description: "Whether to upload/promote JAX wheels"
         type: boolean
         default: true
 
@@ -277,7 +293,7 @@ jobs:
 
   test_jax_wheels:
     name: Test JAX wheels | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
-    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
+    if: ${{ inputs.run_tests && needs.generate_target_to_run.outputs.test_runs_on != '' }}
     needs: [build_jax_wheels, generate_target_to_run]
     permissions:
       contents: read
@@ -302,7 +318,7 @@ jobs:
   upload_jax_wheels:
     name: Release JAX Wheels to S3
     needs: [build_jax_wheels, generate_target_to_run, test_jax_wheels]
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && inputs.upload_wheels }}
     runs-on: ubuntu-24.04
     env:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
