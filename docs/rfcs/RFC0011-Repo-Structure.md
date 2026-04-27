@@ -90,7 +90,7 @@ the repo file will update the gpg key to the latest.
 - amdrocm-repo.deb
 - amdrocm-repo-lts-YYYYMM.rpm #reserved for future LTS release streams
 
-The rocm-repo file uses an environment variable, $release_type, to identify the release type. 
+The rocm-repo file uses an environment variable, $rocm_release_type, to identify the release type. 
 This to allow users to manually switch to nightly or prerelease repositories.
 
 The repository package is to include the latest amdgpu driver folder from repo.radeon.com.
