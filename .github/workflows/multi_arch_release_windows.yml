@@ -120,29 +120,23 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       actions: write
-      contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
-
-      # gh workflow run --ref selects which version of the workflow YAML
-      # to execute and accepts a branch or tag name (commit SHAs may be
-      # rejected). github.ref_name is the short branch/tag name that
-      # triggered this workflow's run. The -f ref input is plumbed
-      # through to the dispatched workflow's actions/checkout, which
-      # accepts branches, tags, or SHAs.
+      # benc-uk/workflow-dispatch dispatches via the GitHub API; no local
+      # checkout needed. ref: selects which version of the workflow YAML
+      # to run (branch or tag name; SHAs may be rejected). The "ref"
+      # input inside `inputs:` is plumbed through to the dispatched
+      # workflow's actions/checkout, which accepts branches, tags, or
+      # SHAs.
       - name: Dispatch multi_arch_release_windows_pytorch_wheels.yml
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run multi_arch_release_windows_pytorch_wheels.yml \
-            --ref "${{ inputs.ref || github.ref_name }}" \
-            -f amdgpu_families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
-            -f rocm_version="${{ inputs.rocm_package_version }}" \
-            -f rocm_package_find_links_url="${{ needs.build_python_packages.outputs.package_find_links_url }}" \
-            -f release_type="${{ inputs.release_type }}" \
-            -f repository="${{ inputs.repository || github.repository }}" \
-            -f ref="${{ inputs.ref }}"
+        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        with:
+          workflow: multi_arch_release_windows_pytorch_wheels.yml
+          ref: ${{ inputs.ref || github.ref_name }}
+          inputs: |
+            { "amdgpu_families": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
+              "rocm_version": "${{ inputs.rocm_package_version }}",
+              "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
+              "release_type": "${{ inputs.release_type }}",
+              "repository": "${{ inputs.repository || github.repository }}",
+              "ref": "${{ inputs.ref || '' }}"
+            }
