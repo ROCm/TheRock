@@ -39,9 +39,9 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     native linux packages (prerelease):
 
     s3://therock-prerelease-artifacts/12345-linux/packages/deb/
-      -> s3://therock-prerelease-packages/v3/packages/deb/
+      -> s3://therock-prerelease-packages/v4/packages/deb/
     s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
-      -> s3://therock-prerelease-packages/v3/packages/rpm/
+      -> s3://therock-prerelease-packages/v4/packages/rpm/
 
 Test usage:
     python build_tools/github_actions/publish_rocm_to_release_buckets.py \\
@@ -138,9 +138,9 @@ def publish_native_packages(
 
     prerelease example:
         s3://therock-prerelease-artifacts/12345-linux/packages/deb/
-          -> s3://therock-prerelease-packages/v3/packages/deb/
+          -> s3://therock-prerelease-packages/v4/packages/deb/
         s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
-          -> s3://therock-prerelease-packages/v3/packages/rpm/
+          -> s3://therock-prerelease-packages/v4/packages/rpm/
 
     Note (prerelease): This is a plain copy — the repodata already present in the
     packages bucket is overwritten with the repodata from this run. If multiple
@@ -156,7 +156,7 @@ def publish_native_packages(
         source = artifacts_root.native_packages(pkg_type)
 
         if release_type == "prerelease":
-            dest_prefix = f"v3/packages/{pkg_type}"
+            dest_prefix = f"v4/packages/{pkg_type}"
         else:
             dest_prefix = f"{pkg_type}/{today}-{artifacts_root.run_id}"
 
