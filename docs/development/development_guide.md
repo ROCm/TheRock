@@ -315,14 +315,31 @@ extension can be used to configure the superproject and build individual targets
 Settings for CMake builds can be specified in `.vscode/settings.json` or a
 `.vscode/*.code-workspace` file, like so:
 
+> [!IMPORTANT]
+> If using ccache, first run `setup_ccache.py` to generate the config file:
+>
+> ```bash
+> python build_tools/setup_ccache.py
+> ```
+>
+> Then set the `CCACHE_CONFIGPATH` environment variable in your VSCode
+> settings as shown below. See the
+> [README ccache instructions](../../README.md#ccache-usage-on-linux)
+> for full details.
+
 ```jsonc
 {
   "cmake.generator": "Ninja",
+  "cmake.environment": {
+    "CCACHE_CONFIGPATH": "${workspaceFolder}/.ccache/ccache.conf"
+  },
   "cmake.configureArgs": [
     // General settings.
     "-DTHEROCK_VERBOSE=ON",
     "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
     "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+    // On Windows, add this so ccache can handle debug info (see README):
+    // "-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded",
     "-DPython3_EXECUTABLE=${workspaceFolder}/.venv/Scripts/python",
     "-DTHEROCK_AMDGPU_FAMILIES=gfx110X-all",  // Set to your GPU target family.
     //
