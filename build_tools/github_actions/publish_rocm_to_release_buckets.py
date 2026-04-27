@@ -32,9 +32,9 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     native linux packages (dev/nightly):
 
     s3://therock-dev-artifacts/12345-linux/packages/deb/
-      -> s3://therock-dev-packages/deb/20250101-12345/
+      -> s3://therock-dev-packages/v4/deb/20250101-12345/
     s3://therock-dev-artifacts/12345-linux/packages/rpm/
-      -> s3://therock-dev-packages/rpm/20250101-12345/
+      -> s3://therock-dev-packages/v4/rpm/20250101-12345/
 
     native linux packages (prerelease):
 
@@ -132,9 +132,9 @@ def publish_native_packages(
 
     dev/nightly example:
         s3://therock-dev-artifacts/12345-linux/packages/deb/
-          -> s3://therock-dev-packages/deb/20250101-12345/
+          -> s3://therock-dev-packages/v4/deb/20250101-12345/
         s3://therock-dev-artifacts/12345-linux/packages/rpm/
-          -> s3://therock-dev-packages/rpm/20250101-12345/
+          -> s3://therock-dev-packages/v4/rpm/20250101-12345/
 
     prerelease example:
         s3://therock-prerelease-artifacts/12345-linux/packages/deb/
@@ -158,7 +158,7 @@ def publish_native_packages(
         if release_type == "prerelease":
             dest_prefix = f"v4/packages/{pkg_type}"
         else:
-            dest_prefix = f"{pkg_type}/{today}-{artifacts_root.run_id}"
+            dest_prefix = f"v4/{pkg_type}/{today}-{artifacts_root.run_id}"
 
         dest = StorageLocation(dest_bucket.name, dest_prefix)
         logger.info(
