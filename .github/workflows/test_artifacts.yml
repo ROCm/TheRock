@@ -31,6 +31,9 @@ on:
       run_extended_tests:
         type: string
         default: 'false'
+      windows_hip_rocr_tests:
+        type: string
+        default: 'false'
       release_type:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
         type: string
@@ -60,6 +63,9 @@ on:
       test_labels:
         type: string
       run_extended_tests:
+        type: string
+        default: 'false'
+      windows_hip_rocr_tests:
         type: string
         default: 'false'
       release_type:
@@ -114,6 +120,7 @@ jobs:
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
           RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
+          WINDOWS_HIP_ROCR_TESTS: ${{ inputs.windows_hip_rocr_tests }}
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
   test_sanity_check:
