@@ -98,7 +98,7 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository || github.repository }}
-      ref: ${{ inputs.ref }}
+      ref: ${{ needs.setup.outputs.ref }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
@@ -116,7 +116,7 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository || github.repository }}
-      ref: ${{ inputs.ref }}
+      ref: ${{ needs.setup.outputs.ref }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
