@@ -68,7 +68,7 @@ AmdGpuFamilyMatrix.to_nested_dict()
                                                 "test": "linux-gfx110X-gpu-rocm",
                                                 "test-multi-gpu": ""},
                                     "sanity_check_only_for_family": True,
-                                    "test_scope": "all"}},
+                                    "test_scope": "comprehensive"}},
                  "windows": {"build": {"build_variants": ["release"], "expect_failure": False},
                              "release": {"bypass_tests_for_releases": True},
                              "test": {"expect_pytorch_failure": False,
@@ -78,7 +78,7 @@ AmdGpuFamilyMatrix.to_nested_dict()
                                                   "test": "windows-gfx110X-gpu-rocm",
                                                   "test-multi-gpu": ""},
                                       "sanity_check_only_for_family": True,
-                                      "test_scope": "all"}}},
+                                      "test_scope": "comprehensive"}}},
      ...}
 
 MatrixEntry.to_dict(platform=None)
@@ -101,10 +101,8 @@ Adding a new field
 -------------------------------------------------------------------------------
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import Literal, Optional
+from typing import Literal
 
 
 @dataclass
@@ -136,7 +134,7 @@ class AllBuildVariants:
     linux: dict[str, BuildVariantInfo] = field(default_factory=dict)
     windows: dict[str, BuildVariantInfo] = field(default_factory=dict)
 
-    def get(self, platform: str, variant: str) -> Optional[BuildVariantInfo]:
+    def get(self, platform: str, variant: str) -> BuildVariantInfo | None:
         """Look up a BuildVariantInfo by platform and variant name."""
         variants = getattr(self, platform, None)
         if variants is None:
@@ -174,9 +172,9 @@ class GpuRunners:
     """Additional runners not covered by the named fields above (e.g. temporary or
     experimental runners). Keys are used as-is in the serialized output."""
 
-    def __bool__(self) -> bool:
-        # True if any runner is set; used by TestConfig.__post_init__ to infer run_tests.
-        return bool(self.test or self.test_multi_gpu or self.benchmark or self.extra)
+    def has_any_runner(self) -> bool:
+        """Return True if any runner field is set; used to infer TestConfig.run_tests."""
+        return any([self.test, self.test_multi_gpu, self.benchmark, self.extra])
 
     def to_dict(self) -> dict:
         result: dict[str, str] = {
@@ -198,13 +196,13 @@ class TestConfig:
     """Runner labels for test job types."""
     fetch_gfx_targets: list[str] = field(default_factory=list)
     """Individual GPU arch strings for fetching split artifacts (e.g. ['gfx942'])."""
-    run_tests: Optional[bool] = None
+    run_tests: bool | None = None
     """Whether tests should actually be executed. Defaults to True any runner is set in runs_on,
     False otherwise. Can be set explicitly to False when a runner exists but is temporarily disabled."""
     sanity_check_only_for_family: bool = False
     """If True, only a sanity-check test subset is run, not the full suite."""
-    test_scope: Literal["all", "smoke", "full"] = "all"
-    """Which test subset to run: all (default), smoke (sanity only), full (skip smoke)."""
+    test_scope: Literal["quick", "comprehensive", "full"] = "comprehensive"
+    """Which test subset to run: comprehensive (default), quick (subset), full (extended)."""
     expect_pytorch_failure: bool = False
     """If True, PyTorch builds are skipped because they are known to fail."""
 
@@ -212,7 +210,7 @@ class TestConfig:
         # set run_tests to True if any runners are specified,
         # False otherwise, if not explicitly set
         if self.run_tests is None:
-            self.run_tests = bool(self.runs_on)
+            self.run_tests = self.runs_on.has_any_runner()
 
     def to_dict(self) -> dict:
         return {
@@ -263,10 +261,16 @@ class MatrixEntry:
     is_family_default: bool = False
     """If True, this entry is returned when looking up by a shared family name
     (e.g. 'gfx94X-dcgpu'). At most one entry per shared family name may have
-    this set — validated at AmdGpuFamilyMatrix construction time."""
-    linux: Optional[PlatformConfig] = None
+    this set — validated at AmdGpuFamilyMatrix construction time.
+
+    Note: this flag (and the family / family-prefix lookup machinery built on
+    top of it) is a convenience for *user-facing* inputs — e.g. a workflow
+    dispatch input where a developer types 'gfx110X' or 'gfx94X-dcgpu' and
+    expects to get back the canonical entry for that family. Internal CI code
+    should pass exact target names (e.g. 'gfx942') and not rely on this."""
+    linux: PlatformConfig | None = None
     """Linux platform config, or None if Linux is not supported."""
-    windows: Optional[PlatformConfig] = None
+    windows: PlatformConfig | None = None
     """Windows platform config, or None if Windows is not supported."""
     family: list[str] = field(init=False, default_factory=list)
     """Family names this target belongs to (e.g. ['dcgpu-all', 'gfx94X-all', 'gfx94X-dcgpu']).
@@ -277,7 +281,7 @@ class MatrixEntry:
         """Canonical lookup key"""
         return self.target
 
-    def platform_config(self, platform: str) -> Optional[PlatformConfig]:
+    def platform_config(self, platform: str) -> PlatformConfig | None:
         """Return the PlatformConfig for 'linux' or 'windows', or None."""
         if platform == "linux":
             return self.linux
@@ -285,7 +289,7 @@ class MatrixEntry:
             return self.windows
         raise ValueError(f"Unknown platform: {platform!r}")
 
-    def to_dict(self, platform: Optional[str] = None) -> dict:
+    def to_dict(self, platform: str | None = None) -> dict:
         d: dict = {"amdgpu_family": self.key}
         if platform is not None:
             cfg = self.platform_config(platform)
@@ -383,7 +387,7 @@ class AmdGpuFamilyMatrix:
             if any(f.lower() == family_lower for f in entry.family)
         ]
 
-    def get_entry(self, key: str) -> Optional[MatrixEntry]:
+    def get_entry(self, key: str) -> MatrixEntry | None:
         """Look up a MatrixEntry by target name (e.g. 'gfx942') or family name (e.g. 'gfx94X-dcgpu').
 
         Direct target lookup is tried first. If not found, treats the key as a family
@@ -396,7 +400,7 @@ class AmdGpuFamilyMatrix:
                 return entry
         return self.get_default_for_family(key)
 
-    def get_default_for_family(self, family: str) -> Optional[MatrixEntry]:
+    def get_default_for_family(self, family: str) -> MatrixEntry | None:
         """Return the is_family_default entry whose family list contains the given name,
         or None if no default is set.
 
@@ -420,7 +424,7 @@ class AmdGpuFamilyMatrix:
                     return entry
         return None
 
-    def lookup(self, key: str) -> Optional[EntryLookupResult]:
+    def lookup(self, key: str) -> EntryLookupResult | None:
         """Look up a single key and return the entry with resolution metadata.
 
         Returns an EntryLookupResult or None if no match found. resolved_via indicates
