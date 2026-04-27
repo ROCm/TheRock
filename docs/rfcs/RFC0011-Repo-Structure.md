@@ -13,11 +13,15 @@ repo.amd.com's open source software release publications need standardization. I
 
 ## Definitions
 
-* nightly - nightly builds from the develop branch
-* prerelease - builds from the release candidate branches
-* stable - GA releases of ROCm with a short term support lifecycle, tagged as ROCm releases.
-* lts - Future long term stability (LTS) releases
-* expansions - SDK built with dependencies on the ROCm Core SDK
+* Repository Streams
+  * nightly - nightly builds from the develop branch
+  * prerelease - builds from the release candidate branches
+  * stable - GA releases of ROCm with a short term support lifecycle, tagged as ROCm releases.
+  * lts - Future long term stability (LTS) releases
+* Products
+  * Core SDK
+  * expansions - SDK built with dependencies on the ROCm Core SDK
+  * extras - standalone components part of ROCm
 * pyindex - folder name for a central repository for python packages
 
 ## Repository Structure
@@ -90,8 +94,14 @@ the repo file will update the gpg key to the latest.
 - amdrocm-repo.deb
 - amdrocm-repo-lts-YYYYMM.rpm #reserved for future LTS release streams
 
-The rocm-repo file uses an environment variable, $rocm_release_type, to identify the release type. 
-This to allow users to manually switch to nightly or prerelease repositories.
+Repository stream selection must be implemented per package manager.
+For rpm packages, install a package-manager variable file, for example
+   /etc/yum/vars/amdrocm_release_stream or /etc/dnf/vars/amdrocm_release_stream,
+   and use $amdrocm_release_stream in the repo baseurl.
+For Debian-based systems, the repository package must not rely on shell-style
+or yum-style variable expansion in APT source files. It should install explicit
+deb822 .sources stanzas, or separate .sources files, for each supported stream,
+using Enabled: yes/no to control which stream is active.
 
 The repository package is to include the latest amdgpu driver folder from repo.radeon.com.
 This is temporary until amdgpu is moved to repo.amd.com.
