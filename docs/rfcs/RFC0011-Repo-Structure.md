@@ -46,7 +46,7 @@ repo.amd.com's open source software release publications need standardization. I
         - tarball
         - whl
         - packages
-      - **TBD** *(extras or individual releases)*
+      - **extras-[ROCm-major]** #projects released independently for each ROCm major version
         - Structure options:
           - Flat or per-project folders  
           - Per-project allows S3 bucket permission granularity by group but complicates duplication on `repo.amd.com`
