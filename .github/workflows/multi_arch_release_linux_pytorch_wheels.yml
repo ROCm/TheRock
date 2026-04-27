@@ -13,7 +13,7 @@
 #     (server-side indexing handles the index page).
 #
 # Triggered exclusively via workflow_dispatch from
-# multi_arch_release_linux.yml's dispatch_pytorch_wheels job (gh workflow run).
+# multi_arch_release_linux.yml's dispatch_pytorch_wheels job.
 #
 # Build phase only: testing and promotion are deferred follow-ups.
 # See https://github.com/ROCm/TheRock/issues/3291 for convergence plans.
@@ -247,9 +247,6 @@ jobs:
         with:
           release_type: ${{ inputs.release_type }}
 
-      # boto3 is already installed via external-builds/pytorch/requirements-ci.txt
-      # earlier in the job. The publish_pytorch_to_staging.py helper uses
-      # _therock_utils.storage_backend (boto3 + stdlib only).
       - name: Upload PyTorch wheels to release-bucket staging
         run: |
           python build_tools/github_actions/publish_pytorch_to_staging.py \
