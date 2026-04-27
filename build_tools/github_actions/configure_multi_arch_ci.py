@@ -404,6 +404,7 @@ class JobDecisions:
         print(f"  build_jax: {self.build_jax.action.value}")
         print(f"  test_jax: {self.test_jax.action.value}")
 
+
 @dataclass(frozen=True)
 class BuildConfig:
     """Build configuration for one platform.

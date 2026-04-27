@@ -60,7 +60,7 @@ on:
       upload_wheels:
         description: "Whether to upload/promote JAX wheels"
         type: boolean
-        default: true        
+        default: true
   workflow_dispatch:
     inputs:
       amdgpu_family:
