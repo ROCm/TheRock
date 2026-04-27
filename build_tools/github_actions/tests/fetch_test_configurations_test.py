@@ -17,12 +17,17 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def setUp(self):
         # Save environment so tests don't leak state
         self._orig_env = os.environ.copy()
+        # Save module-level attributes that tests may change
+        self._orig_functional_matrix = fetch_test_configurations.functional_matrix
+        self._orig_benchmark_matrix = fetch_test_configurations.benchmark_matrix
+        self._orig_get_all_families = (
+            fetch_test_configurations.get_all_families_for_trigger_types
+        )
 
         os.environ["RUNNER_OS"] = "Linux"
         os.environ["AMDGPU_FAMILIES"] = "gfx94X-dcgpu"
         os.environ["TEST_TYPE"] = "full"
         os.environ["TEST_LABELS"] = "[]"
-        os.environ["IS_BENCHMARK_WORKFLOW"] = "false"
         os.environ["PROJECTS_TO_TEST"] = "*"
 
         # Capture gha_set_output instead of writing to GitHub
@@ -36,6 +41,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def tearDown(self):
         os.environ.clear()
         os.environ.update(self._orig_env)
+        # Restore module-level attributes
+        fetch_test_configurations.functional_matrix = self._orig_functional_matrix
+        fetch_test_configurations.benchmark_matrix = self._orig_benchmark_matrix
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            self._orig_get_all_families
+        )
 
     def _get_components(self):
         self.assertIn("components", self.gha_output)
@@ -108,8 +119,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(hipblaslt["total_shards"], 6)
         self.assertEqual(hipblaslt["shard_arr"], [1, 2, 3, 4, 5, 6])
 
-    def test_smoke_test_forces_single_shard(self):
-        os.environ["TEST_TYPE"] = "smoke"
+    def test_quick_test_forces_single_shard(self):
+        os.environ["TEST_TYPE"] = "quick"
 
         fetch_test_configurations.run()
         components = self._get_components()
@@ -147,13 +158,47 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("rocroller", names)
 
     # -----------------------
-    # Benchmark workflow
+    # Functional test merging via run_extended_tests
     # -----------------------
 
-    def test_benchmark_workflow_uses_benchmark_matrix_only(self):
-        os.environ["IS_BENCHMARK_WORKFLOW"] = "true"
+    def _setup_functional_test(self):
+        """Common setup for functional tests: fake matrix + isolate from other components."""
+        os.environ["PROJECTS_TO_TEST"] = "func1"
+        fetch_test_configurations.functional_matrix = {
+            "func1": {
+                "job_name": "func1",
+                "platform": ["linux"],
+                "total_shards": 1,
+            }
+        }
 
-        # Replace benchmark_matrix with a tiny fake one
+    def test_functional_merged_when_enabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "true"
+        self._setup_functional_test()
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(len(components), 1)
+        self.assertEqual(components[0]["job_name"], "func1")
+
+    def test_functional_not_merged_when_disabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "false"
+        self._setup_functional_test()
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("func1", names)
+
+    # -----------------------
+    # Benchmark merging via run_extended_tests
+    # -----------------------
+
+    def _setup_benchmark_test(self):
+        """Common setup for benchmark tests: fake matrix + isolate from other components."""
+        os.environ["PROJECTS_TO_TEST"] = "bench1"
         fetch_test_configurations.benchmark_matrix = {
             "bench1": {
                 "job_name": "bench1",
@@ -162,11 +207,27 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             }
         }
 
+    def test_benchmarks_merged_when_extended_tests_enabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "true"
+        self._setup_benchmark_test()
+
         fetch_test_configurations.run()
         components = self._get_components()
 
         self.assertEqual(len(components), 1)
         self.assertEqual(components[0]["job_name"], "bench1")
+        self.assertTrue(components[0]["is_benchmark"])
+        self.assertEqual(components[0]["test_type"], "full")
+
+    def test_benchmarks_not_merged_when_extended_tests_disabled(self):
+        os.environ["RUN_EXTENDED_TESTS"] = "false"
+        self._setup_benchmark_test()
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("bench1", names)
 
     # -----------------------
     # Multi-GPU logic (RCCL)
@@ -205,6 +266,45 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # -----------------------
     # Output contract
     # -----------------------
+
+    def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
+        """On Windows, hip-tests run twice: PAL (pass/fail) and ROCR (informational)."""
+        os.environ["RUNNER_OS"] = "Windows"
+        os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        hip_jobs = [j for j in components if "hip-tests" in j["job_name"]]
+        self.assertEqual(
+            len(hip_jobs), 2, "Expected hip-tests (PAL) and hip-tests (ROCR)"
+        )
+        names = {j["job_name"] for j in hip_jobs}
+        self.assertEqual(names, {"hip-tests (PAL)", "hip-tests (ROCR)"})
+
+        pal = next(j for j in hip_jobs if j["job_name"] == "hip-tests (PAL)")
+        self.assertNotIn("expect_failure", pal)
+        self.assertEqual(pal["total_shards"], 4)
+        self.assertEqual(pal["shard_arr"], [1, 2, 3, 4])
+
+        rocr = next(j for j in hip_jobs if j["job_name"] == "hip-tests (ROCR)")
+        self.assertTrue(rocr["expect_failure"])
+        self.assertEqual(rocr["total_shards"], 4)
+        self.assertEqual(rocr["shard_arr"], [1, 2, 3, 4])
+
+    def test_windows_hip_tests_quick_uses_single_shard(self):
+        """On Windows with test_type=quick, hip-tests PAL/ROCR each use 1 shard."""
+        os.environ["RUNNER_OS"] = "Windows"
+        os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
+        os.environ["TEST_TYPE"] = "quick"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        hip_jobs = [j for j in components if "hip-tests" in j["job_name"]]
+        for job in hip_jobs:
+            self.assertEqual(job["total_shards"], 1)
+            self.assertEqual(job["shard_arr"], [1])
 
     def test_platform_is_emitted(self):
         fetch_test_configurations.run()

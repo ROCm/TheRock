@@ -36,7 +36,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from github_actions_utils import gha_set_output
+from github_actions_api import gha_set_output
 
 
 # Repository configuration map
@@ -293,7 +293,7 @@ def output_github_actions_vars(config: Dict[str, Any]) -> None:
             'submodule_path', etc. Values should be strings or booleans.
 
     Note:
-        Uses gha_set_output() from github_actions_utils.py which handles
+        Uses gha_set_output() from github_actions_api.py which handles
         writing to GITHUB_OUTPUT file or stdout for local testing.
         Booleans are converted to lowercase strings for bash compatibility.
     """

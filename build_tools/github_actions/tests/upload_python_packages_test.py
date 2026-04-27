@@ -10,6 +10,7 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 # Add build_tools to path so _therock_utils is importable.
@@ -112,6 +113,112 @@ class TestUploadPackages(unittest.TestCase):
                     / "rocm-1.0.whl"
                 ).is_file()
             )
+
+
+class TestMultiArchUploadPath(unittest.TestCase):
+    """Tests that multi-arch uploads go to python/ without an artifact_group subdir."""
+
+    def test_multiarch_upload_path(self):
+        output_root = _make_output_root()
+        packages_loc = output_root.python_packages("")
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
+            dist_dir = Path(tmp)
+            staging_dir = Path(staging)
+            (dist_dir / "rocm-1.0.whl").write_bytes(b"whl")
+            (dist_dir / "index.html").write_text("<html></html>")
+
+            backend = LocalStorageBackend(staging_dir)
+            upload_python_packages.upload_packages(dist_dir, packages_loc, backend)
+
+            base = staging_dir / "12345-linux" / "python"
+            self.assertTrue((base / "rocm-1.0.whl").is_file())
+            self.assertTrue((base / "index.html").is_file())
+            # Confirm no artifact_group subdirectory was created
+            self.assertFalse((base / "multi-arch-release").exists())
+
+
+class TestGenerateIndex(unittest.TestCase):
+    """Tests for generate_index() flat vs per-family auto-detection."""
+
+    def test_flat_layout_skips_client_side_index(self):
+        """Flat dist/ (no subdirs) skips client index generation — the
+        therock-ci-artifacts bucket serves index.html from its own side,
+        and a client-generated index would race with the server view
+        when multiple jobs append to the same prefix."""
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_dir = Path(tmp)
+            (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
+            (dist_dir / "rocm_sdk_device_gfx942-1.0.whl").write_bytes(b"device")
+
+            upload_python_packages.generate_index(dist_dir, multiarch=True)
+
+            self.assertFalse((dist_dir / "index.html").exists())
+            self.assertFalse(any(d.is_dir() for d in dist_dir.iterdir()))
+
+    def test_per_family_layout_creates_family_indexes(self):
+        """Per-family dist/ (with subdirs) creates per-family indexes, not top-level."""
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_dir = Path(tmp)
+            (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
+            (dist_dir / "gfx94X-dcgpu").mkdir()
+            (
+                dist_dir / "gfx94X-dcgpu" / "rocm_sdk_libraries_gfx94x_dcgpu-1.0.whl"
+            ).write_bytes(b"libs")
+
+            upload_python_packages.generate_index(dist_dir, multiarch=True)
+
+            self.assertTrue((dist_dir / "gfx94X-dcgpu" / "index.html").is_file())
+            self.assertFalse((dist_dir / "index.html").is_file())
+
+    def test_dry_run_creates_nothing(self):
+        """dry_run=True creates no files regardless of layout."""
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_dir = Path(tmp)
+            (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
+
+            upload_python_packages.generate_index(
+                dist_dir, multiarch=True, dry_run=True
+            )
+
+            self.assertFalse((dist_dir / "index.html").is_file())
+
+
+class TestWriteGhaUploadSummary(unittest.TestCase):
+    """Tests for write_gha_upload_summary() three-way families branch."""
+
+    def _make_loc(self):
+        return _make_output_root().python_packages("")
+
+    @unittest.mock.patch("upload_python_packages.gha_append_step_summary")
+    def test_none_families_single_arch(self, mock_summary):
+        """families=None → single-arch summary with /index.html URL."""
+        upload_python_packages.write_gha_upload_summary(self._make_loc(), families=None)
+
+        text = mock_summary.call_args[0][0]
+        self.assertIn("/index.html", text)
+        self.assertNotIn("kpack-split", text)
+        self.assertNotIn("per-family", text.lower())
+
+    @unittest.mock.patch("upload_python_packages.gha_append_step_summary")
+    def test_empty_families_kpack_split(self, mock_summary):
+        """families=[] → kpack-split summary with /index.html URL."""
+        upload_python_packages.write_gha_upload_summary(self._make_loc(), families=[])
+
+        text = mock_summary.call_args[0][0]
+        self.assertIn("kpack-split", text)
+        self.assertIn("/index.html", text)
+
+    @unittest.mock.patch("upload_python_packages.gha_append_step_summary")
+    def test_nonempty_families_per_family(self, mock_summary):
+        """families=[...] → per-family summary with per-family index URLs."""
+        upload_python_packages.write_gha_upload_summary(
+            self._make_loc(), families=["gfx94X-dcgpu", "gfx120X-all"]
+        )
+
+        text = mock_summary.call_args[0][0]
+        self.assertIn("gfx94X-dcgpu/index.html", text)
+        self.assertIn("gfx120X-all/index.html", text)
+        self.assertNotIn("kpack-split", text)
 
 
 if __name__ == "__main__":

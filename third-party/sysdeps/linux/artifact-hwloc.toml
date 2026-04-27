@@ -5,6 +5,6 @@ unmatched_exclude = [
 ]
 
 # hwloc
+[components.lib."third-party/sysdeps/linux/hwloc/build/stage"]
 [components.dev."third-party/sysdeps/linux/hwloc/build/stage"]
 [components.doc."third-party/sysdeps/linux/hwloc/build/stage"]
-[components.lib."third-party/sysdeps/linux/hwloc/build/stage"]

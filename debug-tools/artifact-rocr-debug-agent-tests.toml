@@ -4,5 +4,8 @@
 include = [
   "bin/**",
   "lib/**",
-  "src/**"
+  "src/**",
+  # New location of the tests. The old artifacts are kept for backwards
+  # compatibility.
+  "tests/**"
 ]

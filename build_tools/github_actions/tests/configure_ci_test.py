@@ -1,51 +1,25 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+from contextlib import redirect_stdout, redirect_stderr
+import io
 import json
 from pathlib import Path
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 # Add tests directory to path for extended_tests imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests"))
 import configure_ci
-from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 
 
 class ConfigureCITest(unittest.TestCase):
     def assert_target_output_is_valid(self, target_output, allow_xfail):
         self.assertTrue(all("test-runs-on" in entry for entry in target_output))
         self.assertTrue(all("family" in entry for entry in target_output))
-
-        if not allow_xfail:
-            self.assertFalse(
-                any(entry.get("expect_failure") for entry in target_output)
-            )
-
-    def assert_multi_arch_output_is_valid(self, target_output, allow_xfail):
-        """Validate multi-arch matrix output format."""
-        import json
-
-        self.assertTrue(
-            all("matrix_per_family_json" in entry for entry in target_output)
-        )
-        self.assertTrue(all("dist_amdgpu_families" in entry for entry in target_output))
-        self.assertTrue(all("build_variant_label" in entry for entry in target_output))
-        # Multi-arch output should NOT have 'family' field at top level
-        self.assertFalse(any("family" in entry for entry in target_output))
-
-        # Validate structure of matrix_per_family_json
-        for entry in target_output:
-            family_info_list = json.loads(entry["matrix_per_family_json"])
-            self.assertTrue(all("amdgpu_family" in f for f in family_info_list))
-            self.assertTrue(all("amdgpu_targets" in f for f in family_info_list))
-            self.assertTrue(all("test-runs-on" in f for f in family_info_list))
-            self.assertTrue(
-                all("sanity_check_only_for_family" in f for f in family_info_list)
-            )
 
         if not allow_xfail:
             self.assertFalse(
@@ -92,7 +66,7 @@ class ConfigureCITest(unittest.TestCase):
             any("gfx94X-dcgpu" == entry["family"] for entry in linux_target_output)
         )
         self.assertTrue(
-            any("gfx103X-dgpu" == entry["family"] for entry in linux_target_output)
+            any("gfx103X-all" == entry["family"] for entry in linux_target_output)
         )
         self.assertGreaterEqual(len(linux_target_output), 2)
         self.assert_target_output_is_valid(
@@ -266,9 +240,85 @@ class ConfigureCITest(unittest.TestCase):
         )
         self.assertEqual(linux_test_labels, [])
 
+    @patch("subprocess.run")
+    def test_filter_tests_from_pull_request(self, mock_run):
+        base_args = {
+            "pr_labels": '{"labels":[{"name":"test_filter:comprehensive"}]}',
+            "build_variant": "release",
+            "github_event_name": "pull_request",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml\nsrc/some_code.cpp"
+        mock_run.return_value = mock_process
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            configure_ci.main(base_args, {}, {})
+        self.assertIn('"test_type": "comprehensive"', captured_out.getvalue())
+
+    @patch("subprocess.run")
+    def test_invalid_filter_tests_from_pull_request(self, mock_run):
+        base_args = {
+            "pr_labels": '{"labels":[{"name":"test_filter:extended"}]}',
+            "build_variant": "release",
+            "github_event_name": "pull_request",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml\nsrc/some_code.cpp"
+        mock_run.return_value = mock_process
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            configure_ci.main(base_args, {}, {})
+        self.assertIn('"test_type": "quick"', captured_out.getvalue())
+
+    @patch("subprocess.run")
+    def test_valid_main_push_ci_run(self, mock_run):
+        base_args = {
+            "build_variant": "release",
+            "github_event_name": "push",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml"
+        mock_run.return_value = mock_process
+        configure_ci.main(base_args, {}, {})
+
+    @patch("subprocess.run")
+    def test_valid_schedule_ci_run(self, mock_run):
+        base_args = {
+            "build_variant": "release",
+            "github_event_name": "schedule",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml"
+        mock_run.return_value = mock_process
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            configure_ci.main(base_args, {}, {})
+        self.assertIn('"test_type": "comprehensive"', captured_out.getvalue())
+
+    @patch("subprocess.run")
+    def test_valid_workflow_dispatch_ci_run(self, mock_run):
+        base_args = {
+            "build_variant": "release",
+            "github_event_name": "workflow_dispatch",
+            "base_ref": "HEAD^",
+        }
+        mock_process = MagicMock()
+        mock_process.stdout = ".github/workflows/ci.yml"
+        mock_run.return_value = mock_process
+        configure_ci.main(
+            base_args, {"amdgpu_families": "gfx94X"}, {"amdgpu_families": "gfx110X"}
+        )
+
     def test_skip_ci_label(self):
         base_args = {
-            "pr_labels": '{"labels":[{"name":"skip-ci"},{"name":"test:hipblaslt"},{"name":"test:rocblas"},{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"},{"name":"test_runner:oem"}]}',
+            "pr_labels": '{"labels":[{"name":"ci:skip"},{"name":"test:hipblaslt"},{"name":"test:rocblas"},{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"},{"name":"test_runner:oem"}]}',
             "build_variant": "release",
         }
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(
@@ -322,7 +372,6 @@ class ConfigureCITest(unittest.TestCase):
 
     def test_linux_branch_push_matrix_generator(self):
         # Push to non-main branches uses presubmit defaults
-        # This supports multi_arch_ci.yml which triggers on multi_arch/** branches
         base_args = {"branch_name": "test_branch", "build_variant": "release"}
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(
             is_pull_request=False,
@@ -459,329 +508,6 @@ class ConfigureCITest(unittest.TestCase):
         ]:
             self.assertFalse(configure_ci.determine_long_lived_branch(branch))
 
-    ###########################################################################
-    # Tests for multi_arch mode
-
-    def test_multi_arch_linux_workflow_dispatch_matrix_generator(self):
-        """Test multi_arch mode groups all families into one entry with test-runs-on."""
-        import json
-
-        build_families = {"amdgpu_families": "gfx94X, gfx110X"}
-        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
-            is_pull_request=False,
-            is_workflow_dispatch=True,
-            is_push=False,
-            is_schedule=False,
-            base_args={
-                "workflow_dispatch_linux_test_labels": "",
-                "workflow_dispatch_windows_test_labels": "",
-                "build_variant": "release",
-            },
-            families=build_families,
-            platform="linux",
-            multi_arch=True,
-        )
-        # Multi-arch should produce one entry per build_variant, not per family
-        self.assertEqual(len(linux_target_output), 1)
-        self.assert_multi_arch_output_is_valid(
-            target_output=linux_target_output, allow_xfail=True
-        )
-
-        # Check that both families are in the output with structured format
-        entry = linux_target_output[0]
-        family_info_list = json.loads(entry["matrix_per_family_json"])
-        family_names = [f["amdgpu_family"] for f in family_info_list]
-        self.assertIn("gfx94X-dcgpu", family_names)
-        self.assertIn("gfx110X-all", family_names)
-
-        # Verify test-runs-on is populated for each family
-        for family_info in family_info_list:
-            self.assertIn("test-runs-on", family_info)
-
-        # Check dist_amdgpu_families is semicolon-separated
-        dist_families = entry["dist_amdgpu_families"].split(";")
-        self.assertIn("gfx94X-dcgpu", dist_families)
-        self.assertIn("gfx110X-all", dist_families)
-
-        self.assertEqual(linux_test_labels, [])
-
-    def test_multi_arch_single_family_linux_workflow_dispatch(self):
-        """Test multi_arch mode with single family produces one entry."""
-        import json
-
-        build_families = {"amdgpu_families": "gfx94X"}
-        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
-            is_pull_request=False,
-            is_workflow_dispatch=True,
-            is_push=False,
-            is_schedule=False,
-            base_args={
-                "workflow_dispatch_linux_test_labels": "",
-                "workflow_dispatch_windows_test_labels": "",
-                "build_variant": "release",
-            },
-            families=build_families,
-            platform="linux",
-            multi_arch=True,
-        )
-        self.assertEqual(len(linux_target_output), 1)
-        self.assert_multi_arch_output_is_valid(
-            target_output=linux_target_output, allow_xfail=True
-        )
-
-        entry = linux_target_output[0]
-        family_info_list = json.loads(entry["matrix_per_family_json"])
-        self.assertEqual(len(family_info_list), 1)
-        self.assertEqual(family_info_list[0]["amdgpu_family"], "gfx94X-dcgpu")
-
-    def test_multi_arch_empty_families_linux_workflow_dispatch(self):
-        """Test multi_arch mode with empty families produces empty output."""
-        build_families = {"amdgpu_families": ""}
-        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
-            is_pull_request=False,
-            is_workflow_dispatch=True,
-            is_push=False,
-            is_schedule=False,
-            base_args={"build_variant": "release"},
-            families=build_families,
-            platform="linux",
-            multi_arch=True,
-        )
-        self.assertEqual(linux_target_output, [])
-        self.assertEqual(linux_test_labels, [])
-
-    def test_multi_arch_postsubmit_matrix_generator(self):
-        """Test multi_arch mode with postsubmit (main branch push)."""
-        import json
-
-        base_args = {"branch_name": "main", "build_variant": "release"}
-        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
-            is_pull_request=False,
-            is_workflow_dispatch=False,
-            is_push=True,
-            is_schedule=False,
-            base_args=base_args,
-            families={},
-            platform="linux",
-            multi_arch=True,
-        )
-        # Should produce one entry with all postsubmit families grouped
-        self.assertEqual(len(linux_target_output), 1)
-        self.assert_multi_arch_output_is_valid(
-            target_output=linux_target_output, allow_xfail=True
-        )
-
-        entry = linux_target_output[0]
-        family_info_list = json.loads(entry["matrix_per_family_json"])
-        # Postsubmit should have multiple families
-        self.assertGreaterEqual(len(family_info_list), 1)
-        # Each entry should have amdgpu_family and test-runs-on
-        for family_info in family_info_list:
-            self.assertIn("amdgpu_family", family_info)
-            self.assertIn("test-runs-on", family_info)
-
-    def test_multi_arch_sanity_check_field_propagation_logic(self):
-        """Unit test: Verify sanity_check_only_for_family field is correctly propagated.
-
-        Uses synthetic data to test the code logic in isolation.
-        This test should never need updates unless the code behavior changes.
-        """
-        # Synthetic minimal test matrix
-        # Use naming convention matching real matrix (e.g., gfx94x, gfx110x - no underscores)
-        synthetic_matrix = {
-            "testfamily1": {
-                "linux": {
-                    "family": "testfamily1-stable",
-                    "test-runs-on": "linux-stable-runner",
-                    "build_variants": ["release"],
-                    # Field not present - should default to False
-                }
-            },
-            "testfamily2": {
-                "linux": {
-                    "family": "testfamily2-experimental",
-                    "test-runs-on": "linux-experimental-runner",
-                    "build_variants": ["release"],
-                    "sanity_check_only_for_family": True,
-                }
-            },
-            "testfamily3": {
-                "linux": {
-                    "family": "testfamily3-explicit-false",
-                    "test-runs-on": "linux-another-runner",
-                    "build_variants": ["release"],
-                    "sanity_check_only_for_family": False,  # Explicit False
-                }
-            },
-        }
-
-        with patch(
-            "configure_ci.get_all_families_for_trigger_types",
-            return_value=synthetic_matrix,
-        ):
-            build_families = {
-                "amdgpu_families": "testfamily1, testfamily2, testfamily3"
-            }
-            linux_target_output, linux_test_labels = configure_ci.matrix_generator(
-                is_pull_request=False,
-                is_workflow_dispatch=True,
-                is_push=False,
-                is_schedule=False,
-                base_args={
-                    "workflow_dispatch_linux_test_labels": "",
-                    "workflow_dispatch_windows_test_labels": "",
-                    "build_variant": "release",
-                },
-                families=build_families,
-                platform="linux",
-                multi_arch=True,
-            )
-
-            # Validate multi-arch structure
-            self.assertEqual(len(linux_target_output), 1)
-            self.assert_multi_arch_output_is_valid(
-                target_output=linux_target_output, allow_xfail=True
-            )
-
-            # Parse and validate field propagation
-            entry = linux_target_output[0]
-            family_info_list = json.loads(entry["matrix_per_family_json"])
-            self.assertEqual(len(family_info_list), 3)
-
-            family_dict = {f["amdgpu_family"]: f for f in family_info_list}
-
-            # Verify field is correctly propagated with proper defaults
-            self.assertIn("testfamily1-stable", family_dict)
-            self.assertFalse(
-                family_dict["testfamily1-stable"]["sanity_check_only_for_family"],
-                "Missing field should default to False",
-            )
-
-            self.assertIn("testfamily2-experimental", family_dict)
-            self.assertTrue(
-                family_dict["testfamily2-experimental"]["sanity_check_only_for_family"],
-                "Explicit True should be preserved",
-            )
-
-            self.assertIn("testfamily3-explicit-false", family_dict)
-            self.assertFalse(
-                family_dict["testfamily3-explicit-false"][
-                    "sanity_check_only_for_family"
-                ],
-                "Explicit False should be preserved",
-            )
-
-            # Verify all entries have the field (even if False)
-            for family_info in family_info_list:
-                self.assertIn("sanity_check_only_for_family", family_info)
-                self.assertIsInstance(family_info["sanity_check_only_for_family"], bool)
-
-    def test_multi_arch_production_sanity_check_configuration(self):
-        """Integration test: Verify production matrix sanity_check configuration.
-
-        This documents our expected production configuration and catches unintentional changes.
-
-        When this test fails:
-        1. Check if the architecture matured (expected) → update expected_families
-        2. Check if someone accidentally changed the matrix (bug) → revert the change
-
-        Update this test when architectures are promoted/demoted intentionally.
-        """
-        # Get actual production matrix
-        matrix = configure_ci.get_all_families_for_trigger_types(["presubmit"])
-
-        # Document expected production configuration as of 2025-02
-        # Update these when architectures mature or new experimental archs are added
-        expected_families = {
-            # Stable architectures - should NOT have sanity_check flag
-            "stable": ["gfx94x"],
-            # Experimental architectures - SHOULD have sanity_check flag
-            "experimental": ["gfx110x", "gfx1151"],
-        }
-
-        # Verify stable architectures
-        for family in expected_families["stable"]:
-            if family not in matrix:
-                self.fail(
-                    f"Stable family '{family}' not in presubmit matrix. "
-                    f"If removed intentionally, update expected_families in this test."
-                )
-            linux_info = matrix[family].get("linux", {})
-            sanity_check = linux_info.get("sanity_check_only_for_family", False)
-            self.assertFalse(
-                sanity_check,
-                f"Stable family '{family}' should not have sanity_check_only_for_family=True",
-            )
-
-        # Verify experimental architectures
-        for family in expected_families["experimental"]:
-            if family not in matrix:
-                # Allow experimental families to be removed without breaking CI
-                print(
-                    f"WARNING: Experimental family '{family}' not in matrix (may have been promoted/removed)"
-                )
-                continue
-            linux_info = matrix[family].get("linux", {})
-            sanity_check = linux_info.get("sanity_check_only_for_family", False)
-            self.assertTrue(
-                sanity_check,
-                f"Experimental family '{family}' should have sanity_check_only_for_family=True. "
-                f"If promoted to stable, move to 'stable' list in expected_families.",
-            )
-
-        # Now test end-to-end: pick one stable + one experimental and verify propagation
-        if not expected_families["stable"] or not expected_families["experimental"]:
-            self.skipTest("Need at least one stable and one experimental family")
-
-        stable_family = expected_families["stable"][0]
-        experimental_family = expected_families["experimental"][0]
-
-        # Skip if experimental family was removed
-        if experimental_family not in matrix:
-            self.skipTest(f"Experimental family {experimental_family} not available")
-
-        build_families = {"amdgpu_families": f"{stable_family}, {experimental_family}"}
-        linux_target_output, _ = configure_ci.matrix_generator(
-            is_pull_request=False,
-            is_workflow_dispatch=True,
-            is_push=False,
-            is_schedule=False,
-            base_args={
-                "workflow_dispatch_linux_test_labels": "",
-                "workflow_dispatch_windows_test_labels": "",
-                "build_variant": "release",
-            },
-            families=build_families,
-            platform="linux",
-            multi_arch=True,
-        )
-
-        self.assertEqual(len(linux_target_output), 1)
-        self.assert_multi_arch_output_is_valid(
-            target_output=linux_target_output, allow_xfail=True
-        )
-
-        # Verify the production values are correctly propagated
-        entry = linux_target_output[0]
-        family_info_list = json.loads(entry["matrix_per_family_json"])
-
-        stable_arch_name = matrix[stable_family]["linux"]["family"]
-        experimental_arch_name = matrix[experimental_family]["linux"]["family"]
-
-        family_dict = {f["amdgpu_family"]: f for f in family_info_list}
-
-        self.assertIn(stable_arch_name, family_dict)
-        self.assertFalse(
-            family_dict[stable_arch_name]["sanity_check_only_for_family"],
-            f"Stable family {stable_arch_name} should have sanity_check=False",
-        )
-
-        self.assertIn(experimental_arch_name, family_dict)
-        self.assertTrue(
-            family_dict[experimental_arch_name]["sanity_check_only_for_family"],
-            f"Experimental family {experimental_arch_name} should have sanity_check=True",
-        )
-
     # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
     def test_sandbox_test_runner_with_asan(self):
         base_args = {"build_variant": "asan"}
@@ -796,7 +522,170 @@ class ConfigureCITest(unittest.TestCase):
             platform="linux",
         )
         entry = linux_target_output[0]
-        self.assertEqual(entry["test-runs-on"], "linux-mi325-8gpu-ossci-rocm-sandbox")
+        self.assertEqual(entry["test-runs-on"], "rocm-asan-mi325-sandbox")
+
+    ###########################################################################
+    # Tests for multi-label runner selection
+
+    def test_gfx94x_multi_label_selects_first_when_random_low(self):
+        """When random() is very low, first label should be selected."""
+        base_args = {"build_variant": "release"}
+        build_families = {"amdgpu_families": "gfx94X"}
+
+        # Mock random.random() to return 0.1 (< 0.59 first weight)
+        with patch("random.random", return_value=0.1):
+            linux_target_output, _ = configure_ci.matrix_generator(
+                is_pull_request=True,
+                is_workflow_dispatch=False,
+                is_push=False,
+                is_schedule=False,
+                base_args=base_args,
+                families=build_families,
+                platform="linux",
+            )
+
+        # Find the gfx94X entry
+        gfx94x_entries = [
+            e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"
+        ]
+        self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
+        entry = gfx94x_entries[0]
+        # Should select the first (vultr) label
+        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
+
+    def test_gfx94x_multi_label_selects_second_when_random_medium(self):
+        """When random() is in middle range, second label should be selected."""
+        base_args = {"build_variant": "release"}
+        build_families = {"amdgpu_families": "gfx94X"}
+
+        # Mock random.random() to return 0.65 (>= 0.59, < 0.59+0.14=0.73)
+        with patch("random.random", return_value=0.65):
+            linux_target_output, _ = configure_ci.matrix_generator(
+                is_pull_request=True,
+                is_workflow_dispatch=False,
+                is_push=False,
+                is_schedule=False,
+                base_args=base_args,
+                families=build_families,
+                platform="linux",
+            )
+
+        # Find the gfx94X entry
+        gfx94x_entries = [
+            e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"
+        ]
+        self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
+        entry = gfx94x_entries[0]
+        # Should select the second (cirrascale) label
+        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm")
+
+    def test_gfx94x_multi_label_selects_third_when_random_high(self):
+        """When random() is high, third label should be selected."""
+        base_args = {"build_variant": "release"}
+        build_families = {"amdgpu_families": "gfx94X"}
+
+        # Mock random.random() to return 0.8 (>= 0.59+0.14=0.73)
+        with patch("random.random", return_value=0.8):
+            linux_target_output, _ = configure_ci.matrix_generator(
+                is_pull_request=True,
+                is_workflow_dispatch=False,
+                is_push=False,
+                is_schedule=False,
+                base_args=base_args,
+                families=build_families,
+                platform="linux",
+            )
+
+        # Find the gfx94X entry
+        gfx94x_entries = [
+            e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"
+        ]
+        self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
+        entry = gfx94x_entries[0]
+        # Should select the third (core42) label
+        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm")
+
+    def test_gfx94x_multi_gpu_label_selects_first_when_random_low(self):
+        """When random() is low, first multi-gpu label should be selected."""
+        base_args = {"build_variant": "release"}
+        build_families = {"amdgpu_families": "gfx94X"}
+
+        # Mock random.random() to return 0.3 (< 0.61 first weight)
+        with patch("random.random", return_value=0.3):
+            linux_target_output, _ = configure_ci.matrix_generator(
+                is_pull_request=True,
+                is_workflow_dispatch=False,
+                is_push=False,
+                is_schedule=False,
+                base_args=base_args,
+                families=build_families,
+                platform="linux",
+            )
+
+        # Find the gfx94X entry
+        gfx94x_entries = [
+            e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"
+        ]
+        self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
+        entry = gfx94x_entries[0]
+        # Should select the first (cirrascale) multi-gpu label
+        self.assertEqual(
+            entry["test-runs-on-multi-gpu"], "linux-gfx942-8gpu-ossci-rocm"
+        )
+
+    def test_gfx94x_multi_gpu_label_selects_second_when_random_high(self):
+        """When random() is high, second multi-gpu label should be selected."""
+        base_args = {"build_variant": "release"}
+        build_families = {"amdgpu_families": "gfx94X"}
+
+        # Mock random.random() to return 0.7 (>= 0.61)
+        with patch("random.random", return_value=0.7):
+            linux_target_output, _ = configure_ci.matrix_generator(
+                is_pull_request=True,
+                is_workflow_dispatch=False,
+                is_push=False,
+                is_schedule=False,
+                base_args=base_args,
+                families=build_families,
+                platform="linux",
+            )
+
+        # Find the gfx94X entry
+        gfx94x_entries = [
+            e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"
+        ]
+        self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
+        entry = gfx94x_entries[0]
+        # Should select the second (core42) multi-gpu label
+        self.assertEqual(
+            entry["test-runs-on-multi-gpu"], "linux-gfx942-8gpu-core42-ossci-rocm"
+        )
+
+    def test_families_without_multi_label_always_use_primary(self):
+        """Families without multi-label config should always use primary label."""
+        base_args = {"build_variant": "release"}
+        build_families = {"amdgpu_families": "gfx103X"}
+
+        # Run multiple times to ensure consistency (no multi-label config exists)
+        for _ in range(5):
+            linux_target_output, _ = configure_ci.matrix_generator(
+                is_pull_request=False,
+                is_workflow_dispatch=False,
+                is_push=False,
+                is_schedule=True,
+                base_args=base_args,
+                families=build_families,
+                platform="linux",
+            )
+
+            # Find the gfx103X entry
+            gfx103x_entries = [
+                e for e in linux_target_output if e["family"] == "gfx103X-all"
+            ]
+            if gfx103x_entries:
+                entry = gfx103x_entries[0]
+                # Should always use the same primary label
+                self.assertEqual(entry["test-runs-on"], "linux-gfx1030-gpu-rocm")
 
 
 if __name__ == "__main__":

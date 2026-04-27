@@ -5,8 +5,15 @@ import json
 import logging
 import os
 import shlex
+import sys
 import subprocess
 from pathlib import Path
+import platform
+
+from libhipcxx_utils import (
+    get_gpu_architecture_portable,
+    prepend_env_path,
+)
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
@@ -14,6 +21,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+gpu_arch = get_gpu_architecture_portable(OUTPUT_ARTIFACTS_DIR)
+logging.info(f"++ Detected GPU architecture: {gpu_arch}")
 
 
 # Load ROCm version from version.json
@@ -48,17 +58,11 @@ environ_vars["CMAKE_GENERATOR"] = "Ninja"
 
 # Add ROCm binaries to PATH
 rocm_bin = str(THEROCK_BIN_PATH)
-if "PATH" in environ_vars:
-    environ_vars["PATH"] = f"{rocm_bin}:{environ_vars['PATH']}"
-else:
-    environ_vars["PATH"] = rocm_bin
+prepend_env_path(environ_vars, "PATH", rocm_bin)
 
 # Set library paths
 rocm_lib = str(OUTPUT_ARTIFACTS_PATH / "lib")
-if "LD_LIBRARY_PATH" in environ_vars:
-    environ_vars["LD_LIBRARY_PATH"] = f"{rocm_lib}:{environ_vars['LD_LIBRARY_PATH']}"
-else:
-    environ_vars["LD_LIBRARY_PATH"] = rocm_lib
+prepend_env_path(environ_vars, "LD_LIBRARY_PATH", rocm_lib)
 
 logging.info(f"ROCM_PATH: {environ_vars['ROCM_PATH']}")
 logging.info(f"HIP_PATH: {environ_vars['HIP_PATH']}")
@@ -76,28 +80,51 @@ except FileNotFoundError as e:
     logging.error(f"Error: Directory '{LIBHIPCXX_BUILD_DIR}' does not exist.")
     raise
 
+is_windows = platform.system() == "Windows"
+is_linux = platform.system() == "Linux"
+
+compiler_ext = ".exe" if is_windows else ""
+
+HIPCC_BINARY_NAME = f"hipcc{compiler_ext}"
+
+HIP_COMPILER_ROCM_ROOT = OUTPUT_ARTIFACTS_PATH
+if is_windows:
+    environ_vars["HIPCXX"] = str(
+        OUTPUT_ARTIFACTS_PATH / "lib" / "llvm" / "bin" / "amdclang++.exe"
+    )
+    print("HIPCXX:", environ_vars["HIPCXX"], str(OUTPUT_ARTIFACTS_PATH))
 
 # Configure with CMake
 cmd = [
     "cmake",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/hipcc",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
-    "-GNinja",
-    "..",
+    f"-DHIP_HIPCC_EXECUTABLE={(THEROCK_BIN_PATH / HIPCC_BINARY_NAME).as_posix()}",
+    f"-DCMAKE_CXX_COMPILER={(THEROCK_BIN_PATH / HIPCC_BINARY_NAME)}",
+    f"-DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT.as_posix()}",
+    f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
 ]
+
+# Add rc compiler for windows
+if is_windows:
+    cmd.append("-DCMAKE_RC_COMPILER=rc.exe")
+
+cmd.extend(["-GNinja", ".."])
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
-
 # Run the tests using lit
-cmd = [
-    "bash",
-    "../ci/test_libhipcxx.sh",
-    "-cmake-options",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
-]
-
+if is_windows:
+    cmd = [
+        "ninja",
+        "check-hipcxx",
+    ]
+else:
+    cmd = [
+        "bash",
+        "../ci/test_libhipcxx.sh",
+        "-cmake-options",
+        f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME} -DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT} -DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
+    ]
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 
 subprocess.run(cmd, check=True, env=environ_vars)
