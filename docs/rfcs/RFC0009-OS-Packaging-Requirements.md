@@ -101,7 +101,7 @@ The primary OS root folder will include the following distributions where the pa
 
 ASAN packages coexist in the same folder structure as the standard build packages.
 ASAN packages follow the same naming conventions as standard packages but the 
-contain an additional prefix after amd-rocm
+contain an additional prefix after amdrocm
 ```
 amdrocm-asan-[regular package naming]
 ```
