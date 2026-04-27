@@ -77,6 +77,13 @@ on:
       build_jax:
         description: Whether to run JAX build jobs.
         value: ${{ jobs.setup.outputs.build_jax }}
+      ref:
+        description: >-
+          Resolved commit SHA from checkout. Use this instead of the input ref
+          to ensure all downstream jobs use the same commit, even if the branch
+          HEAD moves during the workflow run.
+        value: ${{ jobs.setup.outputs.ref }}
+
 permissions:
   contents: read
 
@@ -92,8 +99,10 @@ jobs:
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
       build_jax: ${{ steps.configure.outputs.build_jax }}
+      ref: ${{ steps.checkout.outputs.commit }}
     steps:
       - name: Checking out repository
+        id: checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
