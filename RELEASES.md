@@ -25,6 +25,7 @@ Table of contents:
   - [Multi-arch release status](#multi-arch-release-status)
   - [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages)
   <!-- - [Installing multi-arch PyTorch Python packages](#installing-multi-arch-pytorch-python-packages) -->
+  - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
 - [Per-family releases](#per-family-releases)
   - [Installing per-family releases using pip](#installing-per-family-releases-using-pip)
     - [Python packages release status](#python-packages-release-status)
@@ -47,15 +48,25 @@ Table of contents:
 
 ## Multi-arch releases
 
-Multi-arch releases use a unified package index that serves all GPU architectures.
+> [!IMPORTANT]
+> We are introducing multi-arch releases with
+> [#3323](https://github.com/ROCm/TheRock/issues/3323). Rather than build
+> ROCm for GPU family subsets like the [per-family releases](#per-family-releases),
+> these multi-arch releases build all GPU architectures together and split
+> GPU-specific code (kernel packs) from architecture-neutral host code as a
+> packaging step.
+>
+> This new setup will streamline package installation, so please note the
+> differences in the install instructions.
 
-Benefits over [per-family releases](#per-family-releases):
+See this table for key differences between release types:
 
-- **One index URL** for all GPUs - no need to find the right per-family URL
-- **Smaller downloads** - GPU-specific code is split into separate device
-  packages, so you only download what you need
-- **Mix GPU targets** - install device packages for multiple GPUs in the same
-  environment
+|                      | Multi-arch releases                    | Per-family releases                    |
+| -------------------- | -------------------------------------- | -------------------------------------- |
+| GPU code separation  | Split into device packages / `.kpack`  | Bundled into each artifact             |
+| GPU selection        | Package extras/variants                | Chosen by index URL or tarball name    |
+| Multiple GPU targets | Install extras / use multiarch tarball | Separate venvs or tarballs per family  |
+| Download size        | Smaller per target                     | Larger (all targets in family bundled) |
 
 ### Multi-arch release status
 
@@ -85,8 +96,17 @@ Install ROCm with device support for your GPU using the unified index and one or
 more `device-gfx*` pip extras:
 
 ```bash
+# Note: this URL is expected to change soon
 pip install --extra-index-url https://rocm.nightlies.amd.com/v4/whl/ --pre "rocm[devel,device-gfx####]"
 ```
+
+<!-- TODO: Once dependencies are uploaded to the multi-arch index, replace
+     --extra-index-url with --index-url throughout this section. -->
+
+<!-- TODO: Update URL once the top-level CloudFront path is finalized
+     (e.g. https://rocm.nightlies.amd.com/whl-multi-arch/). -->
+
+<!-- TODO: Advertise wheel variants / WheelNext once available  -->
 
 Where `####` is the GFX target taken from the following table:
 
@@ -108,14 +128,6 @@ For example, install the gfx1100 device code like so:
 pip install --extra-index-url https://rocm.nightlies.amd.com/v4/whl/ --pre "rocm[devel,device-gfx1100]"
 ```
 
-<!-- TODO: Once dependencies are uploaded to the multi-arch index, replace
-     --extra-index-url with --index-url throughout this section. -->
-
-<!-- TODO: Update URL once the top-level CloudFront path is finalized
-     (e.g. https://rocm.nightlies.amd.com/whl-multi-arch/). -->
-
-<!-- TODO: Advertise wheel variants / WheelNext once available  -->
-
 After installing, verify your installation:
 
 ```bash
@@ -125,6 +137,41 @@ rocm-sdk test
 <!-- ### Installing multi-arch PyTorch Python packages -->
 
 <!-- TODO(#3332): Document torch packages once they are available in nightly releases -->
+
+### Installing multi-arch tarballs
+
+Standalone "ROCm SDK tarballs" are a flattened view of ROCm
+[artifacts](docs/development/artifacts.md) matching the familiar folder
+structure seen with system installs on Linux to `/opt/rocm/` or on Windows via
+the HIP SDK:
+
+```
+install/
+  .kpack/     # GPU-specific kernel packs (multi-arch only)
+  bin/
+  clients/
+  include/
+  lib/
+  libexec/
+  share/
+```
+
+Tarballs are _just_ these raw files. They do not come with "install" steps
+such as setting environment variables.
+
+Multi-arch tarballs separate GPU-specific kernel code into a `.kpack/`
+directory. Two variants are available:
+
+- **Per-family tarballs** (e.g. `therock-dist-linux-gfx110X-all-7.13.0a20260427.tar.gz`)
+  that include `.kpack` files only for one family.
+- **Multiarch tarball** (e.g. `therock-dist-linux-multiarch-7.13.0a20260427.tar.gz`)
+  that include `.kpack` files for all supported targets.
+
+> [!NOTE]
+> Multi-arch tarball releases are coming soon (index pages are not yet generated).
+
+<!-- TODO: Document tarball download/install once index pages are generated
+           and the CloudFront path is finalized. -->
 
 ## Per-family releases
 
