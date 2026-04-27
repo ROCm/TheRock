@@ -368,9 +368,7 @@ class TestRocmDecision(JobGroupDecision):
 
     test_type: str = "quick"
     test_type_reason: str = "default"
-    # TODO: Consolidate test_type, test labels, and run_functional_tests
-    # (from the single-arch pipeline) into a per-platform test config object
-    # (e.g. linux_test_config JSON) instead of separate top-level outputs.
+    run_extended_tests: bool = False
 
 
 @dataclass(frozen=True)
@@ -603,10 +601,14 @@ def decide_jobs(
         ci_inputs=ci_inputs,
         git_context=git_context,
     )
+    run_extended_tests = ci_inputs.is_schedule or (
+        ci_inputs.is_workflow_dispatch and _has_test_labels(ci_inputs)
+    )
     test_rocm = TestRocmDecision(
         action=JobAction.RUN,
         test_type=test_type,
         test_type_reason=test_type_reason,
+        run_extended_tests=run_extended_tests,
     )
 
     # Other jobs run unconditionally with no configuration.
@@ -871,6 +873,7 @@ def _expand_build_config_for_platform(
                 "amdgpu_family": platform_info["family"],
                 "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
                 "test-runs-on": test_runs_on,
+                "benchmark-runs-on": platform_info.get("benchmark-runs-on", ""),
                 "sanity_check_only_for_family": platform_info.get(
                     "sanity_check_only_for_family", False
                 ),
@@ -967,12 +970,16 @@ def write_outputs(
     linux = outputs.builds.linux
     windows = outputs.builds.windows
     test_type = outputs.jobs.test_rocm.test_type if outputs.is_ci_enabled else ""
+    run_extended_tests = (
+        outputs.jobs.test_rocm.run_extended_tests if outputs.is_ci_enabled else False
+    )
     output_vars = {
         # Workflow YAML references this as 'enable_build_jobs'
         "enable_build_jobs": json.dumps(outputs.is_ci_enabled),
         "linux_build_config": json.dumps(linux.to_dict()) if linux else "",
         "windows_build_config": json.dumps(windows.to_dict()) if windows else "",
         "test_type": test_type,
+        "run_extended_tests": json.dumps(run_extended_tests),
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
     }

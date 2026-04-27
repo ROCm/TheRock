@@ -209,6 +209,10 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
     lines.append(
         f"Test level: **{test_rocm.test_type}** ({test_rocm.test_type_reason})"
     )
+    lines.append(
+        f"Extended tests (functional + benchmarks): "
+        f"**{'enabled' if test_rocm.run_extended_tests else 'disabled'}**"
+    )
 
     # Component test labels (per platform)
     if outputs.linux_test_labels:

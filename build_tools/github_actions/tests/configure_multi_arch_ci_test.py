@@ -359,6 +359,48 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(decision.rebuild_stages, ["math-libs"])
 
+    # -- run_extended_tests determination --
+
+    def test_schedule_enables_extended_tests(self):
+        """Schedule trigger → run_extended_tests True."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="schedule"), git_context=cm.GitContext()
+        )
+        self.assertTrue(result.test_rocm.run_extended_tests)
+
+    def test_workflow_dispatch_with_labels_enables_extended_tests(self):
+        """workflow_dispatch with test labels → run_extended_tests True."""
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="workflow_dispatch",
+                linux_test_labels=["test:rocprim"],
+            ),
+            git_context=cm.GitContext(),
+        )
+        self.assertTrue(result.test_rocm.run_extended_tests)
+
+    def test_workflow_dispatch_without_labels_disables_extended_tests(self):
+        """workflow_dispatch without test labels → run_extended_tests False."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="workflow_dispatch"),
+            git_context=cm.GitContext(),
+        )
+        self.assertFalse(result.test_rocm.run_extended_tests)
+
+    def test_pr_disables_extended_tests(self):
+        """pull_request → run_extended_tests False."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="pull_request"), git_context=cm.GitContext()
+        )
+        self.assertFalse(result.test_rocm.run_extended_tests)
+
+    def test_push_disables_extended_tests(self):
+        """push → run_extended_tests False."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="push"), git_context=cm.GitContext()
+        )
+        self.assertFalse(result.test_rocm.run_extended_tests)
+
 
 # ---------------------------------------------------------------------------
 # Step 4: Select Targets
@@ -713,6 +755,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "amdgpu_family",
             "amdgpu_targets",
             "test-runs-on",
+            "benchmark-runs-on",
             "sanity_check_only_for_family",
         }
         for config in [result.linux, result.windows]:
@@ -822,6 +865,21 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertNotEqual(entry["test-runs-on"], "linux-gfx1151-gpu-rocm")
         self.assertNotIn("oem", entry["test-runs-on"])
 
+    def test_benchmark_runs_on_key_always_emitted(self):
+        """benchmark-runs-on key is present (as a string) even when the matrix entry omits it.
+
+        gfx94x has benchmark-runs-on in the matrix; gfx110x does not.
+        expand_build_configs must emit the key for both, defaulting to ''.
+        """
+        targets = cm.TargetSelection(linux_families=["gfx94x", "gfx110x"])
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+        )
+        self.assertIsNotNone(result.linux)
+        for entry in result.linux.per_family_info:
+            self.assertIn("benchmark-runs-on", entry)
+            self.assertIsInstance(entry["benchmark-runs-on"], str)
+
 
 # ---------------------------------------------------------------------------
 # Step 6: Format Outputs
@@ -869,6 +927,39 @@ class TestFormatSummary(unittest.TestCase):
         outputs = cm.CIOutputs(is_ci_enabled=False)
         cm.write_outputs(self._inputs(), outputs)
 
+    def test_write_outputs_emits_run_extended_tests(self):
+        """write_outputs serialises run_extended_tests bool as 'true'/'false' string."""
+        jobs = cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
+            test_rocm=cm.TestRocmDecision(
+                action=cm.JobAction.RUN,
+                test_type="comprehensive",
+                run_extended_tests=True,
+            ),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+        )
+        outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
+        captured = {}
+        with patch(
+            "configure_multi_arch_ci.gha_set_output",
+            side_effect=lambda v: captured.update(v),
+        ):
+            cm.write_outputs(self._inputs(), outputs)
+        self.assertEqual(captured["run_extended_tests"], "true")
+
+    def test_write_outputs_skipped_ci_extended_tests_false(self):
+        """Skipped CI emits run_extended_tests='false'."""
+        outputs = cm.CIOutputs(is_ci_enabled=False)
+        captured = {}
+        with patch(
+            "configure_multi_arch_ci.gha_set_output",
+            side_effect=lambda v: captured.update(v),
+        ):
+            cm.write_outputs(self._inputs(), outputs)
+        self.assertEqual(captured["run_extended_tests"], "false")
+
 
 # ---------------------------------------------------------------------------
 # End-to-end: configure() pipeline
@@ -900,6 +991,32 @@ class TestConfigurePipeline(unittest.TestCase):
         outputs = cm.configure(inputs, cm.GitContext())
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
+
+    def test_schedule_pipeline_enables_extended_tests(self):
+        """Schedule trigger through full pipeline → run_extended_tests True."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        outputs = cm.configure(inputs, cm.GitContext())
+        self.assertTrue(outputs.is_ci_enabled)
+        self.assertTrue(outputs.jobs.test_rocm.run_extended_tests)
+
+    def test_pr_pipeline_disables_extended_tests(self):
+        """PR trigger through full pipeline → run_extended_tests False."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        outputs = cm.configure(inputs, cm.GitContext())
+        self.assertTrue(outputs.is_ci_enabled)
+        self.assertFalse(outputs.jobs.test_rocm.run_extended_tests)
 
 
 # ---------------------------------------------------------------------------
