@@ -67,10 +67,8 @@ repo.amd.com's open source software release publications need standardization. I
 
   - **stable**
     - Current ROCm Core release from TheRock
-    - **standard** or regular (includes debug symbols)
-    - **asan** (includes debug symbols
-    - **standard-rpath**
-    - **asan-rpath**
+    - **standard** (includes default build packages, asan build packages, default-debug symbol packages, and asan-debug system packages)
+    - **rpath** (includes rpath variant of standard packages)
 
   - **lts**
     - `YYYYMM`
