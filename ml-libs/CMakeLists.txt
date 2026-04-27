@@ -75,10 +75,18 @@ if(THEROCK_ENABLE_MIOPEN)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
-  if(MSVC)
-    set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
+  # MIOpen tests require composable kernel. When CK is disabled (e.g., for
+  # gfx110X which is not in _ck_supported_gfx_targets), we must also disable
+  # MIOpen tests to avoid compilation errors in CK-dependent test code.
+  if(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+    if(MSVC)
+      set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
+    else()
+      set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
+    endif()
   else()
-    set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
+    message(STATUS "Disabling MIOpen tests because composable kernel is disabled")
+    set(_THEROCK_MIOPEN_ENABLE_TESTING OFF)
   endif()
 
   therock_cmake_subproject_declare(MIOpen
