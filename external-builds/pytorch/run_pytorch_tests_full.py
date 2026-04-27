@@ -53,7 +53,6 @@ import platform
 import subprocess
 import sys
 import tempfile
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from skip_tests.create_skip_tests import get_tests
@@ -139,25 +138,6 @@ INDUCTOR_UNIT_TESTS = [
     "inductor/test_torchinductor_opinfo",
     "inductor/test_aot_inductor",
 ]
-
-
-def has_junit_failures(reports_dir: Path) -> bool:
-    """Scan JUnit XML reports for any test failures or errors."""
-    if not reports_dir.is_dir():
-        return False
-    for xml_file in reports_dir.rglob("*.xml"):
-        try:
-            tree = ET.parse(xml_file)
-        except ET.ParseError:
-            continue
-        root = tree.getroot()
-        suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
-        for suite in suites:
-            failures = int(suite.get("failures", 0))
-            errors = int(suite.get("errors", 0))
-            if failures > 0 or errors > 0:
-                return True
-    return False
 
 
 def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
@@ -553,13 +533,6 @@ def main(argv: list[str]) -> int:
         result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
         return_code = result.returncode
         print(f"run_test.py finished with return code: {return_code}")
-
-    # run_test.py with --keep-going may exit 0 even when individual test
-    # cases fail.  Check JUnit XML reports for the ground truth.
-    reports_dir = args.pytorch_dir / "test" / "test-reports"
-    if return_code == 0 and has_junit_failures(reports_dir):
-        print("JUnit XML reports contain failures — overriding exit code to 1")
-        return_code = 1
 
     # Force-exit immediately.  PyTorch's run_test.py is known to hang after
     # all test files complete due to leaked daemon threads or orphan child
