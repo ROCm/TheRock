@@ -136,14 +136,18 @@ Users are encouraged to identify their local GPU architecture and install packag
 Example behaviour for amdrocm-blas:
 ```
 yum install amdrocm-blas # installs all GPU architectures i.e. is a meta pacakge with host and all device packages
-yum install amdrocm-blas-host # host only, has not dependency. functionality is not guaranteed today, RTC is needed if possible
+yum install amdrocm-blas-host # install host only packages
+
 yum install amdrocm-blas-gfx90a # is depedent on amdrocm-blas-host
 yum install amdrocm-blas-gfx90a amdrocm-blas-gfx94x # is depedent on amdrocm-blas-host, installs two GPU architectures
 ```
 The rules for host, device and dev packages apply to other meta packages including amdrocm. The default behaviour for installing
 the meta package amdrocm is to install all GPU architectures.
 
-Does not include per package method to install all GPU architectures
+`component-host` is installable without device packages. It contains host-side
+runtime files only. Features requiring precompiled device code may not work
+unless a matching `component-$device` package is installed. Runtime compilation
+fallback support is TBD and must be documented per component.
 
 All device-specific packages must:
 
@@ -151,7 +155,10 @@ All device-specific packages must:
 - Be independently installable
 - Support meta-packages
 
-TheRock must provide a GPU detection interface for package managers.
+ROCm must provide a GPU detection tool, for example `amdrocm-detect-gpu`,
+that reports the local LLVM gfx architectures and can print recommended package
+names. Native package managers are not expected to perform hardware detection
+during dependency resolution.
 
 ### Meta Packages
 
@@ -169,7 +176,7 @@ The following table shows the meta packages that will be available:
 
 | Name                    | Content                                                              | Description                                                                   |
 | :---------------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------- |
-| amdrocm & amdrocm-core (implemented via provides)  | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Needed to run software built with ROCm Core                                   |
+| Real package: amdrocm Provides: amdrocm-core | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Run software built on  ROCm Core                       |
 | amdrocm-core-devel      | rocm-core + compiler cmake, static library files, and headers        | Needed to build software with ROCm Core                                       |
 | amdrocm-developer-tools | Profiler, debugger, and related tools                                | Independent set of tools to debug and profile any application built with ROCm |
 | amdrocm-fortran         |                                                                      | Fortran compiler and related components                                       |
