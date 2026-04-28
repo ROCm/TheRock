@@ -328,15 +328,21 @@
     "Gfxarch": "False"
   },
   {
-    "Package": "amdrocm-hip-test",
+    "Package": "amdrocm-runtime-test",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-runtime-devel"
+      "amdrocm-runtime-devel",
+      "amdrocm-sysdeps",
+      "amdrocm-base",
+      "amdrocm-llvm"
     ],
     "RPMRequires": [
-      "amdrocm-runtime-devel"
+      "amdrocm-runtime-devel",
+      "amdrocm-sysdeps",
+      "amdrocm-base",
+      "amdrocm-llvm"
     ],
     "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
     "Description_Short": "AMD HIP test files for ROCm platforms",
@@ -358,9 +364,21 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "rocrtst",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocrtst",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
       }
     ],
-    "Gfxarch": "False"
+    "Gfxarch": "False",
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-fft-test",
