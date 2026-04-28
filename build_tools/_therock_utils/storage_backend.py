@@ -452,13 +452,15 @@ class S3StorageBackend(StorageBackend):
             return
 
         copy_source = {"Bucket": source.bucket, "Key": source.relative_path}
+        # Use the managed transfer copy() instead of copy_object() to
+        # support files larger than 5GB via automatic multipart copy.
         _s3_retry(
             "copy",
             f"{source.s3_uri} -> {dest.s3_uri}",
-            self.s3_client.copy_object,
-            Bucket=dest.bucket,
-            Key=dest.relative_path,
-            CopySource=copy_source,
+            self.s3_client.copy,
+            copy_source,
+            dest.bucket,
+            dest.relative_path,
         )
 
 

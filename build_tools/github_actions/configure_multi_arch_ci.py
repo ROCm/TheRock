@@ -48,7 +48,6 @@ import enum
 import json
 import os
 import sys
-import random
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
@@ -56,7 +55,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _therock_utils.build_topology import get_topology
 
-from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
+from amdgpu_family_matrix import (
+    all_build_variants,
+    get_all_families_for_trigger_types,
+    select_weighted_label,
+)
 from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
@@ -170,13 +173,9 @@ class CIInputs:
         with open(event_path) as f:
             event = json.load(f)
 
-        # Extract additional fields based on event type.
-
-        # "inputs" are set for workflow_dispatch, empty otherwise.
-        inputs = event.get("inputs") or {}
-
-        # BUILD_VARIANT and RELEASE_TYPE come from workflow_call inputs, not
-        # the event payload.
+        # Workflow inputs are passed as environment variables by
+        # setup_multi_arch.yml. GitHub-specific context (PR labels,
+        # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
         release_type = os.environ.get("RELEASE_TYPE", "")
 
@@ -203,17 +202,19 @@ class CIInputs:
             release_type=release_type,
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
-                inputs.get("linux_amdgpu_families", "")
+                os.environ.get("LINUX_AMDGPU_FAMILIES", "")
             ),
             windows_amdgpu_families=_parse_comma_list(
-                inputs.get("windows_amdgpu_families", "")
+                os.environ.get("WINDOWS_AMDGPU_FAMILIES", "")
             ),
-            linux_test_labels=_parse_comma_list(inputs.get("linux_test_labels", "")),
+            linux_test_labels=_parse_comma_list(
+                os.environ.get("LINUX_TEST_LABELS", "")
+            ),
             windows_test_labels=_parse_comma_list(
-                inputs.get("windows_test_labels", "")
+                os.environ.get("WINDOWS_TEST_LABELS", "")
             ),
-            prebuilt_stages=inputs.get("prebuilt_stages", ""),
-            baseline_run_id=inputs.get("baseline_run_id", ""),
+            prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
+            baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
         )
 
 
@@ -680,19 +681,19 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
     if ci_inputs.is_workflow_dispatch:
         # Manual trigger: caller specifies exact families per platform.
-        # For CI dispatches, empty input means "no families for that
-        # platform" — the caller has full control over what runs.
-        # For release dispatches, empty input defaults to all families
-        # so that release workflows don't need to enumerate every family.
+        # "all" = all known families. "none" or empty = skip platform.
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
-        if ci_inputs.release_type and not linux_names and not windows_names:
+        if linux_names == ["all"]:
             linux_names = list(all_families.keys())
+            print("  linux_amdgpu_families='all' -> all Linux families")
+        elif linux_names == ["none"]:
+            linux_names = []
+        if windows_names == ["all"]:
             windows_names = list(all_families.keys())
-            print(
-                f"  Release type {ci_inputs.release_type!r} with no "
-                f"explicit families -> all families"
-            )
+            print("  windows_amdgpu_families='all' -> all Windows families")
+        elif windows_names == ["none"]:
+            windows_names = []
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (gfx* for individual families, ci:run-all-archs
@@ -808,22 +809,12 @@ def _expand_build_config_for_platform(
         # Determine test runner label.
         test_runs_on = platform_info["test-runs-on"]
 
-        # Handle dual-label configuration with weighted random selection.
+        # Handle multi-label configuration with weighted random selection.
         # Some families (e.g. gfx94x) have multiple runner labels available.
-        if "test-runs-on-alternate" in platform_info:
-            alternate_label = platform_info["test-runs-on-alternate"]
-            alternate_weight = platform_info.get("test-runs-on-alternate-weight", 0.5)
-            if random.random() < alternate_weight:
-                test_runs_on = alternate_label
-                print(
-                    f"  {family_name}: selected alternate runner (weight={alternate_weight}): "
-                    f"{test_runs_on}"
-                )
-            else:
-                print(
-                    f"  {family_name}: selected primary runner (weight={1-alternate_weight}): "
-                    f"{test_runs_on}"
-                )
+        if "test-runs-on-labels" in platform_info:
+            test_runs_on = select_weighted_label(
+                platform_info["test-runs-on-labels"], family_name
+            )
 
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
