@@ -6,9 +6,11 @@
 # Built shape:
 #   - One fat build_prod_wheels.py invocation per (python_version,
 #     pytorch_git_ref) matrix cell, covering all gfx targets expanded
-#     from the inputs.amdgpu_families set.
-#   - kpack-split the resulting fat torch wheel into a host wheel plus
-#     per-gfx amd-torch-device-* wheels.
+#     from the inputs.amdgpu_families set. Builds torch, torchaudio,
+#     torchvision, and triton in a single invocation.
+#   - kpack-split the fat torch and torchvision wheels into host wheels
+#     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
+#     torchaudio and triton ship as-is (no split).
 #   - Upload the result to s3://therock-{release_type}-python/v4/whl-staging/
 #     (server-side indexing handles the index page).
 #
@@ -122,18 +124,28 @@ jobs:
         run: |
           pip install -r external-builds/pytorch/requirements-ci.txt
 
-      - name: Checkout PyTorch source (nightly)
+      - name: Checkout PyTorch source repos (nightly)
         if: ${{ matrix.pytorch_git_ref == 'nightly' }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --repo-hashtag nightly
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+            --repo-hashtag nightly
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+            --repo-hashtag nightly
+          ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
-      - name: Checkout PyTorch source (stable)
+      - name: Checkout PyTorch source repos (stable)
         if: ${{ matrix.pytorch_git_ref != 'nightly' }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
             --repo-hashtag ${{ matrix.pytorch_git_ref }}
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+            --require-related-commit
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+            --require-related-commit
+          ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
       # determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV (--rocm-sdk-version, --version-suffix).
@@ -217,23 +229,34 @@ jobs:
             -e rocm-systems/python/rocm-bootstrap \
             -e rocm-systems/shared/kpack
 
-      - name: Split PyTorch fat wheel
+      - name: Split PyTorch fat wheels (torch + torchvision)
         run: |
           # The splitter writes the host wheel under the same filename as
-          # the input, so relocate the fat wheel out of PACKAGE_DIST_DIR
-          # first.
+          # the input, so relocate each fat wheel out of PACKAGE_DIST_DIR
+          # before invoking the splitter. torchaudio and triton ship as-is.
           FAT_STAGE="${RUNNER_TEMP:-/tmp}/pytorch-fat"
           mkdir -p "${FAT_STAGE}"
-          mv ${{ env.PACKAGE_DIST_DIR }}/torch-*.whl "${FAT_STAGE}/"
 
           ROCM_SDK_VERSION="$(python -m rocm_sdk version)"
 
+          mv ${{ env.PACKAGE_DIST_DIR }}/torch-*.whl "${FAT_STAGE}/"
           python -m rocm_kpack.tools.split_python_wheels \
             --input "${FAT_STAGE}"/torch-*.whl \
             --output-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --device-package-prefix amd-torch-device \
             --overlay-root torch/ \
             --wheel-type torch-fat \
+            --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
+            --compression zstd \
+            -j "$(nproc)"
+          rm -f "${FAT_STAGE}"/torch-*.whl
+
+          mv ${{ env.PACKAGE_DIST_DIR }}/torchvision-*.whl "${FAT_STAGE}/"
+          python -m rocm_kpack.tools.split_python_wheels \
+            --input "${FAT_STAGE}"/torchvision-*.whl \
+            --output-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --device-package-prefix amd-torchvision-device \
+            --overlay-root torchvision/ \
             --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
             --compression zstd \
             -j "$(nproc)"
