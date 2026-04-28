@@ -36,11 +36,32 @@ if TYPE_CHECKING:
 
 # ============================================================================
 # GC 12.0 register offsets (from gc_12_0_0_offset.h)
-# These are DWORD offsets relative to GC base_index 1
+# These are DWORD offsets; each register below has an explicit base index.
 # ============================================================================
 
 # GRBM
-regGRBM_GFX_CNTL = 0x0900  # base_index 0
+regGRBM_CNTL = 0x0DA0                  # base_index 0
+regGRBM_GFX_CNTL = 0x0900              # base_index 1
+
+# CP/RLC engine bring-up
+regCP_STAT = 0x0F40                    # base_index 0
+regCP_PFP_PRGRM_CNTR_START = 0x1E44    # base_index 0
+regCP_ME_PRGRM_CNTR_START = 0x1E45     # base_index 0
+regCP_PFP_PRGRM_CNTR_START_HI = 0x1E59 # base_index 0
+regCP_ME_PRGRM_CNTR_START_HI = 0x1E79  # base_index 0
+regCP_ME_CNTL = 0x0803                 # base_index 1
+regCP_MEC_RS64_PRGRM_CNTR_START = 0x2900     # base_index 1
+regCP_MEC_RS64_CNTL = 0x2904                 # base_index 1
+regCP_MEC_RS64_PRGRM_CNTR_START_HI = 0x2938  # base_index 1
+regCP_MEC_DOORBELL_RANGE_LOWER = 0x1DFC      # base_index 0
+regCP_MEC_DOORBELL_RANGE_UPPER = 0x1DFD      # base_index 0
+regRLC_CNTL = 0x4C00                 # base_index 1
+regRLC_SRM_CNTL = 0x4C80             # base_index 1
+regRLC_RLCS_BOOTLOAD_STATUS = 0x4E7C # base_index 1
+regRLC_SPM_MC_CNTL = 0x0982          # base_index 1
+regSH_MEM_BASES = 0x09E3             # base_index 1
+regSH_MEM_CONFIG = 0x09E4            # base_index 1
+regTCP_CNTL = 0x19A2                 # base_index 1
 
 # CP MES control registers (base_index 1)
 regCP_MES_CNTL = 0x2807
@@ -55,7 +76,7 @@ regCP_MES_MIBOUND_LO = 0x585B
 regCP_MES_MDBOUND_LO = 0x585D
 regCP_MES_IC_OP_CNTL = 0x2820
 
-# CP HQD registers (base_index 1, used for direct queue programming)
+# CP HQD registers (base_index 0, used for direct queue programming)
 regCP_MQD_BASE_ADDR = 0x1FA9
 regCP_MQD_BASE_ADDR_HI = 0x1FAA
 regCP_HQD_ACTIVE = 0x1FAB
@@ -63,6 +84,7 @@ regCP_HQD_VMID = 0x1FAC
 regCP_HQD_PERSISTENT_STATE = 0x1FAD
 regCP_HQD_PIPE_PRIORITY = 0x1FAE
 regCP_HQD_QUEUE_PRIORITY = 0x1FAF
+regCP_HQD_QUANTUM = 0x1FB0
 regCP_HQD_PQ_BASE = 0x1FB1
 regCP_HQD_PQ_BASE_HI = 0x1FB2
 regCP_HQD_PQ_RPTR = 0x1FB3
@@ -76,6 +98,9 @@ regCP_MQD_CONTROL = 0x1FCB
 regCP_HQD_EOP_BASE_ADDR = 0x1FCE
 regCP_HQD_EOP_BASE_ADDR_HI = 0x1FCF
 regCP_HQD_EOP_CONTROL = 0x1FD0
+regCP_HQD_IB_CONTROL = 0x1FBE
+regCP_HQD_HQ_STATUS0 = 0x1FC9
+regCP_HQD_AQL_CONTROL = 0x1FDE
 regCP_HQD_PQ_WPTR_LO = 0x1FBB
 regCP_HQD_PQ_WPTR_HI = 0x1FBC
 
@@ -99,13 +124,17 @@ DOORBELL_HIT = 1 << 31
 # CP_HQD_PQ_CONTROL bit fields
 PQ_CONTROL__QUEUE_SIZE__SHIFT = 0
 PQ_CONTROL__RPTR_BLOCK_SIZE__SHIFT = 8
+PQ_CONTROL__QUEUE_FULL_EN = 1 << 14
+PQ_CONTROL__SLOT_BASED_WPTR__SHIFT = 18
 PQ_CONTROL__NO_UPDATE_RPTR = 1 << 27
 PQ_CONTROL__UNORD_DISPATCH = 1 << 28
 PQ_CONTROL__TUNNEL_DISPATCH = 1 << 29
 PQ_CONTROL__PRIV_STATE = 1 << 30
 PQ_CONTROL__KMD_QUEUE = 1 << 31
 
-# CP_HQD_PERSISTENT_STATE: preload size
+# CP_HQD_PERSISTENT_STATE
+HQD_PERSISTENT_STATE__PRELOAD_REQ = 1 << 0
+HQD_PERSISTENT_STATE__PRELOAD_SIZE__SHIFT = 8
 HQD_PERSISTENT_STATE__PRELOAD_SIZE = 0x55
 
 # CP_HQD_EOP_CONTROL
@@ -117,10 +146,19 @@ GRBM_GFX_CNTL__MEID__SHIFT = 2
 GRBM_GFX_CNTL__VMID__SHIFT = 4
 GRBM_GFX_CNTL__QUEUEID__SHIFT = 8
 
+# CP engine control bit fields
+CP_ME_CNTL__PFP_PIPE0_RESET = 0x00040000
+CP_ME_CNTL__ME_PIPE0_RESET = 0x00100000
+CP_ME_CNTL__PFP_HALT = 0x04000000
+CP_ME_CNTL__ME_HALT = 0x10000000
+CP_MEC_RS64_CNTL__MEC_PIPE0_RESET = 0x00010000
+CP_MEC_RS64_CNTL__MEC_PIPE0_ACTIVE = 0x04000000
+CP_MEC_RS64_CNTL__MEC_HALT = 0x40000000
+
 # Doorbell assignments (LAYOUT1 for GFX12)
 DOORBELL_KIQ = 0x000
 DOORBELL_HIQ = 0x001
-DOORBELL_MEC_RING_START = 0x008
+DOORBELL_MEC_RING_START = 0x020
 DOORBELL_SDMA_START = 0x100
 
 # MES pipe IDs
@@ -193,6 +231,12 @@ class ComputeQueueConfig:
     # State
     active: bool = False
     wptr: int = 0   # Current write pointer (in DWORDs)
+    aql: bool = False
+
+    # Optional backend hooks for HDP flush and lifetime tracking.
+    dev: object | None = None
+    nbio_config: object | None = None
+    memory_handles: list[object] = field(default_factory=list)
 
 
 @dataclass
@@ -257,6 +301,41 @@ def _gc_wreg(dev: WindowsDevice, gc_base: list[int],
     dev.write_reg32(offset, val)
 
 
+def _gc_wreg_pair(
+    dev: WindowsDevice,
+    gc_base: list[int],
+    reg_lo: int,
+    reg_hi: int,
+    value: int,
+    *,
+    base_idx: int,
+) -> None:
+    _gc_wreg(dev, gc_base, reg_lo, value & 0xFFFFFFFF, base_idx=base_idx)
+    _gc_wreg(dev, gc_base, reg_hi, (value >> 32) & 0xFFFFFFFF,
+             base_idx=base_idx)
+
+
+def _alloc_queue_buffer(
+    dev: WindowsDevice,
+    config: ComputeQueueConfig,
+    size: int,
+) -> tuple[int, int, int]:
+    """Allocate queue memory, preferring VRAM MC addresses for amdgpu_lite."""
+    if hasattr(dev, "read_vram") and hasattr(dev, "alloc_memory"):
+        from amd_gpu_driver.backends.base import MemoryLocation
+
+        handle = dev.alloc_memory(size, MemoryLocation.VRAM)
+        if handle.cpu_addr == 0:
+            raise RuntimeError("Queue VRAM allocation is not CPU mapped")
+        ctypes.memset(handle.cpu_addr, 0, handle.size)
+        config.memory_handles.append(handle)
+        return handle.cpu_addr, handle.gpu_addr, 0
+
+    cpu, bus, handle = dev.driver.alloc_dma(size)
+    ctypes.memset(cpu, 0, size)
+    return cpu, bus, handle
+
+
 # ============================================================================
 # GRBM_SELECT — target a specific ME/pipe/queue for subsequent register writes
 # ============================================================================
@@ -277,8 +356,8 @@ def grbm_select(dev: WindowsDevice, gc_base: list[int],
     val |= (vmid & 0xF) << GRBM_GFX_CNTL__VMID__SHIFT
     val |= (queue & 0x7) << GRBM_GFX_CNTL__QUEUEID__SHIFT
 
-    # GRBM_GFX_CNTL is at base_index 0
-    offset = (gc_base[0] + regGRBM_GFX_CNTL) * 4
+    # GRBM_GFX_CNTL is at base_index 1 on GC 12.
+    offset = (gc_base[1] + regGRBM_GFX_CNTL) * 4
     dev.write_reg32(offset, val)
 
 
@@ -330,14 +409,18 @@ def _init_compute_mqd(config: ComputeQueueConfig) -> None:
     mqd[131] = 0
 
     # cp_hqd_persistent_state (offset 132)
-    mqd[132] = HQD_PERSISTENT_STATE__PRELOAD_SIZE
+    mqd[132] = (
+        HQD_PERSISTENT_STATE__PRELOAD_REQ |
+        (HQD_PERSISTENT_STATE__PRELOAD_SIZE <<
+         HQD_PERSISTENT_STATE__PRELOAD_SIZE__SHIFT)
+    )
 
     # cp_hqd_pipe_priority (offset 133) and queue_priority (offset 134)
-    mqd[133] = 0
-    mqd[134] = 0
+    mqd[133] = 0x2
+    mqd[134] = 0xF
 
     # cp_hqd_quantum (offset 135)
-    mqd[135] = 0
+    mqd[135] = 0x111
 
     # cp_hqd_pq_base (offsets 136-137) — ring buffer address >> 8
     pq_base = config.ring_bus_addr >> 8
@@ -348,12 +431,12 @@ def _init_compute_mqd(config: ComputeQueueConfig) -> None:
     mqd[138] = 0
 
     # cp_hqd_pq_rptr_report_addr (offsets 139-140)
-    mqd[139] = config.rptr_bus_addr & 0xFFFFFFFC
-    mqd[140] = (config.rptr_bus_addr >> 32) & 0xFFFF
+    mqd[139] = config.rptr_bus_addr & 0xFFFFFFFF
+    mqd[140] = (config.rptr_bus_addr >> 32) & 0xFFFFFFFF
 
     # cp_hqd_pq_wptr_poll_addr (offsets 141-142)
-    mqd[141] = config.wptr_bus_addr & 0xFFFFFFF8
-    mqd[142] = (config.wptr_bus_addr >> 32) & 0xFFFF
+    mqd[141] = config.wptr_bus_addr & 0xFFFFFFFF
+    mqd[142] = (config.wptr_bus_addr >> 32) & 0xFFFFFFFF
 
     # cp_hqd_pq_doorbell_control (offset 143)
     doorbell_ctrl = 0
@@ -365,16 +448,15 @@ def _init_compute_mqd(config: ComputeQueueConfig) -> None:
     ring_size_log2 = int(math.log2(config.ring_size // 4)) - 1
     pq_control = 0
     pq_control |= (ring_size_log2 & 0x3F) << PQ_CONTROL__QUEUE_SIZE__SHIFT
-    # RPTR_BLOCK_SIZE = log2(4096/4) - 1 = 9
-    pq_control |= (9 & 0x3F) << PQ_CONTROL__RPTR_BLOCK_SIZE__SHIFT
-    pq_control |= PQ_CONTROL__UNORD_DISPATCH
-    pq_control |= PQ_CONTROL__NO_UPDATE_RPTR
-    pq_control |= PQ_CONTROL__PRIV_STATE
-    pq_control |= PQ_CONTROL__KMD_QUEUE
+    pq_control |= (5 & 0x3F) << PQ_CONTROL__RPTR_BLOCK_SIZE__SHIFT
+    if config.aql:
+        pq_control |= PQ_CONTROL__QUEUE_FULL_EN
+        pq_control |= 2 << PQ_CONTROL__SLOT_BASED_WPTR__SHIFT
+        pq_control |= PQ_CONTROL__NO_UPDATE_RPTR
     mqd[145] = pq_control
 
     # cp_mqd_control (offset 162)
-    mqd[162] = 0  # VMID=0
+    mqd[162] = 1 << 8  # PRIV_STATE
 
     # cp_hqd_eop_base_addr (offsets 165-166) — EOP buffer address >> 8
     eop_base = config.eop_bus_addr >> 8
@@ -384,9 +466,16 @@ def _init_compute_mqd(config: ComputeQueueConfig) -> None:
     # cp_hqd_eop_control (offset 167) — EOP_SIZE = log2(2048/4) - 1 = 8
     mqd[167] = 8
 
+    # cp_hqd_ib_control (offset 149), cp_hqd_hq_status0 (offset 160)
+    mqd[149] = 3 << 20
+    mqd[160] = 0x20004000
+
     # cp_hqd_pq_wptr_lo/hi (offsets 182-183) = 0
     mqd[182] = 0
     mqd[183] = 0
+
+    # cp_hqd_aql_control (offset 181)
+    mqd[181] = 1 if config.aql else 0
 
     # reserved_184 (offset 184) — set bit 15 for unmapped doorbell handling
     mqd[184] = 1 << 15
@@ -413,79 +502,92 @@ def _activate_compute_queue_mmio(
     grbm_select(dev, gc_base, config.me, config.pipe, config.queue)
 
     # Deactivate queue first
-    _gc_wreg(dev, gc_base, regCP_HQD_ACTIVE, 0)
+    _gc_wreg(dev, gc_base, regCP_HQD_ACTIVE, 0, base_idx=0)
 
     # Set VMID
-    _gc_wreg(dev, gc_base, regCP_HQD_VMID, 0)
+    _gc_wreg(dev, gc_base, regCP_HQD_VMID, 0, base_idx=0)
 
     # Disable doorbell initially
-    _gc_wreg(dev, gc_base, regCP_HQD_PQ_DOORBELL_CONTROL, 0)
+    _gc_wreg(dev, gc_base, regCP_HQD_PQ_DOORBELL_CONTROL, 0, base_idx=0)
 
     # MQD base address
     _gc_wreg(dev, gc_base, regCP_MQD_BASE_ADDR,
-             config.mqd_bus_addr & 0xFFFFFFFC)
+             config.mqd_bus_addr & 0xFFFFFFFC, base_idx=0)
     _gc_wreg(dev, gc_base, regCP_MQD_BASE_ADDR_HI,
-             (config.mqd_bus_addr >> 32) & 0xFFFFFFFF)
+             (config.mqd_bus_addr >> 32) & 0xFFFFFFFF, base_idx=0)
 
     # MQD control (VMID = 0)
-    _gc_wreg(dev, gc_base, regCP_MQD_CONTROL, 0)
+    _gc_wreg(dev, gc_base, regCP_MQD_CONTROL, 1 << 8, base_idx=0)
 
     # Ring buffer base (address >> 8)
     pq_base = config.ring_bus_addr >> 8
     _gc_wreg(dev, gc_base, regCP_HQD_PQ_BASE,
-             pq_base & 0xFFFFFFFF)
+             pq_base & 0xFFFFFFFF, base_idx=0)
     _gc_wreg(dev, gc_base, regCP_HQD_PQ_BASE_HI,
-             (pq_base >> 32) & 0xFFFFFFFF)
+             (pq_base >> 32) & 0xFFFFFFFF, base_idx=0)
 
     # RPTR report address
     _gc_wreg(dev, gc_base, regCP_HQD_PQ_RPTR_REPORT_ADDR,
-             config.rptr_bus_addr & 0xFFFFFFFC)
+             config.rptr_bus_addr & 0xFFFFFFFF, base_idx=0)
     _gc_wreg(dev, gc_base, regCP_HQD_PQ_RPTR_REPORT_ADDR_HI,
-             (config.rptr_bus_addr >> 32) & 0xFFFF)
+             (config.rptr_bus_addr >> 32) & 0xFFFFFFFF, base_idx=0)
 
     # PQ control (ring size, flags)
     ring_size_log2 = int(math.log2(config.ring_size // 4)) - 1
     pq_control = 0
     pq_control |= (ring_size_log2 & 0x3F) << PQ_CONTROL__QUEUE_SIZE__SHIFT
-    pq_control |= (9 & 0x3F) << PQ_CONTROL__RPTR_BLOCK_SIZE__SHIFT
-    pq_control |= PQ_CONTROL__UNORD_DISPATCH
-    pq_control |= PQ_CONTROL__NO_UPDATE_RPTR
-    pq_control |= PQ_CONTROL__PRIV_STATE
-    pq_control |= PQ_CONTROL__KMD_QUEUE
-    _gc_wreg(dev, gc_base, regCP_HQD_PQ_CONTROL, pq_control)
+    pq_control |= (5 & 0x3F) << PQ_CONTROL__RPTR_BLOCK_SIZE__SHIFT
+    if config.aql:
+        pq_control |= PQ_CONTROL__QUEUE_FULL_EN
+        pq_control |= 2 << PQ_CONTROL__SLOT_BASED_WPTR__SHIFT
+        pq_control |= PQ_CONTROL__NO_UPDATE_RPTR
+    _gc_wreg(dev, gc_base, regCP_HQD_PQ_CONTROL, pq_control, base_idx=0)
 
     # WPTR poll address
     _gc_wreg(dev, gc_base, regCP_HQD_PQ_WPTR_POLL_ADDR,
-             config.wptr_bus_addr & 0xFFFFFFF8)
+             config.wptr_bus_addr & 0xFFFFFFFF, base_idx=0)
     _gc_wreg(dev, gc_base, regCP_HQD_PQ_WPTR_POLL_ADDR_HI,
-             (config.wptr_bus_addr >> 32) & 0xFFFF)
+             (config.wptr_bus_addr >> 32) & 0xFFFFFFFF, base_idx=0)
 
     # Reset RPTR and WPTR
-    _gc_wreg(dev, gc_base, regCP_HQD_PQ_RPTR, 0)
-    _gc_wreg(dev, gc_base, regCP_HQD_PQ_WPTR_LO, 0)
-    _gc_wreg(dev, gc_base, regCP_HQD_PQ_WPTR_HI, 0)
+    _gc_wreg(dev, gc_base, regCP_HQD_PQ_RPTR, 0, base_idx=0)
+    _gc_wreg(dev, gc_base, regCP_HQD_PQ_WPTR_LO, 0, base_idx=0)
+    _gc_wreg(dev, gc_base, regCP_HQD_PQ_WPTR_HI, 0, base_idx=0)
 
     # Doorbell control (enable doorbell)
     doorbell_ctrl = 0
     doorbell_ctrl |= (config.doorbell_index & 0x0FFFFFFC) << DOORBELL_OFFSET__SHIFT
     doorbell_ctrl |= DOORBELL_EN
-    _gc_wreg(dev, gc_base, regCP_HQD_PQ_DOORBELL_CONTROL, doorbell_ctrl)
+    _gc_wreg(dev, gc_base, regCP_HQD_PQ_DOORBELL_CONTROL, doorbell_ctrl,
+             base_idx=0)
 
     # Persistent state (preload)
-    _gc_wreg(dev, gc_base, regCP_HQD_PERSISTENT_STATE,
-             HQD_PERSISTENT_STATE__PRELOAD_SIZE)
+    persistent = (
+        HQD_PERSISTENT_STATE__PRELOAD_REQ |
+        (HQD_PERSISTENT_STATE__PRELOAD_SIZE <<
+         HQD_PERSISTENT_STATE__PRELOAD_SIZE__SHIFT)
+    )
+    _gc_wreg(dev, gc_base, regCP_HQD_PERSISTENT_STATE, persistent,
+             base_idx=0)
+    _gc_wreg(dev, gc_base, regCP_HQD_PIPE_PRIORITY, 0x2, base_idx=0)
+    _gc_wreg(dev, gc_base, regCP_HQD_QUEUE_PRIORITY, 0xF, base_idx=0)
+    _gc_wreg(dev, gc_base, regCP_HQD_QUANTUM, 0x111, base_idx=0)
+    _gc_wreg(dev, gc_base, regCP_HQD_IB_CONTROL, 3 << 20, base_idx=0)
+    _gc_wreg(dev, gc_base, regCP_HQD_HQ_STATUS0, 0x20004000, base_idx=0)
+    _gc_wreg(dev, gc_base, regCP_HQD_AQL_CONTROL, 1 if config.aql else 0,
+             base_idx=0)
 
     # EOP buffer
     eop_base = config.eop_bus_addr >> 8
     _gc_wreg(dev, gc_base, regCP_HQD_EOP_BASE_ADDR,
-             eop_base & 0xFFFFFFFF)
+             eop_base & 0xFFFFFFFF, base_idx=0)
     _gc_wreg(dev, gc_base, regCP_HQD_EOP_BASE_ADDR_HI,
-             (eop_base >> 32) & 0xFFFFFFFF)
+             (eop_base >> 32) & 0xFFFFFFFF, base_idx=0)
     # EOP_SIZE = log2(2048/4) - 1 = 8
-    _gc_wreg(dev, gc_base, regCP_HQD_EOP_CONTROL, 8)
+    _gc_wreg(dev, gc_base, regCP_HQD_EOP_CONTROL, 8, base_idx=0)
 
     # Activate the queue
-    _gc_wreg(dev, gc_base, regCP_HQD_ACTIVE, 1)
+    _gc_wreg(dev, gc_base, regCP_HQD_ACTIVE, 1, base_idx=0)
 
     # Deselect GRBM
     grbm_deselect(dev, gc_base)
@@ -529,6 +631,10 @@ def submit_compute_packets(
 
     # Update wptr writeback location (64-bit write)
     ctypes.c_uint64.from_address(config.wptr_cpu_addr).value = config.wptr
+
+    if config.dev is not None and config.nbio_config is not None:
+        from amd_gpu_driver.backends.windows.nbio_init import hdp_flush
+        hdp_flush(config.dev, config.nbio_config)
 
     # Ring the doorbell (64-bit write to doorbell BAR)
     if config.doorbell_cpu_addr != 0:
@@ -662,6 +768,136 @@ def resolve_gc_bases(ip_result: IPDiscoveryResult) -> list[int]:
     return bases
 
 
+def _wait_rlc_autoload(dev: WindowsDevice, gc_base: list[int]) -> None:
+    deadline = time.monotonic() + 5.0
+    last_status = 0
+    while time.monotonic() < deadline:
+        last_status = _gc_reg(dev, gc_base, regRLC_RLCS_BOOTLOAD_STATUS,
+                              base_idx=1)
+        cp_stat = _gc_reg(dev, gc_base, regCP_STAT, base_idx=0)
+        if (last_status & 0x80000000) or cp_stat == 0:
+            print(f"  GFX: RLC autoload status=0x{last_status:08X}, "
+                  f"CP_STAT=0x{cp_stat:08X}")
+            return
+        time.sleep(0.001)
+    print(f"  GFX: WARNING RLC autoload not confirmed "
+          f"(status=0x{last_status:08X})")
+
+
+def _pulse_reset_bits(
+    dev: WindowsDevice,
+    gc_base: list[int],
+    reg: int,
+    reset_mask: int,
+    *,
+    base_idx: int,
+) -> None:
+    val = _gc_reg(dev, gc_base, reg, base_idx=base_idx)
+    _gc_wreg(dev, gc_base, reg, val | reset_mask, base_idx=base_idx)
+    val = _gc_reg(dev, gc_base, reg, base_idx=base_idx)
+    _gc_wreg(dev, gc_base, reg, val & ~reset_mask, base_idx=base_idx)
+
+
+def _config_mec_from_ucode(
+    dev: WindowsDevice,
+    gc_base: list[int],
+    ucode_start: dict[str, int],
+) -> None:
+    missing = [name for name in ("PFP", "ME", "MEC")
+               if name not in ucode_start]
+    if missing:
+        print(f"  GFX: Skipping CP program counters, missing {missing}")
+        return
+
+    grbm_select(dev, gc_base, me=0, pipe=0, queue=0)
+    _gc_wreg_pair(
+        dev, gc_base, regCP_PFP_PRGRM_CNTR_START,
+        regCP_PFP_PRGRM_CNTR_START_HI, ucode_start["PFP"] >> 2,
+        base_idx=0,
+    )
+    _gc_wreg_pair(
+        dev, gc_base, regCP_ME_PRGRM_CNTR_START,
+        regCP_ME_PRGRM_CNTR_START_HI, ucode_start["ME"] >> 2,
+        base_idx=0,
+    )
+    grbm_deselect(dev, gc_base)
+
+    _pulse_reset_bits(
+        dev, gc_base, regCP_ME_CNTL,
+        CP_ME_CNTL__PFP_PIPE0_RESET | CP_ME_CNTL__ME_PIPE0_RESET,
+        base_idx=1,
+    )
+    val = _gc_reg(dev, gc_base, regCP_ME_CNTL, base_idx=1)
+    val &= ~(CP_ME_CNTL__PFP_HALT | CP_ME_CNTL__ME_HALT)
+    _gc_wreg(dev, gc_base, regCP_ME_CNTL, val, base_idx=1)
+
+    grbm_select(dev, gc_base, me=1, pipe=0, queue=0)
+    _gc_wreg_pair(
+        dev, gc_base, regCP_MEC_RS64_PRGRM_CNTR_START,
+        regCP_MEC_RS64_PRGRM_CNTR_START_HI, ucode_start["MEC"] >> 2,
+        base_idx=1,
+    )
+    grbm_deselect(dev, gc_base)
+
+    _pulse_reset_bits(
+        dev, gc_base, regCP_MEC_RS64_CNTL,
+        CP_MEC_RS64_CNTL__MEC_PIPE0_RESET,
+        base_idx=1,
+    )
+    print("  GFX: CP PFP/ME/MEC program counters configured")
+
+
+def _enable_mec(dev: WindowsDevice, gc_base: list[int]) -> None:
+    val = _gc_reg(dev, gc_base, regCP_MEC_RS64_CNTL, base_idx=1)
+    val &= ~(CP_MEC_RS64_CNTL__MEC_PIPE0_RESET |
+             CP_MEC_RS64_CNTL__MEC_HALT)
+    val |= CP_MEC_RS64_CNTL__MEC_PIPE0_ACTIVE
+    _gc_wreg(dev, gc_base, regCP_MEC_RS64_CNTL, val, base_idx=1)
+    time.sleep(0.050)
+
+
+def init_gfx_for_compute(
+    dev: WindowsDevice,
+    ip_result: IPDiscoveryResult,
+    psp_config: object | None = None,
+) -> list[int]:
+    """Initialize the minimal GC/MEC state needed for direct compute queues."""
+    gc_base = resolve_gc_bases(ip_result)
+    _wait_rlc_autoload(dev, gc_base)
+
+    ucode_start = getattr(psp_config, "ucode_start", {}) if psp_config else {}
+    if ucode_start:
+        _config_mec_from_ucode(dev, gc_base, ucode_start)
+
+    tcp_cntl = _gc_reg(dev, gc_base, regTCP_CNTL, base_idx=1)
+    _gc_wreg(dev, gc_base, regTCP_CNTL, tcp_cntl | 0x20000000, base_idx=1)
+    _gc_wreg(dev, gc_base, regRLC_CNTL, 0x1, base_idx=1)
+    rlc_srm = _gc_reg(dev, gc_base, regRLC_SRM_CNTL, base_idx=1)
+    _gc_wreg(dev, gc_base, regRLC_SRM_CNTL, rlc_srm | 0x3, base_idx=1)
+    _gc_wreg(dev, gc_base, regRLC_SPM_MC_CNTL, 0xF, base_idx=1)
+
+    grbm_cntl = _gc_reg(dev, gc_base, regGRBM_CNTL, base_idx=0)
+    _gc_wreg(dev, gc_base, regGRBM_CNTL,
+             (grbm_cntl & ~0xFFF) | 0xFF, base_idx=0)
+
+    sh_mem_config = (3 << 2) | (3 << 14)
+    sh_mem_bases = (1 << 16) | 2
+    for vmid in range(16):
+        grbm_select(dev, gc_base, me=0, pipe=0, queue=0, vmid=vmid)
+        _gc_wreg(dev, gc_base, regSH_MEM_CONFIG, sh_mem_config, base_idx=1)
+        _gc_wreg(dev, gc_base, regSH_MEM_BASES, sh_mem_bases, base_idx=1)
+    grbm_deselect(dev, gc_base)
+
+    _gc_wreg(dev, gc_base, regCP_MEC_DOORBELL_RANGE_LOWER, 0, base_idx=0)
+    _gc_wreg(dev, gc_base, regCP_MEC_DOORBELL_RANGE_UPPER,
+             (0x8A * 2) << 2, base_idx=0)
+
+    _enable_mec(dev, gc_base)
+    mec_cntl = _gc_reg(dev, gc_base, regCP_MEC_RS64_CNTL, base_idx=1)
+    print(f"  GFX: MEC enabled (CP_MEC_RS64_CNTL=0x{mec_cntl:08X})")
+    return gc_base
+
+
 def init_compute_queue(
     dev: WindowsDevice,
     ip_result: IPDiscoveryResult,
@@ -699,52 +935,48 @@ def init_compute_queue(
     config.pipe = pipe
     config.queue = queue
     config.doorbell_index = doorbell_index
+    config.dev = dev
+    config.nbio_config = nbio_config
 
     # Allocate ring buffer
-    ring_cpu, ring_bus, ring_handle = dev.driver.alloc_dma(ring_size)
+    ring_cpu, ring_bus, ring_handle = _alloc_queue_buffer(dev, config, ring_size)
     config.ring_cpu_addr = ring_cpu
     config.ring_bus_addr = ring_bus
     config.ring_dma_handle = ring_handle
-    # Zero the ring
-    ctypes.memset(ring_cpu, 0, ring_size)
 
     # Allocate MQD
-    mqd_cpu, mqd_bus, mqd_handle = dev.driver.alloc_dma(4096)  # page-aligned
+    mqd_cpu, mqd_bus, mqd_handle = _alloc_queue_buffer(dev, config, 4096)
     config.mqd_cpu_addr = mqd_cpu
     config.mqd_bus_addr = mqd_bus
     config.mqd_dma_handle = mqd_handle
 
     # Allocate EOP buffer
-    eop_cpu, eop_bus, eop_handle = dev.driver.alloc_dma(4096)
+    eop_cpu, eop_bus, eop_handle = _alloc_queue_buffer(dev, config, 4096)
     config.eop_cpu_addr = eop_cpu
     config.eop_bus_addr = eop_bus
     config.eop_dma_handle = eop_handle
-    ctypes.memset(eop_cpu, 0, 4096)
 
     # Allocate WPTR writeback (8 bytes in a page)
-    wptr_cpu, wptr_bus, wptr_handle = dev.driver.alloc_dma(4096)
+    wptr_cpu, wptr_bus, wptr_handle = _alloc_queue_buffer(dev, config, 4096)
     config.wptr_cpu_addr = wptr_cpu
     config.wptr_bus_addr = wptr_bus
     config.wptr_dma_handle = wptr_handle
-    ctypes.memset(wptr_cpu, 0, 4096)
 
     # Allocate RPTR writeback
-    rptr_cpu, rptr_bus, rptr_handle = dev.driver.alloc_dma(4096)
+    rptr_cpu, rptr_bus, rptr_handle = _alloc_queue_buffer(dev, config, 4096)
     config.rptr_cpu_addr = rptr_cpu
     config.rptr_bus_addr = rptr_bus
     config.rptr_dma_handle = rptr_handle
-    ctypes.memset(rptr_cpu, 0, 4096)
 
     # Allocate fence buffer
-    fence_cpu, fence_bus, fence_handle = dev.driver.alloc_dma(4096)
+    fence_cpu, fence_bus, fence_handle = _alloc_queue_buffer(dev, config, 4096)
     config.fence_cpu_addr = fence_cpu
     config.fence_bus_addr = fence_bus
     config.fence_dma_handle = fence_handle
-    ctypes.memset(fence_cpu, 0, 4096)
 
     # Map doorbell BAR for this queue (if available from NBIO)
     if nbio_config.doorbell_phys_addr != 0:
-        doorbell_offset = doorbell_index * 8  # Each doorbell is 8 bytes
+        doorbell_offset = doorbell_index * 4  # doorbell_index is a DWORD index
         try:
             db_addr, db_handle = dev.driver.map_bar(
                 2, doorbell_offset, 8)  # BAR2 = doorbell

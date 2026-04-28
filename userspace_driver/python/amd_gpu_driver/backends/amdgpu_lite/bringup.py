@@ -46,6 +46,7 @@ from amd_gpu_driver.backends.windows.psp_init import (
 from amd_gpu_driver.backends.windows.ih_init import IHConfig, init_ih
 from amd_gpu_driver.backends.windows.ring_init import (
     ComputeQueueConfig,
+    init_gfx_for_compute,
     init_compute_queue,
     submit_compute_packets,
     wait_fence,
@@ -184,6 +185,13 @@ def full_gpu_bringup(
         print("  Continuing with VBIOS-initialized firmware state")
         psp_config = PSPConfig(mp0_base=[0] * 6)
 
+    print("\n[5b/8] Initializing GFX/MEC...")
+    try:
+        init_gfx_for_compute(dev, ip_result, psp_config)
+    except Exception as e:
+        print(f"  GFX/MEC init failed: {e}")
+        print("  Continuing with existing firmware state")
+
     # --- 6. IH init ---
     print("\n[6/8] Initializing IH (interrupts)...")
     ih_config = None
@@ -203,7 +211,7 @@ def full_gpu_bringup(
         # physical address from registers, but the kernel module already mapped
         # the doorbell BAR for us.
         if compute_queue.doorbell_cpu_addr == 0 and dev.doorbell_addr != 0:
-            doorbell_offset = compute_queue.doorbell_index * 8
+            doorbell_offset = compute_queue.doorbell_index * 4
             compute_queue.doorbell_cpu_addr = dev.doorbell_addr + doorbell_offset
     except Exception as e:
         print(f"  Compute queue init failed: {e}")

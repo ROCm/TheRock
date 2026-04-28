@@ -17,6 +17,12 @@
 
 #include "amdgpu_lite.h"
 
+/*
+ * ROCR's direct compute queue uses a fixed low-VRAM window matching the macOS
+ * userspace path. Keep the generic VRAM allocator away from it.
+ */
+#define AMDGPU_LITE_VRAM_RESERVED_BYTES (64ULL * 1024ULL * 1024ULL)
+
 /* ======================================================================
  * GTT allocation helpers
  * ====================================================================== */
@@ -197,6 +203,7 @@ int vram_allocator_init(struct amdgpu_lite_device *ldev)
 {
 	struct vram_allocator *va = &ldev->vram;
 	u64 vram_size;
+	u64 reserve_pages;
 
 	/*
 	 * Use visible_vram_size since that's what we can map through the BAR.
@@ -225,9 +232,17 @@ int vram_allocator_init(struct amdgpu_lite_device *ldev)
 		return -ENOMEM;
 	}
 
+	reserve_pages = min_t(u64, va->total_pages,
+			      AMDGPU_LITE_VRAM_RESERVED_BYTES >> PAGE_SHIFT);
+	if (reserve_pages > 0) {
+		bitmap_set(va->bitmap, 0, reserve_pages);
+		va->free_pages -= reserve_pages;
+	}
+
 	dev_info(&ldev->pdev->dev,
-		 "amdgpu_lite: VRAM allocator initialized: %llu pages (%llu MB)\n",
-		 va->total_pages, vram_size / (1024 * 1024));
+		 "amdgpu_lite: VRAM allocator initialized: %llu pages (%llu MB), reserved %llu pages (%llu MB)\n",
+		 va->total_pages, vram_size / (1024 * 1024),
+		 reserve_pages, (reserve_pages << PAGE_SHIFT) / (1024 * 1024));
 
 	return 0;
 }
@@ -334,7 +349,7 @@ long amdgpu_lite_ioctl_alloc_vram(struct amdgpu_lite_fpriv *fpriv,
 
 	/* Fill output */
 	params.handle = alloc->handle;
-	params.gpu_addr = ldev->bars[ldev->vram_bar_idx].phys_addr + alloc->gpu_offset;
+	params.gpu_addr = ldev->vram_mc_base + alloc->gpu_offset;
 	params.mmap_offset = (AMDGPU_LITE_MMAP_TYPE_VRAM << AMDGPU_LITE_MMAP_TYPE_SHIFT) |
 			     alloc->gpu_offset;
 

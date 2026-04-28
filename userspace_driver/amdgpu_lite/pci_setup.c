@@ -18,6 +18,10 @@
  */
 #define RCC_CONFIG_MEMSIZE_REG      0x378C  /* 0xDE3 * 4 */
 
+/* MMHUB v4.1 FB location. Same register sequence used by the macOS DEXT path. */
+#define MMHUB_BASE0                 0x1A000
+#define MMMC_VM_FB_LOCATION_BASE    0x0554
+
 /* ======================================================================
  * BAR enumeration
  * ====================================================================== */
@@ -138,15 +142,19 @@ static void detect_vram_size(struct amdgpu_lite_device *ldev)
 	struct amdgpu_lite_bar *mmio_bar = &ldev->bars[ldev->mmio_bar_idx];
 	struct amdgpu_lite_bar *vram_bar = &ldev->bars[ldev->vram_bar_idx];
 	u32 mem_size_mb;
+	u32 fb_base;
 
 	if (!mmio_bar->kaddr ||
 	    RCC_CONFIG_MEMSIZE_REG + sizeof(u32) > mmio_bar->size) {
 		ldev->vram_size = vram_bar->size;
 		ldev->visible_vram_size = vram_bar->size;
+		ldev->vram_mc_base = vram_bar->phys_addr;
 		return;
 	}
 
 	mem_size_mb = ioread32(mmio_bar->kaddr + RCC_CONFIG_MEMSIZE_REG);
+	fb_base = ioread32(mmio_bar->kaddr +
+			   (MMHUB_BASE0 + MMMC_VM_FB_LOCATION_BASE) * sizeof(u32));
 
 	dev_info(&ldev->pdev->dev,
 		 "amdgpu_lite: RCC_CONFIG_MEMSIZE = 0x%08x (%u MB)\n",
@@ -159,6 +167,13 @@ static void detect_vram_size(struct amdgpu_lite_device *ldev)
 	}
 
 	ldev->visible_vram_size = min(ldev->vram_size, (u64)vram_bar->size);
+	ldev->vram_mc_base = (u64)(fb_base & 0x00ffffff) << 24;
+	if (!ldev->vram_mc_base)
+		ldev->vram_mc_base = vram_bar->phys_addr;
+
+	dev_info(&ldev->pdev->dev,
+		 "amdgpu_lite: VRAM MC base = 0x%llx (FB_LOCATION_BASE=0x%08x)\n",
+		 ldev->vram_mc_base, fb_base);
 }
 
 /* ======================================================================

@@ -300,6 +300,7 @@ struct amdgpu_lite_device {
 	/* VRAM info */
 	u64 vram_size;
 	u64 visible_vram_size;
+	u64 vram_mc_base;
 
 	/* VRAM allocator */
 	struct vram_allocator vram;

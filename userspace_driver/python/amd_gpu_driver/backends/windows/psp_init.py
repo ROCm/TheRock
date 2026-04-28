@@ -23,12 +23,15 @@ Reference: Linux amdgpu psp_v14_0.c, amdgpu_psp.c
 
 from __future__ import annotations
 
+import ctypes
+import os
+import subprocess
 import struct
 import time
 from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from amd_gpu_driver.backends.windows.device import WindowsDevice
@@ -73,13 +76,16 @@ PSP_RING_TYPE_KM = 2
 
 # PSP ring commands
 GFX_CMD_ID_LOAD_IP_FW = 0x00006
-GFX_CMD_ID_AUTOLOAD_RLC = 0x00017
+GFX_CMD_ID_AUTOLOAD_RLC = 0x00021
+GFX_CMD_BUF_VERSION = 1
+GFX_CMD_RESP_SIZE = 1024
+PSP_FENCE_BUFFER_SIZE = 4096
 
 # PSP ring size
 PSP_RING_SIZE = 0x10000  # 64KB
 
-# GPCOM ring entry size
-PSP_RING_ENTRY_SIZE = 16  # 4 DWORDs per entry
+# GPCOM ring frame size. The write pointer is tracked in DWORDs.
+PSP_RING_FRAME_SIZE = 64
 
 
 # ============================================================================
@@ -101,70 +107,40 @@ class PSPFWType(IntEnum):
     PSP_IPKEYMGR_DRV = 11
 
 
-class UCODEType(IntEnum):
-    """GPU IP firmware type IDs for PSP ring load commands."""
-    SDMA0 = 0
-    SDMA1 = 1
-    CP_CE = 2
-    CP_PFP = 3
-    CP_ME = 4
-    CP_MEC1 = 5
-    CP_MEC2 = 6
-    RLC_G = 7
-    RLC_V = 8
-    RLC_RESTORE_LIST_CNTL = 9
-    RLC_RESTORE_LIST_GPM_MEM = 10
-    RLC_RESTORE_LIST_SRM_MEM = 11
-    SMC = 12
-    UVD = 13
-    UVD1 = 14
-    VCE = 15
-    ISP = 16
-    DMCU_ERAM = 17
-    DMCU_INTV = 18
-    VCN0_RAM = 19
-    VCN1_RAM = 20
-    DMCUB = 21
-    VPE = 22
-    UMSCH_MM_UCODE = 23
-    UMSCH_MM_DATA = 24
-    UMSCH_MM_CMD_BUFFER = 25
-    P2S_TABLE = 26
-    RLC_P = 27
-    RLC_IRAM = 28
-    RLC_DRAM = 29
-    RS64_ME = 30
-    RS64_ME_P0_DATA = 31
-    RS64_ME_P1_DATA = 32
-    RS64_PFP = 33
-    RS64_PFP_P0_DATA = 34
-    RS64_PFP_P1_DATA = 35
-    RS64_MEC = 36
-    RS64_MEC_P0_DATA = 37
-    RS64_MEC_P1_DATA = 38
-    RS64_MEC_P2_DATA = 39
-    RS64_MEC_P3_DATA = 40
-    MES = 41
-    MES_KIQ = 42
-    MES_STACK = 43
-    MES_THREAD1_STACK = 44
-    MES_KIQ_STACK = 45
-    RLC_SRM_DRAM_SR = 46
-    IMU_I = 47
-    IMU_D = 48
-    CP_RS64_PFP_P0_STACK = 49
-    CP_RS64_PFP_P1_STACK = 50
-    CP_RS64_ME_P0_STACK = 51
-    CP_RS64_ME_P1_STACK = 52
-    CP_RS64_MEC_P0_STACK = 53
-    CP_RS64_MEC_P1_STACK = 54
-    CP_RS64_MEC_P2_STACK = 55
-    CP_RS64_MEC_P3_STACK = 56
-    RLC_AUTOLOAD = 57
-    MES_DATA = 58
-    MES_KIQ_DATA = 59
-    UMSCH_MM_DATA_UCODE = 60
-    ISP_DATA = 61
+class GFXFWType(IntEnum):
+    """PSP GFX firmware type IDs for GFX_CMD_ID_LOAD_IP_FW."""
+    RLC_V = 7
+    RLC_G = 8
+    SDMA0 = 9
+    SDMA1 = 10
+    SMU = 18
+    RLC_RESTORE_LIST_GPM_MEM = 20
+    RLC_RESTORE_LIST_SRM_MEM = 21
+    RLC_RESTORE_LIST_SRM_CNTL = 22
+    RLC_P = 25
+    RLC_IRAM = 26
+    RLC_DRAM_BOOT = 48
+    IMU_I = 68
+    IMU_D = 69
+    SDMA_UCODE_TH0 = 71
+    SDMA_UCODE_TH1 = 72
+    RS64_MES = 76
+    RS64_MES_STACK = 77
+    RS64_KIQ = 78
+    RS64_KIQ_STACK = 79
+    CP_MES_KIQ = 81
+    MES_KIQ_STACK = 82
+    RS64_PFP = 87
+    RS64_ME = 88
+    RS64_MEC = 89
+    RS64_PFP_P0_STACK = 90
+    RS64_PFP_P1_STACK = 91
+    RS64_ME_P0_STACK = 92
+    RS64_ME_P1_STACK = 93
+    RS64_MEC_P0_STACK = 94
+    RS64_MEC_P1_STACK = 95
+    RS64_MEC_P2_STACK = 96
+    RS64_MEC_P3_STACK = 97
 
 
 # ============================================================================
@@ -214,7 +190,7 @@ class FirmwareBundle:
 
 def parse_firmware_header(data: bytes) -> FirmwareHeader:
     """Parse a common firmware header."""
-    fields = struct.unpack_from("<IIHHHHIIIi", data, 0)
+    fields = struct.unpack_from("<IIHHHHIIII", data, 0)
     return FirmwareHeader(
         size_bytes=fields[0],
         header_size_bytes=fields[1],
@@ -229,9 +205,46 @@ def parse_firmware_header(data: bytes) -> FirmwareHeader:
     )
 
 
+def _read_firmware(path: Path) -> bytes:
+    """Read a firmware file, including linux-firmware .zst files."""
+    if path.exists():
+        return path.read_bytes()
+
+    zst_path = Path(str(path) + ".zst")
+    if zst_path.exists():
+        result = subprocess.run(
+            ["zstdcat", str(zst_path)],
+            check=True,
+            stdout=subprocess.PIPE,
+        )
+        return result.stdout
+
+    raise FileNotFoundError(path)
+
+
+def _optional_firmware(path: Path) -> bytes | None:
+    try:
+        return _read_firmware(path)
+    except FileNotFoundError:
+        return None
+
+
+def _slice(data: bytes, offset: int, size: int) -> bytes:
+    if offset < 0 or size < 0 or offset + size > len(data):
+        raise ValueError(
+            f"Firmware slice outside blob: offset={offset}, size={size}, "
+            f"blob={len(data)}"
+        )
+    return data[offset:offset + size]
+
+
+def _version_string(major: int, minor: int, revision: int) -> str:
+    return f"{major}_{minor}_{revision}"
+
+
 def parse_firmware_file(path: Path) -> FirmwareBundle:
     """Parse a firmware file (SOS, TA, or IP firmware)."""
-    data = path.read_bytes()
+    data = _read_firmware(path)
     header = parse_firmware_header(data)
     bundle = FirmwareBundle(header=header, raw_data=data)
 
@@ -279,12 +292,31 @@ class PSPConfig:
     fw_buf_cpu_addr: int = 0
     fw_buf_dma_handle: int = 0
 
+    # Command and fence buffers for the PSP GPCOM ring command-buffer ABI
+    cmd_buf_bus_addr: int = 0
+    cmd_buf_cpu_addr: int = 0
+    cmd_buf_dma_handle: int = 0
+    fence_bus_addr: int = 0
+    fence_cpu_addr: int = 0
+    fence_dma_handle: int = 0
+    fence_value: int = 0
+
+    # Backing memory handles for VRAM allocations used by amdgpu_lite.
+    ring_mem_handle: Any | None = None
+    fw_buf_mem_handle: Any | None = None
+    cmd_buf_mem_handle: Any | None = None
+    fence_mem_handle: Any | None = None
+
     # State
     sos_alive: bool = False
     ring_created: bool = False
 
     # Firmware directory
     fw_dir: Path = Path(".")
+
+    # Firmware versions and entry points resolved from IP discovery/files.
+    ip_versions: dict[str, str] = field(default_factory=dict)
+    ucode_start: dict[str, int] = field(default_factory=dict)
 
 
 # ============================================================================
@@ -316,6 +348,61 @@ def _wait_for_reg(
             return True
         time.sleep(0.001)  # 1ms between polls
     return False
+
+
+def _align_up(value: int, alignment: int) -> int:
+    return (value + alignment - 1) & ~(alignment - 1)
+
+
+def _alloc_psp_buffer(
+    dev: WindowsDevice,
+    size: int,
+    *,
+    alignment: int = 4096,
+) -> tuple[int, int, int, Any | None]:
+    """Allocate a PSP-visible buffer.
+
+    amdgpu_lite uses VRAM MC addresses for PSP-visible boot buffers, which
+    matches the macOS/Tinygrad path. Other backends keep the old DMA fallback.
+    """
+    alloc_size = _align_up(size + alignment - 1, 4096)
+
+    if hasattr(dev, "read_vram") and hasattr(dev, "alloc_memory"):
+        from amd_gpu_driver.backends.base import MemoryLocation
+
+        handle = dev.alloc_memory(alloc_size, MemoryLocation.VRAM)
+        if handle.cpu_addr == 0:
+            raise RuntimeError("PSP VRAM allocation is not CPU mapped")
+        delta = (-handle.gpu_addr) & (alignment - 1)
+        ctypes.memset(handle.cpu_addr, 0, handle.size)
+        return (
+            handle.cpu_addr + delta,
+            handle.gpu_addr + delta,
+            0,
+            handle,
+        )
+
+    cpu_addr, bus_addr, dma_handle = dev.driver.alloc_dma(alloc_size)
+    delta = (-bus_addr) & (alignment - 1)
+    ctypes.memset(cpu_addr, 0, alloc_size)
+    return cpu_addr + delta, bus_addr + delta, dma_handle, None
+
+
+def _resolve_ip_versions(ip_result: IPDiscoveryResult) -> dict[str, str]:
+    from amd_gpu_driver.backends.windows.ip_discovery import HardwareID
+
+    versions: dict[str, str] = {}
+    for block in ip_result.ip_blocks:
+        version = _version_string(block.major, block.minor, block.revision)
+        if block.hw_id == HardwareID.GC and block.instance_number == 0:
+            versions["gc"] = version
+        elif block.hw_id == HardwareID.SDMA0 and "sdma" not in versions:
+            versions["sdma"] = version
+        elif block.hw_id == HardwareID.MP1 and block.instance_number == 0:
+            versions["mp1"] = version
+        elif block.hw_id == HardwareID.MP0 and block.instance_number == 0:
+            versions["mp0"] = version
+    return versions
 
 
 # ============================================================================
@@ -364,6 +451,16 @@ def create_psp_ring(dev: WindowsDevice, config: PSPConfig) -> None:
 
     Reference: psp_v14_0_ring_create()
     """
+    if _psp_reg(dev, config, regMPASP_SMN_C2PMSG_71) != 0:
+        # Destroy any stale ring left by an earlier userspace process.
+        status = _psp_reg(dev, config, regMPASP_SMN_C2PMSG_64)
+        if (status & GFX_FLAG_RESPONSE) == 0:
+            raise RuntimeError(
+                f"PSP TOS has a stale busy ring (C2PMSG_64=0x{status:08X})"
+            )
+        _psp_wreg(dev, config, regMPASP_SMN_C2PMSG_64, 0x00030000)
+        time.sleep(0.020)
+
     # Wait for TOS ready
     if not _wait_for_reg(dev, config, regMPASP_SMN_C2PMSG_64,
                          GFX_FLAG_RESPONSE, GFX_CMD_RESPONSE_MASK,
@@ -404,46 +501,128 @@ def submit_psp_cmd(
     fw_bus_addr: int = 0,
     fw_size: int = 0,
 ) -> None:
-    """Submit a command to the PSP GPCOM ring.
+    if os.environ.get("AMDGPU_LITE_PSP_CMD_BUFFER") == "1":
+        _submit_psp_cmd_buffer(dev, config, cmd_id, fw_type, fw_bus_addr,
+                               fw_size)
+    else:
+        _submit_psp_cmd_legacy(dev, config, cmd_id, fw_type, fw_bus_addr,
+                               fw_size)
 
-    The ring entry format is 4 DWORDs:
-    DW[0]: fence_addr_lo (or 0)
-    DW[1]: fence_addr_hi (or 0)
-    DW[2]: fence_value (or 0)
-    DW[3]: cmd_id | (fw_type << 16)
 
-    For LOAD_IP_FW commands, additional data is written to the
-    firmware buffer and the address is passed via C2PMSG_36.
-    """
-    import ctypes
+def _submit_psp_cmd_buffer(
+    dev: WindowsDevice,
+    config: PSPConfig,
+    cmd_id: int,
+    fw_type: int = 0,
+    fw_bus_addr: int = 0,
+    fw_size: int = 0,
+) -> None:
+    """Submit a command to the PSP GPCOM command-buffer ring."""
+    if config.cmd_buf_cpu_addr == 0 or config.fence_cpu_addr == 0:
+        raise RuntimeError("PSP command/fence buffers are not allocated")
 
-    # Write ring entry at current wptr
-    entry_offset = (config.ring_wptr * PSP_RING_ENTRY_SIZE) % config.ring_size
-    entry_addr = config.ring_cpu_addr + entry_offset
+    ctypes.memset(config.cmd_buf_cpu_addr, 0, GFX_CMD_RESP_SIZE)
+    ctypes.memset(config.fence_cpu_addr, 0, 4)
 
-    # Build entry: fence_lo, fence_hi, fence_val, cmd
-    cmd_word = cmd_id | (fw_type << 16)
+    cmd = (ctypes.c_uint32 * (GFX_CMD_RESP_SIZE // 4)).from_address(
+        config.cmd_buf_cpu_addr
+    )
+    cmd[0] = GFX_CMD_RESP_SIZE
+    cmd[1] = GFX_CMD_BUF_VERSION
+    cmd[2] = cmd_id
 
-    # Write the 4 DWORDs to the ring buffer
-    buf = (ctypes.c_uint32 * 4).from_address(entry_addr)
-    buf[0] = 0  # fence_addr_lo
-    buf[1] = 0  # fence_addr_hi
-    buf[2] = 0  # fence_value
-    buf[3] = cmd_word
+    if cmd_id == GFX_CMD_ID_LOAD_IP_FW:
+        cmd[7] = fw_bus_addr & 0xFFFFFFFF
+        cmd[8] = (fw_bus_addr >> 32) & 0xFFFFFFFF
+        cmd[9] = fw_size
+        cmd[10] = fw_type
 
-    # Advance write pointer
-    config.ring_wptr += 1
+    config.fence_value += 1
+    fence = (ctypes.c_uint32).from_address(config.fence_cpu_addr)
+    fence.value = 0
 
-    # Update write pointer register
+    ring_wptr = _psp_reg(dev, config, regMPASP_SMN_C2PMSG_67)
+    frame_offset = (ring_wptr * 4) % config.ring_size
+    frame = (ctypes.c_uint32 * (PSP_RING_FRAME_SIZE // 4)).from_address(
+        config.ring_cpu_addr + frame_offset
+    )
+    for i in range(PSP_RING_FRAME_SIZE // 4):
+        frame[i] = 0
+    frame[0] = config.cmd_buf_bus_addr & 0xFFFFFFFF
+    frame[1] = (config.cmd_buf_bus_addr >> 32) & 0xFFFFFFFF
+    frame[2] = GFX_CMD_RESP_SIZE
+    frame[3] = config.fence_bus_addr & 0xFFFFFFFF
+    frame[4] = (config.fence_bus_addr >> 32) & 0xFFFFFFFF
+    frame[5] = config.fence_value
+
+    config.ring_wptr = ring_wptr + (PSP_RING_FRAME_SIZE // 4)
     _psp_wreg(dev, config, regMPASP_SMN_C2PMSG_67, config.ring_wptr)
 
-    # Wait for response
-    if not _wait_for_reg(dev, config, regMPASP_SMN_C2PMSG_64,
-                         GFX_FLAG_RESPONSE, GFX_CMD_RESPONSE_MASK,
-                         timeout_ms=30000):
-        raise RuntimeError(
-            f"PSP command 0x{cmd_id:X} (fw_type={fw_type}) timed out"
-        )
+    deadline = time.monotonic() + 30.0
+    while time.monotonic() < deadline:
+        if fence.value == config.fence_value:
+            status = cmd[216]  # struct psp_gfx_cmd_resp.resp.status
+            if status != 0:
+                raise RuntimeError(
+                    f"PSP command 0x{cmd_id:X} fw_type={fw_type} "
+                    f"failed with status 0x{status:X}"
+                )
+            return
+        time.sleep(0.001)
+
+    raise RuntimeError(
+        f"PSP command 0x{cmd_id:X} fw_type={fw_type} timed out "
+        f"(fence={fence.value}, expected={config.fence_value})"
+    )
+
+
+def _submit_psp_cmd_legacy(
+    dev: WindowsDevice,
+    config: PSPConfig,
+    cmd_id: int,
+    fw_type: int = 0,
+    fw_bus_addr: int = 0,
+    fw_size: int = 0,
+) -> None:
+    """Submit a command using the 16-byte GPCOM ring frame.
+
+    This is the protocol used by the current lite Windows path and by the
+    PSP state we inherit after firmware POST in the Linux VM.
+    """
+    if config.fence_cpu_addr == 0:
+        raise RuntimeError("PSP fence buffer is not allocated")
+
+    config.fence_value += 1
+    fence = (ctypes.c_uint32).from_address(config.fence_cpu_addr)
+    fence.value = 0
+
+    if cmd_id == GFX_CMD_ID_LOAD_IP_FW:
+        _psp_wreg(dev, config, regMPASP_SMN_C2PMSG_36,
+                  (fw_bus_addr >> 20) & 0xFFFFFFFF)
+
+    entry_offset = (config.ring_wptr * 16) % config.ring_size
+    entry = (ctypes.c_uint32 * 4).from_address(
+        config.ring_cpu_addr + entry_offset
+    )
+    entry[0] = config.fence_bus_addr & 0xFFFFFFFF
+    entry[1] = (config.fence_bus_addr >> 32) & 0xFFFFFFFF
+    entry[2] = config.fence_value
+    entry[3] = cmd_id | (fw_type << 16)
+
+    config.ring_wptr += 1
+    _psp_wreg(dev, config, regMPASP_SMN_C2PMSG_67, config.ring_wptr)
+
+    deadline = time.monotonic() + 30.0
+    while time.monotonic() < deadline:
+        if fence.value == config.fence_value:
+            return
+        time.sleep(0.001)
+
+    raise RuntimeError(
+        f"PSP legacy command 0x{cmd_id:X} fw_type={fw_type} timed out "
+        f"(fence={fence.value}, expected={config.fence_value}, "
+        f"size={fw_size})"
+    )
 
 
 def load_ip_firmware(
@@ -465,10 +644,6 @@ def load_ip_firmware(
     # Copy firmware data to the DMA buffer
     ctypes.memmove(config.fw_buf_cpu_addr, fw_data, len(fw_data))
 
-    # Write firmware address to C2PMSG_36 (>> 20 for 1MB alignment)
-    _psp_wreg(dev, config, regMPASP_SMN_C2PMSG_36,
-              (config.fw_buf_bus_addr >> 20) & 0xFFFFFFFF)
-
     # Submit LOAD_IP_FW command
     submit_psp_cmd(
         dev, config,
@@ -486,6 +661,184 @@ def trigger_rlc_autoload(dev: WindowsDevice, config: PSPConfig) -> None:
     all IP blocks using the loaded firmware.
     """
     submit_psp_cmd(dev, config, cmd_id=GFX_CMD_ID_AUTOLOAD_RLC)
+
+
+def _load_fw_desc(
+    dev: WindowsDevice,
+    config: PSPConfig,
+    fw_type: GFXFWType,
+    fw_data: bytes,
+    label: str,
+) -> None:
+    if not fw_data:
+        return
+    load_ip_firmware(dev, config, int(fw_type), fw_data)
+    print(f"  PSP: Loaded {label} ({len(fw_data)} bytes, type={int(fw_type)})")
+
+
+def _u32(data: bytes, offset: int) -> int:
+    return struct.unpack_from("<I", data, offset)[0]
+
+
+def _load_smu_firmware(dev: WindowsDevice, config: PSPConfig, path: Path) -> bool:
+    data = _optional_firmware(path)
+    if data is None:
+        return False
+    header = parse_firmware_header(data)
+    _load_fw_desc(
+        dev,
+        config,
+        GFXFWType.SMU,
+        _slice(data, header.ucode_array_offset_bytes, header.ucode_size_bytes),
+        path.name,
+    )
+    return True
+
+
+def _load_sdma_firmware(dev: WindowsDevice, config: PSPConfig, path: Path) -> bool:
+    data = _optional_firmware(path)
+    if data is None:
+        return False
+    header = parse_firmware_header(data)
+
+    if header.header_version_major == 1:
+        fw = _slice(data, header.ucode_array_offset_bytes,
+                    header.ucode_size_bytes)
+        _load_fw_desc(dev, config, GFXFWType.SDMA0, fw, f"{path.name}:SDMA0")
+        _load_fw_desc(dev, config, GFXFWType.SDMA1, fw, f"{path.name}:SDMA1")
+    elif header.header_version_major == 2:
+        ctx_size = _u32(data, 36)
+        ctl_offset = _u32(data, 48)
+        ctl_size = _u32(data, 52)
+        _load_fw_desc(
+            dev, config, GFXFWType.SDMA_UCODE_TH1,
+            _slice(data, ctl_offset, ctl_size), f"{path.name}:TH1"
+        )
+        _load_fw_desc(
+            dev, config, GFXFWType.SDMA_UCODE_TH0,
+            _slice(data, header.ucode_array_offset_bytes, ctx_size),
+            f"{path.name}:TH0",
+        )
+    else:
+        ucode_offset = _u32(data, 36)
+        ucode_size = _u32(data, 40)
+        _load_fw_desc(
+            dev, config, GFXFWType.SDMA_UCODE_TH0,
+            _slice(data, ucode_offset, ucode_size), f"{path.name}:TH0"
+        )
+    return True
+
+
+def _load_gfx_rs64_firmware(
+    dev: WindowsDevice,
+    config: PSPConfig,
+    path: Path,
+    name: str,
+    code_type: GFXFWType,
+    stack_type: GFXFWType,
+) -> bool:
+    data = _optional_firmware(path)
+    if data is None:
+        return False
+    header = parse_firmware_header(data)
+    if header.header_version_major < 2:
+        raise ValueError(f"{path} is not an RS64 firmware image")
+
+    ucode_size = _u32(data, 36)
+    ucode_offset = header.ucode_array_offset_bytes or _u32(data, 40)
+    data_size = _u32(data, 44)
+    data_offset = _u32(data, 48)
+    start_lo = _u32(data, 52)
+    start_hi = _u32(data, 56)
+    config.ucode_start[name.upper()] = start_lo | (start_hi << 32)
+
+    _load_fw_desc(
+        dev, config, code_type, _slice(data, ucode_offset, ucode_size),
+        f"{path.name}:{name.upper()}"
+    )
+    _load_fw_desc(
+        dev, config, stack_type, _slice(data, data_offset, data_size),
+        f"{path.name}:{name.upper()}_STACK"
+    )
+    return True
+
+
+def _load_imu_firmware(dev: WindowsDevice, config: PSPConfig, path: Path) -> bool:
+    data = _optional_firmware(path)
+    if data is None:
+        return False
+    header = parse_firmware_header(data)
+    imu_i_size = _u32(data, 32)
+    imu_i_offset = _u32(data, 36) or header.ucode_array_offset_bytes
+    imu_d_size = _u32(data, 40)
+    imu_d_offset = _u32(data, 44) or (imu_i_offset + imu_i_size)
+    _load_fw_desc(
+        dev, config, GFXFWType.IMU_I,
+        _slice(data, imu_i_offset, imu_i_size), f"{path.name}:IMU_I"
+    )
+    _load_fw_desc(
+        dev, config, GFXFWType.IMU_D,
+        _slice(data, imu_d_offset, imu_d_size), f"{path.name}:IMU_D"
+    )
+    return True
+
+
+def _load_rlc_firmware(dev: WindowsDevice, config: PSPConfig, path: Path) -> bool:
+    data = _optional_firmware(path)
+    if data is None:
+        return False
+    header = parse_firmware_header(data)
+    minor = header.header_version_minor
+
+    if minor >= 1 and len(data) >= 156:
+        for label, fw_type, size_off, data_off in [
+            ("RLC_RESTORE_LIST_SRM_CNTL",
+             GFXFWType.RLC_RESTORE_LIST_SRM_CNTL, 116, 120),
+            ("RLC_RESTORE_LIST_GPM_MEM",
+             GFXFWType.RLC_RESTORE_LIST_GPM_MEM, 132, 136),
+            ("RLC_RESTORE_LIST_SRM_MEM",
+             GFXFWType.RLC_RESTORE_LIST_SRM_MEM, 148, 152),
+        ]:
+            size = _u32(data, size_off)
+            offset = _u32(data, data_off)
+            if size:
+                _load_fw_desc(
+                    dev, config, fw_type, _slice(data, offset, size),
+                    f"{path.name}:{label}"
+                )
+
+    if minor >= 2 and len(data) >= 172:
+        for label, fw_type, size_off, data_off in [
+            ("RLC_IRAM", GFXFWType.RLC_IRAM, 156, 160),
+            ("RLC_DRAM_BOOT", GFXFWType.RLC_DRAM_BOOT, 164, 168),
+        ]:
+            size = _u32(data, size_off)
+            offset = _u32(data, data_off)
+            if size:
+                _load_fw_desc(
+                    dev, config, fw_type, _slice(data, offset, size),
+                    f"{path.name}:{label}"
+                )
+
+    if minor >= 3 and len(data) >= 204:
+        for label, fw_type, size_off, data_off in [
+            ("RLC_P", GFXFWType.RLC_P, 180, 184),
+            ("RLC_V", GFXFWType.RLC_V, 196, 200),
+        ]:
+            size = _u32(data, size_off)
+            offset = _u32(data, data_off)
+            if size:
+                _load_fw_desc(
+                    dev, config, fw_type, _slice(data, offset, size),
+                    f"{path.name}:{label}"
+                )
+
+    _load_fw_desc(
+        dev, config, GFXFWType.RLC_G,
+        _slice(data, header.ucode_array_offset_bytes, header.ucode_size_bytes),
+        f"{path.name}:RLC_G",
+    )
+    return True
 
 
 # ============================================================================
@@ -516,6 +869,7 @@ def init_psp(
     """
     config = resolve_psp_bases(ip_result)
     config.fw_dir = Path(fw_dir)
+    config.ip_versions = _resolve_ip_versions(ip_result)
 
     # Check if SOS is already alive (should be after VBIOS POST)
     config.sos_alive = is_sos_alive(dev, config)
@@ -528,17 +882,40 @@ def init_psp(
 
     print("  PSP: SOS is alive (POST'd by VBIOS)")
 
-    # Allocate PSP ring buffer
-    ring_cpu, ring_bus, ring_handle = dev.driver.alloc_dma(config.ring_size)
+    # Allocate PSP-visible buffers. amdgpu_lite uses VRAM MC addresses here,
+    # matching the macOS userspace bring-up path.
+    ring_cpu, ring_bus, ring_handle, ring_mem = _alloc_psp_buffer(
+        dev, config.ring_size
+    )
     config.ring_cpu_addr = ring_cpu
     config.ring_bus_addr = ring_bus
     config.ring_dma_handle = ring_handle
+    config.ring_mem_handle = ring_mem
 
-    # Allocate firmware staging buffer (1MB)
-    fw_cpu, fw_bus, fw_handle = dev.driver.alloc_dma(1024 * 1024)
+    # Allocate firmware staging buffer (1MB, PSP-aligned)
+    fw_cpu, fw_bus, fw_handle, fw_mem = _alloc_psp_buffer(
+        dev, 1024 * 1024, alignment=1024 * 1024
+    )
     config.fw_buf_cpu_addr = fw_cpu
     config.fw_buf_bus_addr = fw_bus
     config.fw_buf_dma_handle = fw_handle
+    config.fw_buf_mem_handle = fw_mem
+
+    cmd_cpu, cmd_bus, cmd_handle, cmd_mem = _alloc_psp_buffer(
+        dev, GFX_CMD_RESP_SIZE
+    )
+    config.cmd_buf_cpu_addr = cmd_cpu
+    config.cmd_buf_bus_addr = cmd_bus
+    config.cmd_buf_dma_handle = cmd_handle
+    config.cmd_buf_mem_handle = cmd_mem
+
+    fence_cpu, fence_bus, fence_handle, fence_mem = _alloc_psp_buffer(
+        dev, PSP_FENCE_BUFFER_SIZE
+    )
+    config.fence_cpu_addr = fence_cpu
+    config.fence_bus_addr = fence_bus
+    config.fence_dma_handle = fence_handle
+    config.fence_mem_handle = fence_mem
 
     # Create PSP GPCOM ring
     create_psp_ring(dev, config)
@@ -567,57 +944,47 @@ def load_all_firmware(
         ip_version: IP version string for firmware file names.
     """
     fw_dir = config.fw_dir
+    versions = config.ip_versions
+    gc_version = versions.get("gc", "12_0_1")
+    sdma_version = versions.get("sdma", gc_version)
+    mp1_version = versions.get("mp1", ip_version)
 
-    # Determine GC IP version for firmware files
-    # GFX1201 = GC 12.0.1
-    gc_version = "12_0_1"
+    loaded_any = False
 
-    # Load SMU firmware first (required for autoload)
-    smu_path = fw_dir / f"smu_{ip_version}.bin"
-    if smu_path.exists():
-        smu_fw = smu_path.read_bytes()
-        load_ip_firmware(dev, config, UCODEType.SMC, smu_fw)
-        print(f"  PSP: Loaded SMU firmware ({len(smu_fw)} bytes)")
+    loaded_any |= _load_smu_firmware(
+        dev, config, fw_dir / f"smu_{mp1_version}.bin"
+    )
+    loaded_any |= _load_sdma_firmware(
+        dev, config, fw_dir / f"sdma_{sdma_version}.bin"
+    )
 
-    # Load SDMA firmware
-    sdma_path = fw_dir / f"sdma_{gc_version}.bin"
-    if sdma_path.exists():
-        sdma_fw = sdma_path.read_bytes()
-        load_ip_firmware(dev, config, UCODEType.SDMA0, sdma_fw)
-        print(f"  PSP: Loaded SDMA firmware ({len(sdma_fw)} bytes)")
-
-    # Load GFX firmware components
-    for ucode_name, ucode_type in [
-        ("pfp", UCODEType.RS64_PFP),
-        ("me", UCODEType.RS64_ME),
-        ("mec", UCODEType.RS64_MEC),
+    for fw_name, code_type, stack_type in [
+        ("pfp", GFXFWType.RS64_PFP, GFXFWType.RS64_PFP_P0_STACK),
+        ("me", GFXFWType.RS64_ME, GFXFWType.RS64_ME_P0_STACK),
+        ("mec", GFXFWType.RS64_MEC, GFXFWType.RS64_MEC_P0_STACK),
     ]:
-        path = fw_dir / f"gc_{gc_version}_{ucode_name}.bin"
-        if path.exists():
-            fw_data = path.read_bytes()
-            load_ip_firmware(dev, config, ucode_type, fw_data)
-            print(f"  PSP: Loaded {ucode_name.upper()} firmware ({len(fw_data)} bytes)")
+        loaded_any |= _load_gfx_rs64_firmware(
+            dev,
+            config,
+            fw_dir / f"gc_{gc_version}_{fw_name}.bin",
+            fw_name,
+            code_type,
+            stack_type,
+        )
 
-    # Load RLC firmware (this is the one that triggers autoload)
-    rlc_path = fw_dir / f"gc_{gc_version}_rlc.bin"
-    if rlc_path.exists():
-        rlc_fw = rlc_path.read_bytes()
-        load_ip_firmware(dev, config, UCODEType.RLC_G, rlc_fw)
-        print(f"  PSP: Loaded RLC firmware ({len(rlc_fw)} bytes)")
+    loaded_any |= _load_imu_firmware(
+        dev, config, fw_dir / f"gc_{gc_version}_imu.bin"
+    )
 
-        # Trigger RLC autoload after RLC_G is loaded
+    if _load_rlc_firmware(dev, config, fw_dir / f"gc_{gc_version}_rlc.bin"):
+        loaded_any = True
         trigger_rlc_autoload(dev, config)
         print("  PSP: RLC autoload triggered")
 
-    # Load MES firmware
-    for mes_name, mes_type in [
-        ("mes", UCODEType.MES),
-        ("mes1", UCODEType.MES_KIQ),
-    ]:
-        path = fw_dir / f"gc_{gc_version}_{mes_name}.bin"
-        if path.exists():
-            mes_fw = path.read_bytes()
-            load_ip_firmware(dev, config, mes_type, mes_fw)
-            print(f"  PSP: Loaded {mes_name.upper()} firmware ({len(mes_fw)} bytes)")
+    if not loaded_any:
+        raise FileNotFoundError(
+            f"No usable firmware found in {fw_dir} "
+            f"(gc={gc_version}, sdma={sdma_version}, mp1={mp1_version})"
+        )
 
     print("  PSP: All firmware loaded")
