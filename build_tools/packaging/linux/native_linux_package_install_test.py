@@ -40,6 +40,13 @@ Prerequisites:
   (or from build_tools/packaging/linux/tests: pip install -r requirements.txt).
   Equivalent one-liner: pip install pyelftools requests prettytable PyYAML
 
+CI typically runs this module under pytest (same file; reporting handled by pytest)::
+
+    pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=short
+
+Workflow/container ``env`` maps to CLI flags via :func:`_argv_from_ci_env` + ``test_native_linux_package_install``.
+You can still invoke this file as a script for ad-hoc runs (no pytest required).
+
 Example invocations:
 
  # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
@@ -915,12 +922,15 @@ Examples:
 """
 
 
-def _build_argument_parser() -> ArgumentParser:
-    parser = ArgumentParser(
+def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
+    kwargs: dict = dict(
         description="Full installation and simulate-install test for ROCm native packages",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=_CLI_EXAMPLES_EPILOG,
     )
+    if sys.version_info >= (3, 9):
+        kwargs["exit_on_error"] = exit_on_error
+    parser = ArgumentParser(**kwargs)
     parser.add_argument(
         "--os-profile",
         type=str,
@@ -998,9 +1008,23 @@ def _validate_cli_args(parser: ArgumentParser, args: Namespace) -> None:
         parser.error("--gfx-arch is required when --test-type is 'sanity' or 'full'")
 
 
-def parse_cli_arguments(argv: list[str] | None = None) -> Namespace:
-    """Build parser, parse argv, validate; may call parser.error (exits process)."""
-    parser = _build_argument_parser()
+def parse_cli_arguments(
+    argv: list[str] | None = None, *, raise_instead_of_exit: bool = False
+) -> Namespace:
+    """Build parser, parse argv, validate.
+
+    By default invalid input calls ``parser.error`` (exits the process). For pytest
+    or other callers, pass ``raise_instead_of_exit=True`` to get ``ValueError``
+    instead of ``sys.exit``.
+    """
+    exit_on_error = not raise_instead_of_exit
+    parser = _build_argument_parser(exit_on_error=exit_on_error)
+    if raise_instead_of_exit:
+
+        def _raise(msg: str) -> None:
+            raise ValueError(msg)
+
+        parser.error = _raise  # type: ignore[method-assign]
     args = parser.parse_args(argv)
     _validate_cli_args(parser, args)
     return args
@@ -1016,7 +1040,9 @@ def run_tests(args: Namespace) -> int:
         print("SIMULATED INSTALL TEST")
         print("=" * 80)
         ok = run_simulate_install_test(pkg_type, args.packages_dir)
-        return 0 if ok else 1
+        if ok:
+            return 0
+        return 1
 
     try:
         derived_package_type = NativeLinuxPackageInstallTest._derive_package_type(
@@ -1080,6 +1106,81 @@ def run_tests(args: Namespace) -> int:
         print(f"\n[FAIL] Error during installation test: {e}")
         traceback.print_exc()
         return 1
+
+
+def _argv_from_ci_env() -> list[str] | None:
+    """Build CLI argv from workflow/container env (see ``test_native_linux_packages_install.yml``)."""
+    test_type = (os.environ.get("TEST_TYPE") or "sanity").strip().lower() or "sanity"
+
+    if test_type == "simulate":
+        packages_dir = (os.environ.get("PACKAGES_DIR") or "").strip()
+        if not packages_dir:
+            return None
+        argv: list[str] = [
+            "--test-type",
+            "simulate",
+            "--packages-dir",
+            packages_dir,
+        ]
+        os_profile = (os.environ.get("OS_PROFILE") or "").strip()
+        if os_profile:
+            argv.extend(["--os-profile", os_profile])
+        pkg_type = (os.environ.get("SIMULATE_PKG_TYPE") or "").strip()
+        if pkg_type in ("deb", "rpm"):
+            argv.extend(["--pkg-type", pkg_type])
+        prefix = (os.environ.get("INSTALL_PREFIX") or "").strip()
+        if prefix:
+            argv.extend(["--install-prefix", prefix])
+        return argv
+
+    os_profile = (os.environ.get("OS_PROFILE") or "").strip()
+    repo_url = (os.environ.get("REPO_URL") or "").strip()
+    gfx_arch = (os.environ.get("GFX_ARCH") or "").split()
+    release_type = (os.environ.get("RELEASE_TYPE") or "").strip()
+    install_prefix = (os.environ.get("INSTALL_PREFIX") or "").strip()
+
+    if not (os_profile and repo_url and gfx_arch and release_type and install_prefix):
+        return None
+
+    argv = [
+        "--test-type",
+        test_type,
+        "--os-profile",
+        os_profile,
+        "--repo-url",
+        repo_url,
+        "--gfx-arch",
+        *gfx_arch,
+        "--release-type",
+        release_type,
+        "--install-prefix",
+        install_prefix,
+    ]
+    gpg = (os.environ.get("GPG_KEY_URL") or "").strip()
+    if gpg:
+        argv.extend(["--gpg-key-url", gpg])
+    return argv
+
+
+def test_native_linux_package_install() -> None:
+    """Pytest entry: same run as CLI, driven by env vars in CI."""
+    import pytest
+
+    argv = _argv_from_ci_env()
+    if argv is None:
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            pytest.fail(
+                "Missing required environment variables for native install test "
+                "(expected OS_PROFILE, REPO_URL, GFX_ARCH, RELEASE_TYPE, INSTALL_PREFIX; "
+                "or for simulate: PACKAGES_DIR)."
+            )
+        pytest.skip(
+            "Set workflow env vars (OS_PROFILE, REPO_URL, GFX_ARCH, RELEASE_TYPE, INSTALL_PREFIX)."
+        )
+
+    args = parse_cli_arguments(argv, raise_instead_of_exit=True)
+    rc = run_tests(args)
+    assert rc == 0, f"run_tests exited with code {rc}"
 
 
 def main() -> None:

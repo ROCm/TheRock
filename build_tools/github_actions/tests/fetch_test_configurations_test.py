@@ -267,10 +267,26 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # Output contract
     # -----------------------
 
-    def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
-        """On Windows, hip-tests run twice: PAL (pass/fail) and ROCR (informational)."""
+    def test_windows_hip_tests_default_emits_pal_only(self):
+        """On Windows, hip-tests emits only PAL by default (WINDOWS_HIP_ROCR_TESTS off)."""
         os.environ["RUNNER_OS"] = "Windows"
         os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        hip_jobs = [j for j in components if "hip-tests" in j["job_name"]]
+        self.assertEqual(len(hip_jobs), 1, "Expected only hip-tests (PAL)")
+        self.assertEqual(hip_jobs[0]["job_name"], "hip-tests (PAL)")
+        self.assertNotIn("expect_failure", hip_jobs[0])
+        self.assertEqual(hip_jobs[0]["total_shards"], 4)
+        self.assertEqual(hip_jobs[0]["shard_arr"], [1, 2, 3, 4])
+
+    def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
+        """On Windows with WINDOWS_HIP_ROCR_TESTS=true, hip-tests runs PAL and ROCR."""
+        os.environ["RUNNER_OS"] = "Windows"
+        os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
+        os.environ["WINDOWS_HIP_ROCR_TESTS"] = "true"
 
         fetch_test_configurations.run()
         components = self._get_components()
@@ -293,10 +309,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(rocr["shard_arr"], [1, 2, 3, 4])
 
     def test_windows_hip_tests_quick_uses_single_shard(self):
-        """On Windows with test_type=quick, hip-tests PAL/ROCR each use 1 shard."""
+        """On Windows with test_type=quick and ROCR enabled, PAL/ROCR each use 1 shard."""
         os.environ["RUNNER_OS"] = "Windows"
         os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
         os.environ["TEST_TYPE"] = "quick"
+        os.environ["WINDOWS_HIP_ROCR_TESTS"] = "true"
 
         fetch_test_configurations.run()
         components = self._get_components()

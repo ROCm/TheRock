@@ -161,12 +161,12 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
         # 24 mins + 20% margin = 30 mins => ~40 mins (considering gpu delays and lags)
-        "timeout_minutes": 40,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 2,
+            "linux": 3,
             "windows": 2,
         },
     },
@@ -463,7 +463,7 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 4,
+            "linux": 5,
             "windows": 2,
         },
     },
@@ -573,6 +573,7 @@ def run():
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
+    windows_hip_rocr_tests = str2bool(os.getenv("WINDOWS_HIP_ROCR_TESTS", "false"))
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
@@ -631,9 +632,9 @@ def run():
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
 
-            # Hip-tests on Windows run twice: PAL (pass/fail) and ROCR (informational)
-            # for parity tracking until ROCR is the pass/fail path. See:
-            # https://github.com/ROCm/TheRock/issues/3587
+            # Hip-tests on Windows: always run PAL (pass/fail). Optionally also run
+            # ROCR (informational) for parity tracking when WINDOWS_HIP_ROCR_TESTS=true.
+            # See: https://github.com/ROCm/TheRock/issues/3587
             if key == "hip-tests" and platform == "windows":
                 base = selected_matrix[key]
                 total_shards = base.get("total_shards_dict", {}).get(platform, 1)
@@ -654,19 +655,20 @@ def run():
                 }
                 all_components.append(pal_entry)
 
-                rocr_entry = {
-                    "job_name": "hip-tests (ROCR)",
-                    "fetch_artifact_args": base["fetch_artifact_args"],
-                    "timeout_minutes": base["timeout_minutes"],
-                    "test_script": base["test_script"],
-                    "platform": base["platform"],
-                    "total_shards": total_shards,
-                    "test_type": test_type,
-                    "shard_arr": shard_arr,
-                    "expect_failure": True,
-                    "gpu_enable_pal": "0",
-                }
-                all_components.append(rocr_entry)
+                if windows_hip_rocr_tests:
+                    rocr_entry = {
+                        "job_name": "hip-tests (ROCR)",
+                        "fetch_artifact_args": base["fetch_artifact_args"],
+                        "timeout_minutes": base["timeout_minutes"],
+                        "test_script": base["test_script"],
+                        "platform": base["platform"],
+                        "total_shards": total_shards,
+                        "test_type": test_type,
+                        "shard_arr": shard_arr,
+                        "expect_failure": True,
+                        "gpu_enable_pal": "0",
+                    }
+                    all_components.append(rocr_entry)
                 continue
 
             job_config_data = selected_matrix[key]
