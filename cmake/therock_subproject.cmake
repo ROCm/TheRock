@@ -703,6 +703,10 @@ function(therock_cmake_subproject_activate target_name)
     file(GLOB_RECURSE _fprint_file_globs_resolved ${_fprint_file_globs})
     list(APPEND _fprint_files ${_fprint_file_globs_resolved})
   endif()
+  if(_install_test_script_files)
+    list(APPEND _fprint_files ${_install_test_script_files})
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_install_test_script_files})
+  endif()
 
   # Detect pre/post hooks.
   set(_pre_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/pre_hook_${_logical_target_name}.cmake")
@@ -1126,6 +1130,7 @@ function(therock_cmake_subproject_activate target_name)
       DEPENDS
         "${_build_stamp_file}"
         "${_fileset_tool}"
+        ${_install_test_script_files}
     )
   endif()  # Split between pre-built and build mode
   add_custom_target(
