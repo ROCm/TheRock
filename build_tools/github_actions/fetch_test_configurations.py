@@ -349,7 +349,7 @@ test_matrix = {
             "windows": 1,
         },
         # Architectures that we have multi GPU setup for testing
-        "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
+        "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
     },
     # rocprofiler-sdk tests
     "rocprofiler-sdk": {
