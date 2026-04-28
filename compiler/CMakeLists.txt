@@ -180,6 +180,23 @@ if(THEROCK_ENABLE_COMPILER)
   therock_cmake_subproject_provide_package(amd-comgr amd_comgr lib/cmake/amd_comgr)
   therock_cmake_subproject_activate(amd-comgr)
 
+  if(THEROCK_BUILD_COMGR_TESTS)
+    if(WIN32)
+      set(_llvm_lit_script "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build/bin/llvm-lit.py")
+    else()
+      set(_llvm_lit_script "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build/bin/llvm-lit")
+    endif()
+    therock_cmake_subproject_build_test(amd-comgr
+      COMMAND
+        "${Python3_EXECUTABLE}" "${_llvm_lit_script}"
+        "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build/test-lit" -v
+      COMMAND
+        "${CMAKE_CTEST_COMMAND}"
+        --test-dir "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
+        --output-on-failure
+    )
+  endif()
+
   therock_test_validate_shared_lib(
     PATH amd-comgr/dist/lib
     LIB_NAMES
