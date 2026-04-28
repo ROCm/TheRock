@@ -391,6 +391,13 @@ artifact_deps = []
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
+[artifacts.sysdeps-tbb]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.sysdeps-hwloc]
 artifact_group = "third-party-sysdeps"
 type = "target-neutral"
@@ -719,7 +726,7 @@ disable_platforms = ["windows"]
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdlog", "openmpi"]
+artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdlog", "openmpi", "sysdeps-tbb"]
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]

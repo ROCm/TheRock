@@ -1,0 +1,3 @@
+# tbb
+[components.lib."third-party/sysdeps/linux/tbb/build/stage"]
+[components.dev."third-party/sysdeps/linux/tbb/build/stage"]

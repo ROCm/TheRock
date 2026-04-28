@@ -19,7 +19,6 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zstd" "${CMAKE_CURRENT_B
 
 # Core system deps that depend on the above.
 add_subdirectory(elfutils)
-add_subdirectory(tbb)
 
 therock_provide_artifact(sysdeps
   TARGET_NEUTRAL
@@ -40,7 +39,6 @@ therock_provide_artifact(sysdeps
     therock-libnl
     therock-numactl
     therock-sqlite3
-    therock-tbb
     therock-zlib
     therock-zstd
 )
@@ -130,6 +128,20 @@ if(THEROCK_ENABLE_SYSDEPS_LIBPCIACCESS)
       lib
     SUBPROJECT_DEPS
       therock-libpciaccess
+  )
+endif()
+
+# Optional sysdep: TBB (Threading Building Blocks)
+if(THEROCK_ENABLE_SYSDEPS_TBB)
+  add_subdirectory(tbb)
+  therock_provide_artifact(sysdeps-tbb
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-tbb.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-tbb
   )
 endif()
 
