@@ -7,10 +7,10 @@
 #   - One fat build_prod_wheels.py invocation per (python_version,
 #     pytorch_git_ref) matrix cell, covering all gfx targets expanded
 #     from the inputs.amdgpu_families set. Builds torch, torchaudio,
-#     torchvision, and triton in a single invocation.
+#     torchvision, triton, and apex in a single invocation.
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
-#     torchaudio and triton ship as-is (no split).
+#     torchaudio, triton, and apex ship as-is.
 #   - Upload the result to s3://therock-{release_type}-python/v4/whl-staging/
 #     (server-side indexing handles the index page).
 #
@@ -134,6 +134,8 @@ jobs:
           ./external-builds/pytorch/pytorch_vision_repo.py checkout \
             --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
+          ./external-builds/pytorch/pytorch_apex_repo.py checkout \
+            --repo-hashtag master
 
       - name: Checkout PyTorch source repos (stable)
         if: ${{ matrix.pytorch_git_ref != 'nightly' }}
@@ -146,6 +148,8 @@ jobs:
           ./external-builds/pytorch/pytorch_vision_repo.py checkout \
             --require-related-commit
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
+          ./external-builds/pytorch/pytorch_apex_repo.py checkout \
+            --require-related-commit
 
       # determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV (--rocm-sdk-version, --version-suffix).
@@ -229,11 +233,14 @@ jobs:
             -e rocm-systems/python/rocm-bootstrap \
             -e rocm-systems/shared/kpack
 
-      - name: Split PyTorch fat wheels (torch + torchvision)
+      - name: Split fat wheels (torch + torchvision)
         run: |
           # The splitter writes the host wheel under the same filename as
           # the input, so relocate each fat wheel out of PACKAGE_DIST_DIR
-          # before invoking the splitter. torchaudio and triton ship as-is.
+          # before invoking the splitter. torchaudio, triton, and apex ship
+          # as-is: torchaudio and triton have no fat binaries to split, and
+          # apex's ROCm fork ships JIT-loader shims rather than precompiled
+          # extensions, so its wheel is constant-size in arch count.
           FAT_STAGE="${RUNNER_TEMP:-/tmp}/pytorch-fat"
           mkdir -p "${FAT_STAGE}"
 

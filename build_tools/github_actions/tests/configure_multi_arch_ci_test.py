@@ -1134,5 +1134,50 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
                 self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
 
 
+# ---------------------------------------------------------------------------
+# Build runner selection
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRunnerSelection(unittest.TestCase):
+    """Test weighted random selection of build runners (Azure vs AWS)."""
+
+    def test_select_build_runner_weighted_selection(self):
+        """Test weighted selection: Azure (90%) vs AWS (10%) for default builds."""
+        from amdgpu_family_matrix import select_build_runner
+
+        # Random < 0.9 should select Azure
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_build_runner("linux", "release"), "azure-linux-scale-rocm"
+            )
+
+        # Random >= 0.9 should select AWS
+        with patch("random.random", return_value=0.95):
+            self.assertEqual(
+                select_build_runner("linux", "release"), "aws-linux-scale-rocm"
+            )
+
+        # Random >= 0.9 should select AWS
+        with patch("random.random", return_value=0.95):
+            self.assertEqual(
+                select_build_runner("windows", "release"), "azure-windows-scale-rocm"
+            )
+
+    def test_select_build_runner_sanitizer_uses_ramdisk(self):
+        """Sanitizer builds (asan/tsan) should always use Azure ramdisk runner."""
+        from amdgpu_family_matrix import select_build_runner
+
+        with patch("random.random", return_value=0.99):
+            self.assertEqual(
+                select_build_runner("linux", "asan"),
+                "azure-linux-scale-rocm-heavy-ramdisk",
+            )
+            self.assertEqual(
+                select_build_runner("linux", "tsan"),
+                "azure-linux-scale-rocm-heavy-ramdisk",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -257,7 +257,7 @@ jobs:
             -e rocm-systems/python/rocm-bootstrap \
             -e rocm-systems/shared/kpack
 
-      - name: Split PyTorch fat wheels (torch + torchvision)
+      - name: Split fat wheels (torch + torchvision)
         run: |
           DIST_DIR="$(cygpath -u "${{ env.PACKAGE_DIST_DIR }}")"
 
