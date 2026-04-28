@@ -150,11 +150,23 @@ class BuildConfig:
     """Ordered list of variant names to build (e.g. ['release', 'asan'])."""
     expect_failure: bool = False
     """If True, build failures for this entry are non-blocking."""
+    runs_on: str | None = None
+    """Build runner label. Resolved late by `resolve_runners(...)` from the build
+    runner inventory (see new_amdgpu_family_matrix_data.py); None until resolved.
+    Must be a non-empty label by serialization time — every build job needs a
+    runner. `to_dict()` raises ValueError if it is still None."""
 
     def to_dict(self) -> dict:
+        if self.runs_on is None:
+            raise ValueError(
+                "BuildConfig.runs_on is None — call resolve_runners(entry) before "
+                "serialization, or assign the runner label directly. Build jobs "
+                "always require a runner."
+            )
         return {
             "build_variants": list(self.build_variants),
             "expect_failure": self.expect_failure,
+            "build_runs_on": self.runs_on,
         }
 
 
