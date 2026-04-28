@@ -317,8 +317,8 @@ jobs:
 
   upload_jax_wheels:
     name: Release JAX Wheels to S3
-    needs: [build_jax_wheels, generate_target_to_run]
-    if: ${{ !cancelled() && inputs.upload_wheels }}
+    needs: [build_jax_wheels, generate_target_to_run, test_jax_wheels]
+    if: ${{ always() && !cancelled() && inputs.upload_wheels }}
     runs-on: ubuntu-24.04
     env:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
@@ -344,7 +344,7 @@ jobs:
       - name: Determine upload flag
         env:
           BUILD_RESULT: ${{ needs.build_jax_wheels.result }}
-          TEST_RESULT: ${{ inputs.run_tests && 'passed' || 'skipped' }}
+          TEST_RESULT: ${{ inputs.run_tests && needs.test_jax_wheels.result || 'skipped' }}
           TEST_RUNS_ON: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
           BYPASS_TESTS_FOR_RELEASES: ${{ needs.generate_target_to_run.outputs.bypass_tests_for_releases }}
         run: python ./build_tools/github_actions/promote_wheels_based_on_policy.py
