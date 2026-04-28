@@ -58,6 +58,7 @@ from _therock_utils.build_topology import get_topology
 from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
+    select_build_runner,
     select_weighted_label,
 )
 from configure_ci_path_filters import (
@@ -417,6 +418,8 @@ class BuildConfig:
     build_variant_cmake_preset: str
     expect_failure: bool
     build_pytorch: bool
+    # Build runner label for this platform/variant combination
+    build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
@@ -885,6 +888,9 @@ def _expand_build_config_for_platform(
     expect_pytorch_failure = variant_config.get("expect_pytorch_failure", False)
     suffix = variant_config.get("build_variant_suffix", "")
 
+    # Select build runner using weighted distribution
+    build_runs_on = select_build_runner(platform, ci_inputs.build_variant)
+
     return BuildConfig(
         per_family_info=per_family_info,
         dist_amdgpu_families=";".join(family_names),
@@ -894,6 +900,7 @@ def _expand_build_config_for_platform(
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         expect_failure=expect_failure,
         build_pytorch=not expect_failure and not expect_pytorch_failure,
+        build_runs_on=build_runs_on,
         prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,
     )

@@ -57,6 +57,7 @@ import string
 from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
+    select_build_runner,
     select_weighted_label,
 )
 from fetch_test_configurations import test_matrix, functional_matrix
@@ -452,6 +453,12 @@ def matrix_generator(
                     and "test-runs-on-sandbox" in matrix_row
                 ):
                     matrix_row["test-runs-on"] = matrix_row["test-runs-on-sandbox"]
+
+                # Select build runner using weighted distribution (90% Azure, 10% AWS)
+                # Sanitizer builds use ramdisk variants
+                matrix_row["build-runs-on"] = select_build_runner(
+                    platform, base_args.get("build_variant", "release")
+                )
 
                 matrix_output.append(matrix_row)
 
