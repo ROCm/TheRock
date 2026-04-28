@@ -39,7 +39,7 @@
   * windows_test_labels : List of test names to run on Windows, optionally filtered by PR labels.
   * enable_build_jobs: If true, builds will be enabled
   * test_type: The type of test that component tests will run (i.e. quick, full)
-  * run_functional_tests: If true, functional tests will be enabled (nightly/scheduled builds)
+  * run_extended_tests: Boolean controlling extended test enablement (functional + benchmarks)
 
   Written to GITHUB_STEP_SUMMARY:
   * Human-readable summary for most contributors
@@ -529,15 +529,15 @@ def main(base_args, linux_families, windows_families):
 
     test_type = "quick"
     test_type_reason = "default (quick tests)"
-    run_functional_tests = False
+    run_extended_tests = False
 
     if is_schedule:
         # Always build and run full tests on scheduled runs.
         enable_build_jobs = True
         test_type = "comprehensive"
         test_type_reason = "scheduled run triggers comprehensive tests"
-        # Functional tests run on nightly/scheduled builds
-        run_functional_tests = True
+        # Extended tests (functional + benchmarks) run on nightly/scheduled builds
+        run_extended_tests = True
     elif is_workflow_dispatch:
         # Always build and conditionally run full tests for workflow dispatch.
         enable_build_jobs = True
@@ -545,8 +545,8 @@ def main(base_args, linux_families, windows_families):
             combined_test_labels = list(set(linux_test_output + windows_test_output))
             test_type = "full"
             test_type_reason = f"test label(s) specified: {combined_test_labels}"
-            # Functional tests run on nightly/scheduled builds
-            run_functional_tests = True
+            # Extended tests (functional + benchmarks) run on workflow dispatch with test labels
+            run_extended_tests = True
     else:
         # Conditionally build and conditionally run full tests for other
         # triggers (pull_request), based on modified paths and other inputs.
@@ -606,6 +606,7 @@ def main(base_args, linux_families, windows_families):
                     break
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
+    print(f"run_extended_tests: {run_extended_tests}")
 
     # Format variants for summary
     def format_variants(variants):
@@ -635,7 +636,7 @@ def main(base_args, linux_families, windows_families):
 * `windows_use_prebuilt_artifacts`: {json.dumps(windows_use_prebuilt_artifacts)}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
 * `test_type`: {test_type}
-* `run_functional_tests`: {json.dumps(run_functional_tests)}
+* `run_extended_tests`: {run_extended_tests}
     """
     )
 
@@ -646,7 +647,7 @@ def main(base_args, linux_families, windows_families):
         "windows_test_labels": json.dumps(windows_test_output),
         "enable_build_jobs": json.dumps(enable_build_jobs),
         "test_type": test_type,
-        "run_functional_tests": json.dumps(run_functional_tests),
+        "run_extended_tests": json.dumps(run_extended_tests),
     }
     gha_set_output(output)
 
