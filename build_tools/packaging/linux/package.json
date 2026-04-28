@@ -328,6 +328,41 @@
     "Gfxarch": "False"
   },
   {
+    "Package": "amdrocm-hip-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime-devel"
+    ],
+    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
+    "Description_Short": "AMD HIP test files for ROCm platforms",
+    "Description_Long": "AMD HIP test files for ROCm platforms",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "core-hiptests",
+        "Artifact_Subdir": [
+          {
+            "Name": "hip-tests",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
     "Package": "amdrocm-fft-test",
     "Version": "",
     "Architecture": "amd64",
@@ -2326,79 +2361,6 @@
 
   },
   {
-    "Package": "rocr-debug-agent-test",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "amdrocm-sysdeps"
-    ],
-    "RPMRequires": [
-      "amdrocm-sysdeps"
-    ],
-    "Maintainer": "ROCm Debugger Support <rocm-gdb.support@amd.com>",
-    "Description_Short": "ROCm debugger tests",
-    "Description_Long": "Tests for AMD ROCm source-level debugger for Linux,based on GDB, the GNU source-level debugger",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT AND GPL AND NCSA",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/rocGdb",
-    "Artifactory": [
-      {
-        "Artifact": "rocr-debug-agent-tests",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocr-debug-agent-tests",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      }
-    ],
-    "Disable_DWZ": "True",
-    "Gfxarch": "False"
-  },
-
-  {
-    "Package": "rocgdb-test",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "amdrocm-sysdeps"
-    ],
-    "RPMRequires": [
-      "amdrocm-sysdeps"
-    ],
-    "Maintainer": "ROCm Debugger Support <rocm-gdb.support@amd.com>",
-    "Description_Short": "ROCm debugger tests",
-    "Description_Long": "AMD ROCm source-level debugger tests",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT AND GPL AND NCSA",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/rocGdb",
-    "Artifactory": [
-      {
-        "Artifact": "rocgdb",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocgdb",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      }
-    ],
-    "Gfxarch": "False"
-  },
-
-  {
     "Package": "amdrocm-debugger",
     "Version": "",
     "Architecture": "amd64",
@@ -2462,6 +2424,93 @@
       }
 
     ],
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-debugger-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "ROCm Debugger Support <rocm-gdb.support@amd.com>",
+    "Description_Short": "ROCm debugger test files",
+    "Description_Long": "Test files for AMD ROCm debugger including rocr-debug-agent-tests and rocgdb-test",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT AND GPL AND NCSA",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocGdb",
+    "Artifactory": [
+      {
+        "Artifact": "rocr-debug-agent-tests",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocr-debug-agent-tests",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "rocgdb",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocgdb",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Disable_DWZ": "True",
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-rocrtst",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-sysdeps",
+      "amdrocm-base",
+      "amdrocm-llvm"
+    ],
+    "RPMRequires": [
+      "amdrocm-sysdeps",
+      "amdrocm-base",
+      "amdrocm-llvm"
+    ],
+    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
+    "Description_Short": "ROCm runtime test files",
+    "Description_Long": "Test files for AMD HIP Runtime for ROCm platforms",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "rocrtst",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocrtst",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Disable_DWZ": "True",
     "Gfxarch": "False"
   },
   {
@@ -2954,46 +3003,6 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
     "Gfxarch": "True"
-  },
-  {
-    "Package": "rocrtst-test",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "amdrocm-sysdeps",
-      "amdrocm-base",
-      "amdrocm-llvm"
-    ],
-    "RPMRequires": [
-      "amdrocm-sysdeps",
-      "amdrocm-base",
-      "amdrocm-llvm"
-    ],
-    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
-    "Description_Short": "AMD HIP Runtime for ROCm platforms",
-    "Description_Long": "AMD HIP Runtime for ROCm platforms",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/rocm-libraries",
-    "Artifactory": [
-      {
-        "Artifact": "rocrtst",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocrtst",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      }
-    ],
-    "Disable_DWZ": "True",
-    "Gfxarch": "False"
   }
 
 ]
