@@ -1158,6 +1158,12 @@ class TestBuildRunnerSelection(unittest.TestCase):
                 select_build_runner("linux", "release"), "aws-linux-scale-rocm"
             )
 
+        # Random >= 0.9 should select AWS
+        with patch("random.random", return_value=0.95):
+            self.assertEqual(
+                select_build_runner("windows", "release"), "azure-windows-scale-rocm"
+            )
+
     def test_select_build_runner_sanitizer_uses_ramdisk(self):
         """Sanitizer builds (asan/tsan) should always use Azure ramdisk runner."""
         from amdgpu_family_matrix import select_build_runner
