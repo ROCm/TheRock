@@ -257,6 +257,7 @@ class S3Index:
                 or pkg.startswith("rocm_sdk_device_")
                 or pkg.startswith("amd_torch_device")
                 or pkg.startswith("amd_torchvision_device")
+                or pkg.startswith("amd_apex_device")
             ):
                 packages[package_name] += 1
             else:
