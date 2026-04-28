@@ -156,6 +156,21 @@ function(therock_provide_artifact slice_name)
     string(SHA256 _fprint "${_fprint_content}")
   endif()
 
+  # Write fingerprint files for each component (configure-time).
+  # TODO: Also write fingerprint files when splitting is enabled.
+  if(NOT _should_split)
+    set(_artifacts_dir "${THEROCK_BINARY_DIR}/artifacts")
+    file(MAKE_DIRECTORY "${_artifacts_dir}")
+    foreach(_component ${ARG_COMPONENTS})
+      set(_fprint_file "${_artifacts_dir}/${slice_name}_${_component}${_bundle_suffix}.fprint")
+      if(_fprint_is_valid)
+        file(WRITE "${_fprint_file}" "${_fprint}")
+      elseif(EXISTS "${_fprint_file}")
+        file(REMOVE "${_fprint_file}")
+      endif()
+    endforeach()
+  endif()
+
   # Populate commands.
   set(_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")
   set(_artifact_command
