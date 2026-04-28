@@ -313,7 +313,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
       INSTALL_RPATH_DIRS
         "lib"
         "lib/rocprofiler-systems"
-        "llvm/lib"
+        "lib/llvm/lib"
+        "lib/rocm_sysdeps/lib"
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
       BUILD_DEPS
