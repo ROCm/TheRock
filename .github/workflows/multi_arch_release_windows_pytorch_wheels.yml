@@ -1,0 +1,299 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Multi-arch release variant of build_windows_pytorch_wheels_ci.yml.
+#
+# Built shape:
+#   - One fat build_prod_wheels.py invocation per (python_version,
+#     pytorch_git_ref) matrix cell, covering all gfx targets expanded
+#     from the inputs.amdgpu_families set.
+#   - kpack-split the resulting fat torch wheel into a host wheel plus
+#     per-gfx amd-torch-device-* wheels.
+#   - Upload the result to s3://therock-{release_type}-python/v4/whl-staging/
+#     (server-side indexing handles the index page) via
+#     publish_pytorch_to_staging.py.
+#
+# Triggered exclusively via workflow_dispatch from
+# multi_arch_release_windows.yml's dispatch_pytorch_wheels job.
+#
+# Build phase only: testing and promotion are deferred follow-ups.
+# See https://github.com/ROCm/TheRock/issues/3291 for convergence plans.
+
+name: Multi-Arch Release Windows PyTorch Wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        description: >-
+          Semicolon-separated list of AMD GPU families to build PyTorch for
+          (e.g. 'gfx110X-all;gfx120X-all'). Expanded to gfx targets at
+          build time via cmake/therock_amdgpu_targets.cmake.
+        type: string
+        required: true
+      rocm_version:
+        description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
+        type: string
+        required: true
+      rocm_package_find_links_url:
+        description: URL for pip --find-links to install ROCm packages
+        type: string
+        required: true
+      release_type:
+        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
+        type: string
+        required: true
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      cache_type:
+        description: "Compiler cache type"
+        type: choice
+        options:
+          - none
+          - sccache
+          - ccache
+        default: none
+
+run-name: Multi-Arch Release Windows PyTorch Wheels (${{ inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.rocm_version }})
+
+permissions:
+  contents: read
+
+jobs:
+  build_pytorch_wheels:
+    name: Build | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        pytorch_git_ref: ["release/2.9", "release/2.10", "release/2.11", "nightly"]
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      CHECKOUT_ROOT: B:/src
+      # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
+      PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
+      optional_build_prod_arguments: ""
+      SCCACHE_BUCKET: "therock-${{ inputs.release_type }}-pytorch-sccache"
+      SCCACHE_REGION: us-east-2
+      SCCACHE_S3_KEY_PREFIX: "windows/multiarch/v1/"
+      SCCACHE_S3_USE_SSL: "true"
+      SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
+      SCCACHE_IDLE_TIMEOUT: "600"
+      SCCACHE_LOG: warn
+    defaults:
+      run:
+        # Note: there are mixed uses of 'bash' (this default) and 'cmd' below
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Configure Git Identity
+        run: |
+          git config --global user.name "therockbot"
+          git config --global user.email "therockbot@amd.com"
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Select Python version
+        run: |
+          python build_tools/github_actions/python_to_cp_version.py \
+            --python-version ${{ matrix.python_version }}
+
+      # TODO(amd-justchen): share with build_windows_artifacts.yml. Include in VM image? Dockerfile?
+      - name: Install requirements
+        run: |
+          choco source disable -n=chocolatey
+          choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
+          choco install --no-progress -y ninja --version 1.13.1
+
+      - name: Install sccache
+        if: ${{ inputs.cache_type == 'sccache' }}
+        run: |
+          choco install --no-progress -y sccache
+          echo "sccache version: $(sccache --version)"
+
+      # After other installs, so MSVC gets priority in the PATH.
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Install python deps for CI
+        run: |
+          pip install -r external-builds/pytorch/requirements-ci.txt
+
+      - name: Checkout PyTorch source (nightly)
+        if: ${{ matrix.pytorch_git_ref == 'nightly' }}
+        run: |
+          git config --global core.longpaths true
+          python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --repo-hashtag nightly
+
+      - name: Checkout PyTorch source (stable)
+        if: ${{ matrix.pytorch_git_ref != 'nightly' }}
+        run: |
+          git config --global core.longpaths true
+          python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --gitrepo-origin https://github.com/ROCm/pytorch.git \
+            --repo-hashtag ${{ matrix.pytorch_git_ref }}
+
+      # determine_version.py sets optional_build_prod_arguments in
+      # GITHUB_ENV (--rocm-sdk-version, --version-suffix).
+      - name: Determine optional arguments passed to `build_prod_wheels.py`
+        run: |
+          python build_tools/github_actions/determine_version.py \
+            --rocm-version ${{ inputs.rocm_version }}
+
+      - name: Configure AWS Credentials for sccache
+        if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
+          special-characters-workaround: true
+
+      - name: Verify sccache
+        if: ${{ inputs.cache_type == 'sccache' }}
+        run: |
+          echo "sccache version: $(sccache --version)"
+          echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
+          echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX}"
+
+      - name: Expand amdgpu families to gfx targets
+        id: expand
+        run: |
+          targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${{ inputs.amdgpu_families }}")
+          echo "Expanded families '${{ inputs.amdgpu_families }}' -> '${targets}'"
+          echo "targets=${targets}" >> "$GITHUB_OUTPUT"
+
+      # Using 'cmd' here is load bearing! There are configuration issues when
+      # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
+      - name: Build PyTorch wheels
+        shell: cmd
+        run: |
+          set "CACHE_FLAG="
+          if "${{ inputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
+          if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
+
+          echo "Building PyTorch wheels for ${{ inputs.amdgpu_families }} (cache: ${{ inputs.cache_type }})"
+          python ./external-builds/pytorch/build_prod_wheels.py ^
+            build ^
+            --install-rocm ^
+            --find-links "${{ inputs.rocm_package_find_links_url }}" ^
+            --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
+            --enable-pytorch-flash-attention-windows ^
+            --clean ^
+            --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
+            %CACHE_FLAG% ^
+            --pytorch-rocm-arch ${{ steps.expand.outputs.targets }} ^
+            ${{ env.optional_build_prod_arguments }}
+
+      - name: Report cache stats
+        if: ${{ !cancelled() && inputs.cache_type != 'none' }}
+        run: |
+          if [ "${{ inputs.cache_type }}" = "sccache" ]; then
+            echo "sccache stats:"
+            echo "--------------"
+            sccache --show-stats || true
+          elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
+            echo "ccache stats:"
+            echo "-------------"
+            ccache -s -v || true
+          fi
+
+      - name: Sanity check wheel
+        shell: cmd
+        run: |
+          python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}
+
+      # The kpack wheel splitter takes the fat torch wheel and produces a
+      # smaller host wheel plus one device wheel per gfx target. Source-install
+      # from the TheRock checkout - kpack has no published wheel today.
+      # The outer actions/checkout skips submodules for speed, so pull in
+      # rocm-systems only when we actually need it.
+      - name: Init rocm-systems submodule
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git submodule update --init --depth=1 rocm-systems
+
+      - name: Install kpack tooling
+        run: |
+          pip install \
+            -e rocm-systems/python/rocm-bootstrap \
+            -e rocm-systems/shared/kpack
+
+      - name: Split PyTorch fat wheel
+        run: |
+          DIST_DIR="$(cygpath -u "${{ env.PACKAGE_DIST_DIR }}")"
+
+          # LLVM binaries ship inside the already-installed rocm-sdk-devel.
+          ROCM_SDK_ROOT="$(cygpath -u "$(python -m rocm_sdk path --root)")"
+          LLVM_BIN="${ROCM_SDK_ROOT}/lib/llvm/bin"
+          if [ ! -d "${LLVM_BIN}" ]; then
+            echo "ERROR: LLVM bin dir not found: ${LLVM_BIN}" >&2
+            exit 1
+          fi
+
+          # The kpack Toolchain strictly looks up "objcopy" and "readelf" on
+          # PATH. On Windows, ROCm ships only llvm-objcopy.exe /
+          # llvm-readelf.exe, so stage copies under the unprefixed names.
+          # TODO: drop this shim once rocm-kpack's Toolchain adds llvm-*
+          # fallbacks for objcopy/readelf (parallels its existing objdump
+          # pattern). See https://github.com/ROCm/rocm-systems/issues/5506.
+          SHIMS="$(cygpath -u "${RUNNER_TEMP}")/kpack-shims"
+          mkdir -p "${SHIMS}"
+          cp "${LLVM_BIN}/llvm-objcopy.exe" "${SHIMS}/objcopy.exe"
+          cp "${LLVM_BIN}/llvm-readelf.exe" "${SHIMS}/readelf.exe"
+
+          # Prepend shims + LLVM bin so clang-offload-bundler.exe and the
+          # llvm-objdump fallback are also resolvable.
+          export PATH="${SHIMS}:${LLVM_BIN}:${PATH}"
+
+          # The splitter writes the host wheel under the same filename as the
+          # input, so relocate the fat wheel out of PACKAGE_DIST_DIR first.
+          FAT_STAGE="$(cygpath -u "${RUNNER_TEMP}")/pytorch-fat"
+          mkdir -p "${FAT_STAGE}"
+          mv "${DIST_DIR}"/torch-*.whl "${FAT_STAGE}/"
+
+          ROCM_SDK_VERSION="$(python -m rocm_sdk version)"
+
+          python -m rocm_kpack.tools.split_python_wheels \
+            --input "${FAT_STAGE}"/torch-*.whl \
+            --output-dir "${DIST_DIR}" \
+            --device-package-prefix amd-torch-device \
+            --overlay-root torch/ \
+            --wheel-type torch-fat \
+            --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
+            --compression zstd \
+            -j 32
+
+          rm -rf "${FAT_STAGE}"
+          echo "Post-split contents of ${DIST_DIR}:"
+          ls -lh "${DIST_DIR}/"
+
+      - name: Configure AWS Credentials
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ${{ inputs.release_type }}
+
+      - name: Upload PyTorch wheels to release-bucket staging
+        run: |
+          python build_tools/github_actions/publish_pytorch_to_staging.py \
+            --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
+            --release-type="${{ inputs.release_type }}"

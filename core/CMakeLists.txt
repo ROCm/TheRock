@@ -502,6 +502,7 @@ if(THEROCK_BUILD_TESTING)
     set(_rocrtst_build_deps
       amd-llvm
       ocl-clr
+      therock-yaml-cpp
     )
     if(TARGET amdsmi)
       list(APPEND _rocrtst_build_deps amdsmi)

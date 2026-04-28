@@ -3,6 +3,7 @@
 
 """
 This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
+Also provides the select_weighted_label utility for weighted runner selection.
 
 * Each entry determines which families and test runners are available to use
 * Each group determines which entries run by default on workflow triggers
@@ -19,6 +20,30 @@ TODO(#2200): clarify AMD GPU family selection
 #############################################################################################
 # NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
 #############################################################################################
+
+import random
+
+
+def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
+    """Select a runner label based on weighted random selection."""
+    rand_val = random.random()
+    cumulative = 0.0
+    for config in labels_config:
+        cumulative += config["weight"]
+        if rand_val < cumulative:
+            print(
+                f"  {context_name}: selected runner (weight={config['weight']}): "
+                f"{config['label']}"
+            )
+            return config["label"]
+    # Fallback to last label if rounding errors
+    selected = labels_config[-1]
+    print(
+        f"  {context_name}: selected runner (weight={selected['weight']}): "
+        f"{selected['label']}"
+    )
+    return selected["label"]
+
 
 all_build_variants = {
     "linux": {
@@ -53,7 +78,12 @@ all_build_variants = {
 """
 amdgpu_family_info_matrix dictionary fields:
 - test-runs-on: (required) GitHub runner label for this architecture
+- test-runs-on-labels: (optional) List of runner label configs for load balancing across pools.
+    Each entry is a dict with "label" and "weight" (probability 0.0-1.0). Weights must sum to 1.0.
+    When present, overrides test-runs-on for runner selection.
 - test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture
+- test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
+    Same format as test-runs-on-labels.
 - benchmark-runs-on: (optional) GitHub runner label for benchmarks for this architecture
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
@@ -68,12 +98,38 @@ amdgpu_family_info_matrix dictionary fields:
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            # TODO: Remove alternative weight once we get dedicated set of machines
-            # As we are bringing back up mi325, we are using a dual-label configuration to distribute load
+            # TODO: Remove multi-label config once we get dedicated set of machines
+            # As we are bringing up mi325, we are using a multi-label configuration to distribute load
+            # 1-GPU distribution: 17N (vultr) + 4N (cirrascale) + 8N (core42)
             "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
+            "test-runs-on-labels": [
+                {
+                    "label": "linux-gfx942-1gpu-ossci-rocm",
+                    "weight": 0.59,
+                },  # vultr (17/29)
+                {
+                    "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
+                    "weight": 0.14,
+                },  # cirrascale (4/29)
+                {
+                    "label": "linux-gfx942-1gpu-core42-ossci-rocm",
+                    "weight": 0.27,
+                },  # core42 (8/29)
+            ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
+            # 8-GPU distribution: 11N (cirrascale) + 7N (core42)
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
+            "test-runs-on-multi-gpu-labels": [
+                {
+                    "label": "linux-gfx942-8gpu-ossci-rocm",
+                    "weight": 0.61,
+                },  # cirrascale (11/18)
+                {
+                    "label": "linux-gfx942-8gpu-core42-ossci-rocm",
+                    "weight": 0.39,
+                },  # core42 (7/18)
+            ],
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
@@ -171,7 +227,6 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx900",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     # gfx906/908/90a split into separate families - each has different instruction
@@ -191,7 +246,6 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx906",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     "gfx908": {
@@ -208,7 +262,6 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx908",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     "gfx90a": {
@@ -224,7 +277,6 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx90a",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     "gfx101x": {
