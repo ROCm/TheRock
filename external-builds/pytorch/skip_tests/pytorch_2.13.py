@@ -479,6 +479,8 @@ skip_tests = {
             # (missing upstream config attribute in installed torch wheel)
             "test_basic_compile",
             "test_disable_fast_launcher",
+            # ExtensionBackendTests: torch._dynamo.exc.InternalTorchDynamoError: AttributeError: module 'extension_device' has no attribute 'is_available'.
+            "test_open_device_registration",
         ],
         "linalg": [
             # TestLinalgCUDA - tunableop_rocm addmm relu
@@ -679,6 +681,11 @@ skip_tests = {
             "test_meta_tensor_init",
             # TestFullyShardCustomForwardMethod: RuntimeError: Process exited with error code 10
             "test_register_fsdp_forward_method",
+            # TestFullyShardHSDP3DTraining: all 8 worker processes exit with error
+            # code 10.
+            "test_3d_mlp_with_nd_mesh",
+            # TestMultiProc: worker processes exit with error code 10.
+            "test_compiler_collectives_automatic_dynamic_tensor",
         ],
         "autograd": [
             # --- Added from CI run 24871076312 ---
