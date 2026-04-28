@@ -4,10 +4,9 @@
 
 """Upload PyTorch wheels from a local directory to release-bucket staging.
 
-Used by the multi-arch release Linux PyTorch wheels workflow to push the
+Used by the multi-arch release PyTorch wheels workflow to push the
 host wheel and per-gfx amd-torch-device-* wheels produced by the kpack
-splitter into the release bucket's staging path. A future test workflow
-consumes this path; a future promotion workflow copies it into v4/whl/.
+splitter into the release bucket's staging path.
 
 Example with ``--source-dir /tmp/dist --release-type dev``::
 
@@ -36,8 +35,6 @@ from _therock_utils.storage_location import StorageLocation
 
 logger = logging.getLogger(__name__)
 
-_STAGING_SUBDIR = "v4/whl-staging"
-
 
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
@@ -64,7 +61,8 @@ def main(argv: list[str]) -> None:
         raise FileNotFoundError(f"Source directory not found: {args.source_dir}")
 
     bucket = get_release_bucket_config(args.release_type, "python")
-    dest = StorageLocation(bucket.name, _STAGING_SUBDIR)
+    s3_subdir = "v4/whl-staging"
+    dest = StorageLocation(bucket.name, s3_subdir)
     backend = create_storage_backend(dry_run=args.dry_run)
 
     logger.info("PyTorch wheels: %s -> %s", args.source_dir, dest.s3_uri)
