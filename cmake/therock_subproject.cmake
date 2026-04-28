@@ -1186,8 +1186,12 @@ function(therock_cmake_subproject_build_test target_name)
     message(FATAL_ERROR "Empty COMMAND in build tests for '${target_name}'")
   endif()
 
-  set(_build_test_commands)
+  # Generate a runner script that executes all test commands independently,
+  # so a failure in one does not prevent the others from running.
   _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
+  set(_runner_script "${_stamp_dir}/build-test-runner.cmake")
+  set(_runner_content "set(_any_failed FALSE)\n\n")
+
   foreach(_command_index RANGE 1 ${_command_count})
     set(_log_file "${target_name}_build_test.log")
     set(_log_label "${target_name} build-test")
@@ -1203,20 +1207,44 @@ function(therock_cmake_subproject_build_test target_name)
     )
 
     set(_test_command_var "_test_command_${_command_index}")
-    list(APPEND _build_test_commands
-      COMMAND
-        ${_test_log_prefix}
-        "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
-        ${${_test_command_var}}
+    set(_full_cmd
+      ${_test_log_prefix}
+      "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
+      ${${_test_command_var}}
     )
+
+    # Serialize the command list into a quoted string for the script.
+    set(_cmd_str "")
+    foreach(_arg IN LISTS _full_cmd)
+      string(APPEND _cmd_str " \"${_arg}\"")
+    endforeach()
+
+    if(_command_index GREATER 1)
+      string(APPEND _runner_content "message(STATUS \"\")\n")
+    endif()
+    string(APPEND _runner_content "execute_process(\n")
+    string(APPEND _runner_content "  COMMAND${_cmd_str}\n")
+    string(APPEND _runner_content "  WORKING_DIRECTORY \"${_binary_dir}\"\n")
+    string(APPEND _runner_content "  RESULT_VARIABLE _rc\n")
+    string(APPEND _runner_content ")\n")
+    string(APPEND _runner_content "if(_rc)\n")
+    string(APPEND _runner_content "  set(_any_failed TRUE)\n")
+    string(APPEND _runner_content "  message(WARNING \"Build test command ${_command_index} for ${target_name} failed with exit code: \${_rc}\")\n")
+    string(APPEND _runner_content "endif()\n\n")
   endforeach()
+
+  string(APPEND _runner_content "if(_any_failed)\n")
+  string(APPEND _runner_content "  message(FATAL_ERROR \"One or more build test commands failed for ${target_name}\")\n")
+  string(APPEND _runner_content "endif()\n")
+
+  file(GENERATE OUTPUT "${_runner_script}" CONTENT "${_runner_content}")
 
   set(_build_stamp_file "${_stamp_dir}/build.stamp")
   set(_build_test_stamp_file "${_stamp_dir}/build-test.stamp")
 
   add_custom_command(
     OUTPUT "${_build_test_stamp_file}"
-    ${_build_test_commands}
+    COMMAND "${CMAKE_COMMAND}" -P "${_runner_script}"
     COMMAND "${CMAKE_COMMAND}" -E touch "${_build_test_stamp_file}"
     WORKING_DIRECTORY "${_binary_dir}"
     COMMENT "Running build tests for sub-project ${target_name}"
