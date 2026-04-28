@@ -99,6 +99,8 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "rocm_sdk",
     "rocm_sdk_core",
     "rocm_sdk_devel",
+    "rocm_profiler",
+    "rocm_sdk_libraries",
     # ---- triton ----
     "triton",
     # ---- triton additional packages ----
@@ -180,14 +182,6 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "jax_rocm7_pjrt",
 ]}
 
-# Allow new ROCm multi-arch + device packages
-ROCM_PACKAGE_PREFIXES = (
-    "rocm_",
-    "rocm-sdk",          # safety for normalized names
-    "rocm_sdk_device",
-    "amd_torch_device",
-)
-
 S3IndexType = TypeVar('S3IndexType', bound='S3Index')
 
 
@@ -256,11 +250,14 @@ class S3Index:
             full_package_name = path.basename(obj)
             package_name = full_package_name.split('-')[0]
             print(f"[DEBUG] Evaluating package: {package_name}")
-            # Hard pass on `rocm_sdk_libraries` and packages that are included in our allow list
             pkg = package_name.lower()
-
-            # Allow legacy packages + new ROCm multi-arch/device packages
-            if pkg in PACKAGE_ALLOW_LIST or pkg.startswith(ROCM_PACKAGE_PREFIXES):
+            # Allow legacy packages + explicitly handle dynamic multi-arch packages
+            if (
+                pkg in PACKAGE_ALLOW_LIST
+                or pkg.startswith("rocm_sdk_device_")
+                or pkg.startswith("amd_torch_device")
+                or pkg.startswith("amd_torchvision_device")
+            ):
                 packages[package_name] += 1
             else:
                 print(f"[FILTERED OUT] {package_name}")
