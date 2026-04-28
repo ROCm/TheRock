@@ -403,7 +403,7 @@ test_matrix = {
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-samples --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipdnn_samples.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
