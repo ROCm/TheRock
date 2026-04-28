@@ -166,6 +166,7 @@ def generate_cmake_args(
         if include_comments:
             args.append("")
             args.append("# Enable Comgr tests for compiler-runtime stage")
+        args.append("-DTHEROCK_BUILD_TESTING=ON")
         args.append("-DTHEROCK_BUILD_COMGR_TESTS=ON")
 
     return args
