@@ -30,19 +30,22 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(mock_copy.call_count, 2)
+        # Calls: tarballs, python -> v3/whl-staging, python -> v3/whl
+        self.assertEqual(mock_copy.call_count, 3)
         # First call: tarballs
         tarball_source, tarball_dest = mock_copy.call_args_list[0].args
         self.assertEqual(tarball_source.bucket, "therock-dev-artifacts")
         self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
         self.assertEqual(tarball_dest.bucket, "therock-dev-tarball")
         self.assertEqual(tarball_dest.relative_path, "v4/tarball")
-        # Second call: python packages
-        python_source, python_dest = mock_copy.call_args_list[1].args
+        # Python staging then release
+        python_source, python_dest_staging = mock_copy.call_args_list[1].args
         self.assertEqual(python_source.bucket, "therock-dev-artifacts")
         self.assertEqual(python_source.relative_path, "123-linux/python")
-        self.assertEqual(python_dest.bucket, "therock-dev-python")
-        self.assertEqual(python_dest.relative_path, "v3/whl")
+        self.assertEqual(python_dest_staging.bucket, "therock-dev-python")
+        self.assertEqual(python_dest_staging.relative_path, "v3/whl-staging")
+        _, python_dest_release = mock_copy.call_args_list[2].args
+        self.assertEqual(python_dest_release.relative_path, "v3/whl")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_nightly_windows_copies_to_correct_buckets(self, mock_copy):
@@ -70,7 +73,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(python_dest.bucket, "therock-nightly-python")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
-    def test_kpack_split_uses_v4(self, mock_copy):
+    def test_kpack_split_uses_v4_staging_then_release(self, mock_copy):
         mock_copy.return_value = 2
         main(
             [
@@ -86,8 +89,12 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             ]
         )
 
-        python_source, python_dest = mock_copy.call_args_list[1].args
-        self.assertEqual(python_dest.relative_path, "v4/whl")
+        # Calls: tarballs, python -> v4/whl-staging, python -> v4/whl
+        self.assertEqual(mock_copy.call_count, 3)
+        _, python_dest_staging = mock_copy.call_args_list[1].args
+        self.assertEqual(python_dest_staging.relative_path, "v4/whl-staging")
+        _, python_dest_release = mock_copy.call_args_list[2].args
+        self.assertEqual(python_dest_release.relative_path, "v4/whl")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_raises_when_no_tarballs_found(self, mock_copy):
