@@ -20,7 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Mapping
+from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen, Request
 
@@ -377,6 +377,21 @@ def gha_append_step_summary(summary: str):
     with open(step_summary_file, "a") as f:
         # Use double newlines to split sections in markdown.
         f.write(summary + "\n\n")
+
+
+def gha_load_github_event() -> dict[str, Any]:
+    """Load the GitHub Actions workflow event JSON from disk.
+
+    Reads the path from :envvar:`GITHUB_EVENT_PATH`. GitHub writes that file
+    as UTF-8. On Windows the process default encoding is often not UTF-8, so
+    the file must be opened with ``encoding="utf-8"``.
+
+    Returns:
+        Parsed JSON object (GitHub webhook payloads are JSON objects).
+    """
+    path = os.environ["GITHUB_EVENT_PATH"]
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def gha_send_request(url: str, timeout_seconds: int = 300) -> object:

@@ -92,6 +92,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND NOT DEFINED THEROCK_BUILD_TESTIN
 endif()
 if(THEROCK_BUILD_TESTING)
   message(STATUS "Enabling building tests")
+  therock_add_convenience_target(build-tests)
 endif()
 
 ################################################################################
@@ -268,10 +269,6 @@ include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 # which filters out CORE_RUNTIME dependency for HIP_RUNTIME on Windows.
 
 # Optional sub-features that control behavior within artifacts
-cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
-  "Enables composable kernel in MIOpen" ON
-  "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
-
 cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "Enables building rocWMMA benchmarks" OFF
   "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)

@@ -23,7 +23,6 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
-        default: ""
 
 permissions:
   contents: read

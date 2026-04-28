@@ -56,8 +56,8 @@ from pathlib import Path
 from typing import List, Optional, Set
 
 from _therock_utils.cmake_amdgpu_targets import (
-    build_family_to_targets,
-    parse_amdgpu_targets_cmake,
+    amdgpu_family_map,
+    expand_families,
 )
 from _therock_utils.build_topology import BuildTopology
 from _therock_utils.artifact_backend import (
@@ -72,21 +72,6 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Component types that artifacts are split into
 ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
-
-# Lazy-loaded cache for the family -> targets mapping parsed from CMake.
-_family_to_targets_cache: Optional[dict[str, list[str]]] = None
-
-
-def _get_family_to_targets() -> dict[str, list[str]]:
-    """Return the family -> gfx targets mapping, parsed once from CMake."""
-    global _family_to_targets_cache
-    if _family_to_targets_cache is None:
-        cmake_path = (
-            Path(__file__).parent.parent / "cmake" / "therock_amdgpu_targets.cmake"
-        )
-        infos = parse_amdgpu_targets_cmake(cmake_path)
-        _family_to_targets_cache = build_family_to_targets(infos)
-    return _family_to_targets_cache
 
 
 def log(msg: str):
@@ -163,11 +148,10 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
             input_families = args.amdgpu_families.split(";")
             output_families.extend(input_families)
             if args.expand_family_to_targets:
-                family_map = _get_family_to_targets()
-                for input_family in input_families:
-                    for target in family_map.get(input_family, []):
-                        if target not in output_families:
-                            output_families.append(target)
+                family_map = amdgpu_family_map()
+                for target in expand_families(input_families, family_map, strict=False):
+                    if target not in output_families:
+                        output_families.append(target)
         if args.amdgpu_targets:
             output_families.extend(
                 t.strip() for t in args.amdgpu_targets.split(",") if t.strip()
