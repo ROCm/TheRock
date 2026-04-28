@@ -44,7 +44,7 @@ on:
         description: "Comma-separated build stages to skip (artifacts already copied by the orchestrator)"
       build_runs_on:
         type: string
-        default: ""
+        default: "azure-linux-scale-rocm"
         description: "Build runner label (selected by configure script with weighted distribution)"
       release_type:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
