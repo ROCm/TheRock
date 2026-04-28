@@ -50,6 +50,14 @@ repos:
     - id: actionlint
       args: [-shellcheck=, -ignore, 'label ".+" is unknown']
 
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.15.12
+  hooks:
+    - id: ruff
+      name: ruff (explicit text encoding, PLW1514)
+      args: [--select, PLW1514, --preview]
+      files: ^(build_tools|tests|external-builds)/
+
 - repo: local
   hooks:
   - id: test-file-naming
