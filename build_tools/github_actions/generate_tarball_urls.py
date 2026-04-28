@@ -29,7 +29,7 @@ from github_actions_api import gha_set_output
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate presigned download URLs for uploaded tarballs"
+        description="Generate public download URLs for uploaded tarballs"
     )
     parser.add_argument("--run-id", required=True, help="Workflow run ID")
     parser.add_argument(
