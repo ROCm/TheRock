@@ -58,6 +58,11 @@ BUILD_RUNNER_LABELS = {
             {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
         ],
     },
+    "windows": {
+        "default": [
+            {"label": "azure-windows-scale-rocm", "weight": 1.0},
+        ],
+    },
 }
 
 
