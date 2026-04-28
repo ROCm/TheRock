@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: MIT
 
 if(THEROCK_ENABLE_COMPILER)
+  if(NOT DEFINED THEROCK_BUILD_COMGR_TESTS)
+    set(THEROCK_BUILD_COMGR_TESTS ${THEROCK_BUILD_TESTING})
+  endif()
+
   ##############################################################################
   # amd-llvm
   # Everything built as part of LLVM installs to lib/llvm
