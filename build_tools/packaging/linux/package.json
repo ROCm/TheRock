@@ -2492,46 +2492,6 @@
     "Gfxarch": "False"
   },
   {
-    "Package": "amdrocm-rocrtst",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "amdrocm-sysdeps",
-      "amdrocm-base",
-      "amdrocm-llvm"
-    ],
-    "RPMRequires": [
-      "amdrocm-sysdeps",
-      "amdrocm-base",
-      "amdrocm-llvm"
-    ],
-    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
-    "Description_Short": "ROCm runtime test files",
-    "Description_Long": "Test files for AMD HIP Runtime for ROCm platforms",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/rocm-libraries",
-    "Artifactory": [
-      {
-        "Artifact": "rocrtst",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocrtst",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      }
-    ],
-    "Disable_DWZ": "True",
-    "Gfxarch": "False"
-  },
-  {
     "Package": "amdrocm-decode-test",
     "Version": "",
     "Architecture": "amd64",
