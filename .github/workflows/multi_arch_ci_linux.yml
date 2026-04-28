@@ -166,34 +166,28 @@ jobs:
       container_image_name: ${{ matrix.image.name }}
       container_image_url: ${{ matrix.image.url }}
 
-  # NOTE: Per-family PyTorch builds — each family gets its own wheel built
-  # against that family's ROCm package index slice.
-  # TODO(future): Consider adding a combined multi-arch pytorch build job
-  # that builds once against the full multi-arch index (amdgpu_families=all).
-  build_pytorch_wheels_per_family:
+  # Multi-arch PyTorch build: one fat wheel covering every target, then
+  # split into a host wheel + per-gfx device wheels via rocm-kpack.
+  # KPACK_SPLIT_ARTIFACTS is always ON in multi-arch CI (FLAGS.cmake
+  # default; build_configure.py's opt-out only fires in single-arch CI),
+  # so the split path is unconditional here. The split itself runs inline
+  # in build_portable_linux_pytorch_wheels_ci.yml based on inputs.kpack_split.
+  build_pytorch_wheel_fat:
     needs: [build_python_packages]
-    name: Build PyTorch | ${{ matrix.family_info.amdgpu_family }}
+    name: Build PyTorch (fat + split)
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true }}
-    strategy:
-      fail-fast: false
-      matrix:
-        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels_ci.yml
     with:
-      artifact_group: ${{ matrix.family_info.amdgpu_family }}
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       python_version: "3.12"
       pytorch_git_ref: "release/2.10"
-      amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
+      # The reusable workflow expands this to gfx targets via
+      # cmake/therock_amdgpu_targets.cmake.
+      amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
-      rocm_package_find_links_url: >-
-        ${{
-          needs.build_python_packages.outputs.kpack_split == 'true'
-          && needs.build_python_packages.outputs.package_find_links_url
-          || format('{0}/{1}/index.html',
-              needs.build_python_packages.outputs.package_find_links_url,
-              matrix.family_info.amdgpu_family)
-        }}
+      rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+      release_type: ${{ inputs.release_type }}
     permissions:
       contents: read
       id-token: write
