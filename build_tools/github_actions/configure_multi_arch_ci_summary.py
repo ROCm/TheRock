@@ -87,6 +87,9 @@ def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
 def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
     highlights: list[str] = []
 
+    if ci_inputs.release_type:
+        highlights.append(f"Release type: {ci_inputs.release_type}")
+
     # Explicit family selection (workflow_dispatch)
     if ci_inputs.is_workflow_dispatch:
         parts = []
@@ -189,8 +192,8 @@ def _append_build_rocm(
         output_root = WorkflowOutputRoot.from_workflow_run(
             run_id=ci_inputs.run_id, platform=platform_name
         )
-        log_url = output_root.root_log_index().https_url
-        artifact_url = output_root.root_index().https_url
+        log_url = output_root.log_root_index().https_url
+        artifact_url = output_root.artifact_index().https_url
         lines.append(f"{platform_name.capitalize()} | {log_url} | {artifact_url}")
 
 
