@@ -8,20 +8,6 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
-# limit use of composable kernel to the GPU families it is valid for
-if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
-  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1150 gfx1151 gfx1152 gfx1153 gfx1200 gfx1201)
-  foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
-    if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
-      message(WARNING
-        "${_gfx_target} (included in THEROCK_AMDGPU_TARGETS) is not supported by composable kernel. "
-        "Disabling composable kernel and it's use in MIOpen.")
-      set(THEROCK_ENABLE_COMPOSABLE_KERNEL OFF)
-      set(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL OFF)
-    endif()
-  endforeach()
-endif()
-
 if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   ##############################################################################
   # Composable_kernel
@@ -69,28 +55,15 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
 endif()
 
 if(THEROCK_ENABLE_MIOPEN)
-  # If composable kernel is enabled, add it as an MIOpen dep.
+  # If composable kernel is enabled, add it as an MIOpen build dep.
+  # MIOpen's ck_impl self-filters GPU_TARGETS against arches it has CK grouped
+  # conv kernels for, so no need to gate on specific arch families here.
   set(optional_miopen_build_deps)
-  if(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+  if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
   if(MSVC)
-    # HACK, see https://github.com/ROCm/TheRock/issues/525.
-    # Take the most recent few MSVC versions from
-    # https://github.com/boostorg/boost_install/blob/develop/BoostDetectToolset.cmake
-    # and pass them through to the Boost_COMPILER option below. This is messy -
-    # maybe we can drop the Boost dependency or write new build rules for it.
-    if((MSVC_VERSION GREATER 1929) AND (MSVC_VERSION LESS 1950))
-      set(_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER "vc143")
-    elseif((MSVC_VERSION GREATER 1919) AND (MSVC_VERSION LESS 1930))
-      set(_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER "vc142")
-    elseif((MSVC_VERSION GREATER 1909) AND (MSVC_VERSION LESS 1920))
-      set(_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER "vc141")
-    else()
-      message(WARNING "Unhandled MSVC_VERSION '${MSVC_VERSION}', Boost may not configure correctly")
-    endif()
-
     set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
   else()
     set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
@@ -105,10 +78,9 @@ if(THEROCK_ENABLE_MIOPEN)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
-      "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL}"
+      "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_ENABLE_COMPOSABLE_KERNEL}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
-      -DBoost_COMPILER=${_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER}
       "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
@@ -116,7 +88,6 @@ if(THEROCK_ENABLE_MIOPEN)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      therock-boost
       therock-eigen
       therock-frugally-deep
       therock-googletest

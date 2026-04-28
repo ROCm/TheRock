@@ -68,17 +68,22 @@ build_prod_wheels.py \
     --index-url https://rocm.devreleases.amd.com/v2/gfx110X-all/
 ```
 
-3. Build torch, torchaudio and torchvision for a single gfx architecture.
+3. Build torch, torchaudio and torchvision for one or more gfx architectures.
 
-Typical usage to build with default architecture from rocm-sdk targets:
+Target architectures are resolved in priority order from `--pytorch-rocm-arch`
+(comma-separated), the `PYTORCH_ROCM_ARCH` environment variable, and finally
+`rocm-sdk targets` from the installed rocm-sdk-core. Passing the flag or env
+var explicitly is preferred; see TODO on get_rocm_sdk_targets.
 
 ```
 # On Linux, using default paths for each repository:
 python build_prod_wheels.py build \
+    --pytorch-rocm-arch gfx942 \
     --output-dir $HOME/tmp/pyout
 
 # On Windows, using shorter custom paths:
 python build_prod_wheels.py build ^
+    --pytorch-rocm-arch gfx1201 ^
     --output-dir %HOME%/tmp/pyout ^
     --pytorch-dir C:/b/pytorch ^
     --pytorch-audio-dir C:/b/audio ^
@@ -227,6 +232,15 @@ def get_rocm_sdk_version() -> str:
     ).strip()
 
 
+# TODO(#4687): Remove this fallback once every caller passes --pytorch-rocm-arch
+# (or PYTORCH_ROCM_ARCH) explicitly. Reading dist_amdgpu_targets from the
+# installed rocm-sdk-core misreports targets in two known cases:
+#   1. Multi-arch kpack-split builds share one superset rocm-sdk-core, so every
+#      per-family job would compile torch for every arch in the superset.
+#   2. Prebuilt-reuse flows where the installed rocm-sdk-core's targets do not
+#      match the build intent (e.g. issue #4687).
+# This fallback is kept for legacy CI and release workflows that have not yet
+# been updated to plumb --pytorch-rocm-arch through from the caller.
 def get_rocm_sdk_targets() -> str:
     # Run `rocm-sdk targets` to get the default architecture
     targets = capture([sys.executable, "-m", "rocm_sdk", "targets"], cwd=Path.cwd())
@@ -622,20 +636,28 @@ def do_build(args: argparse.Namespace):
     system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
     print(f"  PATH = {system_path}")
 
-    pytorch_rocm_arch = args.pytorch_rocm_arch
-    if pytorch_rocm_arch is None:
+    # Priority: --pytorch-rocm-arch > PYTORCH_ROCM_ARCH env > `rocm-sdk targets`
+    # fallback (legacy; see TODO on get_rocm_sdk_targets()).
+    pytorch_rocm_arch = args.pytorch_rocm_arch or os.environ.get("PYTORCH_ROCM_ARCH")
+    if pytorch_rocm_arch:
+        print(f"  Using provided PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
+    else:
         pytorch_rocm_arch = get_rocm_sdk_targets()
         print(
             f"  Using default PYTORCH_ROCM_ARCH from rocm-sdk targets: {pytorch_rocm_arch}"
         )
-    else:
-        print(f"  Using provided PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
 
     if not pytorch_rocm_arch:
         raise ValueError(
-            "No --pytorch-rocm-arch provided and rocm-sdk targets returned empty. "
+            "No --pytorch-rocm-arch provided, PYTORCH_ROCM_ARCH not set, and "
+            "rocm-sdk targets returned empty. "
             "Please specify --pytorch-rocm-arch (e.g., gfx942)."
         )
+
+    # PyTorch's CMake consumes PYTORCH_ROCM_ARCH as a CMake-style list, so any
+    # comma-separated input needs to be rewritten with semicolons before
+    # CMake runs — otherwise the whole string is treated as one arch.
+    pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
         cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
@@ -1340,7 +1362,10 @@ def main(argv: list[str]):
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",
-        help="gfx arch to build pytorch with (defaults to rocm-sdk targets)",
+        help="Comma-separated gfx arches to build pytorch for (e.g. 'gfx942' or "
+        "'gfx942,gfx1201'). May also be supplied via the PYTORCH_ROCM_ARCH "
+        "environment variable. Falls back to `rocm-sdk targets` when unset "
+        "(legacy; see TODO on get_rocm_sdk_targets).",
     )
     build_p.add_argument(
         "--pytorch-build-number", default="1", help="Build number to append to version"
