@@ -61,24 +61,24 @@ AmdGpuFamilyMatrix.to_nested_dict()
     {"gfx1101": {"amdgpu_family": "gfx1101",
                  "linux": {"build": {"build_variants": ["release"], "expect_failure": False},
                            "release": {"bypass_tests_for_releases": True},
-                           "test": {"expect_pytorch_failure": False,
-                                    "fetch-gfx-targets": ["gfx1101"],
+                           "test": {"fetch-gfx-targets": ["gfx1101"],
                                     "run_tests": False,
                                     "runs_on": {"benchmark": "",
                                                 "test": "linux-gfx110X-gpu-rocm",
                                                 "test-multi-gpu": ""},
                                     "sanity_check_only_for_family": True,
-                                    "test_scope": "comprehensive"}},
+                                    "test_scope": "comprehensive",
+                                    "bypass_tests_for_unscheduled": True}},
                  "windows": {"build": {"build_variants": ["release"], "expect_failure": False},
                              "release": {"bypass_tests_for_releases": True},
-                             "test": {"expect_pytorch_failure": False,
-                                      "fetch-gfx-targets": ["gfx1101"],
+                             "test": {"fetch-gfx-targets": ["gfx1101"],
                                       "run_tests": True,
                                       "runs_on": {"benchmark": "",
                                                   "test": "windows-gfx110X-gpu-rocm",
                                                   "test-multi-gpu": ""},
                                       "sanity_check_only_for_family": True,
-                                      "test_scope": "comprehensive"}}},
+                                      "test_scope": "comprehensive",
+                                      "bypass_tests_for_unscheduled": False}}},
      ...}
 
 MatrixEntry.to_dict(platform=None)
@@ -215,8 +215,9 @@ class TestConfig:
     """If True, only a sanity-check test subset is run, not the full suite."""
     test_scope: Literal["quick", "comprehensive", "full"] = "comprehensive"
     """Which test subset to run: comprehensive (default), quick (subset), full (extended)."""
-    expect_pytorch_failure: bool = False
-    """If True, PyTorch builds are skipped because they are known to fail."""
+    bypass_tests_for_unscheduled: bool = False
+    """If True, tests are skipped on non-scheduled triggers (PR / push) and only run
+    on the schedule (nightly) workflow trigger."""
 
     def __post_init__(self):
         # set run_tests to True if any runners are specified,
@@ -231,7 +232,7 @@ class TestConfig:
             "fetch-gfx-targets": list(self.fetch_gfx_targets),
             "sanity_check_only_for_family": self.sanity_check_only_for_family,
             "test_scope": self.test_scope,
-            "expect_pytorch_failure": self.expect_pytorch_failure,
+            "bypass_tests_for_unscheduled": self.bypass_tests_for_unscheduled,
         }
 
 
@@ -287,6 +288,23 @@ class MatrixEntry:
     family: list[str] = field(init=False, default_factory=list)
     """Family names this target belongs to (e.g. ['dcgpu-all', 'gfx94X-all', 'gfx94X-dcgpu']).
     Auto-populated by AmdGpuFamilyMatrix from cmake/therock_amdgpu_targets.cmake."""
+
+    def __post_init__(self):
+        # Auto-fill TestConfig.runs_on from the runner inventory for any platform
+        # whose runs_on is still empty (the default). Caller-supplied runs_on (e.g.
+        # in synthetic tests) is left alone. After the fill, force run_tests to
+        # False if there's still no runner — there's nothing to run on.
+        # Function-local import to avoid the types <-> runners circular dependency.
+        from new_amdgpu_family_matrix_runners import _runners_for
+
+        for platform in ("linux", "windows"):
+            cfg = self.platform_config(platform)
+            if cfg is None:
+                continue
+            if not cfg.test.runs_on.has_any_runner():
+                cfg.test.runs_on = _runners_for(platform, self.target)
+            if not cfg.test.runs_on.has_any_runner():
+                cfg.test.run_tests = False
 
     @property
     def key(self) -> str:
