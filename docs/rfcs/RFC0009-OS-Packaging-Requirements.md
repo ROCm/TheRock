@@ -73,6 +73,45 @@ The soft links allow for an independent directory structure for ROCm expansions,
 /opt/rocm/hpc/ -> /opt/rocm/hpc-26.2.0
 ```
 
+### System Configuration Files (`sys` component)
+
+Some ROCm packages install system-level configuration files that must reside in OS-managed directories outside the ROCm install prefix (e.g. `/etc/ld.so.conf.d/`, `/etc/OpenCL/vendors/`). These are captured in the `sys` artifact component type (see [artifact component types](../development/artifacts.md#component-types)).
+
+Examples:
+
+```
+/etc/ld.so.conf.d/10-rocm7.12-43-opencl.conf
+/etc/OpenCL/vendors/amdocl64_70200_43.icd
+/usr/lib/systemd/system/amdcuid_daemon.service
+```
+
+#### ROCm Path References in Config File Contents
+
+Any ROCm path referenced inside a `sys` config file must point to the **unversioned symlink** `/opt/rocm/core` rather than a versioned path (e.g. `/opt/rocm/core-7.12`). This ensures the config remains valid across patch updates and supports side-by-side multi-version installs, where the active version is controlled by the symlink.
+
+Example — correct content for `/etc/ld.so.conf.d/10-rocm7.12-43-opencl.conf`:
+
+```
+/opt/rocm/core/lib/opencl
+```
+
+Not:
+
+```
+/opt/rocm/core-7.12/lib/opencl   # Wrong — breaks when version changes
+```
+
+#### Handling During Packaging and Installation
+
+When a `sys` component is present, the packaging and install tooling must **copy** these files to the corresponding system directory. Symlinks must not be used because:
+
+- Package managers treat `/etc` files as *conffiles* — preserving user edits on upgrade and removing them cleanly on uninstall. This mechanism is defined for regular files; behavior with symlinks is implementation-dependent and unreliable.
+- `ldconfig` silently ignores broken symlinks in `ld.so.conf.d/`, leaving ROCm library paths absent from `/etc/ld.so.cache` with no error — producing "library not found" failures that are difficult to diagnose.
+- Symlinks are invalidated by any operation that removes or relocates the target: ROCm upgrades, partial uninstalls, or manual cleanup. The broken entry persists in `/etc`, invisible to the package manager.
+- On SELinux-enforcing systems (RHEL and derivatives), symlinks in `/etc` whose targets fall outside the expected security context may trigger policy denials.
+
+When installing from tarballs or artifacts directly (without an OS package manager), the user/installer must copy `sys` component files to the appropriate system paths (requires elevated privileges) and run `ldconfig` after copying any `ld.so.conf.d/` entries.
+
 ### RPATH and Relocatability
 
 - All ROCm packages must be built and shipped with `$ORIGIN`-based RPATH
