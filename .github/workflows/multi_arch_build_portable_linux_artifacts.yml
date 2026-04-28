@@ -53,11 +53,23 @@ on:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease". Controls artifact bucket and IAM role.'
         type: string
         default: ""
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "azure-linux-scale-rocm"
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
 
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    runs-on: ${{ contains(inputs.build_variant_cmake_preset, 'san') && 'azure-linux-scale-rocm-heavy-ramdisk' || 'azure-linux-scale-rocm' }}
+    runs-on: ${{ inputs.build_runs_on }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       id-token: write
@@ -77,6 +89,9 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -147,6 +162,10 @@ jobs:
           ccache -s -v
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+
+      - name: Test Packaging
+        run: |
+          ctest --test-dir ${BUILD_DIR} --output-on-failure
 
       - name: Configure AWS credentials for artifact uploads
         if: ${{ always() }}

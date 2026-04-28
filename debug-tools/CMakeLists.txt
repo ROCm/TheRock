@@ -12,9 +12,13 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
   # of AMD GPU's.
   ##############################################################################
 
+  if(THEROCK_USE_EXTERNAL_AMD_DBGAPI AND THEROCK_AMD_DBGAPI_SOURCE_DIR)
+    message(WARNING "Configuring amd-dbgapi with modified source directory: ${THEROCK_AMD_DBGAPI_SOURCE_DIR}")
+  endif()
+
   therock_cmake_subproject_declare(amd-dbgapi
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocdbgapi"
+    EXTERNAL_SOURCE_DIR "${THEROCK_AMD_DBGAPI_SOURCE_DIR}"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amd-dbgapi"
     COMPILER_TOOLCHAIN
       amd-llvm
@@ -72,12 +76,16 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT)
   # state of wavefronts.
   ##############################################################################
 
+  if(THEROCK_USE_EXTERNAL_ROCR_DEBUG_AGENT AND THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR)
+    message(WARNING "Configuring rocr-debug-agent with modified source directory: ${THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR}")
+  endif()
+
   # Make sure to pass -DENABLE_TESTS=OFF so we don't build
   # rocr-debug-agent-tests alongside the library. The tests need to be built
   # for each gfx level that is requested by the build.
   therock_cmake_subproject_declare(rocr-debug-agent
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-debug-agent"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR}"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent"
     CMAKE_ARGS
       "-DENABLE_TESTS=OFF"
@@ -133,10 +141,14 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
   # fat binaries are built containing support for all of those GPU targets.
   ##############################################################################
 
+  if(THEROCK_USE_EXTERNAL_ROCR_DEBUG_AGENT AND THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR)
+    message(WARNING "Configuring rocr-debug-agent-tests with modified source directory: ${THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR}/test")
+  endif()
+
   if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_declare(rocr-debug-agent-tests
       USE_TEST_AMDGPU_TARGETS
-      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-debug-agent/test"
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR}/test"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent-tests"
       INSTALL_RPATH_EXECUTABLE_DIR
         "tests/rocm-debug-agent"

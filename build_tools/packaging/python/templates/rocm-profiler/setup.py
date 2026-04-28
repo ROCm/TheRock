@@ -68,6 +68,7 @@ setup(
         "console_scripts": (
             [
                 "rocprof-compute=rocm_profiler._cli:rocprof_compute",
+                "rocprof-sys-attach=rocm_profiler._cli:rocprof_sys_attach",
                 "rocprof-sys-avail=rocm_profiler._cli:rocprof_sys_avail",
                 "rocprof-sys-causal=rocm_profiler._cli:rocprof_sys_causal",
                 "rocprof-sys-instrument=rocm_profiler._cli:rocprof_sys_instrument",
