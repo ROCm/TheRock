@@ -105,6 +105,54 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 ]
             )
 
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_copy_to_staging_v4(self, mock_copy):
+        mock_copy.return_value = 2
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "dev",
+                "--kpack-split",
+                "true",
+                "--copy-to-staging",
+                "--dry-run",
+            ]
+        )
+
+        # Calls: tarballs, python -> v4/whl, python -> v4/whl-staging
+        self.assertEqual(mock_copy.call_count, 3)
+        _, python_dest_main = mock_copy.call_args_list[1].args
+        self.assertEqual(python_dest_main.relative_path, "v4/whl")
+        _, python_dest_staging = mock_copy.call_args_list[2].args
+        self.assertEqual(python_dest_staging.relative_path, "v4/whl-staging")
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_copy_to_staging_v3(self, mock_copy):
+        mock_copy.return_value = 2
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "dev",
+                "--copy-to-staging",
+                "--dry-run",
+            ]
+        )
+
+        # Calls: tarballs, python -> v3/whl, python -> v3/whl-staging
+        self.assertEqual(mock_copy.call_count, 3)
+        _, python_dest_main = mock_copy.call_args_list[1].args
+        self.assertEqual(python_dest_main.relative_path, "v3/whl")
+        _, python_dest_staging = mock_copy.call_args_list[2].args
+        self.assertEqual(python_dest_staging.relative_path, "v3/whl-staging")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,7 +18,7 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     s3://therock-dev-artifacts/12345-linux/tarballs/therock-dist-linux-gfx94X-dcgpu-7.10.0.tar.gz
       -> s3://therock-dev-tarball/v4/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0.tar.gz
 
-    python (kpack split enabled):
+    python (kpack split enabled, --copy-to-staging):
 
     s3://therock-dev-artifacts/12345-linux/python/rocm-7.13.0.tar.gz
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
@@ -28,6 +28,10 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
       -> s3://therock-dev-python/v4/whl/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
       -> s3://therock-dev-python/v4/whl/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
       -> s3://therock-dev-python/v4/whl/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-dev-python/v4/whl-staging/rocm-7.13.0.tar.gz
+      -> s3://therock-dev-python/v4/whl-staging/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-dev-python/v4/whl-staging/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-dev-python/v4/whl-staging/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
 
 Test usage:
     python build_tools/github_actions/publish_rocm_to_release_buckets.py \\
@@ -81,27 +85,45 @@ def publish_python_packages(
     release_type: str,
     backend: StorageBackend,
     kpack_split: bool,
+    copy_to_staging: bool,
 ) -> None:
     """Copy python packages from the artifacts bucket to the release python bucket.
 
-    With kpack split disabled (per-family subdirs):
+    The destination layout depends on kpack_split:
+      - kpack_split=False uses the v3 per-family layout (v3/whl).
+      - kpack_split=True uses the v4 flat layout (v4/whl).
+
+    With copy_to_staging=True, also copies to the corresponding -staging
+    sibling (v3/whl-staging or v4/whl-staging). Use this when PyTorch wheels
+    are uploaded directly to the staging path and need to resolve their
+    rocm-sdk-device-* dependencies from the same index.
+
+    Examples:
+
+        kpack split disabled (per-family subdirs):
         s3://therock-dev-artifacts/12345-linux/python/gfx110X-all/*.whl
           -> s3://therock-dev-python/v3/whl/gfx110X-all/*.whl
+          -> s3://therock-dev-python/v3/whl-staging/gfx110X-all/*.whl  (with copy_to_staging)
 
-    With kpack split enabled (flat):
+        kpack split enabled (flat):
         s3://therock-dev-artifacts/12345-linux/python/*.whl
           -> s3://therock-dev-python/v4/whl/*.whl
+          -> s3://therock-dev-python/v4/whl-staging/*.whl              (with copy_to_staging)
     """
     source = artifacts_root.python_packages()
     dest_bucket = get_release_bucket_config(release_type, "python")
-    s3_subdir = "v4/whl" if kpack_split else "v3/whl"
-    dest = StorageLocation(dest_bucket.name, s3_subdir)
+    base_subdir = "v4/whl" if kpack_split else "v3/whl"
+    s3_subdirs = [base_subdir]
+    if copy_to_staging:
+        s3_subdirs.append(f"{base_subdir}-staging")
 
-    logger.info("Python packages: %s -> %s", source.s3_uri, dest.s3_uri)
-    count = backend.copy_directory(source, dest, include=["*.whl", "*.tar.gz"])
-    logger.info("Copied %d python package files", count)
-    if count == 0:
-        raise FileNotFoundError(f"No python packages found at {source.s3_uri}")
+    for s3_subdir in s3_subdirs:
+        dest = StorageLocation(dest_bucket.name, s3_subdir)
+        logger.info("Python packages: %s -> %s", source.s3_uri, dest.s3_uri)
+        count = backend.copy_directory(source, dest, include=["*.whl", "*.tar.gz"])
+        logger.info("Copied %d python package files to %s", count, s3_subdir)
+        if count == 0:
+            raise FileNotFoundError(f"No python packages found at {source.s3_uri}")
 
 
 def main(argv: list[str]) -> None:
@@ -128,6 +150,15 @@ def main(argv: list[str]) -> None:
         help='Whether kpack split is enabled ("true" or "false")',
     )
     parser.add_argument(
+        "--copy-to-staging",
+        action="store_true",
+        default=False,
+        help="Also copy python packages to the corresponding -staging sibling "
+        "(v3/whl-staging or v4/whl-staging). Off by default. Use this when "
+        "PyTorch wheels are uploaded directly to the staging path and need to "
+        "resolve their rocm-sdk-device-* dependencies from the same index.",
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without copying"
     )
     args = parser.parse_args(argv)
@@ -139,7 +170,13 @@ def main(argv: list[str]) -> None:
     kpack_split = args.kpack_split.lower() == "true"
 
     publish_tarballs(artifacts_root, args.release_type, backend)
-    publish_python_packages(artifacts_root, args.release_type, backend, kpack_split)
+    publish_python_packages(
+        artifacts_root,
+        args.release_type,
+        backend,
+        kpack_split,
+        copy_to_staging=args.copy_to_staging,
+    )
 
 
 if __name__ == "__main__":

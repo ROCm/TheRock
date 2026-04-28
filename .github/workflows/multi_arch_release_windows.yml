@@ -110,7 +110,8 @@ jobs:
             --run-id="${{ github.run_id }}" \
             --platform=windows \
             --release-type="${{ inputs.release_type }}" \
-            --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}"
+            --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}" \
+            --copy-to-staging
 
   # TODO: dispatch test artifacts per family
   # TODO: dispatch pytorch wheels
