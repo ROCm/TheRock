@@ -67,15 +67,7 @@ BUILD_RUNNER_LABELS = {
 
 
 def select_build_runner(platform: str, build_variant: str) -> str:
-    """Select a build runner label based on platform and build variant.
-
-    Args:
-        platform: The platform to build for (e.g., "linux", "windows")
-        build_variant: The build variant (e.g., "release", "asan", "tsan")
-
-    Returns:
-        A runner label string for the build job
-    """
+    """Select a build runner label based on platform and build variant."""
     if platform not in BUILD_RUNNER_LABELS:
         # Platform not configured for weighted selection, return default
         print(f"  No build runner config for platform {platform}, using default")
