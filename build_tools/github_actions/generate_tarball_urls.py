@@ -2,10 +2,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Generate presigned download URLs for uploaded tarballs.
+"""Generate public download URLs for uploaded tarballs.
 
 This resolves the uploaded tarball destination using WorkflowOutputRoot,
-verifies the expected tarball objects exist in S3, and writes presigned
+verifies the expected tarball objects exist in S3, and writes public
 download URLs to GitHub Actions outputs.
 
 Outputs written to GITHUB_OUTPUT:
@@ -63,12 +63,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default="us-east-2",
         help="AWS region for S3 client",
     )
-    parser.add_argument(
-        "--expires-in",
-        type=int,
-        default=7 * 24 * 60 * 60,
-        help="Presigned URL lifetime in seconds",
-    )
     return parser.parse_args(argv)
 
 
@@ -93,20 +87,15 @@ def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
     return bucket, prefix
 
 
-def generate_presigned_url(
+def generate_public_s3_url(
     *,
     s3_client,
     bucket: str,
     key: str,
-    expires_in: int,
 ) -> str:
     # Fail fast if the uploaded object is not present where we expect it.
     s3_client.head_object(Bucket=bucket, Key=key)
-    return s3_client.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": bucket, "Key": key},
-        ExpiresIn=expires_in,
-    )
+    return f"https://{bucket}.s3.amazonaws.com/{key}"
 
 
 def main(argv: list[str]) -> int:
@@ -136,11 +125,10 @@ def main(argv: list[str]) -> int:
     s3 = boto3.client("s3", region_name=args.aws_region)
 
     tarball_key = f"{prefix}/{tarball_name}"
-    tarball_url = generate_presigned_url(
+    tarball_url = generate_public_s3_url(
         s3_client=s3,
         bucket=bucket,
         key=tarball_key,
-        expires_in=args.expires_in,
     )
 
     gha_set_output({"tarball_url": tarball_url})
