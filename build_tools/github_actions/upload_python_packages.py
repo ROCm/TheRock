@@ -219,15 +219,17 @@ def run(args: argparse.Namespace):
     if not packages_dir.is_dir():
         raise FileNotFoundError(f"Packages root directory not found: {packages_dir}")
 
-    dist_dir = packages_dir / "dist"
-    if not dist_dir.is_dir():
-        raise FileNotFoundError(f"Packages dist/ subdirectory not found: {dist_dir}")
+    # Convention: build_python_packages.py writes into <packages_dir>/dist/,
+    # but build_prod_wheels.py (pytorch) writes directly into its output dir.
+    # Use the dist/ subdirectory when it exists, otherwise use the input dir.
+    dist_subdir = packages_dir / "dist"
+    dist_dir = dist_subdir if dist_subdir.is_dir() else packages_dir
 
-    log(f"[INFO] Packages directory: {packages_dir}")
-    log(f"[INFO] Dist subdirectory : {dist_dir}")
-    log(f"[INFO] Artifact group    : {args.artifact_group}")
-    log(f"[INFO] Run ID            : {args.run_id}")
-    log(f"[INFO] Platform          : {PLATFORM}")
+    log(f"[INFO] Packages directory  : {packages_dir}")
+    log(f"[INFO] Dist [sub]directory : {dist_dir}")
+    log(f"[INFO] Artifact group      : {args.artifact_group}")
+    log(f"[INFO] Run ID              : {args.run_id}")
+    log(f"[INFO] Platform            : {PLATFORM}")
     if args.dry_run:
         log(f"[INFO] Mode              : DRY RUN")
     elif args.output_dir:

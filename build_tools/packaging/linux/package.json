@@ -551,6 +551,18 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "hipblasltprovider",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipblasltprovider",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "True"
@@ -693,9 +705,26 @@
               "test"
             ]
           },
-
+          {
+            "Name": "origami",
+            "Components": [
+              "test"
+            ]
+          },
           {
             "Name": "hipBLASLt",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "hipblasltprovider",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipblasltprovider",
             "Components": [
               "test"
             ]
@@ -1123,6 +1152,17 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "rocwmma",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocWMMA",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "True"
@@ -1177,6 +1217,17 @@
         "Artifact_Subdir": [
           {
             "Name": "libhipcxx",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "rocwmma",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocWMMA",
             "Components": [
               "dev"
             ]
@@ -1729,18 +1780,6 @@
             ]
           }
         ]
-      },
-      {
-        "Artifact": "rocwmma",
-        "Artifact_Gfxarch": "True",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocWMMA",
-            "Components": [
-              "dev"
-            ]
-          }
-        ]
       }
     ],
 
@@ -1854,8 +1893,7 @@
       }
     ],
 
-    "Gfxarch": "False",
-    "DisablePackaging": "True"
+    "Gfxarch": "False"
   },
 
   {
@@ -2069,6 +2107,30 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "miopenprovider",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "miopenprovider",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "flatbuffers",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "flatbuffers",
+            "Components": [
+              "run"
+            ]
+          }
+        ]
       }
     ],
 
@@ -2124,6 +2186,29 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "miopenprovider",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "miopenprovider",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "hipdnn-samples",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipdnn_samples",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "True"
@@ -2170,6 +2255,30 @@
             "Name": "MIOpen",
             "Components": [
               "run",
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "flatbuffers",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "flatbuffers",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "nlohmann-json",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "nlohmann-json",
+            "Components": [
               "dev"
             ]
           }
