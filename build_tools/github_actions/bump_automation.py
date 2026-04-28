@@ -105,7 +105,7 @@ def update_ref_in_file(file_path, new_sha):
     Update all ROCm/TheRock refs in a YAML file.
     Replaces existing 'ref:' after 'repository: "ROCm/TheRock"'.
     """
-    with open(file_path, "r") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
     updated_lines = []
@@ -150,7 +150,7 @@ def update_ref_in_file(file_path, new_sha):
                 i = ref_line_index
         i += 1
 
-    with open(file_path, "w") as f:
+    with open(file_path, "w", encoding="utf-8") as f:
         f.writelines(updated_lines)
 
     print(f"[INFO] Updated {file_path}")

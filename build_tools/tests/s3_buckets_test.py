@@ -206,7 +206,9 @@ class TestGetArtifactsBucketConfigForWorkflowRun(unittest.TestCase):
         Uses delete=False because NamedTemporaryFile(delete=True) holds an
         exclusive lock on Windows, preventing the code under test from reading.
         """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", mode="w", suffix=".json", delete=False
+        ) as f:
             json.dump(event, f)
             return f.name
 

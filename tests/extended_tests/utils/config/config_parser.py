@@ -45,7 +45,7 @@ class ConfigParser:
     def _load(self):
         """Load configuration from file with environment variable expansion and validation."""
         try:
-            with open(self.config_file, "r") as f:
+            with open(self.config_file, "r", encoding="utf-8") as f:
                 raw_config = yaml.safe_load(f)
 
             # Check if config is empty

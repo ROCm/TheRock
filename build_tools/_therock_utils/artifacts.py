@@ -193,7 +193,7 @@ class ArtifactPopulator:
                 # Process an exploded artifact dir.
                 self.on_artifact_dir(artifact_path)
                 manifest_path: Path = artifact_path / "artifact_manifest.txt"
-                relpaths = manifest_path.read_text().splitlines()
+                relpaths = manifest_path.read_text(encoding="utf-8").splitlines()
                 for relpath in relpaths:
                     if not relpath:
                         continue

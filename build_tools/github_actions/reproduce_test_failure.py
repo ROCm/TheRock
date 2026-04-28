@@ -310,7 +310,9 @@ def run_windows(args: argparse.Namespace) -> int:
     script_content = "\n".join(lines)
 
     # Write to temp file and execute
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".ps1", delete=False) as f:
+    with tempfile.NamedTemporaryFile(
+        encoding="utf-8", mode="w", suffix=".ps1", delete=False
+    ) as f:
         f.write(script_content)
         script_path = f.name
 

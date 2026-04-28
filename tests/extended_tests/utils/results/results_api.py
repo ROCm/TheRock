@@ -333,7 +333,7 @@ def _load_schema() -> Dict[str, Any]:
         Dict containing the JSON schema
     """
     schema_path = Path(__file__).parent / "schemas" / "payload_schema.json"
-    with open(schema_path, "r") as f:
+    with open(schema_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 

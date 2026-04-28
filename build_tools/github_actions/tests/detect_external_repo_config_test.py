@@ -73,7 +73,9 @@ class TestOutputGithubActionsVars(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures"""
         # Create temporary file for GITHUB_OUTPUT
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", mode="w+", delete=False
+        ) as f:
             self.temp_file = f.name
         os.environ["GITHUB_OUTPUT"] = self.temp_file
 
@@ -97,7 +99,7 @@ class TestOutputGithubActionsVars(unittest.TestCase):
         output_github_actions_vars(config)
 
         # Read the output file
-        with open(self.temp_file, "r") as f:
+        with open(self.temp_file, "r", encoding="utf-8") as f:
             output = f.read()
 
         # Verify output format
@@ -114,7 +116,7 @@ class TestOutputGithubActionsVars(unittest.TestCase):
 
         output_github_actions_vars(config)
 
-        with open(self.temp_file, "r") as f:
+        with open(self.temp_file, "r", encoding="utf-8") as f:
             output = f.read()
 
         # Verify lowercase (important for bash conditionals)
@@ -135,7 +137,7 @@ class TestOutputGithubActionsVars(unittest.TestCase):
         )
         self.assertEqual(rc, 0)
 
-        with open(self.temp_file, "r") as f:
+        with open(self.temp_file, "r", encoding="utf-8") as f:
             output = f.read()
 
         # Verify extra_cmake_options is included

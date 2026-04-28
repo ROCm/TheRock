@@ -38,7 +38,7 @@ def run_command(cmd_list, cwd=None):
 
 
 def create_stamp_file(filename):
-    with open(filename, "w") as f:
+    with open(filename, "w", encoding="utf-8") as f:
         pass
 
 

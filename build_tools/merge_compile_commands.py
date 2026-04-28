@@ -29,5 +29,5 @@ for input_file in input_files:
         this_records = json.load(f)
     records.extend(this_records)
 
-with open(output_file, "wt") as f:
+with open(output_file, "wt", encoding="utf-8") as f:
     json.dump(records, f, check_circular=False, indent="  ")

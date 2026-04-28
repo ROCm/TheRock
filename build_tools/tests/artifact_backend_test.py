@@ -586,7 +586,7 @@ class TestS3BackendCredentials(unittest.TestCase):
         # Write a minimal credentials file. Values are intentionally not
         # real AWS keys — boto3 loads any syntactically valid values.
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".ini", delete=False
+            encoding="utf-8", mode="w", suffix=".ini", delete=False
         ) as creds_file:
             creds_file.write(
                 "[default]\n"

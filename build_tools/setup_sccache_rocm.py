@@ -165,7 +165,7 @@ def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
                 f"  Created sccache wrapper: {compiler_path} -> sccache {real_compiler}"
             )
         else:
-            compiler_path.write_text(wrapper_content)
+            compiler_path.write_text(wrapper_content, encoding="utf-8")
             compiler_path.chmod(
                 stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
             )

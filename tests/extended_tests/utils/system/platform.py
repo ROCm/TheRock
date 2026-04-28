@@ -121,7 +121,7 @@ class PlatformDetector:
             # Method 2: /sys/class/dmi/id/bios_version
             try:
                 logger.debug("Trying /sys/class/dmi/id/bios_version...")
-                with open("/sys/class/dmi/id/bios_version", "r") as f:
+                with open("/sys/class/dmi/id/bios_version", "r", encoding="utf-8") as f:
                     bios_content = f.read().strip()
                     if bios_content:
                         logger.debug(f"SBIOS from sysfs: {bios_content}")
@@ -136,7 +136,9 @@ class PlatformDetector:
             # Method 3: /sys/devices/virtual/dmi/id/bios_version
             try:
                 logger.debug("Trying /sys/devices/virtual/dmi/id/bios_version...")
-                with open("/sys/devices/virtual/dmi/id/bios_version", "r") as f:
+                with open(
+                    "/sys/devices/virtual/dmi/id/bios_version", "r", encoding="utf-8"
+                ) as f:
                     bios_content = f.read().strip()
                     if bios_content:
                         logger.debug(f"SBIOS from alternate sysfs: {bios_content}")
@@ -233,7 +235,7 @@ class PlatformDetector:
         try:
             if os_name == "Linux":
                 try:
-                    with open("/etc/os-release", "r") as f:
+                    with open("/etc/os-release", "r", encoding="utf-8") as f:
                         os_release = f.read()
 
                     # Extract NAME and VERSION_ID

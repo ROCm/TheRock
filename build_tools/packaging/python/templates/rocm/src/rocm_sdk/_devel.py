@@ -182,7 +182,7 @@ def _lock_and_expand(
         if dir.exists():
             shutil.rmtree(dir, ignore_errors=False)
 
-    with open(record_path, "at") as record_file:
+    with open(record_path, "at", encoding="utf-8") as record_file:
         file_lock = FileLock(record_file)
         try:
             with tarfile.open(tarfile_path, tarfile_mode) as tf:

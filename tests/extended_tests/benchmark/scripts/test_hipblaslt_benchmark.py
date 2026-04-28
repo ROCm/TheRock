@@ -40,7 +40,7 @@ class HipblasltBenchmark(BenchmarkBase):
 
         # Load benchmark configuration
         config_file = self.script_dir.parent / "configs" / "hipblaslt.json"
-        with open(config_file, "r") as f:
+        with open(config_file, "r", encoding="utf-8") as f:
             config_data = json.load(f)
 
         # Combine test configurations: (shapes_list, transB_value)
@@ -51,7 +51,7 @@ class HipblasltBenchmark(BenchmarkBase):
 
         log.info("Running hipBLASLt Benchmarks")
 
-        with open(self.log_file, "w+") as f:
+        with open(self.log_file, "w+", encoding="utf-8") as f:
             for shapes_list, transB in test_configs:
                 for input_shape in shapes_list:
                     M, N, K, B = input_shape.split()
@@ -181,7 +181,7 @@ class HipblasltBenchmark(BenchmarkBase):
             )
 
         try:
-            with open(self.log_file, "r") as log_fp:
+            with open(self.log_file, "r", encoding="utf-8") as log_fp:
                 data = log_fp.readlines()
 
             # Find CSV header line

@@ -99,7 +99,7 @@ def do_checkout(args: argparse.Namespace):
 
     def _do_hipify(args: argparse.Namespace):
         print("Applying local modifications...")
-        with open(repo_dir / "build_env.json", "w") as f:
+        with open(repo_dir / "build_env.json", "w", encoding="utf-8") as f:
             json.dump(build_env, f, indent=2)
 
     repo_management.do_checkout(args, custom_hipify=_do_hipify)

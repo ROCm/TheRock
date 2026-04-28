@@ -110,7 +110,7 @@ class ROCmDetector:
             version_rocm_file = os.path.join(rocm_path, ".info", "version-rocm")
             logger.debug(f"Trying {version_rocm_file} file...")
             if os.path.exists(version_rocm_file):
-                with open(version_rocm_file, "r") as f:
+                with open(version_rocm_file, "r", encoding="utf-8") as f:
                     rocm_ver = f.read().strip()
                     if rocm_ver:
                         logger.debug(f"ROCm version from version-rocm file: {rocm_ver}")
@@ -126,7 +126,7 @@ class ROCmDetector:
             version_file = os.path.join(rocm_path, ".info", "version")
             logger.debug(f"Trying {version_file} file...")
             if os.path.exists(version_file):
-                with open(version_file, "r") as f:
+                with open(version_file, "r", encoding="utf-8") as f:
                     rocm_ver = f.read().strip()
                     if rocm_ver:
                         logger.debug(f"ROCm version from version file: {rocm_ver}")
@@ -141,7 +141,9 @@ class ROCmDetector:
                             )
                             if os.path.exists(version_rocm_file):
                                 try:
-                                    with open(version_rocm_file, "r") as f2:
+                                    with open(
+                                        version_rocm_file, "r", encoding="utf-8"
+                                    ) as f2:
                                         full_ver = f2.read().strip()
                                         if full_ver and "-" in full_ver:
                                             logger.debug(

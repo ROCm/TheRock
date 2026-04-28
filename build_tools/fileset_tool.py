@@ -89,7 +89,7 @@ def do_artifact_archive(args):
     ) as arc:
         for artifact_path in args.artifact:
             manifest_path: Path = artifact_path / "artifact_manifest.txt"
-            relpaths = manifest_path.read_text().splitlines()
+            relpaths = manifest_path.read_text(encoding="utf-8").splitlines()
             # Important: The manifest must be stored first.
             arc.add(manifest_path, arcname=manifest_path.name, recursive=False)
             for relpath in relpaths:

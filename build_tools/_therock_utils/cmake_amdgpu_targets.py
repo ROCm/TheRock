@@ -40,7 +40,7 @@ def parse_amdgpu_targets_cmake(cmake_path: Path) -> list[AmdgpuTargetInfo]:
             "Expected at cmake/therock_amdgpu_targets.cmake relative to repo root."
         )
 
-    content = cmake_path.read_text()
+    content = cmake_path.read_text(encoding="utf-8")
     results: list[AmdgpuTargetInfo] = []
 
     # Each therock_add_amdgpu_target() call has the form:

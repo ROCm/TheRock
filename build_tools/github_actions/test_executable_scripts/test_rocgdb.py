@@ -902,7 +902,7 @@ def setup_core_file_info() -> bool:
     core_pattern_file = Path("/proc/sys/kernel/core_pattern")
     try:
         if core_pattern_file.exists():
-            core_pattern = core_pattern_file.read_text().strip()
+            core_pattern = core_pattern_file.read_text(encoding="utf-8").strip()
             logger.info(f"System core file pattern: {core_pattern}")
         else:
             logger.info("System core file pattern: N/A (file not found)")
@@ -1019,7 +1019,7 @@ def set_test_timeout(test_suite_dir: Path, timeout_value: int) -> None:
     """
     site_exp_file = test_suite_dir / "site.exp"
     try:
-        with open(site_exp_file, "a") as f:
+        with open(site_exp_file, "a", encoding="utf-8") as f:
             f.write(f"\nset gdb_test_timeout {timeout_value}\n")
         logger.info(
             f"{STATUS_PASS} Successfully set gdb_test_timeout to {timeout_value} in {site_exp_file}"

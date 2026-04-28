@@ -42,7 +42,7 @@ def extract_jax_version_from_requirements(requirements_path: str) -> str:
     """
     pattern = re.compile(r"^\s*(jax|jaxlib)\s*==\s*([^#\s]+)")
 
-    with open(requirements_path, "r") as f:
+    with open(requirements_path, "r", encoding="utf-8") as f:
         for line in f:
             match = pattern.match(line.strip())
             if match:

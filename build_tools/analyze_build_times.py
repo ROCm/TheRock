@@ -119,7 +119,7 @@ def parse_ninja_log(log_path: Path) -> List[Task]:
     """Parse .ninja_log and return list of Task objects."""
     tasks = []
     try:
-        with open(log_path, "r") as f:
+        with open(log_path, "r", encoding="utf-8") as f:
             f.readline()  # Skip header
             for line in f:
                 parts = line.strip().split("\t")
@@ -297,7 +297,7 @@ def get_system_info() -> Dict[str, str]:
 
     # Get CPU model from /proc/cpuinfo
     try:
-        with open("/proc/cpuinfo", "r") as f:
+        with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
             for line in f:
                 if line.startswith("model name"):
                     info["cpu_model"] = line.split(":")[1].strip()
@@ -313,7 +313,7 @@ def get_system_info() -> Dict[str, str]:
 
     # Get memory from /proc/meminfo
     try:
-        with open("/proc/meminfo", "r") as f:
+        with open("/proc/meminfo", "r", encoding="utf-8") as f:
             for line in f:
                 if line.startswith("MemTotal"):
                     kb = int(line.split()[1])
@@ -462,7 +462,7 @@ def generate_report(
             .replace("{{DEP_TABLE}}", dep_html)
             .replace("{{COMP_SUMMARY}}", comp_summary_html)
         )
-        output_file.write_text(html)
+        output_file.write_text(html, encoding="utf-8")
         print(f"HTML report generated at: {output_file}")
     except FileNotFoundError:
         print(f"Error: Template file not found at {template_path}")

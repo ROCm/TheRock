@@ -47,7 +47,7 @@ class ROCrandBenchmark(BenchmarkBase):
             log_file = self.script_dir / f"{bench_type}_bench.log"
 
             # Run benchmark
-            with open(log_file, "w+") as f:
+            with open(log_file, "w+", encoding="utf-8") as f:
                 cmd = [
                     f"{self.therock_bin_dir}/{bench_bin}",
                     "--trials",
@@ -117,7 +117,7 @@ class ROCrandBenchmark(BenchmarkBase):
             log.info(f"Parsing {bench_type} results")
 
             try:
-                with open(log_file, "r") as f:
+                with open(log_file, "r", encoding="utf-8") as f:
                     data = f.read()
 
                 # Find the CSV data in the file

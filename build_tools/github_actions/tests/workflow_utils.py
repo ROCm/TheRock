@@ -12,7 +12,7 @@ WORKFLOWS_DIR = Path(__file__).resolve().parents[3] / ".github" / "workflows"
 
 def load_workflow(path: Path) -> dict:
     """Loads a YAML workflow file from the given Path as a JSON dictionary."""
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 

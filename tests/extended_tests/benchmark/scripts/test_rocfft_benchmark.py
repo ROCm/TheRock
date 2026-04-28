@@ -36,7 +36,7 @@ class ROCfftBenchmark(BenchmarkBase):
 
         # Load benchmark configuration
         config_file = self.script_dir.parent / "configs" / "rocfft.json"
-        with open(config_file, "r") as f:
+        with open(config_file, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         test_cases = data.get("generic", [])
@@ -45,7 +45,7 @@ class ROCfftBenchmark(BenchmarkBase):
 
         log.info("Running ROCfft Benchmarks")
 
-        with open(self.log_file, "w+") as f:
+        with open(self.log_file, "w+", encoding="utf-8") as f:
             for test_case in test_cases:
                 # Extract batch size from test case string (if specified)
                 pattern_batch_size = re.compile(r"-b\s+(\d+)")
@@ -122,7 +122,7 @@ class ROCfftBenchmark(BenchmarkBase):
         batch_size = default_batch_size
 
         try:
-            with open(self.log_file, "r") as log_fp:
+            with open(self.log_file, "r", encoding="utf-8") as log_fp:
 
                 for line in log_fp:
                     # Extract batch size from command line

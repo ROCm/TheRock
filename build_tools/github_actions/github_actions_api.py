@@ -313,7 +313,7 @@ def gha_add_to_path(new_path: str | Path):
         _log("  Warning: GITHUB_PATH env var not set, can't add to path")
         return
 
-    with open(path_file, "a") as f:
+    with open(path_file, "a", encoding="utf-8") as f:
         f.write(str(new_path))
 
 
@@ -332,7 +332,7 @@ def gha_set_env(vars: Mapping[str, str | Path]):
         _log("  Warning: GITHUB_ENV env var not set, can't set environment variable")
         return
 
-    with open(env_file, "a") as f:
+    with open(env_file, "a", encoding="utf-8") as f:
         f.writelines(f"{k}={str(v)}" + "\n" for k, v in vars.items())
 
 
@@ -352,7 +352,7 @@ def gha_set_output(vars: Mapping[str, str | Path]):
         _log("  Warning: GITHUB_OUTPUT env var not set, can't set github outputs")
         return
 
-    with open(step_output_file, "a") as f:
+    with open(step_output_file, "a", encoding="utf-8") as f:
         for k, v in vars.items():
             print(f"OUTPUT {k}={str(v)}")
             f.write(f"{k}={str(v)}\n")
@@ -374,7 +374,7 @@ def gha_append_step_summary(summary: str):
         _log("  Warning: GITHUB_STEP_SUMMARY env var not set, can't write job summary")
         return
 
-    with open(step_summary_file, "a") as f:
+    with open(step_summary_file, "a", encoding="utf-8") as f:
         # Use double newlines to split sections in markdown.
         f.write(summary + "\n\n")
 

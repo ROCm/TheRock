@@ -20,12 +20,14 @@ import get_url_repo_params
 
 def _run_main_with_output(argv: list[str]) -> tuple[int, str]:
     """Run main() with a temp GITHUB_OUTPUT file; return (exit_code, file_contents)."""
-    with tempfile.NamedTemporaryFile(mode="r", suffix=".txt", delete=False) as f:
+    with tempfile.NamedTemporaryFile(
+        encoding="utf-8", mode="r", suffix=".txt", delete=False
+    ) as f:
         tmp_path = f.name
     try:
         with patch.dict(os.environ, {"GITHUB_OUTPUT": tmp_path}):
             code = get_url_repo_params.main(argv)
-        contents = Path(tmp_path).read_text()
+        contents = Path(tmp_path).read_text(encoding="utf-8")
     finally:
         os.unlink(tmp_path)
     return code, contents
