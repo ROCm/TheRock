@@ -58,12 +58,25 @@ skip_tests = {
             # AttributeError: 'Model' object has no attribute '__annotations__'
             # https://github.com/ROCm/TheRock/issues/2985
             "test_autocast_cat_jit",
+            # what():  HIP error: operation not permitted when stream is capturing
+            # Search for `hipErrorStreamCaptureUnsupported' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__HIPRT__TYPES.html for more information.
+            # HIP kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+            # For debugging consider passing AMD_SERIALIZE_KERNEL=3
+            # Compile with `TORCH_USE_HIP_DSA` to enable device-side assertions.
+            #
+            # Exception raised from ~CUDAGraph at /__w/TheRock/TheRock/external-builds/pytorch/pytorch/aten/src/ATen/hip/HIPGraph.cpp:320 (most recent call first):
+            # frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x80 (0x7f2316f1bdf0 in /home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/lib/libc10.so)
+            "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_allow_unused_input",
+            "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_not_allow_unused_input",
             # ----------------
             # maybe failing
             # ----------------
             # "test_hip_device_count"
             # "test_nvtx"
             # ----------------
+            #
+            # Multi-processing error in py3.14 - https://github.com/ROCm/TheRock/issues/4197
+            "test_is_pinned_no_context",
         ],
         "nn": [
             # external-builds/pytorch/pytorch/test/test_nn.py::TestNN::test_RNN_dropout_state MIOpen(HIP): Error [Compile] 'hiprtcCompileProgram(prog.get(), c_options.size(), c_options.data())' MIOpenDropoutHIP.cpp: HIPRTC_ERROR_COMPILATION (6)
@@ -172,6 +185,32 @@ skip_tests = {
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_int64",
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_int8",
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint8",
+            "test_reference_numerics_large__refs_nn_functional_mish_cuda_float16",
+            "test_reference_numerics_large__refs_special_spherical_bessel_j0_cuda_uint16",
+            "test_reference_numerics_large__refs_special_spherical_bessel_j0_cuda_uint32",
+            "test_reference_numerics_large__refs_special_spherical_bessel_j0_cuda_uint64",
+            "test_reference_numerics_large_nn_functional_mish_cuda_float16",
+            "test_reference_numerics_large_special_spherical_bessel_j0_cuda_uint16",
+            "test_reference_numerics_large_special_spherical_bessel_j0_cuda_uint32",
+            "test_reference_numerics_large_special_spherical_bessel_j0_cuda_uint64",
+            "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint16",
+            "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint32",
+            "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint64",
+            "test_reference_numerics_normal_special_airy_ai_cuda_uint16",
+            "test_reference_numerics_normal_special_airy_ai_cuda_uint32",
+            "test_reference_numerics_normal_special_airy_ai_cuda_uint64",
+            "test_reference_numerics_normal_special_spherical_bessel_j0_cuda_uint16",
+            "test_reference_numerics_normal_special_spherical_bessel_j0_cuda_uint32",
+            "test_reference_numerics_normal_special_spherical_bessel_j0_cuda_uint64",
+            "test_reference_numerics_small__refs_special_spherical_bessel_j0_cuda_uint16",
+            "test_reference_numerics_small__refs_special_spherical_bessel_j0_cuda_uint32",
+            "test_reference_numerics_small__refs_special_spherical_bessel_j0_cuda_uint64",
+            "test_reference_numerics_small_special_airy_ai_cuda_uint16",
+            "test_reference_numerics_small_special_airy_ai_cuda_uint32",
+            "test_reference_numerics_small_special_airy_ai_cuda_uint64",
+            "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint16",
+            "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint32",
+            "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint64",
         ],
     },
     # Special notes for Windows:

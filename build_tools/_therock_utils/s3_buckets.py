@@ -79,10 +79,6 @@ _ALLOWED_RELEASE_TYPES = {"dev", "nightly", "prerelease"}
 
 _ALLOWED_RELEASE_BUCKET_TYPES = {"tarball", "python", "packages"}
 
-# Repositories allowed to use release_type. Only these repositories are trusted
-# to assume release IAM roles that grant write access to release buckets.
-_ALLOWED_RELEASE_REPOS = {"ROCm/TheRock", "ROCm/rockrel"}
-
 
 def get_artifacts_bucket_config(
     release_type: str,
@@ -104,12 +100,6 @@ def get_artifacts_bucket_config(
             raise ValueError(
                 f"release_type={release_type!r} is invalid, "
                 f"expected empty string or one of {_ALLOWED_RELEASE_TYPES}"
-            )
-        if repository not in _ALLOWED_RELEASE_REPOS:
-            raise ValueError(
-                f"release_type={release_type!r} is set but "
-                f"repository {repository!r} is not one of "
-                f"{_ALLOWED_RELEASE_REPOS}"
             )
         bucket_name = f"therock-{release_type}-artifacts"
     else:
