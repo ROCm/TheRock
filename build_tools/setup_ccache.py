@@ -40,6 +40,11 @@ POSIX_COMPILER_CHECK_SCRIPT = (
 CACHE_SRV_DEV = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
 CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
 
+# Bump this version when making hash-affecting config changes (sloppiness,
+# compiler_check, etc.) to logically isolate new cache entries from stale
+# ones on the shared remote cache server.
+CCACHE_NAMESPACE_VERSION = "v1"
+
 DEFAULT_LOG_DIR = REPO_ROOT / "build" / "logs" / "ccache"
 
 # See https://ccache.dev/manual/4.6.1.html#_configuration
@@ -56,10 +61,12 @@ CONFIG_PRESETS_MAP = {
     "github-oss-dev": {
         "remote_storage": CACHE_SRV_DEV,
         "max_size": "10G",
+        "namespace": f"therock-{CCACHE_NAMESPACE_VERSION}",
     },
     "github-oss-release": {
         "remote_storage": CACHE_SRV_REL,
         "max_size": "10G",
+        "namespace": f"therock-{CCACHE_NAMESPACE_VERSION}",
     },
 }
 
