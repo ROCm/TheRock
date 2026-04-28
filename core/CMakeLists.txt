@@ -37,7 +37,7 @@ therock_cmake_subproject_declare(rocm-kpack
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
-    -DBUILD_TESTING=OFF  # TODO: Enable testing in TheRock builds
+    -DBUILD_TESTING=OFF  # TODO: Enable after rocm-kpack runtime tests link under TheRock.
     -DBUILD_SHARED_LIBS=ON
   BUILD_DEPS
     therock-msgpack-cxx
@@ -50,6 +50,10 @@ therock_cmake_subproject_declare(rocm-kpack
 )
 therock_cmake_subproject_provide_package(rocm-kpack
   rocm-kpack lib/cmake/rocm-kpack)
+# TODO(#4789): Enable after rocm-kpack runtime tests link under TheRock.
+# therock_cmake_subproject_build_test(rocm-kpack
+#   COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
+# )
 therock_cmake_subproject_activate(rocm-kpack)
 
 therock_provide_artifact(core-kpack

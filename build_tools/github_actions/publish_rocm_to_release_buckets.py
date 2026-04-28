@@ -24,6 +24,10 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-dev-python/v4/whl-staging/rocm-7.13.0.tar.gz
+      -> s3://therock-dev-python/v4/whl-staging/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-dev-python/v4/whl-staging/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-dev-python/v4/whl-staging/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
       -> s3://therock-dev-python/v4/whl/rocm-7.13.0.tar.gz
       -> s3://therock-dev-python/v4/whl/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
       -> s3://therock-dev-python/v4/whl/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
@@ -84,24 +88,41 @@ def publish_python_packages(
 ) -> None:
     """Copy python packages from the artifacts bucket to the release python bucket.
 
-    With kpack split disabled (per-family subdirs):
+    Wheels always land in both the -staging index (canonical superset) and
+    the release index (current promoted set). The release path is treated as
+    a subset of -staging, so anything visible from the release URL is also
+    visible from the staging URL. A future test-gated promotion step would
+    move the second copy out of this script.
+
+    The destination layout depends on kpack_split:
+      - kpack_split=False uses the v3 per-family layout (v3/whl-staging,
+        v3/whl).
+      - kpack_split=True uses the v4 flat layout (v4/whl-staging, v4/whl).
+
+    Examples:
+
+        kpack split disabled (per-family subdirs):
         s3://therock-dev-artifacts/12345-linux/python/gfx110X-all/*.whl
+          -> s3://therock-dev-python/v3/whl-staging/gfx110X-all/*.whl
           -> s3://therock-dev-python/v3/whl/gfx110X-all/*.whl
 
-    With kpack split enabled (flat):
+        kpack split enabled (flat):
         s3://therock-dev-artifacts/12345-linux/python/*.whl
+          -> s3://therock-dev-python/v4/whl-staging/*.whl
           -> s3://therock-dev-python/v4/whl/*.whl
     """
     source = artifacts_root.python_packages()
     dest_bucket = get_release_bucket_config(release_type, "python")
-    s3_subdir = "v4/whl" if kpack_split else "v3/whl"
-    dest = StorageLocation(dest_bucket.name, s3_subdir)
+    release_subdir = "v4/whl" if kpack_split else "v3/whl"
+    s3_subdirs = [f"{release_subdir}-staging", release_subdir]
 
-    logger.info("Python packages: %s -> %s", source.s3_uri, dest.s3_uri)
-    count = backend.copy_directory(source, dest, include=["*.whl", "*.tar.gz"])
-    logger.info("Copied %d python package files", count)
-    if count == 0:
-        raise FileNotFoundError(f"No python packages found at {source.s3_uri}")
+    for s3_subdir in s3_subdirs:
+        dest = StorageLocation(dest_bucket.name, s3_subdir)
+        logger.info("Python packages: %s -> %s", source.s3_uri, dest.s3_uri)
+        count = backend.copy_directory(source, dest, include=["*.whl", "*.tar.gz"])
+        logger.info("Copied %d python package files to %s", count, s3_subdir)
+        if count == 0:
+            raise FileNotFoundError(f"No python packages found at {source.s3_uri}")
 
 
 def main(argv: list[str]) -> None:

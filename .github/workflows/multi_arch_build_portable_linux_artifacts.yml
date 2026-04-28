@@ -53,6 +53,10 @@ on:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease". Controls artifact bucket and IAM role.'
         type: string
         default: ""
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "azure-linux-scale-rocm"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -65,7 +69,7 @@ on:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    runs-on: ${{ contains(inputs.build_variant_cmake_preset, 'san') && 'azure-linux-scale-rocm-heavy-ramdisk' || 'azure-linux-scale-rocm' }}
+    runs-on: ${{ inputs.build_runs_on }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       id-token: write

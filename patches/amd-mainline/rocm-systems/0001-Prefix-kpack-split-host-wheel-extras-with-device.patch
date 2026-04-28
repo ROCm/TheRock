@@ -1,0 +1,250 @@
+From f7cdfcf9fd6e319a5add6e30e86bffa2ec076af8 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Mon, 27 Apr 2026 23:58:48 +0200
+Subject: [PATCH] Prefix kpack-split host wheel extras with `device-`
+
+The kpack-split host wheel METADATA today emits per-target extras as
+the bare bundle key, so a single find-links URL exposes two different
+conventions for the same SDK + PyTorch stack:
+
+  pip install rocm[device-gfx1201]   # rocm-sdk-core
+  pip install torch[gfx1201]         # kpack-split host wheel
+
+This aligns the kpack splitter to emit the `device-<arch>` pattern used
+in rocm-sdk-core so both halves share one install command.
+
+Apply the prefix uniformly: the per-target extras
+(`device-gfx1201`, ...) and the aggregate (`device-all`) all start
+with `device-` after this commit and widens the regex in
+`_add_variant_markers_to_metadata` to match the new `[\w-]+` extra
+names, and strips the `device-` prefix before substituting the bare arch
+into the PEP 817 `"amd :: gfx_arch :: <arch>"` marker.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ .../kpack/python/rocm_kpack/wheel_splitter.py | 47 ++++++++++++-------
+ shared/kpack/tests/test_wheel_splitter.py     | 42 ++++++++---------
+ 2 files changed, 51 insertions(+), 38 deletions(-)
+
+diff --git a/shared/kpack/python/rocm_kpack/wheel_splitter.py b/shared/kpack/python/rocm_kpack/wheel_splitter.py
+index c96b327c20..ecbb1dbb5a 100644
+--- a/shared/kpack/python/rocm_kpack/wheel_splitter.py
++++ b/shared/kpack/python/rocm_kpack/wheel_splitter.py
+@@ -869,7 +869,7 @@ class WheelSplitter:
+         Inserts into the existing METADATA header section:
+           - Requires-Dist: rocm-bootstrap
+           - Per-target Provides-Extra + Requires-Dist (extras-based)
+-          - Provides-Extra: all (with all device wheels)
++          - Provides-Extra: device-all (with all device wheels)
+           - If include_variant_markers: also adds variant_properties markers
+         """
+         metadata_path = host_staging / identity.dist_info_name / "METADATA"
+@@ -889,11 +889,15 @@ class WheelSplitter:
+             if bundle.level == rocm_bootstrap.PackagingLevel.TARGET:
+                 target_keys.append(key)
+ 
+-        # For each target, compute packaging chain and generate extras
++        # For each target, compute packaging chain and generate extras.
++        # Per-target extras are prefixed with "device-" to mirror the
++        # convention used by rocm-sdk-core (rocm[device-gfx1201], ...) so
++        # one find-links URL exposes a uniform install command across the
++        # SDK + PyTorch stack.
+         all_device_dist_names: set[str] = set()
+-        for target_name in target_keys:
+-            chain = rocm_bootstrap.packaging_chain(target_name)
+-            lines.append(f"Provides-Extra: {target_name}")
++        for amdgpu_target in target_keys:
++            chain = rocm_bootstrap.packaging_chain(amdgpu_target)
++            lines.append(f"Provides-Extra: device-{amdgpu_target}")
+ 
+             for chain_bundle in chain:
+                 if chain_bundle.key not in bundle_keys:
+@@ -907,15 +911,15 @@ class WheelSplitter:
+                 # update the regex there too.
+                 lines.append(
+                     f"Requires-Dist: {dist_name} == {version}; "
+-                    f'extra == "{target_name}"'
++                    f'extra == "device-{amdgpu_target}"'
+                 )
+                 if include_variant_markers:
+                     lines.append(
+                         f"Requires-Dist: {dist_name} == {version}; "
+-                        f'"amd :: gfx_arch :: {target_name}" in variant_properties'
++                        f'"amd :: gfx_arch :: {amdgpu_target}" in variant_properties'
+                     )
+ 
+-        # Also add non-target bundle keys (family, sub-family) to the "all" set
++        # Also add non-target bundle keys (family, sub-family) to the "device-all" set
+         for key in sorted(bundle_keys):
+             bundle = rocm_bootstrap.lookup_bundle(key)
+             if bundle.level != rocm_bootstrap.PackagingLevel.TARGET:
+@@ -924,10 +928,14 @@ class WheelSplitter:
+                 )
+                 all_device_dist_names.add(dist_name)
+ 
+-        # "all" extra: includes every device wheel
+-        lines.append("Provides-Extra: all")
++        # "device-all" extra: includes every device wheel. The prefix
++        # matches the per-target extras above so every kpack-emitted extra
++        # starts with "device-".
++        lines.append("Provides-Extra: device-all")
+         for dist_name in sorted(all_device_dist_names):
+-            lines.append(f"Requires-Dist: {dist_name} == {version}; " f'extra == "all"')
++            lines.append(
++                f"Requires-Dist: {dist_name} == {version}; " f'extra == "device-all"'
++            )
+ 
+         # Insert new headers before the body (after the last header line).
+         # METADATA uses RFC 822 format: headers, blank line, body.
+@@ -946,7 +954,7 @@ class WheelSplitter:
+         metadata_path.write_text(new_content, encoding="utf-8")
+ 
+         if self.verbose:
+-            n_extras = len(target_keys) + 1  # +1 for "all"
++            n_extras = len(target_keys) + 1  # +1 for "device-all"
+             n_device = len(all_device_dist_names)
+             label = "variant" if include_variant_markers else "classic"
+             print(
+@@ -1047,20 +1055,25 @@ class WheelSplitter:
+             # add the variant_properties version
+             if not line.startswith("Requires-Dist:") or "extra ==" not in line:
+                 continue
+-            if 'extra == "all"' in line:
++            # The "device-all" extra aggregates every device wheel and
++            # must not get a variant marker — variants are per-target.
++            if 'extra == "device-all"' in line:
+                 continue
+             # Extract the dist requirement and target name.
+             # This regex must match the format generated by _rewrite_host_metadata():
+             #   f"Requires-Dist: {dist_name} == {version}; "
+-            #   f'extra == "{target_name}"'
++            #   f'extra == "device-{amdgpu_target}"'
+             # If that format changes, this regex must be updated to match.
+-            match = re.match(r'(Requires-Dist: .+ == .+); extra == "(\w+)"', line)
++            # The captured extra is the user-facing "device-<arch>" form;
++            # strip the "device-" prefix to recover the bare gfx target
++            # used in the variant_properties marker.
++            match = re.match(r'(Requires-Dist: .+ == .+); extra == "([\w-]+)"', line)
+             if match:
+                 req_part = match.group(1)
+-                target_name = match.group(2)
++                amdgpu_target = match.group(2).removeprefix("device-")
+                 new_lines.append(
+                     f"{req_part}; "
+-                    f'"amd :: gfx_arch :: {target_name}" in variant_properties'
++                    f'"amd :: gfx_arch :: {amdgpu_target}" in variant_properties'
+                 )
+ 
+         metadata_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+diff --git a/shared/kpack/tests/test_wheel_splitter.py b/shared/kpack/tests/test_wheel_splitter.py
+index 8c4f5686cb..4b098e9899 100644
+--- a/shared/kpack/tests/test_wheel_splitter.py
++++ b/shared/kpack/tests/test_wheel_splitter.py
+@@ -386,12 +386,12 @@ class TestRewriteHostMetadata:
+         splitter._rewrite_host_metadata(staging, identity, {"gfx942"})
+ 
+         metadata = (staging / identity.dist_info_name / "METADATA").read_text()
+-        assert "Provides-Extra: gfx942" in metadata
++        assert "Provides-Extra: device-gfx942" in metadata
+         assert (
+-            'Requires-Dist: amd-torch-device-gfx942 == 2.10.0+rocm7.1; extra == "gfx942"'
++            'Requires-Dist: amd-torch-device-gfx942 == 2.10.0+rocm7.1; extra == "device-gfx942"'
+             in metadata
+         )
+-        assert "Provides-Extra: all" in metadata
++        assert "Provides-Extra: device-all" in metadata
+ 
+     def test_classic_has_no_variant_markers(self, tmp_path: Path):
+         staging, identity = self._make_host_staging(tmp_path)
+@@ -424,20 +424,20 @@ class TestRewriteHostMetadata:
+         metadata = (staging / identity.dist_info_name / "METADATA").read_text()
+         # Both should appear as deps under the gfx1100 extra
+         assert (
+-            'Requires-Dist: amd-torch-device-gfx1100 == 2.10.0+rocm7.1; extra == "gfx1100"'
++            'Requires-Dist: amd-torch-device-gfx1100 == 2.10.0+rocm7.1; extra == "device-gfx1100"'
+             in metadata
+         )
+         assert (
+-            'Requires-Dist: amd-torch-device-gfx11 == 2.10.0+rocm7.1; extra == "gfx1100"'
++            'Requires-Dist: amd-torch-device-gfx11 == 2.10.0+rocm7.1; extra == "device-gfx1100"'
+             in metadata
+         )
+-        # "all" should include both
++        # "device-all" should include both
+         assert (
+-            'Requires-Dist: amd-torch-device-gfx11 == 2.10.0+rocm7.1; extra == "all"'
++            'Requires-Dist: amd-torch-device-gfx11 == 2.10.0+rocm7.1; extra == "device-all"'
+             in metadata
+         )
+         assert (
+-            'Requires-Dist: amd-torch-device-gfx1100 == 2.10.0+rocm7.1; extra == "all"'
++            'Requires-Dist: amd-torch-device-gfx1100 == 2.10.0+rocm7.1; extra == "device-all"'
+             in metadata
+         )
+ 
+@@ -450,11 +450,11 @@ class TestRewriteHostMetadata:
+ 
+         metadata = (staging / identity.dist_info_name / "METADATA").read_text()
+         # No target-level extras since gfx11 is a family
+-        assert "Provides-Extra: gfx11" not in metadata
+-        # But "all" should still include it
+-        assert "Provides-Extra: all" in metadata
++        assert "Provides-Extra: device-gfx11" not in metadata
++        # But "device-all" should still include it
++        assert "Provides-Extra: device-all" in metadata
+         assert (
+-            'Requires-Dist: amd-torch-device-gfx11 == 2.10.0+rocm7.1; extra == "all"'
++            'Requires-Dist: amd-torch-device-gfx11 == 2.10.0+rocm7.1; extra == "device-all"'
+             in metadata
+         )
+ 
+@@ -481,8 +481,8 @@ class TestRewriteHostMetadata:
+         header_section, body_section = header_body
+         # All injected headers must be in the header section, not the body
+         assert "Requires-Dist: rocm-bootstrap" in header_section
+-        assert "Provides-Extra: gfx942" in header_section
+-        assert "Provides-Extra: all" in header_section
++        assert "Provides-Extra: device-gfx942" in header_section
++        assert "Provides-Extra: device-all" in header_section
+         # Body should still contain the description
+         assert "description body" in body_section
+ 
+@@ -501,10 +501,10 @@ class TestVariantWheel:
+             "Name: torch\n"
+             "Version: 2.10.0+rocm7.1\n"
+             "Requires-Dist: rocm-bootstrap\n"
+-            "Provides-Extra: gfx942\n"
+-            'Requires-Dist: amd-torch-device-gfx942 == 2.10.0+rocm7.1; extra == "gfx942"\n'
+-            "Provides-Extra: all\n"
+-            'Requires-Dist: amd-torch-device-gfx942 == 2.10.0+rocm7.1; extra == "all"\n'
++            "Provides-Extra: device-gfx942\n"
++            'Requires-Dist: amd-torch-device-gfx942 == 2.10.0+rocm7.1; extra == "device-gfx942"\n'
++            "Provides-Extra: device-all\n"
++            'Requires-Dist: amd-torch-device-gfx942 == 2.10.0+rocm7.1; extra == "device-all"\n'
+             "\n"
+             "Description body.\n"
+         )
+@@ -542,9 +542,9 @@ class TestVariantWheel:
+ 
+         metadata = (staging / identity.dist_info_name / "METADATA").read_text()
+         # Should have the extras line AND the variant marker line
+-        assert 'extra == "gfx942"' in metadata
++        assert 'extra == "device-gfx942"' in metadata
+         assert ('"amd :: gfx_arch :: gfx942" in variant_properties') in metadata
+-        # "all" extra should NOT get variant markers
++        # "device-all" extra should NOT get variant markers
+         assert '"amd :: gfx_arch :: all"' not in metadata
+ 
+     def test_variant_json(self, tmp_path: Path):
+@@ -582,7 +582,7 @@ class TestVariantWheel:
+         # Check METADATA has variant markers
+         metadata = (variant_path / identity.dist_info_name / "METADATA").read_text()
+         assert "variant_properties" in metadata
+-        assert 'extra == "gfx942"' in metadata
++        assert 'extra == "device-gfx942"' in metadata
+ 
+         # Check variant.json exists
+         variant_json = variant_path / identity.dist_info_name / "variant.json"
+-- 
+2.51.0
+
