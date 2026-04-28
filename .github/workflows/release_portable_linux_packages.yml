@@ -239,7 +239,7 @@ jobs:
 
       - name: Build Projects
         run: |
-          cmake --build ${{ env.OUTPUT_DIR }}/build --target therock-archives therock-dist
+          cmake --build ${{ env.OUTPUT_DIR }}/build --target therock-artifacts therock-dist
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .

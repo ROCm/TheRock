@@ -106,8 +106,6 @@ set(THEROCK_PACKAGE_VERSION "git" CACHE STRING "Sets the package version string"
 # Disable compatibility symlinks created in default ROCM cmake project wide
 set(ROCM_SYMLINK_LIBS OFF)
 
-set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
-
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 
 # TODO: Set default to true for Linux branch after necessary changes land

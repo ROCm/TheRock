@@ -138,10 +138,10 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Build therock-archives and therock-dist
+      - name: Build therock-artifacts and therock-dist
         run: |
           python build_tools/memory_monitor.py --phase Build -- \
-            cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
+            cmake --build "${{ env.BUILD_DIR }}" --target therock-artifacts therock-dist -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
