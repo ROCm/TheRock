@@ -69,8 +69,7 @@ on:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    # Use build_runs_on if provided, otherwise fall back to hardcoded logic for sanitizer vs default
-    runs-on: ${{ inputs.build_runs_on != '' && inputs.build_runs_on || (contains(inputs.build_variant_cmake_preset, 'san') && 'azure-linux-scale-rocm-heavy-ramdisk' || 'azure-linux-scale-rocm') }}
+    runs-on: ${{ inputs.build_runs_on }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       id-token: write
