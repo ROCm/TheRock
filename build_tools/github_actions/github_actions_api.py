@@ -379,23 +379,17 @@ def gha_append_step_summary(summary: str):
         f.write(summary + "\n\n")
 
 
-def gha_load_github_event(
-    path: str | os.PathLike[str] | None = None,
-) -> dict[str, Any]:
+def gha_load_github_event() -> dict[str, Any]:
     """Load the GitHub Actions workflow event JSON from disk.
 
-    GitHub writes ``GITHUB_EVENT_PATH`` as UTF-8. On Windows the process
-    default encoding is often not UTF-8, so the file must be opened with
-    ``encoding="utf-8"``.
-
-    Args:
-        path: Event file path. If None, uses :envvar:`GITHUB_EVENT_PATH`.
+    Reads the path from :envvar:`GITHUB_EVENT_PATH`. GitHub writes that file
+    as UTF-8. On Windows the process default encoding is often not UTF-8, so
+    the file must be opened with ``encoding="utf-8"``.
 
     Returns:
         Parsed JSON object (GitHub webhook payloads are JSON objects).
     """
-    if path is None:
-        path = os.environ["GITHUB_EVENT_PATH"]
+    path = os.environ["GITHUB_EVENT_PATH"]
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 

@@ -38,20 +38,26 @@ def _skip_unless_authenticated_github_api_is_available(test_func):
 class GhaLoadGitHubEventTest(unittest.TestCase):
     """Tests for gha_load_github_event."""
 
-    def test_loads_utf8_curly_quotes_with_explicit_path(self):
+    def test_loads_utf8_curly_quotes_from_github_event_path(self):
         """UTF-8 bytes must decode correctly (GitHub writes UTF-8 event files)."""
         payload = {"body": "“smart quotes” in PR description"}
         with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".json") as f:
             f.write(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
             path = f.name
+        saved = os.environ.get("GITHUB_EVENT_PATH")
+        os.environ["GITHUB_EVENT_PATH"] = path
         try:
-            loaded = gha_load_github_event(path)
+            loaded = gha_load_github_event()
             self.assertEqual(loaded["body"], "“smart quotes” in PR description")
         finally:
             os.unlink(path)
+            if saved is None:
+                del os.environ["GITHUB_EVENT_PATH"]
+            else:
+                os.environ["GITHUB_EVENT_PATH"] = saved
 
     def test_loads_from_github_event_path_env(self):
-        """When path is None, GITHUB_EVENT_PATH must be read as UTF-8."""
+        """GITHUB_EVENT_PATH must be read as UTF-8."""
         payload = {"action": "opened", "number": 42}
         with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".json") as f:
             f.write(json.dumps(payload, ensure_ascii=False).encode("utf-8"))

@@ -153,15 +153,14 @@ def _is_current_run_pr_from_fork() -> bool:
     if event_name != "pull_request":
         return False
 
-    event_path = os.environ.get("GITHUB_EVENT_PATH")
-    if not event_path:
+    if not os.environ.get("GITHUB_EVENT_PATH"):
         return False
 
     # Deferred import: github_actions is optional in some environments; only
     # needed when resolving fork state from the on-disk event payload.
     from github_actions.github_actions_api import gha_load_github_event
 
-    event = gha_load_github_event(event_path)
+    event = gha_load_github_event()
 
     return bool(
         event.get("pull_request", {}).get("head", {}).get("repo", {}).get("fork", False)
