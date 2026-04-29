@@ -167,13 +167,14 @@ jobs:
       ${{
         !failure() &&
         !cancelled() &&
+        needs.configure_test_matrix.outputs.components != '' &&
         needs.configure_test_matrix.outputs.components != '[]' &&
         !inputs.sanity_check_only_for_family
       }}
     strategy:
       fail-fast: false
       matrix:
-        components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
+        components: ${{ fromJSON(needs.configure_test_matrix.outputs.components || '[]') }}
     uses: './.github/workflows/test_component.yml'
     secrets: inherit
     with:
