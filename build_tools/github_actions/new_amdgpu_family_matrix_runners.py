@@ -71,50 +71,137 @@ class _GpuRunnerEntry:
 
 _TEST_RUNNER_INVENTORY: list[_GpuRunnerEntry] = [
     # gfx90a
-    _GpuRunnerEntry(platform="linux", target="gfx90a", role="test", label="linux-gfx90a-gpu-rocm"),
+    _GpuRunnerEntry(
+        platform="linux", target="gfx90a", role="test", label="linux-gfx90a-gpu-rocm"
+    ),
     #
     # gfx94X (mi325) — split across 3 pools (vultr / cirrascale / core42)
     # 1-GPU distribution: 17N (vultr) + 4N (cirrascale) + 8N (core42)
-    _GpuRunnerEntry(platform="linux", target="gfx942", role="test",
-        label="linux-gfx942-1gpu-ossci-rocm",        weight=17),  # vultr (17/29)
-    _GpuRunnerEntry(platform="linux", target="gfx942", role="test",
-        label="linux-gfx942-1gpu-ccs-ossci-rocm",    weight=4),  # cirrascale (4/29)
-    _GpuRunnerEntry(platform="linux", target="gfx942", role="test",
-        label="linux-gfx942-1gpu-core42-ossci-rocm", weight=8),  # core42 (8/29)
+    _GpuRunnerEntry(
+        platform="linux",
+        target="gfx942",
+        role="test",
+        label="linux-gfx942-1gpu-ossci-rocm",
+        weight=17,
+    ),  # vultr (17/29)
+    _GpuRunnerEntry(
+        platform="linux",
+        target="gfx942",
+        role="test",
+        label="linux-gfx942-1gpu-ccs-ossci-rocm",
+        weight=4,
+    ),  # cirrascale (4/29)
+    _GpuRunnerEntry(
+        platform="linux",
+        target="gfx942",
+        role="test",
+        label="linux-gfx942-1gpu-core42-ossci-rocm",
+        weight=8,
+    ),  # core42 (8/29)
     # 8-GPU distribution: 11N (cirrascale) + 7N (core42)
-    _GpuRunnerEntry(platform="linux", target="gfx942", role="test_multi_gpu",
-        label="linux-gfx942-8gpu-ossci-rocm",        weight=11),  # cirrascale (11/18)
-    _GpuRunnerEntry(platform="linux", target="gfx942", role="test_multi_gpu",
-        label="linux-gfx942-8gpu-core42-ossci-rocm", weight=7),  # core42 (7/18)
+    _GpuRunnerEntry(
+        platform="linux",
+        target="gfx942",
+        role="test_multi_gpu",
+        label="linux-gfx942-8gpu-ossci-rocm",
+        weight=11,
+    ),  # cirrascale (11/18)
+    _GpuRunnerEntry(
+        platform="linux",
+        target="gfx942",
+        role="test_multi_gpu",
+        label="linux-gfx942-8gpu-core42-ossci-rocm",
+        weight=7,
+    ),  # core42 (7/18)
     # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-    _GpuRunnerEntry(platform="linux", target="gfx942", role="benchmark",
-        label="linux-gfx942-8gpu-ossci-rocm"),
+    _GpuRunnerEntry(
+        platform="linux",
+        target="gfx942",
+        role="benchmark",
+        label="linux-gfx942-8gpu-ossci-rocm",
+    ),
     # TODO(#3433): Remove sandbox label once ASAN tests are passing
-    _GpuRunnerEntry(platform="linux", target="gfx942", role="test-sandbox",
-        label="rocm-asan-mi325-sandbox"),
+    _GpuRunnerEntry(
+        platform="linux",
+        target="gfx942",
+        role="test-sandbox",
+        label="rocm-asan-mi325-sandbox",
+    ),
     #
     # gfx950 (mi355)
-    _GpuRunnerEntry(platform="linux", target="gfx950", role="test", label="linux-gfx950-1gpu-ccs-ossci-rocm"),
-    _GpuRunnerEntry(platform="linux", target="gfx950", role="test_multi_gpu", label="linux-gfx950-8gpu-ccs-ossci-rocm"),
+    _GpuRunnerEntry(
+        platform="linux",
+        target="gfx950",
+        role="test",
+        label="linux-gfx950-1gpu-ccs-ossci-rocm",
+    ),
+    _GpuRunnerEntry(
+        platform="linux",
+        target="gfx950",
+        role="test_multi_gpu",
+        label="linux-gfx950-8gpu-ccs-ossci-rocm",
+    ),
     # gfx1030
-    _GpuRunnerEntry(platform="linux", target="gfx1030", role="test", label="linux-gfx1030-gpu-rocm"),
-    _GpuRunnerEntry(platform="windows", target="gfx1030", role="test", label="windows-gfx1030-gpu-rocm"),
+    _GpuRunnerEntry(
+        platform="linux", target="gfx1030", role="test", label="linux-gfx1030-gpu-rocm"
+    ),
+    _GpuRunnerEntry(
+        platform="windows",
+        target="gfx1030",
+        role="test",
+        label="windows-gfx1030-gpu-rocm",
+    ),
     # gfx1101 (gfx110X family default)
-    _GpuRunnerEntry(platform="linux", target="gfx1101", role="test", label="linux-gfx110X-gpu-rocm"),
-    _GpuRunnerEntry(platform="windows", target="gfx1101", role="test", label="windows-gfx110X-gpu-rocm"),
+    _GpuRunnerEntry(
+        platform="linux", target="gfx1101", role="test", label="linux-gfx110X-gpu-rocm"
+    ),
+    _GpuRunnerEntry(
+        platform="windows",
+        target="gfx1101",
+        role="test",
+        label="windows-gfx110X-gpu-rocm",
+    ),
     # gfx1150
-    _GpuRunnerEntry(platform="linux", target="gfx1150", role="test", label="linux-gfx1150-gpu-rocm"),
+    _GpuRunnerEntry(
+        platform="linux", target="gfx1150", role="test", label="linux-gfx1150-gpu-rocm"
+    ),
     # gfx1151 (strix halo)
-    _GpuRunnerEntry(platform="linux", target="gfx1151", role="test", label="linux-gfx1151-gpu-rocm"),
-    _GpuRunnerEntry(platform="linux", target="gfx1151", role="oem", label="linux-strix-halo-gpu-rocm-oem"),
-    _GpuRunnerEntry(platform="windows", target="gfx1151", role="test", label="windows-gfx1151-gpu-rocm"),
+    _GpuRunnerEntry(
+        platform="linux", target="gfx1151", role="test", label="linux-gfx1151-gpu-rocm"
+    ),
+    _GpuRunnerEntry(
+        platform="linux",
+        target="gfx1151",
+        role="oem",
+        label="linux-strix-halo-gpu-rocm-oem",
+    ),
+    _GpuRunnerEntry(
+        platform="windows",
+        target="gfx1151",
+        role="test",
+        label="windows-gfx1151-gpu-rocm",
+    ),
     # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-    _GpuRunnerEntry(platform="windows", target="gfx1151", role="benchmark", label="windows-gfx1151-gpu-rocm"),
+    _GpuRunnerEntry(
+        platform="windows",
+        target="gfx1151",
+        role="benchmark",
+        label="windows-gfx1151-gpu-rocm",
+    ),
     # gfx1153
-    _GpuRunnerEntry(platform="linux", target="gfx1153", role="test", label="linux-gfx1153-gpu-rocm"),
+    _GpuRunnerEntry(
+        platform="linux", target="gfx1153", role="test", label="linux-gfx1153-gpu-rocm"
+    ),
     # gfx1201 (gfx120X family default)
-    _GpuRunnerEntry(platform="linux", target="gfx1201", role="test", label="linux-gfx120X-gpu-rocm"),
-    _GpuRunnerEntry(platform="windows", target="gfx1201", role="test", label="windows-gfx120X-gpu-rocm"),
+    _GpuRunnerEntry(
+        platform="linux", target="gfx1201", role="test", label="linux-gfx120X-gpu-rocm"
+    ),
+    _GpuRunnerEntry(
+        platform="windows",
+        target="gfx1201",
+        role="test",
+        label="windows-gfx120X-gpu-rocm",
+    ),
 ]
 
 
@@ -152,10 +239,24 @@ class _BuildRunnerEntry:
 # Linux sanitizer: heavy-ramdisk runners only (Azure 100% — no AWS variant yet).
 # Windows: single Azure pool; the workflow input is reserved for future use.
 _BUILD_RUNNER_INVENTORY: list[_BuildRunnerEntry] = [
-    _BuildRunnerEntry(platform="linux",   variant="default",   label="azure-linux-scale-rocm",                weight=90),
-    _BuildRunnerEntry(platform="linux",   variant="default",   label="aws-linux-scale-rocm",                  weight=10),
-    _BuildRunnerEntry(platform="linux",   variant="sanitizer", label="azure-linux-scale-rocm-heavy-ramdisk",  weight=1),
-    _BuildRunnerEntry(platform="windows", variant="default",   label="azure-windows-scale-rocm",              weight=1),
+    _BuildRunnerEntry(
+        platform="linux", variant="default", label="azure-linux-scale-rocm", weight=90
+    ),
+    _BuildRunnerEntry(
+        platform="linux", variant="default", label="aws-linux-scale-rocm", weight=10
+    ),
+    _BuildRunnerEntry(
+        platform="linux",
+        variant="sanitizer",
+        label="azure-linux-scale-rocm-heavy-ramdisk",
+        weight=1,
+    ),
+    _BuildRunnerEntry(
+        platform="windows",
+        variant="default",
+        label="azure-windows-scale-rocm",
+        weight=1,
+    ),
 ]
 
 
@@ -244,11 +345,7 @@ def _get_build_runner(
     matches = [e for e in inv if e.platform == platform and e.variant == pool]
     if not matches and pool == "sanitizer":
         # Fall back to default pool for platforms without a sanitizer-specific row.
-        matches = [
-            e for e in inv if e.platform == platform and e.variant == "default"
-        ]
+        matches = [e for e in inv if e.platform == platform and e.variant == "default"]
     if not matches:
         return ""
     return _select_weighted_label(matches)
-
-
