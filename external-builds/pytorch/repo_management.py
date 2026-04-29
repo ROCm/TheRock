@@ -253,7 +253,6 @@ def read_pytorch_rocm_pins(
     related_commits_file = pytorch_dir / "related_commits"
     if related_commits_file.exists():
         lines = related_commits_file.read_text().splitlines()
-        project_matches: set[tuple[str, str]] = set()
         for line in lines:
             try:
                 (
@@ -266,17 +265,8 @@ def read_pytorch_rocm_pins(
                 ) = line.split("|")
             except ValueError:
                 print(f"WARNING: Could not parse related_commits line: {line}")
-                continue
             if rec_os == os and rec_project == project:
                 return rec_origin, rec_commit, True
-            if rec_project == project:
-                project_matches.add((rec_origin, rec_commit))
-
-        # Some ROCm/pytorch branches omit duplicate OS rows when the related
-        # commits are identical. In that case, use the unique project pin.
-        if len(project_matches) == 1:
-            rec_origin, rec_commit = next(iter(project_matches))
-            return rec_origin, rec_commit, True
 
     # Not found.
     return default_origin, default_hashtag, False
