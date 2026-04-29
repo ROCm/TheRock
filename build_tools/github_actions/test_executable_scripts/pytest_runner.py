@@ -221,12 +221,149 @@ def add_gpu_skip_markers(marker_expr, gpu_arch):
     return combined_expr
 
 
-if __name__ == "__main__":
-    # This is a placeholder main - will be extended in subsequent commits
-    logging.info("Pytest test collection and sharding utility loaded")
+def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_vars):
+    """
+    Execute pytest with the specified test IDs and configuration.
 
-    # Example usage (will be replaced with full runner logic)
+    Args:
+        test_dir: Base test directory
+        test_ids: List of pytest test node IDs to run
+        marker_expr: Pytest marker expression (for logging purposes)
+        timeout: Per-test timeout in seconds
+        num_workers: Number of parallel xdist workers
+        env_vars: Environment variables dictionary
+
+    Returns:
+        Exit code from pytest
+    """
+    if not test_ids:
+        logging.warning("No tests to run in this shard")
+        return 0
+
+    cmd = ["pytest", str(test_dir)]
+
+    # Add specific test IDs
+    cmd.extend(test_ids)
+
+    # Add pytest options
+    cmd.extend([
+        "-v",  # Verbose output
+        f"--timeout={timeout}",  # Per-test timeout
+        f"--numprocesses={num_workers}",  # Parallel workers (pytest-xdist)
+        "--color=yes",  # Color output
+    ])
+
+    logging.info(f"Running pytest with {len(test_ids)} tests, {num_workers} workers, {timeout}s timeout")
+    logging.info(f"Marker expression used for collection: {marker_expr or '(none)'}")
+    logging.info(f"Command: {' '.join(cmd[:3])} <{len(test_ids)} test IDs> {' '.join(cmd[3+len(test_ids):])}")
+
+    result = subprocess.run(cmd, env=env_vars, check=False)
+    return result.returncode
+
+
+if __name__ == "__main__":
+    # Component mapping: job name -> directory name in THEROCK_BIN_DIR
+    PYTEST_COMPONENT_MAPPING = {
+        "tensile": "Tensile",
+        "tensilite": "hipblaslt/tensilite",
+    }
+
+    # Valid test categories
+    VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
+
+    # Environment variables
+    THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+    TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
+    TEST_TYPE = os.getenv("TEST_TYPE", "quick")
+    AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
     SHARD_INDEX = int(os.getenv("SHARD_INDEX", 1))
     TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", 1))
 
-    logging.info(f"Shard configuration: {SHARD_INDEX}/{TOTAL_SHARDS}")
+    # Validate required environment variables
+    if not TEST_COMPONENT_NAME:
+        logging.error("TEST_COMPONENT environment variable is required")
+        sys.exit(1)
+
+    if not THEROCK_BIN_DIR:
+        logging.error("THEROCK_BIN_DIR environment variable is required")
+        sys.exit(1)
+
+    # Map component name to directory
+    component_dir = PYTEST_COMPONENT_MAPPING.get(TEST_COMPONENT_NAME, TEST_COMPONENT_NAME)
+    component_path = Path(THEROCK_BIN_DIR) / component_dir
+
+    if not component_path.exists():
+        logging.error(f"Component directory not found: {component_path}")
+        sys.exit(1)
+
+    # Validate test category
+    if TEST_TYPE not in VALID_TEST_CATEGORIES:
+        logging.warning(f"Invalid TEST_TYPE '{TEST_TYPE}', falling back to 'quick'")
+        TEST_TYPE = "quick"
+
+    logging.info(f"Component: {TEST_COMPONENT_NAME} ({component_dir})")
+    logging.info(f"Test category: {TEST_TYPE}")
+    logging.info(f"Shard: {SHARD_INDEX}/{TOTAL_SHARDS}")
+
+    # Load test categories configuration
+    yaml_path = component_path / "test_categories.yaml"
+    if not yaml_path.exists():
+        logging.error(f"test_categories.yaml not found at {yaml_path}")
+        sys.exit(1)
+
+    config = load_test_categories_yaml(yaml_path)
+
+    # Get category configuration
+    category_config = config.get("test_categories", {}).get(TEST_TYPE)
+    if not category_config:
+        logging.error(f"No configuration found for test category '{TEST_TYPE}'")
+        sys.exit(1)
+
+    # Build marker expression
+    marker_expr = build_marker_expression(category_config)
+
+    # Add GPU architecture filtering
+    gpu_arch = extract_gpu_arch(AMDGPU_FAMILIES)
+    marker_expr = add_gpu_skip_markers(marker_expr, gpu_arch)
+
+    # Get test directory (assume Tests/ subdirectory)
+    test_dir = component_path / "Tests"
+    if not test_dir.exists():
+        logging.error(f"Tests directory not found: {test_dir}")
+        sys.exit(1)
+
+    # Collect tests
+    all_test_ids = collect_pytest_tests(test_dir, marker_expr)
+
+    # Shard tests
+    sharded_test_ids = shard_tests(all_test_ids, SHARD_INDEX, TOTAL_SHARDS)
+
+    # Get execution settings
+    exec_settings = config.get("execution_settings", {})
+    timeout = exec_settings.get("category_timeouts", {}).get(TEST_TYPE, 300)
+    num_workers = exec_settings.get("parallel_workers", 4)
+
+    # Setup environment variables
+    env_vars = os.environ.copy()
+
+    # Apply custom environment variables from config
+    custom_env = exec_settings.get("environment", {})
+    for key, value in custom_env.items():
+        # Replace {ROCM_PATH} placeholder
+        if "{ROCM_PATH}" in str(value):
+            rocm_path = Path(THEROCK_BIN_DIR).parent
+            value = value.replace("{ROCM_PATH}", str(rocm_path))
+        env_vars[key] = str(value)
+        logging.info(f"Set environment variable: {key}={value}")
+
+    # Run pytest
+    exit_code = run_pytest_tests(
+        test_dir,
+        sharded_test_ids,
+        marker_expr,
+        timeout,
+        num_workers,
+        env_vars
+    )
+
+    sys.exit(exit_code)
