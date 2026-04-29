@@ -6,37 +6,28 @@
 """Computes a ROCm package version with an appropriate suffix for a given release type.
 
 For usage from other Python scripts, call the `compute_version()` function
-directly. When used from GitHub Actions, this writes to GITHUB_OUTPUT:
-  - 'rocm_package_version' for wheel packages (default)
+directly. When used from GitHub Actions, this writes all three version outputs
+to GITHUB_OUTPUT:
+  - 'rocm_package_version' for wheel packages
   - 'rocm_deb_package_version' for deb packages
   - 'rocm_rpm_package_version' for rpm packages
 
-Sample usage for wheel packages (Python):
+Sample usage:
 
   python compute_rocm_package_version.py --release-type=dev
-  # 7.10.0.dev0+f689a8ea40232f3f6be1ec958354b108349023ff
+  # rocm_package_version=7.10.0.dev0+f689a8ea40232f3f6be1ec958354b108349023ff
+  # rocm_deb_package_version=7.10.0~dev20251203
+  # rocm_rpm_package_version=7.10.0~20251203gf689a8e
 
   python compute_rocm_package_version.py --release-type=prerelease --prerelease-version=2
-  # 7.10.0rc2
+  # rocm_package_version=7.10.0rc2
+  # rocm_deb_package_version=7.10.0~pre2
+  # rocm_rpm_package_version=7.10.0~rc2
 
   python compute_rocm_package_version.py --release-type=nightly
-  # 7.10.0a20251021
-
-Sample usage for native packages (deb/rpm):
-
-  python compute_rocm_package_version.py --release-type=dev --package-type=deb
-  # 8.1.0~dev20251203
-
-  python compute_rocm_package_version.py --release-type=dev --package-type=rpm
-  # 8.1.0~20251203gf689a8e
-
-  python compute_rocm_package_version.py --release-type=prerelease --prerelease-version=2 --package-type=deb
-  # 8.1.0~pre2
-
-  python compute_rocm_package_version.py --release-type=release --package-type=rpm
-  # 8.1.0
-
-Sample usage with custom release versions:
+  # rocm_package_version=7.10.0a20251021
+  # rocm_deb_package_version=7.10.0~20251021
+  # rocm_rpm_package_version=7.10.0~20251021
 
   python compute_rocm_package_version.py --custom-version-suffix=.dev0
   # 7.10.0.dev0
@@ -221,14 +212,6 @@ def compute_version(
 def main(argv):
     parser = argparse.ArgumentParser(prog="compute_rocm_package_version")
 
-    parser.add_argument(
-        "--package-type",
-        type=str,
-        choices=["wheel", "deb", "rpm"],
-        default=None,
-        help="The type of package. If not specified, computes versions for all types (wheel, deb, rpm)",
-    )
-
     release_type_group = parser.add_mutually_exclusive_group()
     release_type_group.add_argument(
         "--release-type",
@@ -262,16 +245,8 @@ def main(argv):
 
     args = parser.parse_args(argv)
 
-    # Determine which package types to compute
-    if args.package_type is None:
-        # Compute all types
-        package_types = ["wheel", "deb", "rpm"]
-    else:
-        # Compute only the specified type
-        package_types = [args.package_type]
-
     # Validation
-    if args.release_type == "release" and "wheel" in package_types:
+    if args.release_type == "release":
         parser.error("'release' type is only valid for deb/rpm packages, not wheel")
 
     if args.release_type != "prerelease" and args.prerelease_version:
@@ -281,9 +256,9 @@ def main(argv):
             "--prerelease-version is required when release type is 'prerelease'"
         )
 
-    # Compute versions for all requested package types
+    # Compute versions for all three package types: wheel, deb, and rpm
     outputs = {}
-    for pkg_type in package_types:
+    for pkg_type in ["wheel", "deb", "rpm"]:
         version = compute_version(
             pkg_type,
             args.release_type,

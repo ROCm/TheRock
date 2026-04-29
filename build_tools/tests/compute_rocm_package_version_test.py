@@ -81,6 +81,15 @@ class DetermineVersionTest(unittest.TestCase):
         )
         self.assertEqual(version, "1000abc")
 
+    def test_nightly_with_override_base_version(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="nightly",
+            custom_version_suffix=None,
+            prerelease_version=None,
+            override_base_version="7.9.0",
+        )
+        self.assertRegex(version, r"^7\.9\.0a[0-9]{8}$")
+
 
 class DebPackageVersionTest(unittest.TestCase):
     """Tests for Debian package version computation."""
@@ -246,24 +255,8 @@ class GitShaOverrideTest(unittest.TestCase):
         self.assertRegex(version, r"^8\.1\.0~[0-9]{8}gabcdef12$")
 
 
-class BackwardsCompatibilityTest(unittest.TestCase):
-    """Tests for backwards compatibility with old API."""
-
-    def test_old_api_without_package_type(self):
-        """Test that old calls without package_type still work (defaults to wheel)."""
-        version = compute_rocm_package_version.compute_version(
-            release_type="nightly",
-            custom_version_suffix=None,
-            prerelease_version=None,
-            override_base_version="7.9.0",
-        )
-        # Should default to wheel format
-        self.assertEqual(version[:5], "7.9.0")
-        self.assertIn("a", version)  # alpha version for nightly
-
-
 class MainFunctionMultiplePackageTypesTest(unittest.TestCase):
-    """Tests for main() function with new behavior: compute all package types when --package-type is omitted."""
+    """Tests for main() function: compute all package types when --package-type is omitted."""
 
     def test_compute_all_package_types_without_flag(self):
         """Test that when --package-type is not provided, all types are computed."""
@@ -295,40 +288,6 @@ class MainFunctionMultiplePackageTypesTest(unittest.TestCase):
             self.assertRegex(
                 captured_outputs["rocm_rpm_package_version"],
                 r"^8\.0\.0~[0-9]{8}g[0-9a-z]{8}$",
-            )
-        finally:
-            compute_rocm_package_version.gha_set_output = original_gha_set_output
-
-    def test_backward_compatible_with_package_type_specified(self):
-        """Test that when --package-type is provided, only that type is computed (backward compatible)."""
-        captured_outputs = {}
-        original_gha_set_output = compute_rocm_package_version.gha_set_output
-
-        def mock_gha_set_output(outputs):
-            captured_outputs.update(outputs)
-
-        compute_rocm_package_version.gha_set_output = mock_gha_set_output
-
-        try:
-            compute_rocm_package_version.main(
-                [
-                    "--package-type",
-                    "deb",
-                    "--release-type",
-                    "nightly",
-                    "--override-base-version",
-                    "8.1.0",
-                ]
-            )
-
-            # Should only have deb output
-            self.assertIn("rocm_deb_package_version", captured_outputs)
-            self.assertNotIn("rocm_package_version", captured_outputs)
-            self.assertNotIn("rocm_rpm_package_version", captured_outputs)
-
-            # Verify format
-            self.assertRegex(
-                captured_outputs["rocm_deb_package_version"], r"^8\.1\.0~[0-9]{8}$"
             )
         finally:
             compute_rocm_package_version.gha_set_output = original_gha_set_output
