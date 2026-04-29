@@ -18,9 +18,10 @@
 #       release_portable_linux_packages.yml) so tests only run after a
 #       successful build, or use a workflow_dispatch trigger / Quartz.
 #
-# Scheduled runs alternate the PyTorch source/wheel pair by UTC day-of-year:
-#   - odd day  -> nightly (latest wheel + upstream nightly sources)
-#   - even day -> release/2.11 (latest 2.11.x wheel + release/2.11 sources)
+# Scheduled runs rotate the PyTorch source/wheel pair by UTC day-of-year mod 3:
+#   - day % 3 == 0 -> nightly (latest wheel + upstream nightly sources)
+#   - day % 3 == 1 -> release/2.11 (latest 2.11.x wheel + release/2.11 sources)
+#   - day % 3 == 2 -> release/2.12 (latest 2.12.x wheel + release/2.12 sources)
 # workflow_dispatch runs honor the pytorch_git_ref input as-is.
 
 name: CI Nightly PyTorch Full Test
@@ -96,20 +97,29 @@ jobs:
       - name: Select PyTorch git ref
         id: select_ref
         run: |
-          # Scheduled runs alternate between nightly and release/2.11 by UTC
-          # day-of-year parity. workflow_dispatch runs honor the input as-is.
+          # Scheduled runs rotate between nightly, release/2.11, and
+          # release/2.12 by UTC day-of-year mod 3.
+          # workflow_dispatch runs honor the input as-is.
           if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
             DAY_OF_YEAR="$(date -u +%j)"
             # Strip leading zeros to avoid base-8 interpretation in $(( ... )).
             DAY_OF_YEAR="${DAY_OF_YEAR#0}"
             DAY_OF_YEAR="${DAY_OF_YEAR#0}"
-            if [ $(( DAY_OF_YEAR % 2 )) -eq 1 ]; then
-              REF="nightly"
-              REASON="schedule odd UTC day-of-year (${DAY_OF_YEAR})"
-            else
-              REF="release/2.11"
-              REASON="schedule even UTC day-of-year (${DAY_OF_YEAR})"
-            fi
+            SLOT=$(( DAY_OF_YEAR % 3 ))
+            case "${SLOT}" in
+              0)
+                REF="nightly"
+                REASON="schedule day-of-year ${DAY_OF_YEAR} mod 3 == 0"
+                ;;
+              1)
+                REF="release/2.11"
+                REASON="schedule day-of-year ${DAY_OF_YEAR} mod 3 == 1"
+                ;;
+              2)
+                REF="release/2.12"
+                REASON="schedule day-of-year ${DAY_OF_YEAR} mod 3 == 2"
+                ;;
+            esac
           else
             REF="${PYTORCH_GIT_REF_INPUT}"
             REASON="${GITHUB_EVENT_NAME} input"
