@@ -8,7 +8,28 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
-if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
+# composable_kernel only supports a subset of gfx targets (per its own
+# rocm_check_target_ids allowlist). The per-arch EXCLUDE_TARGET_PROJECTS
+# mechanism in cmake/therock_amdgpu_targets.cmake removes unsupported arches
+# from the CK subproject's GPU_TARGETS at activate time. If no targets remain
+# after that filter (e.g. a single-arch shard for a CK-unsupported arch like
+# gfx906 or gfx101X), declaring CK with an empty GPU_TARGETS list would break
+# CK's own HIP try-compile with "HIP_ARCHITECTURES is empty". Skip declaring
+# the subproject entirely in that case. MIOpen handles the absence of CK on
+# a given target itself.
+# See https://github.com/ROCm/TheRock/issues/4836
+set(_ck_filtered_targets)
+if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+  therock_filter_amdgpu_targets(_ck_filtered_targets composable_kernel ${THEROCK_AMDGPU_TARGETS})
+endif()
+
+if(THEROCK_ENABLE_COMPOSABLE_KERNEL AND NOT _ck_filtered_targets)
+  message(STATUS
+    "composable_kernel: no supported gfx targets remain after filtering "
+    "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+endif()
+
+if(THEROCK_ENABLE_COMPOSABLE_KERNEL AND _ck_filtered_targets)
   ##############################################################################
   # Composable_kernel
   ##############################################################################
@@ -55,9 +76,6 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
 endif()
 
 if(THEROCK_ENABLE_MIOPEN)
-  # If composable kernel is enabled, add it as an MIOpen build dep.
-  # MIOpen's ck_impl self-filters GPU_TARGETS against arches it has CK grouped
-  # conv kernels for, so no need to gate on specific arch families here.
   set(optional_miopen_build_deps)
   if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
     list(APPEND optional_miopen_build_deps composable_kernel)
