@@ -8,6 +8,7 @@ parallel test execution across multiple CI runners with GPU isolation.
 Environment variables used:
 TEST_COMPONENT: Job name of the component to test (e.g., "tensile", "tensilite")
 TEST_TYPE: Test category to run (quick, standard, comprehensive, full)
+AMDGPU_FAMILIES: GPU architecture for skip marker filtering (e.g., "gfx1151")
 SHARD_INDEX: Current shard number (1-indexed, like GTest)
 TOTAL_SHARDS: Total number of shards for test distribution
 THEROCK_BIN_DIR: Path to installed binaries
@@ -153,6 +154,71 @@ def build_marker_expression(category_config):
 
     logging.info(f"Built marker expression: {marker_expr or '(none)'}")
     return marker_expr
+
+
+def extract_gpu_arch(amdgpu_families):
+    """
+    Extract GPU architecture from AMDGPU_FAMILIES environment variable.
+
+    Args:
+        amdgpu_families: String from AMDGPU_FAMILIES env var (e.g., "gfx1151" or "gfx94X")
+
+    Returns:
+        GPU architecture string (e.g., "gfx1151") or None
+    """
+    if not amdgpu_families:
+        return None
+
+    # Extract first GPU architecture (format: gfxNNNN or gfxNNX)
+    match = re.search(r'gfx\w+', amdgpu_families)
+    if match:
+        gpu_arch = match.group(0)
+        logging.info(f"Detected GPU architecture: {gpu_arch}")
+        return gpu_arch
+
+    logging.warning(f"Could not parse GPU architecture from: {amdgpu_families}")
+    return None
+
+
+def add_gpu_skip_markers(marker_expr, gpu_arch):
+    """
+    Add GPU-specific skip markers to pytest marker expression.
+
+    Pytest tests use markers like skip-gfx1151 or skip-gfx115X to exclude tests
+    on specific GPU architectures. This function adds "and not skip-gfxXXXX" to
+    the marker expression.
+
+    Args:
+        marker_expr: Existing pytest marker expression
+        gpu_arch: GPU architecture (e.g., "gfx1151")
+
+    Returns:
+        Updated marker expression with GPU skip exclusions
+    """
+    if not gpu_arch:
+        return marker_expr
+
+    # Build list of skip markers to exclude, from most specific to least
+    # e.g., for gfx1151: ["skip-gfx1151", "skip-gfx115X", "skip-gfx11X"]
+    skip_markers = [f"skip-{gpu_arch}"]
+
+    # Add wildcard patterns
+    for i in range(len(gpu_arch) - 1, 4, -1):  # From end to "gfx11"
+        pattern = gpu_arch[:i] + "X"
+        skip_markers.append(f"skip-{pattern}")
+
+    # Build exclusion expression
+    exclusion_parts = [f"not {marker}" for marker in skip_markers]
+    gpu_exclusion = " and ".join(exclusion_parts)
+
+    # Combine with existing marker expression
+    if marker_expr:
+        combined_expr = f"({marker_expr}) and {gpu_exclusion}"
+    else:
+        combined_expr = gpu_exclusion
+
+    logging.info(f"Added GPU skip markers: {gpu_exclusion}")
+    return combined_expr
 
 
 if __name__ == "__main__":
