@@ -192,9 +192,10 @@ class TestConfig:
     fetch_gfx_targets: list[str] = field(default_factory=list)
     """Individual GPU arch strings for fetching split artifacts (e.g. ['gfx942'])."""
     run_tests: bool | None = None
-    """Whether tests should actually run. Defaults to True if any runner is set
-    in runs_on, False otherwise. Set explicitly to False to disable tests even
-    when a runner is available."""
+    """Whether tests should actually run. None means "infer from runs_on", and
+    is resolved by MatrixEntry.__post_init__ *after* the inventory fill (so an
+    inferred value sees the populated runners). Set explicitly to True/False to
+    bypass inference. to_dict() raises if still None at serialization time."""
     sanity_check_only_for_family: bool = False
     """If True, only a sanity-check test subset is run, not the full suite."""
     test_scope: Literal["quick", "comprehensive", "full"] = "comprehensive"
@@ -203,13 +204,12 @@ class TestConfig:
     """If True, tests are skipped on non-scheduled triggers (PR / push) and only run
     on the schedule (nightly) workflow trigger."""
 
-    def __post_init__(self):
-        # set run_tests to True if any runners are specified,
-        # False otherwise, if not explicitly set
-        if self.run_tests is None:
-            self.run_tests = self.runs_on.has_any_runner()
-
     def to_dict(self) -> dict:
+        if self.run_tests is None:
+            raise ValueError(
+                "TestConfig.run_tests is None — inference normally happens in "
+                "MatrixEntry.__post_init__; bare TestConfig instances must set it."
+            )
         return {
             "run_tests": self.run_tests,
             "runs_on": self.runs_on.to_dict(),
@@ -274,9 +274,10 @@ class MatrixEntry:
 
     def __post_init__(self):
         # Fill runner labels from the inventories on each platform that did not
-        # specify them; build runner is always release-pool here (lookup paths
-        # rebind for non-release variants). Function-local import breaks the
-        # types <-> runners cycle.
+        # specify them, then infer test.run_tests if the caller left it as None.
+        # build.runs_on is always release-pool here; lookup paths rebind for
+        # non-release variants. Function-local import breaks the types <->
+        # runners cycle.
         from new_amdgpu_family_matrix_runners import _get_build_runner, _get_gpu_runners
 
         for platform in ("linux", "windows"):
@@ -285,8 +286,8 @@ class MatrixEntry:
                 continue
             if not cfg.test.runs_on.has_any_runner():
                 cfg.test.runs_on = _get_gpu_runners(platform, self.target)
-            if not cfg.test.runs_on.has_any_runner():
-                cfg.test.run_tests = False
+            if cfg.test.run_tests is None:
+                cfg.test.run_tests = cfg.test.runs_on.has_any_runner()
             if cfg.build.runs_on is None:
                 cfg.build.runs_on = _get_build_runner(platform, "release")
 
