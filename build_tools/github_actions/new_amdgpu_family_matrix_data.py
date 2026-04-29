@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 AMD GPU Family Matrix — source of truth for GitHub CI workflows.
 

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 GitHub Actions runner inventory and selection for the AMD GPU family matrix.
 
