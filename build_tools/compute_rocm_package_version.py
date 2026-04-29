@@ -107,6 +107,7 @@ def compute_version(
     custom_version_suffix: str | None = None,
     prerelease_version: str | None = None,
     override_base_version: str | None = None,
+    git_sha: str | None = None,
 ) -> str:
     """Compute package version based on package type and release type.
 
@@ -116,6 +117,10 @@ def compute_version(
         custom_version_suffix: Custom suffix to override automatic suffix
         prerelease_version: Prerelease version number
         override_base_version: Override the base version from version.json
+        git_sha: Explicit git SHA to use instead of auto-detecting from
+            GITHUB_SHA or the local repo HEAD. Needed when the workflow is
+            triggered from a different repository (e.g. rockrel calling
+            TheRock), where GITHUB_SHA refers to the caller's commit.
 
     Returns:
         Computed version string appropriate for the package type
@@ -136,8 +141,8 @@ def compute_version(
         elif release_type == "dev":
             # Construct a dev release version:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#developmental-releases
-            git_sha = get_git_sha()
-            version_suffix = f".dev0+{git_sha}"
+            resolved_sha = git_sha or get_git_sha()
+            version_suffix = f".dev0+{resolved_sha}"
         elif release_type == "nightly":
             # Construct a nightly (a / "alpha") version:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
@@ -175,8 +180,10 @@ def compute_version(
             if package_type == "deb":
                 version_suffix_str = f"~dev{current_date}"
             else:  # rpm
-                git_sha = get_git_sha(short=True)
-                version_suffix_str = f"~{current_date}g{git_sha}"
+                resolved_sha = git_sha or get_git_sha(short=True)
+                if len(resolved_sha) > 8:
+                    resolved_sha = resolved_sha[:8]
+                version_suffix_str = f"~{current_date}g{resolved_sha}"
         elif release_type == "nightly":
             # Construct a nightly version with date
             # Format: <rocm-version>~<YYYYMMDD>
@@ -238,6 +245,12 @@ def main(argv):
         help="Override the base version from version.json with this value",
     )
 
+    parser.add_argument(
+        "--git-sha",
+        type=str,
+        help="Explicit git SHA to embed in the version instead of auto-detecting",
+    )
+
     args = parser.parse_args(argv)
 
     # Validation
@@ -257,6 +270,7 @@ def main(argv):
         args.custom_version_suffix,
         args.prerelease_version,
         args.override_base_version,
+        args.git_sha,
     )
 
     # Set appropriate output variable based on package type
