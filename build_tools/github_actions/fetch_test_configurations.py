@@ -574,6 +574,21 @@ test_matrix = {
             }
         },
     },
+    "tensilite": {
+        "job_name": "tensilite",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 480,  # 8 hours for full category
+        "test_script": f"python {_get_script_path('pytest_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": {
+                "quick": 1,
+                "standard": 2,
+                "comprehensive": 4,
+                "full": 4,
+            }
+        },
+    },
 }
 
 
