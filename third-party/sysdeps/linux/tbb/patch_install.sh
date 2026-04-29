@@ -19,6 +19,8 @@ LIB_DIR="$PREFIX/lib"
 
 echo "Patching TBB install..."
 
+shopt -s nullglob
+
 # Set RPATH to $ORIGIN on all real (non-symlink) rocm_sysdeps TBB libraries and
 # create unprefixed libtbb*.so symlinks pointing at the SONAME symlink
 # (e.g. libtbb.so -> librocm_sysdeps_tbb.so.12).
