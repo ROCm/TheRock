@@ -232,7 +232,7 @@ def main(argv: list[str]) -> None:
 
     publish_tarballs(artifacts_root, args.release_type, backend)
     publish_python_packages(artifacts_root, args.release_type, backend, kpack_split)
-    if not args.skip_native_packages:
+    if artifacts_root.platform == "linux" and not args.skip_native_packages:
         publish_native_linux_packages(artifacts_root, args.release_type, backend)
 
 

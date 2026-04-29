@@ -26,6 +26,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 "linux",
                 "--release-type",
                 "dev",
+                "--skip-native-packages",
                 "--dry-run",
             ]
         )
@@ -85,6 +86,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 "dev",
                 "--kpack-split",
                 "true",
+                "--skip-native-packages",
                 "--dry-run",
             ]
         )
@@ -95,6 +97,53 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(python_dest_staging.relative_path, "v4/whl-staging")
         _, python_dest_release = mock_copy.call_args_list[2].args
         self.assertEqual(python_dest_release.relative_path, "v4/whl")
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_dev_linux_copies_native_packages(self, mock_copy):
+        mock_copy.return_value = 2
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "dev",
+                "--dry-run",
+            ]
+        )
+
+        # Calls: tarballs, python -> v3/whl-staging, python -> v3/whl, deb, rpm
+        self.assertEqual(mock_copy.call_count, 5)
+        # deb packages
+        deb_source, deb_dest = mock_copy.call_args_list[3].args
+        self.assertEqual(deb_source.bucket, "therock-dev-artifacts")
+        self.assertEqual(deb_source.relative_path, "123-linux/packages/deb")
+        self.assertEqual(deb_dest.bucket, "therock-dev-packages")
+        self.assertRegex(deb_dest.relative_path, r"^v4/deb/\d{8}-123$")
+        # rpm packages
+        rpm_source, rpm_dest = mock_copy.call_args_list[4].args
+        self.assertEqual(rpm_source.bucket, "therock-dev-artifacts")
+        self.assertEqual(rpm_source.relative_path, "123-linux/packages/rpm")
+        self.assertEqual(rpm_dest.bucket, "therock-dev-packages")
+        self.assertRegex(rpm_dest.relative_path, r"^v4/rpm/\d{8}-123$")
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_windows_skips_native_packages(self, mock_copy):
+        mock_copy.return_value = 1
+        main(
+            [
+                "--run-id",
+                "99",
+                "--platform",
+                "windows",
+                "--release-type",
+                "nightly",
+                "--dry-run",
+            ]
+        )
+        # Only tarballs + python x2 (3 calls) — native packages skipped for windows
+        self.assertEqual(mock_copy.call_count, 3)
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_raises_when_no_tarballs_found(self, mock_copy):
