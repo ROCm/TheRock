@@ -1,0 +1,50 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# ROCm Simulation Tools (rocjitsu)
+
+if(THEROCK_ENABLE_ROCJITSU)
+  ##############################################################################
+  # rocjitsu
+  #
+  # ROCm Just-in-Time Suite: simulation, virtualization, and instrumentation
+  # tools for AMD GPU applications. Provides ISA-level execution of AMD GPU
+  # and RISC-V machine code from HIP fat binaries without requiring GPU
+  # hardware.
+  ##############################################################################
+
+  therock_cmake_subproject_declare(rocjitsu
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/experimental/rocjitsu"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DRJ_BUILD_GUI=OFF
+      -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
+  )
+
+  therock_cmake_subproject_glob_c_sources(rocjitsu
+    SUBDIRS
+      lib
+      tools
+      tests
+  )
+
+  therock_cmake_subproject_activate(rocjitsu)
+
+  therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
+    LIB_NAMES
+      librocjitsu.so
+  )
+
+  therock_provide_artifact(rocjitsu
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-rocjitsu.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      run
+    SUBPROJECT_DEPS
+      rocjitsu
+  )
+endif()
