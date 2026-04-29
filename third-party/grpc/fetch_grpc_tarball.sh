@@ -1,9 +1,12 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # gRPC source tarball generation script
 
-GRPC_VERSION="${GRPC_VERSION:-v1.67.1}"
+GRPC_VERSION="${GRPC_VERSION:-v1.78.1}"
 GRPC_TAG="${GRPC_VERSION}"
 OUTPUT_DIR="${PWD}/tarballs"
 TEMP_DIR=$(mktemp -d)

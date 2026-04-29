@@ -1,9 +1,9 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # NOTE: not tested. just combining pytorch_2.7.py and pytorch_2.10.py to see if that resolves the OOM errors
 skip_tests = {
     "common": {
-        "autograd": [
-            "test_side_stream_backward_overlap",
-        ],
         "cuda": [
             # Explicitly deselected since giving segfault
             "test_unused_output_device_cuda",  # this test does not exist in nightly anymore
@@ -41,9 +41,14 @@ skip_tests = {
             "test_fp32_precision_with_tf32",
             # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
             "test_invalid_status_for_legacy_api",
+            # Off-by-one due to float truncation (int() without round()) plus
+            # UnboundLocalError on cleanup when the assertion fails.
+            # Fixed upstream in pytorch#163297, landed in 2.10+.
+            # https://github.com/ROCm/pytorch/commit/66abba8f49f05b0998040443813380efc32844f6
+            "test_max_split_expandable",
         ],
     },
-    "gfx942": {
+    "gfx94": {
         "autograd": [
             # fixed or just good with no caching?
             # "test_reentrant_parent_error_on_cpu_cuda",
@@ -66,17 +71,6 @@ skip_tests = {
         ],
         "cuda": [
             # "test_cpp_memory_snapshot_pickle",
-            #
-            # what():  HIP error: operation not permitted when stream is capturing
-            # Search for `hipErrorStreamCaptureUnsupported' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__HIPRT__TYPES.html for more information.
-            # HIP kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
-            # For debugging consider passing AMD_SERIALIZE_KERNEL=3
-            # Compile with `TORCH_USE_HIP_DSA` to enable device-side assertions.
-            #
-            # Exception raised from ~CUDAGraph at /__w/TheRock/TheRock/external-builds/pytorch/pytorch/aten/src/ATen/hip/HIPGraph.cpp:320 (most recent call first):
-            # frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x80 (0x7f2316f1bdf0 in /home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/lib/libc10.so)
-            "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_allow_unused_input",
-            "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_not_allow_unused_input",
             "test_graph_concurrent_replay ",
             #
             # OSError: libhiprtc.so: cannot open shared object file: No such file or directory
@@ -104,7 +98,6 @@ skip_tests = {
             "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
             # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
             "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
-            "test_allocator_settings",
         ],
         "nn": [
             # Is now skipped.. on pytorch side

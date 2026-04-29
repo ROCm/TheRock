@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # TODO: HIP language support not based on an /opt/rocm installed SDK
 # must have these three cache variables set to avoid language setup
 # error. https://github.com/ROCm/TheRock/issues/102
@@ -20,10 +23,11 @@ else()
   )
 endif()
 
-# Examples are configured against the installed ROCm prefix. Since
-# sanitizer builds do not install HIP, this cpp-sdk-user example test
-# is skipped when sanitizers are enabled.
-if("${THEROCK_SANITIZER}" STREQUAL "")
+# Examples are configured against the installed ROCm prefix. The
+# cpp-sdk-user project requires HIP (LANGUAGES CXX HIP), so skip when
+# HIP is not enabled (e.g. in early multi-arch CI stages) or when
+# sanitizers are enabled (sanitizer builds do not install HIP).
+if(THEROCK_ENABLE_HIP_RUNTIME AND "${THEROCK_SANITIZER}" STREQUAL "")
   add_test(
     NAME therock-examples-cpp-sdk-user
     COMMAND

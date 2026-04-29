@@ -1,0 +1,6 @@
+# Native Linux packaging tests (install verification, pytest driver)
+pytest>=9.0.3
+pyelftools
+requests
+prettytable
+PyYAML

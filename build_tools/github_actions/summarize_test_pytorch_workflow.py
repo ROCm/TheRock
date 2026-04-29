@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 """
 This summarizes the environment setup steps for the
@@ -20,7 +22,7 @@ import argparse
 import os
 import platform
 
-from github_actions_utils import *
+from github_actions_api import *
 
 
 def is_windows() -> bool:

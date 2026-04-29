@@ -1,17 +1,21 @@
 # hipBLAS-common
+[components.lib."math-libs/BLAS/hipBLAS-common/stage"]
 [components.dbg."math-libs/BLAS/hipBLAS-common/stage"]
 [components.dev."math-libs/BLAS/hipBLAS-common/stage"]
 [components.doc."math-libs/BLAS/hipBLAS-common/stage"]
-[components.lib."math-libs/BLAS/hipBLAS-common/stage"]
 
 # rocRoller
+[components.lib."math-libs/BLAS/rocRoller/stage"]
+optional = true
 [components.dbg."math-libs/BLAS/rocRoller/stage"]
 optional = true
 [components.dev."math-libs/BLAS/rocRoller/stage"]
 optional = true
+exclude = [
+  "include/mxDataGenerator/**",
+  "lib/cmake/mxDataGenerator/**",
+]
 [components.doc."math-libs/BLAS/rocRoller/stage"]
-optional = true
-[components.lib."math-libs/BLAS/rocRoller/stage"]
 optional = true
 [components.test."math-libs/BLAS/rocRoller/stage"]
 include = [
@@ -20,15 +24,15 @@ include = [
 optional = true
 
 # hipBLAS
+[components.lib."math-libs/BLAS/hipBLAS/stage"]
+exclude = [
+  "lib/libhipblas_fortran.so",
+]
 [components.dbg."math-libs/BLAS/hipBLAS/stage"]
 [components.dev."math-libs/BLAS/hipBLAS/stage"]
 [components.doc."math-libs/BLAS/hipBLAS/stage"]
 include = [
   "**/hipblas_clients_readme.txt",
-]
-[components.lib."math-libs/BLAS/hipBLAS/stage"]
-exclude = [
-  "lib/libhipblas_fortran.so",
 ]
 [components.test."math-libs/BLAS/hipBLAS/stage"]
 include = [
@@ -46,6 +50,11 @@ include = [
 ]
 
 # hipBLASLt
+[components.lib."math-libs/BLAS/hipBLASLt/stage"]
+include = [
+  "bin/hipblaslt/library/**",
+  "lib/hipblaslt/library/**",
+]
 [components.dbg."math-libs/BLAS/hipBLASLt/stage"]
 [components.dev."math-libs/BLAS/hipBLASLt/stage"]
 include = [
@@ -54,11 +63,6 @@ include = [
 [components.doc."math-libs/BLAS/hipBLASLt/stage"]
 include = [
   "share/hipblaslt/samples/**",
-]
-[components.lib."math-libs/BLAS/hipBLASLt/stage"]
-include = [
-  "bin/hipblaslt/library/**",
-  "lib/hipblaslt/library/**",
 ]
 [components.test."math-libs/BLAS/hipBLASLt/stage"]
 include = [
@@ -81,39 +85,42 @@ include = [
 ]
 
 # rocBLAS
+[components.lib."math-libs/BLAS/rocBLAS/stage"]
+include = [
+  "bin/rocblas/library/**",
+  "lib/rocblas/library/**",
+]
 [components.dbg."math-libs/BLAS/rocBLAS/stage"]
 [components.dev."math-libs/BLAS/rocBLAS/stage"]
 [components.doc."math-libs/BLAS/rocBLAS/stage"]
 include = [
   "**/rocblas_clients_readme.txt",
 ]
-[components.lib."math-libs/BLAS/rocBLAS/stage"]
-include = [
-  "bin/rocblas/library/**",
-  "lib/rocblas/library/**",
-]
 [components.test."math-libs/BLAS/rocBLAS/stage"]
 include = [
   # Clients benchmarks
   "bin/rocblas-bench*",
   "bin/rocblas-gemm-tune*",
-  # Clients tests
+  # Clients tests (test_runner runs ctest from bin/rocblas/; needs CTestTestfile.cmake)
+  "bin/rocblas/**",
   "bin/rocblas-test*",
   "bin/rocblas_gentest.py",
   "bin/rocblas_gtest.data",
   "bin/rocblas_*.yaml",
   "bin/*_rtest.xml",
   "bin/*_rtest.py",
+  # Clients samples
+  "bin/rocblas-example*",
 ]
 
 # rocSOLVER
+[components.lib."math-libs/BLAS/rocSOLVER/stage"]
+optional = true
 [components.dbg."math-libs/BLAS/rocSOLVER/stage"]
 optional = true
 [components.dev."math-libs/BLAS/rocSOLVER/stage"]
 optional = true
 [components.doc."math-libs/BLAS/rocSOLVER/stage"]
-optional = true
-[components.lib."math-libs/BLAS/rocSOLVER/stage"]
 optional = true
 [components.test."math-libs/BLAS/rocSOLVER/stage"]
 include = [
@@ -124,16 +131,16 @@ include = [
 optional = true
 
 # hipSOLVER
+[components.lib."math-libs/BLAS/hipSOLVER/stage"]
+exclude = [
+  "lib/libhipsolver_fortran.so*",
+]
+optional = true
 [components.dbg."math-libs/BLAS/hipSOLVER/stage"]
 optional = true
 [components.dev."math-libs/BLAS/hipSOLVER/stage"]
 optional = true
 [components.doc."math-libs/BLAS/hipSOLVER/stage"]
-optional = true
-[components.lib."math-libs/BLAS/hipSOLVER/stage"]
-exclude = [
-  "lib/libhipsolver_fortran.so*",
-]
 optional = true
 [components.test."math-libs/BLAS/hipSOLVER/stage"]
 include = [
@@ -145,12 +152,6 @@ include = [
 optional = true
 
 # rocSPARSE
-[components.dbg."math-libs/BLAS/rocSPARSE/stage"]
-optional = true
-[components.dev."math-libs/BLAS/rocSPARSE/stage"]
-optional = true
-[components.doc."math-libs/BLAS/rocSPARSE/stage"]
-optional = true
 [components.lib."math-libs/BLAS/rocSPARSE/stage"]
 optional = true
 include = [
@@ -164,6 +165,12 @@ include = [
   "lib/rocsparse/rocsparseio-convert",
   "bin/rocsparseio-convert.exe",
 ]
+[components.dbg."math-libs/BLAS/rocSPARSE/stage"]
+optional = true
+[components.dev."math-libs/BLAS/rocSPARSE/stage"]
+optional = true
+[components.doc."math-libs/BLAS/rocSPARSE/stage"]
+optional = true
 [components.test."math-libs/BLAS/rocSPARSE/stage"]
 include = [
   "bin/*_rtest.xml",
@@ -176,15 +183,6 @@ include = [
 optional = true
 
 # hipSPARSE
-[components.dbg."math-libs/BLAS/hipSPARSE/stage"]
-optional = true
-[components.dev."math-libs/BLAS/hipSPARSE/stage"]
-optional = true
-include = [
-  "**/*.cmake"
-]
-[components.doc."math-libs/BLAS/hipSPARSE/stage"]
-optional = true
 [components.lib."math-libs/BLAS/hipSPARSE/stage"]
 optional = true
 [components.run."math-libs/BLAS/hipSPARSE/stage"]
@@ -192,6 +190,18 @@ optional = true
 include = [
   "bin/hipsparse_mtx2csr",
 ]
+[components.dbg."math-libs/BLAS/hipSPARSE/stage"]
+optional = true
+[components.dev."math-libs/BLAS/hipSPARSE/stage"]
+optional = true
+include = [
+  "**/*.cmake"
+]
+exclude = [
+  "share/hipsparse/test/**",
+]
+[components.doc."math-libs/BLAS/hipSPARSE/stage"]
+optional = true
 [components.test."math-libs/BLAS/hipSPARSE/stage"]
 include = [
   "bin/*_rtest.xml",
@@ -204,6 +214,11 @@ include = [
 optional = true
 
 # hipSPARSELt
+[components.lib."math-libs/BLAS/hipSPARSELt/stage"]
+include = [
+  "bin/hipsparselt/library/**",
+  "lib/hipsparselt/library/**",
+]
 [components.dbg."math-libs/BLAS/hipSPARSELt/stage"]
 optional = true
 [components.dev."math-libs/BLAS/hipSPARSELt/stage"]
@@ -211,18 +226,17 @@ optional = true
 include = [
   "**/*.cmake"
 ]
+exclude = [
+  "bin/hipsparselt/CTest*",
+]
 [components.doc."math-libs/BLAS/hipSPARSELt/stage"]
 optional = true
-[components.lib."math-libs/BLAS/hipSPARSELt/stage"]
-include = [
-  "bin/hipsparselt/library/**",
-  "lib/hipsparselt/library/**",
-]
 [components.test."math-libs/BLAS/hipSPARSELt/stage"]
 include = [
   # Clients benchmarks
   "bin/hipsparselt-bench*",
   # Clients tests
+  "bin/hipsparselt/**",
   "bin/hipsparselt-test*",
   "bin/hipsparselt_gtest.data",
   "bin/hipsparselt_gentest.py",

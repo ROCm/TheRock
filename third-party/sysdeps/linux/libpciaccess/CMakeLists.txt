@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
     set(_download_stamp "${_source_dir}/download.stamp")
@@ -54,9 +57,22 @@ if(NOT PATCHELF OR NOT MESON_BUILD)
   message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
 endif()
 
+include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
+therock_get_meson_compiler_env(_meson_cc _meson_cxx)
+
+# Apply patch source only on Linux
+set(patch_source_commands)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND patch_source_commands COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
+endif()
+
 add_custom_target(
   meson_build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+
+  COMMAND
+    ${patch_source_commands}
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
   COMMAND
@@ -66,6 +82,8 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E env
       # Apply symbol versioning via version.lds. RPATH is set post-install via patch_install.py.
       "LDFLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "CC=${_meson_cc}"
+      "CXX=${_meson_cxx}"
       --
       "${MESON_BUILD}" setup "${CMAKE_CURRENT_BINARY_DIR}"
         --reconfigure

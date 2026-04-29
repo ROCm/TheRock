@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
@@ -18,7 +21,7 @@ cmd = [
     "--parallel",
     "8",
     "--timeout",
-    "60",
+    "300",
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 

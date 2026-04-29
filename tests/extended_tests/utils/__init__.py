@@ -1,6 +1,9 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Utils package for test execution with system detection and result reporting.
 
-Provides BenchmarkClient API for collecting system info (OS, hardware, ROCm) and
+Provides ExtendedTestClient API for collecting system info (OS, hardware, ROCm) and
 uploading test results to API endpoints.
 
 Organization:
@@ -17,7 +20,9 @@ __all__ = [
     "constants",
     "exceptions",
     # Main API
-    "BenchmarkClient",
+    "ExtendedTestClient",
+    # Shared test base class
+    "ExtendedTestBase",
     # Commonly used exports
     "SystemContext",
     "SystemDetector",
@@ -32,7 +37,7 @@ __all__ = [
 ]
 
 # Import main API
-from .test_client import BenchmarkClient
+from .extended_test_client import ExtendedTestClient
 
 # Export commonly used classes from subdirectories
 from .system import (

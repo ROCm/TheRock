@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Merges a number of compile_commands.json files.
 # Usage:
 #   python merge_compile_commands.py {output} {inputs...}

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # therock_subproject.cmake
 # Facilities for defining build subprojects. This has some similarity to the
 # built-in ExternalProject and FetchContent facilities, but it is intended to
@@ -206,11 +209,16 @@ endfunction()
 # ACTIVATE: Option to signify that this call should end by calling
 #   therock_cmake_subproject_activate. Do not specify this option if wishing to
 #   further configure the sub-project.
-# USE_DIST_AMDGPU_TARGETS: Use the dist GPU targets vs the shard specific GPU
-#   targets. Typically this is set on runtime components that are intended to
-#    work for all supported targets, whereas it is ommitted for components which
-#    are meant to be built only for the given targets (typically for kernel
-#    libraries).
+# USE_DIST_AMDGPU_TARGETS: Use the dist GPU targets (THEROCK_DIST_AMDGPU_TARGETS)
+#   vs the shard specific GPU targets. Typically this is set on runtime components
+#   that are intended to work for all supported targets, whereas it is omitted for
+#   components which are meant to be built only for the given targets (typically
+#   for kernel libraries).
+# USE_TEST_AMDGPU_TARGETS: Use the test GPU targets (THEROCK_TEST_AMDGPU_TARGETS)
+#   which default to all available architectures. Set this on test subprojects whose
+#   artifacts are marked TARGET_NEUTRAL so that the resulting _generic artifact
+#   contains device code for every architecture, making upload races in classic CI
+#   harmless. Does not affect dist_info.json (unlike USE_DIST_AMDGPU_TARGETS).
 # DISABLE_AMDGPU_TARGETS: Do not set any GPU_TARGETS or AMDGPU_TARGETS variables
 #   in the project. This is largely used for broken projects that cannot
 #   build with an explicit target list.
@@ -255,9 +263,9 @@ endfunction()
 #   super-project specified C/C++ compiler. This will add an implicit dep on
 #   the named compiler sub-project and reconfigure CMAKE_C(XX)_COMPILER options.
 #   Only a fixed set of supported toolchains are supported (currently
-#   "amd-llvm").
+#   "amd-llvm" and "amd-hip").
 # BACKGROUND_BUILD: Option to indicate that the subproject does low concurrency,
-#   high latency build steps. It will be run in the backgroun in a job pool that
+#   high latency build steps. It will be run in the background in a job pool that
 #   allows some overlapping of work (controlled by
 #   THEROCK_BACKGROUND_BUILD_JOBS).
 # CMAKE_LISTS_RELPATH: Relative path within the source directory to the
@@ -304,6 +312,10 @@ endfunction()
 #   that all shared libraries are installed to. Defaults to
 #   INSTALL_DESTINATION/lib. Can be overriden on a per target basis by setting
 #   THEROCK_INSTALL_RPATH_LIBRARY_DIR.
+# INSTALL_OPTIONAL_COMPONENTS: List of CMake component names to pass to cmake
+#   --install via --component flags alongside default (all) target. Use this
+#   when a project marks certain components as EXCLUDE_FROM_ALL and you need to
+#   explicitly request them.
 #
 # Note that all transitive keywords (i.e. "INTERFACE_" prefixes) only consider
 # transitive deps along their RUNTIME_DEPS edges, not BUILD_DEPS.
@@ -327,9 +339,9 @@ endfunction()
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
+    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -468,6 +480,8 @@ function(therock_cmake_subproject_declare target_name)
   # GPU Targets.
   if(ARG_DISABLE_AMDGPU_TARGETS)
     set(_gpu_targets)
+  elseif(ARG_USE_TEST_AMDGPU_TARGETS)
+    set(_gpu_targets "${THEROCK_TEST_AMDGPU_TARGETS}")
   elseif(ARG_USE_DIST_AMDGPU_TARGETS)
     set(_gpu_targets "${THEROCK_DIST_AMDGPU_TARGETS}")
   else()
@@ -521,6 +535,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_INTERFACE_CONFIGURE_DEPEND_FILES "${_transitive_configure_depend_files}"
     THEROCK_EXTRA_DEPENDS "${ARG_EXTRA_DEPENDS}"
     THEROCK_OUTPUT_ON_FAILURE "${ARG_OUTPUT_ON_FAILURE}"
+    THEROCK_OPTIONAL_INSTALL_COMPONENTS "${ARG_INSTALL_OPTIONAL_COMPONENTS}"
 
     # RPATH
     THEROCK_NO_INSTALL_RPATH "${ARG_NO_INSTALL_RPATH}"
@@ -614,6 +629,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_prefix_dir "${target_name}" THEROCK_PREFIX_DIR)
   get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
   get_target_property(_logical_target_name "${target_name}" THEROCK_LOGICAL_TARGET_NAME)
+  get_target_property(_optional_install_components "${target_name}" THEROCK_OPTIONAL_INSTALL_COMPONENTS)
 
   # RPATH properties: just mirror these to same named variables because we just
   # mirror them syntactically into the subprojet..
@@ -692,23 +708,7 @@ function(therock_cmake_subproject_activate target_name)
   # subproject build or configure command.
   # https://cmake.org/cmake/help/latest/manual/cmake.1.html#cmdoption-cmake-E-arg-env
   # TODO: split into 'build' and 'configure'? Keeping them in sync seems useful.
-  set(_build_env_pairs)
-
-  # All project dependencies are managed within the super-project so we don't
-  # want subprojects reaching outside of the sandbox and building against
-  # uncontrolled (and likely incompatible) sources.
-  #
-  # These environment variables have been used by some subprojects to discover
-  # preexisting ROCm/HIP SDK installs. If detected, these subprojects then do
-  # things like:
-  #   * Append `${HIP_PATH}/cmake` to `CMAKE_MODULE_PATH`
-  #   * Use `${HIP_PATH}` as a hint for `find_package()` calls
-  # We unset both the CMake and environment variables with these names.
-  # See also https://github.com/ROCm/TheRock/issues/670.
-  list(APPEND _build_env_pairs "--unset=ROCM_PATH")
-  list(APPEND _build_env_pairs "--unset=ROCM_DIR")
-  list(APPEND _build_env_pairs "--unset=HIP_PATH")
-  list(APPEND _build_env_pairs "--unset=HIP_DIR")
+  _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
 
   # Handle compiler toolchain.
   set(_compiler_toolchain_addl_depends)
@@ -837,6 +837,11 @@ function(therock_cmake_subproject_activate target_name)
     endif()
     string(APPEND _init_contents "include(\"${_addl_cmake_include}\")\n")
   endforeach()
+
+  # Flag system: inject flag-controlled variables and defines.
+  _therock_get_flag_init_contents(_flag_init_contents "${target_name}")
+  string(APPEND _init_contents "${_flag_init_contents}")
+
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
   list(APPEND _fprint_files "${_cmake_project_init_file}")
 
@@ -853,6 +858,8 @@ function(therock_cmake_subproject_activate target_name)
 
   # Detect whether the stage dir has been pre-built.
   set(_prebuilt_file "${_stage_dir}.prebuilt")
+
+  list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
 
   # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
@@ -1001,6 +1008,7 @@ function(therock_cmake_subproject_activate target_name)
       LABEL "${target_name}"
       OUTPUT_ON_FAILURE "${_output_on_failure}"
     )
+
     add_custom_command(
       OUTPUT "${_build_stamp_file}"
       COMMAND
@@ -1028,6 +1036,33 @@ function(therock_cmake_subproject_activate target_name)
     if(THEROCK_SPLIT_DEBUG_INFO)
       set(_install_strip_option "--strip")
     endif()
+    # Set up install command(s) for optional components. If INSTALL_COMPONENTS is specified, run cmake
+    # --install once for each component, for some reason CMake doesn't support
+    # multiple --component flags in one call.
+    #   example commands with 2 INSTALL_COMPONENTS:
+    #     COMMAND;python;teatime.py;--log-timestamps;--label;
+    #     ${target_name} ${_comp1} install;--interactive;path/logs/${target_name}_${comp1}_install.log;--;
+    #     cmake;--install;build;--component;${_comp1};--strip;
+    #     COMMAND;python;teatime.py;--log-timestamps;--label;
+    #     ${target_name} ${comp2} install;--interactive;path/logs/${target_name}_${comp2}_install.log;--;
+    #     cmake;--install;build;--component;${comp2};--strip
+    set(_optional_component_install_commands)
+    if(_optional_install_components)
+      foreach(_comp IN LISTS _optional_install_components)
+        therock_subproject_log_command(_install_log_prefix
+          LOG_FILE "${target_name}_${_comp}_install.log"
+          LABEL "${target_name} ${_comp} install"
+          # While useful for debugging, stage install logs are almost pure noise
+          # for interactive use.
+          OUTPUT_ON_FAILURE "${THEROCK_QUIET_INSTALL}"
+        )
+        # install component to stage directory.
+        list(APPEND _optional_component_install_commands
+          COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" --component "${_comp}" ${_install_strip_option}
+        )
+      endforeach()
+    endif()
+    # Setup prefix for default component.
     therock_subproject_log_command(_install_log_prefix
       LOG_FILE "${target_name}_install.log"
       LABEL "${target_name} install"
@@ -1037,8 +1072,10 @@ function(therock_cmake_subproject_activate target_name)
     )
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
-      # Install to stage directory.
+      # Install default (all target) to stage directory.
       COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" ${_install_strip_option}
+      # Expand optional components _install command(s).
+      ${_optional_component_install_commands}
       # Populate local dist directory with this+all transitive stage installs.
       COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
@@ -1084,6 +1121,114 @@ function(therock_cmake_subproject_activate target_name)
   if(THEROCK_VERBOSE)
     message(STATUS "  FPRINT = ${_fprint}")
     message(STATUS "  FPRINT CONTENT = ${_fprint_content}")
+  endif()
+endfunction()
+
+# therock_cmake_subproject_build_test
+# Defines build-tree tests for a CMake subproject. Tests are run from the
+# subproject build directory after its build stamp is up to date. They are not
+# part of ALL and are reached through build-test-${target_name} and the
+# build-tests aggregate target when testing is enabled.
+function(therock_cmake_subproject_build_test target_name)
+  if(NOT THEROCK_BUILD_TESTING)
+    return()
+  endif()
+
+  _therock_assert_is_cmake_subproject("${target_name}")
+
+  get_target_property(_binary_dir "${target_name}" THEROCK_BINARY_DIR)
+  get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
+  get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
+  get_target_property(_stage_dir "${target_name}" THEROCK_STAGE_DIR)
+
+  # Match the subproject prebuilt behavior: when the stage is imported from
+  # artifacts, there is no local build tree to test.
+  set(_prebuilt_file "${_stage_dir}.prebuilt")
+  if(EXISTS "${_prebuilt_file}")
+    return()
+  endif()
+
+  if(TARGET "build-test-${target_name}")
+    message(FATAL_ERROR "Build tests already declared for subproject '${target_name}'")
+  endif()
+  if(NOT ARGN)
+    message(FATAL_ERROR "Build tests for '${target_name}' require at least one COMMAND")
+  endif()
+
+  set(_command_count 0)
+  set(_current_command)
+  set(_expect_command TRUE)
+  foreach(_arg IN LISTS ARGN)
+    if(_arg STREQUAL "COMMAND")
+      if(_current_command)
+        math(EXPR _command_count "${_command_count} + 1")
+        set("_test_command_${_command_count}" "${_current_command}")
+        set(_current_command)
+      elseif(NOT _expect_command)
+        message(FATAL_ERROR "Empty COMMAND in build tests for '${target_name}'")
+      endif()
+      set(_expect_command FALSE)
+    else()
+      if(_expect_command)
+        message(FATAL_ERROR
+          "Expected COMMAND in therock_cmake_subproject_build_test(${target_name} ...)")
+      endif()
+      list(APPEND _current_command "${_arg}")
+    endif()
+  endforeach()
+  if(_current_command)
+    math(EXPR _command_count "${_command_count} + 1")
+    set("_test_command_${_command_count}" "${_current_command}")
+  elseif(NOT _command_count)
+    message(FATAL_ERROR "Build tests for '${target_name}' require at least one non-empty COMMAND")
+  elseif(NOT _expect_command)
+    message(FATAL_ERROR "Empty COMMAND in build tests for '${target_name}'")
+  endif()
+
+  set(_build_test_commands)
+  _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
+  foreach(_command_index RANGE 1 ${_command_count})
+    set(_log_file "${target_name}_build_test.log")
+    set(_log_label "${target_name} build-test")
+    if(_command_index GREATER 1)
+      math(EXPR _log_suffix "${_command_index} - 1")
+      set(_log_file "${target_name}_build_test_${_log_suffix}.log")
+      set(_log_label "${target_name} build-test ${_log_suffix}")
+    endif()
+    therock_subproject_log_command(_test_log_prefix
+      LOG_FILE "${_log_file}"
+      LABEL "${_log_label}"
+      OUTPUT_ON_FAILURE "${_output_on_failure}"
+    )
+
+    set(_test_command_var "_test_command_${_command_index}")
+    list(APPEND _build_test_commands
+      COMMAND
+        ${_test_log_prefix}
+        "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
+        ${${_test_command_var}}
+    )
+  endforeach()
+
+  set(_build_stamp_file "${_stamp_dir}/build.stamp")
+  set(_build_test_stamp_file "${_stamp_dir}/build-test.stamp")
+
+  add_custom_command(
+    OUTPUT "${_build_test_stamp_file}"
+    ${_build_test_commands}
+    COMMAND "${CMAKE_COMMAND}" -E touch "${_build_test_stamp_file}"
+    WORKING_DIRECTORY "${_binary_dir}"
+    COMMENT "Running build tests for sub-project ${target_name}"
+    USES_TERMINAL
+    DEPENDS
+      "${_build_stamp_file}"
+    VERBATIM
+  )
+  add_custom_target("build-test-${target_name}"
+    DEPENDS "${_build_test_stamp_file}"
+  )
+  if(TARGET therock-build-tests)
+    add_dependencies(therock-build-tests "build-test-${target_name}")
   endif()
 endfunction()
 
@@ -1170,6 +1315,28 @@ function(_therock_assert_is_cmake_subproject target_name)
   if(NOT _is_subproject STREQUAL "cmake")
     message(FATAL_ERROR "Target ${target_name} is not a sub-project")
   endif()
+endfunction()
+
+function(_therock_cmake_subproject_build_env_pairs out_var)
+  set(_build_env_pairs)
+
+  # All project dependencies are managed within the super-project so we don't
+  # want subprojects reaching outside of the sandbox and building against
+  # uncontrolled (and likely incompatible) sources.
+  #
+  # These environment variables have been used by some subprojects to discover
+  # preexisting ROCm/HIP SDK installs. If detected, these subprojects then do
+  # things like:
+  #   * Append `${HIP_PATH}/cmake` to `CMAKE_MODULE_PATH`
+  #   * Use `${HIP_PATH}` as a hint for `find_package()` calls
+  # We unset both the CMake and environment variables with these names.
+  # See also https://github.com/ROCm/TheRock/issues/670.
+  list(APPEND _build_env_pairs "--unset=ROCM_PATH")
+  list(APPEND _build_env_pairs "--unset=ROCM_DIR")
+  list(APPEND _build_env_pairs "--unset=HIP_PATH")
+  list(APPEND _build_env_pairs "--unset=HIP_DIR")
+
+  set("${out_var}" "${_build_env_pairs}" PARENT_SCOPE)
 endfunction()
 
 # Builds a CMake language fragment to set up a dependency provider such that
@@ -1399,6 +1566,10 @@ function(_therock_cmake_subproject_setup_toolchain
         message(FATAL_ERROR
           "Subproject ${target_name} requires dist AMDGPU targets but none were set. "
           "Set THEROCK_DIST_AMDGPU_FAMILIES.")
+      elseif("${_filtered_gpu_targets}" STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
+        message(FATAL_ERROR
+          "Subproject ${target_name} requires test AMDGPU targets but none are available. "
+          "This is unexpected since test targets default to all registered targets.")
       else()
         message(FATAL_ERROR
           "Internal error: Subproject ${target_name} received unexpected NOTFOUND sentinel "

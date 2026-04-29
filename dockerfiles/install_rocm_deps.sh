@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # install_rocm_deps.sh
 #
 # Installs runtime dependencies for ROCm on various Linux distributions.
@@ -8,6 +11,8 @@
 #   - Ubuntu 22.04, 24.04 (apt)
 #   - AlmaLinux 8 (dnf)
 #   - Azure Linux 3 (tdnf)
+#   - RHEL 8.10, 9.7, 10.1 (dnf)
+#   - SLES 15.7, 16.0 (zypper)
 
 set -e
 
@@ -21,8 +26,20 @@ detect_distro() {
     fi
 }
 
+# Detect distribution version from /etc/os-release
+detect_version() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        echo "${VERSION_ID:-unknown}"
+    else
+        echo "unknown"
+    fi
+}
+
 DISTRO=$(detect_distro)
+VERSION_ID=$(detect_version)
 echo "Detected distribution: $DISTRO"
+echo "Detected version: $VERSION_ID"
 
 case "$DISTRO" in
     ubuntu)
@@ -31,6 +48,7 @@ case "$DISTRO" in
         apt-get install -y --no-install-recommends \
             ca-certificates \
             curl \
+            gpg \
             build-essential \
             libelf1 \
             libnuma1 \
@@ -98,9 +116,56 @@ case "$DISTRO" in
         tdnf clean all
         ;;
 
+    rhel)
+        echo "Installing dependencies using dnf for RHEL ${VERSION_ID}..."
+        # Use --allowerasing to handle curl-minimal vs curl conflict in UBI images
+        dnf install -y --setopt=install_weak_deps=False --allowerasing \
+            ca-certificates \
+            curl \
+            libatomic \
+            elfutils-libelf \
+            elfutils-libs \
+            numactl-libs \
+            ncurses-libs \
+            openssl-libs \
+            perl \
+            file \
+            python3 \
+            python3-devel \
+            python3-pip \
+            kmod
+        dnf clean all
+        ;;
+
+    sles)
+        echo "Installing dependencies using zypper for SLES ${VERSION_ID}..."
+
+        # Refresh repos
+        zypper --non-interactive refresh || true
+
+        # Install dependencies
+        zypper --non-interactive install --no-recommends \
+            ca-certificates \
+            curl \
+            tar \
+            libatomic1 \
+            libelf1 \
+            libdw1 \
+            libnuma1 \
+            ncurses-utils \
+            perl \
+            file \
+            kmod \
+            python3 \
+            python3-devel \
+            python3-pip
+
+        zypper clean --all
+        ;;
+
     *)
         echo "Error: Unsupported distribution: $DISTRO"
-        echo "Supported distributions: ubuntu, almalinux, azurelinux"
+        echo "Supported distributions: ubuntu, almalinux, azurelinux, rhel, sles"
         exit 1
         ;;
 esac

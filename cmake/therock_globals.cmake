@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Globals defined for the entire super-project.
 
 # THEROCK_CONDITION_* variables

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Writes torch_version, torchaudio_version, torchvision_version, triton_version, and apex_version to GITHUB_OUTPUT.
 
 Fails if any wheels that were expected for the platform were not set.
@@ -11,7 +14,7 @@ import argparse
 import os
 import glob
 import platform
-from github_actions_utils import *
+from github_actions_api import *
 
 
 def _log(*args, **kwargs):

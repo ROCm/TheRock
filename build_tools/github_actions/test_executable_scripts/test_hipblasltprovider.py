@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
@@ -25,8 +28,8 @@ cmd = [
 environ_vars = os.environ.copy()
 test_type = os.getenv("TEST_TYPE", "full")
 
-if test_type == "smoke":
-    # Exclude tests that start with "Full" during smoke tests
+if test_type == "quick":
+    # Exclude tests that start with "Full" during quick tests
     environ_vars["GTEST_FILTER"] = "-Full*"
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")

@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Sets up sccache to wrap ROCm compilers for HIP builds.
 
 This script wraps the ROCm LLVM compilers (clang, clang++) with sccache stubs

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
@@ -23,12 +26,12 @@ cmd = [
     f"{THEROCK_BIN_DIR}/rocsolver-test",
 ]
 
-# If smoke tests are enabled, we run smoke tests only.
+# If quick tests are enabled, we run quick tests only.
 # Otherwise, we run the normal test suite
 # Test filter patterns retrieved from https://github.com/ROCm/rocm-libraries/blob/a18b17eef6c24bcd4bcf8dd6a0e36325cbcd11a7/projects/rocsolver/rtest.xml
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
-    smoke_tests = [
+if test_type == "quick":
+    quick_tests = [
         "checkin*BDSQR*",
         "checkin*STEBZ*",
         "checkin*STEIN*",
@@ -47,11 +50,7 @@ if test_type == "smoke":
         "checkin*REFACTLU*",
         "checkin*REFACTCHOL*",
     ]
-    cmd.extend([f"--gtest_filter={':'.join(smoke_tests)}-*LARFB*:*known_bug*"])
-else:
-    cmd.extend(
-        ["--gtest_filter=checkin*-*known_bug*:checkin_lapack/SYGVDX_INPLACE.__float/41"]
-    )
+    cmd.extend([f"--gtest_filter={':'.join(quick_tests)}-*LARFB*:*known_bug*"])
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=envion_vars)

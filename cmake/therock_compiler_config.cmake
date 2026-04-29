@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Project wide compiler configuration.
 
 # On win32 only support embedded debug databases project wide.

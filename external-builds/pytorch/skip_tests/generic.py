@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 skip_tests = {
     "gfx950": {
         "cuda": {
@@ -6,11 +9,21 @@ skip_tests = {
         }
     },
     "common": {
-        # ----------------
-        # might be failing
-        # ----------------
-        # "binary_ufuncs": [ "test_cuda_tensor_pow_scalar_tensor_cuda" ]
-        # ----------------
+        "cuda": [
+            # RuntimeError: Error building extension 'dummy_allocator'
+            # Skipped across all PyTorch versions; the hipblas.h include error
+            # persists in the ROCm SDK environment.
+            "test_mempool_empty_cache_inactive",
+            # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
+            "test_memory_snapshot",
+            "test_memory_plots",
+        ],
+        "autograd": [
+            # Stream comparison mismatch on ROCm (non-default stream vs default stream)
+            #   AssertionError: <torch.cuda.Stream ...> != <torch.cuda.Stream cuda_stream=0x0>
+            # Seems to fails on Linux and Windows across torch versions and all tested GPUs.
+            "test_side_stream_backward_overlap",
+        ],
         "cuda": [
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
@@ -41,12 +54,29 @@ skip_tests = {
             #   * https://github.com/ROCm/pytorch/pull/2742
             #   * https://github.com/ROCm/pytorch/pull/2873
             "test_preferred_blas_library_settings",
+            # Python 3.14: PEP 649 changed __annotations__ behavior
+            # AttributeError: 'Model' object has no attribute '__annotations__'
+            # https://github.com/ROCm/TheRock/issues/2985
+            "test_autocast_cat_jit",
+            # what():  HIP error: operation not permitted when stream is capturing
+            # Search for `hipErrorStreamCaptureUnsupported' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__HIPRT__TYPES.html for more information.
+            # HIP kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+            # For debugging consider passing AMD_SERIALIZE_KERNEL=3
+            # Compile with `TORCH_USE_HIP_DSA` to enable device-side assertions.
+            #
+            # Exception raised from ~CUDAGraph at /__w/TheRock/TheRock/external-builds/pytorch/pytorch/aten/src/ATen/hip/HIPGraph.cpp:320 (most recent call first):
+            # frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x80 (0x7f2316f1bdf0 in /home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/lib/libc10.so)
+            "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_allow_unused_input",
+            "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_not_allow_unused_input",
             # ----------------
             # maybe failing
             # ----------------
             # "test_hip_device_count"
             # "test_nvtx"
             # ----------------
+            #
+            # Multi-processing error in py3.14 - https://github.com/ROCm/TheRock/issues/4197
+            "test_is_pinned_no_context",
         ],
         "nn": [
             # external-builds/pytorch/pytorch/test/test_nn.py::TestNN::test_RNN_dropout_state MIOpen(HIP): Error [Compile] 'hiprtcCompileProgram(prog.get(), c_options.size(), c_options.data())' MIOpenDropoutHIP.cpp: HIPRTC_ERROR_COMPILATION (6)
@@ -67,6 +97,14 @@ skip_tests = {
             # FLAKY!! AssertionError: 'tensor([2.3000+4.j, 7.0000+6.j])' != 'tensor([2.30000+4.j, 7.00000+6.j])'
             # (Note: this will also skip "test_print" in all other test modules)
             "test_print",
+            # Python 3.14: PEP 649 changed storage deallocation behavior
+            # AssertionError: False is not true
+            # https://github.com/ROCm/TheRock/issues/2985
+            "test_storage_dealloc_subclass_resurrected",
+            "test_storage_dealloc_subclass_zombie",
+            # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
+            # TypeError: 'CustomDecompTable' object is not a mapping
+            "test_fx_memory_profiler_augmentation",
         ],
         "unary_ufuncs": [
             # ----------------
@@ -147,29 +185,32 @@ skip_tests = {
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_int64",
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_int8",
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint8",
-        ],
-    },
-    "gfx950": {
-        "binary_ufuncs": [
-            # for all the pow() issues see https://github.com/ROCm/TheRock/issues/2070
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other___rpow___cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other__refs_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig___rpow___cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig__refs_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_batch_vs_slicing_pow_cuda_complex64",
-            # 2.11 specific?
-            "test_batch_vs_slicing__refs_pow_cuda_complex64",
-            "test_batch_vs_slicing__refs_pow_cuda_complex32",
-            "test_batch_vs_slicing___rpow___cuda_complex64",
+            "test_reference_numerics_large__refs_nn_functional_mish_cuda_float16",
+            "test_reference_numerics_large__refs_special_spherical_bessel_j0_cuda_uint16",
+            "test_reference_numerics_large__refs_special_spherical_bessel_j0_cuda_uint32",
+            "test_reference_numerics_large__refs_special_spherical_bessel_j0_cuda_uint64",
+            "test_reference_numerics_large_nn_functional_mish_cuda_float16",
+            "test_reference_numerics_large_special_spherical_bessel_j0_cuda_uint16",
+            "test_reference_numerics_large_special_spherical_bessel_j0_cuda_uint32",
+            "test_reference_numerics_large_special_spherical_bessel_j0_cuda_uint64",
+            "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint16",
+            "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint32",
+            "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint64",
+            "test_reference_numerics_normal_special_airy_ai_cuda_uint16",
+            "test_reference_numerics_normal_special_airy_ai_cuda_uint32",
+            "test_reference_numerics_normal_special_airy_ai_cuda_uint64",
+            "test_reference_numerics_normal_special_spherical_bessel_j0_cuda_uint16",
+            "test_reference_numerics_normal_special_spherical_bessel_j0_cuda_uint32",
+            "test_reference_numerics_normal_special_spherical_bessel_j0_cuda_uint64",
+            "test_reference_numerics_small__refs_special_spherical_bessel_j0_cuda_uint16",
+            "test_reference_numerics_small__refs_special_spherical_bessel_j0_cuda_uint32",
+            "test_reference_numerics_small__refs_special_spherical_bessel_j0_cuda_uint64",
+            "test_reference_numerics_small_special_airy_ai_cuda_uint16",
+            "test_reference_numerics_small_special_airy_ai_cuda_uint32",
+            "test_reference_numerics_small_special_airy_ai_cuda_uint64",
+            "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint16",
+            "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint32",
+            "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint64",
         ],
     },
     # Special notes for Windows:

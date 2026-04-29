@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Script to generate an index.html listing .tar.gz files in an S3 bucket, performing the following:
  * Lists .tar.gz files in the specified S3 bucket.
@@ -27,7 +30,7 @@ from botocore.exceptions import NoCredentialsError, ClientError
 import re
 import json
 import logging
-from github_actions.github_actions_utils import gha_append_step_summary
+from github_actions.github_actions_api import gha_append_step_summary
 
 log = logging.getLogger(__name__)
 

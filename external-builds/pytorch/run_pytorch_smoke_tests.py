@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """PyTorch ROCm Smoke Tests Runner.
 
 This script runs PyTorch smoke tests using pytest.

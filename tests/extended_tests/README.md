@@ -14,10 +14,10 @@ Unified testing framework for TheRock ROCm distribution, supporting benchmark an
 
 The test framework provides infrastructure for two test types:
 
-| Test Type                     | Purpose                          | Result Types         | When to Use                                  | Status            |
-| ----------------------------- | -------------------------------- | -------------------- | -------------------------------------------- | ----------------- |
-| **[Benchmark](benchmark/)**   | Performance regression detection | PASS/FAIL/UNKNOWN    | Prevent performance degradation (nightly CI) | Implemented       |
-| **[Functional](functional/)** | Correctness validation           | PASS/FAIL/ERROR/SKIP | Verify expected behavior (nightly CI)        | Under Development |
+| Test Type                     | Purpose                          | Result Types         | When to Use                                  |
+| ----------------------------- | -------------------------------- | -------------------- | -------------------------------------------- |
+| **[Benchmark](benchmark/)**   | Performance regression detection | PASS/FAIL/UNKNOWN    | Prevent performance degradation (nightly CI) |
+| **[Functional](functional/)** | Correctness validation           | PASS/FAIL/ERROR/SKIP | Verify expected behavior (nightly CI)        |
 
 ### Key Features
 
@@ -33,14 +33,16 @@ The test framework provides infrastructure for two test types:
 
 ### Environment Setup
 
-All tests require these environment variables. **Note:** These are automatically configured in CI runs. For local testing, adjust values based on your setup:
+All tests require these environment variables. **Note:** These are automatically configured in CI runs. For local testing, adjust values based on your setup.
+
+> **Setting Up Environment:** See [Test Environment Reproduction](../../docs/development/test_environment_reproduction.md) for instructions on reproducing the CI test environment, including how to obtain TheRock build artifacts from a CI run and get the `ARTIFACT_RUN_ID` (same as `CI_RUN_ID` in the document).
 
 ```bash
-# Required: Update to your actual TheRock build directory
+# Required: Path to TheRock bin/ directory (see above for how to obtain)
 export THEROCK_BIN_DIR=/path/to/therock/build/bin
 
-# Optional: Unique identifier for this test run (default: local-test)
-export ARTIFACT_RUN_ID=local-test
+# Required: GitHub Actions run ID (from CI run URL, e.g., https://github.com/ROCm/TheRock/actions/runs/16948046392)
+export ARTIFACT_RUN_ID=16948046392
 
 # Required: Update to match your GPU family (e.g., gfx908, gfx90a, gfx942, gfx950-dcgpu)
 export AMDGPU_FAMILIES=gfx950-dcgpu
@@ -54,7 +56,7 @@ export AMDGPU_FAMILIES=gfx950-dcgpu
 See test-specific READMEs for detailed instructions and examples:
 
 - **[Benchmark Tests](benchmark/README.md)** - Performance regression testing
-- **[Functional Tests](functional/README.md)** - Correctness validation testing (under development)
+- **[Functional Tests](functional/README.md)** - Correctness validation testing
 
 ## Project Structure
 
@@ -76,17 +78,24 @@ extended_tests/
 │   ├── benchmark_test_matrix.py   # Benchmark test matrix
 │   └── README.md                  # Benchmark-specific docs
 │
-├── functional/                     # Functional/correctness tests (under development)
-│   └── README.md                  # Functional-specific docs (placeholder - tests to be added in follow-up PRs)
+├── functional/                    # Functional/correctness tests
+│   ├── scripts/                   # Test implementations
+│   │   ├── functional_base.py     # Base class for functional tests
+│   │   └── test_*.py              # Individual tests
+│   ├── configs/                   # Test-specific configurations
+│   │   └── *.json
+│   ├── functional_test_matrix.py  # Functional test matrix
+│   └── README.md                  # Functional-specific docs
 │
 └── utils/                          # SHARED utilities for all test types
+    ├── extended_test_base.py      # ExtendedTestBase - shared base class for all tests
+    ├── extended_test_client.py    # ExtendedTestClient - system detection & result reporting
     ├── exceptions.py              # Custom exception classes
     │   ├── BenchmarkExecutionError   # Execution/parsing failures
     │   ├── BenchmarkResultError      # Result validation failures
     │   └── FrameworkException        # Base exception
     │
     ├── logger.py                  # Logging utilities
-    ├── test_client.py             # Test execution client
     ├── constants.py               # Global constants
     │
     ├── config/                    # Configuration parsers
@@ -108,11 +117,11 @@ extended_tests/
 
 ### Test Execution Schedule
 
-| Workflow Trigger           | Benchmark Tests | Functional Tests  |
-| -------------------------- | --------------- | ----------------- |
-| **Pull Request (PR)**      | Skipped         | Skipped           |
-| **Nightly CI (scheduled)** | Run (parallel)  | Under Development |
-| **Push to main**           | Skipped         | Skipped           |
+| Workflow Trigger           | Benchmark Tests | Functional Tests |
+| -------------------------- | --------------- | ---------------- |
+| **Pull Request (PR)**      | Skipped         | Skipped          |
+| **Nightly CI (scheduled)** | Run (parallel)  | Run (parallel)   |
+| **Push to main**           | Skipped         | Skipped          |
 
 ### Parallel Execution Architecture
 
@@ -123,27 +132,22 @@ ci_nightly.yml
   └─ ci_linux.yml / ci_windows.yml
       ├─ build_artifacts
       │
-      ├─ test_artifacts ────────────────────┐
-      │   └─ Component tests (smoke/full)   │ Run in parallel
-      │                                      │ after build
-      ├─ test_benchmarks ───────────────────┤
-      │   └─ Benchmark tests                │
-      └─ test_functional_tests ─────────────┘
-          └─ Functional tests (under development)
+      └─ test_artifacts
+          └─ Component + Functional + Benchmark tests
+              (runner auto-selected per component)
 ```
 
 **Workflow Files:**
 
 - `.github/workflows/ci_nightly.yml` - Nightly CI orchestration
 - `.github/workflows/ci_linux.yml` / `ci_windows.yml` - Platform-specific CI logic
-- `.github/workflows/test_benchmarks.yml` - Benchmark test execution (uses `benchmark_runs_on`)
-- `.github/workflows/test_artifacts.yml` - Component test execution (uses `test_runs_on`)
+- `.github/workflows/test_artifacts.yml` - All test execution (component, functional, benchmark)
 
 **Key Differences:**
 
-- **Component Tests**: Run on all PRs (smoke) and nightly (full), use regular runners
-- **Benchmark Tests**: Run only on nightly, use dedicated performance runners (`benchmark_runs_on`)
-- **Functional Tests**: Under development - will run only on nightly, use regular runners (`test_runs_on`)
+- **Component Tests**: Run on all PRs (smoke) and nightly (full), use regular runners (`test_runs_on`)
+- **Benchmark Tests**: Run only when globally enabled via `run_extended_tests == true` AND a dedicated performance runner is available (`benchmark-runs-on` in `amdgpu_family_matrix.py`). Runner is auto-selected per component.
+- **Functional Tests**: Run only when globally enabled via `run_extended_tests == true`, use regular runners (`test_runs_on`)
 
 ## Architecture
 
@@ -162,5 +166,5 @@ All tests follow this pattern:
 See test-specific READMEs for detailed implementation guides:
 
 - **[Benchmark Tests](benchmark/README.md)** - LKG comparison logic and adding new benchmarks
-- **[Functional Tests](functional/README.md)** - Correctness validation and adding new tests (under development)
+- **[Functional Tests](functional/README.md)** - Correctness validation and adding new tests
 - **[Shared Utils](utils/README.md)** - Common utilities, exceptions, and helpers

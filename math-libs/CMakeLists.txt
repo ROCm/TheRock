@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(THEROCK_ENABLE_RAND)
   ##############################################################################
   # rocRAND
@@ -85,17 +88,15 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_declare(rocPRIM
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM"
-    BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_TEST=OFF
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      therock-googletest
     RUNTIME_DEPS
       hip-clr
   )
@@ -106,6 +107,41 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
 
+  if(THEROCK_BUILD_TESTING)
+    ##############################################################################
+    # rocPRIM tests
+    ##############################################################################
+
+    # rocPRIM_tests declared as a separate target to stop the tests from clogging up the critical build path for libs
+    # that depend on rocPRIM
+    # passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding
+    therock_cmake_subproject_declare(rocPRIM_tests
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM_tests"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        -DHIP_PLATFORM=amd
+        -DROCM_PATH=
+        -DROCM_DIR=
+        -DBUILD_TEST=ON
+        -DUSE_SYSTEM_LIB=ON
+      COMPILER_TOOLCHAIN
+        amd-hip
+      BUILD_DEPS
+        rocm-cmake
+        therock-googletest
+        rocPRIM
+      RUNTIME_DEPS
+        hip-clr
+    )
+    therock_cmake_subproject_glob_c_sources(rocPRIM_tests
+      SUBDIRS
+        .
+    )
+    therock_cmake_subproject_activate(rocPRIM_tests)
+
+  endif()
+
   therock_cmake_subproject_declare(hipCUB
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipcub"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCUB"
@@ -115,6 +151,7 @@ if(THEROCK_ENABLE_PRIM)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -140,14 +177,17 @@ if(THEROCK_ENABLE_PRIM)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
       rocPRIM
+      rocRAND
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+      ${THEROCK_BUNDLED_SQLITE3}
   )
   therock_cmake_subproject_glob_c_sources(rocThrust
     SUBDIRS
@@ -156,6 +196,16 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocThrust rocthrust lib/cmake/rocthrust)
   therock_cmake_subproject_activate(rocThrust)
 
+  set(_prim_subproject_deps
+    rocPRIM
+    hipCUB
+    rocThrust
+  )
+
+  if(THEROCK_BUILD_TESTING)
+    list(APPEND _prim_subproject_deps rocPRIM_tests)
+  endif()
+
   therock_provide_artifact(prim
     DESCRIPTOR artifact-prim.toml
     COMPONENTS
@@ -163,7 +213,8 @@ if(THEROCK_ENABLE_PRIM)
       dev
       doc
       test
-    SUBPROJECT_DEPS rocPRIM hipCUB rocThrust
+    SUBPROJECT_DEPS
+      ${_prim_subproject_deps}
   )
 endif(THEROCK_ENABLE_PRIM)
 
@@ -345,6 +396,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       -DROCM_PATH=
       -DROCM_DIR=
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+      -DCMAKE_CXX_STANDARD=17
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN

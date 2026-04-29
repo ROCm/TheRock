@@ -1,0 +1,64 @@
+From 5a790ae5a6d4f87f0bfa132b486913b16aad5d1a Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Fri, 17 Apr 2026 17:48:46 +0200
+Subject: [PATCH] Add EXPORT_FORTRAN_BINDINGS option
+
+Splits the build-vs-export concerns for the Fortran interop shim. A new
+`EXPORT_FORTRAN_BINDINGS` optionn controls whether hipsolver_fortran is
+registered in the exported hipsolver-targets set.
+`BUILD_FORTRAN_BINDINGS` still controls whether the library is built at
+all. The new options defaults to on, thus the existing behaviour is
+unchanged.
+
+In TheRock, hipsolver_fortran is packaged as part of the test artifact
+as it was so only used by hipsolver-test and friends. The library is not
+shipped in the dev wheels for kpack-enabled wheels whereas it was in the
+legacy wheels. The exported target broke `find_package` for unrelated
+consumers (e.g. PyTorch) with the shim omitted from the dev wheel. As
+the `hipsolver_module.f90` has been depcrecated since Aug 2024 in favor
+of hipfort it is resonab le to make exposing the lib optional (while
+still allowing the tests to use it).
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ projects/hipsolver/CMakeLists.txt             |  1 +
+ projects/hipsolver/library/src/CMakeLists.txt | 11 ++++++++++-
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/projects/hipsolver/CMakeLists.txt b/projects/hipsolver/CMakeLists.txt
+index 9dc58a50ff..257259b2d1 100644
+--- a/projects/hipsolver/CMakeLists.txt
++++ b/projects/hipsolver/CMakeLists.txt
+@@ -83,6 +83,7 @@ option(BUILD_WITH_SPARSE "Build hipSOLVER with sparse functionality available at
+ option(BUILD_VERBOSE "Output additional build information" OFF)
+ option(HIPSOLVER_FIND_PACKAGE_LAPACK_CONFIG "Skip module mode search for LAPACK" ON)
+ option(BUILD_FORTRAN_BINDINGS "Build the Fortran bindings" "${UNIX}")
++option(EXPORT_FORTRAN_BINDINGS "Install hipsolver_fortran as an exported CMake target" ON)
+ 
+ if(NOT BUILD_SHARED_LIBS)
+   add_compile_definitions(HIPSOLVER_STATIC_LIB)
+diff --git a/projects/hipsolver/library/src/CMakeLists.txt b/projects/hipsolver/library/src/CMakeLists.txt
+index fc364b3e29..315d2915a5 100644
+--- a/projects/hipsolver/library/src/CMakeLists.txt
++++ b/projects/hipsolver/library/src/CMakeLists.txt
+@@ -76,7 +76,16 @@ if(BUILD_FORTRAN_BINDINGS)
+   # Create hipSOLVER Fortran module
+   add_library(hipsolver_fortran ${hipsolver_f90_source})
+   rocm_set_soversion(hipsolver_fortran ${hipsolver_SOVERSION})
+-  rocm_install(TARGETS hipsolver_fortran)
++  if(EXPORT_FORTRAN_BINDINGS)
++    rocm_install(TARGETS hipsolver_fortran)
++  else()
++    # Install the shared object without adding it to the
++    # hipsolver-targets export set, so find_package(hipsolver)
++    # does not reference roc::hipsolver_fortran.
++    install(TARGETS hipsolver_fortran
++            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
++            COMPONENT runtime)
++  endif()
+ endif()
+ 
+ add_library(hipsolver
+-- 
+2.51.0
+

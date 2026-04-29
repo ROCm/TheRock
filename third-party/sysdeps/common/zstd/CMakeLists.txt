@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
@@ -62,7 +65,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(CONFIGURE_ARGS
     -DZSTD_BUILD_STATIC=OFF
     -DZSTD_BUILD_SHARED=ON
-    "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+    "-DCMAKE_C_FLAGS=-fvisibility=hidden"
+    -DZSTDLIB_VISIBLE=default
+    -DZSTDERRORLIB_VISIBLE=default
+    -DZDICTLIB_VISIBLE=default
+    "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds -Wl,-Bsymbolic"
   )
   set(POST_INSTALL_COMMANDS
     COMMAND

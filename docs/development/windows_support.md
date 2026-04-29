@@ -16,8 +16,8 @@ TheRock aims to support as many subprojects as possible on "native" Windows
 ROCm is composed of many subprojects, some of which are supported on Windows:
 
 - https://rocm.docs.amd.com/en/latest/what-is-rocm.html
-- https://rocm.docs.amd.com/projects/install-on-windows/en/latest/reference/component-support.html
-- https://rocm.docs.amd.com/projects/install-on-windows/en/latest/conceptual/release-versioning.html#windows-builds-from-source
+- https://rocm.docs.amd.com/projects/install-on-windows/en/latest/conceptual/component-support.html
+- https://rocm.docs.amd.com/projects/install-on-windows/en/latest/about/release-versioning.html#windows-builds-from-source
 
 This table tracks current support status for each subproject in TheRock on
 Windows. Some subprojects may need extra patches to build within TheRock (on
@@ -61,6 +61,9 @@ mainline, in open source, using MSVC, etc.).
 |                     |                                                                                                                          |                |           |                                               |
 | comm-libs           | [rccl](https://github.com/ROCm/rocm-systems/tree/develop/projects/rccl)                                                  | rocm-systems   | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
+| media-libs          | [rocDecode](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdecode)                                        | rocm-systems   | ❌        | Linux only (requires VA-API / Mesa)           |
+| media-libs          | [rocJPEG](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocjpeg)                                            | rocm-systems   | ❌        | Linux only (requires VA-API / Mesa)           |
+|                     |                                                                                                                          |                |           |                                               |
 | math-libs           | [rocRAND](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocrand)                                          | rocm-libraries | ✅        |                                               |
 | math-libs           | [hipRAND](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hiprand)                                          | rocm-libraries | ✅        |                                               |
 | math-libs           | [rocPRIM](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocprim)                                          | rocm-libraries | ✅        |                                               |
@@ -80,7 +83,7 @@ mainline, in open source, using MSVC, etc.).
 | math-libs (BLAS)    | [hipSOLVER](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipsolver)                                      | rocm-libraries | ✅        |                                               |
 | math-libs (BLAS)    | [hipBLAS](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipblas)                                          | rocm-libraries | ✅        |                                               |
 | math-libs           | [rocWMMA](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocwmma)                                          | rocm-libraries | ✅        |                                               |
-| math-libs           | [libhipcxx](https://github.com/ROCm/libhipcxx)                                                                           | standalone     | ❌        | Unsupported                                   |
+| math-libs           | [libhipcxx](https://github.com/ROCm/libhipcxx)                                                                           | standalone     | ✅        |                                               |
 |                     |                                                                                                                          |                |           |                                               |
 | ml-libs             | [Composable Kernel](https://github.com/ROCm/rocm-libraries/tree/develop/projects/composablekernel)                       | rocm-libraries | ✅        |                                               |
 | ml-libs             | [MIOpen](https://github.com/ROCm/rocm-libraries/tree/develop/projects/miopen)                                            | rocm-libraries | ✅        |                                               |
@@ -93,6 +96,19 @@ mainline, in open source, using MSVC, etc.).
 
 These instructions mostly mirror the instructions in the root
 [README.md](../../README.md), with some extra Windows-specific callouts.
+
+### Validating your environment
+
+Before diving into the full setup, you can run the environment validation script
+to check that all prerequisites are met:
+
+```powershell
+.\build_tools\validate_windows_install.ps1
+```
+
+The script checks RAM, disk space, long path support, symlink capability, MSVC,
+CMake, Ninja, Git, Python, DVC, Strawberry Perl/gfortran, ccache, and git
+configuration. It is safe to re-run at any time.
 
 ### Prerequisites
 
@@ -111,9 +127,24 @@ These instructions mostly mirror the instructions in the root
     to save space, but storage sizes do not often account for this savings.
     Reported size used and actual size used may differ substantially.
 
-- Long path support is required. As needed, enable long paths for your system:
+- Long path support is required. There are a few ways to enable it:
 
-  - https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry#registry-setting-to-enable-long-paths
+  - **Registry (most reliable):** set
+    `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled` to `1`
+    (requires admin):
+
+    ```
+    reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f
+    ```
+
+  - **GUI toggle (Windows 11, after enabling Developer Mode):** go to
+    Settings > System > For developers and enable the **"Enable Long Paths"**
+    toggle, then reboot. Note: this toggle may not appear until Developer Mode
+    is on, and has been reported as unreliable on some systems — verify with the
+    validation script after rebooting.
+
+  - See also:
+    https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry#registry-setting-to-enable-long-paths
 
 - There are some [known issues](https://github.com/ROCm/TheRock/issues/651)
   with preexisting HIP SDK / ROCm installs causing errors during the build
@@ -177,6 +208,8 @@ If you prefer to install tools manually, you will need:
   https://github.com/mozilla/sccache
 
 - gfortran, recommended from Strawberry Perl: https://strawberryperl.com/
+
+- nasm, recommended from Strawberry Perl: https://strawberryperl.com/
 
 - patch, available in Strawberry Perl or Git.
 
@@ -336,6 +369,13 @@ files now exist.
 Errors like this indicate that the value of `-DTHEROCK_AMDGPU_FAMILIES=` or
 `-DTHEROCK_AMDGPU_TARGETS=` is currently unsupported by one or more libraries.
 
+#### `lld-link: m.lib does not exist`
+
+Since msvc 14+, m.lib has become an implicit dependency and should not be linked
+(it does not exist). TheRock does not link it, but `cmake` could decide on its own to try
+and link it because it found a libm.a in the path, coming from leftover installs on the
+build machine, like a w64devkit or msys2 install.
+
 #### `lld-link: error: duplicate symbol`
 
 Several developers have reported link errors in rocBLAS and rocSPARSE like
@@ -359,6 +399,22 @@ Several developers have reported link errors in rocBLAS and rocSPARSE like
 ```
 
 These have been worked around by disabling ccache.
+
+### `pyYAML cannot be found by cmake`
+
+It is recommended to build TheRock using the `.venv` python3 virtual environment.
+The build steps explain that you must do a `pip install -r requirements.txt` that
+installs PyYAML in the venv so maybe this step was not done.
+
+The problem can also be that you have another python install available in your path
+and that cmake chose to use it. Make sure to check `which python` points to the python
+in your .venv
+
+### `gfortran cannot be found by cmake`
+
+If you have installed strawberry perl as recommended but gfortran cannot be found by
+cmake, you can create a `FC` environment variable pointing to where `gfortran.exe` is
+located.
 
 ## Other notes
 
