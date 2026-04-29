@@ -151,9 +151,6 @@ jobs:
             echo "Build dir:"
             echo "------------"
             ls -lh "${{ env.BUILD_DIR }}"
-            echo "Artifact Archives:"
-            echo "------------------"
-            ls -lh "${{ env.BUILD_DIR }}"/artifacts/*.tar.xz
             echo "Artifacts:"
             echo "----------"
             du -h -d 1 "${{ env.BUILD_DIR }}"/artifacts
