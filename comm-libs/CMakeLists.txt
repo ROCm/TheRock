@@ -5,7 +5,6 @@ if(THEROCK_ENABLE_RCCL)
   # Most libraries need to depend on the profiler, but is conditionally only used
   # on Posix.
   set(optional_profiler_deps)
-
   if(THEROCK_FLAG_INCLUDE_PROFILER)
     list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
   endif()
@@ -28,9 +27,6 @@ if(THEROCK_ENABLE_RCCL)
   set(_rccl_subproject_names)
 
   therock_cmake_subproject_declare(rccl
-    # Build all GPU targets in a single target-neutral artifact as long as the
-    # host code isn't fully target agnostic.
-    USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl"
     # High latency LTO link of a single library.
@@ -75,7 +71,6 @@ if(THEROCK_ENABLE_RCCL)
     endif()
 
     therock_cmake_subproject_declare(rccl-tests
-      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl-tests"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl-tests"
       BACKGROUND_BUILD
@@ -104,7 +99,6 @@ if(THEROCK_ENABLE_RCCL)
   endif(THEROCK_BUILD_TESTING)
 
   therock_provide_artifact(rccl
-    TARGET_NEUTRAL
     DESCRIPTOR artifact-rccl.toml
     COMPONENTS
       dbg
