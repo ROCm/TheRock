@@ -24,7 +24,14 @@ new_amdgpu_family_matrix_types.py for the full lookup API.
 # NOTE: when doing changes here, also check that they are done in amdgpu_family_matrix.py
 ##########################################################################################
 
+import sys
 from pathlib import Path
+
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+if str(_BUILD_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+
+from _therock_utils.cmake_amdgpu_targets import parse_amdgpu_targets_cmake
 
 from new_amdgpu_family_matrix_types import (
     AllBuildVariants,
@@ -41,20 +48,16 @@ from new_amdgpu_family_matrix_types import (
 def _parse_amdgpu_targets() -> dict[str, list[str]]:
     """Parse cmake/therock_amdgpu_targets.cmake, return {gfx_target: [family_names]}.
 
-    Reads FAMILY args from each therock_add_amdgpu_target() call. The target itself
-    is not included in the returned family list (it is stored as MatrixEntry.target).
+    Returns the explicit FAMILY arguments per target. The target itself is not
+    included in the returned family list (it is stored as MatrixEntry.target).
+    Delegates parsing to _therock_utils.cmake_amdgpu_targets so the tokenizer
+    handles quoted product names, inline comments, and EXCLUDE_TARGET_PROJECTS.
     """
     cmake_path = Path(__file__).parents[2] / "cmake" / "therock_amdgpu_targets.cmake"
-    text = cmake_path.read_text()
-
-    result: dict[str, list[str]] = {}
-    for block in text.split("therock_add_amdgpu_target(")[1:]:
-        target = block.split()[0]
-        if "FAMILY" not in block:
-            raise
-        family_line = block.split("FAMILY")[1].split("\n")[0]
-        result[target] = family_line.rstrip(")").split()
-    return result
+    return {
+        info.gfx_target: info.families
+        for info in parse_amdgpu_targets_cmake(cmake_path)
+    }
 
 
 ##########################################################################################

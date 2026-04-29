@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from new_amdgpu_family_matrix_data import (
+    _parse_amdgpu_targets,
     amdgpu_family_info_matrix_all,
     amdgpu_family_predefined_groups,
     all_build_variants,
@@ -461,6 +462,7 @@ class TestBuildRunnerSelection(unittest.TestCase):
         ]
         self.assertEqual(_get_build_runner("macos", "release", inventory=inv), "")
 
+
 # -----------------------------------------------------------------------------
 # Build-variant filtering and re-binding on lookup paths.
 # -----------------------------------------------------------------------------
@@ -623,6 +625,36 @@ class TestEagerFill(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             bare.to_dict()
         self.assertIn("run_tests", str(ctx.exception))
+
+
+# -----------------------------------------------------------------------------
+# CMake target parsing — verifies the contract _populate_families relies on,
+# now that parsing is delegated to _therock_utils.cmake_amdgpu_targets.
+# -----------------------------------------------------------------------------
+
+
+class TestParseAmdgpuTargets(unittest.TestCase):
+    """Smoke-test _parse_amdgpu_targets against the real CMake source."""
+
+    def test_returns_known_target_with_expected_families(self):
+        # gfx942 is a long-standing, stable target — its FAMILY entries are
+        # unlikely to churn, so this is a safe canary for the parser.
+        result = _parse_amdgpu_targets()
+        self.assertIn("gfx942", result)
+        self.assertCountEqual(
+            result["gfx942"], ["dcgpu-all", "gfx94X-all", "gfx94X-dcgpu"]
+        )
+
+    def test_self_family_not_included(self):
+        # _populate_families relies on the self-family being absent (the target
+        # itself is stored as MatrixEntry.target, separately from .family).
+        result = _parse_amdgpu_targets()
+        for target, families in result.items():
+            self.assertNotIn(
+                target,
+                families,
+                f"Target {target!r} unexpectedly appears in its own families list",
+            )
 
 
 if __name__ == "__main__":
