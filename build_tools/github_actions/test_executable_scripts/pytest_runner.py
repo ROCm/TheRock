@@ -262,10 +262,15 @@ def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_
 
 
 if __name__ == "__main__":
-    # Component mapping: job name -> directory name in THEROCK_BIN_DIR
+    # Component mapping: job name -> directory name
     PYTEST_COMPONENT_MAPPING = {
         "tensile": "Tensile",
         "tensilite": "hipblaslt/tensilite",
+    }
+
+    # Source-based components (run from source tree, not installed artifacts)
+    SOURCE_BASED_COMPONENTS = {
+        "tensile": "shared/tensile",
     }
 
     # Valid test categories
@@ -273,6 +278,7 @@ if __name__ == "__main__":
 
     # Environment variables
     THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+    GITHUB_WORKSPACE = os.getenv("GITHUB_WORKSPACE")
     TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
     TEST_TYPE = os.getenv("TEST_TYPE", "quick")
     AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
@@ -284,13 +290,23 @@ if __name__ == "__main__":
         logging.error("TEST_COMPONENT environment variable is required")
         sys.exit(1)
 
-    if not THEROCK_BIN_DIR:
-        logging.error("THEROCK_BIN_DIR environment variable is required")
-        sys.exit(1)
-
-    # Map component name to directory
-    component_dir = PYTEST_COMPONENT_MAPPING.get(TEST_COMPONENT_NAME, TEST_COMPONENT_NAME)
-    component_path = Path(THEROCK_BIN_DIR) / component_dir
+    # Determine component path (source-based or installed)
+    if TEST_COMPONENT_NAME in SOURCE_BASED_COMPONENTS:
+        # Source-based component: run from checked-out source tree
+        if not GITHUB_WORKSPACE:
+            logging.error(f"GITHUB_WORKSPACE required for source-based component {TEST_COMPONENT_NAME}")
+            sys.exit(1)
+        source_path = SOURCE_BASED_COMPONENTS[TEST_COMPONENT_NAME]
+        component_path = Path(GITHUB_WORKSPACE) / source_path
+        logging.info(f"Using source-based tests from: {component_path}")
+    else:
+        # Installed component: run from installed artifacts
+        if not THEROCK_BIN_DIR:
+            logging.error("THEROCK_BIN_DIR environment variable is required")
+            sys.exit(1)
+        component_dir = PYTEST_COMPONENT_MAPPING.get(TEST_COMPONENT_NAME, TEST_COMPONENT_NAME)
+        component_path = Path(THEROCK_BIN_DIR) / component_dir
+        logging.info(f"Using installed tests from: {component_path}")
 
     if not component_path.exists():
         logging.error(f"Component directory not found: {component_path}")
