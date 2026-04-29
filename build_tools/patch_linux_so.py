@@ -7,6 +7,7 @@
 import argparse
 import glob
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -79,13 +80,11 @@ def update_library_links(
             stderr=subprocess.DEVNULL,
             text=True,
         ).strip()
-    except subprocess.CalledProcessError:
-        print(f"Error: No SONAME found in '{libfile}'", flush=True)
-        return
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"patchelf --print-soname failed for '{libfile}'") from e
 
     if not lib_soname:
-        print(f"Error: Empty SONAME for '{libfile}'", flush=True)
-        return
+        raise RuntimeError(f"Empty SONAME returned by patchelf for '{libfile}'")
 
     # Resolve real file path
     try:
@@ -130,7 +129,6 @@ def relativize_pc_file(pc_file: Path) -> None:
     pc_file : Path
         Path to the .pc file to make relocatable.
     """
-    import re
 
     content = pc_file.read_text()
 
