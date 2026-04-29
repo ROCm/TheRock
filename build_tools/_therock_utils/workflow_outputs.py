@@ -198,8 +198,17 @@ class WorkflowOutputRoot:
 
     # -- Native packages --------------------------------------------------------
 
-    def native_packages(self, pkg_type: str) -> StorageLocation:
-        """Location for the native Linux packages directory.
+    def native_linux_packages(self, pkg_type: str) -> StorageLocation:
+        """Location for the native Linux package repository directory.
+
+        Returns ``StorageLocation`` at ``{run_id}-linux/packages/{pkg_type}``
+        (e.g. ``12345678901-linux/packages/deb``).
+
+        The contents under this prefix follow standard repository layouts
+        (not loose files): deb repos use APT layout (``pool/main/`` +
+        ``dists/stable/``); rpm repos place packages under ``x86_64/`` with
+        ``repodata/`` alongside. See ``upload_package_repo.py`` for the exact
+        on-disk and S3 layout.
 
         Args:
             pkg_type: Package type ('deb' or 'rpm').

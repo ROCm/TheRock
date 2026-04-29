@@ -48,6 +48,7 @@ if str(_THIS_DIR) not in sys.path:
 if str(_BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
+from _therock_utils.storage_location import StorageLocation
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 
@@ -614,13 +615,6 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
     return s3, uploaded_packages  # Return S3 client and list of uploaded packages
 
 
-_S3_REGION = "us-east-2"
-
-
-def _s3_https_url(bucket: str, prefix: str) -> str:
-    return f"https://{bucket}.s3.{_S3_REGION}.amazonaws.com/{prefix}"
-
-
 def _emit_github_output(key: str, value: str) -> None:
     """Write a key=value pair to $GITHUB_OUTPUT if running in GitHub Actions."""
     github_output = os.environ.get("GITHUB_OUTPUT")
@@ -636,7 +630,7 @@ def _package_install_url(bucket: str, prefix: str, pkg_type: str) -> str:
     (the directory containing repodata/). For DEB repos, apt points to the
     repo root (it resolves dists/ itself).
     """
-    base = _s3_https_url(bucket, prefix)
+    base = StorageLocation(bucket, prefix).https_url
     if pkg_type == "rpm":
         return f"{base}/x86_64"
     return base
@@ -657,7 +651,7 @@ def _resolve_upload_target(
         root = WorkflowOutputRoot.from_workflow_run(
             run_id=args.run_id, platform="linux"
         )
-        loc = root.native_packages(pkg_type)
+        loc = root.native_linux_packages(pkg_type)
         job_type = os.environ.get("RELEASE_TYPE", "") or "ci"
         install_url = _package_install_url(loc.bucket, loc.relative_path, pkg_type)
         return loc.bucket, loc.relative_path, install_url, True, job_type
@@ -692,19 +686,6 @@ def _resolve_upload_target(
             args.job,
         )
 
-    if args.job == "ci":
-        if args.s3_bucket == "therock-ci-artifacts-external":
-            prefix = f"ROCm-TheRock/{args.artifact_id}-linux/packages/{pkg_type}"
-        else:
-            prefix = f"{args.artifact_id}-linux/packages/{pkg_type}"
-        return (
-            args.s3_bucket,
-            prefix,
-            _package_install_url(args.s3_bucket, prefix, pkg_type),
-            True,
-            "ci",
-        )
-
     raise ValueError(f"Unknown job type: {args.job!r}")
 
 
@@ -727,7 +708,7 @@ def main():
     parser.add_argument(
         "--job",
         default="dev",
-        choices=["dev", "nightly", "prerelease", "ci"],
+        choices=["dev", "nightly", "prerelease"],
         help="Job type (legacy, used when --run-id is not provided)",
     )
     parser.add_argument(
