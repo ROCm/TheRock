@@ -7,8 +7,10 @@ parallel test execution across multiple CI runners with GPU isolation.
 
 Environment variables used:
 TEST_COMPONENT: Job name of the component to test (e.g., "tensile", "tensilite")
+TEST_TYPE: Test category to run (quick, standard, comprehensive, full)
 SHARD_INDEX: Current shard number (1-indexed, like GTest)
 TOTAL_SHARDS: Total number of shards for test distribution
+THEROCK_BIN_DIR: Path to installed binaries
 """
 
 import sys
@@ -16,6 +18,7 @@ import subprocess
 import re
 import os
 import logging
+import yaml
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
@@ -96,6 +99,60 @@ def shard_tests(test_ids, shard_index, total_shards):
     )
 
     return sharded_tests
+
+
+def load_test_categories_yaml(yaml_path):
+    """
+    Load and parse test_categories.yaml configuration file.
+
+    Args:
+        yaml_path: Path to test_categories.yaml
+
+    Returns:
+        Dictionary containing parsed YAML configuration
+    """
+    try:
+        with open(yaml_path, "r") as f:
+            config = yaml.safe_load(f)
+            logging.info(f"Loaded test categories from {yaml_path}")
+            return config
+    except FileNotFoundError:
+        logging.error(f"test_categories.yaml not found at {yaml_path}")
+        sys.exit(1)
+    except yaml.YAMLError as e:
+        logging.error(f"Invalid YAML syntax in {yaml_path}: {e}")
+        sys.exit(1)
+
+
+def build_marker_expression(category_config):
+    """
+    Build pytest marker expression from test_categories.yaml category configuration.
+
+    Args:
+        category_config: Dictionary for a specific test category (e.g., config['test_categories']['quick'])
+
+    Returns:
+        String containing pytest marker expression (e.g., "unit or pre_checkin")
+    """
+    pytest_markers = category_config.get("pytest_markers", [])
+    exclude_markers = category_config.get("exclude_markers", [])
+
+    if not pytest_markers:
+        logging.warning("No pytest_markers defined for category - will run all tests")
+        marker_expr = ""
+    elif len(pytest_markers) == 1:
+        marker_expr = pytest_markers[0]
+    else:
+        # Multiple markers: combine with "or" - (marker1 or marker2 or marker3)
+        marker_expr = " or ".join(pytest_markers)
+
+    # Add exclusions with "and not"
+    if exclude_markers:
+        exclusion_expr = " and not ".join([""] + exclude_markers)  # Leading empty string for first "and not"
+        marker_expr = f"({marker_expr}){exclusion_expr}" if marker_expr else exclusion_expr.lstrip(" and ")
+
+    logging.info(f"Built marker expression: {marker_expr or '(none)'}")
+    return marker_expr
 
 
 if __name__ == "__main__":
