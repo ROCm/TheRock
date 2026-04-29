@@ -1466,7 +1466,7 @@ def _build_runtestflags(
         f"F90_FOR_TARGET={fc}",
     ]
     if optimization:
-        parts.append(f"CFLAGS_FOR_TARGET={optimization}")
+        parts.append(f"CFLAGS_FOR_TARGET={shlex.quote(optimization)}")
     if runtestflags:
         parts.append(runtestflags)
 
