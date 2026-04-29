@@ -140,7 +140,7 @@ def publish_python_packages(
             raise FileNotFoundError(f"No python packages found at {source.s3_uri}")
 
 
-def publish_native_packages(
+def publish_native_linux_packages(
     artifacts_root: WorkflowOutputRoot,
     release_type: str,
     backend: StorageBackend,
@@ -174,7 +174,7 @@ def publish_native_packages(
     today = datetime.date.today().strftime("%Y%m%d")
 
     for pkg_type in ["deb", "rpm"]:
-        source = artifacts_root.native_packages(pkg_type)
+        source = artifacts_root.native_linux_packages(pkg_type)
 
         if release_type == "prerelease":
             dest_prefix = f"v4/packages/{pkg_type}"
@@ -233,7 +233,7 @@ def main(argv: list[str]) -> None:
     publish_tarballs(artifacts_root, args.release_type, backend)
     publish_python_packages(artifacts_root, args.release_type, backend, kpack_split)
     if not args.skip_native_packages:
-        publish_native_packages(artifacts_root, args.release_type, backend)
+        publish_native_linux_packages(artifacts_root, args.release_type, backend)
 
 
 if __name__ == "__main__":
