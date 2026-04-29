@@ -1,48 +1,23 @@
 """
 AMD GPU Family Matrix — source of truth for GitHub CI workflows.
 
-Each MatrixEntry defines the build, test, and release configuration for a
-specific GPU target (e.g. gfx942, gfx1151). Family membership is auto-populated
-from cmake/therock_amdgpu_targets.cmake.
-CMake targets are defined in: cmake/therock_amdgpu_targets.cmake
+Each MatrixEntry defines build / test / release config for a GPU target
+(e.g. gfx942, gfx1151). Family membership is auto-populated from
+cmake/therock_amdgpu_targets.cmake. Dataclass types and field documentation
+live in new_amdgpu_family_matrix_types.py.
 
-Dataclass types and field documentation live in new_amdgpu_family_matrix_types.py.
+Exported:
+    all_build_variants               — CMake preset / artifact-naming per
+                                       platform and build variant.
+    amdgpu_family_predefined_groups  — named subsets used by CI triggers
+                                       (presubmit / postsubmit / nightly).
+    amdgpu_family_info_matrix_all    — the complete AmdGpuFamilyMatrix,
+                                       auto-collected from _MatrixEntries.
 
--------------------------------------------------------------------------------
-Exported variables
--------------------------------------------------------------------------------
-
-all_build_variants (AllBuildVariants)
-    CMake preset and artifact naming per platform and build variant
-    (e.g. "release", "asan"). Consumed by the CI build job configuration.
-
-amdgpu_family_predefined_groups (dict)
-    Named groups of matrix keys selected by CI workflow triggers:
-    amdgpu_presubmit  — runs on pull_request (all PRs)
-    amdgpu_postsubmit — runs on push to main and release branches
-    amdgpu_nightly    — runs on schedule
-
-amdgpu_family_info_matrix_all (AmdGpuFamilyMatrix)
-    All MatrixEntry rows, auto-populated from every GFX* attribute defined in
-    _MatrixEntries, sorted alphabetically by target name. Each entry's family
-    list is auto-populated from cmake/therock_amdgpu_targets.cmake. To add a
-    new GPU, define a new GFX* attribute in _MatrixEntries.
-
--------------------------------------------------------------------------------
-Key lookup and auto-resolution
--------------------------------------------------------------------------------
-
-Entries are looked up by canonical key via:
-    amdgpu_family_info_matrix_all.get_entry(key)
-
-Accepted key formats:
-    "gfx942"        — specific GPU target name
-    "gfx1151"       — specific GPU (registered individually)
-    "gfx94X-dcgpu"  — family name, resolves to the entry marked
-                      is_family_default=True for that family, otherwise
-                      returns None
-
-Families without a default (e.g. gfx115X-all) return None for family lookup.
+To add a GPU: define a new GFX* attribute in _MatrixEntries below — no other
+change needed. Lookup keys: exact target ("gfx942") or family name
+("gfx94X-dcgpu", which resolves via is_family_default). See
+new_amdgpu_family_matrix_types.py for the full lookup API.
 """
 
 ##########################################################################################
@@ -123,14 +98,8 @@ all_build_variants = AllBuildVariants(
 
 
 def _build_groups() -> dict[str, list[str]]:
-    """Build named groups of GPU family keys for use in CI workflow triggers.
-
-    Each group is a named subset of matrix keys (e.g. for pull_request, push, schedule,
-    or any custom trigger like a weekly run). New groups can be added freely here.
-    Defined as a function to avoid polluting the module namespace with intermediate variables.
-    """
-    # Each tier is built by unioning the previous tier with new keys (set for dedup),
-    # then sorted alphabetically to produce a stable, ordered list[str].
+    """Named groups of matrix keys for CI triggers. Each tier is a superset of
+    the previous one (presubmit ⊂ postsubmit ⊂ nightly)."""
     presubmit = sorted(["gfx94X-dcgpu", "gfx110X-all", "gfx1151", "gfx120X-all"])
     postsubmit = sorted(set(presubmit) | {"gfx950-dcgpu"})
     nightly = sorted(
@@ -160,24 +129,17 @@ amdgpu_family_predefined_groups = _build_groups()
 # GPU matrix entries: one MatrixEntry per GPU target.
 #
 # Add new GPUs by defining a new GFX* attribute in _MatrixEntries below.
-# Field defaults are defined in new_amdgpu_family_matrix_types.py — only specify
-# what differs from the default. Runner labels live in `_RUNNER_INVENTORY` in
-# new_amdgpu_family_matrix_runners.py and are auto-populated into each entry's
-# TestConfig.runs_on by MatrixEntry.__post_init__ — entries below should NOT
-# pass `runs_on=` unless they want to override the inventory pick (e.g. tests).
+# Field defaults live in new_amdgpu_family_matrix_types.py — only set what differs.
+# Runner labels are auto-filled from the inventories in
+# new_amdgpu_family_matrix_runners.py; do NOT pass `runs_on=` here unless overriding.
 ##########################################################################################
 
 
 class _MatrixEntries:
-    """All MatrixEntry definitions, scoped to avoid polluting the module namespace.
-
-    To add a new GPU, define a new GFX* attribute here — no other change needed.
-    Entries are auto-populated into amdgpu_family_info_matrix_all, sorted alphabetically.
-
-    Generic scope entries (e.g. gfx110X-all, gfx101X-dgpu) are expanded to individual
-    GPU targets as listed in cmake/therock_amdgpu_targets.cmake. The is_family_default
-    entry carries the CI runner config; siblings get minimal config.
-    """
+    """All MatrixEntry definitions, namespaced to keep module globals clean.
+    Auto-collected into amdgpu_family_info_matrix_all alphabetically. Within
+    a family, the is_family_default entry carries the full CI config; siblings
+    get minimal config and inherit on family-name lookups."""
 
     GFX900 = MatrixEntry(
         target="gfx900",
