@@ -856,7 +856,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "linux-strix-halo-gpu-rocm-oem")
+        self.assertEqual(entry["test-runs-on"], "")
 
     def test_test_runner_kernel_clears_unsupported_family(self):
         """test_runner:oem label clears runner for families without kernel support."""
