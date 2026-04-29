@@ -15,6 +15,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from github_actions_api import (
     GitHubAPI,
     GitHubAPIError,
+    gha_load_github_event,
     gha_query_last_workflow_run,
     gha_query_recent_branch_commits,
     gha_query_workflow_run_by_id,
