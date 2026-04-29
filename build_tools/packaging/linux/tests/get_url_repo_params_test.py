@@ -71,30 +71,36 @@ class GetGpgKeyUrlTest(unittest.TestCase):
     """Tests for get_gpg_key_url()."""
 
     def test_extracts_base_and_adds_gpg_path(self):
-        # Test that get_gpg_key_url extracts base URL and appends /gpg/rocm.gpg.
+        # Test that get_gpg_key_url keeps the /packages prefix and appends gpg/rocm.gpg.
         self.assertEqual(
             get_url_repo_params.get_gpg_key_url(
                 "https://rocm.prereleases.amd.com/packages/ubuntu2404"
             ),
-            "https://rocm.prereleases.amd.com/gpg/rocm.gpg",
+            "https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg",
         )
 
     def test_strips_path_from_url(self):
-        # Test that get_gpg_key_url strips path and query from URL.
+        # Test that get_gpg_key_url keeps /rocm/packages and appends gpg/rocm.gpg.
         self.assertEqual(
             get_url_repo_params.get_gpg_key_url(
                 "https://repo.amd.com/rocm/packages/rhel10/x86_64/"
             ),
-            "https://repo.amd.com/gpg/rocm.gpg",
+            "https://repo.amd.com/rocm/packages/gpg/rocm.gpg",
         )
 
     def test_handles_nightly_url(self):
-        # Test that get_gpg_key_url works with nightly URLs.
+        # No /packages/ in path: fall back to .../packages/gpg/rocm.gpg on the host.
         self.assertEqual(
             get_url_repo_params.get_gpg_key_url(
                 "https://rocm.nightlies.amd.com/deb/20260204-12345/"
             ),
-            "https://rocm.nightlies.amd.com/gpg/rocm.gpg",
+            "https://rocm.nightlies.amd.com/packages/gpg/rocm.gpg",
+        )
+
+    def test_repo_amd_com_without_packages_segment(self):
+        self.assertEqual(
+            get_url_repo_params.get_gpg_key_url("https://repo.amd.com/"),
+            "https://repo.amd.com/rocm/packages/gpg/rocm.gpg",
         )
 
 
@@ -419,7 +425,7 @@ class MainSubcommandsTest(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         self.assertIn(
-            "gpg_key_url=https://rocm.prereleases.amd.com/gpg/rocm.gpg", output
+            "gpg_key_url=https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg", output
         )
 
     def test_get_gpg_url_with_release_type_dev_emits_empty(self):
@@ -461,7 +467,7 @@ class MainSubcommandsTest(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         self.assertIn(
-            "gpg_key_url=https://rocm.prereleases.amd.com/gpg/rocm.gpg", output
+            "gpg_key_url=https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg", output
         )
 
     def test_get_gpg_url_with_release_type_release(self):
@@ -475,7 +481,9 @@ class MainSubcommandsTest(unittest.TestCase):
             ]
         )
         self.assertEqual(code, 0)
-        self.assertIn("gpg_key_url=https://repo.amd.com/gpg/rocm.gpg", output)
+        self.assertIn(
+            "gpg_key_url=https://repo.amd.com/rocm/packages/gpg/rocm.gpg", output
+        )
 
 
 class GetContainerImageTest(unittest.TestCase):
