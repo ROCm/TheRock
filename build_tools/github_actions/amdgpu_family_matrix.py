@@ -58,7 +58,7 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture
 - benchmark-runs-on: (optional) GitHub runner label for benchmarks for this architecture
 - pytorch-ci-test-runs-on: (optional) GitHub runner label for PyTorch wheel tests only; when set,
-  portable PyTorch test jobs use this label instead of test-runs-on (other workflows keep test-runs-on)
+  the workflow should pass `--test-project-name=pytorch` to configure_target_run.py to use this label instead of test-runs-on
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])

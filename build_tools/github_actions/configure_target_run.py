@@ -7,25 +7,45 @@ Environment variable inputs:
     * 'TARGET': A GPU family like 'gfx95X-dcgpu' or 'gfx1151', corresponding
                 to a release index.
     * 'PLATFORM': "linux" or "windows"
+
+Command-line:
+    * `--test-project-name`: When set to `pytorch`, use `pytorch-ci-test-runs-on`
+      instead of `test-runs-on` label. Workflows need specific runners for
+      PyTorch testing should pass this explicitly.
 """
 
+import argparse
 import os
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 from github_actions_api import *
 
+test_project_runs_on_label = {
+    "pytorch": "pytorch-ci-test-runs-on",
+}
 
-def is_pytorch_wheel_workflow() -> bool:
-    """True when this process runs from a *pytorch_wheels*.yml GitHub Actions workflow.
 
-    Matches the workflow file path in ``GITHUB_WORKFLOW_REF`` (stable)
+def validate_test_project_name(project_name: str) -> str:
+    """Validate the test project name.
+
+    Empty input returns ``""`` (use default ``test-runs-on`` in the matrix).
+    Unknown names raise ``argparse.ArgumentTypeError``.
     """
-    ref = os.getenv("GITHUB_WORKFLOW_REF", "")
-    return "pytorch_wheels" in ref.replace("\\", "/").lower()
+    if not project_name:
+        return ""
+
+    if project_name in test_project_runs_on_label:
+        return project_name
+
+    raise argparse.ArgumentTypeError(
+        f"Project '{project_name}' does not have a dedicated test runner label."
+    )
 
 
-def get_runner_label(target: str, platform: str) -> str:
+def get_runner_label(target: str, platform: str, *, test_project_name: str = "") -> str:
     print(f"Searching for a runner for target '{target}' on platform '{platform}'")
+    if test_project_name:
+        print(f"Using test project name: '{test_project_name}'")
     amdgpu_family_info_matrix = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit"]
     )
@@ -50,19 +70,15 @@ def get_runner_label(target: str, platform: str) -> str:
             )
             continue
 
-        # `pytorch-ci-test-runs-on` is used only for Windows gfx1151 when the workflow
-        # is a `*pytorch_wheels*.yml` job; all other families use `test-runs-on`.
-        use_pytorch_ci_windows_gfx1151 = (
-            is_pytorch_wheel_workflow()
-            and platform == "windows"
-            and family_for_platform == "gfx1151"
-        )
-        if use_pytorch_ci_windows_gfx1151:
+        # Optional per-project matrix key (e.g. pytorch-ci-test-runs-on); missing
+        # or empty dedicated label falls back to test-runs-on.
+        if test_project_name:
             test_runs_on_machine = platform_for_key.get(
-                "pytorch-ci-test-runs-on"
+                test_project_runs_on_label[test_project_name]
             ) or platform_for_key.get("test-runs-on")
         else:
             test_runs_on_machine = platform_for_key.get("test-runs-on")
+
         if test_runs_on_machine:
             print(f"  Found runner: '{test_runs_on_machine}'")
             return test_runs_on_machine
@@ -103,8 +119,10 @@ def get_upload_label(target: str, platform: str) -> str:
     return ""
 
 
-def main(target: str, platform: str):
-    runner_label = get_runner_label(target, platform)
+def main(target: str, platform: str, *, test_project_name: str = ""):
+    runner_label = get_runner_label(
+        target, platform, test_project_name=test_project_name
+    )
     if runner_label:
         gha_set_output({"test-runs-on": runner_label})
     upload_label = get_upload_label(target, platform)
@@ -113,6 +131,20 @@ def main(target: str, platform: str):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--test-project-name",
+        default="",
+        type=validate_test_project_name,
+        help=(
+            "Request project specific test runner label. e.g. 'pytorch' for `pytorch-ci-test-runs-on` label."
+        ),
+    )
+    args = parser.parse_args()
     target = os.getenv("TARGET", "")
     platform = os.getenv("PLATFORM", "")
-    main(target=target, platform=platform)
+    main(
+        target=target,
+        platform=platform,
+        test_project_name=args.test_project_name,
+    )
