@@ -507,6 +507,7 @@ add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 add_subdirectory(iree-libs)
 add_subdirectory(media-libs)
+add_subdirectory(rocjitsu)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)

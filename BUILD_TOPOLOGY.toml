@@ -192,6 +192,10 @@ artifact_groups = ["fusilli-libs"]
 description = "Profiler applications (depends on profiler-core)"
 artifact_groups = ["profiler-apps"]
 
+[build_stages.rocjitsu]
+description = "ROCm simulation and instrumentation tools"
+artifact_groups = ["rocjitsu"]
+
 [build_stages.media-libs]
 description = "Media Libraries"
 artifact_groups = ["media-libs"]
@@ -326,6 +330,13 @@ description = "Media Libraries"
 type = "generic"
 artifact_group_deps = ["third-party-sysdeps", "base", "core-runtime", "hip-runtime"]
 source_sets = ["amd-mesa", "rocm-systems"]
+
+[artifact_groups.rocjitsu]
+description = "ROCm simulation, virtualization, and instrumentation tools"
+type = "generic"
+artifact_group_deps = []
+source_sets = ["rocm-systems"]
+disable_platforms = ["windows"]
 
 # ==============================================================================
 # ARTIFACTS - The actual build outputs that can be transmitted between stages
@@ -776,4 +787,13 @@ artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+disable_platforms = ["windows"]
+
+# --- ROCm Simulation Tools ---
+
+[artifacts.rocjitsu]
+artifact_group = "rocjitsu"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "ROCJITSU"
 disable_platforms = ["windows"]
