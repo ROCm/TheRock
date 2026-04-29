@@ -76,8 +76,17 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL AND _ck_filtered_targets)
 endif()
 
 if(THEROCK_ENABLE_MIOPEN)
+  # CK is only usable from MIOpen when the CK subproject was actually declared
+  # for the current target set. THEROCK_ENABLE_COMPOSABLE_KERNEL is a global
+  # opt-in; _ck_filtered_targets reflects whether any of the requested arches
+  # are CK-supported. If the filter empties the list, the CK subproject above
+  # is skipped — so MIOpen must not declare a build_dep on it nor set
+  # MIOPEN_USE_COMPOSABLEKERNEL=ON, or configure will fail looking for a
+  # subproject that was never declared.
+  set(_miopen_use_ck OFF)
   set(optional_miopen_build_deps)
-  if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
+  if(THEROCK_ENABLE_COMPOSABLE_KERNEL AND _ck_filtered_targets)
+    set(_miopen_use_ck ON)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
@@ -96,7 +105,7 @@ if(THEROCK_ENABLE_MIOPEN)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
-      "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_ENABLE_COMPOSABLE_KERNEL}"
+      "-DMIOPEN_USE_COMPOSABLEKERNEL=${_miopen_use_ck}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
       "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""
