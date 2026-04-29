@@ -38,6 +38,10 @@ on:
         type: string
         default: ""
         description: "Comma-separated build stages to skip (artifacts already copied by the orchestrator)"
+      build_runs_on:
+        type: string
+        default: ""
+        description: "Build runner label (not currently used for Windows, reserved for future use)"
       rocm_package_version:
         type: string
       release_type:

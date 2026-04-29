@@ -708,23 +708,7 @@ function(therock_cmake_subproject_activate target_name)
   # subproject build or configure command.
   # https://cmake.org/cmake/help/latest/manual/cmake.1.html#cmdoption-cmake-E-arg-env
   # TODO: split into 'build' and 'configure'? Keeping them in sync seems useful.
-  set(_build_env_pairs)
-
-  # All project dependencies are managed within the super-project so we don't
-  # want subprojects reaching outside of the sandbox and building against
-  # uncontrolled (and likely incompatible) sources.
-  #
-  # These environment variables have been used by some subprojects to discover
-  # preexisting ROCm/HIP SDK installs. If detected, these subprojects then do
-  # things like:
-  #   * Append `${HIP_PATH}/cmake` to `CMAKE_MODULE_PATH`
-  #   * Use `${HIP_PATH}` as a hint for `find_package()` calls
-  # We unset both the CMake and environment variables with these names.
-  # See also https://github.com/ROCm/TheRock/issues/670.
-  list(APPEND _build_env_pairs "--unset=ROCM_PATH")
-  list(APPEND _build_env_pairs "--unset=ROCM_DIR")
-  list(APPEND _build_env_pairs "--unset=HIP_PATH")
-  list(APPEND _build_env_pairs "--unset=HIP_DIR")
+  _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
 
   # Handle compiler toolchain.
   set(_compiler_toolchain_addl_depends)
@@ -1140,6 +1124,114 @@ function(therock_cmake_subproject_activate target_name)
   endif()
 endfunction()
 
+# therock_cmake_subproject_build_test
+# Defines build-tree tests for a CMake subproject. Tests are run from the
+# subproject build directory after its build stamp is up to date. They are not
+# part of ALL and are reached through build-test-${target_name} and the
+# build-tests aggregate target when testing is enabled.
+function(therock_cmake_subproject_build_test target_name)
+  if(NOT THEROCK_BUILD_TESTING)
+    return()
+  endif()
+
+  _therock_assert_is_cmake_subproject("${target_name}")
+
+  get_target_property(_binary_dir "${target_name}" THEROCK_BINARY_DIR)
+  get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
+  get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
+  get_target_property(_stage_dir "${target_name}" THEROCK_STAGE_DIR)
+
+  # Match the subproject prebuilt behavior: when the stage is imported from
+  # artifacts, there is no local build tree to test.
+  set(_prebuilt_file "${_stage_dir}.prebuilt")
+  if(EXISTS "${_prebuilt_file}")
+    return()
+  endif()
+
+  if(TARGET "build-test-${target_name}")
+    message(FATAL_ERROR "Build tests already declared for subproject '${target_name}'")
+  endif()
+  if(NOT ARGN)
+    message(FATAL_ERROR "Build tests for '${target_name}' require at least one COMMAND")
+  endif()
+
+  set(_command_count 0)
+  set(_current_command)
+  set(_expect_command TRUE)
+  foreach(_arg IN LISTS ARGN)
+    if(_arg STREQUAL "COMMAND")
+      if(_current_command)
+        math(EXPR _command_count "${_command_count} + 1")
+        set("_test_command_${_command_count}" "${_current_command}")
+        set(_current_command)
+      elseif(NOT _expect_command)
+        message(FATAL_ERROR "Empty COMMAND in build tests for '${target_name}'")
+      endif()
+      set(_expect_command FALSE)
+    else()
+      if(_expect_command)
+        message(FATAL_ERROR
+          "Expected COMMAND in therock_cmake_subproject_build_test(${target_name} ...)")
+      endif()
+      list(APPEND _current_command "${_arg}")
+    endif()
+  endforeach()
+  if(_current_command)
+    math(EXPR _command_count "${_command_count} + 1")
+    set("_test_command_${_command_count}" "${_current_command}")
+  elseif(NOT _command_count)
+    message(FATAL_ERROR "Build tests for '${target_name}' require at least one non-empty COMMAND")
+  elseif(NOT _expect_command)
+    message(FATAL_ERROR "Empty COMMAND in build tests for '${target_name}'")
+  endif()
+
+  set(_build_test_commands)
+  _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
+  foreach(_command_index RANGE 1 ${_command_count})
+    set(_log_file "${target_name}_build_test.log")
+    set(_log_label "${target_name} build-test")
+    if(_command_index GREATER 1)
+      math(EXPR _log_suffix "${_command_index} - 1")
+      set(_log_file "${target_name}_build_test_${_log_suffix}.log")
+      set(_log_label "${target_name} build-test ${_log_suffix}")
+    endif()
+    therock_subproject_log_command(_test_log_prefix
+      LOG_FILE "${_log_file}"
+      LABEL "${_log_label}"
+      OUTPUT_ON_FAILURE "${_output_on_failure}"
+    )
+
+    set(_test_command_var "_test_command_${_command_index}")
+    list(APPEND _build_test_commands
+      COMMAND
+        ${_test_log_prefix}
+        "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
+        ${${_test_command_var}}
+    )
+  endforeach()
+
+  set(_build_stamp_file "${_stamp_dir}/build.stamp")
+  set(_build_test_stamp_file "${_stamp_dir}/build-test.stamp")
+
+  add_custom_command(
+    OUTPUT "${_build_test_stamp_file}"
+    ${_build_test_commands}
+    COMMAND "${CMAKE_COMMAND}" -E touch "${_build_test_stamp_file}"
+    WORKING_DIRECTORY "${_binary_dir}"
+    COMMENT "Running build tests for sub-project ${target_name}"
+    USES_TERMINAL
+    DEPENDS
+      "${_build_stamp_file}"
+    VERBATIM
+  )
+  add_custom_target("build-test-${target_name}"
+    DEPENDS "${_build_test_stamp_file}"
+  )
+  if(TARGET therock-build-tests)
+    add_dependencies(therock-build-tests "build-test-${target_name}")
+  endif()
+endfunction()
+
 # therock_cmake_subproject_glob_c_sources
 # Adds C/C++ sources from given project subdirectories to the list of sources for
 # a sub-project. This allows the super-project build system to know when to
@@ -1223,6 +1315,28 @@ function(_therock_assert_is_cmake_subproject target_name)
   if(NOT _is_subproject STREQUAL "cmake")
     message(FATAL_ERROR "Target ${target_name} is not a sub-project")
   endif()
+endfunction()
+
+function(_therock_cmake_subproject_build_env_pairs out_var)
+  set(_build_env_pairs)
+
+  # All project dependencies are managed within the super-project so we don't
+  # want subprojects reaching outside of the sandbox and building against
+  # uncontrolled (and likely incompatible) sources.
+  #
+  # These environment variables have been used by some subprojects to discover
+  # preexisting ROCm/HIP SDK installs. If detected, these subprojects then do
+  # things like:
+  #   * Append `${HIP_PATH}/cmake` to `CMAKE_MODULE_PATH`
+  #   * Use `${HIP_PATH}` as a hint for `find_package()` calls
+  # We unset both the CMake and environment variables with these names.
+  # See also https://github.com/ROCm/TheRock/issues/670.
+  list(APPEND _build_env_pairs "--unset=ROCM_PATH")
+  list(APPEND _build_env_pairs "--unset=ROCM_DIR")
+  list(APPEND _build_env_pairs "--unset=HIP_PATH")
+  list(APPEND _build_env_pairs "--unset=HIP_DIR")
+
+  set("${out_var}" "${_build_env_pairs}" PARENT_SCOPE)
 endfunction()
 
 # Builds a CMake language fragment to set up a dependency provider such that
