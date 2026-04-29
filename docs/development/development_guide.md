@@ -338,8 +338,6 @@ Settings for CMake builds can be specified in `.vscode/settings.json` or a
     "-DTHEROCK_VERBOSE=ON",
     "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
     "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
-    // On Windows, add this so ccache can handle debug info (see README):
-    // "-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded",
     "-DPython3_EXECUTABLE=${workspaceFolder}/.venv/Scripts/python",
     "-DTHEROCK_AMDGPU_FAMILIES=gfx110X-all",  // Set to your GPU target family.
     //

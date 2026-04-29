@@ -322,21 +322,10 @@ for /f "delims=" %i in ('python build_tools/setup_ccache.py') do @%i
 cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache ^
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ^
-  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded ^
   .
 
 cmake --build build
 ```
-
-> [!TIP]
-> ccache [does not support](https://github.com/ccache/ccache/issues/1040)
-> MSVC's `/Zi` flag which may be set by default when a project (e.g. LLVM) opts
-> in to
-> [policy CMP0141](https://cmake.org/cmake/help/latest/policy/CMP0141.html).
-> Setting
-> [`-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded`](https://cmake.org/cmake/help/latest/variable/CMAKE_MSVC_DEBUG_INFORMATION_FORMAT.html)
-> instructs CMake to compile with `/Z7` or equivalent, which is supported by
-> ccache.
 
 ### Running tests
 

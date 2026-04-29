@@ -81,10 +81,6 @@ def build_compiler_launcher(
 platform_options = {
     "windows": [
         "-DTHEROCK_BACKGROUND_BUILD_JOBS=4",
-        # ccache does not support MSVC's /Zi flag. Setting Embedded instructs
-        # CMake to compile with /Z7 (or equivalent), which ccache supports.
-        # See: https://github.com/ccache/ccache/issues/1040
-        "-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded",
     ],
 }
 

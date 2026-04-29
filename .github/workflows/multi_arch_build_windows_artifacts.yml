@@ -165,7 +165,6 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage

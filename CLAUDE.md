@@ -91,7 +91,7 @@ eval "$(./build_tools/setup_ccache.py)"
 cmake -B build -GNinja \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-  -DTHEROCK_AMDGPU_FAMILIES=gfx1100
+  -DTHEROCK_AMDGPU_FAMILIES=gfx1100 .
 ```
 
 On Windows (Command Prompt):
@@ -100,8 +100,7 @@ On Windows (Command Prompt):
 for /f "delims=" %i in ('python build_tools/setup_ccache.py') do @%i
 cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx1100 ^
   -DCMAKE_C_COMPILER_LAUNCHER=ccache ^
-  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ^
-  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache .
 ```
 
 See [README.md](README.md#ccache-usage-on-windows) for full ccache setup details.
