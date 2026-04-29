@@ -130,10 +130,8 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      artifact_run_id: ${{ github.run_id }}
       rocm_version: ${{ inputs.rocm_deb_package_version }}
       native_package_type: deb
-      release_type: ""
     permissions:
       contents: read
       id-token: write
@@ -145,10 +143,8 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      artifact_run_id: ${{ github.run_id }}
       rocm_version: ${{ inputs.rocm_rpm_package_version }}
       native_package_type: rpm
-      release_type: ""
     permissions:
       contents: read
       id-token: write
