@@ -33,7 +33,8 @@ AmdGpuFamilyMatrix
        │    ├─ TestConfig
        │    │    └─ GpuRunners   runner labels (test, test_multi_gpu, benchmark, extra)
        │    └─ ReleaseConfig
-       └─ ...
+       └─ PlatformConfig
+            ├─ ...
 AllBuildVariants           CMake preset + artifact naming per platform and variant
   └─ BuildVariantInfo
 
@@ -41,45 +42,28 @@ AllBuildVariants           CMake preset + artifact naming per platform and varia
 Key functions
 -------------------------------------------------------------------------------
 
-AmdGpuFamilyMatrix.get_entry(key)
-    Look up a MatrixEntry by canonical key ("gfx942", "gfx1151") or by
-    family name alone ("gfx94X-dcgpu"), which resolves to the is_family_default entry.
+AmdGpuFamilyMatrix.get_entry(key, *, build_variant="release")
+    Look up by exact target ("gfx942") or family name ("gfx94X-dcgpu") which
+    resolves to the is_family_default entry. Always returns a deep copy scoped
+    to `build_variant`: platforms not supporting the variant are dropped, and
+    non-release variants re-bind BuildConfig.runs_on to a matching build runner.
+    Returns None if no entry matches or no platform supports the build_variant.
 
 AmdGpuFamilyMatrix.get_default_for_family(family)
-    Return the is_family_default entry whose family list contains the given name,
-    or None if no default is set (e.g. gfx115X-all where GPUs are registered individually)
-    or the requested family does not exist.
+    Return the is_family_default entry for the given family name, or None.
 
-AmdGpuFamilyMatrix.get_entries_for_groups(list[str])
-    Return a GroupLookupResult with matched MatrixEntry list and unmatched keys.
+AmdGpuFamilyMatrix.get_entries_for_groups(list[str], *, build_variant="release")
+    Look up many keys at once. Returns a GroupLookupResult with the matched
+    entries and the keys that had no match (either unknown, or the entry exists
+    but does not support `build_variant`).
 
 AmdGpuFamilyMatrix.keys()
-    Return all canonical keys in alphabetical order.
+    All canonical keys, alphabetically.
 
 AmdGpuFamilyMatrix.to_nested_dict()
-    Serialize all entries as a flat dict keyed by target name, e.g.:
-    {"gfx1101": {"amdgpu_family": "gfx1101",
-                 "linux": {"build": {"build_variants": ["release"], "expect_failure": False},
-                           "release": {"bypass_tests_for_releases": True},
-                           "test": {"fetch-gfx-targets": ["gfx1101"],
-                                    "run_tests": False,
-                                    "runs_on": {"benchmark": "",
-                                                "test": "linux-gfx110X-gpu-rocm",
-                                                "test-multi-gpu": ""},
-                                    "sanity_check_only_for_family": True,
-                                    "test_scope": "comprehensive",
-                                    "bypass_tests_for_unscheduled": True}},
-                 "windows": {"build": {"build_variants": ["release"], "expect_failure": False},
-                             "release": {"bypass_tests_for_releases": True},
-                             "test": {"fetch-gfx-targets": ["gfx1101"],
-                                      "run_tests": True,
-                                      "runs_on": {"benchmark": "",
-                                                  "test": "windows-gfx110X-gpu-rocm",
-                                                  "test-multi-gpu": ""},
-                                      "sanity_check_only_for_family": True,
-                                      "test_scope": "comprehensive",
-                                      "bypass_tests_for_unscheduled": False}}},
-     ...}
+    Serialize the matrix as {target: entry_dict}; each entry_dict has
+    "amdgpu_family" plus per-platform "linux"/"windows" sub-dicts containing
+    "build", "test", and "release" blocks (see MatrixEntry.to_dict).
 
 MatrixEntry.to_dict(platform=None)
     Serialize to dict. Without platform: nested linux/windows keys.
@@ -101,6 +85,7 @@ Adding a new field
 -------------------------------------------------------------------------------
 """
 
+import copy
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -151,17 +136,15 @@ class BuildConfig:
     expect_failure: bool = False
     """If True, build failures for this entry are non-blocking."""
     runs_on: str | None = None
-    """Build runner label. Resolved late by `resolve_runners(...)` from the build
-    runner inventory (see new_amdgpu_family_matrix_data.py); None until resolved.
-    Must be a non-empty label by serialization time — every build job needs a
-    runner. `to_dict()` raises ValueError if it is still None."""
+    """Build runner label. Auto-filled by MatrixEntry.__post_init__ from the
+    'release' inventory pool; non-release lookups re-bind it to the matching
+    pool. None only if the inventory has no matching row — to_dict() then raises."""
 
     def to_dict(self) -> dict:
         if self.runs_on is None:
             raise ValueError(
-                "BuildConfig.runs_on is None — call resolve_runners(entry) before "
-                "serialization, or assign the runner label directly. Build jobs "
-                "always require a runner."
+                "BuildConfig.runs_on is None — no matching row in the build runner "
+                "inventory. Build jobs always require a runner."
             )
         return {
             "build_variants": list(self.build_variants),
@@ -209,8 +192,9 @@ class TestConfig:
     fetch_gfx_targets: list[str] = field(default_factory=list)
     """Individual GPU arch strings for fetching split artifacts (e.g. ['gfx942'])."""
     run_tests: bool | None = None
-    """Whether tests should actually be executed. Defaults to True any runner is set in runs_on,
-    False otherwise. Can be set explicitly to False when a runner exists but is temporarily disabled."""
+    """Whether tests should actually run. Defaults to True if any runner is set
+    in runs_on, False otherwise. Set explicitly to False to disable tests even
+    when a runner is available."""
     sanity_check_only_for_family: bool = False
     """If True, only a sanity-check test subset is run, not the full suite."""
     test_scope: Literal["quick", "comprehensive", "full"] = "comprehensive"
@@ -257,6 +241,10 @@ class PlatformConfig:
     test: TestConfig = field(default_factory=TestConfig)
     release: ReleaseConfig = field(default_factory=ReleaseConfig)
 
+    def supports_variant(self, build_variant: str) -> bool:
+        """True if this platform's BuildConfig lists the given variant."""
+        return build_variant in self.build.build_variants
+
     def to_dict(self) -> dict:
         return {
             "build": self.build.to_dict(),
@@ -272,15 +260,10 @@ class MatrixEntry:
     target: str
     """Specific GPU target name, e.g. 'gfx942', 'gfx1151'."""
     is_family_default: bool = False
-    """If True, this entry is returned when looking up by a shared family name
-    (e.g. 'gfx94X-dcgpu'). At most one entry per shared family name may have
-    this set — validated at AmdGpuFamilyMatrix construction time.
-
-    Note: this flag (and the family / family-prefix lookup machinery built on
-    top of it) is a convenience for *user-facing* inputs — e.g. a workflow
-    dispatch input where a developer types 'gfx110X' or 'gfx94X-dcgpu' and
-    expects to get back the canonical entry for that family. Internal CI code
-    should pass exact target names (e.g. 'gfx942') and not rely on this."""
+    """If True, this entry is returned for family-name lookups like 'gfx94X-dcgpu'.
+    At most one entry per shared family name (validated at construction time).
+    Intended for user-facing inputs (workflow dispatch); internal CI code
+    should use exact target names."""
     linux: PlatformConfig | None = None
     """Linux platform config, or None if Linux is not supported."""
     windows: PlatformConfig | None = None
@@ -290,21 +273,22 @@ class MatrixEntry:
     Auto-populated by AmdGpuFamilyMatrix from cmake/therock_amdgpu_targets.cmake."""
 
     def __post_init__(self):
-        # Auto-fill TestConfig.runs_on from the runner inventory for any platform
-        # whose runs_on is still empty (the default). Caller-supplied runs_on (e.g.
-        # in synthetic tests) is left alone. After the fill, force run_tests to
-        # False if there's still no runner — there's nothing to run on.
-        # Function-local import to avoid the types <-> runners circular dependency.
-        from new_amdgpu_family_matrix_runners import _runners_for
+        # Fill runner labels from the inventories on each platform that did not
+        # specify them; build runner is always release-pool here (lookup paths
+        # rebind for non-release variants). Function-local import breaks the
+        # types <-> runners cycle.
+        from new_amdgpu_family_matrix_runners import _get_build_runner, _get_gpu_runners
 
         for platform in ("linux", "windows"):
             cfg = self.platform_config(platform)
             if cfg is None:
                 continue
             if not cfg.test.runs_on.has_any_runner():
-                cfg.test.runs_on = _runners_for(platform, self.target)
+                cfg.test.runs_on = _get_gpu_runners(platform, self.target)
             if not cfg.test.runs_on.has_any_runner():
                 cfg.test.run_tests = False
+            if cfg.build.runs_on is None:
+                cfg.build.runs_on = _get_build_runner(platform, "release")
 
     @property
     def key(self) -> str:
@@ -341,20 +325,38 @@ class GroupLookupResult:
     unmatched_keys: list[str]
 
 
-@dataclass
-class EntryLookupResult:
-    """Result of a single-key lookup, preserving how the entry was resolved."""
+def _entry_supports_variant(entry: "MatrixEntry", build_variant: str) -> bool:
+    """True if any platform on the entry lists `build_variant`."""
+    for p in ("linux", "windows"):
+        cfg = entry.platform_config(p)
+        if cfg is not None and cfg.supports_variant(build_variant):
+            return True
+    return False
 
-    entry: MatrixEntry
-    amdgpu_family: str
-    """The original lookup key, e.g. 'gfx94X', 'gfx94X-dcgpu', 'gfx942'.
-    Used as the family identifier in CI output."""
-    resolved_via: Literal["target", "family", "family_prefix"]
-    """How the entry was resolved:
-      'target'        — exact target name match (e.g. 'gfx942')
-      'family'        — exact family name match (e.g. 'gfx94X-dcgpu')
-      'family_prefix' — prefix match via trailing X (e.g. 'gfx94X')
-    """
+
+def _scope_to_variant(entry: "MatrixEntry", build_variant: str) -> None:
+    """Drop platforms that do not support `build_variant`; trim survivors'
+    build_variants to [build_variant]. Mutates in place — caller must deep-copy."""
+    for platform in ("linux", "windows"):
+        cfg = entry.platform_config(platform)
+        if cfg is None:
+            continue
+        if not cfg.supports_variant(build_variant):
+            setattr(entry, platform, None)
+            continue
+        cfg.build.build_variants = [build_variant]
+
+
+def _rebind_build_runners(entry: "MatrixEntry", build_variant: str) -> None:
+    """Re-pick BuildConfig.runs_on from `build_variant`'s pool on every kept
+    platform. Function-local import breaks the types <-> runners cycle."""
+    from new_amdgpu_family_matrix_runners import _get_build_runner
+
+    for platform in ("linux", "windows"):
+        cfg = entry.platform_config(platform)
+        if cfg is None:
+            continue
+        cfg.build.runs_on = _get_build_runner(platform, build_variant)
 
 
 @dataclass
@@ -417,18 +419,37 @@ class AmdGpuFamilyMatrix:
             if any(f.lower() == family_lower for f in entry.family)
         ]
 
-    def get_entry(self, key: str) -> MatrixEntry | None:
-        """Look up a MatrixEntry by target name (e.g. 'gfx942') or family name (e.g. 'gfx94X-dcgpu').
+    def get_entry(
+        self, key: str, *, build_variant: str = "release"
+    ) -> MatrixEntry | None:
+        """Look up by target name ('gfx942') or family name ('gfx94X-dcgpu',
+        falls through to the is_family_default entry). Case-insensitive.
 
-        Direct target lookup is tried first. If not found, treats the key as a family
-        name and returns the is_family_default entry for that family.
-        Lookup is case-insensitive. Returns None if no match found.
+        Returns a deep copy scoped to `build_variant`: unsupported platforms are
+        set to None and survivors' build_variants is trimmed to [build_variant].
+        Non-release variants also re-bind BuildConfig.runs_on. Returns None if
+        the key is unknown or no platform supports the variant.
+
+        Deep-copying lets consumers mutate freely without leaking changes into
+        the shared module-level matrix.
         """
         key_lower = key.lower()
+        match: MatrixEntry | None = None
         for entry in self.entries:
             if entry.key.lower() == key_lower:
-                return entry
-        return self.get_default_for_family(key)
+                match = entry
+                break
+        if match is None:
+            match = self.get_default_for_family(key)
+        if match is None:
+            return None
+        if not _entry_supports_variant(match, build_variant):
+            return None
+        match = copy.deepcopy(match)
+        _scope_to_variant(match, build_variant)
+        if build_variant != "release":
+            _rebind_build_runners(match, build_variant)
+        return match
 
     def get_default_for_family(self, family: str) -> MatrixEntry | None:
         """Return the is_family_default entry whose family list contains the given name,
@@ -454,58 +475,25 @@ class AmdGpuFamilyMatrix:
                     return entry
         return None
 
-    def lookup(self, key: str) -> EntryLookupResult | None:
-        """Look up a single key and return the entry with resolution metadata.
-
-        Returns an EntryLookupResult or None if no match found. resolved_via indicates
-        how the entry was found:
-          'target'        — exact target name match (e.g. 'gfx942' → gfx942)
-          'family'        — exact family name match (e.g. 'gfx94X-dcgpu' → gfx942)
-          'family_prefix' — prefix match via trailing X (e.g. 'gfx94X' → gfx942)
-        """
-        key_lower = key.lower()
-        for entry in self.entries:
-            if entry.key.lower() == key_lower:
-                return EntryLookupResult(
-                    entry=entry, amdgpu_family=key, resolved_via="target"
-                )
-        family_lower = key_lower
-        is_prefix = family_lower.endswith("x")
-        for entry in self.entries:
-            if not entry.is_family_default:
-                continue
-            for f in entry.family:
-                f_lower = f.lower()
-                if f_lower == family_lower:
-                    return EntryLookupResult(
-                        entry=entry, amdgpu_family=key, resolved_via="family"
-                    )
-                if is_prefix and f_lower.startswith(family_lower + "-"):
-                    return EntryLookupResult(
-                        entry=entry, amdgpu_family=key, resolved_via="family_prefix"
-                    )
-        return None
-
     def get_entries_for_groups(
-        self, group_keys: list[str], deduplicate: bool = True
+        self,
+        group_keys: list[str],
+        deduplicate: bool = True,
+        *,
+        build_variant: str = "release",
     ) -> GroupLookupResult:
-        """Look up entries for a list of keys, returning both matches and misses.
-           By default deduplicates group_keys entries resolving to the same target.
+        """Look up many keys at once via get_entry. Returns matches in input
+        order plus a list of keys that produced no entry (unknown key, or the
+        entry does not support `build_variant`).
 
-        Args:
-            group_keys: list of keys to look up.
-            deduplicate: if True, entries with the same target are included only once
-                         (first occurrence wins). Unmatched keys are always reported.
-
-        Returns a GroupLookupResult with:
-            entries: matched MatrixEntry objects, in the order of group_keys
-            unmatched_keys: keys from group_keys that had no match in the matrix
+        With `deduplicate=True` (default), keys that resolve to the same target
+        appear only once (first occurrence wins).
         """
         entries = []
         unmatched_keys = []
         seen: set[str] = set()
         for key in group_keys:
-            entry = self.get_entry(key)
+            entry = self.get_entry(key, build_variant=build_variant)
             if entry is None:
                 unmatched_keys.append(key)
                 continue
