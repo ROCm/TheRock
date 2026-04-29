@@ -73,21 +73,34 @@ def load_rocm_version() -> str:
         return loaded_file["rocm-version"]
 
 
-def get_git_sha(short: bool = False):
-    """Gets the current git SHA, either from GITHUB_SHA or running git commands."""
+def get_git_sha(short: bool = False, override_git_sha: str | None = None):
+    """Gets the git SHA to embed in version strings.
 
-    # Default GitHub environment variable, info:
-    # https://docs.github.com/en/actions/reference/workflows-and-actions/variables
-    github_sha = os.getenv("GITHUB_SHA")
+    Resolution order:
+      1. ``override_git_sha`` (explicit caller override)
+      2. ``GITHUB_SHA`` environment variable
+      3. ``git rev-parse HEAD`` in the repo checkout
 
-    if github_sha:
-        git_sha = github_sha
+    When the workflow is triggered cross-repo (e.g. rockrel calling TheRock),
+    GITHUB_SHA refers to the *caller's* commit.  Pass ``override_git_sha``
+    from the checkout step to get the correct TheRock SHA.
+    """
+
+    if override_git_sha:
+        git_sha = override_git_sha
     else:
-        git_sha = subprocess.check_output(
-            ["git", "rev-parse", "--verify", "HEAD"],
-            cwd=THEROCK_DIR,
-            text=True,
-        ).strip()
+        # Default GitHub environment variable, info:
+        # https://docs.github.com/en/actions/reference/workflows-and-actions/variables
+        github_sha = os.getenv("GITHUB_SHA")
+
+        if github_sha:
+            git_sha = github_sha
+        else:
+            git_sha = subprocess.check_output(
+                ["git", "rev-parse", "--verify", "HEAD"],
+                cwd=THEROCK_DIR,
+                text=True,
+            ).strip()
 
     # Shorten the sha to 8 characters if requested
     if short:
@@ -107,6 +120,7 @@ def compute_version(
     custom_version_suffix: str | None = None,
     prerelease_version: str | None = None,
     override_base_version: str | None = None,
+    override_git_sha: str | None = None,
 ) -> str:
     """Compute package version based on package type and release type.
 
@@ -116,6 +130,8 @@ def compute_version(
         custom_version_suffix: Custom suffix to override automatic suffix
         prerelease_version: Prerelease version number
         override_base_version: Override the base version from version.json
+        override_git_sha: Explicit git SHA override, forwarded to get_git_sha().
+            See get_git_sha() for details on when this is needed.
 
     Returns:
         Computed version string appropriate for the package type
@@ -136,7 +152,7 @@ def compute_version(
         elif release_type == "dev":
             # Construct a dev release version:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#developmental-releases
-            git_sha = get_git_sha()
+            git_sha = get_git_sha(override_git_sha=override_git_sha)
             version_suffix = f".dev0+{git_sha}"
         elif release_type == "nightly":
             # Construct a nightly (a / "alpha") version:
@@ -175,7 +191,7 @@ def compute_version(
             if package_type == "deb":
                 version_suffix_str = f"~dev{current_date}"
             else:  # rpm
-                git_sha = get_git_sha(short=True)
+                git_sha = get_git_sha(short=True, override_git_sha=override_git_sha)
                 version_suffix_str = f"~{current_date}g{git_sha}"
         elif release_type == "nightly":
             # Construct a nightly version with date
@@ -238,6 +254,12 @@ def main(argv):
         help="Override the base version from version.json with this value",
     )
 
+    parser.add_argument(
+        "--override-git-sha",
+        type=str,
+        help="Explicit git SHA to embed in the version instead of auto-detecting",
+    )
+
     args = parser.parse_args(argv)
 
     # Validation
@@ -257,6 +279,7 @@ def main(argv):
         args.custom_version_suffix,
         args.prerelease_version,
         args.override_base_version,
+        args.override_git_sha,
     )
 
     # Set appropriate output variable based on package type
