@@ -31,6 +31,10 @@ if(THEROCK_ENABLE_ROCJITSU)
 
   therock_cmake_subproject_activate(rocjitsu)
 
+  therock_cmake_subproject_build_test(rocjitsu
+    COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
+  )
+
   therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
     LIB_NAMES
       librocjitsu.so
