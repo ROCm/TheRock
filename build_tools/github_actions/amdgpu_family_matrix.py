@@ -62,7 +62,7 @@ all_build_variants = {
             "build_variant_cmake_preset": "linux-release-asan",
         },
         # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
-        # host ASAN sanitizers build tools (compiler, core components)
+        # host ASAN detects memory errors on host code (excluding kernel binaries), while ASAN sanitizes everything
         "host-asan": {
             "build_variant_label": "host-asan",
             "build_variant_suffix": "host-asan",
