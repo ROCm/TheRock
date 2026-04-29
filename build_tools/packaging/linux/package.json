@@ -579,7 +579,13 @@
               "doc"
             ]
           },
-
+          {
+            "Name": "origami",
+            "Components": [
+              "lib",
+              "run"
+            ]
+          },
           {
             "Name": "hipBLASLt",
             "Components": [
@@ -1726,7 +1732,6 @@
           }
         ]
       },
-
       {
         "Artifact": "sysdeps-expat",
         "Artifact_Subdir": [
@@ -1740,7 +1745,36 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "sysdeps-hwloc",
+        "Artifact_Subdir": [
+          {
+            "Name": "hwloc",
+            "Components": [
+              "lib",
+              "dev",
+              "doc",
+              "run"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "sysdeps-libpciaccess",
+        "Artifact_Subdir": [
+          {
+            "Name": "libpciaccess",
+            "Components": [
+              "lib",
+              "dev",
+              "doc",
+              "run"
+            ]
+          }
+        ]
       }
+
     ],
 
     "Gfxarch": "False",
@@ -2250,6 +2284,18 @@
         "Artifact_Subdir": [
           {
             "Name": "hipdnn_samples",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "hipdnn-integration-tests",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipdnn_integration_tests",
             "Components": [
               "test"
             ]
