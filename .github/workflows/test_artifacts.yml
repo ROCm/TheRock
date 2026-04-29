@@ -38,6 +38,12 @@ on:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
         type: string
         default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
   workflow_call:
     inputs:
       artifact_group:
@@ -71,6 +77,12 @@ on:
       release_type:
         type: string
         default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
   push:
     branches:
       - ADHOCBUILD
@@ -94,6 +106,8 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
           sparse-checkout: build_tools
           path: "prejob"
 
@@ -106,6 +120,9 @@ jobs:
 
       - name: "Checking out repository"
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
 
       - name: Setting up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -136,6 +153,8 @@ jobs:
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ needs.configure_test_matrix.outputs.sanity_component }}
       release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
@@ -178,3 +197,5 @@ jobs:
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ toJSON(matrix.components) }}
       release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}

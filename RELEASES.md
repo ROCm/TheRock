@@ -96,15 +96,8 @@ Install ROCm with device support for your GPU using the unified index and one or
 more `device-gfx*` pip extras:
 
 ```bash
-# Note: this URL is expected to change soon
-pip install --extra-index-url https://rocm.nightlies.amd.com/v4/whl/ --pre "rocm[devel,device-gfx####]"
+pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ --pre "rocm[devel,device-gfx####]"
 ```
-
-<!-- TODO: Once dependencies are uploaded to the multi-arch index, replace
-     --extra-index-url with --index-url throughout this section. -->
-
-<!-- TODO: Update URL once the top-level CloudFront path is finalized
-     (e.g. https://rocm.nightlies.amd.com/whl-multi-arch/). -->
 
 <!-- TODO: Advertise wheel variants / WheelNext once available  -->
 
@@ -125,7 +118,7 @@ Where `####` is the GFX target taken from the following table:
 For example, install the gfx1100 device code like so:
 
 ```bash
-pip install --extra-index-url https://rocm.nightlies.amd.com/v4/whl/ --pre "rocm[devel,device-gfx1100]"
+pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ --pre "rocm[devel,device-gfx1100]"
 ```
 
 After installing, verify your installation:
