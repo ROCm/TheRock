@@ -61,6 +61,10 @@ on:
           (e.g. torch[device-gfx942]) instead of per-family index subdirs.
         type: boolean
         default: false
+      pytorch_git_repo:
+        description: "PyTorch git repo to checkout test sources from for raw refs. Options: pytorch/pytorch, ROCm/pytorch"
+        type: string
+        default: "pytorch/pytorch"
 
   workflow_call:
     inputs:
@@ -100,6 +104,9 @@ on:
           (e.g. torch[device-gfx942]) instead of per-family index subdirs.
         type: boolean
         default: false
+      pytorch_git_repo:
+        type: string
+        default: "pytorch/pytorch"
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -182,10 +189,18 @@ jobs:
             --no-hipify
 
       - name: Checkout PyTorch Source Repos from stable branch
-        if: ${{ (inputs.pytorch_git_ref != 'nightly') }}
+        if: ${{ startsWith(inputs.pytorch_git_ref, 'release/') }}
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
+            --repo-hashtag ${{ inputs.pytorch_git_ref }} \
+            --no-hipify
+
+      - name: Checkout PyTorch Source Repos from raw ref
+        if: ${{ inputs.pytorch_git_ref != 'nightly' && !startsWith(inputs.pytorch_git_ref, 'release/') }}
+        run: |
+          python external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --gitrepo-origin https://github.com/${{ inputs.pytorch_git_repo }}.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
             --no-hipify
 
