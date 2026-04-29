@@ -26,7 +26,7 @@ Usage:
 
 Examples:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url https://example.com/v2/whl
-  python build_tools/packaging/linux/get_url_repo_params.py get-gpg-url --release-type prerelease --from-url https://rocm.prereleases.amd.com/packages/ubuntu2404
+  python build_tools/packaging/linux/get_url_repo_params.py get-gpg-url --release-type prerelease --from-url https://rocm.prereleases.amd.com/packages/ubuntu2404  # → .../packages/gpg/rocm.gpg
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix v3/packages/deb/20260204-12345
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --native-package-type deb --repo-base-url https://x.com --os-profile ubuntu2404 --repo-sub-folder ''
   python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch --artifact-group gfx94X-dcgpu
@@ -72,14 +72,28 @@ def get_gpg_key_url(package_url: str) -> str:
     """
     Get GPG key URL from package repository URL.
 
-    Extracts base URL and appends /gpg/rocm.gpg path.
+    ROCm hosts publish the key under .../packages/gpg/rocm.gpg (same tree as the repo),
+    not at the origin root. See dockerfiles/install_rocm_packages.sh get_gpg_key_url.
 
     Examples:
-        https://rocm.prereleases.amd.com/packages/ubuntu2404 -> https://rocm.prereleases.amd.com/gpg/rocm.gpg
-        https://repo.amd.com/rocm/packages/rhel10/x86_64/ -> https://repo.amd.com/gpg/rocm.gpg
+        https://rocm.prereleases.amd.com/packages/ubuntu2404
+            -> https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+        https://repo.amd.com/rocm/packages/rhel10/x86_64/
+            -> https://repo.amd.com/rocm/packages/gpg/rocm.gpg
     """
-    base_url = get_base_url(package_url)
-    return f"{base_url}/gpg/rocm.gpg"
+    parsed = urlparse(package_url)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError(f"Invalid URL: {package_url!r}")
+    segments = [p for p in parsed.path.split("/") if p]
+    try:
+        idx = segments.index("packages")
+    except ValueError:
+        # No .../packages/... segment (e.g. bare base URL): match AMD defaults.
+        if parsed.netloc.lower() == "repo.amd.com":
+            return f"{parsed.scheme}://{parsed.netloc}/rocm/packages/gpg/rocm.gpg"
+        return f"{parsed.scheme}://{parsed.netloc}/packages/gpg/rocm.gpg"
+    prefix = "/" + "/".join(segments[: idx + 1])
+    return f"{parsed.scheme}://{parsed.netloc}{prefix}/gpg/rocm.gpg"
 
 
 def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
@@ -286,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
         type=str,
         required=True,
         metavar="URL",
-        help="Package repository URL to derive GPG key URL from when needed (e.g. https://rocm.prereleases.amd.com/packages/ubuntu2404 → https://rocm.prereleases.amd.com/gpg/rocm.gpg)",
+        help="Package repository URL to derive GPG key URL from when needed (e.g. .../packages/ubuntu2404 → .../packages/gpg/rocm.gpg)",
     )
     p_gpg.add_argument(
         "--release-type",
