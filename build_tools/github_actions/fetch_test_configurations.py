@@ -559,6 +559,21 @@ test_matrix = {
             "windows": 1,
         },
     },
+    "tensile": {
+        "job_name": "tensile",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 600,  # 10 hours for full category
+        "test_script": f"python {_get_script_path('pytest_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": {
+                "quick": 1,
+                "standard": 4,
+                "comprehensive": 8,
+                "full": 8,
+            }
+        },
+    },
 }
 
 
