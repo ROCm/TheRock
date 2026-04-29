@@ -144,7 +144,6 @@ jobs:
         uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
         with:
           workflow: multi_arch_release_windows_pytorch_wheels.yml
-          ref: ${{ inputs.ref || github.ref_name }}
           inputs: |
             { "amdgpu_families": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
               "rocm_version": "${{ inputs.rocm_package_version }}",
