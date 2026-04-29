@@ -21,14 +21,10 @@ echo "Patching TBB install..."
 
 shopt -s nullglob
 
-# Set RPATH to $ORIGIN on all real (non-symlink) rocm_sysdeps TBB libraries and
-# create unprefixed libtbb*.so symlinks pointing at the SONAME symlink
-# (e.g. libtbb.so -> librocm_sysdeps_tbb.so.12).
+# Set RPATH and create unprefixed symlinks (e.g. libtbb.so -> librocm_sysdeps_tbb.so.12).
 for lib in "$LIB_DIR"/librocm_sysdeps_tbb*.so.*; do
     [ -L "$lib" ] && continue
     "$PATCHELF" --set-rpath '$ORIGIN' "$lib"
-    # Create unprefixed .so symlink pointing at the SONAME (e.g. libtbb.so -> librocm_sysdeps_tbb.so.12).
-    # $lib is the real file (librocm_sysdeps_tbb.so.12.17); strip the minor version to get the SONAME.
     base=$(basename "$lib")                    # librocm_sysdeps_tbb.so.12.17
     soname="${base%.*}"                        # librocm_sysdeps_tbb.so.12
     unprefixed="${soname/rocm_sysdeps_/}"      # libtbb.so.12
