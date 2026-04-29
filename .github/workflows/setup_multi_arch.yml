@@ -141,4 +141,4 @@ jobs:
           python ./build_tools/compute_rocm_package_version.py \
             --release-type=${{ inputs.release_type || 'dev' }} \
             --prerelease-version=${{ inputs.prerelease_version }} \
-            --git-sha=${{ steps.checkout.outputs.commit }}
+            --override-git-sha=${{ steps.checkout.outputs.commit }}
