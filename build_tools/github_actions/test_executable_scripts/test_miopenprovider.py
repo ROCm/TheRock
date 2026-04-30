@@ -37,8 +37,6 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
-    "--timeout",
-    "1200",
 ]
 
 if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
