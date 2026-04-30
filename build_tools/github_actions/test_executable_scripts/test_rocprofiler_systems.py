@@ -94,18 +94,13 @@ def execute_tests():
     subprocess.run(config_cmd, cwd=THEROCK_PATH, check=False, env=environ_vars)
 
     # Actual tests
-    # Cap passed/skipped output to ~8 KiB (tail) so the SKIPPED reason and final
-    # lines survive without exploding CI log size.
+    # Keep passing tests quiet in CI.
     excluded_tests = list(EXCLUDED_TESTS)
     if test_type == "quick":
         excluded_tests.extend(QUICK_TEST_EXCLUDE_REGEX)
 
     cmd = ctest_base + [
-        "--verbose",
-        "--test-output-size-passed",
-        str(8 * 1024),
-        "--test-output-truncation",
-        "tail",
+        "--output-on-failure",
         "--exclude-regex",
         f"{'|'.join(excluded_tests)}",
         "--label-exclude",
