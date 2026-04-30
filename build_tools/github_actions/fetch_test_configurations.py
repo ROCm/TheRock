@@ -707,7 +707,9 @@ def run():
             # Support both simple and test-type-specific sharding configurations:
             # Simple: total_shards_dict[platform] = integer
             # Test-type-specific: total_shards_dict[platform][test_type] = integer
-            shards_config = job_config_data.get("total_shards_dict", {}).get(platform, 1)
+            shards_config = job_config_data.get("total_shards_dict", {}).get(
+                platform, 1
+            )
             if isinstance(shards_config, dict):
                 # Test-type-specific sharding (e.g., for pytest components)
                 total_shards = shards_config.get(test_type, 1)

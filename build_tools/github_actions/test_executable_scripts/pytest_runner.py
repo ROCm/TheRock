@@ -41,7 +41,9 @@ def collect_pytest_tests(test_dir, marker_expr=None):
     if marker_expr:
         cmd.extend(["-m", marker_expr])
 
-    logging.info(f"Collecting tests from {test_dir} with markers: {marker_expr or 'none'}")
+    logging.info(
+        f"Collecting tests from {test_dir} with markers: {marker_expr or 'none'}"
+    )
 
     try:
         result = subprocess.run(
@@ -90,7 +92,8 @@ def shard_tests(test_ids, shard_index, total_shards):
     shard_idx_zero = shard_index - 1
 
     sharded_tests = [
-        test_id for i, test_id in enumerate(test_ids)
+        test_id
+        for i, test_id in enumerate(test_ids)
         if i % total_shards == shard_idx_zero
     ]
 
@@ -149,8 +152,14 @@ def build_marker_expression(category_config):
 
     # Add exclusions with "and not"
     if exclude_markers:
-        exclusion_expr = " and not ".join([""] + exclude_markers)  # Leading empty string for first "and not"
-        marker_expr = f"({marker_expr}){exclusion_expr}" if marker_expr else exclusion_expr.lstrip(" and ")
+        exclusion_expr = " and not ".join(
+            [""] + exclude_markers
+        )  # Leading empty string for first "and not"
+        marker_expr = (
+            f"({marker_expr}){exclusion_expr}"
+            if marker_expr
+            else exclusion_expr.lstrip(" and ")
+        )
 
     logging.info(f"Built marker expression: {marker_expr or '(none)'}")
     return marker_expr
@@ -170,7 +179,7 @@ def extract_gpu_arch(amdgpu_families):
         return None
 
     # Extract first GPU architecture (format: gfxNNNN or gfxNNX)
-    match = re.search(r'gfx\w+', amdgpu_families)
+    match = re.search(r"gfx\w+", amdgpu_families)
     if match:
         gpu_arch = match.group(0)
         logging.info(f"Detected GPU architecture: {gpu_arch}")
@@ -246,16 +255,22 @@ def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_
     cmd.extend(test_ids)
 
     # Add pytest options
-    cmd.extend([
-        "-v",  # Verbose output
-        f"--timeout={timeout}",  # Per-test timeout
-        f"--numprocesses={num_workers}",  # Parallel workers (pytest-xdist)
-        "--color=yes",  # Color output
-    ])
+    cmd.extend(
+        [
+            "-v",  # Verbose output
+            f"--timeout={timeout}",  # Per-test timeout
+            f"--numprocesses={num_workers}",  # Parallel workers (pytest-xdist)
+            "--color=yes",  # Color output
+        ]
+    )
 
-    logging.info(f"Running pytest with {len(test_ids)} tests, {num_workers} workers, {timeout}s timeout")
+    logging.info(
+        f"Running pytest with {len(test_ids)} tests, {num_workers} workers, {timeout}s timeout"
+    )
     logging.info(f"Marker expression used for collection: {marker_expr or '(none)'}")
-    logging.info(f"Command: {' '.join(cmd[:3])} <{len(test_ids)} test IDs> {' '.join(cmd[3+len(test_ids):])}")
+    logging.info(
+        f"Command: {' '.join(cmd[:3])} <{len(test_ids)} test IDs> {' '.join(cmd[3+len(test_ids):])}"
+    )
 
     result = subprocess.run(cmd, env=env_vars, check=False)
     return result.returncode
@@ -295,7 +310,9 @@ if __name__ == "__main__":
     if TEST_COMPONENT_NAME in SOURCE_BASED_COMPONENTS:
         # Source-based component: run from checked-out source tree
         if not GITHUB_WORKSPACE:
-            logging.error(f"GITHUB_WORKSPACE required for source-based component {TEST_COMPONENT_NAME}")
+            logging.error(
+                f"GITHUB_WORKSPACE required for source-based component {TEST_COMPONENT_NAME}"
+            )
             sys.exit(1)
         source_path = SOURCE_BASED_COMPONENTS[TEST_COMPONENT_NAME]
         component_path = Path(GITHUB_WORKSPACE) / source_path
@@ -305,7 +322,9 @@ if __name__ == "__main__":
         if not THEROCK_BIN_DIR:
             logging.error("THEROCK_BIN_DIR environment variable is required")
             sys.exit(1)
-        component_dir = PYTEST_COMPONENT_MAPPING.get(TEST_COMPONENT_NAME, TEST_COMPONENT_NAME)
+        component_dir = PYTEST_COMPONENT_MAPPING.get(
+            TEST_COMPONENT_NAME, TEST_COMPONENT_NAME
+        )
         component_path = Path(THEROCK_BIN_DIR) / component_dir
         logging.info(f"Using installed tests from: {component_path}")
 
@@ -375,12 +394,7 @@ if __name__ == "__main__":
 
     # Run pytest
     exit_code = run_pytest_tests(
-        test_dir,
-        sharded_test_ids,
-        marker_expr,
-        timeout,
-        num_workers,
-        env_vars
+        test_dir, sharded_test_ids, marker_expr, timeout, num_workers, env_vars
     )
 
     sys.exit(exit_code)
