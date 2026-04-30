@@ -157,7 +157,7 @@ test_matrix = {
         # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
         # 24 mins + 20% margin = 30 mins => ~40 mins (considering gpu delays and lags)
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocsolver.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
         "total_shards_dict": {
