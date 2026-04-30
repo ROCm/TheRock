@@ -66,8 +66,8 @@ on:
 
   # Trigger on a schedule to build nightly release candidates.
   schedule:
-    # Runs at 04:00 AM UTC, which is 8:00 PM PST (UTC-8)
-    - cron: '0 04 * * *'
+    # Runs at 02:00 AM UTC, which is 7:00 PM PST (UTC-8)
+    - cron: '0 02 * * *'
 
 permissions:
   contents: read
@@ -214,11 +214,9 @@ jobs:
           python ./build_tools/health_status.py
 
       - name: Setup ccache
-        env:
-          CI_TYPE: ${{ env.RELEASE_TYPE == 'dev' && 'presubmit' || 'postsubmit' }}
         run: |
           python ./build_tools/setup_ccache.py \
-            --config-preset "github-oss-${{ env.CI_TYPE }}" \
+            --release-type "${{ env.RELEASE_TYPE }}" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache" \
             --log-dir "${BUILD_DIR}/logs/ccache"
@@ -278,7 +276,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}

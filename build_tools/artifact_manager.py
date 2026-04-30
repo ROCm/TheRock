@@ -55,6 +55,10 @@ import time
 from pathlib import Path
 from typing import List, Optional, Set
 
+from _therock_utils.cmake_amdgpu_targets import (
+    amdgpu_family_map,
+    expand_families,
+)
 from _therock_utils.build_topology import BuildTopology
 from _therock_utils.artifact_backend import (
     ArtifactBackend,
@@ -136,17 +140,23 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
     Returns a list starting with "generic", extended with any families and
     individual targets from the args.
     """
-    target_families = ["generic"]
+    output_families = ["generic"]
     if args.generic_only:
         log("Using generic (host) artifacts only")
     else:
         if args.amdgpu_families:
-            target_families.extend(args.amdgpu_families.split(";"))
+            input_families = args.amdgpu_families.split(";")
+            output_families.extend(input_families)
+            if args.expand_family_to_targets:
+                family_map = amdgpu_family_map()
+                for target in expand_families(input_families, family_map, strict=False):
+                    if target not in output_families:
+                        output_families.append(target)
         if args.amdgpu_targets:
-            target_families.extend(
+            output_families.extend(
                 t.strip() for t in args.amdgpu_targets.split(",") if t.strip()
             )
-    return target_families
+    return output_families
 
 
 def find_available_artifacts(
@@ -201,7 +211,17 @@ class ExtractRequest:
 
 
 def download_artifact(request: DownloadRequest) -> Optional[Path]:
-    """Download a single artifact with retry logic."""
+    """Download a single artifact with retry logic.
+
+    Skips downloading if the file already exists in the download cache.
+    """
+    # TODO: Validate cached file integrity (e.g. compare size against S3
+    # object metadata). A partial download from a killed process would pass
+    # this check. Consider adding a --no-cache flag to bypass.
+    if request.dest_path.exists():
+        log(f"  == Cached {request.artifact_key}")
+        return request.dest_path
+
     MAX_RETRIES = 3
     BASE_DELAY_SECONDS = 2
 
@@ -342,6 +362,7 @@ def do_fetch(args: argparse.Namespace):
     # Create backend
     backend = create_backend_from_env(
         run_id=args.run_id,
+        github_repository=args.run_github_repo,
         platform=args.platform,
     )
     log(f"Using backend: {backend.base_uri}")
@@ -352,7 +373,10 @@ def do_fetch(args: argparse.Namespace):
 
     # Build download requests
     output_dir = Path(args.output_dir)
-    download_dir = output_dir / ".download_cache"
+    shared_cache = args.download_cache_dir is not None
+    download_dir = (
+        args.download_cache_dir if shared_cache else output_dir / ".download_cache"
+    )
     download_dir.mkdir(parents=True, exist_ok=True)
 
     matched_filenames = find_available_artifacts(inbound, target_families, available)
@@ -441,8 +465,8 @@ def do_fetch(args: argparse.Namespace):
 
     log(f"\nDownloaded {downloaded_count} artifacts, extracted {extracted_count}")
 
-    # Cleanup download cache
-    if download_dir.exists() and not args.no_extract:
+    # Cleanup download cache (skip when using a shared cache dir)
+    if download_dir.exists() and not args.no_extract and not shared_cache:
         shutil.rmtree(download_dir)
 
     # Fail if any downloads failed
@@ -588,6 +612,7 @@ def do_push(args: argparse.Namespace):
     # Create backend
     backend = create_backend_from_env(
         run_id=args.run_id,
+        github_repository=args.run_github_repo,
         platform=args.platform,
     )
     log(f"Using backend: {backend.base_uri}")
@@ -967,6 +992,17 @@ def _add_target_args(parser: argparse.ArgumentParser):
         default="",
         help="Comma-separated individual GPU targets for split artifacts (e.g. 'gfx942')",
     )
+    parser.add_argument(
+        "--expand-family-to-targets",
+        action="store_true",
+        help=(
+            "Expand each --amdgpu-families entry to its constituent gfx targets "
+            "using cmake/therock_amdgpu_targets.cmake. Use when fetching kpack-split "
+            "artifacts that are named per target rather than per family. "
+            "Safe to pass against non-kpack-split buckets: the family name is still "
+            "matched and the extra per-target lookups simply find nothing."
+        ),
+    )
 
 
 def _add_backend_args(parser: argparse.ArgumentParser):
@@ -983,6 +1019,13 @@ def _add_backend_args(parser: argparse.ArgumentParser):
         type=str,
         default=os.getenv("THEROCK_PLATFORM", platform_module.system().lower()),
         help="Platform name (default: current platform)",
+    )
+    parser.add_argument(
+        "--run-github-repo",
+        type=str,
+        default=None,
+        help="GitHub repository for --run-id in 'owner/repo' format (e.g. 'ROCm/TheRock'). "
+        "Defaults to GITHUB_REPOSITORY env var or 'ROCm/TheRock'",
     )
     parser.add_argument(
         "--local-staging-dir",
@@ -1033,6 +1076,14 @@ def main(argv: Optional[List[str]] = None):
         "--no-extract",
         action="store_true",
         help="Download only, do not extract",
+    )
+    fetch_parser.add_argument(
+        "--download-cache-dir",
+        type=Path,
+        default=None,
+        help="Shared download cache directory. When set, downloaded archives "
+        "are kept after extraction so subsequent fetches can reuse them. "
+        "Defaults to OUTPUT_DIR/.download_cache (cleaned up after extraction).",
     )
     fetch_parser.add_argument(
         "--download-concurrency",
