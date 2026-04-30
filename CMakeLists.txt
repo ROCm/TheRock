@@ -500,6 +500,8 @@ add_subdirectory(debug-tools)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
+# Simulation and instrumentation tools.
+add_subdirectory(simulation)
 # Data center tools (RDC, etc.)
 add_subdirectory(dctools)
 add_subdirectory(comm-libs)
@@ -507,7 +509,6 @@ add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 add_subdirectory(iree-libs)
 add_subdirectory(media-libs)
-add_subdirectory(rocjitsu)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)

@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# ROCm Simulation Tools (rocjitsu)
+# ROCm Simulation Tools
 
 if(THEROCK_ENABLE_ROCJITSU)
   ##############################################################################
