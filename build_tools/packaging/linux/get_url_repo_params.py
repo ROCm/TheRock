@@ -12,7 +12,7 @@ Subcommands (get operations):
   get-base-url         Get base URL (scheme + netloc) from --from-url or from --release-type. Prints repo_base_url=<value>.
   get-gpg-url          Get GPG key URL for GITHUB_OUTPUT. Provide --from-url and/or --release-type (at least one). With --release-type only, uses canonical package hosts. With --release-type, emits a non-empty URL only for signed-repo lines (prerelease/release/stable); otherwise gpg_key_url=. Legacy: --from-url only always derives.
   get-repo-sub-folder  Get repo_sub_folder from an S3 prefix (last segment if YYYYMMDD-<id>, else empty). Prints repo_sub_folder=<value>.
-  get-repo-url         Get full repo URL. Required: --release-type, --os-profile. Optional: --repo-sub-folder, --repo-base-url, --native-package-type (repo base and package type default from release line and OS profile). Prints repo_url=<value>.
+  get-repo-url         Full native install repo URL (see docs/packaging/native_packaging.md). Required: --release-type, --os-profile. Optional: --repo-sub-folder, --repo-base-url, --native-package-type. Prints repo_url=<value>.
   extract-gfx-arch     Extract and normalize GPU architecture from artifact group. Prints gfx_arch=<value>.
   get-container-image  Get container image for a given OS profile. Prints container_image=<value>.
 
@@ -248,18 +248,23 @@ def get_repo_url(
     repo_sub_folder: str,
 ) -> str:
     """
-    Return the full repo URL for install tests.
-    - prerelease (+ prereleases alias) + deb: repo_base_url / os_profile
-    - prerelease + rpm: repo_base_url / os_profile / x86_64/
-    - non-prerelease + deb: repo_base_url / deb / repo_sub_folder / (or .../deb/ if subfolder empty)
-    - non-prerelease + rpm: repo_base_url / rpm / repo_sub_folder / x86_64/ (or .../rpm/x86_64/ if empty)
+    Return the full native-package install repo URL.
+
+    Layout matches docs/packaging/native_packaging.md (DEB/RPM install URL columns):
+    - prerelease: .../packages/{os_profile} (deb) or .../packages/{os_profile}/x86_64/ (rpm)
+    - release, stable: .../rocm/packages/{os_profile} (deb) or .../rocm/packages/{os_profile}/x86_64/ (rpm)
+    - dev, nightly, ci, etc.: .../deb/{YYYYMMDD-id}/ or .../rpm/{id}/x86_64/ (empty id omits duplicate slashes)
     """
     base = repo_base_url.rstrip("/")
     rt = _normalized_release_type_for_repo_url(release_type)
     if rt == "prerelease":
         if native_package_type == "deb":
-            return f"{base}/{os_profile}"
-        return f"{base}/{os_profile}/x86_64/"
+            return f"{base}/packages/{os_profile}"
+        return f"{base}/packages/{os_profile}/x86_64/"
+    if rt in ("release", "stable"):
+        if native_package_type == "deb":
+            return f"{base}/rocm/packages/{os_profile}"
+        return f"{base}/rocm/packages/{os_profile}/x86_64/"
     sub = (repo_sub_folder or "").strip().strip("/")
     if native_package_type == "deb":
         if sub:
@@ -437,7 +442,7 @@ def main(argv: list[str] | None = None) -> int:
     # get-repo-url: full repo URL from components (replaces inline logic in workflows)
     p_url = subparsers.add_parser(
         "get-repo-url",
-        help="Get full repo URL. Requires --release-type and --os-profile; optional --repo-sub-folder; --repo-base-url and --native-package-type default from release line and OS profile.",
+        help="Get full native install repo URL (docs/packaging/native_packaging.md). Requires --release-type and --os-profile; optional --repo-sub-folder; --repo-base-url and --native-package-type default from release line and OS profile.",
     )
     p_url.add_argument(
         "--release-type", type=str, required=True, help="e.g. prerelease, dev, nightly"
@@ -466,7 +471,7 @@ def main(argv: list[str] | None = None) -> int:
         "--repo-sub-folder",
         type=str,
         default="",
-        help="Repo subfolder (e.g. YYYYMMDD-<id> for dev/nightly; empty for prerelease)",
+        help="YYYYMMDD-<id> for dev/nightly/ci deb|rpm layout; ignored for prerelease/release/stable (URL uses /packages/ or /rocm/packages/ + os-profile)",
     )
     p_url.set_defaults(func=cmd_repo_url)
 
