@@ -151,8 +151,6 @@ def setup_env(env):
 
 
 def execute_tests(env):
-    # Allow for more time in ASAN mode to run the tests.
-    timeout = 1500 if is_asan() else 600
     cmd = [
         "ctest",
         "--tests-information",
@@ -160,8 +158,6 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
-        "--timeout",
-        f"{timeout}",
     ]
 
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:

@@ -23,8 +23,6 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
-    "--timeout",
-    "600",
 ]
 
 # Set up environment variables

@@ -9,8 +9,9 @@ on:
         type: string
       artifact_run_id:
         description: "Workflow run id to download the artifacts from"
-        required: true
+        required: false
         type: string
+        default: ""
       rocm_version:
         description: "ROCm version to append to the package (8.0.0, 8.0.1rc1, ...)"
         required: true
@@ -55,7 +56,7 @@ jobs:
     outputs:
       package_repository_url: ${{ steps.upload-packages.outputs.package_repository_url }}
     env:
-      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix }}
       OUTPUT_DIR: ${{ github.workspace }}/output

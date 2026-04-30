@@ -187,7 +187,6 @@ jobs:
               "rocm_version": "${{ inputs.rocm_package_version }}",
               "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
               "release_type": "${{ inputs.release_type }}",
-              "repository": "${{ inputs.repository || github.repository }}",
               "ref": "${{ inputs.ref || '' }}"
             }
 
