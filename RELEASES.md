@@ -254,7 +254,7 @@ We provide several Python packages which together form the complete ROCm SDK.
 A new optional package `rocm-profiler` is available, providing ROCm profiling tools:
 
 - `rocprof-compute`
-- `rocprof-sys-*` (run, attach, avail, causal, instrument, sample, python)
+- `rocprof-sys-*` (see rocprofiler-systems documentation for full command list)
 
 ###### Installing the profiler package
 

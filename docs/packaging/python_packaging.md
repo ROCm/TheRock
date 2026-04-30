@@ -206,7 +206,7 @@ The `rocm-profiler` package provides ROCm profiling tools and runtime components
 ### Contents
 
 - `rocprof-compute`
-- `rocprof-sys-*` (run, attach, avail, causal, instrument, sample, python)
+- `rocprof-sys-*` (see rocprofiler-systems documentation for full command list)
 - `rocprofiler-systems` runtime libraries
 - `rocprofiler-compute` runtime components
 
