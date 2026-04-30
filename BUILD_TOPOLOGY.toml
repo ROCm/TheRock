@@ -153,7 +153,8 @@ artifact_groups = [
     "hip-runtime",
     "opencl-runtime",
     "profiler-core",
-    "rocrtst"
+    "rocrtst",
+    "rocjitsu"
 ]
 
 [build_stages.math-libs]
@@ -191,10 +192,6 @@ artifact_groups = ["fusilli-libs"]
 [build_stages.profiler-apps]
 description = "Profiler applications (depends on profiler-core)"
 artifact_groups = ["profiler-apps"]
-
-[build_stages.rocjitsu]
-description = "ROCm simulation and instrumentation tools"
-artifact_groups = ["rocjitsu"]
 
 [build_stages.media-libs]
 description = "Media Libraries"
@@ -795,5 +792,5 @@ disable_platforms = ["windows"]
 artifact_group = "rocjitsu"
 type = "target-neutral"
 artifact_deps = []
-feature_group = "ROCJITSU"
+feature_group = "SIMULATION"
 disable_platforms = ["windows"]
