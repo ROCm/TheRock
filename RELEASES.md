@@ -168,10 +168,15 @@ A `[device-all]` extra is also provided which installs device code for all GPUs.
 > running or if they failed for an individual target, this extra will not be
 > able to find all required packages.
 >
+> We also publish **untested** packages to the nightly "whl-staging-multi-arch"
+> index which is not affected by this limitation.
+>
 > | Package index                                          | Safe to use `[device-all]`?                              |
 > | ------------------------------------------------------ | -------------------------------------------------------- |
 > | https://rocm.nightlies.amd.com/whl-multi-arch/         | ❌ No (some packages may not be available)               |
 > | https://rocm.nightlies.amd.com/whl-staging-multi-arch/ | ✅ Yes (index includes all packages, even if tests fail) |
+
+<!-- TODO: add repo.amd.com URL to the list of package indexes once we publish a stable release? -->
 
 ### Installing multi-arch PyTorch Python packages
 
