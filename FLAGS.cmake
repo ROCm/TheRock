@@ -31,6 +31,16 @@ therock_declare_flag(
     hipkernelprovider
 )
 
+therock_declare_flag(
+  NAME HIP_TESTS_MONITOR_LOAD_AS_AN_ATOMIC_OPERATION
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Monitor loads are implemented as an atomic operation"
+  CMAKE_VARS
+    HIP_TESTS_MONITOR_LOAD_AS_AN_ATOMIC_OPERATION=ON
+  SUB_PROJECTS
+    hip-tests
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on
