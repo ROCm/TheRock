@@ -61,6 +61,10 @@ jobs:
   generate-report:
     name: Generate Manifest Diff Report
     runs-on: ubuntu-24.04
+    # When this workflow is called via `uses:` (e.g. from ci_nightly.yml) the
+    # report is informational and a failure must not fail the parent run.
+    # When invoked directly via workflow_dispatch, failures should surface.
+    continue-on-error: ${{ github.event_name != 'workflow_dispatch' }}
     permissions:
       id-token: write
       contents: read
