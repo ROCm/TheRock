@@ -301,12 +301,11 @@ ls install/.kpack/
 ```
 
 > [!TIP]
-> You may want to add the install directory to your environment:
+> You may also want to add parts of the install directory to your `PATH` or set
+> other environment variables like `ROCM_HOME`.
 >
-> ```bash
-> export PATH="$(pwd)/install/bin:$PATH"
-> export ROCM_HOME="$(pwd)/install"
-> ```
+> See also [this issue](https://github.com/ROCm/TheRock/issues/1658) discussing
+> relevant environment variables.
 
 <!-- ### Installing multi-arch native packages
 
