@@ -106,6 +106,24 @@ index at https://rocm.nightlies.amd.com/whl-multi-arch/.
 > If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual enivornment.
 > In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
+We provide several Python packages which together form the complete ROCm SDK.
+In multi-arch releases, GPU-specific device code is split into separate
+`rocm-sdk-device-{target}` packages.
+
+- See [ROCm Python Packaging via TheRock](./docs/packaging/python_packaging.md)
+  for information about each package.
+- The packages are defined in the
+  [`build_tools/packaging/python/templates/`](https://github.com/ROCm/TheRock/tree/main/build_tools/packaging/python/templates)
+  directory.
+
+| Package name               | Description                                                        |
+| -------------------------- | ------------------------------------------------------------------ |
+| `rocm`                     | Primary sdist meta package that dynamically determines other deps  |
+| `rocm-sdk-core`            | OS-specific core of the ROCm SDK (e.g. compiler and utility tools) |
+| `rocm-sdk-libraries`       | OS-specific libraries (architecture-neutral host code)             |
+| `rocm-sdk-device-{target}` | GPU-specific device code (e.g. `rocm-sdk-device-gfx942`)           |
+| `rocm-sdk-devel`           | OS-specific development tools                                      |
+
 Install ROCm with device support for your GPU using the unified index:
 
 ```bash
@@ -374,8 +392,8 @@ We provide several Python packages which together form the complete ROCm SDK.
 | -------------------- | ------------------------------------------------------------------ |
 | `rocm`               | Primary sdist meta package that dynamically determines other deps  |
 | `rocm-sdk-core`      | OS-specific core of the ROCm SDK (e.g. compiler and utility tools) |
-| `rocm-sdk-devel`     | OS-specific development tools                                      |
 | `rocm-sdk-libraries` | OS-specific libraries                                              |
+| `rocm-sdk-devel`     | OS-specific development tools                                      |
 
 ##### rocm for gfx94X-dcgpu
 
