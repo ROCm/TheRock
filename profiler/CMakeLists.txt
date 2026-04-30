@@ -289,7 +289,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems
-      TARGET_NEUTRAL
+      USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
       BACKGROUND_BUILD
