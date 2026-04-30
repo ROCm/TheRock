@@ -12,24 +12,23 @@ endif()
 # rocm_check_target_ids allowlist). The per-arch EXCLUDE_TARGET_PROJECTS
 # mechanism in cmake/therock_amdgpu_targets.cmake removes unsupported arches
 # from the CK subproject's GPU_TARGETS at activate time. If no targets remain
-# after that filter (e.g. a single-arch shard for a CK-unsupported arch like
-# gfx906 or gfx101X), declaring CK with an empty GPU_TARGETS list would break
-# CK's own HIP try-compile with "HIP_ARCHITECTURES is empty". Skip declaring
-# the subproject entirely in that case. MIOpen handles the absence of CK on
-# a given target itself.
+# after that filter (e.g. a single-arch shard for a CK-unsupported arch),
+# declaring CK with an empty GPU_TARGETS list breaks CK's own HIP try-compile
+# with "HIP_ARCHITECTURES is empty", so flip the global gate off here and let
+# MIOpen build with MIOPEN_USE_COMPOSABLEKERNEL=OFF.
 # See https://github.com/ROCm/TheRock/issues/4836
-set(_ck_filtered_targets)
-if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-  therock_filter_amdgpu_targets(_ck_filtered_targets composable_kernel ${THEROCK_AMDGPU_TARGETS})
+set(_ck_enabled ${THEROCK_ENABLE_COMPOSABLE_KERNEL})
+if(_ck_enabled)
+  therock_filter_amdgpu_targets(_ck_targets composable_kernel ${THEROCK_AMDGPU_TARGETS})
+  if(NOT _ck_targets)
+    message(STATUS
+      "composable_kernel: no supported gfx targets remain after filtering "
+      "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+    set(_ck_enabled OFF)
+  endif()
 endif()
 
-if(THEROCK_ENABLE_COMPOSABLE_KERNEL AND NOT _ck_filtered_targets)
-  message(STATUS
-    "composable_kernel: no supported gfx targets remain after filtering "
-    "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
-endif()
-
-if(THEROCK_ENABLE_COMPOSABLE_KERNEL AND _ck_filtered_targets)
+if(_ck_enabled)
   ##############################################################################
   # Composable_kernel
   ##############################################################################
@@ -76,17 +75,8 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL AND _ck_filtered_targets)
 endif()
 
 if(THEROCK_ENABLE_MIOPEN)
-  # CK is only usable from MIOpen when the CK subproject was actually declared
-  # for the current target set. THEROCK_ENABLE_COMPOSABLE_KERNEL is a global
-  # opt-in; _ck_filtered_targets reflects whether any of the requested arches
-  # are CK-supported. If the filter empties the list, the CK subproject above
-  # is skipped — so MIOpen must not declare a build_dep on it nor set
-  # MIOPEN_USE_COMPOSABLEKERNEL=ON, or configure will fail looking for a
-  # subproject that was never declared.
-  set(_miopen_use_ck OFF)
   set(optional_miopen_build_deps)
-  if(THEROCK_ENABLE_COMPOSABLE_KERNEL AND _ck_filtered_targets)
-    set(_miopen_use_ck ON)
+  if(_ck_enabled)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
@@ -105,7 +95,7 @@ if(THEROCK_ENABLE_MIOPEN)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
-      "-DMIOPEN_USE_COMPOSABLEKERNEL=${_miopen_use_ck}"
+      "-DMIOPEN_USE_COMPOSABLEKERNEL=${_ck_enabled}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
       "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""
