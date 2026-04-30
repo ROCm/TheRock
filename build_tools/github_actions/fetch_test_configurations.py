@@ -306,6 +306,8 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        # Architectures that we have multi GPU setup for testing
+        "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
     },
     "hipfft": {
         "job_name": "hipfft",
