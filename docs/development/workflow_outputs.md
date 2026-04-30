@@ -119,6 +119,23 @@ families in parallel, producing identically-named log files (e.g.,
         {subproject}_install.log
         ninja_logs.tar.gz
 
+    packages/deb/                               (APT repository)
+        pool/main/
+            *.deb
+        dists/stable/
+            Release
+            main/binary-amd64/
+                Packages
+                Packages.gz
+
+    packages/rpm/                               (DNF/Zypper repository)
+        x86_64/
+            *.rpm
+            repodata/
+                repomd.xml
+                primary.xml.gz
+                ...
+
     python/
         *.whl                                   (generic wheels, e.g., rocm_sdk_core)
         {amdgpu_family}/
@@ -231,6 +248,12 @@ root.log_index(artifact_group="gfx94X-dcgpu")
 root.build_observability(artifact_group="gfx94X-dcgpu")
 root.manifest_dir(artifact_group="gfx94X-dcgpu")
 root.manifest(artifact_group="gfx94X-dcgpu")
+root.native_linux_packages(
+    pkg_type="deb"
+)  # {run_id}-linux/packages/deb — APT repo root
+root.native_linux_packages(
+    pkg_type="rpm"
+)  # {run_id}-linux/packages/rpm — DNF/Zypper repo root
 root.python_packages(artifact_group="gfx110X-all")
 root.tarballs()
 ```
@@ -272,14 +295,15 @@ To add a new output type:
 
 ### Upload scripts
 
-| File                                                                                       | Uses                                                                      |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for artifacts, logs, manifests    |
-| [`post_stage_upload.py`](/build_tools/github_actions/post_stage_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for multi-arch stage logs         |
-| [`upload_tarballs.py`](/build_tools/github_actions/upload_tarballs.py)                     | `WorkflowOutputRoot` + `StorageBackend` for tarballs                      |
-| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `WorkflowOutputRoot` + `StorageBackend` for Python wheels and index       |
-| [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `WorkflowOutputRoot` + `StorageBackend` for PyTorch manifests             |
-| [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py) | `WorkflowOutputRoot` for S3 base URI (upload not yet migrated to backend) |
+| File                                                                                       | Uses                                                                          |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for artifacts, logs, manifests        |
+| [`upload_package_repo.py`](/build_tools/packaging/linux/upload_package_repo.py)            | `WorkflowOutputRoot.native_linux_packages()` for deb/rpm package repositories |
+| [`post_stage_upload.py`](/build_tools/github_actions/post_stage_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for multi-arch stage logs             |
+| [`upload_tarballs.py`](/build_tools/github_actions/upload_tarballs.py)                     | `WorkflowOutputRoot` + `StorageBackend` for tarballs                          |
+| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `WorkflowOutputRoot` + `StorageBackend` for Python wheels and index           |
+| [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `WorkflowOutputRoot` + `StorageBackend` for PyTorch manifests                 |
+| [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py) | `WorkflowOutputRoot` for S3 base URI (upload not yet migrated to backend)     |
 
 ### Download scripts
 

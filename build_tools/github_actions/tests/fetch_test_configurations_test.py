@@ -247,6 +247,50 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         rccl = next(j for j in components if j["job_name"] == "rccl")
         self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu")
 
+    def test_multi_gpu_job_uses_weighted_labels_when_available(self):
+        """When test-runs-on-multi-gpu-labels is present, select_weighted_label is used."""
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu-default",
+                        "test-runs-on-multi-gpu-labels": [
+                            {"label": "linux-mi300-mgpu-a", "weight": 0.5},
+                            {"label": "linux-mi300-mgpu-b", "weight": 0.5},
+                        ],
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        # Mock select_weighted_label to verify it's called and return a known label
+        original_select_weighted_label = fetch_test_configurations.select_weighted_label
+        selected_labels = []
+
+        def fake_select_weighted_label(labels_config, context_name):
+            selected_labels.append((labels_config, context_name))
+            return "linux-mi300-mgpu-a"
+
+        fetch_test_configurations.select_weighted_label = fake_select_weighted_label
+
+        try:
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+            rccl = next(j for j in components if j["job_name"] == "rccl")
+            self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu-a")
+            # Verify select_weighted_label was called
+            self.assertEqual(len(selected_labels), 1)
+            self.assertEqual(selected_labels[0][1], "gfx94x-multi-gpu")
+        finally:
+            fetch_test_configurations.select_weighted_label = (
+                original_select_weighted_label
+            )
+
     def test_multi_gpu_job_excluded_when_not_supported(self):
         os.environ["AMDGPU_FAMILIES"] = "gfx90a"
 
