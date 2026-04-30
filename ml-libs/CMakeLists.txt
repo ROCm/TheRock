@@ -75,8 +75,16 @@ if(_ck_enabled)
 endif()
 
 if(THEROCK_ENABLE_MIOPEN)
+  # MIOpen's CK use is gated on both the per-arch CK availability above and
+  # the user-facing THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL opt-out, which lets
+  # someone build CK for other consumers while keeping it out of MIOpen.
+  set(_miopen_use_ck OFF)
+  if(_ck_enabled AND THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+    set(_miopen_use_ck ON)
+  endif()
+
   set(optional_miopen_build_deps)
-  if(_ck_enabled)
+  if(_miopen_use_ck)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
@@ -95,7 +103,7 @@ if(THEROCK_ENABLE_MIOPEN)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
-      "-DMIOPEN_USE_COMPOSABLEKERNEL=${_ck_enabled}"
+      "-DMIOPEN_USE_COMPOSABLEKERNEL=${_miopen_use_ck}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
       "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""
