@@ -218,7 +218,8 @@ The recommended way to install profiling tools is via the meta package:
 pip install "rocm[profiler]"
 ```
 
-This installs:
+This will install:
+
 - `rocm-sdk-core` (required runtime + SDK)
 - `rocm-profiler` (profiling tools)
 
@@ -229,11 +230,13 @@ This installs:
 ROCm Python packaging separates profiling functionality as follows:
 
 - `rocm-sdk-core`:
+
   - `rocprofiler-sdk` libraries
   - `rocprofv3`, `rocprof-attach`
   - `roctx` API (user-facing annotation library)
 
 - `rocm-profiler`:
+
   - `rocprof-compute`
   - `rocprof-sys-*`
   - profiler runtime libraries (from `rocprofiler-systems` and `rocprofiler-compute`)
@@ -245,6 +248,7 @@ This separation allows users to install profiling tools only when needed.
 The `rocm-profiler` package intentionally does **not** declare `install_requires`.
 
 Instead:
+
 - Dependencies are managed by the `rocm` meta package
 - Packages are co-installed into the same `site-packages`
 - Runtime dependencies are resolved using RPATH

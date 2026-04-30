@@ -265,6 +265,7 @@ pip install "rocm[profiler]"
 ```
 
 This will install:
+
 - `rocm-sdk-core` (required runtime + SDK)
 - `rocm-profiler` (profiling tools)
 
