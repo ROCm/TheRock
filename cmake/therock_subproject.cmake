@@ -1138,6 +1138,7 @@ function(therock_cmake_subproject_build_test target_name)
 
   get_target_property(_binary_dir "${target_name}" THEROCK_BINARY_DIR)
   get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
+  get_target_property(_prefix_dir "${target_name}" THEROCK_PREFIX_DIR)
   get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
   get_target_property(_stage_dir "${target_name}" THEROCK_STAGE_DIR)
 
@@ -1188,7 +1189,7 @@ function(therock_cmake_subproject_build_test target_name)
   # Generate a runner script that executes all test commands independently,
   # so a failure in one does not prevent the others from running.
   _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
-  set(_runner_script "${_stamp_dir}/build-test-runner.cmake")
+  set(_runner_script "${_prefix_dir}/build-test-runner.cmake")
   set(_runner_content "set(_any_failed FALSE)\n\n")
 
   foreach(_command_index RANGE 1 ${_command_count})
