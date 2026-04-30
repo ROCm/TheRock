@@ -21,8 +21,11 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
+<<<<<<< users/addickin/hipdnn_timeouts
     "--timeout",
     "300",
+=======
+>>>>>>> main
 ]
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
