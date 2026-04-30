@@ -223,7 +223,8 @@ This will install:
 - `rocm-sdk-core` (required runtime + SDK)
 - `rocm-profiler` (profiling tools)
 
-> Note: Installation requires compatible ROCm SDK packages for the target platform.
+> [!NOTE]
+> Installation requires compatible ROCm SDK packages for the target platform.
 
 ### Package Layout
 
@@ -253,7 +254,7 @@ Instead:
 - Packages are co-installed into the same `site-packages`
 - Runtime dependencies are resolved using RPATH
 
-> Note:
+> [!NOTE]
 > The `rocm` meta package requires device-family-specific components
 > (e.g. `gfx94X-dcgpu`). If these are not available in the selected
 > package index, installation may be incomplete.
