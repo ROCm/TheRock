@@ -31,7 +31,6 @@ include(therock_sanitizers)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_testing)
-include("${CMAKE_CURRENT_SOURCE_DIR}/FLAGS.cmake")
 
 ################################################################################
 # Python is used throughout the build. Ensure it is initialized early.
@@ -45,8 +44,10 @@ find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
 # Track BUILD_TOPOLOGY.toml and related files for changes to trigger reconfigure
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/BUILD_TOPOLOGY.toml"
+  "${CMAKE_CURRENT_SOURCE_DIR}/BRANCH_CONFIG.json"
   "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/topology_to_cmake.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/build_topology.py"
+  "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/branch_config.py"
 )
 
 block(SCOPE_FOR VARIABLES)
@@ -55,12 +56,16 @@ block(SCOPE_FOR VARIABLES)
     COMMAND ${Python3_EXECUTABLE}
       "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/topology_to_cmake.py"
       "--topology" "${CMAKE_CURRENT_SOURCE_DIR}/BUILD_TOPOLOGY.toml"
+      "--branch-config" "${CMAKE_CURRENT_SOURCE_DIR}/BRANCH_CONFIG.json"
       "--output" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake"
+      "--branch-config-output" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_branch_config.cmake"
     OUTPUT_VARIABLE _topology_output
     COMMAND_ERROR_IS_FATAL ANY  # Fail on any error
   )
   message(STATUS "Generated build topology targets from BUILD_TOPOLOGY.toml")
 endblock()
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/FLAGS.cmake")
 
 ################################################################################
 # Notices
