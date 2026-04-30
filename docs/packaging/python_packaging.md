@@ -205,10 +205,8 @@ The `rocm-profiler` package provides ROCm profiling tools and runtime components
 
 ### Contents
 
-- `rocprof-compute`
-- `rocprof-sys-*` (see rocprofiler-systems documentation for full command list)
-- `rocprofiler-systems` runtime libraries
-- `rocprofiler-compute` runtime components
+- ROCm Systems Profiler (rocprofiler-systems)
+- ROCm Compute Profiler (rocprofiler-compute)
 
 ### Installation
 
