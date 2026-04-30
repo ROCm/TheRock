@@ -97,11 +97,11 @@ by creating a `BRANCH_CONFIG.json` file in the project root:
 ```json
 {
   "flags": {
-    "KPACK_SPLIT_ARTIFACTS": "ON"
+    "INCLUDE_HRX": "ON"
   },
   "source_sets": ["optional-hrx"],
   "artifact_groups": {
-    "hip-runtime": {
+    "core-runtime": {
       "source_sets": ["optional-hrx"]
     }
   }

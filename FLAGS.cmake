@@ -31,6 +31,12 @@ therock_declare_flag(
     hipkernelprovider
 )
 
+therock_declare_flag(
+  NAME INCLUDE_HRX
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Include experimental HRX runtime in core-runtime"
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on

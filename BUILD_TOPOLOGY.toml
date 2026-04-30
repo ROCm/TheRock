@@ -100,7 +100,7 @@ submodules = ["rocm-systems"]
 [source_sets.optional-hrx]
 description = "Optional HRX source checkout"
 external_git_sources = [
-    { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "e642a13425f46bcf909078459dd4e07df0723a0d", path = "optional-sources/hrx" },
+    { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "56e60cfdc8df89edd43f5ae507cd3fd7f5aafd03", path = "optional-sources/hrx" },
 ]
 
 [source_sets.rocm-libraries]
