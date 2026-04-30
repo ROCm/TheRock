@@ -329,7 +329,7 @@ artifact_group_deps = ["third-party-sysdeps", "base", "core-runtime", "hip-runti
 source_sets = ["amd-mesa", "rocm-systems"]
 
 [artifact_groups.rocjitsu]
-description = "ROCm simulation, virtualization, and instrumentation tools"
+description = "ROCm emulation, virtualization, and instrumentation tools"
 type = "generic"
 artifact_group_deps = []
 source_sets = ["rocm-systems"]
@@ -786,11 +786,11 @@ artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysde
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
 
-# --- ROCm Simulation Tools ---
+# --- ROCm Emulation Tools ---
 
 [artifacts.rocjitsu]
 artifact_group = "rocjitsu"
 type = "target-neutral"
 artifact_deps = []
-feature_group = "SIMULATION"
+feature_group = "EMULATION"
 disable_platforms = ["windows"]
