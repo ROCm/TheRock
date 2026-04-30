@@ -134,6 +134,7 @@ therock_add_amdgpu_target(gfx1030 "AMD RX 6800 / XT" FAMILY dgpu-all gfx103X-all
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
@@ -143,6 +144,7 @@ therock_add_amdgpu_target(gfx1031 "AMD RX 6700 / XT" FAMILY dgpu-all gfx103X-all
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
@@ -152,6 +154,7 @@ therock_add_amdgpu_target(gfx1032 "AMD RX 6600" FAMILY dgpu-all gfx103X-all gfx1
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
@@ -171,6 +174,7 @@ therock_add_amdgpu_target(gfx1034 "AMD RX 6500 XT" FAMILY dgpu-all gfx103X-all g
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
@@ -180,6 +184,7 @@ therock_add_amdgpu_target(gfx1035 "AMD Radeon 680M Laptop iGPU" FAMILY igpu-all 
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
@@ -189,6 +194,7 @@ therock_add_amdgpu_target(gfx1036 "AMD Raphael iGPU" FAMILY igpu-all gfx103X-all
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
@@ -199,6 +205,7 @@ therock_add_amdgpu_target(gfx1036 "AMD Raphael iGPU" FAMILY igpu-all gfx103X-all
 therock_add_amdgpu_target(gfx1100 "AMD RX 7900 XTX" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
     rccl-tests
@@ -206,6 +213,7 @@ therock_add_amdgpu_target(gfx1100 "AMD RX 7900 XTX" FAMILY dgpu-all gfx110X-all 
 therock_add_amdgpu_target(gfx1101 "AMD RX 7800 XT" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
     rccl-tests
@@ -213,6 +221,7 @@ therock_add_amdgpu_target(gfx1101 "AMD RX 7800 XT" FAMILY dgpu-all gfx110X-all g
 therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
     rccl-tests
@@ -220,6 +229,7 @@ therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu
 therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all gfx110X-all gfx110X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rccl # https://github.com/ROCm/TheRock/issues/150
     rccl-tests
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
