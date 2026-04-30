@@ -1,8 +1,0 @@
-# rocjitsu
-[components.lib."simulation/rocjitsu/stage"]
-[components.dbg."simulation/rocjitsu/stage"]
-[components.dev."simulation/rocjitsu/stage"]
-[components.run."simulation/rocjitsu/stage"]
-include = [
-  "share/rocjitsu/**",
-]
