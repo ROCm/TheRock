@@ -251,8 +251,8 @@ def get_repo_url(
     Return the full repo URL for install tests.
     - prerelease (+ prereleases alias) + deb: repo_base_url / os_profile
     - prerelease + rpm: repo_base_url / os_profile / x86_64/
-    - non-prerelease + deb: repo_base_url / deb / repo_sub_folder /
-    - non-prerelease + rpm: repo_base_url / rpm / repo_sub_folder / x86_64/
+    - non-prerelease + deb: repo_base_url / deb / repo_sub_folder / (or .../deb/ if subfolder empty)
+    - non-prerelease + rpm: repo_base_url / rpm / repo_sub_folder / x86_64/ (or .../rpm/x86_64/ if empty)
     """
     base = repo_base_url.rstrip("/")
     rt = _normalized_release_type_for_repo_url(release_type)
@@ -260,9 +260,14 @@ def get_repo_url(
         if native_package_type == "deb":
             return f"{base}/{os_profile}"
         return f"{base}/{os_profile}/x86_64/"
+    sub = (repo_sub_folder or "").strip().strip("/")
     if native_package_type == "deb":
-        return f"{base}/deb/{repo_sub_folder}/"
-    return f"{base}/rpm/{repo_sub_folder}/x86_64/"
+        if sub:
+            return f"{base}/deb/{sub}/"
+        return f"{base}/deb/"
+    if sub:
+        return f"{base}/rpm/{sub}/x86_64/"
+    return f"{base}/rpm/x86_64/"
 
 
 def cmd_repo_url(args: argparse.Namespace) -> int:
