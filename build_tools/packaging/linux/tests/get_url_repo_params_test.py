@@ -277,11 +277,11 @@ class GetRepoUrlTest(unittest.TestCase):
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://x.com/ubuntu2404",
+            "https://x.com/packages/ubuntu2404",
         )
 
     def test_prerelease_deb(self):
-        # Test that prerelease + deb yields base/os_profile.
+        # native_packaging.md: .../packages/ubuntu2404
         self.assertEqual(
             get_url_repo_params.get_repo_url(
                 release_type="prerelease",
@@ -290,11 +290,10 @@ class GetRepoUrlTest(unittest.TestCase):
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://x.com/ubuntu2404",
+            "https://x.com/packages/ubuntu2404",
         )
 
     def test_prerelease_rpm(self):
-        # Test that prerelease + rpm yields base/os_profile/x86_64/
         self.assertEqual(
             get_url_repo_params.get_repo_url(
                 release_type="prerelease",
@@ -303,7 +302,31 @@ class GetRepoUrlTest(unittest.TestCase):
                 os_profile="rhel8",
                 repo_sub_folder="",
             ),
-            "https://x.com/rhel8/x86_64/",
+            "https://x.com/packages/rhel8/x86_64/",
+        )
+
+    def test_release_deb_matches_native_packaging_doc(self):
+        self.assertEqual(
+            get_url_repo_params.get_repo_url(
+                release_type="release",
+                native_package_type="deb",
+                repo_base_url="https://repo.amd.com",
+                os_profile="ubuntu2404",
+                repo_sub_folder="",
+            ),
+            "https://repo.amd.com/rocm/packages/ubuntu2404",
+        )
+
+    def test_stable_rpm_matches_native_packaging_doc(self):
+        self.assertEqual(
+            get_url_repo_params.get_repo_url(
+                release_type="stable",
+                native_package_type="rpm",
+                repo_base_url="https://repo.amd.com",
+                os_profile="rhel10",
+                repo_sub_folder="",
+            ),
+            "https://repo.amd.com/rocm/packages/rhel10/x86_64/",
         )
 
     def test_nightly_deb(self):
@@ -341,7 +364,7 @@ class GetRepoUrlTest(unittest.TestCase):
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://repo.amd.com/deb/",
+            "https://repo.amd.com/rocm/packages/ubuntu2404",
         )
 
     def test_non_prerelease_empty_repo_subfolder_no_double_slash_rpm(self):
@@ -366,7 +389,7 @@ class GetRepoUrlTest(unittest.TestCase):
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://x.com/ubuntu2404",
+            "https://x.com/packages/ubuntu2404",
         )
 
 
@@ -500,7 +523,7 @@ class MainSubcommandsTest(unittest.TestCase):
             ]
         )
         self.assertEqual(code, 0)
-        self.assertIn("repo_url=https://x.com/ubuntu2404", output)
+        self.assertIn("repo_url=https://x.com/packages/ubuntu2404", output)
 
     def test_get_repo_url_minimal_prerelease_ubuntu(self):
         code, output = _run_main_with_output(
@@ -514,7 +537,7 @@ class MainSubcommandsTest(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         self.assertIn(
-            "repo_url=https://rocm.prereleases.amd.com/ubuntu2404",
+            "repo_url=https://rocm.prereleases.amd.com/packages/ubuntu2404",
             output,
         )
 
@@ -834,6 +857,7 @@ class ContractLegacyAndDerivedTest(unittest.TestCase):
         )
         self.assertIn("rocm.prereleases.amd.com", out_derived)
         self.assertIn("internal.example.com", out_custom)
+        self.assertIn("/packages/ubuntu2404", out_custom)
         self.assertNotEqual(out_derived, out_custom)
 
 
