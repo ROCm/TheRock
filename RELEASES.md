@@ -215,8 +215,6 @@ pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
 > The compatible ROCm packages are installed automatically - you do not need to
 > install ROCm separately:
 >
-> <!-- TODO: replace with a nightly releases example -->
->
 > ```bash
 > pip install --index-url https://rocm.nightlies.amd.com/whl-staging-multi-arch/ \
 >     torch[gfx942]
