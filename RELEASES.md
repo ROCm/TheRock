@@ -124,36 +124,38 @@ rocm-sdk test
 
 For packages which include device-specific code (such as `rocm`, `torch`, and
 `torchvision`), support for individual devices can be installed using the
-corresponding `device-*` extra from the table below.
+corresponding `device-*` extra from the table below. See also the
+[GPU architecture specs](https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html)
+for a full list of supported AMD GPUs.
 
-| Product Name                       | GFX Target | Device Extra     |
-| ---------------------------------- | ---------- | ---------------- |
-| MI350X/MI355X                      | gfx950     | `device-gfx950`  |
-| MI300A/MI300X                      | gfx942     | `device-gfx942`  |
-| MI210/MI250                        | gfx90a     | `device-gfx90a`  |
-| MI100                              | gfx908     | `device-gfx908`  |
-| Radeon VII / MI50                  | gfx906     | `device-gfx906`  |
-| Vega 10 / MI25                     | gfx900     | `device-gfx900`  |
-| AMD RX 9070 / XT                   | gfx1201    | `device-gfx1201` |
-| AMD RX 9060 / XT                   | gfx1200    | `device-gfx1200` |
-| AMD Radeon 820M iGPU               | gfx1153    | `device-gfx1153` |
-| AMD Krackan 1 iGPU                 | gfx1152    | `device-gfx1152` |
-| AMD Strix Halo APU                 | gfx1151    | `device-gfx1151` |
-| AMD Strix Point iGPU               | gfx1150    | `device-gfx1150` |
-| AMD Radeon 780M Laptop iGPU        | gfx1103    | `device-gfx1103` |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    | `device-gfx1102` |
-| AMD RX 7800 XT                     | gfx1101    | `device-gfx1101` |
-| AMD RX 7900 XTX                    | gfx1100    | `device-gfx1100` |
-| AMD RX 6800 / XT                   | gfx1030    | `device-gfx1030` |
-| AMD RX 6700 / XT                   | gfx1031    | `device-gfx1031` |
-| AMD RX 6600                        | gfx1032    | `device-gfx1032` |
-| AMD Van Gogh iGPU                  | gfx1033    | `device-gfx1033` |
-| AMD RX 6500 XT                     | gfx1034    | `device-gfx1034` |
-| AMD Radeon 680M Laptop iGPU        | gfx1035    | `device-gfx1035` |
-| AMD Raphael iGPU                   | gfx1036    | `device-gfx1036` |
-| AMD RX 5700                        | gfx1010    | `device-gfx1010` |
-| AMD Radeon Pro V520                | gfx1011    | `device-gfx1011` |
-| AMD RX 5500                        | gfx1012    | `device-gfx1012` |
+| Product Name                                         | GFX Target | Device Extra     |
+| ---------------------------------------------------- | ---------- | ---------------- |
+| AMD Instinct MI355X / MI350X                         | gfx950     | `device-gfx950`  |
+| AMD Instinct MI325X / MI300X / MI300A                | gfx942     | `device-gfx942`  |
+| AMD Instinct MI250X / MI250 / MI210                  | gfx90a     | `device-gfx90a`  |
+| AMD Instinct MI100                                   | gfx908     | `device-gfx908`  |
+| AMD Instinct MI60 / MI50, Radeon Pro VII, Radeon VII | gfx906     | `device-gfx906`  |
+| AMD Instinct MI25                                    | gfx900     | `device-gfx900`  |
+| AMD Radeon RX 9070 / XT, AI PRO R9700 / R9600D       | gfx1201    | `device-gfx1201` |
+| AMD Radeon RX 9060 / XT                              | gfx1200    | `device-gfx1200` |
+| AMD Radeon 820M iGPU                                 | gfx1153    | `device-gfx1153` |
+| AMD Ryzen AI 7 350                                   | gfx1152    | `device-gfx1152` |
+| AMD Ryzen AI Max+ PRO 395                            | gfx1151    | `device-gfx1151` |
+| AMD Ryzen AI 9 HX 375                                | gfx1150    | `device-gfx1150` |
+| AMD Ryzen 7 7840U / Ryzen 9 270                      | gfx1103    | `device-gfx1103` |
+| AMD Radeon RX 7600                                   | gfx1102    | `device-gfx1102` |
+| AMD Radeon RX 7800 XT / 7700 XT, PRO V710 / W7700    | gfx1101    | `device-gfx1101` |
+| AMD Radeon RX 7900 XTX / 7900 XT, PRO W7900 / W7800  | gfx1100    | `device-gfx1100` |
+| AMD Radeon RX 6900 XT / 6800 XT, PRO W6800 / V620    | gfx1030    | `device-gfx1030` |
+| AMD Radeon RX 6750 XT / 6700 XT                      | gfx1031    | `device-gfx1031` |
+| AMD Radeon RX 6600 XT / 6600, PRO W6600              | gfx1032    | `device-gfx1032` |
+| AMD Van Gogh iGPU                                    | gfx1033    | `device-gfx1033` |
+| AMD Radeon RX 6500 XT                                | gfx1034    | `device-gfx1034` |
+| AMD Radeon 680M iGPU                                 | gfx1035    | `device-gfx1035` |
+| AMD Raphael iGPU                                     | gfx1036    | `device-gfx1036` |
+| AMD Radeon RX 5700 / XT                              | gfx1010    | `device-gfx1010` |
+| AMD Radeon Pro V520                                  | gfx1011    | `device-gfx1011` |
+| AMD Radeon Pro W5500                                 | gfx1012    | `device-gfx1012` |
 
 #### The Python `[device-all]` install extra
 
