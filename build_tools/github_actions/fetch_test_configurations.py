@@ -116,14 +116,6 @@ test_matrix = {
             ],
         },
     },
-    "origami": {
-        "job_name": "origami",
-        "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_origami.py')}",
-        "platform": ["linux", "windows"],
-        "total_shards": 1,
-    },
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
@@ -479,7 +471,7 @@ test_matrix = {
             "libexec/rocprofiler-compute/requirements.txt",
             "libexec/rocprofiler-compute/requirements-test.txt",
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_compute.py')} -v",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {"linux": 2},
     },

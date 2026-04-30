@@ -99,45 +99,57 @@ def run(args: argparse.Namespace):
         ),
     )
 
-    profiler = PopulatedDistPackage(params, logical_name="profiler")
-    profiler.rpath_dep(core, "lib")
-    profiler.rpath_dep(core, "lib/llvm/lib")
-    profiler.rpath_dep(core, "lib/rocm_sysdeps/lib")
-    profiler.populate_runtime_files(
-        params.filter_artifacts(
-            profiler_artifact_filter,
-            includes=[
-                # rocprofiler-systems
-                "bin/rocprof-sys-*",
-                "include/rocprofiler-systems/**",
-                "lib/librocprof-sys*",
-                "lib/python/site-packages/rocprofsys/**",
-                "lib/rocprofiler-systems/**",
-                "libexec/rocprofiler-systems/**",
-                "share/**/rocprofiler-systems/**",
-                # rocprofiler-compute
-                "bin/rocprof-*",
-                "libexec/rocprofiler-compute/**",
-                "lib/rocprofiler-compute/**",
-                "share/**/rocprofiler-compute/**",
-            ],
-        ),
+    profiler_artifacts = params.filter_artifacts(
+        profiler_artifact_filter,
+        includes=[
+            # rocprofiler-systems
+            "bin/rocprof-sys-*",
+            "include/rocprofiler-systems/**",
+            "lib/librocprof-sys*",
+            "lib/python/site-packages/rocprofsys/**",
+            "lib/rocprofiler-systems/**",
+            "libexec/rocprofiler-systems/**",
+            "share/**/rocprofiler-systems/**",
+            # rocprofiler-compute
+            "bin/rocprof-*",
+            "libexec/rocprofiler-compute/**",
+            "lib/rocprofiler-compute/**",
+            "share/**/rocprofiler-compute/**",
+        ],
     )
-    ensure_profiler_library_symlinks(profiler)
 
-    # The rocprofiler-compute artifact installs the launcher as a symlink:
-    # bin/rocprof-compute -> ../libexec/rocprofiler-compute/rocprof-compute
-    # However, populate_runtime_files() does not preserve symlinks and only
-    # materializes the real file under libexec/. Recreate the expected bin/
-    # entry here so CLI entrypoints (_exec("bin/rocprof-compute")) continue to work.
-    compute_target = (
-        profiler.platform_dir / "libexec" / "rocprofiler-compute" / "rocprof-compute"
-    )
-    compute_link = profiler.platform_dir / "bin" / "rocprof-compute"
+    if profiler_artifacts.artifact_names:
+        profiler = PopulatedDistPackage(params, logical_name="profiler")
+        profiler.rpath_dep(core, "lib")
+        profiler.rpath_dep(core, "lib/llvm/lib")
+        profiler.rpath_dep(core, "lib/rocm_sysdeps/lib")
+        profiler.populate_runtime_files(profiler_artifacts)
+        ensure_profiler_library_symlinks(profiler)
 
-    if compute_target.exists() and not compute_link.exists():
-        compute_link.parent.mkdir(parents=True, exist_ok=True)
-        compute_link.symlink_to("../libexec/rocprofiler-compute/rocprof-compute")
+        # The rocprofiler-compute artifact installs the launcher as a symlink:
+        # bin/rocprof-compute -> ../libexec/rocprofiler-compute/rocprof-compute
+        # However, populate_runtime_files() does not preserve symlinks and only
+        # materializes the real file under libexec/. Recreate the expected bin/
+        # entry here so CLI entrypoints (_exec("bin/rocprof-compute")) continue to work.
+        compute_target = (
+            profiler.platform_dir
+            / "libexec"
+            / "rocprofiler-compute"
+            / "rocprof-compute"
+        )
+        compute_link = profiler.platform_dir / "bin" / "rocprof-compute"
+
+        if compute_target.exists() and not compute_link.exists():
+            compute_link.parent.mkdir(parents=True, exist_ok=True)
+            compute_link.symlink_to("../libexec/rocprofiler-compute/rocprof-compute")
+    elif sys.platform == "win32":
+        print(
+            "::: No profiler artifacts found on Windows; skipping rocm-profiler package"
+        )
+    else:
+        raise RuntimeError(
+            "No profiler artifacts found; refusing to build an empty rocm-profiler package"
+        )
 
     if kpack_split:
         _run_kpack_split(args, params, core)
