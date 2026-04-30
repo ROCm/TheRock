@@ -25,6 +25,39 @@
 name: Multi-Arch Release Windows PyTorch Wheels
 
 on:
+  workflow_call:
+    inputs:
+      amdgpu_families:
+        description: >-
+          Semicolon-separated list of AMD GPU families to build PyTorch for
+          (e.g. 'gfx110X-all;gfx120X-all'). Expanded to gfx targets at
+          build time via cmake/therock_amdgpu_targets.cmake.
+        type: string
+        required: true
+      rocm_version:
+        description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
+        type: string
+        required: true
+      rocm_package_find_links_url:
+        description: URL for pip --find-links to install ROCm packages
+        type: string
+        required: true
+      release_type:
+        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
+        type: string
+        required: true
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      cache_type:
+        description: "Compiler cache type ('none', 'sccache', or 'ccache')"
+        type: string
+        default: "none"
   workflow_dispatch:
     inputs:
       amdgpu_families:

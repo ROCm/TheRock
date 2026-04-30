@@ -18,6 +18,12 @@ on:
         type: string
       rocm_package_version:
         type: string
+      rocm_deb_package_version:
+        type: string
+        description: ROCm DEB package version for native packages
+      rocm_rpm_package_version:
+        type: string
+        description: ROCm RPM package version for native packages
       test_type:
         type: string
       release_type:
@@ -116,6 +122,77 @@ jobs:
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
       release_type: ${{ inputs.release_type }}
+
+  build_native_deb_packages:
+    needs: [build_multi_arch_stages]
+    name: Build DEB Packages
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    with:
+      dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      rocm_version: ${{ inputs.rocm_deb_package_version }}
+      native_package_type: deb
+    permissions:
+      contents: read
+      id-token: write
+
+  build_native_rpm_packages:
+    needs: [build_multi_arch_stages]
+    name: Build RPM Packages
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    with:
+      dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      rocm_version: ${{ inputs.rocm_rpm_package_version }}
+      native_package_type: rpm
+    permissions:
+      contents: read
+      id-token: write
+
+  test_native_packages_ubuntu2404:
+    needs: [build_native_deb_packages]
+    name: Test DEB Install - ubuntu2404
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    uses: ./.github/workflows/test_native_linux_packages_install.yml
+    with:
+      package_install_url: ${{ needs.build_native_deb_packages.outputs.package_repository_url }}
+      release_type: ci
+      os_profile: ubuntu2404
+      artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      test_type: sanity
+    permissions:
+      contents: read
+      id-token: write
+
+  test_native_packages_rhel10:
+    needs: [build_native_rpm_packages]
+    name: Test RPM Install - rhel10
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    uses: ./.github/workflows/test_native_linux_packages_install.yml
+    with:
+      package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
+      release_type: ci
+      os_profile: rhel10
+      artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      test_type: sanity
+    permissions:
+      contents: read
+      id-token: write
+
+  test_native_packages_sles16:
+    needs: [build_native_rpm_packages]
+    name: Test RPM Install - sles16
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    uses: ./.github/workflows/test_native_linux_packages_install.yml
+    with:
+      package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
+      release_type: ci
+      os_profile: sles16
+      artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      test_type: sanity
+    permissions:
+      contents: read
+      id-token: write
 
   build_python_packages:
     needs: [build_multi_arch_stages]
