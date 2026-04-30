@@ -216,7 +216,7 @@ def run_therock_ci(
         sys.executable,
         str(
             _REPO_ROOT
-            / "build_tools/github_actions/test_executable_scripts/run-therock-ci.py"
+            / "rocm-systems/projects/rocprofiler-sdk/source/scripts/run-therock-ci.py"
         ),
         "--configure-cmd",
         shlex.join(cmake_config_cmd),
