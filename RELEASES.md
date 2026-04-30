@@ -61,14 +61,15 @@ Table of contents:
 > This new setup will streamline package installation, so please note the
 > differences in the install instructions.
 
-See this table for key differences between release types:
+Key differences from [per-family releases](#per-family-releases):
 
-|                      | Multi-arch releases                         | Per-family releases                    |
-| -------------------- | ------------------------------------------- | -------------------------------------- |
-| GPU code separation  | Split into device packages / `.kpack` files | Included directly into main packages   |
-| GPU selection        | Package extras/variants                     | Chosen by index URL or tarball name    |
-| Multiple GPU targets | Install extras / use multiarch tarball      | Separate venvs or tarballs per family  |
-| Download size        | Smaller per target                          | Larger (all targets in family bundled) |
+- **One index URL for all GPUs**: select your target with a pip extra like
+  `[device-gfx942]` instead of finding a per-family index URL
+- **Broader GPU support**: adding support for a new GPU target is just one
+  more device package, so more GPUs can be supported without impacting build
+  times or download sizes for other targets
+- **Smaller downloads**: kernels downloads can be scoped to a single GPU
+  instead of always being scoped to a family or "all"
 
 ### Multi-arch release status
 
@@ -210,23 +211,25 @@ pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
 ```
 
 > [!TIP]
-> The device extras install GPU-specific packages like `amd-torch-device-gfx942`
-> which contain GPU-specific kernels and depend on `rocm-sdk-device-gfx942`.
-> The compatible ROCm packages are installed automatically - you do not need to
+> The device extras install GPU-specific packages like `amd-torch-device-gfx1100`
+> which contain GPU-specific kernels and depend on `rocm-sdk-device-gfx1100`.
+> The compatible ROCm packages are installed automatically, you do not need to
 > install ROCm separately:
 >
 > ```bash
-> pip install --index-url https://rocm.nightlies.amd.com/whl-staging-multi-arch/ \
->     torch[gfx942]
+> pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+>     "torch[device-gfx1100]"
 >
-> pip freeze | grep rocm
-> # amd-torch-device-gfx942==2.11.0+rocm7.13.0a20260430
-> # rocm==7.13.0a20260430
-> # rocm-bootstrap==0.1.0
-> # rocm-sdk-core==7.13.0a20260430
-> # rocm-sdk-device-gfx942==7.13.0a20260430
-> # rocm-sdk-libraries==7.13.0a20260430
-> # torch==2.11.0+rocm7.13.0a20260430
+> pip freeze  # with approximate download sizes:
+> # rocm-sdk-core==7.13.0a...              ~700 MB
+> # rocm-sdk-libraries==7.13.0a...         ~100 MB  (host code, shared across GPUs)
+> # rocm-sdk-device-gfx1100==7.13.0a...     ~50 MB  (only gfx1100 device code)
+> # torch==2.11.0+rocm...                  ~100 MB  (host code, shared across GPUs)
+> # amd-torch-device-gfx1100==2.11.0+...    ~50 MB  (only gfx1100 device code)
+> # Total:                                 ~1.1 GB
+> #
+> # For comparison, a similar per-family (non-multi-arch) torch wheel for
+> # gfx110X-all [gfx1100, gfx1101, gfx1102, gfx1103] is ~600 MB.
 > ```
 
 After installing, verify PyTorch can see your GPU:
