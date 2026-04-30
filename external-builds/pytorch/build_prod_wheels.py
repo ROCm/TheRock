@@ -937,15 +937,6 @@ def do_build_pytorch(
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
     is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
-    is_pytorch_2_11_or_later = pytorch_build_version_parsed.release[:2] >= (2, 11)
-
-    # aotriton is not supported on certain architectures yet.
-    # gfx900/gfx906/gfx908/gfx101X/gfx103X: https://github.com/ROCm/TheRock/issues/1925
-    AOTRITON_UNSUPPORTED_ARCHS = ["gfx900", "gfx906", "gfx908", "gfx101", "gfx103"]
-    # gfx1152/53: supported in aotriton 0.11.2b+ (https://github.com/ROCm/aotriton/pull/142),
-    #   which is pinned by pytorch >= 2.11. Older versions don't include it.
-    if not is_pytorch_2_11_or_later:
-        AOTRITON_UNSUPPORTED_ARCHS += ["gfx1152", "gfx1153"]
 
     ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
     ## and causes build failures for other PyTorch versions
@@ -981,15 +972,14 @@ def do_build_pytorch(
         print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
 
         if args.enable_pytorch_flash_attention_linux is None:
-            # Default behavior — determined by if triton is build
+            # Default behavior — determined by if triton is built.
+            # Arch filtering is intentionally NOT done here: aotriton's
+            # build system only downloads kernel images for supported
+            # architectures, and the runtime (check_gpu) gracefully falls
+            # back to math/CK backends on unsupported GPUs.
             use_flash_attention = "ON" if triton_requirement else "OFF"
-
-            if any(
-                arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
-            ):
-                use_flash_attention = "OFF"
             print(
-                f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
+                f"Flash Attention default behavior (based on triton): {use_flash_attention}"
             )
         else:
             # Explicit override: user has set the flag to true/false
@@ -1038,12 +1028,13 @@ def do_build_pytorch(
     if is_windows:
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
 
-        use_flash_attention = "0"
-
-        if args.enable_pytorch_flash_attention_windows and not any(
-            arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
-        ):
-            use_flash_attention = "1"
+        # Arch filtering is intentionally NOT done here: aotriton's
+        # build system filters unsupported architectures itself (via
+        # gpu_targets.py), and the runtime (check_gpu) gracefully falls
+        # back to math/CK backends on unsupported GPUs.
+        use_flash_attention = (
+            "1" if args.enable_pytorch_flash_attention_windows else "0"
+        )
 
         env.update(
             {
@@ -1060,9 +1051,7 @@ def do_build_pytorch(
                 "BUILD_TEST": "0",
             }
         )
-        print(
-            f"  Flash attention enabled: {args.enable_pytorch_flash_attention_windows or not is_windows}"
-        )
+        print(f"  Flash attention enabled: {use_flash_attention == '1'}")
 
     if not is_windows:
         # Prepend the ROCm sysdeps dir so that we use bundled libraries.
