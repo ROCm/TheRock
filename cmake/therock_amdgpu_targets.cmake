@@ -205,7 +205,6 @@ therock_add_amdgpu_target(gfx1036 "AMD Raphael iGPU" FAMILY igpu-all gfx103X-all
 therock_add_amdgpu_target(gfx1100 "AMD RX 7900 XTX" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
-    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
     rccl-tests
@@ -213,7 +212,6 @@ therock_add_amdgpu_target(gfx1100 "AMD RX 7900 XTX" FAMILY dgpu-all gfx110X-all 
 therock_add_amdgpu_target(gfx1101 "AMD RX 7800 XT" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
-    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
     rccl-tests
@@ -221,7 +219,6 @@ therock_add_amdgpu_target(gfx1101 "AMD RX 7800 XT" FAMILY dgpu-all gfx110X-all g
 therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
-    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     rccl # Disable on all but CDNA, see https://github.com/ROCm/TheRock/issues/2130
     rccl-tests
