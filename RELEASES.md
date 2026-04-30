@@ -27,6 +27,7 @@ Table of contents:
   - [Installing multi-arch PyTorch Python packages](#installing-multi-arch-pytorch-python-packages)
   - [Supported device extras](#supported-device-extras)
   - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
+  <!-- - [Installing multi-arch native packages](#installing-multi-arch-native-packages) -->
 - [Per-family releases](#per-family-releases)
   - [Installing per-family releases using pip](#installing-per-family-releases-using-pip)
     - [Python packages release status](#python-packages-release-status)
@@ -282,6 +283,13 @@ ls install/.kpack/
 > export PATH="$(pwd)/install/bin:$PATH"
 > export ROCM_HOME="$(pwd)/install"
 > ```
+
+<!-- ### Installing multi-arch native packages
+
+TODO: Add install instructions for multi-arch native Linux packages from
+https://rocm.nightlies.amd.com/packages-multi-arch/. See issue #3333.
+
+-->
 
 ## Per-family releases
 
