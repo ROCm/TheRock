@@ -239,6 +239,33 @@ list(APPEND _blas_subproject_names rocBLAS)
 
 
 if(THEROCK_ENABLE_SPARSE)
+  # Point subprojects at DVC-tracked pre-converted matrices when testing is enabled.
+  # Avoids downloading matrices from external source during the build.
+  set(_rocsparse_matrices_dir_arg)
+  set(_hipsparse_matrices_dir_arg)
+  if(THEROCK_BUILD_TESTING)
+    set(_rocsparse_matrices_dir
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocsparse/clients/matrices")
+    set(_hipsparse_matrices_dir
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipsparse/clients/matrices")
+    if(NOT EXISTS "${_rocsparse_matrices_dir}/nos1.csr")
+      message(FATAL_ERROR
+        "Sparse test matrices not found at ${_rocsparse_matrices_dir}.\n"
+        "Run 'dvc pull' in ${THEROCK_ROCM_LIBRARIES_SOURCE_DIR} or "
+        "'python build_tools/fetch_sources.py --dvc-projects rocm-libraries' "
+        "to fetch them.")
+    endif()
+    if(NOT EXISTS "${_hipsparse_matrices_dir}/nos1.bin")
+      message(FATAL_ERROR
+        "Sparse test matrices not found at ${_hipsparse_matrices_dir}.\n"
+        "Run 'dvc pull' in ${THEROCK_ROCM_LIBRARIES_SOURCE_DIR} or "
+        "'python build_tools/fetch_sources.py --dvc-projects rocm-libraries' "
+        "to fetch them.")
+    endif()
+    set(_rocsparse_matrices_dir_arg -DCMAKE_MATRICES_DIR=${_rocsparse_matrices_dir})
+    set(_hipsparse_matrices_dir_arg -DCMAKE_MATRICES_DIR=${_hipsparse_matrices_dir})
+  endif()
+
   ##############################################################################
   # rocSPARSE
   ##############################################################################
@@ -256,6 +283,7 @@ if(THEROCK_ENABLE_SPARSE)
       -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_SAMPLES=OFF
+      ${_rocsparse_matrices_dir_arg}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -292,6 +320,7 @@ if(THEROCK_ENABLE_SPARSE)
       -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_SAMPLES=OFF
+      ${_hipsparse_matrices_dir_arg}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
