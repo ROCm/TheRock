@@ -14,6 +14,7 @@ if(THEROCK_ENABLE_ROCJITSU)
   ##############################################################################
 
   therock_cmake_subproject_declare(rocjitsu
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/experimental/rocjitsu"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu"
     BACKGROUND_BUILD
