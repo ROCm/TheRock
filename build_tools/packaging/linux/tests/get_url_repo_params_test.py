@@ -332,6 +332,30 @@ class GetRepoUrlTest(unittest.TestCase):
             "https://x.com/rpm/20260204-12345/x86_64/",
         )
 
+    def test_non_prerelease_empty_repo_subfolder_no_double_slash_deb(self):
+        self.assertEqual(
+            get_url_repo_params.get_repo_url(
+                release_type="release",
+                native_package_type="deb",
+                repo_base_url="https://repo.amd.com",
+                os_profile="ubuntu2404",
+                repo_sub_folder="",
+            ),
+            "https://repo.amd.com/deb/",
+        )
+
+    def test_non_prerelease_empty_repo_subfolder_no_double_slash_rpm(self):
+        self.assertEqual(
+            get_url_repo_params.get_repo_url(
+                release_type="nightly",
+                native_package_type="rpm",
+                repo_base_url="https://repo.amd.com",
+                os_profile="rhel10",
+                repo_sub_folder="",
+            ),
+            "https://repo.amd.com/rpm/x86_64/",
+        )
+
     def test_strips_trailing_slash_from_base(self):
         # Test that repo_base_url trailing slash is stripped.
         self.assertEqual(
