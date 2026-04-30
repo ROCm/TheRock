@@ -62,26 +62,29 @@ Table of contents:
 
 See this table for key differences between release types:
 
-|                      | Multi-arch releases                    | Per-family releases                    |
-| -------------------- | -------------------------------------- | -------------------------------------- |
-| GPU code separation  | Split into device packages / `.kpack`  | Bundled into each artifact             |
-| GPU selection        | Package extras/variants                | Chosen by index URL or tarball name    |
-| Multiple GPU targets | Install extras / use multiarch tarball | Separate venvs or tarballs per family  |
-| Download size        | Smaller per target                     | Larger (all targets in family bundled) |
+|                      | Multi-arch releases                         | Per-family releases                    |
+| -------------------- | ------------------------------------------- | -------------------------------------- |
+| GPU code separation  | Split into device packages / `.kpack` files | Included directly into main packages   |
+| GPU selection        | Package extras/variants                     | Chosen by index URL or tarball name    |
+| Multiple GPU targets | Install extras / use multiarch tarball      | Separate venvs or tarballs per family  |
+| Download size        | Smaller per target                          | Larger (all targets in family bundled) |
 
 ### Multi-arch release status
 
-[![Multi-arch release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml)
+| Platform |                                                                                                                                                                                  ROCm |                                                                                                                                                                                                                                       PyTorch |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| Linux    | [![Multi-arch release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml) |       [![Multi-arch PyTorch (Linux)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml) |
+| Windows  | [![Multi-arch release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml) | [![Multi-arch PyTorch (Windows)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml) |
 
 **Package availability:**
 
-| Package type            | Linux                                                                                                     | Windows                                                           |
-| ----------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| ROCm Python packages    | ✅ Available                                                                                              | ✅ Available                                                      |
-| PyTorch Python packages | ✅ Available (2.10 and 2.11; other versions pending [#4768](https://github.com/ROCm/TheRock/issues/4768)) | ✅ Available                                                      |
-| JAX Python packages     | 🟠 Planned                                                                                                | -                                                                 |
-| ROCm tarballs           | ✅ Available                                                                                              | ✅ Available                                                      |
-| Native Linux packages   | 🟡 In progress ([#3333](https://github.com/ROCm/TheRock/issues/3333))                                     | 🟠 Planned ([#1987](https://github.com/ROCm/TheRock/issues/1987)) |
+| Package type            | Linux                                                                                                                                                                                                                                        | Windows                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| ROCm Python packages    | ✅ Available                                                                                                                                                                                                                                 | ✅ Available                                                                                                       |
+| PyTorch Python packages | ✅ Available<ul><li>Torch versions 2.10 and 2.11 only,<br>other versions pending [#4768](https://github.com/ROCm/TheRock/issues/4768)</li><li>Missing flash attention pending [#4969](https://github.com/ROCm/TheRock/issues/4969)</li></ul> | ✅ Available<ul><li>Missing flash attention pending [#4969](https://github.com/ROCm/TheRock/issues/4969)</li></ul> |
+| JAX Python packages     | 🟠 Planned                                                                                                                                                                                                                                   | -                                                                                                                  |
+| ROCm tarballs           | ✅ Available                                                                                                                                                                                                                                 | ✅ Available                                                                                                       |
+| Native Linux packages   | ✅ Available                                                                                                                                                                                                                                 | 🟠 Planned ([#1987](https://github.com/ROCm/TheRock/issues/1987))                                                  |
 
 ### Installing multi-arch ROCm Python packages
 
