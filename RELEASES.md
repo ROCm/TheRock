@@ -85,6 +85,9 @@ See this table for key differences between release types:
 
 ### Installing multi-arch ROCm Python packages
 
+Nightly releases of ROCm and related Python packages are published to a unified
+index at https://rocm.nightlies.amd.com/whl-multi-arch/.
+
 > [!TIP]
 > We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html):
 >
@@ -99,21 +102,14 @@ See this table for key differences between release types:
 > If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual enivornment.
 > In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
-Install ROCm with device support for all GPUs using the unified index:
+Install ROCm with device support for your GPU using the unified index:
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ "rocm[libraries,device-all]"
+# Replace device-gfx942 with your GPU, see the section below for details
+pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ "rocm[libraries,device-gfx942]"
 ```
 
 <!-- TODO: Advertise wheel variants / WheelNext once available  -->
-
-To install device code for only a specific GPU (smaller download), use a
-per-target extra like `device-gfx1100` instead of `device-all` (see
-[supported device extras](#supported-device-extras) for the full list):
-
-```bash
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ "rocm[libraries,device-gfx1100]"
-```
 
 After installing, verify your installation:
 
@@ -121,12 +117,11 @@ After installing, verify your installation:
 rocm-sdk test
 ```
 
-#### Supported device extras
+#### Supported Python `[device-*]` install extras
 
-The `device-all` extra installs device code for all supported GPUs. To install
-for a specific GPU only, use the corresponding `device-gfx*` extra from the
-table below. These extras work with `rocm`, `torch`, `torchvision`, and other
-multi-arch packages.
+For packages which include device-specific code (such as `rocm`, `torch`, and
+`torchvision`), support for individual devices can be installed using the
+corresponding `device-*` extra from the table below.
 
 | Product Name                       | GFX Target | Device Extra     |
 | ---------------------------------- | ---------- | ---------------- |
@@ -157,48 +152,54 @@ multi-arch packages.
 | AMD Radeon Pro V520                | gfx1011    | `device-gfx1011` |
 | AMD RX 5500                        | gfx1012    | `device-gfx1012` |
 
+#### The Python `[device-all]` install extra
+
+A `[device-all]` extra is also provided which installs device code for all GPUs.
+
+> [!WARNING]
+> The `[device-all]` extra may not work consistently for nightly releases because
+> packages are promoted per-target as they pass tests. If tests are still
+> running or if they failed for an individual target, this extra will not be
+> able to find all required packages.
+>
+> | Package index                                          | Safe to use `[device-all]`?                              |
+> | ------------------------------------------------------ | -------------------------------------------------------- |
+> | https://rocm.nightlies.amd.com/whl-multi-arch/         | ❌ No (some packages may not be available)               |
+> | https://rocm.nightlies.amd.com/whl-staging-multi-arch/ | ✅ Yes (index includes all packages, even if tests fail) |
+
 ### Installing multi-arch PyTorch Python packages
 
 Install PyTorch with ROCm support using the same unified index:
 
 ```bash
+# Replace device-gfx942 with your GPU, see the section above for details
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
-    "torch[device-all]" "torchvision[device-all]" torchaudio
-# Optional additional packages on Linux:
-#   apex
-```
+    "torch[device-gfx942]" "torchvision[device-gfx942]" torchaudio
 
-To install for only a specific GPU, use a per-target extra like `device-gfx1100`
-instead of `device-all` (see
-[supported device extras](#supported-device-extras) for the full list):
-
-```bash
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
-    "torch[device-gfx1100]" "torchvision[device-gfx1100]" torchaudio
 # Optional additional packages on Linux:
 #   apex
 ```
 
 > [!TIP]
-> The device extras install GPU-specific packages like `amd-torch-device-gfx1100`
-> which contain GPU-specific kernels and depend on `rocm-sdk-device-gfx1100`.
+> The device extras install GPU-specific packages like `amd-torch-device-gfx942`
+> which contain GPU-specific kernels and depend on `rocm-sdk-device-gfx942`.
 > The compatible ROCm packages are installed automatically - you do not need to
 > install ROCm separately:
 >
 > <!-- TODO: replace with a nightly releases example -->
 >
 > ```bash
-> pip install --index-url https://rocm.devreleases.amd.com/whl-staging-multi-arch/ \
->     torch[gfx1100]==2.11.0+devrocm7.13.0.dev0.b7df0b9cb7302534cb45e9614ba29962d4ec6c2c
+> pip install --index-url https://rocm.nightlies.amd.com/whl-staging-multi-arch/ \
+>     torch[gfx942]
 >
 > pip freeze | grep rocm
-> # amd-torch-device-gfx1100==2.11.0+devrocm7.13.0.dev0.b7df0b9cb7302534cb45e9614ba29962d4ec6c2c
-> # rocm==7.13.0.dev0+b7df0b9cb7302534cb45e9614ba29962d4ec6c2c
+> # amd-torch-device-gfx942==2.11.0+rocm7.13.0a20260430
+> # rocm==7.13.0a20260430
 > # rocm-bootstrap==0.1.0
-> # rocm-sdk-core==7.13.0.dev0+b7df0b9cb7302534cb45e9614ba29962d4ec6c2c
-> # rocm-sdk-device-gfx1100==7.13.0.dev0+b7df0b9cb7302534cb45e9614ba29962d4ec6c2c
-> # rocm-sdk-libraries==7.13.0.dev0+b7df0b9cb7302534cb45e9614ba29962d4ec6c2c
-> # torch==2.11.0+devrocm7.13.0.dev0.b7df0b9cb7302534cb45e9614ba29962d4ec6c2c
+> # rocm-sdk-core==7.13.0a20260430
+> # rocm-sdk-device-gfx942==7.13.0a20260430
+> # rocm-sdk-libraries==7.13.0a20260430
+> # torch==2.11.0+rocm7.13.0a20260430
 > ```
 
 After installing, verify PyTorch can see your GPU:
@@ -222,7 +223,7 @@ Standalone "ROCm SDK tarballs" are a flattened view of ROCm
 structure seen with system installs on Linux to `/opt/rocm/` or on Windows via
 the HIP SDK:
 
-```
+```bash
 install/
   .kpack/     # GPU-specific kernel packs (multi-arch only)
   bin/
@@ -239,20 +240,43 @@ such as setting environment variables.
 Multi-arch tarballs separate GPU-specific kernel code into a `.kpack/`
 directory. Two variants are available:
 
-- **Per-family tarballs** (e.g. `therock-dist-linux-gfx110X-all-7.13.0a20260427.tar.gz`)
+- **Per-family tarballs** (e.g. `therock-dist-linux-gfx110X-all-7.13.0a20260430.tar.gz`)
   that include `.kpack` files only for one family.
-- **Multiarch tarball** (e.g. `therock-dist-linux-multiarch-7.13.0a20260427.tar.gz`)
+- **Multiarch tarball** (e.g. `therock-dist-linux-multiarch-7.13.0a20260430.tar.gz`)
   that include `.kpack` files for all supported targets.
 
-> [!NOTE]
-> Multi-arch tarball releases are coming soon (index pages are not yet generated).
+Browse and download tarballs from
+https://rocm.nightlies.amd.com/tarball-multi-arch/.
 
-<!-- TODO: Document tarball download/install once index pages are generated
-           and the CloudFront path is finalized. -->
+To download and extract:
 
-<!-- https://rocm.devreleases.amd.com/tarball-multi-arch/ -->
+```bash
+mkdir therock-tarball && cd therock-tarball
 
-<!-- https://rocm.nightlies.amd.com/tarball-multi-arch/ -->
+# Per-family (smaller, one GPU family):
+wget https://rocm.nightlies.amd.com/tarball-multi-arch/therock-dist-linux-gfx110X-all-7.13.0a20260430.tar.gz
+
+# Or multiarch (all GPUs):
+wget https://rocm.nightlies.amd.com/tarball-multi-arch/therock-dist-linux-multiarch-7.13.0a20260430.tar.gz
+
+mkdir install && tar -xf *.tar.gz -C install
+```
+
+After extraction, test the install:
+
+```bash
+./install/bin/rocminfo
+ls install/.kpack/
+# blas_lib_gfx1100.kpack  fft_lib_gfx1100.kpack  rand_lib_gfx1100.kpack  ...
+```
+
+> [!TIP]
+> You may want to add the install directory to your environment:
+>
+> ```bash
+> export PATH="$(pwd)/install/bin:$PATH"
+> export ROCM_HOME="$(pwd)/install"
+> ```
 
 ## Per-family releases
 
