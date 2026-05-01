@@ -739,7 +739,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 {
                     "amdgpu_family": "gfx94X-dcgpu",
                     "amdgpu_targets": "gfx942",
-                    "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+                    "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
                     "sanity_check_only_for_family": false
                 },
                 ...

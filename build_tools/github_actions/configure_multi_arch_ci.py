@@ -66,7 +66,11 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
-from github_actions_api import gha_append_step_summary, gha_set_output
+from github_actions_api import (
+    gha_append_step_summary,
+    gha_load_github_event,
+    gha_set_output,
+)
 
 # ---------------------------------------------------------------------------
 # Input parsing helpers
@@ -170,9 +174,7 @@ class CIInputs:
         commit_ref = os.environ["GITHUB_REF_NAME"]
 
         # Read the full event webhook payload (common to all event triggers).
-        event_path = os.environ["GITHUB_EVENT_PATH"]
-        with open(event_path) as f:
-            event = json.load(f)
+        event = gha_load_github_event()
 
         # Workflow inputs are passed as environment variables by
         # setup_multi_arch.yml. GitHub-specific context (PR labels,
