@@ -203,7 +203,9 @@ Install PyTorch with ROCm support using the same unified index:
 
 ```bash
 # Replace device-gfx942 with your GPU, see the section above for details
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+# Note: we'll recommend 'whl-multi-arch' instead of 'whl-staging-multi-arch'
+#       as soon as we test run automate tests on these packages
+pip install --index-url https://rocm.nightlies.amd.com/whl-staging-multi-arch/ \
     "torch[device-gfx942]" "torchvision[device-gfx942]" torchaudio
 
 # Optional additional packages on Linux:
@@ -217,7 +219,7 @@ pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
 > install ROCm separately:
 >
 > ```bash
-> pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+> pip install --index-url https://rocm.nightlies.amd.com/whl-staging-multi-arch/ \
 >     "torch[device-gfx1100]"
 >
 > pip freeze  # with approximate download sizes:
