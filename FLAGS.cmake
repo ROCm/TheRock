@@ -32,11 +32,11 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
-  NAME HIP_TESTS_MONITOR_LOAD_AS_AN_ATOMIC_OPERATION
+  NAME HIP_TESTS_MONITOR_OPS_ARE_ATOMIC
   DEFAULT_VALUE OFF
-  DESCRIPTION "Monitor loads are implemented as an atomic operation"
+  DESCRIPTION "Monitor builtins are implemented as an atomic operation"
   CMAKE_VARS
-    HIP_TESTS_MONITOR_LOAD_AS_AN_ATOMIC_OPERATION=ON
+    HIP_TESTS_MONITOR_OPS_ARE_ATOMIC=ON
   SUB_PROJECTS
     hip-tests
 )
