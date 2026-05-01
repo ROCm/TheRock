@@ -17,6 +17,9 @@ Example usage:
     python expand_amdgpu_families.py --amdgpu-families "gfx94X-dcgpu;gfx120X-all"
     -> gfx942,gfx1200,gfx1201
 
+    python expand_amdgpu_families.py --amdgpu-families "gfx94X-dcgpu" --prefix "device-"
+    -> device-gfx942
+
 Fails with a non-zero exit code and a clear message if any requested
 family is not present in the CMake source — silent drops were the bug
 this helper exists to prevent.
@@ -45,6 +48,15 @@ def main(argv: list[str]) -> int:
             "(e.g. 'gfx94X-dcgpu;gfx120X-all')."
         ),
     )
+    p.add_argument(
+        "--prefix",
+        type=str,
+        default="",
+        help=(
+            "Prefix to prepend to each target in the output "
+            "(e.g. 'device-' to produce 'device-gfx942')."
+        ),
+    )
     args = p.parse_args(argv)
 
     families = [f.strip() for f in args.amdgpu_families.split(";") if f.strip()]
@@ -52,7 +64,8 @@ def main(argv: list[str]) -> int:
         print("")
         return 0
 
-    print(",".join(expand_families(families, amdgpu_family_map())))
+    targets = expand_families(families, amdgpu_family_map())
+    print(",".join(f"{args.prefix}{t}" for t in targets))
     return 0
 
 

@@ -83,6 +83,21 @@ class ExpandAmdgpuFamiliesMainTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             expand_amdgpu_families.main(["--amdgpu-families", "gfxNOPE"])
 
+    def test_main_prefix_prepends_to_each_target(self):
+        out = self._run_and_capture(
+            "--amdgpu-families", "gfx94X-dcgpu", "--prefix", "device-"
+        )
+        self.assertIn("device-gfx942", out.split(","))
+        # No bare target without the prefix.
+        for token in out.split(","):
+            self.assertTrue(token.startswith("device-"), token)
+
+    def test_main_prefix_default_is_empty(self):
+        # Without --prefix the output should not have a prefix.
+        out = self._run_and_capture("--amdgpu-families", "gfx94X-dcgpu")
+        self.assertIn("gfx942", out.split(","))
+        self.assertNotIn("device-", out)
+
 
 if __name__ == "__main__":
     unittest.main()
