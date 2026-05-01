@@ -44,7 +44,7 @@ do_update_alternatives(){
     # previous patch level is small.
     altscore=$((altscore*1000000+(now-1600000000)/60))
 
-    binaries=( hipcc hipconfig hipify-clang roc-obj roc-obj-extract roc-obj-ls rocminfo amd-smi rocm_agent_enumerator rocm-smi rocprofv3 rocprofv3-avail rocgdb rocpd MIOpenDriver)
+    binaries=( hipcc hipconfig hipify-clang roc-obj roc-obj-extract roc-obj-ls rocminfo amd-smi rocm_agent_enumerator rocm-smi rocprofv3 rocprofv3-avail rocgdb rocpd amdclang amdclang++ amdclang-cl amdclang-cpp amdflang amdlld )
 
     {% if target == "deb" %}
        PKG_INSTALL_PREFIX={{ install_prefix }}

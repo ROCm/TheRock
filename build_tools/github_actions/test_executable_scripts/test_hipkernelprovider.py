@@ -26,8 +26,6 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
-    "--timeout",
-    "600",
 ]
 
 # Determine test filter based on TEST_TYPE environment variable
