@@ -207,6 +207,7 @@ The `rocm-profiler` package provides ROCm profiling tools and runtime components
 - ROCm Compute Profiler (rocprofiler-compute)
 
 ### Installation
+
 #### Using meta package
 
 The recommended way to install profiling tools is via the meta package:
@@ -272,7 +273,6 @@ Instead:
 > The `rocm` meta package requires device-family-specific components
 > (e.g. `gfx94X-dcgpu`). If these are not available in the selected
 > package index, installation may be incomplete.
-
 
 ## Using Packages from Frameworks
 
