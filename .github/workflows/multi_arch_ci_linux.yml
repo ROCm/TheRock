@@ -30,10 +30,6 @@ on:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
         type: string
         default: ""
-      external_repo_config:
-        description: "JSON config for external repo checkout (repository, ref, checkout_path, cmake_source_dir_var)"
-        type: string
-        default: ""
 
 permissions:
   contents: read
@@ -91,7 +87,6 @@ jobs:
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
-      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
