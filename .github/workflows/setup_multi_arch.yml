@@ -52,6 +52,10 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, cmake_source_dir_var)"
+        type: string
+        default: ""
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -86,6 +90,9 @@ on:
           to ensure all downstream jobs use the same commit, even if the branch
           HEAD moves during the workflow run.
         value: ${{ jobs.setup.outputs.ref }}
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, cmake_source_dir_var)"
+        value: ${{ jobs.setup.outputs.external_repo_config }}
 
 permissions:
   contents: read
@@ -104,6 +111,7 @@ jobs:
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
+      external_repo_config: ${{ steps.external_repo.outputs.config }}
     steps:
       - name: Checking out repository
         id: checkout
@@ -113,6 +121,12 @@ jobs:
           ref: ${{ inputs.ref }}
           # We need the parent commit to do a diff
           fetch-depth: 2
+
+      # Pass through external repo config if provided
+      - name: Set external repo config
+        id: external_repo
+        run: |
+          echo "config=${{ inputs.external_repo_config }}" >> $GITHUB_OUTPUT
 
       # Note: the script reads PR labels, the base ref, etc. from the event
       # payload (GITHUB_EVENT_PATH). That is the original event that started
