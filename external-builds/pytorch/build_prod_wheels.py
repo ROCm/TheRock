@@ -937,6 +937,7 @@ def do_build_pytorch(
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
     is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
+    is_pytorch_2_11_or_later = pytorch_build_version_parsed.release[:2] >= (2, 11)
 
     # aotriton supports a subset of GPU architectures. When at least one
     # target arch is supported, we enable flash attention and let aotriton's
@@ -944,14 +945,20 @@ def do_build_pytorch(
     # runtime (check_gpu in sdp_utils.cpp) gracefully falls back to math/CK
     # backends on unsupported GPUs. We only disable flash attention when
     # *no* target arch is supported — otherwise aotriton's configure step
-    # fails on the empty target list (see https://github.com/ROCm/aotriton/issues/XXX).
+    # fails on the empty target list.
     #
     # These prefixes match what aotriton's gpu_targets.py recognizes.
     # See also the image list in pytorch/cmake/External/aotriton.cmake.
-    AOTRITON_SUPPORTED_ARCH_PREFIXES = ["gfx90a", "gfx942", "gfx950", "gfx11", "gfx12"]
+    AOTRITON_SUPPORTED_ARCH_PREFIXES = ("gfx90a", "gfx942", "gfx950", "gfx11", "gfx12")
+    # gfx1152/53: supported in aotriton 0.11.2b+ (https://github.com/ROCm/aotriton/pull/142),
+    #   which is pinned by pytorch >= 2.11. Older versions don't include it.
+    aotriton_unsupported_for_version = []
+    if not is_pytorch_2_11_or_later:
+        aotriton_unsupported_for_version = ["gfx1152", "gfx1153"]
     rocm_arch_list = env.get("PYTORCH_ROCM_ARCH", "").split(";")
     has_aotriton_supported_arch = any(
-        arch.startswith(tuple(AOTRITON_SUPPORTED_ARCH_PREFIXES))
+        arch.startswith(AOTRITON_SUPPORTED_ARCH_PREFIXES)
+        and arch not in aotriton_unsupported_for_version
         for arch in rocm_arch_list
     )
 
