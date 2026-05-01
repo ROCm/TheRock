@@ -37,6 +37,19 @@ therock_declare_flag(
   DESCRIPTION "Include experimental HRX runtime in core-runtime"
 )
 
+# Default OFF: when libLLVM.so exists in the install, processes that also
+# load another LLVM (e.g. rocMLIR statically linked into MIGraphX) crash at
+# _dl_init from cl::opt singleton conflicts. The Comgr-side COMGR_STATIC_LLVM
+# option doesn't fully prevent this -- libamd_comgr.so still ends up with
+# DT_NEEDED libLLVM.so via clang/lld INTERFACE_LINK_LIBRARIES + symbol
+# versioning. Forced OFF on Windows. See LCOMPILER-2156.
+therock_declare_flag(
+  NAME LLVM_DYLIB
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build LLVM as a shared dylib (libLLVM.so) and link tools against it"
+  ISSUE "https://amd-hub.atlassian.net/browse/LCOMPILER-2156"
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on
