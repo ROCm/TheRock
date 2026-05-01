@@ -60,9 +60,9 @@ def get_devel_root() -> Path:
     site_lib_path = rocm_sdk_devel_path.parent
     devel_py_pkg_name = di.ALL_PACKAGES["devel"].get_py_package_name()
     devel_py_pkg_path = site_lib_path / devel_py_pkg_name
-    if (devel_py_pkg_path / "__init__.py").exists():
+    tarball_present = (rocm_sdk_devel_path / "_devel.tar.xz").exists() or (rocm_sdk_devel_path / "_devel.tar").exists()
+    if (devel_py_pkg_path / "__init__.py").exists() and not tarball_present:
         return devel_py_pkg_path
-
     _expand_devel_contents(rocm_sdk_devel_path, site_lib_path)
     if not (devel_py_pkg_path / "__init__.py").exists():
         raise ImportError(
