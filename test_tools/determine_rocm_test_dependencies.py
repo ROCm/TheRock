@@ -25,10 +25,7 @@ def parse_cmake_test_subprojects(therock_dir):
     cmake_files = list(Path(therock_dir).rglob("CMakeLists.txt"))
 
     for cmake_file in cmake_files:
-        try:
-            content = cmake_file.read_text()
-        except:
-            continue
+        content = cmake_file.read_text()
 
         # Find all therock_cmake_subproject_declare blocks
         pattern = r"therock_cmake_subproject_declare\s*\(\s*(\w+)(.*?)\)"
