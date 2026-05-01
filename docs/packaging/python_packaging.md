@@ -201,14 +201,13 @@ pip install rocm[libraries,devel] --pre \
 
 ## rocm-profiler
 
-The `rocm-profiler` package provides ROCm profiling tools and runtime components.
-
-### Contents
+The `rocm-profiler` package provides ROCm profiling tools and runtime components. It contains:
 
 - ROCm Systems Profiler (rocprofiler-systems)
 - ROCm Compute Profiler (rocprofiler-compute)
 
 ### Installation
+#### Using meta package
 
 The recommended way to install profiling tools is via the meta package:
 
@@ -223,6 +222,23 @@ This will install:
 
 > [!NOTE]
 > Installation requires compatible ROCm SDK packages for the target platform.
+> See the [ROCm Compatibility Matrix](https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html).
+
+#### Direct installation
+
+Direct installation is not recommended for typical use:
+
+```bash
+pip install rocm-profiler
+```
+
+This may result in missing dependencies unless `rocm-sdk-core` is also installed.
+
+Always prefer:
+
+```bash
+pip install "rocm[profiler]"
+```
 
 ### Package Layout
 
@@ -257,21 +273,6 @@ Instead:
 > (e.g. `gfx94X-dcgpu`). If these are not available in the selected
 > package index, installation may be incomplete.
 
-### Direct Installation
-
-Direct installation is not recommended for typical use:
-
-```bash
-pip install rocm-profiler
-```
-
-This may result in missing dependencies unless `rocm-sdk-core` is also installed.
-
-Always prefer:
-
-```bash
-pip install "rocm[profiler]"
-```
 
 ## Using Packages from Frameworks
 
