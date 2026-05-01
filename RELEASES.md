@@ -253,8 +253,8 @@ We provide several Python packages which together form the complete ROCm SDK.
 
 A new optional package `rocm-profiler` is available, providing ROCm profiling tools:
 
-- `rocprof-compute`
-- `rocprof-sys-*` (see rocprofiler-systems documentation for full command list)
+- ROCm Systems Profiler (rocprofiler-systems)
+- ROCm Compute Profiler (rocprofiler-compute)
 
 ###### Installing the profiler package
 
