@@ -945,7 +945,7 @@ def do_build_pytorch(
     # runtime (check_gpu in sdp_utils.cpp) gracefully falls back to math/CK
     # backends on unsupported GPUs. We only disable flash attention when
     # *no* target arch is supported — otherwise aotriton's configure step
-    # fails on the empty target list.
+    # fails on the empty target list (https://github.com/ROCm/aotriton/issues/169).
     #
     # These prefixes match what aotriton's gpu_targets.py recognizes.
     # See also the image list in pytorch/cmake/External/aotriton.cmake.
