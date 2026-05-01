@@ -188,11 +188,9 @@ jobs:
         if: ${{ inputs.multi_arch }}
         id: expand
         run: |
-          device_extras=$(python build_tools/github_actions/expand_amdgpu_families.py \
+          python build_tools/github_actions/expand_amdgpu_families.py \
             --amdgpu-families "${{ inputs.amdgpu_family }}" \
-            --prefix "device-")
-          echo "Expanded '${{ inputs.amdgpu_family }}' -> device extras '${device_extras}'"
-          echo "device_extras=${device_extras}" >> "$GITHUB_OUTPUT"
+            --output-mode=device-extras
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config

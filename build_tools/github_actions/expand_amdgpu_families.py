@@ -12,13 +12,20 @@ Used by CI workflows that need build-side gfx targets (e.g.
 `--pytorch-rocm-arch`) from a family list. Mirrors the pattern used by
 `artifact_manager.py --expand-family-to-targets`.
 
-Example usage:
+Output modes:
 
-    python expand_amdgpu_families.py --amdgpu-families "gfx94X-dcgpu;gfx120X-all"
-    -> gfx942,gfx1200,gfx1201
+* ``targets`` (default) — bare gfx targets, comma-separated:
 
-    python expand_amdgpu_families.py --amdgpu-families "gfx94X-dcgpu" --prefix "device-"
-    -> device-gfx942
+      python expand_amdgpu_families.py --amdgpu-families "gfx94X-dcgpu;gfx120X-all"
+      -> gfx942,gfx1200,gfx1201
+
+* ``device-extras`` — pip device extras, comma-separated, and also
+  written to ``$GITHUB_OUTPUT`` as ``device_extras=...``:
+
+      python expand_amdgpu_families.py --amdgpu-families "gfx94X-dcgpu" \
+        --output-mode=device-extras
+      -> device-gfx942  (stdout)
+      -> device_extras=device-gfx942  (GITHUB_OUTPUT)
 
 Fails with a non-zero exit code and a clear message if any requested
 family is not present in the CMake source — silent drops were the bug
@@ -36,6 +43,8 @@ from _therock_utils.cmake_amdgpu_targets import (
     expand_families,
 )
 
+from github_actions.github_actions_api import gha_set_output
+
 
 def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(prog="expand_amdgpu_families.py")
@@ -49,12 +58,13 @@ def main(argv: list[str]) -> int:
         ),
     )
     p.add_argument(
-        "--prefix",
-        type=str,
-        default="",
+        "--output-mode",
+        choices=["targets", "device-extras"],
+        default="targets",
         help=(
-            "Prefix to prepend to each target in the output "
-            "(e.g. 'device-' to produce 'device-gfx942')."
+            "'targets' prints bare gfx targets (default). "
+            "'device-extras' prints pip device extras (device-gfxNNN) "
+            "and writes them to GITHUB_OUTPUT as device_extras=..."
         ),
     )
     args = p.parse_args(argv)
@@ -65,7 +75,14 @@ def main(argv: list[str]) -> int:
         return 0
 
     targets = expand_families(families, amdgpu_family_map())
-    print(",".join(f"{args.prefix}{t}" for t in targets))
+
+    if args.output_mode == "device-extras":
+        result = ",".join(f"device-{t}" for t in targets)
+        print(result)
+        gha_set_output({"device_extras": result})
+    else:
+        print(",".join(targets))
+
     return 0
 
 
