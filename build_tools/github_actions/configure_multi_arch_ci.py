@@ -772,6 +772,7 @@ def _expand_build_config_for_platform(
     all_families: dict[str, dict],
     variant_config: dict,
     test_type: str,
+    build_variant: str,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -786,7 +787,6 @@ def _expand_build_config_for_platform(
     - test-runs-on: runner label for testing (empty = no test runner available)
     - sanity_check_only_for_family: whether to limit test scope
     """
-    build_variant = ci_inputs.build_variant
 
     # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
     # Selects kernel-specific test runners for families that support them.
@@ -950,6 +950,7 @@ def expand_build_configs(
             all_families=all_families,
             variant_config=variant_config,
             test_type=test_type,
+            build_variant=build_variant,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
         )

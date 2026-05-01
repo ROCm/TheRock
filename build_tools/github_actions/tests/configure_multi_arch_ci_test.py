@@ -827,6 +827,41 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 build_variant_cmake_preset = result.linux.build_variant_cmake_preset
                 self.assertEqual(build_variant_cmake_preset, expected_variant)
 
+    def test_push_asan_excludes_families_without_host_asan_support(self):
+        """Push ASAN: gfx950 supports asan but not host-asan, so it must be excluded.
+
+        When build_variant=asan on push events, the effective variant becomes
+        host-asan. Families must be filtered using this effective variant, not
+        the original asan variant. gfx950 supports asan but not host-asan, so
+        it should be excluded from the result.
+        """
+        # gfx94x supports host-asan, gfx950 only supports asan (not host-asan)
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x", "gfx950"],
+        )
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",  # push triggers asan -> host-asan remap
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="asan",
+        )
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=ci_inputs,
+            test_type="quick",
+        )
+        self.assertIsNotNone(result.linux)
+        # Verify it's a host-asan build
+        self.assertEqual(
+            result.linux.build_variant_cmake_preset, "linux-release-host-asan"
+        )
+        # Only gfx94x should survive (it supports host-asan), gfx950 should be excluded
+        family_names = [info["amdgpu_family"] for info in result.linux.per_family_info]
+        self.assertIn("gfx94X-dcgpu", family_names)
+        self.assertNotIn("gfx950-dcgpu", family_names)
+        self.assertEqual(len(result.linux.per_family_info), 1)
+
     def test_variant_filters_by_platform_and_family_support(self):
         """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
         # gfx94x supports asan, gfx110x is release-only, windows has no asan variant.
