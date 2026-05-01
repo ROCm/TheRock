@@ -183,8 +183,7 @@ jobs:
             (${{ inputs.amdgpu_families }})
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
         run: |
-          python ./build_tools/memory_monitor.py --phase "Test ${{ fromJSON(inputs.component).job_name }}" -- \
-            bash -c '${{ fromJSON(inputs.component).test_script }}'
+          ${{ fromJSON(inputs.component).test_script }}
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
