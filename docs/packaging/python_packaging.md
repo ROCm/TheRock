@@ -221,10 +221,6 @@ This will install:
 - `rocm-sdk-core` (required runtime + SDK)
 - `rocm-profiler` (profiling tools)
 
-> [!NOTE]
-> Installation requires compatible ROCm SDK packages for the target platform.
-> See the [ROCm Compatibility Matrix](https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html).
-
 #### Direct installation
 
 Direct installation is not recommended for typical use:
