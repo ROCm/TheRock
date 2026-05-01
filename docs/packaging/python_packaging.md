@@ -240,7 +240,7 @@ ROCm Python packaging separates profiling functionality as follows:
   - `rocprof-sys-*`
   - profiler runtime libraries (from `rocprofiler-systems` and `rocprofiler-compute`)
 
-This separation allows users to install profiling tools only when needed.
+This separation allows you to install profiling tools only when needed.
 
 ### Dependency Model
 
@@ -248,9 +248,9 @@ The `rocm-profiler` package intentionally does **not** declare `install_requires
 
 Instead:
 
-- Dependencies are managed by the `rocm` meta package
-- Packages are co-installed into the same `site-packages`
-- Runtime dependencies are resolved using RPATH
+- Dependencies are managed by the `rocm` meta package.
+- Packages are co-installed into the same `site-packages`.
+- Runtime dependencies are resolved using RPATH.
 
 > [!NOTE]
 > The `rocm` meta package requires device-family-specific components
