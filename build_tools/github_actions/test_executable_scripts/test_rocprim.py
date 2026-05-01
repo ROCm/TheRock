@@ -3,6 +3,7 @@
 
 import logging
 import os
+import platform
 import shlex
 import subprocess
 from pathlib import Path
@@ -101,7 +102,40 @@ QUICK_TESTS = [
 shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
 total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
 
+# Generate the resource spec file for ctest
+rocm_base = Path(THEROCK_BIN_DIR).resolve().parent
+ld_paths = [
+    rocm_base / "lib",
+]
+ld_paths_str = os.pathsep.join(str(p) for p in ld_paths)
+existing_path = os.environ.get("PATH", "")
+existing_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+env_vars = os.environ.copy()
+env_vars["PATH"] = (
+    f"{THEROCK_BIN_DIR}{os.pathsep}{existing_path}"
+    if existing_path
+    else THEROCK_BIN_DIR
+)
+env_vars["ROCM_PATH"] = str(rocm_base)
+env_vars["LD_LIBRARY_PATH"] = (
+    f"{ld_paths_str}{os.pathsep}{existing_ld_path}"
+    if existing_ld_path
+    else ld_paths_str
+)
 
+is_windows = platform.system() == "Windows"
+exe_name = "generate_resource_spec.exe" if is_windows else "generate_resource_spec"
+exe_dir = rocm_base / "bin" / "rocthrust"
+
+resource_spec_file = "resources.json"
+res_gen_cmd = [
+    str(exe_dir / exe_name),
+    str(exe_dir / resource_spec_file),
+]
+logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(res_gen_cmd)}")
+subprocess.run(res_gen_cmd, cwd=THEROCK_DIR, check=True, env=env_vars)
+
+# Run ctest with resource spec file
 cmd = [
     "ctest",
     "--test-dir",
@@ -109,8 +143,8 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
-    "--repeat",
-    "until-pass:6",
+    "--resource-spec-file",
+    resource_spec_file,
     # shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)
     "--tests-information",
     f"{shard_index},,{total_shards}",
