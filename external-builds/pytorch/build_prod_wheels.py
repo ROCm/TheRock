@@ -952,13 +952,13 @@ def do_build_pytorch(
     AOTRITON_SUPPORTED_ARCH_PREFIXES = ("gfx90a", "gfx942", "gfx950", "gfx11", "gfx12")
     # gfx1152/53: supported in aotriton 0.11.2b+ (https://github.com/ROCm/aotriton/pull/142),
     #   which is pinned by pytorch >= 2.11. Older versions don't include it.
-    aotriton_unsupported_for_version = []
+    aotriton_unsupported_archs_for_version = []
     if not is_pytorch_2_11_or_later:
-        aotriton_unsupported_for_version = ["gfx1152", "gfx1153"]
+        aotriton_unsupported_archs_for_version = ["gfx1152", "gfx1153"]
     rocm_arch_list = env.get("PYTORCH_ROCM_ARCH", "").split(";")
     has_aotriton_supported_arch = any(
         arch.startswith(AOTRITON_SUPPORTED_ARCH_PREFIXES)
-        and arch not in aotriton_unsupported_for_version
+        and arch not in aotriton_unsupported_archs_for_version
         for arch in rocm_arch_list
     )
 
