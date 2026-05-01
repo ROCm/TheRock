@@ -48,20 +48,21 @@ def run(args: argparse.Namespace):
     pytorch_web_url = f"https://github.com/{pytorch_repo_org}/pytorch"
     pytorch_web_url_with_branch = f"{pytorch_web_url}/tree/{args.pytorch_git_ref}"
 
-    # Determine install mode based on provided arguments.
+    # Build index URL — append family subdir when provided.
+    index_url = args.index_url.rstrip("/")
+    if args.index_subdir:
+        index_url += f"/{args.index_subdir.strip('/')}"
+    index_url += "/"
+
+    # Build package spec — add device extras and/or version when provided.
+    package_spec = "torch"
     if args.device_extras:
-        # Multi-arch mode: single index URL, device selected via pip extras.
-        index_url = args.index_url.rstrip("/") + "/"
-        package_spec = f'"torch[{args.device_extras}]'
-        package_spec += f"=={args.torch_version}" if args.torch_version else ""
-        package_spec += '"'
-        gpu_label = args.device_extras
-    else:
-        # Per-family mode: index URL includes the family subdir.
-        index_url = f"{args.index_url}/{args.index_subdir}/"
-        package_spec = "torch"
-        package_spec += f"=={args.torch_version}" if args.torch_version else ""
-        gpu_label = args.index_subdir
+        package_spec += f"[{args.device_extras}]"
+    if args.torch_version:
+        package_spec += f"=={args.torch_version}"
+
+    # Label for the summary display.
+    gpu_label = " / ".join(filter(None, [args.index_subdir, args.device_extras]))
 
     # This report should be as brief as possible while still conveying what
     # is unique to the given arguments.
@@ -89,7 +90,7 @@ def run(args: argparse.Namespace):
     summary += "# Install torch and test requirements\n"
     summary += "pip install" + LINE_CONTINUATION
     summary += f"--index-url={index_url}" + LINE_CONTINUATION
-    summary += package_spec
+    summary += f'"{package_spec}"'
     summary += "\n"
     summary += "pip install -r pytorch/.ci/docker/requirements-ci.txt\n"
     summary += "```\n\n"
@@ -126,17 +127,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "--index-subdir",
         type=str,
+        default="",
         help="Index subdirectory (e.g. gfx110X-dgpu). Used for per-family installs.",
     )
     # Multi-arch mode: --device-extras selects GPU-specific device packages.
     parser.add_argument(
         "--device-extras",
         type=str,
+        default="",
         help="Comma-separated device extras (e.g. 'device-gfx942'). Used for multi-arch installs.",
     )
     args = parser.parse_args()
-
-    if not args.index_subdir and not args.device_extras:
-        parser.error("one of --index-subdir or --device-extras is required")
 
     run(args)
