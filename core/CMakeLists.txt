@@ -10,6 +10,21 @@
 set(_system_toolchain "amd-llvm")
 if(WIN32)
   set(_system_toolchain "")
+
+  # Compute the versioned Comgr DLL name for CLR builds. Must match what Comgr
+  # produces (set in compiler/pre_hook_amd-comgr.cmake). Old CLR ignores this;
+  # new CLR (post rocm-systems#4211) uses it via COMGR_DLL_NAME compile def.
+  # TODO: Remove once both submodules include their respective upstream changes,
+  # at which point both default to amd_comgr.dll.
+  set(_comgr_major "${THEROCK_HIP_MAJOR_VERSION}")
+  set(_comgr_minor "${THEROCK_HIP_MINOR_VERSION}")
+  if(_comgr_major LESS_EQUAL 9)
+    set(_comgr_major "0${_comgr_major}")
+  endif()
+  if(_comgr_minor LESS_EQUAL 9)
+    set(_comgr_minor "0${_comgr_minor}")
+  endif()
+  set(_comgr_dll_name "amd_comgr${_comgr_major}${_comgr_minor}.dll")
 endif()
 
 ################################################################################
@@ -22,7 +37,7 @@ therock_cmake_subproject_declare(rocm-kpack
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
-    -DBUILD_TESTING=OFF  # TODO: Enable testing in TheRock builds
+    -DBUILD_TESTING=OFF  # TODO: Enable after rocm-kpack runtime tests link under TheRock.
     -DBUILD_SHARED_LIBS=ON
   BUILD_DEPS
     therock-msgpack-cxx
@@ -35,6 +50,10 @@ therock_cmake_subproject_declare(rocm-kpack
 )
 therock_cmake_subproject_provide_package(rocm-kpack
   rocm-kpack lib/cmake/rocm-kpack)
+# TODO(#4789): Enable after rocm-kpack runtime tests link under TheRock.
+# therock_cmake_subproject_build_test(rocm-kpack
+#   COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
+# )
 therock_cmake_subproject_activate(rocm-kpack)
 
 therock_provide_artifact(core-kpack
@@ -61,6 +80,8 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amdsmi"
       USE_DIST_AMDGPU_TARGETS
       BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
       CMAKE_ARGS
         "-DCMAKE_VERBOSE_MAKEFILE=OFF"
         "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
@@ -192,6 +213,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "-D__HIP_ENABLE_RTC=1"
       "-DROCR_DLL_LOAD=0"
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
+      "-DCOMGR_DLL_NAME=${_comgr_dll_name}"
     )
   else()
     # Non-Windows CLR options.
@@ -391,6 +413,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       "-DROCCLR_ENABLE_LC=ON"
       "-DROCR_DLL_LOAD=OFF"
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
+      "-DCOMGR_DLL_NAME=${_comgr_dll_name}"
     )
   else()
     # Non-Windows CLR options.
@@ -483,6 +506,7 @@ if(THEROCK_BUILD_TESTING)
     set(_rocrtst_build_deps
       amd-llvm
       ocl-clr
+      therock-yaml-cpp
     )
     if(TARGET amdsmi)
       list(APPEND _rocrtst_build_deps amdsmi)

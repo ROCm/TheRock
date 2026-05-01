@@ -173,6 +173,7 @@ optional = true
 optional = true
 [components.test."math-libs/BLAS/rocSPARSE/stage"]
 include = [
+  "bin/rocsparse/**",
   "bin/*_rtest.xml",
   "bin/rocsparse-bench*",
   "bin/rocsparse-test*",
@@ -204,6 +205,7 @@ exclude = [
 optional = true
 [components.test."math-libs/BLAS/hipSPARSE/stage"]
 include = [
+  "bin/hipsparse/**",
   "bin/*_rtest.xml",
   "bin/hipsparse-bench*",
   "bin/hipsparse-test*",
@@ -226,6 +228,9 @@ optional = true
 include = [
   "**/*.cmake"
 ]
+exclude = [
+  "bin/hipsparselt/CTest*",
+]
 [components.doc."math-libs/BLAS/hipSPARSELt/stage"]
 optional = true
 [components.test."math-libs/BLAS/hipSPARSELt/stage"]
@@ -233,6 +238,7 @@ include = [
   # Clients benchmarks
   "bin/hipsparselt-bench*",
   # Clients tests
+  "bin/hipsparselt/**",
   "bin/hipsparselt-test*",
   "bin/hipsparselt_gtest.data",
   "bin/hipsparselt_gentest.py",

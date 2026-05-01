@@ -17,8 +17,18 @@ include(therock_flag_utils)
 
 therock_declare_flag(
   NAME KPACK_SPLIT_ARTIFACTS
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON
   DESCRIPTION "Split target-specific artifacts into generic and arch-specific components"
+)
+
+therock_declare_flag(
+  NAME HIP_KERNEL_PROVIDER_ENABLE
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable hip-kernel-provider plugin"
+  CMAKE_VARS
+    HIP_KERNEL_PROVIDER_ENABLE=ON
+  SUB_PROJECTS
+    hipkernelprovider
 )
 
 ###############################################################################

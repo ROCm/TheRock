@@ -1,6 +1,8 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Keeping this workflow for legacy reasons, but will be removed after legacy TheRock CI is retired
+
 name: CI ASAN
 
 on:

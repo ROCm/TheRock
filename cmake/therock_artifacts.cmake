@@ -243,6 +243,9 @@ function(therock_provide_artifact slice_name)
       if(_split_databases)
         list(APPEND _split_command_args --split-databases ${_split_databases})
       endif()
+      if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" STREQUAL "THEROCK_AMDGPU_TARGETS-NOTFOUND")
+        list(APPEND _split_command_args --gpu-targets ${THEROCK_AMDGPU_TARGETS})
+      endif()
 
       add_custom_command(
         OUTPUT "${_split_manifest}"

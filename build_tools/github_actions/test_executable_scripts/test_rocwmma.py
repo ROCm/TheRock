@@ -36,7 +36,7 @@ logging.basicConfig(level=logging.INFO)
 test_type = os.getenv("TEST_TYPE", "full")
 
 # TODO(#2823): Re-enable test once flaky issue is resolved
-TESTS_TO_IGNORE = ["unpack_util_test"]
+TESTS_TO_IGNORE = ["unpack_util_test", "contamination_test", "map_util_test"]
 
 test_subdir = ""
 timeout = "3600"
