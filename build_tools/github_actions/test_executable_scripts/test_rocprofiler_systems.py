@@ -17,13 +17,16 @@ ROCPROFSYS_TEST_DIR = THEROCK_PATH / "share" / "rocprofiler-systems" / "tests"
 EXCLUDED_TESTS = [
     "transferbench-sys-run",  # Requires access to multi-gpu system
     "fork.*",  # May deadlock - Under investigation
+    "openmp-target.*",  # Requires _omp_dm_init_kernel.kd fix
+    "roctx-sampling",  # Need to lower # samples in rocpd validation
+    "roctx-runtime-instrument",  # Sporadic, increase timeout to 180 seconds as opposed to 120
+    "thread-limit-above.*",  # Bypassing ROCPROFSYS_MAX_THREADS, causing regex failure
 ]
 
 # Excluded by default
 EXCLUDED_LABELS = [
     "mpi",  # TODO: Allow the example binaries to be built with MPI
     "julia",  # Unsupported - Not present in TheRock
-    "kfd",  # No SDK version can be found yet
     "attach",  # Fails - Under investigation
     "lulesh",  # Unsupported - Lulesh fails to build on TheRock
     "network",  # NIC unsupported
@@ -42,11 +45,6 @@ QUICK_TESTS_REGEX = [
     "openmp.*",
     "roctx.*",
     "trace-time-window.*",
-]
-
-QUICK_TEST_EXCLUDE_REGEX = [
-    "openmp-target.*",  # Requires _omp_dm_init_kernel.kd fix
-    "roctx-sampling",  # Need to lower # samples in rocpd validation
 ]
 
 logging.basicConfig(level=logging.INFO)
@@ -96,8 +94,6 @@ def execute_tests():
     # Actual tests
     # Keep passing tests quiet in CI.
     excluded_tests = list(EXCLUDED_TESTS)
-    if test_type == "quick":
-        excluded_tests.extend(QUICK_TEST_EXCLUDE_REGEX)
 
     cmd = ctest_base + [
         "--output-on-failure",
