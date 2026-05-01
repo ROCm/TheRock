@@ -246,8 +246,8 @@ amdgpu_family_info_matrix_postsubmit = {
         "linux": {
             # Disabled on 5/1/2026 due to power failures in CCS cluster
             # Expected to be restored 5/8/2026
-            "test-runs-on": "", # label is linux-gfx950-1gpu-ccs-ossci-rocm
-            "test-runs-on-multi-gpu": "", # label is linux-gfx950-8gpu-ccs-ossci-rocm
+            "test-runs-on": "",  # label is linux-gfx950-1gpu-ccs-ossci-rocm
+            "test-runs-on-multi-gpu": "",  # label is linux-gfx950-8gpu-ccs-ossci-rocm
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
             "build_variants": ["release", "asan", "tsan"],
