@@ -83,6 +83,10 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, cmake_source_dir_var)"
+        type: string
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -106,8 +110,8 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
+          repository: ${{ inputs.external_repo_config != '' && 'ROCm/TheRock' || inputs.repository || github.repository }}
+          ref: ${{ inputs.external_repo_config == '' && inputs.ref || '' }}
           sparse-checkout: build_tools
           path: "prejob"
 
@@ -118,7 +122,15 @@ jobs:
         shell: powershell
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
+      # Always checkout TheRock first when called from external repo
+      - name: "Checkout TheRock"
+        if: ${{ inputs.external_repo_config != '' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/TheRock
+
       - name: "Checking out repository"
+        if: ${{ inputs.external_repo_config == '' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
@@ -155,6 +167,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
@@ -200,3 +213,4 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}

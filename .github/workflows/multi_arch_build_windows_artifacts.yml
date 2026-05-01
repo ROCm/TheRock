@@ -58,6 +58,10 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, cmake_source_dir_var)"
+        type: string
+        default: ""
 
 jobs:
   build_stage:
@@ -79,11 +83,33 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
 
     steps:
+      # Enable git longpaths before checkout (needed for external repos with long paths)
+      - name: Enable git longpaths
+        if: ${{ inputs.external_repo_config != '' }}
+        run: git config --system core.longpaths true
+
+      # Always checkout TheRock first. When called from an external repo,
+      # github.repository points to that repo, so we must be explicit.
+      - name: Checkout TheRock
+        if: ${{ inputs.external_repo_config != '' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/TheRock
+
       - name: Checkout Repository
+        if: ${{ inputs.external_repo_config == '' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
+
+      - name: Checkout external repository
+        if: ${{ inputs.external_repo_config != '' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ fromJSON(inputs.external_repo_config).repository }}
+          ref: ${{ fromJSON(inputs.external_repo_config).ref }}
+          path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
@@ -165,6 +191,7 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            ${{ inputs.external_repo_config != '' && format('-D{0}={1}', fromJSON(inputs.external_repo_config).cmake_source_dir_var, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage

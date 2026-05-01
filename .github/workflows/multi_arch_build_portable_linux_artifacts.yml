@@ -65,6 +65,10 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, cmake_source_dir_var)"
+        type: string
+        default: ""
 
 jobs:
   build_stage:
@@ -87,11 +91,28 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
 
     steps:
+      # Always checkout TheRock first. When called from an external repo,
+      # github.repository points to that repo, so we must be explicit.
+      - name: Checkout TheRock
+        if: ${{ inputs.external_repo_config != '' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/TheRock
+
       - name: Checkout Repository
+        if: ${{ inputs.external_repo_config == '' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
+
+      - name: Checkout external repository
+        if: ${{ inputs.external_repo_config != '' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ fromJSON(inputs.external_repo_config).repository }}
+          ref: ${{ fromJSON(inputs.external_repo_config).ref }}
+          path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -148,6 +169,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
+            ${{ inputs.external_repo_config != '' && format('-D{0}={1}', fromJSON(inputs.external_repo_config).cmake_source_dir_var, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
