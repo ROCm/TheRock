@@ -1133,6 +1133,8 @@ function(therock_cmake_subproject_build_test target_name)
     return()
   endif()
 
+  cmake_parse_arguments(ARG "VERBOSE" "" "" ${ARGN})
+
   _therock_assert_is_cmake_subproject("${target_name}")
 
   get_target_property(_binary_dir "${target_name}" THEROCK_BINARY_DIR)
@@ -1151,14 +1153,14 @@ function(therock_cmake_subproject_build_test target_name)
   if(TARGET "build-test-${target_name}")
     message(FATAL_ERROR "Build tests already declared for subproject '${target_name}'")
   endif()
-  if(NOT ARGN)
+  if(NOT ARG_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "Build tests for '${target_name}' require at least one COMMAND")
   endif()
 
   set(_command_count 0)
   set(_current_command)
   set(_expect_command TRUE)
-  foreach(_arg IN LISTS ARGN)
+  foreach(_arg IN LISTS ARG_UNPARSED_ARGUMENTS)
     if(_arg STREQUAL "COMMAND")
       if(_current_command)
         math(EXPR _command_count "${_command_count} + 1")
@@ -1189,7 +1191,15 @@ function(therock_cmake_subproject_build_test target_name)
   # so a failure in one does not prevent the others from running.
   _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
   set(_runner_script "${_prefix_dir}/build-test-runner.cmake")
-  set(_runner_content "set(_any_failed FALSE)\n\n")
+  set(_runner_content "set(_any_failed FALSE)\n")
+
+  # VERBOSE forces TEATIME_FORCE_INTERACTIVE=1 so output streams to the
+  # console even when the CI job defaults to quiet.
+  if(ARG_VERBOSE)
+    string(APPEND _runner_content "set(_saved_teatime_interactive \"\$ENV{TEATIME_FORCE_INTERACTIVE}\")\n")
+    string(APPEND _runner_content "set(ENV{TEATIME_FORCE_INTERACTIVE} \"1\")\n")
+  endif()
+  string(APPEND _runner_content "\n")
 
   foreach(_command_index RANGE 1 ${_command_count})
     # Use numbered labels/files only when there are multiple commands;
@@ -1234,6 +1244,11 @@ function(therock_cmake_subproject_build_test target_name)
     string(APPEND _runner_content "  set(_any_failed TRUE)\n")
     string(APPEND _runner_content "endif()\n\n")
   endforeach()
+
+  # Restore TEATIME_FORCE_INTERACTIVE before the summary.
+  if(ARG_VERBOSE)
+    string(APPEND _runner_content "set(ENV{TEATIME_FORCE_INTERACTIVE} \"\${_saved_teatime_interactive}\")\n\n")
+  endif()
 
   string(APPEND _runner_content "message(STATUS \"\")\n")
   string(APPEND _runner_content "message(STATUS \"========================================\")\n")

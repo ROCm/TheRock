@@ -232,7 +232,7 @@ if(THEROCK_ENABLE_COMPILER)
     else()
       set(_llvm_lit_script "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build/bin/llvm-lit")
     endif()
-    therock_cmake_subproject_build_test(amd-comgr
+    therock_cmake_subproject_build_test(amd-comgr VERBOSE
       COMMAND
         "${Python3_EXECUTABLE}" "${_llvm_lit_script}"
         "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build/test-lit" -v
