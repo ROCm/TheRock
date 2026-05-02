@@ -46,15 +46,17 @@ if(NOT WIN32)
   add_custom_target(symlinks ALL
     ${_symlink_commands}
   )
-  install(DIRECTORY
-    "${CMAKE_CURRENT_BINARY_DIR}/bin"
-    DESTINATION .
-  )
-  install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/llvm"
-    "${CMAKE_CURRENT_BINARY_DIR}/amdgcn"
-    DESTINATION .
-  )
+  # llvm and amdgcn are symlinks to directories; install(FILES) rejects
+  # directories, so create the symlinks directly at install time.
+  # Targets must match those created by the symlinks target above.
+  # See https://github.com/ROCm/TheRock/issues/3714
+  install(CODE "
+    file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}\")
+    file(CREATE_LINK \"lib/llvm\"
+      \"\${CMAKE_INSTALL_PREFIX}/llvm\" SYMBOLIC)
+    file(CREATE_LINK \"lib/llvm/amdgcn\"
+      \"\${CMAKE_INSTALL_PREFIX}/amdgcn\" SYMBOLIC)
+  ")
   install(FILES
     ${_symlink_files}
     DESTINATION bin

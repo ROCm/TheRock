@@ -294,15 +294,12 @@ if(THEROCK_ENABLE_ROCPROFV3)
       message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
     endif()
 
-    set(_rocprofsys_optional_deps)
-    set(_rocprofsys_compiler_toolchain_args)
-    set(_rocprofsys_offload_lib_dir)
-    if(TARGET amd-llvm-offload)
-      list(APPEND _rocprofsys_optional_deps amd-llvm-offload)
-      list(APPEND _rocprofsys_compiler_toolchain_args
-        COMPILER_TOOLCHAIN amd-llvm-offload)
-      get_target_property(_amd_llvm_offload_dist_dir amd-llvm-offload THEROCK_DIST_DIR)
-      set(_rocprofsys_offload_lib_dir "${_amd_llvm_offload_dist_dir}/lib/llvm/lib")
+    set(_ROCPROFSYS_DISABLE_EXAMPLES_STR "")
+    if(NOT THEROCK_FLAG_BUILD_FORTRAN_LIBS)
+      set(_rocprofsys_disable_examples
+        openmp-vv
+        hpc)
+      list(JOIN _rocprofsys_disable_examples "\;" _ROCPROFSYS_DISABLE_EXAMPLES_STR)
     endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems
@@ -310,8 +307,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
       BACKGROUND_BUILD
-      FORTRAN_OPTIONAL
-      ${_rocprofsys_compiler_toolchain_args}
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
         -DROCPROFSYS_BUILD_ELFUTILS=ON
@@ -328,7 +323,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_USE_PYTHON="${_ROCPROFSYS_USE_PYTHON}"
         -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_ROCPROFSYS_PYTHON_VERSIONS_STR}"
         -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}"
-        "-DTHEROCK_OFFLOAD_LIB_DIR=${_rocprofsys_offload_lib_dir}"
+        "-DROCPROFSYS_DISABLE_EXAMPLES:STRING=${_ROCPROFSYS_DISABLE_EXAMPLES_STR}"
         "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
       INSTALL_RPATH_DIRS
         "lib"
@@ -348,7 +343,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
         ${_openmpi_optional_dep}
-        ${_rocprofsys_optional_deps}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems
       SUBDIRS .
