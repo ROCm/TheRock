@@ -69,6 +69,13 @@ if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
+# Apply patch source only on Linux
+set(patch_source_commands)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND patch_source_commands   COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
+endif()
+
 # Helper function to extract dependency prefixes from CMAKE_PREFIX_PATH.
 # Needed for autotools-based builds that require --with-* configure flags.
 # (Autotools doesn't use CMAKE_PREFIX_PATH directly, so we must extract and pass explicitly.)
@@ -94,6 +101,8 @@ add_custom_target(
   #
   # OPTIONAL: Patching of the sources should happen here.
   #
+  COMMAND
+    ${patch_source_commands}
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PKG_CONFIG_PATH=${PCIACCESS_PREFIX}/lib/pkgconfig:${NUMA_PREFIX}/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}"
