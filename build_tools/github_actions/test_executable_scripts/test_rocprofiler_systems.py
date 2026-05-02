@@ -25,11 +25,7 @@ ld_paths = [
     rocm_base / "lib" / "rocm_sysdeps" / "lib",
     rocm_base / "lib" / "rocprofiler-systems",
     # Libraries used by examples
-    rocm_base
-    / "share"
-    / "rocprofiler-systems"
-    / "examples"
-    / "lib",
+    rocm_base / "share" / "rocprofiler-systems" / "examples" / "lib",
 ]
 ld_paths_str = ":".join(str(p) for p in ld_paths)
 
