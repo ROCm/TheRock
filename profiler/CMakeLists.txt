@@ -294,13 +294,13 @@ if(THEROCK_ENABLE_ROCPROFV3)
       message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
     endif()
 
-    set(_ROCPROFSYS_DISABLE_EXAMPLES_STR "")
-    if(NOT THEROCK_FLAG_BUILD_FORTRAN_LIBS)
-      set(_rocprofsys_disable_examples
-        openmp-vv
-        hpc)
-      list(JOIN _rocprofsys_disable_examples "\;" _ROCPROFSYS_DISABLE_EXAMPLES_STR)
-    endif()
+    # rocprofiler-systems' Fortran examples need project-specific compiler
+    # plumbing that does not fit TheRock's split compiler artifacts yet.
+    set(_rocprofsys_disable_examples
+      openmp-vv
+      jacobi-fortran-targetdata-markers
+      jacobi-fortran-usm)
+    list(JOIN _rocprofsys_disable_examples "\;" _ROCPROFSYS_DISABLE_EXAMPLES_STR)
 
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_TEST_AMDGPU_TARGETS
