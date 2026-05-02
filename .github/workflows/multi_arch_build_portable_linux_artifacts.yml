@@ -159,20 +159,36 @@ jobs:
         if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
         run: |
-          echo "=== Checking for GLOB mismatches ==="
           VERIFY_FILE="${BUILD_DIR}/CMakeFiles/VerifyGlobs.cmake"
-          if [ -f "$VERIFY_FILE" ]; then
-            echo "VerifyGlobs.cmake exists ($(wc -l < "$VERIFY_FILE") lines)"
-            echo ""
-            echo "=== Running glob verification with verbose output ==="
-            cmake -DCMAKE_GLOB_VERIFY_VERBOSE=1 -P "$VERIFY_FILE" 2>&1 || true
-            echo ""
-            echo "=== GLOB patterns in VerifyGlobs.cmake ==="
-            grep -n "GLOB\|NEW\|OLD\|mismatch\|file(" "$VERIFY_FILE" | head -200
-          else
-            echo "VerifyGlobs.cmake not found at $VERIFY_FILE"
-            find "${BUILD_DIR}/CMakeFiles" -name "*Glob*" -o -name "*glob*" 2>/dev/null
+          if [ ! -f "$VERIFY_FILE" ]; then
+            echo "VerifyGlobs.cmake not found"
+            exit 0
           fi
+          echo "=== Patching VerifyGlobs.cmake to show which patterns mismatch ==="
+          cp "$VERIFY_FILE" "${VERIFY_FILE}.debug"
+          python3 -c "
+          import re, sys
+          with open(sys.argv[1], 'r') as f:
+              content = f.read()
+          def add_pattern_info(m):
+              glob_line = m.group(1)
+              pattern = re.search(r'\"([^\"]+)\"', glob_line)
+              pat_str = pattern.group(1) if pattern else 'unknown'
+              return m.group(0).replace(
+                  'message(\"-- GLOB mismatch!\")',
+                  f'message(\"-- GLOB mismatch: {pat_str}\")'
+              )
+          content = re.sub(
+              r'(file\(GLOB_RECURSE NEW_GLOB[^\n]+\n)(.*?)(message\(\"-- GLOB mismatch!\"\))',
+              add_pattern_info,
+              content,
+              flags=re.DOTALL
+          )
+          with open(sys.argv[1] + '.debug', 'w') as f:
+              f.write(content)
+          " "$VERIFY_FILE"
+          echo "=== Running patched glob verification ==="
+          cmake -P "${VERIFY_FILE}.debug" 2>&1 || true
 
       - name: Run build tests
         if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
