@@ -42,6 +42,8 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
     [--libhipcxx | --no-libhipcxx]
+    [--flang | --no-flang]
+    [--offload | --no-offload]
     [--tests | --no-tests]
     [--base-only]
 
@@ -325,6 +327,8 @@ def retrieve_artifacts_by_run_id(args):
         "sysdeps_lib",
         "base_run",
         "base_lib",
+        "amd-llvm-base_run",
+        "amd-llvm-base_lib",
         "amd-llvm_run",
         "amd-llvm_lib",
         "core-amdsmi_run",
@@ -336,6 +340,12 @@ def retrieve_artifacts_by_run_id(args):
         "core-ocl_dev",
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
+    ]
+    test_runtime_artifact_patterns = [
+        # Several test binaries link against LLVM OpenMP. With the split
+        # compiler layout, libomp.so comes from the offload artifact instead
+        # of amd-llvm.
+        "amd-llvm-offload_lib",
     ]
 
     if args.base_only:
@@ -366,11 +376,20 @@ def retrieve_artifacts_by_run_id(args):
             args.rocrtst,
             args.rocwmma,
             args.libhipcxx,
+            args.flang,
+            args.offload,
         ]
     ):
         argv.extend(base_artifact_patterns)
+        if args.tests:
+            argv.extend(test_runtime_artifact_patterns)
 
         extra_artifacts = []
+
+        def append_artifact_pattern(pattern: str):
+            if pattern not in argv:
+                argv.append(pattern)
+
         if args.aqlprofile:
             extra_artifacts.append("aqlprofile")
         if args.blas:
@@ -388,6 +407,15 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("mpfr")
             extra_artifacts.append("expat")
             extra_artifacts.append("ncurses")
+            # The ROCgdb test suite exercises both GCC and LLVM compiler
+            # configurations. In the split compiler layout, Flang and OpenMP
+            # live in their own artifacts.
+            extra_artifacts.append("amd-llvm-flang")
+            extra_artifacts.append("amd-llvm-offload")
+            append_artifact_pattern("amd-llvm-flang_run")
+            append_artifact_pattern("amd-llvm-flang_dev")
+            append_artifact_pattern("amd-llvm-offload_run")
+            append_artifact_pattern("amd-llvm-offload_dev")
         if args.fft:
             extra_artifacts.append("fft")
             extra_artifacts.append("fftw3")
@@ -400,9 +428,9 @@ def retrieve_artifacts_by_run_id(args):
         if args.miopen:
             extra_artifacts.append("miopen")
             # Contains bin/MIOpenDriver executable for tests.
-            argv.append("miopen_run")
+            append_artifact_pattern("miopen_run")
             # Also need these for runtime kernel compilation (rocrand includes).
-            argv.append("rand_dev")
+            append_artifact_pattern("rand_dev")
         if args.miopenprovider:
             extra_artifacts.append("miopenprovider")
         if args.hipkernelprovider:
@@ -414,17 +442,17 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocdecode:
             extra_artifacts.append("sysdeps-amd-mesa")
             extra_artifacts.append("rocdecode")
-            argv.append("rocdecode_dev")
-            argv.append("rocdecode_test")
-            argv.append("base_dev")
-            argv.append("amd-llvm_dev")
+            append_artifact_pattern("rocdecode_dev")
+            append_artifact_pattern("rocdecode_test")
+            append_artifact_pattern("base_dev")
+            append_artifact_pattern("amd-llvm_dev")
         if args.rocjpeg:
             extra_artifacts.append("sysdeps-amd-mesa")
             extra_artifacts.append("rocjpeg")
-            argv.append("rocjpeg_dev")
-            argv.append("rocjpeg_test")
-            argv.append("base_dev")
-            argv.append("amd-llvm_dev")
+            append_artifact_pattern("rocjpeg_dev")
+            append_artifact_pattern("rocjpeg_test")
+            append_artifact_pattern("base_dev")
+            append_artifact_pattern("amd-llvm_dev")
         if args.hipblasltprovider:
             extra_artifacts.append("hipblasltprovider")
         if args.prim:
@@ -437,15 +465,15 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocprofiler-sdk")
             extra_artifacts.append("aqlprofile")
             # Contains rocprofiler-sdk-rocpd
-            argv.append("rocprofiler-sdk_run")
+            append_artifact_pattern("rocprofiler-sdk_run")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
             # Contains the rocprof-compute CLI executable.
-            argv.append("rocprofiler-compute_run")
+            append_artifact_pattern("rocprofiler-compute_run")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
             # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
-            argv.append("rocprofiler-systems_run")
+            append_artifact_pattern("rocprofiler-systems_run")
         if args.rocrtst:
             extra_artifacts.append("rocrtst")
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
@@ -453,22 +481,32 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("sysdeps-libpciaccess")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
-            argv.append("rocwmma_dev")
+            append_artifact_pattern("rocwmma_dev")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
-            argv.append("amd-llvm_dev")
-            argv.append("amd-llvm_lib")
-            argv.append("base_dev_generic")
+            append_artifact_pattern("amd-llvm_dev")
+            append_artifact_pattern("amd-llvm_lib")
+            append_artifact_pattern("base_dev_generic")
+        if args.flang:
+            extra_artifacts.append("amd-llvm-flang")
+            append_artifact_pattern("amd-llvm-flang_run")
+            append_artifact_pattern("amd-llvm-flang_dev")
+        if args.offload:
+            extra_artifacts.append("amd-llvm-offload")
+            append_artifact_pattern("amd-llvm-offload_run")
+            append_artifact_pattern("amd-llvm-offload_dev")
 
         # Fetch _lib (always) and _test (when --tests) for each artifact.
         # Some projects have self-contained _test archives (just test
         # binaries), while others may also need executables or data from
         # _run. Add those explicitly above via argv.append("<name>_run").
+        extra_artifacts = list(dict.fromkeys(extra_artifacts))
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
         if args.tests:
             extra_artifact_patterns.extend([f"{a}_test" for a in extra_artifacts])
 
-        argv.extend(extra_artifact_patterns)
+        for pattern in extra_artifact_patterns:
+            append_artifact_pattern(pattern)
     else:
         # No include (or exclude) patterns, so all artifacts will be fetched.
         pass
@@ -814,6 +852,20 @@ def main(argv):
         "--libhipcxx",
         default=False,
         help="Include 'libhipcxx' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--flang",
+        default=False,
+        help="Include 'amd-llvm-flang' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--offload",
+        default=False,
+        help="Include 'amd-llvm-offload' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

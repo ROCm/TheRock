@@ -582,7 +582,7 @@ split_databases = ["rocblas", "hipblaslt"]
 [artifacts.rand]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "amd-llvm-offload"]
+artifact_deps = ["core-runtime", "core-hip"]
 
 [artifacts.fft]
 artifact_group = "math-libs"
