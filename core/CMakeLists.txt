@@ -159,6 +159,68 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   )
 
   ##############################################################################
+  # amd-llvm-offload
+  # OpenMP/offload runtimes and, when Flang is enabled, flang-rt.
+  ##############################################################################
+
+  if(THEROCK_ENABLE_AMD_LLVM_OFFLOAD)
+    set(_offload_deps amd-llvm ROCR-Runtime)
+    set(_extra_offload_cmake_args)
+    if(THEROCK_ENABLE_FLANG)
+      if(NOT TARGET amd-llvm-flang)
+        message(FATAL_ERROR "THEROCK_ENABLE_AMD_LLVM_OFFLOAD with THEROCK_ENABLE_FLANG requires amd-llvm-flang")
+      endif()
+      list(APPEND _offload_deps amd-llvm-flang)
+      get_target_property(_flang_dist_dir amd-llvm-flang THEROCK_DIST_DIR)
+      list(APPEND _extra_offload_cmake_args
+        -DCMAKE_Fortran_COMPILER_WORKS=YES
+        -DLLVM_Fortran_COMPILER_WORKS=ON
+        "-DCMAKE_Fortran_COMPILER=${_flang_dist_dir}/lib/llvm/bin/flang"
+        "-DLLVM_Fortran_COMPILER=${_flang_dist_dir}/lib/llvm/bin/flang"
+      )
+    endif()
+
+    therock_cmake_subproject_declare(amd-llvm-offload
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm-offload"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amd-llvm-offload"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        -DTHEROCK_ENABLE_FLANG=${THEROCK_ENABLE_FLANG}
+        -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=ON
+        "-DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime"
+        ${_extra_offload_cmake_args}
+      RUNTIME_DEPS
+        ${_offload_deps}
+        ${THEROCK_BUNDLED_ZLIB}
+        ${THEROCK_BUNDLED_ZSTD}
+        ${THEROCK_BUNDLED_NUMACTL}
+        ${THEROCK_BUNDLED_ELFUTILS}
+        ${THEROCK_BUNDLED_LIBDRM}
+      INSTALL_DESTINATION "lib/llvm"
+      INTERFACE_LINK_DIRS
+        "lib/llvm/lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib/llvm/lib"
+    )
+    therock_cmake_subproject_provide_package(amd-llvm-offload OpenMP lib/llvm/lib/cmake/openmp)
+    therock_cmake_subproject_activate(amd-llvm-offload)
+
+    therock_provide_artifact(amd-llvm-offload
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-amd-llvm-offload.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+      SUBPROJECT_DEPS
+        amd-llvm-offload
+    )
+  endif()
+
+  ##############################################################################
   # rocminfo
   ##############################################################################
 

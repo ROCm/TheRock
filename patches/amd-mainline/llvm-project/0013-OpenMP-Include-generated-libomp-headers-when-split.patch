@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TheRock Fortran Agent <fortran-agent@local>
+Date: Fri, 1 May 2026 18:35:00 -0700
+Subject: [PATCH] [OpenMP] Generate libomp headers locally when split
+
+When OpenMP is built standalone against an installed LLVM tree,
+LIBOMP_HEADERS_INTDIR can point at the installed LLVM resource include
+directory instead of the local runtime build directory. That makes GCC
+pick up Clang's full resource include directory while compiling libomp.
+
+Only use the LLVM resource include directory in the bootstrapping runtimes
+path. Standalone runtimes builds should generate omp.h and omp-tools.h
+locally.
+---
+ openmp/runtime/src/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/openmp/runtime/src/CMakeLists.txt b/openmp/runtime/src/CMakeLists.txt
+index c224a10eb1ef..c6ad5095fd53 100644
+--- a/openmp/runtime/src/CMakeLists.txt
++++ b/openmp/runtime/src/CMakeLists.txt
+@@ -12,7 +12,7 @@ include(ExtendPath)
+ 
+ # The generated headers will be placed in clang's resource if using it to
+ # compile openmp in a runtimes-bootstrapping build.
+-if(LLVM_TREE_AVAILABLE AND LLVM_RUNTIMES_BUILD)
++if(LLVM_TREE_AVAILABLE AND LLVM_RUNTIMES_BUILD AND HAVE_LLVM_LIT)
+   set(LIBOMP_HEADERS_INTDIR ${LLVM_BINARY_DIR}/${LIBOMP_HEADERS_INSTALL_PATH})
+ else()
+   set(LIBOMP_HEADERS_INTDIR ${CMAKE_CURRENT_BINARY_DIR})
+-- 
+2.51.0

@@ -16,32 +16,47 @@ cmake_minimum_required(VERSION 3.25)
 project(therock-aux-overlay)
 
 if(NOT WIN32)
-  add_custom_target(symlinks ALL
+  set(_symlink_commands
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/bin"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "lib/llvm" "${CMAKE_CURRENT_BINARY_DIR}/llvm"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "lib/llvm/amdgcn" "${CMAKE_CURRENT_BINARY_DIR}/amdgcn"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang"
-    COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdflang" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdflang"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang++" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang++"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang-cl" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cl"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang-cpp" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cpp"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdlld" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/offload-arch" "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
   )
-  install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/bin"
-    "${CMAKE_CURRENT_BINARY_DIR}/llvm"
-    "${CMAKE_CURRENT_BINARY_DIR}/amdgcn"
-    DESTINATION .
-  )
-  install(FILES
+  set(_symlink_files
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang"
-    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdflang"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang++"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cl"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cpp"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
+  )
+  if(ROCM_BUILD_FORTRAN_LIBS)
+    list(APPEND _symlink_commands
+      COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/flang" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdflang"
+    )
+    list(APPEND _symlink_files "${CMAKE_CURRENT_BINARY_DIR}/bin/amdflang")
+  endif()
+
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
+  add_custom_target(symlinks ALL
+    ${_symlink_commands}
+  )
+  install(DIRECTORY
+    "${CMAKE_CURRENT_BINARY_DIR}/bin"
+    DESTINATION .
+  )
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/llvm"
+    "${CMAKE_CURRENT_BINARY_DIR}/amdgcn"
+    DESTINATION .
+  )
+  install(FILES
+    ${_symlink_files}
     DESTINATION bin
   )
 endif()

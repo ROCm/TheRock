@@ -207,7 +207,7 @@ description = "Base ROCm infrastructure and CMake tools"
 type = "generic"
 artifact_group_deps = []
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
-source_sets = ["base", "rocm-systems"]
+source_sets = ["base", "rocm-systems", "compilers"]
 
 [artifact_groups.core-runtime]
 description = "Core runtime (ROCR-Runtime, rocminfo)"
@@ -218,7 +218,7 @@ source_sets = ["rocm-systems"]
 [artifact_groups.core-amdsmi]
 description = "AMD SMI tool (amdsmi)"
 type = "generic"
-artifact_group_deps = ["base", "third-party-sysdeps", "compiler"]
+artifact_group_deps = ["base", "third-party-sysdeps"]
 source_sets = ["rocm-systems"]
 
 [artifact_groups.compiler]
@@ -468,12 +468,26 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 # --- Compiler Artifacts ---
 
+[artifacts.amd-llvm-base]
+artifact_group = "base"
+type = "target-neutral"
+artifact_deps = ["sysdeps"]
+feature_group = "ALL"
+
 [artifacts.amd-llvm]
 artifact_group = "compiler"
 type = "target-neutral"
-artifact_deps = ["sysdeps"]
+artifact_deps = ["amd-llvm-base"]
 feature_name = "COMPILER"
 feature_group = "ALL"
+
+[artifacts.amd-llvm-flang]
+artifact_group = "compiler"
+type = "target-neutral"
+artifact_deps = ["amd-llvm"]
+feature_name = "FLANG"
+feature_group = "ALL"
+disable_platforms = ["windows"]
 
 [artifacts.hipify]
 artifact_group = "compiler"
@@ -486,15 +500,22 @@ feature_group = "ALL"
 [artifacts.core-runtime]
 artifact_group = "core-runtime"
 type = "target-neutral"
-artifact_deps = ["base", "sysdeps", "amd-llvm"]
+artifact_deps = ["base", "sysdeps", "amd-llvm-base"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.amd-llvm-offload]
+artifact_group = "core-runtime"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "core-runtime"]
+feature_group = "ALL"
 disable_platforms = ["windows"]
 
 [artifacts.core-amdsmi]
 artifact_group = "core-amdsmi"
 type = "target-neutral"
-artifact_deps = ["base", "sysdeps", "sysdeps-libnl", "sysdeps-libmnl", "amd-llvm"]
+artifact_deps = ["base", "sysdeps", "sysdeps-libnl", "sysdeps-libmnl"]
 feature_name = "CORE_AMDSMI"
 feature_group = "CORE"
 disable_platforms = ["windows"]
@@ -719,7 +740,7 @@ disable_platforms = ["windows"]
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdlog", "openmpi"]
+artifact_deps = ["amd-llvm", "amd-llvm-offload", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdlog", "openmpi"]
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]

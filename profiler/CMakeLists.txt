@@ -294,11 +294,20 @@ if(THEROCK_ENABLE_ROCPROFV3)
       message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
     endif()
 
+    set(_rocprofsys_optional_deps)
+    set(_rocprofsys_offload_lib_dir)
+    if(TARGET amd-llvm-offload)
+      list(APPEND _rocprofsys_optional_deps amd-llvm-offload)
+      get_target_property(_amd_llvm_offload_dist_dir amd-llvm-offload THEROCK_DIST_DIR)
+      set(_rocprofsys_offload_lib_dir "${_amd_llvm_offload_dist_dir}/lib/llvm/lib")
+    endif()
+
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
       BACKGROUND_BUILD
+      FORTRAN_OPTIONAL
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
         -DROCPROFSYS_BUILD_ELFUTILS=ON
@@ -315,6 +324,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_USE_PYTHON="${_ROCPROFSYS_USE_PYTHON}"
         -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_ROCPROFSYS_PYTHON_VERSIONS_STR}"
         -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}"
+        "-DTHEROCK_OFFLOAD_LIB_DIR=${_rocprofsys_offload_lib_dir}"
         "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
       INSTALL_RPATH_DIRS
         "lib"
@@ -334,6 +344,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
         ${_openmpi_optional_dep}
+        ${_rocprofsys_optional_deps}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems
       SUBDIRS .
