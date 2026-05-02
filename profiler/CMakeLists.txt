@@ -297,6 +297,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     # rocprofiler-systems' Fortran examples need project-specific compiler
     # plumbing that does not fit TheRock's split compiler artifacts yet.
     set(_rocprofsys_disable_examples
+      openmp-target
       openmp-vv
       jacobi-fortran-targetdata-markers
       jacobi-fortran-usm)
