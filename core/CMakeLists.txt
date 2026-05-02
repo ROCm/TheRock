@@ -569,7 +569,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
 endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
 
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS)
-  # rocrtst may optionally build against amdsmi when available (Linux).
+  # rocrtst requires amd_smi on Linux; the runtime-tests topology pulls it in.
   set(_rocrtst_build_deps
     amd-llvm
     ocl-clr

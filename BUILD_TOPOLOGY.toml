@@ -553,7 +553,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 [artifacts.rocrtst]
 artifact_group = "runtime-tests"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-ocl", "sysdeps-hwloc"]
+artifact_deps = ["core-runtime", "core-ocl", "core-amdsmi", "sysdeps-hwloc"]
 feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
 disable_platforms = ["windows"]

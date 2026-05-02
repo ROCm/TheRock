@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TheRock Fortran Agent <fortran-agent@local>
+Date: Sat, 2 May 2026 00:00:00 -0700
+Subject: [PATCH] [rocprofiler-systems] Thread flang module dir to OMPVV
+
+OMPVV builds its Fortran tests with explicit make variables instead of
+using the parent CMake Fortran flags. Allow TheRock to pass the installed
+flang module directory so the split offload compiler can find omp_lib.mod.
+---
+ projects/rocprofiler-systems/examples/openmp/external/CMakeLists.txt | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/projects/rocprofiler-systems/examples/openmp/external/CMakeLists.txt b/projects/rocprofiler-systems/examples/openmp/external/CMakeLists.txt
+index aed16db7b2..1675408118 100644
+--- a/projects/rocprofiler-systems/examples/openmp/external/CMakeLists.txt
++++ b/projects/rocprofiler-systems/examples/openmp/external/CMakeLists.txt
+@@ -77,6 +77,11 @@ function(configure_ompvv_tests TEST_TYPE TEST_LIST_VAR)
+     else()
+         rocprofiler_systems_message(FATAL_ERROR "Unknown TEST_TYPE - Only HOST and OFFLOAD supported")
+     endif()
++    set(OMPVV_FORTRAN_MODULE_FLAGS "")
++    if(OMPVV_FORTRAN_MODULE_DIR)
++        list(APPEND OMPVV_FORTRAN_MODULE_FLAGS "-I${OMPVV_FORTRAN_MODULE_DIR}")
++    endif()
++    list(JOIN OMPVV_FORTRAN_MODULE_FLAGS " " OMPVV_FORTRAN_MODULE_FLAGS)
+ 
+     set(LOCAL_TEST_LIST "")
+ 
+@@ -91,8 +96,8 @@ function(configure_ompvv_tests TEST_TYPE TEST_LIST_VAR)
+             endforeach()
+         endif()
+ 
+-        set(CUSTOM_FFLAGS "-lm ${FOFFLOADING_FLAGS}")
+-        set(CUSTOM_FLINKFLAGS "-lm ${FOFFLOADING_FLAGS}")
++        set(CUSTOM_FFLAGS "-lm ${OMPVV_FORTRAN_MODULE_FLAGS} ${FOFFLOADING_FLAGS}")
++        set(CUSTOM_FLINKFLAGS "-lm ${OMPVV_FORTRAN_MODULE_FLAGS} ${FOFFLOADING_FLAGS}")
+ 
+         add_custom_command(
+             OUTPUT "${OMPVV_BIN_DEST}/${TARGET_NAME}"
+-- 
+2.51.0
+
