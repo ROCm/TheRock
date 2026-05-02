@@ -3,7 +3,14 @@
 
 if(THEROCK_ENABLE_COMPILER)
   if(NOT DEFINED THEROCK_BUILD_LLVM_TESTS)
-    set(THEROCK_BUILD_LLVM_TESTS ${THEROCK_BUILD_TESTING})
+    # Default to OFF on Windows: disabled tools (e.g. clang-linker-wrapper)
+    # cause configure-time errors in LLVM check targets.
+    # TODO: Enable on Windows once the upstream fix lands (ROCm/llvm-project#1860).
+    if(WIN32)
+      set(THEROCK_BUILD_LLVM_TESTS OFF)
+    else()
+      set(THEROCK_BUILD_LLVM_TESTS ${THEROCK_BUILD_TESTING})
+    endif()
   endif()
   if(NOT DEFINED THEROCK_BUILD_COMGR_TESTS)
     set(THEROCK_BUILD_COMGR_TESTS ${THEROCK_BUILD_TESTING})
@@ -152,7 +159,10 @@ if(THEROCK_ENABLE_COMPILER)
   therock_cmake_subproject_provide_package(amd-llvm LLVM lib/llvm/lib/cmake/llvm)
   therock_cmake_subproject_activate(amd-llvm)
 
-  if(THEROCK_BUILD_LLVM_TESTS)
+  # LLVM LIT tests are currently Linux-only: on Windows, disabled tools
+  # (e.g. clang-linker-wrapper) cause configure-time errors in check targets.
+  # TODO: Enable on Windows once the upstream fix lands (ROCm/llvm-project#1860).
+  if(THEROCK_BUILD_LLVM_TESTS AND NOT WIN32)
     therock_cmake_subproject_build_test(amd-llvm
       COMMAND
         "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
