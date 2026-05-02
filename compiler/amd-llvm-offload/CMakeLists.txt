@@ -50,10 +50,28 @@ add_subdirectory("${LLVM_MONOREPO_DIR}/runtimes" "runtimes")
 find_package(Clang REQUIRED CONFIG)
 find_package(AMDDeviceLibs REQUIRED CONFIG)
 
+set(_openmp_device_extra_cmake_args)
+if(CMAKE_C_COMPILER_LAUNCHER)
+  string(REPLACE ";" "\\;" _openmp_device_c_launcher "${CMAKE_C_COMPILER_LAUNCHER}")
+  list(APPEND _openmp_device_extra_cmake_args
+    "-DCMAKE_C_COMPILER_LAUNCHER=${_openmp_device_c_launcher}")
+endif()
+if(CMAKE_CXX_COMPILER_LAUNCHER)
+  string(REPLACE ";" "\\;" _openmp_device_cxx_launcher "${CMAKE_CXX_COMPILER_LAUNCHER}")
+  list(APPEND _openmp_device_extra_cmake_args
+    "-DCMAKE_CXX_COMPILER_LAUNCHER=${_openmp_device_cxx_launcher}")
+endif()
+if(CMAKE_PREFIX_PATH)
+  string(REPLACE ";" "\\;" _openmp_device_cmake_prefix_path "${CMAKE_PREFIX_PATH}")
+  list(APPEND _openmp_device_extra_cmake_args
+    "-DCMAKE_PREFIX_PATH=${_openmp_device_cmake_prefix_path}")
+endif()
+
 set(_openmp_device_build_dir "${CMAKE_CURRENT_BINARY_DIR}/openmp-device")
 set(_openmp_device_install_dir "${CMAKE_INSTALL_PREFIX}")
 set(_openmp_device_cmake_args
   "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+  # ExternalProject expands this documented placeholder to INSTALL_DIR.
   "-DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>"
   "-DLLVM_ENABLE_RUNTIMES=openmp"
   "-DCMAKE_C_COMPILER=${LLVM_TOOLS_BINARY_DIR}/clang"
@@ -71,6 +89,7 @@ set(_openmp_device_cmake_args
   "-DCMAKE_DISABLE_FIND_PACKAGE_LibEdit=ON"
   "-DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON"
   "-DCMAKE_DISABLE_FIND_PACKAGE_zstd=ON"
+  ${_openmp_device_extra_cmake_args}
 )
 ExternalProject_Add(openmp-device-runtime
   SOURCE_DIR "${LLVM_MONOREPO_DIR}/runtimes"

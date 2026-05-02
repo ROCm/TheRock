@@ -161,6 +161,12 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   ##############################################################################
   # amd-llvm-offload
   # OpenMP/offload runtimes and, when Flang is enabled, flang-rt.
+  #
+  # This drives LLVM's standalone runtimes build against the already-staged LLVM
+  # compiler. It still passes ROCr as a source dependency because LLVM offload
+  # has not yet been reworked to consume TheRock's staged ROCr install here.
+  # TODO: Refactor this to depend on the built ROCr/core-runtime package rather
+  # than reaching around to the ROCr source tree.
   ##############################################################################
 
   if(THEROCK_ENABLE_AMD_LLVM_OFFLOAD)
@@ -173,6 +179,8 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       list(APPEND _offload_deps amd-llvm-flang)
       get_target_property(_flang_dist_dir amd-llvm-flang THEROCK_DIST_DIR)
       list(APPEND _extra_offload_cmake_args
+        # Flang cannot link until flang-rt exists, so LLVM's runtimes
+        # instructions require bypassing CMake's compiler link check here.
         -DCMAKE_Fortran_COMPILER_WORKS=YES
         -DLLVM_Fortran_COMPILER_WORKS=ON
         "-DCMAKE_Fortran_COMPILER=${_flang_dist_dir}/lib/llvm/bin/flang"
@@ -286,6 +294,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       ROCR-Runtime
     )
     if(TARGET amd-llvm-offload)
+      # With offload available, build CLR against the compiler view that
+      # includes HIP plus OpenMP/offload. Otherwise CLR only sees HIP.
       set(HIP_CLR_COMPILER_TOOLCHAIN amd-llvm-offload)
       set(HIP_CLR_COMPILER_DEP amd-llvm-offload)
     endif()

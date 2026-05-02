@@ -295,9 +295,12 @@ if(THEROCK_ENABLE_ROCPROFV3)
     endif()
 
     set(_rocprofsys_optional_deps)
+    set(_rocprofsys_compiler_toolchain_args)
     set(_rocprofsys_offload_lib_dir)
     if(TARGET amd-llvm-offload)
       list(APPEND _rocprofsys_optional_deps amd-llvm-offload)
+      list(APPEND _rocprofsys_compiler_toolchain_args
+        COMPILER_TOOLCHAIN amd-llvm-offload)
       get_target_property(_amd_llvm_offload_dist_dir amd-llvm-offload THEROCK_DIST_DIR)
       set(_rocprofsys_offload_lib_dir "${_amd_llvm_offload_dist_dir}/lib/llvm/lib")
     endif()
@@ -308,6 +311,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
       BACKGROUND_BUILD
       FORTRAN_OPTIONAL
+      ${_rocprofsys_compiler_toolchain_args}
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
         -DROCPROFSYS_BUILD_ELFUTILS=ON
@@ -316,7 +320,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
         -DROCPROFSYS_BUILD_FOR_THEROCK=ON # TODO: Will be deprecated
-        -DROCPROFSYS_BUILD_EXAMPLES=OFF
         -DROCPROFSYS_INSTALL_TESTING="${THEROCK_BUILD_TESTING}"
         -DROCPROFSYS_INSTALL_EXAMPLES="${THEROCK_BUILD_TESTING}"
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"

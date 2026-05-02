@@ -13,7 +13,8 @@ path. Standalone runtimes builds should generate omp.h and omp-tools.h
 locally.
 ---
  openmp/runtime/src/CMakeLists.txt | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ runtimes/CMakeLists.txt           | 5 +++++
+ 2 files changed, 6 insertions(+), 1 deletion(-)
 
 diff --git a/openmp/runtime/src/CMakeLists.txt b/openmp/runtime/src/CMakeLists.txt
 index c224a10eb1ef..c6ad5095fd53 100644
@@ -24,9 +25,29 @@ index c224a10eb1ef..c6ad5095fd53 100644
  # The generated headers will be placed in clang's resource if using it to
  # compile openmp in a runtimes-bootstrapping build.
 -if(LLVM_TREE_AVAILABLE AND LLVM_RUNTIMES_BUILD)
-+if(LLVM_TREE_AVAILABLE AND LLVM_RUNTIMES_BUILD AND HAVE_LLVM_LIT)
++if(LLVM_TREE_AVAILABLE AND LLVM_RUNTIMES_BUILD AND LLVM_RUNTIMES_BOOTSTRAPPING_BUILD)
    set(LIBOMP_HEADERS_INTDIR ${LLVM_BINARY_DIR}/${LIBOMP_HEADERS_INSTALL_PATH})
  else()
    set(LIBOMP_HEADERS_INTDIR ${CMAKE_CURRENT_BINARY_DIR})
+diff --git a/runtimes/CMakeLists.txt b/runtimes/CMakeLists.txt
+index 90853b31172c..ea1821c3d809 100644
+--- a/runtimes/CMakeLists.txt
++++ b/runtimes/CMakeLists.txt
+@@ -9,10 +9,15 @@ cmake_minimum_required(VERSION 3.20.0)
+ # by checking for the HAVE_LLVM_LIT flag that is passed explicitly to
+ # llvm_ExternalProject_Add().
+ if (HAVE_LLVM_LIT)
++  set(LLVM_RUNTIMES_BOOTSTRAPPING_BUILD ON)
+   message(STATUS "Performing bootstrapping runtimes build.")
+ else()
++  set(LLVM_RUNTIMES_BOOTSTRAPPING_BUILD OFF)
+   message(STATUS "Performing standalone runtimes build.")
+ endif()
++# Keep a semantically named build-mode variable for runtime projects. The
++# HAVE_LLVM_LIT discriminator above is an implementation detail of how the
++# bootstrapping runtimes build is invoked.
+ # Add path for custom and the LLVM build's modules to the CMake module path.
+ set(LLVM_COMMON_CMAKE_UTILS "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
+ include(${LLVM_COMMON_CMAKE_UTILS}/Modules/CMakePolicy.cmake
 -- 
 2.51.0

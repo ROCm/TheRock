@@ -60,6 +60,8 @@ set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
 
 include(${LLVM_MONOREPO_DIR}/flang/cmake/modules/FlangCommon.cmake)
 if(FLANG_INCLUDE_QUADMATH_H)
+  # TODO: Standalone Flang should expose this through its CMake configuration.
+  # Until then, mirror the normal LLVM build's generated quadmath wrapper.
   set(QUADMATH_WRAPPER_DIR "${CMAKE_BINARY_DIR}/include")
   configure_file(
     "${LLVM_MONOREPO_DIR}/flang/cmake/quadmath_wrapper.h.in"

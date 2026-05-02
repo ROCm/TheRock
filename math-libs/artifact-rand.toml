@@ -2,6 +2,9 @@
 [components.lib."math-libs/rocRAND/stage"]
 [components.dbg."math-libs/rocRAND/stage"]
 [components.dev."math-libs/rocRAND/stage"]
+# TODO: rocRAND's generated package config currently requires this root-level
+# Fortran source tree. Keep packaging it until rocRAND fixes that install
+# contract upstream.
 include = [
   "rocrand/src/fortran/**",
 ]
@@ -17,6 +20,9 @@ include = [
 [components.lib."math-libs/hipRAND/stage"]
 [components.dbg."math-libs/hipRAND/stage"]
 [components.dev."math-libs/hipRAND/stage"]
+# TODO: hipRAND's generated package config currently requires this root-level
+# Fortran source tree. Keep packaging it until hipRAND fixes that install
+# contract upstream.
 include = [
   "hiprand/src/fortran/**",
 ]
