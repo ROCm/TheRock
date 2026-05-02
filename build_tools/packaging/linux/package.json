@@ -101,6 +101,29 @@
         ]
       },
       {
+        "Artifact": "amd-llvm-flang",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm-flang",
+            "Components": [
+              "run"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "amd-llvm-offload",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm-offload",
+            "Components": [
+              "lib",
+              "run"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "base",
         "Artifact_Subdir": [
           {
@@ -167,6 +190,28 @@
           },
           {
             "Name": "hipcc",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "amd-llvm-flang",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm-flang",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "amd-llvm-offload",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm-offload",
             "Components": [
               "dev"
             ]

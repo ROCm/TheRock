@@ -18,7 +18,6 @@ include = [
 include = [
   "lib/llvm/include/flang/**",
   "lib/llvm/lib/cmake/flang/**",
-  "lib/llvm/lib/cmake/mlir/**",
 ]
 
 [components.dbg."compiler/amd-llvm-flang/stage"]

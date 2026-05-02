@@ -509,7 +509,7 @@ disable_platforms = ["windows"]
 [artifacts.amd-llvm-offload]
 artifact_group = "core-runtime"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "core-runtime"]
+artifact_deps = ["amd-llvm", "amd-llvm-flang", "core-runtime"]
 feature_group = "ALL"
 disable_platforms = ["windows"]
 
@@ -576,13 +576,13 @@ feature_group = "CORE"  # Part of core, enabled by default
 [artifacts.blas]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "amd-llvm-offload", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
 split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.rand]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip"]
+artifact_deps = ["core-runtime", "core-hip", "amd-llvm-offload"]
 
 [artifacts.fft]
 artifact_group = "math-libs"

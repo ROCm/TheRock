@@ -110,7 +110,6 @@ if(THEROCK_ENABLE_FLANG)
     INSTALL_DESTINATION "lib/llvm"
   )
   therock_cmake_subproject_provide_package(amd-llvm-flang Flang lib/llvm/lib/cmake/flang)
-  therock_cmake_subproject_provide_package(amd-llvm-flang MLIR lib/llvm/lib/cmake/mlir)
   therock_cmake_subproject_activate(amd-llvm-flang)
 
   therock_provide_artifact(amd-llvm-flang
