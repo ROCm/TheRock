@@ -164,15 +164,19 @@ if(THEROCK_ENABLE_COMPILER)
   # TODO: Enable on Windows once the upstream fix lands (ROCm/llvm-project#1860).
   if(THEROCK_BUILD_LLVM_TESTS AND NOT WIN32)
     set(_llvm_test_commands
+      LABEL check-llvm
       COMMAND
         "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
         --target check-llvm
+      LABEL check-clang
       COMMAND
         "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
         --target check-clang
+      LABEL check-lld
       COMMAND
         "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
         --target check-lld
+      LABEL check-mlir
       COMMAND
         "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
         --target check-mlir
@@ -180,6 +184,7 @@ if(THEROCK_ENABLE_COMPILER)
     # Flang is only enabled on Linux (not in LLVM_ENABLE_PROJECTS on Windows).
     if(NOT WIN32)
       list(APPEND _llvm_test_commands
+        LABEL check-flang
         COMMAND
           "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
           --target check-flang
@@ -233,9 +238,11 @@ if(THEROCK_ENABLE_COMPILER)
       set(_llvm_lit_script "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build/bin/llvm-lit")
     endif()
     therock_cmake_subproject_build_test(amd-comgr VERBOSE
+      LABEL lit
       COMMAND
         "${Python3_EXECUTABLE}" "${_llvm_lit_script}"
         "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build/test-lit" -v
+      LABEL ctest
       COMMAND
         "${CMAKE_CTEST_COMMAND}"
         --test-dir "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
