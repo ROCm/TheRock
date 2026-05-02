@@ -174,7 +174,7 @@ def main(argv: List[str] = None):
         "--stage",
         type=str,
         default=None,
-        help="Build stage name (e.g., foundation, compiler-runtime, math-libs)",
+        help="Build stage name (e.g., compiler-runtime, math-libs)",
     )
     parser.add_argument(
         "--amdgpu-families",

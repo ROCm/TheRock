@@ -296,12 +296,10 @@ if(THEROCK_ENABLE_ROCPROFV3)
 
     set(_rocprofsys_optional_deps)
     set(_rocprofsys_offload_lib_dir)
-    set(_rocprofsys_openmp_dir)
     if(TARGET amd-llvm-offload)
       list(APPEND _rocprofsys_optional_deps amd-llvm-offload)
       get_target_property(_amd_llvm_offload_dist_dir amd-llvm-offload THEROCK_DIST_DIR)
       set(_rocprofsys_offload_lib_dir "${_amd_llvm_offload_dist_dir}/lib/llvm/lib")
-      set(_rocprofsys_openmp_dir "${_amd_llvm_offload_dist_dir}/lib/llvm/lib/cmake/openmp")
     endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems
@@ -318,8 +316,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
         -DROCPROFSYS_BUILD_FOR_THEROCK=ON # TODO: Will be deprecated
+        -DROCPROFSYS_BUILD_EXAMPLES=OFF
         -DROCPROFSYS_INSTALL_TESTING="${THEROCK_BUILD_TESTING}"
-        -DROCPROFSYS_INSTALL_EXAMPLES="${THEROCK_BUILD_TESTING}"
+        -DROCPROFSYS_INSTALL_EXAMPLES=OFF
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
         -DROCPROFSYS_BUILD_SPDLOG=OFF
         -DROCPROFSYS_BUILD_SQLITE3=OFF
@@ -327,7 +326,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_ROCPROFSYS_PYTHON_VERSIONS_STR}"
         -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}"
         "-DTHEROCK_OFFLOAD_LIB_DIR=${_rocprofsys_offload_lib_dir}"
-        "-DTHEROCK_LLVM_OPENMP_DIR=${_rocprofsys_openmp_dir}"
         "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
       INSTALL_RPATH_DIRS
         "lib"
