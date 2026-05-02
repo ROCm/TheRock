@@ -163,7 +163,7 @@ if(THEROCK_ENABLE_COMPILER)
   # (e.g. clang-linker-wrapper) cause configure-time errors in check targets.
   # TODO: Enable on Windows once the upstream fix lands (ROCm/llvm-project#1860).
   if(THEROCK_BUILD_LLVM_TESTS AND NOT WIN32)
-    therock_cmake_subproject_build_test(amd-llvm
+    set(_llvm_test_commands
       COMMAND
         "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
         --target check-llvm
@@ -174,6 +174,15 @@ if(THEROCK_ENABLE_COMPILER)
         "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
         --target check-lld
     )
+    # Flang is only enabled on Linux (not in LLVM_ENABLE_PROJECTS on Windows).
+    if(NOT WIN32)
+      list(APPEND _llvm_test_commands
+        COMMAND
+          "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
+          --target check-flang
+      )
+    endif()
+    therock_cmake_subproject_build_test(amd-llvm ${_llvm_test_commands})
   endif()
 
 
