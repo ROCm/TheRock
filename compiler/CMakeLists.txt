@@ -173,6 +173,9 @@ if(THEROCK_ENABLE_COMPILER)
       COMMAND
         "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
         --target check-lld
+      COMMAND
+        "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
+        --target check-mlir
     )
     # Flang is only enabled on Linux (not in LLVM_ENABLE_PROJECTS on Windows).
     if(NOT WIN32)
