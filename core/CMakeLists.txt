@@ -203,7 +203,6 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       INTERFACE_INSTALL_RPATH_DIRS
         "lib/llvm/lib"
     )
-    therock_cmake_subproject_provide_package(amd-llvm-offload OpenMP lib/llvm/lib/cmake/openmp)
     therock_cmake_subproject_activate(amd-llvm-offload)
 
     therock_provide_artifact(amd-llvm-offload
@@ -263,6 +262,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   ##############################################################################
   set(HIP_CLR_CMAKE_ARGS)
   set(HIP_CLR_RUNTIME_DEPS)
+  set(HIP_CLR_COMPILER_TOOLCHAIN "${_system_toolchain}")
+  set(HIP_CLR_COMPILER_DEP amd-llvm)
   if(WIN32)
     # Windows CLR options
     set(_compute_pal_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
@@ -284,6 +285,10 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       rocprofiler-register
       ROCR-Runtime
     )
+    if(TARGET amd-llvm-offload)
+      set(HIP_CLR_COMPILER_TOOLCHAIN amd-llvm-offload)
+      set(HIP_CLR_COMPILER_DEP amd-llvm-offload)
+    endif()
   endif()
 
 
@@ -296,7 +301,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       bin
     BACKGROUND_BUILD
     COMPILER_TOOLCHAIN
-      "${_system_toolchain}"
+      "${HIP_CLR_COMPILER_TOOLCHAIN}"
     CMAKE_ARGS
       "-DHIP_PLATFORM=amd"
       "-DHIP_COMMON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip"
@@ -310,7 +315,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       rocm-cmake
       therock-simde
     RUNTIME_DEPS
-      amd-llvm
+      ${HIP_CLR_COMPILER_DEP}
       amd-comgr
       hipcc     # For hipconfig
       rocm-core
