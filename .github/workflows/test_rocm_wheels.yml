@@ -15,7 +15,7 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-mi325-1gpu-ossci-rocm-frac"
+        default: "linux-gfx942-1gpu-ossci-rocm"
       package_index_url_base:
         description: Base Python package index URL (without GPU family subdir)
         type: string

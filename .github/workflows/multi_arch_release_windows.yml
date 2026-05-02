@@ -23,7 +23,6 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
-        default: ""
 
 permissions:
   contents: read
@@ -113,5 +112,42 @@ jobs:
             --release-type="${{ inputs.release_type }}" \
             --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}"
 
-  # TODO: dispatch test artifacts per family
-  # TODO: dispatch pytorch wheels
+  test_artifacts_per_family:
+    needs: [build_artifacts]
+    name: Test ${{ matrix.family_info.amdgpu_family }}
+    if: ${{ !failure() && !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
+    uses: ./.github/workflows/test_artifacts.yml
+    with:
+      artifact_group: ${{ matrix.family_info.amdgpu_family }}
+      amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
+      amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
+      test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      test_type: ${{ inputs.test_type }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
+  #   bucket if the job order is not altered.
+  build_pytorch_wheels:
+    needs: [build_artifacts, build_python_packages]
+    name: Build PyTorch Wheels
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - name: Trigger PyTorch Build
+        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        with:
+          workflow: multi_arch_release_windows_pytorch_wheels.yml
+          inputs: |
+            { "amdgpu_families": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
+              "rocm_version": "${{ inputs.rocm_package_version }}",
+              "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
+              "release_type": "${{ inputs.release_type }}",
+              "ref": "${{ inputs.ref || '' }}"
+            }

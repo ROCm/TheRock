@@ -49,14 +49,6 @@ skip_tests = {
             "test_mempool_empty_cache_inactive",
             # RuntimeError: Error building extension 'dummy_allocator_v1'
             "test_mempool_limited_memory_with_allocator",
-            # new for pytorch 2.11
-            # RuntimeError: Error building extension 'dummy_allocator_v3'
-            "test_tensor_delete_after_allocator_delete",
-            # RuntimeError: Error building extension 'dummy_allocator'
-            "test_deleted_mempool_not_used_on_oom",
-            # Same hipblas.h compilation error as test_mempool_with_allocator.
-            # See https://github.com/pytorch/pytorch/pull/173330
-            "test_mempool_expandable",
             # ModuleNotFoundError: No module named 'torchvision'
             "test_resnet",
             # RuntimeError: miopenStatusUnknownError
@@ -68,15 +60,19 @@ skip_tests = {
             # new in 2.11
             # AssertionError: Scalars are not close!
             "test_CTCLoss_cudnn_cuda",
+            # AssertionError: Tensor-likes are not close! - https://github.com/ROCm/TheRock/issues/4744
+            # Failed on gfx1151 and gfx942 (only with python 3.13)
+            "test_Embedding_discontiguous_cuda",
         ],
         "torch": [
             "test_cpp_warnings_have_python_context_cuda",
         ],
     },
-    "gfx1151": {
-        "nn": [
-            # AssertionError: Tensor-likes are not close! - https://github.com/ROCm/TheRock/issues/4744
-            "test_Embedding_discontiguous_cuda",
+    "gfx942": {
+        "cuda": [
+            # new test
+            # AssertionError: Scalars are not equal!
+            "test_graph_capture_reclaim_shared_pool",
         ],
     },
     # "gfx120": {

@@ -417,6 +417,173 @@ class ParametersConstructionTest(TmpDirTestCase):
 
 
 # ---------------------------------------------------------------------------
+# Tests for kpack-split device packaging
+# ---------------------------------------------------------------------------
+
+
+class DevicePackagingTest(TmpDirTestCase):
+    """Tests for kpack-split mode: arch-neutral libraries + per-ISA device wheels."""
+
+    def _add_artifact(
+        self,
+        artifact_dir: Path,
+        name: str,
+        component: str,
+        target_family: str,
+        files: dict[str, str],
+    ):
+        """Create a minimal artifact directory with the given files under stage/."""
+        subdir = artifact_dir / f"{name}_{component}_{target_family}"
+        stage = subdir / "stage"
+        for relpath, content in files.items():
+            f = stage / relpath
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(content)
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_params(self, artifact_dir: Path, kpack_split: bool = False) -> Parameters:
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        return Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+            kpack_split=kpack_split,
+        )
+
+    def _setup_kpack_split_artifacts(self) -> Path:
+        """Create a minimal set of generic + per-ISA artifacts."""
+        artifact_dir = self.temp_dir / "artifacts"
+        # Generic library artifact (host code)
+        self._add_artifact(
+            artifact_dir,
+            "blas",
+            "lib",
+            "generic",
+            {"lib/librocblas.txt": "host library"},
+        )
+        # Per-ISA device artifact
+        self._add_artifact(
+            artifact_dir,
+            "blas",
+            "lib",
+            "gfx942",
+            {
+                ".kpack/blas_lib_gfx942.kpack": "kpack data",
+                "lib/rocblas/library/Foo_gfx942.co": "kernel object",
+            },
+        )
+        return artifact_dir
+
+    def test_kpack_split_libraries_is_arch_neutral(self):
+        """kpack_split=True makes the libraries entry non-target-specific."""
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(artifact_dir, kpack_split=True)
+
+        libraries_entry = params.dist_info.ALL_PACKAGES["libraries"]
+        # Should not raise — libraries is no longer target-specific.
+        dist_name = libraries_entry.get_dist_package_name(target_family=None)
+        self.assertEqual(dist_name, "rocm-sdk-libraries")
+        # py_package_name should also work without a target.
+        py_name = libraries_entry.get_py_package_name(target_family=None)
+        self.assertTrue(py_name.startswith("_rocm_sdk_libraries"))
+
+    def test_kpack_split_libraries_package_creates_without_target(self):
+        """Libraries package with target_family=None should not raise in kpack-split."""
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(artifact_dir, kpack_split=True)
+
+        # Should not raise.
+        lib = PopulatedDistPackage(params, logical_name="libraries", target_family=None)
+        self.assertIsNotNone(lib.path)
+
+    def test_populate_device_files_copies_all_files(self):
+        """populate_device_files() should copy .kpack and kernel DB files."""
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(artifact_dir, kpack_split=True)
+
+        dev = PopulatedDistPackage(
+            params, logical_name="device", target_family="gfx942"
+        )
+        dev.populate_device_files(
+            params.filter_artifacts(
+                lambda an: an.name == "blas"
+                and an.component == "lib"
+                and an.target_family == "gfx942"
+            )
+        )
+
+        # Both files should be materialized.
+        self.assertTrue(dev.files.has(".kpack/blas_lib_gfx942.kpack"))
+        self.assertTrue(dev.files.has("lib/rocblas/library/Foo_gfx942.co"))
+
+        # Files should exist on disk in the platform dir.
+        platform_dir = dev._platform_dir
+        self.assertTrue((platform_dir / ".kpack" / "blas_lib_gfx942.kpack").exists())
+        self.assertTrue(
+            (platform_dir / "lib" / "rocblas" / "library" / "Foo_gfx942.co").exists()
+        )
+
+    def test_device_platform_dir_overlays_libraries(self):
+        """Device package platform dir must match libraries package platform dir name."""
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(artifact_dir, kpack_split=True)
+
+        lib = PopulatedDistPackage(params, logical_name="libraries", target_family=None)
+        dev = PopulatedDistPackage(
+            params, logical_name="device", target_family="gfx942"
+        )
+
+        # The platform dir names must match for the overlay to work.
+        self.assertEqual(lib._platform_dir.name, dev._platform_dir.name)
+
+    def test_device_artifact_filter(self):
+        """device_artifact_filter selects only per-ISA lib artifacts."""
+        # Import the filter from the build script.
+        sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+        from build_python_packages import device_artifact_filter
+
+        from _therock_utils.artifacts import ArtifactName
+
+        # Should match per-ISA lib artifact.
+        an_gfx942 = ArtifactName("blas", "lib", "gfx942")
+        self.assertTrue(device_artifact_filter("gfx942", an_gfx942))
+
+        # Should NOT match generic.
+        an_generic = ArtifactName("blas", "lib", "generic")
+        self.assertFalse(device_artifact_filter("gfx942", an_generic))
+
+        # Should NOT match wrong ISA.
+        an_gfx1100 = ArtifactName("blas", "lib", "gfx1100")
+        self.assertFalse(device_artifact_filter("gfx942", an_gfx1100))
+
+        # Should NOT match test component.
+        an_test = ArtifactName("blas", "test", "gfx942")
+        self.assertFalse(device_artifact_filter("gfx942", an_test))
+
+        # Should NOT match non-library artifact name.
+        an_core = ArtifactName("core-hip", "lib", "gfx942")
+        self.assertFalse(device_artifact_filter("gfx942", an_core))
+
+    def test_device_dist_info_has_libraries_py_package_name(self):
+        """Device package _dist_info.py must contain LIBRARIES_PY_PACKAGE_NAME."""
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(artifact_dir, kpack_split=True)
+
+        dev = PopulatedDistPackage(
+            params, logical_name="device", target_family="gfx942"
+        )
+
+        dist_info_path = (
+            dev.path / "src" / dev.entry.pure_py_package_name / "_dist_info.py"
+        )
+        content = dist_info_path.read_text()
+        self.assertIn("LIBRARIES_PY_PACKAGE_NAME", content)
+        self.assertIn("_rocm_sdk_libraries", content)
+
+
+# ---------------------------------------------------------------------------
 # Unit tests for restrict_families (per-family meta package)
 # ---------------------------------------------------------------------------
 

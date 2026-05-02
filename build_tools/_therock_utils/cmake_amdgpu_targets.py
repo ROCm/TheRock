@@ -11,6 +11,14 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+_DEFAULT_CMAKE_PATH = (
+    Path(__file__).resolve().parent.parent.parent
+    / "cmake"
+    / "therock_amdgpu_targets.cmake"
+)
+
+_family_to_targets_cache: dict[Path, dict[str, list[str]]] = {}
+
 
 @dataclass
 class AmdgpuTargetInfo:
@@ -80,6 +88,52 @@ def build_family_to_targets(infos: list[AmdgpuTargetInfo]) -> dict[str, list[str
             if info.gfx_target not in result[family]:
                 result[family].append(info.gfx_target)
     return result
+
+
+def amdgpu_family_map(
+    cmake_path: Path | None = None,
+) -> dict[str, list[str]]:
+    """Return the family → gfx targets map, parsing the CMake file once.
+
+    Uses `cmake/therock_amdgpu_targets.cmake` at the repo root by default.
+    Results are cached per resolved path so repeated calls are free.
+    """
+    resolved = (cmake_path or _DEFAULT_CMAKE_PATH).resolve()
+    cached = _family_to_targets_cache.get(resolved)
+    if cached is None:
+        cached = build_family_to_targets(parse_amdgpu_targets_cmake(resolved))
+        _family_to_targets_cache[resolved] = cached
+    return cached
+
+
+def expand_families(
+    families: list[str],
+    family_map: dict[str, list[str]],
+    *,
+    strict: bool = True,
+) -> list[str]:
+    """Expand a list of family names to the union of their gfx targets.
+
+    Preserves input order; de-duplicates. When `strict` (the default),
+    raises ValueError if any family is not present in `family_map`. With
+    `strict=False`, unknown families are silently skipped.
+    """
+    if strict:
+        unknown = [f for f in families if f not in family_map]
+        if unknown:
+            known = ", ".join(sorted(family_map.keys()))
+            raise ValueError(
+                f"Unknown AMD GPU families: {unknown}. Known families: {known}"
+            )
+
+    targets: list[str] = []
+    seen: set[str] = set()
+    for family in families:
+        for target in family_map.get(family, []):
+            if target not in seen:
+                seen.add(target)
+                targets.append(target)
+    return targets
 
 
 def _tokenize_cmake(text: str) -> list[str]:

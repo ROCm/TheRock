@@ -25,6 +25,12 @@ on:
       release_type:
         type: string
         default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
@@ -93,6 +99,8 @@ jobs:
       - name: "Fetch 'build_tools' from repository"
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
           sparse-checkout: build_tools
           path: "prejob"
 
@@ -105,7 +113,8 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          repository: "ROCm/TheRock"
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
 
       - name: Run setup test environment workflow
         timeout-minutes: 15

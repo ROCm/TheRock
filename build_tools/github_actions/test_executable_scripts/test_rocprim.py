@@ -109,8 +109,6 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
-    "--timeout",
-    "900",
     "--repeat",
     "until-pass:6",
     # shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)

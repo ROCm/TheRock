@@ -23,10 +23,10 @@
 # Sample usage
 # ------------
 #
-# CI (install + append PYTHON_CMD to GITHUB_ENV):
+# CI (install + append PYTHON_CMD to GITHUB_ENV directly):
 #
 #     bash build_tools/packaging/linux/setup_python_cmd.sh \
-#         --os-profile ubuntu2404 --install-runtime >> "$GITHUB_ENV"
+#         --os-profile ubuntu2404 --install-runtime
 #
 # UBI 9 / older RHEL-like: pin 3.12 from AppStream / repos:
 #
@@ -146,7 +146,7 @@ case "$OUTPUT_FORMAT" in
         echo "{\"python_cmd\": \"$PYTHON_CMD\"}"
         ;;
     github)
-        echo "PYTHON_CMD=$PYTHON_CMD"
+        echo "PYTHON_CMD=$PYTHON_CMD" >> "$GITHUB_ENV"
         ;;
     env)
         echo "export PYTHON_CMD=$PYTHON_CMD"
