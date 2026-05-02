@@ -120,7 +120,6 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
   OFF)
 
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
-option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 

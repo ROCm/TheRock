@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 if(THEROCK_ENABLE_COMPILER)
+  if(NOT DEFINED THEROCK_BUILD_LLVM_TESTS)
+    set(THEROCK_BUILD_LLVM_TESTS ${THEROCK_BUILD_TESTING})
+  endif()
   if(NOT DEFINED THEROCK_BUILD_COMGR_TESTS)
     set(THEROCK_BUILD_COMGR_TESTS ${THEROCK_BUILD_TESTING})
   endif()
@@ -77,7 +80,8 @@ if(THEROCK_ENABLE_COMPILER)
       -DLIBCXXABI_ENABLE_STATIC=ON
 
       # Features
-      -DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}
+      -DLLVM_INCLUDE_TESTS=${THEROCK_BUILD_LLVM_TESTS}
+      -DTHEROCK_BUILD_LLVM_TESTS=${THEROCK_BUILD_LLVM_TESTS}
       -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       -DLLVM_ENABLE_ZLIB=FORCE_ON
       -DLLVM_ENABLE_Z3_SOLVER=OFF
@@ -90,9 +94,9 @@ if(THEROCK_ENABLE_COMPILER)
       -DLLVM_BUILD_LLVM_C_DYLIB=OFF
 
       # Build optimizations
-      -DLLVM_BUILD_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
-      -DLLVM_INCLUDE_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
-      -DLLVM_TOOL_LLVM_JITLINK_BUILD=${THEROCK_ENABLE_LLVM_TESTS}
+      -DLLVM_BUILD_EXAMPLES=${THEROCK_BUILD_LLVM_TESTS}
+      -DLLVM_INCLUDE_EXAMPLES=${THEROCK_BUILD_LLVM_TESTS}
+      -DLLVM_TOOL_LLVM_JITLINK_BUILD=${THEROCK_BUILD_LLVM_TESTS}
 
       # Clang features.
       -DCLANG_ENABLE_ARCMT=OFF
@@ -147,6 +151,20 @@ if(THEROCK_ENABLE_COMPILER)
   therock_cmake_subproject_provide_package(amd-llvm LLD lib/llvm/lib/cmake/lld)
   therock_cmake_subproject_provide_package(amd-llvm LLVM lib/llvm/lib/cmake/llvm)
   therock_cmake_subproject_activate(amd-llvm)
+
+  if(THEROCK_BUILD_LLVM_TESTS)
+    therock_cmake_subproject_build_test(amd-llvm
+      COMMAND
+        "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
+        --target check-llvm
+      COMMAND
+        "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
+        --target check-clang
+      COMMAND
+        "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
+        --target check-lld
+    )
+  endif()
 
 
   ##############################################################################
