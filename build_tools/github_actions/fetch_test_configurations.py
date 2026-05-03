@@ -478,7 +478,7 @@ test_matrix = {
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",
         "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --tests",
-        "timeout_minutes": 60,  # TODO: REVERT, THIS IS TEMPORARY TO VERIFY TESTS
+        "timeout_minutes": 30,
         "additional_requirements_files": [
             "share/rocprofiler-systems/tests/requirements.txt",
         ],

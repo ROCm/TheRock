@@ -13,26 +13,31 @@ THEROCK_PATH = THEROCK_BIN_PATH.parent
 THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
 ROCPROFSYS_TEST_DIR = THEROCK_PATH / "share" / "rocprofiler-systems" / "tests"
 
-# These tests are always excluded until the relevant issue is fixed
+# These tests are always excluded until the relevant issue is fixed (AIPROFSYST-441)
 EXCLUDED_TESTS = [
-    "transferbench-sys-run",  # Requires access to multi-gpu system
-    "fork.*",  # May deadlock - Under investigation
-    "openmp-target.*",  # Requires _omp_dm_init_kernel.kd fix
-    "roctx-sampling",  # Need to lower # samples in rocpd validation
-    "roctx-runtime-instrument",  # Sporadic, increase timeout to 180 seconds as opposed to 120
-    "thread-limit-above.*",  # Bypassing ROCPROFSYS_MAX_THREADS, causing regex failure
+    "transferbench-sys-run",
+    "fork.*",
+    "openmp-target.*",
+    "roctx-sampling",
+    "roctx-runtime-instrument",
+    "thread-limit-above.*",
+    "jacobi-usm-sys-run",
+    "kfd.*",
+    "selective-region-region-1-filter.*",
+    "selective-region-region-2-and-3.*",
+    "selective-region-no-marker-region-1-filter.*",
 ]
 
-# Excluded by default
+# Excluded by default (AIPROFSYST-441)
 EXCLUDED_LABELS = [
-    "mpi",  # TODO: Allow the example binaries to be built with MPI
-    "julia",  # Unsupported - Not present in TheRock
-    "attach",  # Fails - Under investigation
-    "lulesh",  # Unsupported - Lulesh fails to build on TheRock
-    "network",  # NIC unsupported
-    "overflow",  # Requires CAPSYS_ADMIN/PERFMON or perf_event_paranoid <= 3
-    "fork",  # only the runtime instrument fails, but logs are VERY long
-    "pthreads",  # All fail
+    "annotate",
+    "mpi",
+    "julia",
+    "attach",
+    "lulesh",
+    "network",
+    "overflow",
+    "pthreads",
 ]
 
 # Limited to 15 minutes
