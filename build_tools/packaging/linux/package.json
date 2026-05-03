@@ -80,6 +80,19 @@
     "Homepage": "https://github.com/ROCm/llvm-project",
     "Artifactory": [
       {
+        "Artifact": "amd-llvm-base",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm-base",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "amd-llvm",
         "Artifact_Subdir": [
           {
@@ -179,6 +192,17 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/llvm-project",
     "Artifactory": [
+      {
+        "Artifact": "amd-llvm-base",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm-base",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
       {
         "Artifact": "amd-llvm",
         "Artifact_Subdir": [
