@@ -30,6 +30,43 @@ from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, build_packages
 
 
+LLVM_TOOLCHAIN_ARTIFACT_NAMES = [
+    # These split artifacts together preserve the Python package behavior of
+    # the former monolithic amd-llvm artifact.
+    "amd-llvm",
+    "amd-llvm-base",
+    "amd-llvm-flang",
+    "amd-llvm-offload",
+]
+
+
+CORE_ARTIFACT_NAMES = [
+    "amd-dbgapi",
+    "aqlprofile",
+    "base",
+    "core-amdsmi",
+    "core-hip",
+    "core-kpack",
+    "core-ocl",
+    "core-hipinfo",
+    "core-runtime",
+    "hipify",
+    "host-blas",
+    "host-suite-sparse",
+    "rocdecode",
+    "rocgdb",
+    "rocjpeg",
+    "rocprofiler-sdk",
+    "rocr-debug-agent",
+    "sysdeps",
+    "sysdeps-amd-mesa",
+    "sysdeps-expat",
+    "sysdeps-gmp",
+    "sysdeps-mpfr",
+    "sysdeps-ncurses",
+] + LLVM_TOOLCHAIN_ARTIFACT_NAMES
+
+
 def load_therock_manifest(artifact_dir: Path) -> dict:
     """Load therock_manifest.json from the base_lib_generic artifact."""
     manifest_path = (
@@ -325,32 +362,7 @@ def _run_legacy(
 
 
 def core_artifact_filter(an: ArtifactName) -> bool:
-    core = an.name in [
-        "amd-dbgapi",
-        "amd-llvm",
-        "aqlprofile",
-        "base",
-        "core-amdsmi",
-        "core-hip",
-        "core-kpack",
-        "core-ocl",
-        "core-hipinfo",
-        "core-runtime",
-        "hipify",
-        "host-blas",
-        "host-suite-sparse",
-        "rocdecode",
-        "rocgdb",
-        "rocjpeg",
-        "rocprofiler-sdk",
-        "rocr-debug-agent",
-        "sysdeps",
-        "sysdeps-amd-mesa",
-        "sysdeps-expat",
-        "sysdeps-gmp",
-        "sysdeps-mpfr",
-        "sysdeps-ncurses",
-    ] and an.component in [
+    core = an.name in CORE_ARTIFACT_NAMES and an.component in [
         "lib",
         "run",
     ]
