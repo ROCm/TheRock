@@ -192,7 +192,13 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "test_setup_windows_gpu_navi3x",
             "family": "gfx110X-all",
-            "fetch-gfx-targets": ["gfx1100", "gfx1101"],
+            # gfx110X-all family in cmake/therock_amdgpu_targets.cmake includes
+            # gfx1100/gfx1101/gfx1102, so the build already produces split artifacts
+            # for all three. The OrchestrAI test_setup_windows_gpu_navi3x box has
+            # gfx1102 silicon (RX 7600 XT, Navi33), so the test step needs to fetch
+            # the gfx1102 split artifact too -- otherwise HIP fails with
+            # "device kernel image is invalid" / hipErrorInvalidImage on it.
+            "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
