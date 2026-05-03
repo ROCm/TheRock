@@ -83,7 +83,7 @@
         "Artifact": "amd-llvm-base",
         "Artifact_Subdir": [
           {
-            "Name": "amd-llvm-base",
+            "Name": "amd-llvm",
             "Components": [
               "lib",
               "run",
@@ -196,7 +196,7 @@
         "Artifact": "amd-llvm-base",
         "Artifact_Subdir": [
           {
-            "Name": "amd-llvm-base",
+            "Name": "amd-llvm",
             "Components": [
               "dev"
             ]
