@@ -126,7 +126,7 @@ def amdclangpp():
 
 
 def amdflang():
-    _exec("lib/llvm/bin/amdflang")
+    _exec("lib/llvm/bin/flang")
 
 
 def amdlld():
