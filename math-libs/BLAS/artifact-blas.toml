@@ -132,9 +132,6 @@ optional = true
 
 # hipSOLVER
 [components.lib."math-libs/BLAS/hipSOLVER/stage"]
-exclude = [
-  "lib/libhipsolver_fortran.so*",
-]
 optional = true
 [components.dbg."math-libs/BLAS/hipSOLVER/stage"]
 optional = true
@@ -146,7 +143,6 @@ optional = true
 include = [
   "bin/hipsolver-bench*",
   "bin/hipsolver-test*",
-  "lib/libhipsolver_fortran.so*",
   "share/hipsolver/test/**",
 ]
 optional = true

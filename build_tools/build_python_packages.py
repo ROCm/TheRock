@@ -115,6 +115,7 @@ def run(args: argparse.Namespace):
 
     # Populate each target neutral library package.
     core = PopulatedDistPackage(params, logical_name="core")
+    core.rpath_dep(core, "lib")
     core.rpath_dep(core, "lib/llvm/lib")
     core.rpath_dep(core, "lib/rocm_sysdeps/lib")
     core.populate_runtime_files(
