@@ -526,4 +526,5 @@ endif()
 ################################################################################
 # Finalization
 ################################################################################
+therock_cmake_subproject_build_test_finalize()
 therock_subproject_merge_compile_commands()

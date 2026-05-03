@@ -1270,6 +1270,12 @@ function(therock_cmake_subproject_build_test target_name)
     string(APPEND _runner_content "set(ENV{TEATIME_FORCE_INTERACTIVE} \"\${_saved_teatime_interactive}\")\n\n")
   endif()
 
+  # Write per-command results to a file so the total summary can aggregate them.
+  set(_results_dir "${CMAKE_BINARY_DIR}/build-test-results")
+  set(_results_file "${_results_dir}/${target_name}.txt")
+  string(APPEND _runner_content "file(MAKE_DIRECTORY \"${_results_dir}\")\n")
+  string(APPEND _runner_content "set(_results \"\")\n\n")
+
   string(APPEND _runner_content "message(STATUS \"\")\n")
   string(APPEND _runner_content "message(STATUS \"========================================\")\n")
   string(APPEND _runner_content "message(STATUS \"BUILD TEST SUMMARY for ${target_name}\")\n")
@@ -1284,13 +1290,19 @@ function(therock_cmake_subproject_build_test target_name)
     endif()
     string(APPEND _runner_content "if(_rc${_command_index})\n")
     string(APPEND _runner_content "  message(STATUS \"  ${_log_label}: FAILED (exit code \${_rc${_command_index}})\")\n")
+    string(APPEND _runner_content "  string(APPEND _results \"FAIL ${_log_label}\\n\")\n")
     string(APPEND _runner_content "else()\n")
     string(APPEND _runner_content "  message(STATUS \"  ${_log_label}: PASSED\")\n")
+    string(APPEND _runner_content "  string(APPEND _results \"PASS ${_log_label}\\n\")\n")
     string(APPEND _runner_content "endif()\n")
   endforeach()
   string(APPEND _runner_content "message(STATUS \"========================================\")\n")
+
+  # Write results before checking failure — the total summary target reads these.
+  string(APPEND _runner_content "file(WRITE \"${_results_file}\" \"\${_results}\")\n\n")
+
   string(APPEND _runner_content "if(_any_failed)\n")
-  string(APPEND _runner_content "  message(FATAL_ERROR \"One or more build test commands failed for ${target_name}\")\n")
+  string(APPEND _runner_content "  message(WARNING \"One or more build test commands failed for ${target_name}\")\n")
   string(APPEND _runner_content "else()\n")
   string(APPEND _runner_content "  message(STATUS \"All build tests passed for ${target_name}\")\n")
   string(APPEND _runner_content "endif()\n")
@@ -1317,6 +1329,90 @@ function(therock_cmake_subproject_build_test target_name)
   if(TARGET therock-build-tests)
     add_dependencies(therock-build-tests "build-test-${target_name}")
   endif()
+
+  # Register this result file for the total summary.
+  set_property(GLOBAL APPEND PROPERTY THEROCK_BUILD_TEST_RESULT_FILES "${_results_file}")
+endfunction()
+
+# therock_cmake_subproject_build_test_finalize
+# Call once after all subprojects are configured. Generates a total summary
+# target that aggregates results from all build-test runner scripts.
+function(therock_cmake_subproject_build_test_finalize)
+  if(NOT TARGET therock-build-tests)
+    return()
+  endif()
+
+  get_property(_result_files GLOBAL PROPERTY THEROCK_BUILD_TEST_RESULT_FILES)
+  if(NOT _result_files)
+    return()
+  endif()
+
+  set(_summary_script "${CMAKE_BINARY_DIR}/build-test-total-summary.cmake")
+  set(_summary_content "")
+  string(APPEND _summary_content "set(_total_passed 0)\n")
+  string(APPEND _summary_content "set(_total_failed 0)\n")
+  string(APPEND _summary_content "set(_summary_lines \"\")\n\n")
+
+  foreach(_result_file IN LISTS _result_files)
+    string(APPEND _summary_content "if(EXISTS \"${_result_file}\")\n")
+    string(APPEND _summary_content "  file(READ \"${_result_file}\" _contents)\n")
+    string(APPEND _summary_content "  string(STRIP \"\${_contents}\" _contents)\n")
+    string(APPEND _summary_content "  string(REGEX REPLACE \"\\n\" \";\" _lines \"\${_contents}\")\n")
+    string(APPEND _summary_content "  foreach(_line IN LISTS _lines)\n")
+    string(APPEND _summary_content "    if(_line MATCHES \"^PASS (.*)\")\n")
+    string(APPEND _summary_content "      math(EXPR _total_passed \"\${_total_passed} + 1\")\n")
+    string(APPEND _summary_content "      string(APPEND _summary_lines \"  \${CMAKE_MATCH_1}: PASSED\\n\")\n")
+    string(APPEND _summary_content "    elseif(_line MATCHES \"^FAIL (.*)\")\n")
+    string(APPEND _summary_content "      math(EXPR _total_failed \"\${_total_failed} + 1\")\n")
+    string(APPEND _summary_content "      string(APPEND _summary_lines \"  \${CMAKE_MATCH_1}: FAILED\\n\")\n")
+    string(APPEND _summary_content "    endif()\n")
+    string(APPEND _summary_content "  endforeach()\n")
+    string(APPEND _summary_content "endif()\n\n")
+  endforeach()
+
+  string(APPEND _summary_content "math(EXPR _total \"\${_total_passed} + \${_total_failed}\")\n")
+  string(APPEND _summary_content "message(STATUS \"\")\n")
+  string(APPEND _summary_content "message(STATUS \"########################################\")\n")
+  string(APPEND _summary_content "message(STATUS \"TOTAL BUILD TEST SUMMARY\")\n")
+  string(APPEND _summary_content "message(STATUS \"########################################\")\n")
+  string(APPEND _summary_content "message(STATUS \"\${_summary_lines}\")\n")
+  string(APPEND _summary_content "if(_total_failed GREATER 0)\n")
+  string(APPEND _summary_content "  message(STATUS \"Result: \${_total_passed}/\${_total} passed, \${_total_failed} FAILED\")\n")
+  string(APPEND _summary_content "  message(STATUS \"########################################\")\n")
+  string(APPEND _summary_content "  message(FATAL_ERROR \"Build tests failed\")\n")
+  string(APPEND _summary_content "else()\n")
+  string(APPEND _summary_content "  message(STATUS \"Result: \${_total_passed}/\${_total} passed\")\n")
+  string(APPEND _summary_content "  message(STATUS \"########################################\")\n")
+  string(APPEND _summary_content "endif()\n")
+
+  file(GENERATE OUTPUT "${_summary_script}" CONTENT "${_summary_content}")
+
+  # The summary target depends on all individual build-test-* targets (collected
+  # via therock-build-tests), so ninja runs it after every suite finishes.
+  # Adding it as a dependency of therock-build-tests ensures the CI target
+  # still works: therock-build-tests -> therock-build-test-summary -> all
+  # individual build-test-* targets.
+  set(_summary_stamp "${CMAKE_BINARY_DIR}/build-test-summary.stamp")
+  add_custom_command(
+    OUTPUT "${_summary_stamp}"
+    COMMAND "${CMAKE_COMMAND}" -P "${_summary_script}"
+    COMMAND "${CMAKE_COMMAND}" -E touch "${_summary_stamp}"
+    COMMENT "Total build test summary"
+    USES_TERMINAL
+    VERBATIM
+  )
+  add_custom_target(therock-build-test-summary
+    DEPENDS "${_summary_stamp}"
+  )
+
+  # Collect all existing build-test-* dependencies from therock-build-tests
+  # and move them under the summary target, so the ordering is:
+  #   therock-build-tests -> therock-build-test-summary -> build-test-*
+  get_property(_test_deps TARGET therock-build-tests PROPERTY MANUALLY_ADDED_DEPENDENCIES)
+  foreach(_dep IN LISTS _test_deps)
+    add_dependencies(therock-build-test-summary "${_dep}")
+  endforeach()
+  add_dependencies(therock-build-tests therock-build-test-summary)
 endfunction()
 
 # therock_cmake_subproject_glob_c_sources
