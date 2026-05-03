@@ -182,11 +182,16 @@ class FetchPackageTargetsTest(unittest.TestCase):
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Run multiple times to ensure consistency
+        # Run multiple times to ensure consistency.
+        # NOTE: matches gfx110x.linux.test-runs-on in amdgpu_family_matrix.py.
+        # On this <DO NOT MERGE> branch the value is the OrchestrAI label
+        # 'test_setup_linux_gpu_navi3x' so the runner setup gets exercised on
+        # PR triggers; main has 'linux-gfx110X-gpu-rocm'. Restore the upstream
+        # value here when reverting the runner-label change before merge.
         for _ in range(5):
             targets = fetch_package_targets.determine_package_targets(args)
             self.assertEqual(len(targets), 1)
-            self.assertEqual(targets[0]["test_machine"], "linux-gfx110X-gpu-rocm")
+            self.assertEqual(targets[0]["test_machine"], "test_setup_linux_gpu_navi3x")
 
 
 if __name__ == "__main__":
