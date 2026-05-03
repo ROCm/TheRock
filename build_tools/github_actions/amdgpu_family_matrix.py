@@ -222,8 +222,9 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx1151",
             "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
-            # TODO(#3299): Re-enable quick tests once capacity is available for Windows gfx1151
-            "nightly_check_only_for_family": True,
+            # nightly_check_only_for_family removed on this branch so that
+            # PR-triggered CI exercises the OrchestrAI test_setup_windows_igpu_stxh
+            # runner setup. Restore before merging the runner-label change to main.
         },
     },
     "gfx120x": {
@@ -241,7 +242,9 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            # nightly_check_only_for_family removed on this branch so that
+            # PR-triggered CI exercises the OrchestrAI test_setup_windows_gpu_navi4x
+            # runner setup. Restore before merging the runner-label change to main.
         },
     },
 }
