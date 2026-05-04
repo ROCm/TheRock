@@ -259,7 +259,6 @@ class CheckCMake(CheckProgram):
         self.name = "CMake"
 
     def check(self):
-        device = SystemInfo()
         if self.program.exe is None:
             _stat = msg_stat("err", "CMake", f"Cannot find CMake.")
             _except = cstring(
@@ -297,25 +296,6 @@ class CheckCMake(CheckProgram):
                 "warn",
             )
             _result = None
-        elif self.program.MAJOR_VERSION == 4 and device.is_windows:
-            _stat = msg_stat(
-                "warn",
-                "CMake",
-                f"Found CMake version {self.program.version} at {self.program.exe}",
-            )
-            _except = cstring(
-                f"""
-    The support of CMake 4 is still under development, and the different CMake version behavior may effect TheRock build.
-    If your build requires stable build, please downgrade it and re-try again.
-    You can find ROCm/TheRock latest required CMake here:
-        https://github.com/ROCm/TheRock/blob/main/docs/environment_setup_guide.md#common-issues
-
-        traceback: CMake program too new may cause unstable
-            expected: 3.25.X ≤ cmake ≤ 3.31.X, found {self.program.version}
-    """,
-                "warn",
-            )
-            _result = False
 
         else:
             _stat = msg_stat(
