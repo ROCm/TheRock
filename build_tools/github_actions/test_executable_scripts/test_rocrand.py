@@ -89,8 +89,6 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
-    "--timeout",
-    "900",
     "--repeat",
     "until-pass:3",
 ]
