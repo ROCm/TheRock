@@ -130,6 +130,7 @@ PACKAGES_TO_PROMOTE = {
     "rocm_sdk_core",
     "rocm_sdk_devel",
     "rocm_sdk_libraries-*",
+    "rocm_profiler",
     "torch",
     "torchaudio",
     "torchvision",
@@ -138,6 +139,24 @@ PACKAGES_TO_PROMOTE = {
     "jax_rocm7_pjrt",
     "jax_rocm7_plugin",
     "jaxlib",
+}
+
+PACKAGES_TO_PROMOTE_MULTI_ARCH = {
+    "torch",
+    "torchaudio",
+    "torchvision",
+    "triton",
+    "apex",
+    "rocm",
+    "rocm_sdk_core",
+    "rocm_sdk_devel",
+    "rocm_sdk_libraries",
+    "rocm_profiler",
+    "rocm_bootstrap",
+    # device packages (IMPORTANT)
+    "amd_torch_device",
+    "amd_torchvision_device",
+    "rocm_sdk_device",
 }
 
 # copied from build_tools/third_party/s3_management/update_dependencies.py PACKAGES_PER_PROJECT
@@ -165,6 +184,33 @@ DEPENDENCY_PACKAGES = {
     # ROCM
     "setuptools",
 }
+
+
+def is_allowed_multi_arch_package(filename: str) -> bool:
+    """
+    Check if filename belongs to allowed packages for multi-arch flow.
+    Uses BOTH:
+      - PACKAGES_TO_PROMOTE
+      - PACKAGES_TO_PROMOTE_MULTI_ARCH
+
+    Supports:
+      - exact match
+      - wildcard '*' suffix (legacy)
+      - prefix match (for device packages)
+    """
+    base = filename.split("-")[0]
+
+    def matches(pkg: str) -> bool:
+        # Handle wildcard like "rocm_sdk_libraries-*"
+        if pkg.endswith("*"):
+            return base.startswith(pkg[:-1])
+
+        # Exact match OR prefix match (for device families)
+        return base == pkg or base.startswith(pkg)
+
+    return any(
+        matches(pkg) for pkg in (PACKAGES_TO_PROMOTE | PACKAGES_TO_PROMOTE_MULTI_ARCH)
+    )
 
 
 def categorize_package(filename: str) -> str:
@@ -261,6 +307,70 @@ def has_version_in_arch(
         return False
     except ClientError:
         return False
+
+
+def has_version_in_directory(s3_client, bucket, prefix, directory, version):
+    paginator = s3_client.get_paginator("list_objects_v2")
+
+    if directory is None:
+        prefix_to_use = prefix
+    else:
+        prefix_to_use = f"{prefix}{directory}/"
+
+    pages = paginator.paginate(
+        Bucket=bucket,
+        Prefix=prefix_to_use,
+    )
+
+    for page in pages:
+        if "Contents" not in page:
+            continue
+
+        for obj in page["Contents"]:
+            if version in obj["Key"]:
+                return True
+
+    return False
+
+
+def list_packages_multi_arch_verbose(s3_client, bucket, prefix, version):
+    paginator = s3_client.get_paginator("list_objects_v2")
+
+    total_size = 0
+    found = False
+
+    print("\nPackages")
+    print("-" * 60)
+
+    pages = paginator.paginate(
+        Bucket=bucket,
+        Prefix=prefix,
+    )
+
+    for page in pages:
+        if "Contents" not in page:
+            continue
+
+        for obj in page["Contents"]:
+            key = obj["Key"]
+            filename = key.split("/")[-1]
+
+            if not filename or filename == "index.html":
+                continue
+
+            if version in filename and is_allowed_multi_arch_package(filename):
+                found = True
+                size = obj["Size"]
+
+                print(f"  - {filename} ({size / BYTES_TO_MB:.2f} MB)")
+                total_size += size
+
+    if not found:
+        print(f"[ERROR]: No packages found for version {version}")
+        sys.exit(1)
+
+    print("\n" + "=" * 60)
+    print(f"TOTAL SIZE: {total_size / BYTES_TO_MB:.2f} MB")
 
 
 def list_packages_for_arch(
@@ -387,6 +497,64 @@ def download_file(s3_client, bucket_name: str, key: str, local_path: Path) -> bo
         return False
 
 
+def download_multi_arch_packages(
+    s3_client,
+    bucket,
+    prefix,
+    version,
+    output_dir,
+):
+    paginator = s3_client.get_paginator("list_objects_v2")
+
+    wheels_dir = output_dir / "wheels"
+    wheels_dir.mkdir(parents=True, exist_ok=True)
+
+    total_success = 0
+    total_fail = 0
+
+    pages = paginator.paginate(
+        Bucket=bucket,
+        Prefix=prefix,
+    )
+
+    print("\nDownloading packages")
+    print("=" * 80)
+
+    for page in pages:
+        if "Contents" not in page:
+            continue
+
+        for obj in page["Contents"]:
+            key = obj["Key"]
+            filename = key.split("/")[-1]
+
+            if not filename or filename == "index.html":
+                continue
+
+            if version not in filename:
+                continue
+
+            if not is_allowed_multi_arch_package(filename):
+                continue
+
+            local_path = wheels_dir / filename
+
+            if local_path.exists():
+                print(f"  SKIP (exists): {filename}")
+                total_success += 1
+                continue
+
+            size = obj["Size"]
+            print(f"  Downloading: {filename} ({size / BYTES_TO_MB:.2f} MB)")
+
+            if download_file(s3_client, bucket, key, local_path):
+                total_success += 1
+            else:
+                total_fail += 1
+
+    return total_success, total_fail
+
+
 def download_packages(
     s3_client,
     bucket_name: str,
@@ -423,7 +591,7 @@ def download_packages(
     if unknown:
         print(f"  Unknown packages (skipped): {len(unknown)}")
         for key in unknown:
-            print(f"    - {key[0].split("/")[-1]}")
+            print(f"    - {key[0].split('/')[-1]}")
     print("")
     print("-" * 80)
 
@@ -632,6 +800,20 @@ Examples:
         help="List all packages per architecture, do not download",
     )
 
+    parser.add_argument(
+        "--multi-arch",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="--multi-arch requires prefix like v4/whl/",
+    )
+
+    parser.add_argument(
+        "--list-packages-multi-arch",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="List all multi-arch packages matching version",
+    )
+
     args = parser.parse_args(argv)
 
     if args.arch:
@@ -647,9 +829,14 @@ Examples:
                 if args.tarball_output_dir is not None
                 else None
             )
-    if not args.list_archs and not args.list_packages_per_arch and not args.output_dir:
+    if (
+        not args.list_archs
+        and not args.list_packages_per_arch
+        and not args.list_packages_multi_arch
+        and not args.output_dir
+    ):
         parser.error(
-            "--output-dir is required unless --list-archs or --list-packages-per-arch is specified"
+            "--output-dir is required unless --list-archs, --list-packages-per-arch, or --list-packages-multi-arch is specified"
         )
 
     return args
@@ -727,7 +914,7 @@ def print_packages_per_arch(
                 size_tarball += tarball_size
                 total_size_tarball += tarball_size
                 size_mb = tarball_size / BYTES_TO_MB
-                print(f"    - {tarball_name.split("/")[-1]} ({size_mb:.2f} MB)")
+                print(f"    - {tarball_name.split('/')[-1]} ({size_mb:.2f} MB)")
             if not tarballs:
                 print(
                     f"  [WARN]: No tarball found for {arch} with version {version}. Skipping!"
@@ -771,6 +958,8 @@ def download_prerelease_packages(
     bucket_name: str = "therock-prerelease-python",
     bucket_prefix: str = "v3/whl/",
     include_dependencies: bool = False,
+    multi_arch: bool = False,
+    list_packages_multi_arch: bool = False,
     include_tarballs: bool = False,
     tarball_bucket_name: str = "therock-prerelease-tarball",
     tarball_bucket_prefix: str = "v3/tarball/",
@@ -804,10 +993,14 @@ def download_prerelease_packages(
     Raises:
         SystemExit: If AWS credentials are not configured, no architectures found, or downloads fail
     """
-    # Validate arguments
-    if not list_archs and not list_packages_per_arch and output_dir is None:
+    if (
+        not list_archs
+        and not list_packages_per_arch
+        and not list_packages_multi_arch
+        and output_dir is None
+    ):
         print(
-            "[ERROR]: output_dir is required unless list_archs=True or list_packages_per_arch=True"
+            "[ERROR]: output_dir is required unless list_archs=True, list_packages_per_arch=True, or list_packages_multi_arch=True"
         )
         sys.exit(1)
 
@@ -816,6 +1009,7 @@ def download_prerelease_packages(
     print("=" * 80)
     print(f"Bucket: {bucket_name}")
     print(f"Version: {version}")
+
     if architectures:
         print(f"Architectures: {architectures} (user-specified)")
     else:
@@ -823,6 +1017,45 @@ def download_prerelease_packages(
     print("=" * 80)
 
     s3_client = boto3.client("s3")
+    if multi_arch:
+        # Validate that packages exist
+        if not has_version_in_directory(
+            s3_client, bucket_name, bucket_prefix, None, version
+        ):
+            print(f"[ERROR]: No packages found for version {version}")
+            sys.exit(1)
+
+        if list_packages_multi_arch:
+            list_packages_multi_arch_verbose(
+                s3_client,
+                bucket_name,
+                bucket_prefix,
+                version,
+            )
+            return
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"\nOutput directory: {output_dir.absolute()}")
+
+        success, fail = download_multi_arch_packages(
+            s3_client,
+            bucket_name,
+            bucket_prefix,
+            version,
+            output_dir,
+        )
+
+        print("\n" + "=" * 80)
+        print("DOWNLOAD COMPLETE (MULTI-ARCH)")
+        print("=" * 80)
+        print(f"Total successful downloads: {success}")
+        print(f"Total failed downloads: {fail}")
+
+        if fail > 0:
+            sys.exit(1)
+
+        return
+
     # List architectures
     if architectures:
 
@@ -937,6 +1170,8 @@ if __name__ == "__main__":
         output_dir=args.output_dir,
         architectures=args.arch,
         bucket_name=args.bucket,
+        multi_arch=args.multi_arch,
+        list_packages_multi_arch=args.list_packages_multi_arch,
         bucket_prefix=args.bucket_prefix,
         include_dependencies=args.include_dependencies,
         include_tarballs=args.include_tarballs,
