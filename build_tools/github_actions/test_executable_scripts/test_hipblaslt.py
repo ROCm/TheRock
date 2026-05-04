@@ -18,6 +18,9 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from github_actions_api import is_asan
 
+sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
+from test_utils import get_gtest_output_arg
+
 logging.basicConfig(level=logging.INFO)
 
 # GTest sharding
@@ -40,16 +43,16 @@ test_type = os.getenv("TEST_TYPE", "full")
 if AMDGPU_FAMILIES == "gfx1151" and platform == "windows":
     test_type = "quick"
 
-sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
-from test_utils import get_gtest_output_arg
-
 test_filter = []
 if test_type == "quick":
     test_filter.append("--gtest_filter=*smoke*")
 elif test_type == "quick":
     test_filter.append("--gtest_filter=*quick*")
 
-cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test", get_gtest_output_arg("hipblaslt")] + test_filter
+cmd = [
+    f"{THEROCK_BIN_DIR}/hipblaslt-test",
+    get_gtest_output_arg("hipblaslt"),
+] + test_filter
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+subprocess.check_call(cmd, cwd=THEROCK_DIR, env=environ_vars)

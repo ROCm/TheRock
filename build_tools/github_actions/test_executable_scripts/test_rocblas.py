@@ -16,6 +16,9 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from github_actions_api import is_asan
 
+sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
+from test_utils import get_gtest_output_arg
+
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
@@ -38,15 +41,13 @@ else:
     # only running quick tests due to openBLAS issue: https://github.com/ROCm/TheRock/issues/1605
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 
-sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
-from test_utils import get_gtest_output_arg
-
-cmd = [f"{THEROCK_BIN_DIR}/rocblas-test"] + test_filter + [get_gtest_output_arg("rocblas")]
+cmd = (
+    [f"{THEROCK_BIN_DIR}/rocblas-test"]
+    + test_filter
+    + [get_gtest_output_arg("rocblas")]
+)
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
 subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=True,
-    env=environ_vars,
+    cmd, cwd=THEROCK_DIR, check=True, env=environ_vars, stderr=subprocess.STDOUT
 )

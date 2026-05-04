@@ -18,7 +18,6 @@ Supported formats:
 
 import argparse
 import json
-import os
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
@@ -40,14 +39,7 @@ class TestResult:
 
 
 def parse_junit_xml(xml_file: Path) -> TestResult:
-    """Parse a JUnit XML file and extract test results.
-
-    Args:
-        xml_file: Path to the JUnit XML file
-
-    Returns:
-        TestResult with parsed data
-    """
+    """Parse a JUnit XML file and extract test results."""
     # Extract component name from filename (ctest-<component>-shard*.xml)
     name = xml_file.stem
     component = name.replace("ctest-", "").rsplit("-shard", 1)[0]

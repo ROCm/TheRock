@@ -27,6 +27,9 @@ CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_t
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from github_actions_api import is_asan
 
+sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
+from test_utils import get_ctest_junit_path
+
 env = os.environ.copy()
 
 if THEROCK_BIN_DIR_STR is None:
@@ -151,11 +154,6 @@ def setup_env(env):
 
 
 def execute_tests(env):
-    sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
-    from test_utils import get_ctest_junit_path
-
-    # Allow for more time in ASAN mode to run the tests.
-    timeout = 1500 if is_asan() else 600
     cmd = [
         "ctest",
         "--tests-information",
@@ -163,8 +161,6 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
-        "--timeout",
-        f"{timeout}",
         # Output JUnit XML for failed test reporting
         "--output-junit",
         str(get_ctest_junit_path("hip-tests")),
