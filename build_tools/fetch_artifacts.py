@@ -38,11 +38,11 @@ import re
 import shutil
 import sys
 
+from _therock_utils.archive_util import open_archive
 from _therock_utils.artifact_backend import ArtifactBackend, S3Backend
 from _therock_utils.artifacts import (
     ArtifactName,
     ArtifactPopulator,
-    _open_archive_for_read,
 )
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from artifact_manager import DownloadRequest, download_artifact
@@ -165,7 +165,7 @@ def extract_artifact(
         output_dir = archive_file.parent / artifact_name
         if output_dir.exists():
             shutil.rmtree(output_dir)
-        with _open_archive_for_read(archive_file) as tf:
+        with open_archive(archive_file) as tf:
             log(f"++ Extracting '{archive_file.name}' to '{artifact_name}'")
             tf.extractall(archive_file.parent / artifact_name, filter="tar")
     elif postprocess_mode == "flatten":
