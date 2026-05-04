@@ -55,6 +55,9 @@ function(therock_sanitizer_configure
       string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")
       string(APPEND _stanza "message(STATUS \"Override ASAN GPU_TARGETS = \${GPU_TARGETS}\")\n")
     else()
+      # Explicitly disable ASAN for device compilation to prevent malformed
+      # HIP fat binaries on non-xnack GPU targets (e.g. gfx942).
+      string(APPEND _stanza "add_compile_options(\"SHELL:-Xarch_device -fno-sanitize=address\")\n")
       string(APPEND _stanza "message(STATUS \"HOST_ASAN enabled - GPU_TARGETS unchanged\")\n")
     endif()
     # Action at a distance: Signal that the sub-project should extend its build and install
