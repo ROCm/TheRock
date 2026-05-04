@@ -7,7 +7,7 @@
 # This improves compatibility with ccache and sccache:
 # https://github.com/ccache/ccache/issues/1040
 if(WIN32 AND NOT DEFINED CMAKE_MSVC_DEBUG_INFORMATION_FORMAT)
-  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>")
+  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "Embedded")
 endif()
 
 if(WIN32 AND NOT MSVC AND NOT THEROCK_DISABLE_MSVC_CHECK)
