@@ -13,9 +13,17 @@ if(THEROCK_ENABLE_ROCJITSU)
   # hardware.
   ##############################################################################
 
+  if(EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu/CMakeLists.txt")
+    set(_rocjitsu_source_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu")
+  elseif(EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/experimental/rocjitsu/CMakeLists.txt")
+    set(_rocjitsu_source_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/experimental/rocjitsu")
+  else()
+    message(FATAL_ERROR "rocjitsu source directory not found under rocm-systems/emulation or rocm-systems/experimental")
+  endif()
+
   therock_cmake_subproject_declare(rocjitsu
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/experimental/rocjitsu"
+    EXTERNAL_SOURCE_DIR "${_rocjitsu_source_dir}"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu"
     BACKGROUND_BUILD
     CMAKE_ARGS
