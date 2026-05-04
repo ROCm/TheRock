@@ -1,0 +1,35 @@
+From 7c68d1f30ff14cb2caff1c468b89181083cdd507 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Sun, 3 May 2026 18:38:49 -0700
+Subject: [PATCH] hipBLAS: Return gtest status on Windows
+
+Changes:
+
+- remove the Windows std::quick_exit workaround from hipblas-test because it reports exit code 3 even after all GTest cases pass in TheRock CI
+
+- keep the explicit HIP synchronize/reset cleanup before returning the GTest status
+
+Claude Code
+---
+ projects/hipblas/clients/gtest/hipblas_gtest_main.cpp | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/projects/hipblas/clients/gtest/hipblas_gtest_main.cpp b/projects/hipblas/clients/gtest/hipblas_gtest_main.cpp
+index 788c0f412d..ec26014fff 100644
+--- a/projects/hipblas/clients/gtest/hipblas_gtest_main.cpp
++++ b/projects/hipblas/clients/gtest/hipblas_gtest_main.cpp
+@@ -350,11 +350,5 @@ int main(int argc, char** argv)
+     (void)hipDeviceSynchronize();
+     (void)hipDeviceReset();
+ 
+-#ifdef WIN32
+-    // Use quick_exit() to bypass C++ static destructors and atexit() handlers.
+-    // Post-main cleanup in linked DLLs (HIP runtime) crash in comgr
+-    std::quick_exit(status);
+-#else
+     return status;
+-#endif
+ }
+-- 
+2.53.0
+
