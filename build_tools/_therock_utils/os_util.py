@@ -3,7 +3,8 @@
 
 """OS-level utility functions.
 
-Workarounds for platform-specific quirks, particularly Windows file locking.
+These include workarounds for platform-specific quirks, particularly Windows
+file locking.
 """
 
 from pathlib import Path
@@ -11,7 +12,7 @@ import shutil
 import sys
 import time
 
-# Maximum number of attempts to retry removing a directory on Windows.
+# Maximum number of attempts to retry removing a directory.
 RMTREE_MAX_ATTEMPTS: int = 10
 # Base delay between retry attempts in seconds (multiplied by attempt + 2).
 RMTREE_RETRY_DELAY_SECONDS: float = 0.5
@@ -24,10 +25,10 @@ def rmtree_with_retry(
     max_attempts: int = RMTREE_MAX_ATTEMPTS,
     retry_delay_seconds: float = RMTREE_RETRY_DELAY_SECONDS,
 ) -> None:
-    """Remove a directory tree, retrying on PermissionError (Windows file locks).
+    """Remove a directory tree, retrying on PermissionError (e.g. Windows locks).
 
     On Windows, files may be temporarily locked by antivirus scanners, search
-    indexers, or other processes.  A short retry loop avoids flaky failures in
+    indexers, or other processes. A short retry loop avoids flaky failures in
     CI builds where parallel jobs can hold transient file handles.
     """
     for attempt in range(max_attempts):
