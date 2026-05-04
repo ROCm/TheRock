@@ -147,7 +147,7 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
     record_path = record_pkg_file.locate()
 
     # Find the tarfile.
-    tarfile_path, tarfile_mode = find_tarfile(rocm_sdk_devel_path)
+    tarfile_path, tarfile_mode = _find_tarfile(rocm_sdk_devel_path)
     if not tarfile_path:
         raise ImportError(
             f"Expected to find _devel.tar or _devel.tar.xz in {rocm_sdk_devel_path}"
