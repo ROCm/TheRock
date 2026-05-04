@@ -209,15 +209,13 @@ def run_therock_ci(
     Passes shell-joined command lines so run-therock-ci can set CTEST_CONFIGURE_COMMAND,
     CTEST_BUILD_COMMAND, and CMAKE_CTEST_ARGUMENTS consistently with local runs.
     """
+    ROCPROFILER_SDK_CI_SCRIPT = ROCPROFILER_SDK_TESTS_PATH / "scripts" / "run-therock-ci.py"
     ctest_args = (
         ctest_cmd[1:] if ctest_cmd and ctest_cmd[0] == "ctest" else list(ctest_cmd)
     )
     argv = [
         sys.executable,
-        str(
-            _REPO_ROOT
-            / "rocm-systems/projects/rocprofiler-sdk/source/scripts/run-therock-ci.py"
-        ),
+        str(ROCPROFILER_SDK_CI_SCRIPT),
         "--configure-cmd",
         shlex.join(cmake_config_cmd),
         "--build-cmd",
