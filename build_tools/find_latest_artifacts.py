@@ -44,7 +44,7 @@ from github_actions.github_actions_api import (
 def find_latest_artifacts(
     artifact_groups: list[str],
     github_repository_name: str = "ROCm/TheRock",
-    workflow_file_name: str = "ci.yml",
+    workflow_file_name: str = "multi_arch_ci.yml",
     platform: str = platform_module.system().lower(),
     branch: str = "main",
     max_commits: int = 50,
@@ -140,13 +140,13 @@ def main(argv: list[str] | None = None) -> int:
         "--repo",
         type=str,
         default="ROCm/TheRock",
-        help="Repository in 'owner/repo' format (default: detect from git remote)",
+        help="Repository in 'owner/repo' format",
     )
     parser.add_argument(
         "--workflow",
         type=str,
-        default="ci.yml",
-        help="Workflow filename that produces artifacts (default: infer from repo, e.g. ci.yml in TheRock)",
+        default="multi_arch_ci.yml",
+        help="Workflow filename that produces artifacts",
     )
     parser.add_argument(
         "--platform",
