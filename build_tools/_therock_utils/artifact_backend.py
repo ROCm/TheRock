@@ -124,7 +124,6 @@ class LocalDirectoryBackend(ArtifactBackend):
     def __init__(self, staging_dir: Path, output_root: WorkflowOutputRoot):
         self.staging_dir = Path(staging_dir)
         self.output_root = output_root
-        self.base_path.mkdir(parents=True, exist_ok=True)
 
     @property
     def base_path(self) -> Path:
