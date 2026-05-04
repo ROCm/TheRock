@@ -67,6 +67,31 @@ skip_tests = {
         "torch": [
             "test_cpp_warnings_have_python_context_cuda",
         ],
+        "utils": [
+            # ROCm devel/runtime-dependent UT. Skip in the PyTorch full-suite lane;
+            # this is expected to run in the separate ROCm devel UT step.
+            "test_load_standalone",
+        ],
+        "multiprocessing": [
+            # ROCm devel/runtime-dependent UTs. Skip in the PyTorch full-suite
+            # lane; these are expected to run in the separate ROCm devel UT step.
+            "(test_fs and not test_fs_)",
+            "test_fs_is_shared",
+            "test_fs_pool",
+            "test_fs_preserve_sharing",
+            "test_fs_sharing",
+        ],
+        "serialization": [
+            # TestSerialization - NJT weights_only import check
+            # TestOldSerialization - CI env assertion
+            "test_debug_set_in_ci",
+        ],
+        "modules": [
+            # TestModuleCUDA - CTCLoss cpu/gpu parity scalar mismatch
+            "test_cpu_gpu_parity_nn_CTCLoss_cuda_float32",
+            # TestModuleCUDA - CTCLoss forward scalar mismatch
+            "test_forward_nn_CTCLoss_cuda_float32",
+        ],
     },
     "gfx942": {
         "cuda": [
