@@ -79,7 +79,11 @@ except ImportError:
 
 
 def upload_python_files(
-    input_dir: Path, bucket_name: str, bucket_prefix: str, execute: bool
+    input_dir: Path,
+    bucket_name: str,
+    bucket_prefix: str,
+    execute: bool,
+    multi_arch: bool = False,
 ) -> int:
     """Upload Python package files to S3 bucket.
 
@@ -125,7 +129,10 @@ def upload_python_files(
         print(f"  Found {len(files_to_upload)} file(s) to upload:")
 
         for file_path in sorted(files_to_upload):
-            s3_key = f"{bucket_prefix}{arch}/{file_path.name}"
+            if multi_arch:
+                s3_key = f"{bucket_prefix}{file_path.name}"
+            else:
+                s3_key = f"{bucket_prefix}{arch}/{file_path.name}"
 
             if execute:
                 try:
@@ -247,6 +254,13 @@ Safety Features:
     )
 
     parser.add_argument(
+        "--multi-arch",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Upload to multi-arch flat layout (no arch subdirectories)",
+    )
+
+    parser.add_argument(
         "--bucket",
         default="therock-testing-bucket",
         help="S3 bucket name for Python packages (default: therock-testing-bucket). You probably want to use therock-release-python",
@@ -295,9 +309,15 @@ Safety Features:
 
     if args.use_release_buckets:
         args.bucket = "therock-release-python"
-        args.bucket_prefix = "v3/rocm/whl/"
-        args.tarball_bucket = "therock-release-tarball"
-        args.tarball_bucket_prefix = "v3/rocm/tarball/"
+
+        if args.multi_arch:
+            args.bucket_prefix = "v3/whl-multi-arch/"
+            args.tarball_bucket = "therock-release-tarball"
+            args.tarball_bucket_prefix = "v3/tarball-multi-arch/"
+        else:
+            args.bucket_prefix = "v3/whl/"
+            args.tarball_bucket = "therock-release-tarball"
+            args.tarball_bucket_prefix = "v3/tarball/"
 
     # Validate input directory
     if not args.input_dir.exists():
@@ -384,12 +404,20 @@ def upload_release_packages(
     try:
         if upload_python:
             wheels_uploaded = upload_python_files(
-                input_dir, bucket_name, bucket_prefix, execute
+                input_dir,
+                bucket_name,
+                bucket_prefix,
+                execute,
+                multi_arch=args.multi_arch,
             )
 
         if upload_tarballs:
             tarballs_uploaded = upload_tarball_files(
-                input_dir, tarball_bucket_name, tarball_bucket_prefix, execute
+                input_dir,
+                tarball_bucket_name,
+                tarball_bucket_prefix,
+                execute,
+                multi_arch=args.multi_arch,
             )
 
     except NoCredentialsError:
