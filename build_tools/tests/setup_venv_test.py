@@ -168,6 +168,7 @@ class InstallPackagesTest(unittest.TestCase):
 
         cmd = mock_run.call_args[0][0]
         self.assertIn("--no-index", cmd)
+        self.assertIn("--no-build-isolation", cmd)
         self.assertIn("--find-links=https://bucket/run-123/index.html", cmd)
         self.assertFalse(any("--index-url" in str(a) for a in cmd))
 

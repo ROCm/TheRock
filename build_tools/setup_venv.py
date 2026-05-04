@@ -110,9 +110,23 @@ def update_venv(venv_dir: Path, use_uv: bool = False):
         return
 
     # pip logs warnings about wanting to update, so we'll do that for it.
+    # Keep setuptools/wheel available so artifact-only installs of ROCm sdists
+    # can use --no-build-isolation without resolving build dependencies from
+    # the package index being tested.
     log("")
     python_exe = find_venv_python_exe(venv_dir)
-    run_command([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"])
+    run_command(
+        [
+            str(python_exe),
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "pip",
+            "setuptools",
+            "wheel",
+        ]
+    )
 
 
 def activate_venv_in_gha(venv_dir: Path):
@@ -190,6 +204,7 @@ def install_packages_into_venv(
 
     if index_url == "":
         pip_install_cmd.append("--no-index")
+        pip_install_cmd.append("--no-build-isolation")
     elif index_url:
         # Join index with subdir.
         if index_subdir:
