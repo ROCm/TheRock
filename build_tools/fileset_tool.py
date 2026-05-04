@@ -22,7 +22,7 @@ from pathlib import Path
 import sys
 import shutil
 
-from _therock_utils.archive_util import open_archive
+from _therock_utils.archive_util import open_archive_for_write
 from _therock_utils.artifacts import ArtifactPopulator
 import _therock_utils.artifact_builder as artifact_builder
 from _therock_utils.hash_util import calculate_hash, write_hash
@@ -84,11 +84,8 @@ def do_artifact_archive(args):
         output_path.unlink()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open_archive(
-        output_path,
-        "w",
-        compression_type=args.compression_type,
-        compression_level=args.compression_level,
+    with open_archive_for_write(
+        output_path, args.compression_type, args.compression_level
     ) as arc:
         for artifact_path in args.artifact:
             manifest_path: Path = artifact_path / "artifact_manifest.txt"

@@ -54,7 +54,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Set
 
-from _therock_utils.archive_util import open_archive
+from _therock_utils.archive_util import open_archive_for_read
 from _therock_utils.cmake_amdgpu_targets import (
     amdgpu_family_map,
     expand_families,
@@ -294,7 +294,7 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
             if output_dir.exists():
                 shutil.rmtree(output_dir)
             log(f"  ++ Extracting {archive_path.name}")
-            with open_archive(archive_path) as tf:
+            with open_archive_for_read(archive_path) as tf:
                 tf.extractall(output_dir, filter="tar")
 
         if request.delete_archive:

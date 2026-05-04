@@ -29,7 +29,7 @@ import os
 import re
 from pathlib import Path, PurePosixPath
 
-from .archive_util import open_archive
+from .archive_util import open_archive_for_read
 from .pattern_match import PatternMatcher, MatchPredicate
 
 
@@ -184,7 +184,7 @@ class ArtifactPopulator:
                     pm.copy_to(destdir=destdir, verbose=self.verbose, remove_dest=False)
             else:
                 # Process as an archive file.
-                with open_archive(artifact_path) as tf:
+                with open_archive_for_read(artifact_path) as tf:
                     self.on_artifact_archive(artifact_path)
                     # Read manifest first.
                     manifest_member = tf.next()
