@@ -8,7 +8,8 @@ TEST_COMPONENT: Job name of the component to test (e.g., "miopen", "rocrand", "h
     This is automatically set by the GitHub Actions workflow from the job_name field.
     The script maps these job names to actual test directory names (e.g., "miopen" -> "MIOpen")
     Defaults to "miopen" if not set.
-TEST_TYPE: "smoke" runs tests with "quick" category, otherwise runs "standard" category
+TEST_TYPE: Test category to run - one of "quick", "standard", "comprehensive", or "full".
+    Defaults to "quick". Invalid values fall back to "quick" with an error message.
 AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
 
 The script discovers GPU-specific labels via ctest --print-labels and runs the appropriate tests for the current GPU architecture.
@@ -23,13 +24,11 @@ import logging
 import shlex
 from pathlib import Path
 
-sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
-from github_actions_utils import find_matching_gpu_arch
-
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-TEST_TYPE = os.getenv("TEST_TYPE", "smoke")
+VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
+TEST_TYPE = os.getenv("TEST_TYPE", "quick")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 # Map job names to actual test directory names
@@ -37,6 +36,7 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 # and need to be mapped to the actual directory names in THEROCK_BIN_DIR
 COMPONENT_DIR_MAPPING = {
     "miopen": "MIOpen",
+    "rocblas": "rocblas",
     "rocrand": "rocRAND",
     "hiprand": "hipRAND",
     "rocthrust": "rocthrust",
@@ -46,6 +46,7 @@ COMPONENT_DIR_MAPPING = {
     "hipdnn": "hipdnn",
     "hipdnn-samples": "hipdnn_samples",
     "miopen_plugin": "miopen_legacy_plugin",
+    "hipsparselt": "hipsparselt",
     # Add more mappings as needed
 }
 
@@ -85,24 +86,107 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
+
+# Component-specific ENV VARs/PATHs applied on top of defaults.
+#
+# - test_dir: The default TEST_DIR for ctest is THEROCK_BIN_DIR/TEST_COMPONENT.
+#   If any component needs to override the default TEST_DIR, it can use test_dir
+#   by specifying the path relative to ROCM_PATH.
+#
+# - additional_env_paths: Additional paths to prepend to the existing PATH, LD_LIBRARY_PATH, etc.
+#   relative to ROCM_PATH
+
+COMPONENT_OVERRIDES = {
+    # For rocprofiler-compute, we need the following additional paths:
+    # - PATH=ROCM_PATH/bin:$PATH
+    # - LD_LIBRARY_PATH=ROCM_PATH/lib:ROCM_PATH/lib/rocm_sysdeps/lib:$LD_LIBRARY_PATH
+    "rocprofiler-compute": {
+        "test_dir": ["libexec", "rocprofiler-compute"],
+        "additional_env_paths": {
+            "PATH": [["bin"]],
+            "LD_LIBRARY_PATH": [
+                ["lib"],
+                ["lib", "rocm_sysdeps", "lib"],
+            ],
+        },
+    },
+}
+
+
+def _prepend_env_paths(env, base_path, additional_paths_dict):
+    """Prepend paths (relative to base_path) to environment variables."""
+    for env_key, path_parts_list in additional_paths_dict.items():
+        new_paths = [str(base_path.joinpath(*parts)) for parts in path_parts_list]
+        existing_path = env.get(env_key, "")
+        env[env_key] = ":".join(filter(None, new_paths + [existing_path]))
+
+
+def apply_component_overrides(job_name, rocm_path, default_test_dir, env):
+    """Apply component-specific overrides for test_dir and environment variables."""
+    overrides = COMPONENT_OVERRIDES.get(job_name)
+    if not overrides:
+        return default_test_dir
+
+    test_dir = default_test_dir
+    if "test_dir" in overrides:
+        test_dir = str(rocm_path.joinpath(*overrides["test_dir"]))
+
+    _prepend_env_paths(env, rocm_path, overrides.get("additional_env_paths", {}))
+    return test_dir
+
+
+TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
+TEST_DIR = apply_component_overrides(
+    test_component_job_name, ROCM_PATH, TEST_DIR, environ_vars
+)
+
 logging.basicConfig(level=logging.INFO)
 ##############################################
 
 
-def get_available_gpu_suite_tests():
+def find_matching_gpu_arch(gpu_arch: str, available_gpu_archs: set[str]) -> str | None:
     """
-    Get all available GPU architecture labels from ctest --print-labels.
+    Find the most specific GPU architecture in the set that matches the given GPU.
 
-    Parses labels of the form ex_gpu_{gpu_arch} (e.g. ex_gpu_gfx110X, ex_gpu_gfx950).
-    Returns a set of gpu_arch strings (e.g., 'gfx110X', 'gfx115X', 'gfx950').
+    Tries in order from most specific to least specific:
+    # Example:
+    # find_matching_gpu_arch('gfx1151', {'gfx1151', 'gfx115X', 'gfx11X'}) gives 'gfx1151'
+    # find_matching_gpu_arch('gfx1151', {'gfx1150', 'gfx94X', 'gfx11X'}) gives 'gfx11X'
+    - Wildcard matches (gfx115X, gfx11X, etc.)
+
+    Returns the matching architecture string or None if no match found.
     """
-    test_dir = Path(THEROCK_BIN_DIR) / TEST_COMPONENT
+    if gpu_arch in available_gpu_archs:
+        return gpu_arch
+
+    # Start matching from the end (gfx115X) and go back till the 5th character (gfx11X)
+    # Return the top matching pattern
+    for i in range(len(gpu_arch) - 1, 4, -1):
+        pattern = gpu_arch[:i] + "X"
+        if pattern in available_gpu_archs:
+            return pattern
+
+    return None
+
+
+def check_available_labels():
+    """
+    Discover GPU architecture labels and category exclude labels from ctest --print-labels.
+
+    Parses labels of the form:
+    - ex_gpu_{gpu_arch} (e.g. ex_gpu_gfx110X, ex_gpu_gfx950)
+    - {category}_exclude (e.g. quick_exclude, standard_exclude)
+
+    Returns (gpu_archs, exclude_labels) where:
+    - gpu_archs is a set of gpu_arch strings (e.g., 'gfx110X', 'gfx115X', 'gfx950')
+    - exclude_labels is a set of exclude label strings (e.g., 'quick_exclude', 'standard_exclude')
+    """
+    test_dir = Path(TEST_DIR)
     if not test_dir.exists() or not test_dir.is_dir():
         print(f"Error: Test directory does not exist: {test_dir}", file=sys.stderr)
         sys.exit(1)
 
     try:
-        # Ensure the component has at least one test
         list_result = subprocess.run(
             ["ctest", "-N", "--test-dir", str(test_dir)],
             capture_output=True,
@@ -129,15 +213,19 @@ def get_available_gpu_suite_tests():
         )
 
         gpu_archs = set()
-        prefix = "ex_gpu_"
+        exclude_labels = set()
+        gpu_prefix = "ex_gpu_"
+        exclude_suffix = "_exclude"
         for line in result.stdout.splitlines():
             label = line.strip()
-            if label.startswith(prefix):
-                gpu_arch = label[len(prefix) :]
+            if label.startswith(gpu_prefix):
+                gpu_arch = label[len(gpu_prefix) :]
                 if gpu_arch.startswith("gfx"):
                     gpu_archs.add(gpu_arch)
+            elif label.endswith(exclude_suffix):
+                exclude_labels.add(label)
 
-        return gpu_archs
+        return gpu_archs, exclude_labels
     except subprocess.CalledProcessError as e:
         print(f"Error running ctest --print-labels: {e}", file=sys.stderr)
         sys.exit(1)
@@ -149,13 +237,45 @@ def get_available_gpu_suite_tests():
         sys.exit(1)
 
 
-def build_ctest_command(category, gpu_arch, available_gpu_archs):
+def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels):
     """
     Build the appropriate ctest command based on the category and GPU architecture.
 
     Returns a list of command arguments suitable for subprocess.run()
     """
-    cmd = ["ctest", "-L", category]
+    cmd = ["ctest"]
+
+    # Collect all exclude patterns into a list so they can be combined into
+    # a single -LE regex.  Multiple -LE flags are ANDed by ctest, which would
+    # only exclude tests matching ALL patterns.  We need OR semantics instead.
+    le_patterns = []
+    include_labels = [category]
+
+    # Exclude tests labeled with {category}_exclude if that label exists
+    category_exclude_label = f"{category}_exclude"
+    if category_exclude_label in exclude_labels:
+        le_patterns.append(category_exclude_label)
+        print(f"# Excluding tests with label: {category_exclude_label}")
+
+    if gpu_arch.lower() in ["generic", "none", ""]:
+        le_patterns.append("ex_gpu")
+    else:
+        # Find the appropriate GPU suite
+        matching_arch = find_matching_gpu_arch(gpu_arch, available_gpu_archs)
+
+        if matching_arch:
+            gpu_label = f"ex_gpu_{matching_arch}"
+            include_labels.append(gpu_label)
+            print(f"# Using GPU suite label: {gpu_label}")
+        else:
+            le_patterns.append("ex_gpu")
+            print(f"# No GPU suite found for {gpu_arch}, excluding all ex_gpu tests")
+
+    # Add label options together for readability: -L ... -LE ...
+    for label in include_labels:
+        cmd.extend(["-L", label])
+    if le_patterns:
+        cmd.extend(["-LE", "|".join(le_patterns)])
 
     # Add common ctest parameters
     cmd.extend(
@@ -166,41 +286,26 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
             "--timeout",
             str(ctest_timeout_seconds),
             "--test-dir",
-            f"{THEROCK_BIN_DIR}/{TEST_COMPONENT}",
-            "-V",  # Always run in verbose mode
-            # Shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)
+            TEST_DIR,
+            "-V",
             "--tests-information",
             f"{SHARD_INDEX},,{TOTAL_SHARDS}",
         ]
     )
 
-    if gpu_arch.lower() in ["generic", "none", ""]:
-        # For generic/unspecified GPU, exclude all GPU-specific suite tests
-        cmd.extend(["-LE", "ex_gpu"])
-        return cmd
-
-    # Find the appropriate GPU suite
-    matching_arch = find_matching_gpu_arch(gpu_arch, available_gpu_archs)
-
-    if matching_arch:
-        # Run the specific GPU suite using the ex_gpu label
-        gpu_label = f"ex_gpu_{matching_arch}"
-        cmd.extend(["-L", gpu_label])
-        print(f"# Using GPU suite label: {gpu_label}")
-    else:
-        # No specific GPU suite found, run standard tests excluding all GPU-specific ones
-        cmd.extend(["-LE", "ex_gpu"])
-        print(f"# No GPU suite found for {gpu_arch}, excluding all ex_gpu tests")
-
     return cmd
 
 
 def main():
-    # Use only two categories for now - quick and standard - depending on TEST_TYPE.
-    if TEST_TYPE and TEST_TYPE.lower() == "smoke":
+    category = TEST_TYPE.lower() if TEST_TYPE else "quick"
+    if category not in VALID_TEST_CATEGORIES:
+        print(
+            f"ERROR: Invalid TEST_TYPE '{TEST_TYPE}'. "
+            f"Must be one of: {', '.join(sorted(VALID_TEST_CATEGORIES))}. "
+            f"Falling back to 'quick'.",
+            file=sys.stderr,
+        )
         category = "quick"
-    else:
-        category = "standard"
 
     # Use AMDGPU_FAMILIES from environment variable, extract gfx<xxx> part
     gpu_arch = ""
@@ -215,26 +320,26 @@ def main():
                 f"# Warning: Could not extract GPU architecture from AMDGPU_FAMILIES='{AMDGPU_FAMILIES}', using default '{gpu_arch}'"
             )
 
-    print(
-        f"# TEST_COMPONENT: {test_component_job_name} -> Test Directory: {TEST_COMPONENT}"
-    )
+    print(f"# TEST_COMPONENT: {test_component_job_name} -> Test Directory: {TEST_DIR}")
     print(f"# TEST_TYPE: {TEST_TYPE} -> Category: {category}")
     print(f"# AMDGPU_FAMILIES: {AMDGPU_FAMILIES} -> GPU Architecture: {gpu_arch}")
     print()
 
-    # Get available GPU suite tests from ctest
-    print("# Discovering available GPU suite tests...")
-    available_gpu_archs = get_available_gpu_suite_tests()
+    # Discover available labels from ctest
+    print("# Discovering available test labels...")
+    available_gpu_archs, exclude_labels = check_available_labels()
 
     if available_gpu_archs:
         print(f"# Found {len(available_gpu_archs)} GPU suite test(s)")
         print(f"# Available GPU architectures: {sorted(available_gpu_archs)}")
     else:
         print("# Warning: No GPU specific test suites available")
+    if exclude_labels:
+        print(f"# Found exclude labels: {sorted(exclude_labels)}")
     print()
 
     # Build the ctest command
-    cmd = build_ctest_command(category, gpu_arch, available_gpu_archs)
+    cmd = build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
 
     print(f"# Running: {' '.join(cmd)}")
     print()

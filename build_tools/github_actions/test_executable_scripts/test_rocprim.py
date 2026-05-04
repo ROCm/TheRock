@@ -36,7 +36,7 @@ TEST_TO_IGNORE = {
     },
 }
 
-SMOKE_TESTS = [
+QUICK_TESTS = [
     "*ArgIndexIterator",
     "*BasicTests.GetVersion",
     "*BatchMemcpyTests/*",
@@ -109,8 +109,6 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
-    "--timeout",
-    "900",
     "--repeat",
     "until-pass:6",
     # shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)
@@ -122,12 +120,12 @@ if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILI
     ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
     cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 
-# If smoke tests are enabled, we run smoke tests only.
+# If quick tests are enabled, we run quick tests only.
 # Otherwise, we run the normal test suite
 environ_vars = os.environ.copy()
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
-    environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS)
+if test_type == "quick":
+    environ_vars["GTEST_FILTER"] = ":".join(QUICK_TESTS)
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 

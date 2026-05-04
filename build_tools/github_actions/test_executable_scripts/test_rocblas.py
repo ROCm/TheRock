@@ -12,9 +12,9 @@ THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-# Importing is_asan from github_actions_utils.py
+# Importing is_asan from github_actions_api.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import is_asan
+from github_actions_api import is_asan
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -29,13 +29,13 @@ if is_asan():
 
 logging.basicConfig(level=logging.INFO)
 
-# If smoke tests are enabled, we run smoke tests only.
+# If quick tests are enabled, we run quick tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
+if test_type == "quick":
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 else:
-    # only running smoke tests due to openBLAS issue: https://github.com/ROCm/TheRock/issues/1605
+    # only running quick tests due to openBLAS issue: https://github.com/ROCm/TheRock/issues/1605
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 
 cmd = [f"{THEROCK_BIN_DIR}/rocblas-test"] + test_filter
@@ -45,4 +45,6 @@ subprocess.run(
     cmd,
     cwd=THEROCK_DIR,
     check=True,
+    env=environ_vars,
+    stderr=subprocess.STDOUT,
 )

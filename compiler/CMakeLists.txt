@@ -132,9 +132,10 @@ if(THEROCK_ENABLE_COMPILER)
     INTERFACE_INSTALL_RPATH_DIRS
       "lib/llvm/lib"
   )
-  # Note that we do not trigger on LLVM source changes because the monorepo is
-  # too large to glob like that. Consider having a project dev mode option for
-  # enabling better ergonomics here.
+  # LLVM is too large to glob by default; opt in with THEROCK_DEV_PROJECTS.
+  if(THEROCK_DEV_PROJECTS AND "amd-llvm" IN_LIST THEROCK_DEV_PROJECTS)
+    therock_cmake_subproject_glob_c_sources(amd-llvm SUBDIRS .)
+  endif()
 
   therock_cmake_subproject_provide_package(amd-llvm AMDDeviceLibs lib/llvm/lib/cmake/AMDDeviceLibs)
   therock_cmake_subproject_provide_package(amd-llvm Clang lib/llvm/lib/cmake/clang)
@@ -162,8 +163,6 @@ if(THEROCK_ENABLE_COMPILER)
       # symbols inside libamd_comgr.so, preventing symbol interposition without
       # requiring namespace isolation via dlmopen.
       -DCOMGR_STATIC_LLVM=ON
-      # TODO: Currently unstable. Enable in >6.4.
-      -DCOMGR_DISABLE_SPIRV=ON
       -DTHEROCK_HIP_MAJOR_VERSION=${THEROCK_HIP_MAJOR_VERSION}
       -DTHEROCK_HIP_MINOR_VERSION=${THEROCK_HIP_MINOR_VERSION}
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"

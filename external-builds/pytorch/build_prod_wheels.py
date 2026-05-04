@@ -68,17 +68,22 @@ build_prod_wheels.py \
     --index-url https://rocm.devreleases.amd.com/v2/gfx110X-all/
 ```
 
-3. Build torch, torchaudio and torchvision for a single gfx architecture.
+3. Build torch, torchaudio and torchvision for one or more gfx architectures.
 
-Typical usage to build with default architecture from rocm-sdk targets:
+Target architectures are resolved in priority order from `--pytorch-rocm-arch`
+(comma-separated), the `PYTORCH_ROCM_ARCH` environment variable, and finally
+`rocm-sdk targets` from the installed rocm-sdk-core. Passing the flag or env
+var explicitly is preferred; see TODO on get_rocm_sdk_targets.
 
 ```
 # On Linux, using default paths for each repository:
 python build_prod_wheels.py build \
+    --pytorch-rocm-arch gfx942 \
     --output-dir $HOME/tmp/pyout
 
 # On Windows, using shorter custom paths:
 python build_prod_wheels.py build ^
+    --pytorch-rocm-arch gfx1201 ^
     --output-dir %HOME%/tmp/pyout ^
     --pytorch-dir C:/b/pytorch ^
     --pytorch-audio-dir C:/b/audio ^
@@ -141,18 +146,25 @@ import shutil
 import shlex
 import subprocess
 import sys
+import tarfile
 import tempfile
 import textwrap
+import urllib.request
 
 script_dir = Path(__file__).resolve().parent
 
 is_windows = platform.system() == "Windows"
 
+# LLVM download URL for triton-windows
+LLVM_BASE_URL = "https://oaitriton.blob.core.windows.net/public/llvm-builds"
+
 # List of library preloads for Linux to generate into _rocm_init.py
 LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amdhip64",
+    "rocprofiler-sdk",  # Linux only: needed by torch since kineto uses rocprofiler-sdk.
     "rocprofiler-sdk-roctx",  # Linux only for the moment.
+    # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
     "roctracer64",  # Linux only for the moment.
     "roctx64",  # Linux only for the moment.
     "hiprtc",
@@ -168,6 +180,7 @@ LINUX_LIBRARY_PRELOADS = [
     "hipdnn",
     "rocm_sysdeps_liblzma",
     "rocm-openblas",
+    "rocm_smi64",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py
@@ -219,6 +232,15 @@ def get_rocm_sdk_version() -> str:
     ).strip()
 
 
+# TODO(#4687): Remove this fallback once every caller passes --pytorch-rocm-arch
+# (or PYTORCH_ROCM_ARCH) explicitly. Reading dist_amdgpu_targets from the
+# installed rocm-sdk-core misreports targets in two known cases:
+#   1. Multi-arch kpack-split builds share one superset rocm-sdk-core, so every
+#      per-family job would compile torch for every arch in the superset.
+#   2. Prebuilt-reuse flows where the installed rocm-sdk-core's targets do not
+#      match the build intent (e.g. issue #4687).
+# This fallback is kept for legacy CI and release workflows that have not yet
+# been updated to plumb --pytorch-rocm-arch through from the caller.
 def get_rocm_sdk_targets() -> str:
     # Run `rocm-sdk targets` to get the default architecture
     targets = capture([sys.executable, "-m", "rocm_sdk", "targets"], cwd=Path.cwd())
@@ -256,6 +278,68 @@ def get_version_suffix_for_installed_rocm_package() -> str:
     version_suffix = f"+{base_name}{str(parsed_version).replace('+','-')}"
     print(f"Version suffix is: {version_suffix}")
     return version_suffix
+
+
+def get_triton_windows_llvm_hash(triton_dir: Path) -> str:
+    """Read the LLVM hash from triton-windows cmake/llvm-hash.txt."""
+    hash_file = triton_dir / "cmake" / "llvm-hash.txt"
+    if not hash_file.exists():
+        raise RuntimeError(f"LLVM hash file not found: {hash_file}")
+    return hash_file.read_text().strip()
+
+
+def download_llvm_for_triton_windows(triton_dir: Path) -> Path:
+    """Download and extract pre-built LLVM binaries for triton-windows.
+
+    triton-windows requires a specific LLVM version that matches the hash
+    in cmake/llvm-hash.txt. Pre-built binaries are hosted at oaitriton.blob.core.windows.net.
+    """
+    full_hash = get_triton_windows_llvm_hash(triton_dir)
+    short_hash = full_hash[:8]
+
+    llvm_dir = triton_dir.parent / f"llvm-{short_hash}-windows-x64"
+    llvm_hash_marker = llvm_dir / ".llvm-hash"
+
+    if llvm_hash_marker.exists():
+        installed_hash = llvm_hash_marker.read_text().strip()
+        if installed_hash == full_hash:
+            print(f"LLVM already downloaded: {llvm_dir}")
+            return llvm_dir
+
+    if llvm_dir.exists():
+        shutil.rmtree(llvm_dir)
+
+    filename = f"llvm-{short_hash}-windows-x64.tar.gz"
+    download_url = f"{LLVM_BASE_URL}/{filename}"
+
+    print(f"Downloading LLVM for triton-windows...")
+    print(f"  Hash: {short_hash}")
+    print(f"  URL: {download_url}")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        download_path = Path(temp_dir) / filename
+
+        print("  Downloading (this may take a few minutes, ~500MB)...")
+        try:
+            urllib.request.urlretrieve(download_url, download_path)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to download LLVM from {download_url}: {e}\n"
+                "You may need to download manually and extract to "
+                f"{llvm_dir}"
+            )
+
+        print("  Extracting...")
+        with tarfile.open(download_path, "r:gz") as tar:
+            tar.extractall(triton_dir.parent, filter="data")
+
+        if not llvm_dir.exists():
+            raise RuntimeError(f"Extracted LLVM directory not found: {llvm_dir}")
+
+        llvm_hash_marker.write_text(full_hash)
+
+    print(f"  LLVM downloaded to: {llvm_dir}")
+    return llvm_dir
 
 
 def get_rocm_path(path_name: str) -> Path:
@@ -350,7 +434,10 @@ def do_install_rocm(args: argparse.Namespace):
     if args.pip_cache_dir:
         pip_args.extend(["--cache-dir", str(args.pip_cache_dir)])
     rocm_sdk_version = args.rocm_sdk_version if args.rocm_sdk_version else ""
-    pip_args.extend([f"rocm[libraries,devel]{rocm_sdk_version}"])
+    extras = "libraries,devel"
+    if args.rocm_extras:
+        extras += f",{args.rocm_extras}"
+    pip_args.extend([f"rocm[{extras}]{rocm_sdk_version}"])
     run_command(pip_args, cwd=Path.cwd())
     print(f"Installed version: {get_rocm_sdk_version()}")
 
@@ -549,20 +636,28 @@ def do_build(args: argparse.Namespace):
     system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
     print(f"  PATH = {system_path}")
 
-    pytorch_rocm_arch = args.pytorch_rocm_arch
-    if pytorch_rocm_arch is None:
+    # Priority: --pytorch-rocm-arch > PYTORCH_ROCM_ARCH env > `rocm-sdk targets`
+    # fallback (legacy; see TODO on get_rocm_sdk_targets()).
+    pytorch_rocm_arch = args.pytorch_rocm_arch or os.environ.get("PYTORCH_ROCM_ARCH")
+    if pytorch_rocm_arch:
+        print(f"  Using provided PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
+    else:
         pytorch_rocm_arch = get_rocm_sdk_targets()
         print(
             f"  Using default PYTORCH_ROCM_ARCH from rocm-sdk targets: {pytorch_rocm_arch}"
         )
-    else:
-        print(f"  Using provided PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
 
     if not pytorch_rocm_arch:
         raise ValueError(
-            "No --pytorch-rocm-arch provided and rocm-sdk targets returned empty. "
+            "No --pytorch-rocm-arch provided, PYTORCH_ROCM_ARCH not set, and "
+            "rocm-sdk targets returned empty. "
             "Please specify --pytorch-rocm-arch (e.g., gfx942)."
         )
+
+    # PyTorch's CMake consumes PYTORCH_ROCM_ARCH as a CMake-style list, so any
+    # comma-separated input needs to be rewritten with semicolons before
+    # CMake runs — otherwise the whole string is treated as one arch.
+    pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
         cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
@@ -577,6 +672,10 @@ def do_build(args: argparse.Namespace):
         print("Building with ccache, clearing stats first")
         env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
+        if is_windows:
+            # ccache does not support MSVC's /Zi flag. Embedded (/Z7) is needed.
+            # See: https://github.com/ccache/ccache/issues/1040
+            env["CMAKE_MSVC_DEBUG_INFORMATION_FORMAT"] = "Embedded"
         run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
     elif args.use_sccache:
         build_tools_dir = Path(__file__).resolve().parent.parent.parent / "build_tools"
@@ -648,9 +747,61 @@ def do_build(args: argparse.Namespace):
             print(f"ccache --show-stats output:\n{ccache_stats_output}")
 
 
-def do_build_triton(
+def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
+    """Build triton wheel for Windows using triton-windows repository."""
+    print("Building Triton for Windows (using triton-windows repository)")
+
+    llvm_build_dir = download_llvm_for_triton_windows(triton_dir)
+
+    # Prepare environment for triton-windows build.
+    # Note: MSVC environment (vcvars64.bat) must already be set up.
+    windows_env = dict(os.environ)
+    windows_env.update(
+        {
+            "PYTHONUTF8": "1",
+            "LLVM_BUILD_DIR": str(llvm_build_dir),
+            "LLVM_INCLUDE_DIRS": str(llvm_build_dir / "include"),
+            "LLVM_LIBRARY_DIR": str(llvm_build_dir / "lib"),
+            "LLVM_SYSPATH": str(llvm_build_dir),
+            "TRITON_BUILD_PROTON": "OFF",
+            "TRITON_APPEND_CMAKE_ARGS": "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE",
+            # Override package name to "triton" for consistency with Linux
+            "TRITON_WHEEL_NAME": "triton",
+        }
+    )
+
+    print("+++ Installing build dependencies:")
+    run_command(
+        [sys.executable, "-m", "pip", "install", "build", "wheel"],
+        cwd=triton_dir,
+    )
+
+    remove_dir_if_exists(triton_dir / "dist")
+    if args.clean:
+        remove_dir_if_exists(triton_dir / "build")
+
+    print("+++ Building triton:")
+    run_command(
+        [sys.executable, "-m", "build", "--wheel"],
+        cwd=triton_dir,
+        env=windows_env,
+    )
+
+    # Build produces wheel named "triton" (overridden via TRITON_WHEEL_NAME)
+    built_wheel = find_built_wheel(triton_dir / "dist", "triton")
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
+
+    wheel_version = built_wheel.stem.split("-")[1]
+    return f"triton=={wheel_version}"
+
+
+def build_triton_linux(
     args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
 ) -> str:
+    """Build triton wheel for Linux using ROCm/triton repository."""
+    print("Building Triton for Linux (using ROCm/triton repository)")
+
     version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
 
     # Triton's setup.py constructs the final version string by using
@@ -728,6 +879,16 @@ def do_build_triton(
     return f"{triton_wheel_name}=={installed_triton_version}"
 
 
+def do_build_triton(
+    args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
+) -> str:
+    """Build triton wheel. Dispatches to platform-specific build functions."""
+    if is_windows:
+        return build_triton_windows(args, triton_dir)
+    else:
+        return build_triton_linux(args, triton_dir, env)
+
+
 def copy_msvc_libomp_to_torch_lib(pytorch_dir: Path):
     # When USE_OPENMP is set (it is by default), torch_cpu.dll depends on OpenMP.
     #
@@ -782,13 +943,28 @@ def do_build_pytorch(
     is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
     is_pytorch_2_11_or_later = pytorch_build_version_parsed.release[:2] >= (2, 11)
 
-    # aotriton is not supported on certain architectures yet.
-    # gfx906/gfx908/gfx101X/gfx103X: https://github.com/ROCm/TheRock/issues/1925
-    AOTRITON_UNSUPPORTED_ARCHS = ["gfx906", "gfx908", "gfx101", "gfx103"]
+    # aotriton supports a subset of GPU architectures. When at least one
+    # target arch is supported, we enable flash attention and let aotriton's
+    # build system (gpu_targets.py) filter to just the supported ones. The
+    # runtime (check_gpu in sdp_utils.cpp) gracefully falls back to math/CK
+    # backends on unsupported GPUs. We only disable flash attention when
+    # *no* target arch is supported — otherwise aotriton's configure step
+    # fails on the empty target list (https://github.com/ROCm/aotriton/issues/169).
+    #
+    # These prefixes match what aotriton's gpu_targets.py recognizes.
+    # See also the image list in pytorch/cmake/External/aotriton.cmake.
+    AOTRITON_SUPPORTED_ARCH_PREFIXES = ("gfx90a", "gfx942", "gfx950", "gfx11", "gfx12")
     # gfx1152/53: supported in aotriton 0.11.2b+ (https://github.com/ROCm/aotriton/pull/142),
     #   which is pinned by pytorch >= 2.11. Older versions don't include it.
+    aotriton_unsupported_archs_for_version = []
     if not is_pytorch_2_11_or_later:
-        AOTRITON_UNSUPPORTED_ARCHS += ["gfx1152", "gfx1153"]
+        aotriton_unsupported_archs_for_version = ["gfx1152", "gfx1153"]
+    rocm_arch_list = env.get("PYTORCH_ROCM_ARCH", "").split(";")
+    has_aotriton_supported_arch = any(
+        arch.startswith(AOTRITON_SUPPORTED_ARCH_PREFIXES)
+        and arch not in aotriton_unsupported_archs_for_version
+        for arch in rocm_arch_list
+    )
 
     ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
     ## and causes build failures for other PyTorch versions
@@ -824,15 +1000,15 @@ def do_build_pytorch(
         print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
 
         if args.enable_pytorch_flash_attention_linux is None:
-            # Default behavior — determined by if triton is build
-            use_flash_attention = "ON" if triton_requirement else "OFF"
-
-            if any(
-                arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
-            ):
-                use_flash_attention = "OFF"
+            # Default: enable when triton is available AND at least one
+            # target arch is supported by aotriton. When all targets are
+            # unsupported, aotriton can't produce a valid library.
+            use_flash_attention = (
+                "ON" if triton_requirement and has_aotriton_supported_arch else "OFF"
+            )
             print(
-                f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
+                f"Flash Attention default behavior (triton={bool(triton_requirement)},"
+                f" aotriton_arch={has_aotriton_supported_arch}): {use_flash_attention}"
             )
         else:
             # Explicit override: user has set the flag to true/false
@@ -881,12 +1057,12 @@ def do_build_pytorch(
     if is_windows:
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
 
-        use_flash_attention = "0"
-
-        if args.enable_pytorch_flash_attention_windows and not any(
-            arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
-        ):
-            use_flash_attention = "1"
+        use_flash_attention = (
+            "1"
+            if args.enable_pytorch_flash_attention_windows
+            and has_aotriton_supported_arch
+            else "0"
+        )
 
         env.update(
             {
@@ -903,9 +1079,7 @@ def do_build_pytorch(
                 "BUILD_TEST": "0",
             }
         )
-        print(
-            f"  Flash attention enabled: {args.enable_pytorch_flash_attention_windows or not is_windows}"
-        )
+        print(f"  Flash attention enabled: {use_flash_attention == '1'}")
 
     if not is_windows:
         # Prepend the ROCm sysdeps dir so that we use bundled libraries.
@@ -1122,6 +1296,15 @@ def main(argv: list[str]):
             action=argparse.BooleanOptionalAction,
             help="Include pre-release packages (default True)",
         )
+        p.add_argument(
+            "--rocm-extras",
+            default="",
+            help=(
+                "Comma-separated additional extras for rocm package install "
+                "(e.g. 'device-gfx942,device-gfx943'). "
+                "Added alongside the base 'libraries,devel' extras."
+            ),
+        )
 
     sub_p = p.add_subparsers(required=True)
     install_rocm_p = sub_p.add_parser(
@@ -1196,7 +1379,10 @@ def main(argv: list[str]):
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",
-        help="gfx arch to build pytorch with (defaults to rocm-sdk targets)",
+        help="Comma-separated gfx arches to build pytorch for (e.g. 'gfx942' or "
+        "'gfx942,gfx1201'). May also be supplied via the PYTORCH_ROCM_ARCH "
+        "environment variable. Falls back to `rocm-sdk targets` when unset "
+        "(legacy; see TODO on get_rocm_sdk_targets).",
     )
     build_p.add_argument(
         "--pytorch-build-number", default="1", help="Build number to append to version"

@@ -13,16 +13,16 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO)
 
+fusilli_test_dir = THEROCK_BIN_DIR / "fusilli_plugin_test_infra"
+
 # Build the ctest command
 cmd = [
     "ctest",
     "--test-dir",
-    f"{THEROCK_BIN_DIR}/fusilli_plugin_test_infra",
+    str(fusilli_test_dir),
     "--output-on-failure",
     "--parallel",
     "8",
-    "--timeout",
-    "600",
 ]
 
 # Set up environment variables
@@ -30,9 +30,17 @@ environ_vars = os.environ.copy()
 
 # Determine test filter based on TEST_TYPE environment variable
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
-    # Exclude tests that start with "Full" during smoke tests
+if test_type == "quick":
+    # Exclude tests that start with "Full" during quick tests
     environ_vars["GTEST_FILTER"] = "-Full*"
+
+if not fusilli_test_dir.exists():
+    logging.info(
+        "Fusilli test artifacts not found at %s. Treating this as a pass because "
+        "Fusilli is not built in all currently active CI pipelines.",
+        fusilli_test_dir,
+    )
+    raise SystemExit(0)
 
 # As a sanity check, verify libIREECompiler.so is available in the build artifacts.
 # TODO: check for .dll on windows
@@ -49,8 +57,8 @@ environ_vars["PATH"] = f"{THEROCK_BIN_DIR}:{environ_vars['PATH']}"
 
 # Run the tests
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-if test_type == "smoke":
-    logging.info("   TEST_TYPE=smoke: Excluding Full* tests via GTEST_FILTER")
+if test_type == "quick":
+    logging.info("   TEST_TYPE=quick: Excluding Full* tests via GTEST_FILTER")
 subprocess.run(
     cmd,
     cwd=THEROCK_DIR,

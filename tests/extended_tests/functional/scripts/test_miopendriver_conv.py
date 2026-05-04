@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # For functional_base
 from functional_base import FunctionalBase, run_functional_main
 from utils.logger import log
 from utils.exceptions import TestExecutionError
-from github_actions_utils import get_first_gpu_architecture
+from github_actions_api import get_first_gpu_architecture
 
 
 class MIOpenDriverConvTest(FunctionalBase):

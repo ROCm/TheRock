@@ -21,6 +21,7 @@ Usage::
 """
 
 import concurrent.futures
+import fnmatch
 import logging
 import mimetypes
 import os
@@ -86,9 +87,95 @@ class StorageBackend(ABC):
         """
         ...
 
-    # TODO(scotttodd): Add copy_directory for bulk copies (e.g. release
-    # promotion). Needs a list_files method or similar — see ArtifactBackend
-    # consolidation TODO.
+    @abstractmethod
+    def list_files(
+        self,
+        location: StorageLocation,
+        include: list[str] | None = None,
+    ) -> list[StorageLocation]:
+        """List files at a storage location.
+
+        Args:
+            location: The directory location to list.
+            include: Optional glob patterns matched against each file's
+                path relative to *location* (e.g. ``["*.tar.gz"]``).
+                Uses ``fnmatch`` semantics (``*`` matches across ``/``).
+                If ``None``, all files are listed.
+
+        Returns:
+            List of ``StorageLocation`` objects for each matching file.
+        """
+        ...
+
+    def copy_files(self, files: list[tuple[StorageLocation, StorageLocation]]) -> int:
+        """Copy multiple files between storage locations.
+
+        The base implementation copies sequentially.  Subclasses may
+        override to copy in parallel (see ``S3StorageBackend``).
+
+        Args:
+            files: List of ``(source, destination)`` pairs.
+
+        Returns:
+            Number of files copied.
+        """
+        for source, dest in files:
+            self.copy_file(source, dest)
+        return len(files)
+
+    def copy_directory(
+        self,
+        source: StorageLocation,
+        dest: StorageLocation,
+        include: list[str] | None = None,
+    ) -> int:
+        """Copy files from *source* to *dest*, preserving relative paths.
+
+        Lists files at the source location, optionally filters by *include*
+        patterns, and copies each file to the destination with its path
+        relative to *source* preserved.
+
+        Args:
+            source: Source directory location.
+            dest: Destination directory location.
+            include: Optional glob patterns to filter filenames.
+
+        Returns:
+            Number of files copied.
+        """
+        files = self.list_files(source, include=include)
+        # list_files returns full keys. Strip the source prefix to get the
+        # path relative to the source directory, then prepend the dest prefix.
+        #
+        # Example with source="12345-linux/tarballs", dest="v3":
+        #   list_files returns: "12345-linux/tarballs/foo.tar.gz"
+        #   strip prefix:       "foo.tar.gz"
+        #   dest key:            "v3/foo.tar.gz"
+        #
+        # With nested paths (source="run-1/packages", dest="v3"):
+        #   list_files returns: "run-1/packages/gfx94X/rocm.whl"
+        #   strip prefix:       "gfx94X/rocm.whl"
+        #   dest key:            "v3/gfx94X/rocm.whl"
+        source_prefix = source.relative_path
+        if not source_prefix.endswith("/"):
+            source_prefix = source_prefix + "/"
+        pairs = []
+        for f in files:
+            rel = f.relative_path.removeprefix(source_prefix)
+            dest_loc = StorageLocation(dest.bucket, f"{dest.relative_path}/{rel}")
+            pairs.append((f, dest_loc))
+        logger.info(
+            "copy_directory: %s -> %s/%s (%d files)",
+            source.s3_uri,
+            dest.bucket,
+            dest.relative_path,
+            len(pairs),
+        )
+        for src, dst in pairs:
+            logger.info(
+                "  %s -> %s", src.relative_path.removeprefix(source_prefix), dst.s3_uri
+            )
+        return self.copy_files(pairs)
 
     def upload_files(self, files: list[tuple[Path, StorageLocation]]) -> int:
         """Upload multiple files.
@@ -111,6 +198,7 @@ class StorageBackend(ABC):
         source_dir: Path,
         dest: StorageLocation,
         include: list[str] | None = None,
+        exclude: list[str] | None = None,
     ) -> int:
         """Upload files from *source_dir* to *dest*, preserving relative paths.
 
@@ -119,6 +207,9 @@ class StorageBackend(ABC):
             dest: Destination location (the directory root in the backend).
             include: Optional glob patterns to filter files (e.g.
                 ``["*.tar.xz*"]``). If ``None``, all files are uploaded.
+            exclude: Optional glob patterns to reject files (e.g.
+                ``["ccache/*"]``). Applied after *include*. Matched against
+                the file's path relative to *source_dir*.
 
         Returns:
             Number of files uploaded.
@@ -132,6 +223,13 @@ class StorageBackend(ABC):
         files: set[Path] = set()
         for pattern in patterns:
             files.update(source_dir.rglob(pattern))
+
+        if exclude:
+            excluded: set[Path] = set()
+            for pattern in exclude:
+                excluded.update(source_dir.rglob(pattern))
+            files -= excluded
+
         sorted_files = sorted(f for f in files if f.is_file() and not f.is_symlink())
 
         file_list = [
@@ -144,6 +242,15 @@ class StorageBackend(ABC):
             )
             for f in sorted_files
         ]
+        logger.info(
+            "upload_directory: %s -> %s/%s (%d files)",
+            source_dir,
+            dest.bucket,
+            dest.relative_path,
+            len(file_list),
+        )
+        for f, loc in file_list:
+            logger.info("  %s", f.relative_to(source_dir).as_posix())
         return self.upload_files(file_list)
 
 
@@ -185,18 +292,7 @@ def _s3_retry(operation: str, location: str, func, *args, **kwargs):
 
 
 class S3StorageBackend(StorageBackend):
-    """S3 storage backend using boto3.
-
-    The S3 client is lazily initialized on first use.  Credentials are
-    resolved through boto3's default credential chain, which checks (in
-    order): environment variables, shared credentials file
-    (``AWS_SHARED_CREDENTIALS_FILE``), instance metadata, etc.  This
-    matches how the ``aws`` CLI resolves credentials.
-
-    ``upload_files()`` uploads in parallel using a thread pool whose size
-    is controlled by *upload_concurrency* (default: 10, matching the AWS
-    CLI).  The boto3 connection pool is sized to match.
-    """
+    """S3 storage backend using boto3."""
 
     def __init__(
         self,
@@ -210,7 +306,23 @@ class S3StorageBackend(StorageBackend):
 
     @property
     def s3_client(self):
-        """Lazy-initialized boto3 S3 client."""
+        """Lazy-initialized boto3 S3 client.
+
+        Credentials are resolved through boto3's default credential chain
+        (see https://docs.aws.amazon.com/boto3/latest/guide/credentials.html).
+        Relevant locations are checked in order:
+
+        1. Environment variables (``AWS_ACCESS_KEY_ID``,
+           ``AWS_SECRET_ACCESS_KEY``, ``AWS_SESSION_TOKEN``)
+        2. Assume role providers
+        3. Shared credentials file (``AWS_SHARED_CREDENTIALS_FILE``)
+
+        Unlike `S3Backend` in `artifact_backend.py`, this class does
+        **not** fall back to `signature_version=UNSIGNED` when no
+        credentials are found. StorageBackend is used for uploads, which
+        always require authentication. If we later add file listing or
+        downloading support (and not just upload/copy), this should be changed.
+        """
         if self._s3_client is None:
             import boto3
             from botocore.config import Config
@@ -220,6 +332,67 @@ class S3StorageBackend(StorageBackend):
                 config=Config(max_pool_connections=self._upload_concurrency),
             )
         return self._s3_client
+
+    def list_files(
+        self,
+        location: StorageLocation,
+        include: list[str] | None = None,
+    ) -> list[StorageLocation]:
+        prefix = location.relative_path
+        # Ensure prefix ends with / for directory listing (unless empty).
+        if prefix and not prefix.endswith("/"):
+            prefix = prefix + "/"
+
+        paginator = self.s3_client.get_paginator("list_objects_v2")
+        results: list[StorageLocation] = []
+        for page in paginator.paginate(Bucket=location.bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                # Path relative to the listing prefix, used for include
+                # filtering. Matches rglob semantics in upload_directory.
+                # Keys ending in / are S3 directory markers — skip them.
+                rel = key.removeprefix(prefix)
+                if not rel or rel.endswith("/"):
+                    continue
+                if include and not any(fnmatch.fnmatch(rel, p) for p in include):
+                    continue
+                results.append(StorageLocation(location.bucket, key))
+        return results
+
+    def copy_files(self, files: list[tuple[StorageLocation, StorageLocation]]) -> int:
+        """Copy multiple files in parallel.
+
+        Uses a ``ThreadPoolExecutor`` with *upload_concurrency* workers.
+        Each individual file copy retries internally via ``_s3_retry``.
+        If any files still fail after retries, a ``RuntimeError`` is
+        raised listing the failures.
+        """
+        if not files:
+            return 0
+        if self._dry_run or len(files) == 1:
+            return super().copy_files(files)
+
+        failed: list[tuple[StorageLocation, BaseException]] = []
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self._upload_concurrency,
+        ) as pool:
+            future_to_dest = {
+                pool.submit(self.copy_file, src, dst): dst for src, dst in files
+            }
+            for future in concurrent.futures.as_completed(future_to_dest):
+                dest = future_to_dest[future]
+                try:
+                    future.result()
+                except Exception as exc:
+                    failed.append((dest, exc))
+
+        if failed:
+            first_loc, first_exc = failed[0]
+            raise RuntimeError(
+                f"Failed to copy {len(failed)}/{len(files)} files. "
+                f"First failure: {first_loc.s3_uri}: {first_exc}"
+            )
+        return len(files)
 
     def upload_files(self, files: list[tuple[Path, StorageLocation]]) -> int:
         """Upload multiple files in parallel.
@@ -262,6 +435,7 @@ class S3StorageBackend(StorageBackend):
             logger.info("[DRY RUN] %s -> %s (%s)", source, dest.s3_uri, content_type)
             return
 
+        logger.debug("upload %s -> %s (%s)", source, dest.s3_uri, content_type)
         _s3_retry(
             "upload",
             dest.s3_uri,
@@ -278,13 +452,15 @@ class S3StorageBackend(StorageBackend):
             return
 
         copy_source = {"Bucket": source.bucket, "Key": source.relative_path}
+        # Use the managed transfer copy() instead of copy_object() to
+        # support files larger than 5GB via automatic multipart copy.
         _s3_retry(
             "copy",
             f"{source.s3_uri} -> {dest.s3_uri}",
-            self.s3_client.copy_object,
-            Bucket=dest.bucket,
-            Key=dest.relative_path,
-            CopySource=copy_source,
+            self.s3_client.copy,
+            copy_source,
+            dest.bucket,
+            dest.relative_path,
         )
 
 
@@ -303,6 +479,30 @@ class LocalStorageBackend(StorageBackend):
     def __init__(self, staging_dir: Path, *, dry_run: bool = False):
         self._staging_dir = staging_dir
         self._dry_run = dry_run
+
+    def list_files(
+        self,
+        location: StorageLocation,
+        include: list[str] | None = None,
+    ) -> list[StorageLocation]:
+        base = location.local_path(self._staging_dir)
+        if not base.is_dir():
+            return []
+        patterns = include or ["*"]
+        files: set[Path] = set()
+        for p in patterns:
+            files.update(base.rglob(p))
+        return sorted(
+            (
+                StorageLocation(
+                    location.bucket,
+                    f"{location.relative_path}/{f.relative_to(base).as_posix()}",
+                )
+                for f in files
+                if f.is_file()
+            ),
+            key=lambda loc: loc.relative_path,
+        )
 
     def upload_file(self, source: Path, dest: StorageLocation) -> None:
         target = dest.local_path(self._staging_dir)

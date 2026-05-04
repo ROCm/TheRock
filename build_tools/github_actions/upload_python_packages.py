@@ -52,8 +52,8 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
-from generate_local_index import generate_multiarch_indexes
-from github_actions_utils import (
+from generate_local_index import generate_flat_index, generate_multiarch_indexes
+from github_actions_api import (
     gha_append_step_summary,
     gha_set_output,
 )
@@ -96,9 +96,19 @@ def generate_index(dist_dir: Path, multiarch: bool = False, dry_run: bool = Fals
         return
 
     if multiarch:
-        # Multi-arch mode: generate per-family indexes with relative paths
-        log("[INFO] Multi-arch mode: generating per-family indexes")
-        generate_multiarch_indexes(dist_dir)
+        has_subdirs = any(d.is_dir() for d in dist_dir.iterdir())
+        if has_subdirs:
+            log("[INFO] Multi-arch legacy mode: generating per-family indexes")
+            generate_multiarch_indexes(dist_dir)
+        else:
+            # kpack-split flat mode: multiple jobs may append to the same
+            # prefix (ROCm wheels + pytorch wheels). therock-ci-artifacts
+            # generates index.html server-side, so a client-side flat index
+            # would just race with (and briefly shadow) the server view.
+            log(
+                "[INFO] kpack-split flat mode: skipping client-side index "
+                "generation (server-side indexing handles it)"
+            )
     else:
         # Single-arch mode: use existing indexer.py for top-level
         log("[INFO] Single-arch mode: using indexer.py")
@@ -135,9 +145,17 @@ def upload_packages(
     if not package_files:
         raise FileNotFoundError(f"No package files found in {dist_dir}")
 
-    log(f"[INFO] Found {len(package_files)} package files in {dist_dir}:")
+    log(f"[INFO] Found {len(package_files)} top-level package files in {dist_dir}:")
     for f in package_files:
         log(f"  - {f.relative_to(dist_dir)}")
+
+    # Log all files that will actually be uploaded (including subdirectories).
+    all_files = sorted(
+        f for f in dist_dir.rglob("*") if f.is_file() and not f.is_symlink()
+    )
+    log(f"[INFO] Uploading {len(all_files)} total files to {packages_loc.s3_uri}:")
+    for f in all_files:
+        log(f"  {f.relative_to(dist_dir).as_posix()}")
 
     count = backend.upload_directory(dist_dir, packages_loc)
     log(f"[INFO] Uploaded {count} files")
@@ -150,11 +168,14 @@ def write_gha_upload_summary(
 
     Args:
         packages_loc: Storage location for packages
-        families: For multi-arch builds, the list of GPU family names that were
-            uploaded (e.g. ["gfx94X-dcgpu", "gfx120X-all"]). When provided,
-            per-family install links are emitted. When None, single-arch mode.
+        families: Controls the summary format:
+            - None: single-arch mode — single index URL
+            - [] (empty list): kpack-split flat mode — single index URL covering
+              all per-target wheels
+            - [...] non-empty: legacy per-family mode — per-family install links
     """
-    if families is not None:
+    if families:
+        # Legacy per-family multi-arch
         base_url = packages_loc.https_url
         family_links = "\n".join(
             f"- [{family}]({base_url}/{family}/index.html)" for family in families
@@ -170,6 +191,16 @@ Per-family indexes:
 {family_links}
 
 {family_installs}
+"""
+    elif families is not None:
+        # kpack-split flat build — single index covers all per-target wheels
+        index_url = f"{packages_loc.https_url}/index.html"
+        install_instructions_markdown = f"""[ROCm Python packages (kpack-split)]({index_url})
+Replace `<YOUR_TARGET>` with your GPU target (e.g. `gfx942`, `gfx1201`):
+```bash
+pip install rocm[libraries,devel,device-<YOUR_TARGET>] --pre {LINE_CONTINUATION_CHAR}
+    --find-links={index_url}
+```
 """
     else:
         # Single-arch: traditional index URL
@@ -188,15 +219,17 @@ def run(args: argparse.Namespace):
     if not packages_dir.is_dir():
         raise FileNotFoundError(f"Packages root directory not found: {packages_dir}")
 
-    dist_dir = packages_dir / "dist"
-    if not dist_dir.is_dir():
-        raise FileNotFoundError(f"Packages dist/ subdirectory not found: {dist_dir}")
+    # Convention: build_python_packages.py writes into <packages_dir>/dist/,
+    # but build_prod_wheels.py (pytorch) writes directly into its output dir.
+    # Use the dist/ subdirectory when it exists, otherwise use the input dir.
+    dist_subdir = packages_dir / "dist"
+    dist_dir = dist_subdir if dist_subdir.is_dir() else packages_dir
 
-    log(f"[INFO] Packages directory: {packages_dir}")
-    log(f"[INFO] Dist subdirectory : {dist_dir}")
-    log(f"[INFO] Artifact group    : {args.artifact_group}")
-    log(f"[INFO] Run ID            : {args.run_id}")
-    log(f"[INFO] Platform          : {PLATFORM}")
+    log(f"[INFO] Packages directory  : {packages_dir}")
+    log(f"[INFO] Dist [sub]directory : {dist_dir}")
+    log(f"[INFO] Artifact group      : {args.artifact_group}")
+    log(f"[INFO] Run ID              : {args.run_id}")
+    log(f"[INFO] Platform            : {PLATFORM}")
     if args.dry_run:
         log(f"[INFO] Mode              : DRY RUN")
     elif args.output_dir:
@@ -225,29 +258,37 @@ def run(args: argparse.Namespace):
     upload_packages(dist_dir=dist_dir, packages_loc=packages_loc, backend=backend)
 
     if not args.output_dir:
-        # For multi-arch, return base URL without /index.html
-        # so tests can append /{family}/index.html
-        # For single-arch, return traditional URL with /index.html
         if args.multiarch:
-            index_url = packages_loc.https_url
-            log(
-                f"[INFO] Multi-arch base URL (tests append /{{family}}/index.html): {index_url}"
-            )
+            # Detect flat (kpack-split) vs legacy per-family layout from dist/.
+            family_subdirs = sorted(d.name for d in dist_dir.iterdir() if d.is_dir())
+            if family_subdirs:
+                # Legacy per-family: return base URL; downstream appends /{family}/index.html
+                index_url = packages_loc.https_url
+                kpack_split = "false"
+                log(
+                    f"[INFO] Multi-arch legacy URL (tests append /{{family}}/index.html): {index_url}"
+                )
+            else:
+                # kpack-split flat: all wheels at top level; return full /index.html URL
+                index_url = f"{packages_loc.https_url}/index.html"
+                kpack_split = "true"
+                log(f"[INFO] kpack-split flat URL: {index_url}")
         else:
+            family_subdirs = None
             index_url = f"{packages_loc.https_url}/index.html"
+            kpack_split = "false"
             log(f"[INFO] Single-arch index URL: {index_url}")
 
         log("Set github actions output")
         log("-------------------------")
-        gha_set_output({"package_find_links_url": index_url})
+        gha_set_output(
+            {"package_find_links_url": index_url, "kpack_split": kpack_split}
+        )
 
         log("Write github actions build summary")
         log("----------------------------------")
-        families = (
-            sorted(d.name for d in dist_dir.iterdir() if d.is_dir())
-            if args.multiarch
-            else None
-        )
+        # families: None=single-arch, []=kpack-split flat, [...]=legacy per-family
+        families = family_subdirs if args.multiarch else None
         write_gha_upload_summary(packages_loc, families=families)
 
     log("")

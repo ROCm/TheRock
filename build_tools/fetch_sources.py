@@ -15,6 +15,7 @@
 #   This is the original behavior and is still supported.
 
 import argparse
+import concurrent.futures
 import hashlib
 from pathlib import Path
 import platform
@@ -25,10 +26,18 @@ import sys
 from typing import List
 import os
 
+from _therock_utils.git_mirrors import MIRROR_DIR_ENV, url_to_mirror_relpath
+from _therock_utils.branch_config import (
+    get_source_sets_for_artifact_groups,
+    load_branch_config,
+)
+from _therock_utils.build_topology import BuildTopology, ExternalGitSource
+
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 PATCHES_DIR = THEROCK_DIR / "patches"
 TOPOLOGY_PATH = THEROCK_DIR / "BUILD_TOPOLOGY.toml"
+BRANCH_CONFIG_PATH = THEROCK_DIR / "BRANCH_CONFIG.json"
 ALWAYS_SUBMODULE_PATHS: list[str] = []
 
 
@@ -50,10 +59,211 @@ def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = 
     subprocess.check_call(args, cwd=str(cwd), env=full_env, stdin=subprocess.DEVNULL)
 
 
+def resolve_reference_dir(args: argparse.Namespace) -> Path | None:
+    """Resolve the git mirror/reference directory from args or environment.
+
+    Returns None if no reference directory is configured, which means
+    submodule updates proceed with normal network fetches (unchanged behavior).
+    """
+    ref_dir = args.reference_dir
+    if ref_dir is None:
+        env_val = os.environ.get(MIRROR_DIR_ENV)
+        if env_val:
+            ref_dir = Path(env_val)
+    if ref_dir is None:
+        return None
+    ref_dir = Path(ref_dir).resolve()
+    if not ref_dir.is_dir():
+        log(
+            f"WARNING: Reference directory {ref_dir} does not exist. "
+            f"Proceeding without reference repos."
+        )
+        return None
+    return ref_dir
+
+
+def _resolve_mirror_path(reference_dir: Path, url: str) -> Path | None:
+    """Find the local mirror for a submodule URL, or None if not available."""
+    mirror = reference_dir / url_to_mirror_relpath(url)
+    if mirror.is_dir():
+        return mirror
+    return None
+
+
+def _get_submodule_url_map() -> dict[str, str]:
+    """Build a mapping from submodule path to remote URL from .gitmodules."""
+    result = subprocess.run(
+        [
+            "git",
+            "config",
+            "--file",
+            ".gitmodules",
+            "--get-regexp",
+            r"submodule\..*\.url",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(THEROCK_DIR),
+    )
+    if result.returncode != 0:
+        return {}
+
+    path_to_url: dict[str, str] = {}
+    for line in result.stdout.strip().split("\n"):
+        if not line.strip():
+            continue
+        key, url = line.split(None, 1)
+        name = key.split(".")[1]
+        try:
+            path = get_submodule_path(name)
+            path_to_url[path] = url
+        except subprocess.CalledProcessError:
+            continue
+    return path_to_url
+
+
+def _submodule_is_initialized(submodule_path: str) -> bool:
+    """Check whether a submodule directory has been cloned/initialized."""
+    git_marker = THEROCK_DIR / submodule_path / ".git"
+    return git_marker.exists()
+
+
+def _update_one_submodule(
+    submodule_path: str,
+    update_args: list[str],
+    mirror: Path | None,
+) -> None:
+    """Fetch/clone a single already-registered submodule.
+
+    Callers must run ``git submodule init`` before invoking this function
+    so that the submodule URL is already recorded in ``.git/config``.
+    Separating init (serial) from update (parallel) avoids lock contention
+    on ``.git/config`` when multiple updates run concurrently.
+
+    If the --reference clone fails, retries automatically without --reference.
+    """
+    cmd: list[str | Path] = ["git", "submodule", "update"]
+    if mirror:
+        cmd += ["--reference", str(mirror)]
+        log(f"  {submodule_path}: using reference {mirror}")
+    else:
+        log(f"  {submodule_path}: no mirror found, fetching from network")
+    cmd += update_args + ["--", submodule_path]
+
+    try:
+        run_command(cmd, cwd=THEROCK_DIR)
+    except subprocess.CalledProcessError:
+        if mirror:
+            log(
+                f"  WARNING: --reference clone failed for {submodule_path}, "
+                f"retrying without reference..."
+            )
+            fallback_cmd: list[str | Path] = (
+                [
+                    "git",
+                    "submodule",
+                    "update",
+                ]
+                + update_args
+                + ["--", submodule_path]
+            )
+            run_command(fallback_cmd, cwd=THEROCK_DIR)
+        else:
+            raise
+
+
+def _update_submodules_with_reference(
+    submodule_paths: list[str],
+    update_args: list[str],
+    reference_dir: Path,
+    jobs: int,
+) -> None:
+    """Update submodules using local mirror repos as git reference clones.
+
+    For uninitialized submodules the work is split into two phases to avoid
+    Git lock contention when running in parallel:
+
+      Phase 1 (serial): ``git submodule init`` registers all submodule URLs
+      in ``.git/config`` in a single command -- this is the step that takes
+      the ``.git/config`` lock.
+
+      Phase 2 (parallel): ``git submodule update --reference <mirror>`` is
+      run per-submodule, bounded by *jobs*.  Each invocation clones into a
+      separate directory so there is no shared-lock contention.
+
+    Already-initialized submodules are batch-updated in a single git command
+    to preserve --jobs parallelism for the (typically fast) delta fetch.
+
+    If a --reference clone fails, the submodule is retried without --reference
+    as an automatic fallback.
+    """
+    path_to_url = _get_submodule_url_map()
+
+    needs_init: list[str] = []
+    already_init: list[str] = []
+    for sp in submodule_paths:
+        if _submodule_is_initialized(sp):
+            already_init.append(sp)
+        else:
+            needs_init.append(sp)
+
+    if needs_init:
+        log(
+            f"Initializing {len(needs_init)} submodule(s) with reference repos "
+            f"(jobs={jobs})..."
+        )
+
+        # Phase 1: Register submodule URLs in .git/config (single serial
+        # command so there is no lock contention on .git/config).
+        run_command(
+            ["git", "submodule", "init", "--"] + needs_init,
+            cwd=THEROCK_DIR,
+        )
+
+        # Phase 2: Clone/fetch each submodule in parallel.  Each targets a
+        # separate directory so concurrent git processes don't contend.
+        update_tasks: list[tuple[str, Path | None]] = []
+        for sp in needs_init:
+            url = path_to_url.get(sp)
+            mirror = _resolve_mirror_path(reference_dir, url) if url else None
+            update_tasks.append((sp, mirror))
+
+        if jobs <= 1:
+            for sp, mirror in update_tasks:
+                _update_one_submodule(sp, update_args, mirror)
+        else:
+            errors: list[Exception] = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+                futures = {
+                    pool.submit(_update_one_submodule, sp, update_args, mirror): sp
+                    for sp, mirror in update_tasks
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    sp = futures[future]
+                    try:
+                        future.result()
+                    except (
+                        subprocess.CalledProcessError,
+                        OSError,
+                    ) as exc:
+                        log(f"  ERROR: submodule update failed for {sp}: {exc}")
+                        errors.append(exc)
+            if errors:
+                raise errors[0]
+
+    if already_init:
+        log(f"Updating {len(already_init)} already-initialized submodule(s)...")
+        run_command(
+            ["git", "submodule", "update", "--init"]
+            + update_args
+            + ["--"]
+            + already_init,
+            cwd=THEROCK_DIR,
+        )
+
+
 def get_projects_from_topology(stage: str) -> List[str]:
     """Get submodule names for a build stage from BUILD_TOPOLOGY.toml."""
-    from _therock_utils.build_topology import BuildTopology
-
     if not TOPOLOGY_PATH.exists():
         raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
 
@@ -65,13 +275,57 @@ def get_projects_from_topology(stage: str) -> List[str]:
 
 def get_available_stages() -> List[str]:
     """Get list of available build stages from BUILD_TOPOLOGY.toml."""
-    from _therock_utils.build_topology import BuildTopology
-
     if not TOPOLOGY_PATH.exists():
         return []
 
     topology = BuildTopology(str(TOPOLOGY_PATH))
     return [s.name for s in topology.get_build_stages()]
+
+
+def get_topology() -> BuildTopology:
+    """Load BUILD_TOPOLOGY.toml."""
+    if not TOPOLOGY_PATH.exists():
+        raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
+    return BuildTopology(str(TOPOLOGY_PATH))
+
+
+def parse_source_set_args(source_sets: list[str] | None) -> list[str]:
+    """Parse source set CLI args, accepting spaces and commas."""
+    if not source_sets:
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in source_sets:
+        for name in value.split(","):
+            name = name.strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            result.append(name)
+    return result
+
+
+def _append_source_set_contents(
+    topology: BuildTopology,
+    source_set_names: list[str],
+    projects_by_name: dict[str, str],
+    external_sources_by_path: dict[str, ExternalGitSource],
+    *,
+    current_platform: str | None = None,
+) -> None:
+    """Append the submodules and external sources from source sets."""
+    for source_set_name in source_set_names:
+        if source_set_name not in topology.source_sets:
+            raise ValueError(f"Source set '{source_set_name}' not found")
+        source_set = topology.source_sets[source_set_name]
+        if current_platform and current_platform in source_set.disable_platforms:
+            continue
+        for submodule in source_set.submodules:
+            if submodule.name not in projects_by_name:
+                projects_by_name[submodule.name] = submodule.name
+        for external_source in source_set.external_git_sources:
+            if external_source.path not in external_sources_by_path:
+                external_sources_by_path[external_source.path] = external_source
 
 
 def parse_nested_submodules(input):
@@ -81,17 +335,47 @@ def parse_nested_submodules(input):
     return (project, nested_list)
 
 
-def get_enabled_projects(args) -> List[str]:
-    """Get list of submodule names to fetch.
+def get_enabled_sources(args) -> tuple[List[str], list[ExternalGitSource]]:
+    """Get submodule and external git sources to fetch.
 
     If --stage is provided, uses BUILD_TOPOLOGY.toml to determine submodules.
     Otherwise, uses the legacy --include-* flags.
     """
+    topology = get_topology()
+    branch_config = load_branch_config(BRANCH_CONFIG_PATH, topology)
+    current_platform = platform.system().lower()
+    explicit_source_sets = parse_source_set_args(args.source_sets)
+    projects_by_name: dict[str, str] = {}
+    external_sources_by_path: dict[str, ExternalGitSource] = {}
+
     # Stage-aware mode: use topology
     if args.stage:
-        projects = get_projects_from_topology(args.stage)
+        stage_source_sets = [
+            source_set.name
+            for source_set in topology.get_source_sets_for_stage(
+                args.stage, platform=current_platform
+            )
+        ]
+        stage = topology.build_stages[args.stage]
+        branch_source_sets = get_source_sets_for_artifact_groups(
+            branch_config, stage.artifact_groups
+        )
+        _append_source_set_contents(
+            topology,
+            stage_source_sets + branch_source_sets + explicit_source_sets,
+            projects_by_name,
+            external_sources_by_path,
+            current_platform=current_platform,
+        )
+        projects = list(projects_by_name)
         log(f"Stage '{args.stage}' requires submodules: {projects}")
-        return projects
+        external_sources = list(external_sources_by_path.values())
+        if external_sources:
+            log(
+                f"Stage '{args.stage}' requires external git sources: "
+                f"{[source.name for source in external_sources]}"
+            )
+        return projects, external_sources
 
     # Legacy flag-based mode
     projects = []
@@ -113,7 +397,87 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.iree_libs_projects)
     if args.include_math_libraries:
         projects.extend(args.math_library_projects)
-    return projects
+
+    for project in projects:
+        if project not in projects_by_name:
+            projects_by_name[project] = project
+
+    _append_source_set_contents(
+        topology,
+        branch_config.source_sets + explicit_source_sets,
+        projects_by_name,
+        external_sources_by_path,
+        current_platform=current_platform,
+    )
+    return list(projects_by_name), list(external_sources_by_path.values())
+
+
+def fetch_external_git_sources(
+    args: argparse.Namespace, external_sources: list[ExternalGitSource]
+) -> None:
+    """Fetch external git sources and check them out at their pinned commits."""
+    if not external_sources:
+        return
+
+    reference_dir = resolve_reference_dir(args)
+    for source in external_sources:
+        _fetch_one_external_git_source(args, source, reference_dir)
+
+
+def _fetch_one_external_git_source(
+    args: argparse.Namespace,
+    source: ExternalGitSource,
+    reference_dir: Path | None,
+) -> None:
+    source_dir = THEROCK_DIR / source.path
+    git_dir = source_dir / ".git"
+    mirror = (
+        _resolve_mirror_path(reference_dir, source.origin) if reference_dir else None
+    )
+
+    if git_dir.exists():
+        log(f"Updating external git source {source.name} in {source.path}")
+        run_command(
+            ["git", "remote", "set-url", "origin", source.origin], cwd=source_dir
+        )
+        fetch_cmd: list[str | Path] = ["git", "fetch"]
+        if args.depth:
+            fetch_cmd += ["--depth", str(args.depth)]
+        if args.progress:
+            fetch_cmd += ["--progress"]
+        fetch_cmd += ["origin"]
+        run_command(fetch_cmd, cwd=source_dir)
+    else:
+        if source_dir.exists() and any(source_dir.iterdir()):
+            raise RuntimeError(
+                f"External source path {source_dir} exists but is not a git checkout"
+            )
+        source_dir.parent.mkdir(parents=True, exist_ok=True)
+        clone_cmd: list[str | Path] = ["git", "clone", "--no-checkout"]
+        if args.depth:
+            clone_cmd += ["--depth", str(args.depth)]
+        if args.progress:
+            clone_cmd += ["--progress"]
+        if mirror:
+            clone_cmd += ["--reference", mirror]
+            log(f"  {source.name}: using reference {mirror}")
+        clone_cmd += [source.origin, source_dir]
+        try:
+            run_command(clone_cmd, cwd=THEROCK_DIR)
+        except subprocess.CalledProcessError:
+            if not mirror:
+                raise
+            log(
+                f"  WARNING: --reference clone failed for {source.name}, "
+                f"retrying without reference..."
+            )
+            clone_cmd = [
+                arg for arg in clone_cmd if arg != "--reference" and arg != mirror
+            ]
+            run_command(clone_cmd, cwd=THEROCK_DIR)
+
+    run_command(["git", "checkout", "--detach", source.commit], cwd=source_dir)
+    run_command(["git", "reset", "--hard", source.commit], cwd=source_dir)
 
 
 def fetch_nested_submodules(args, projects):
@@ -152,7 +516,7 @@ def fetch_nested_submodules(args, projects):
 
 
 def run(args):
-    projects = get_enabled_projects(args)
+    projects, external_sources = get_enabled_sources(args)
     submodule_paths = ALWAYS_SUBMODULE_PATHS + [
         get_submodule_path(project) for project in projects
     ]
@@ -167,13 +531,25 @@ def run(args):
     if args.remote:
         update_args += ["--remote"]
     if args.update_submodules:
-        run_command(
-            ["git", "submodule", "update", "--init"]
-            + update_args
-            + ["--"]
-            + submodule_paths,
-            cwd=THEROCK_DIR,
-        )
+        if submodule_paths:
+            reference_dir = resolve_reference_dir(args)
+            if reference_dir:
+                log(f"Using reference directory: {reference_dir}")
+                _update_submodules_with_reference(
+                    submodule_paths,
+                    update_args,
+                    reference_dir,
+                    jobs=args.jobs if args.jobs is not None else 4,
+                )
+            else:
+                run_command(
+                    ["git", "submodule", "update", "--init"]
+                    + update_args
+                    + ["--"]
+                    + submodule_paths,
+                    cwd=THEROCK_DIR,
+                )
+        fetch_external_git_sources(args, external_sources)
     if args.dvc_projects:
         pull_large_files(args.dvc_projects, projects)
 
@@ -186,10 +562,11 @@ def run(args):
     # then meaningless. Here on each fetch, we reset the flag so that if
     # patches are aged out, the tree is restored to normal.
     submodule_paths = [get_submodule_path(name) for name in projects]
-    run_command(
-        ["git", "update-index", "--no-skip-worktree", "--"] + submodule_paths,
-        cwd=THEROCK_DIR,
-    )
+    if submodule_paths:
+        run_command(
+            ["git", "update-index", "--no-skip-worktree", "--"] + submodule_paths,
+            cwd=THEROCK_DIR,
+        )
 
     # Remove any stale .smrev files.
     remove_smrev_files(args, projects)
@@ -303,7 +680,7 @@ def apply_patches(args, projects):
         )
 
 
-# Gets the the relative path to a submodule given its name.
+# Gets the relative path to a submodule given its name.
 # Raises an exception on failure.
 def get_submodule_path(name: str, cwd=THEROCK_DIR) -> str:
     relpath = (
@@ -324,7 +701,7 @@ def get_submodule_path(name: str, cwd=THEROCK_DIR) -> str:
     return relpath
 
 
-# Gets the the relative path to a submodule given its name.
+# Gets the URL for a submodule given its name.
 # Raises an exception on failure.
 def get_submodule_url(name: str) -> str:
     relpath = (
@@ -378,6 +755,33 @@ def main(argv):
         "--list-stages",
         action="store_true",
         help="List available build stages and their submodules, then exit",
+    )
+    parser.add_argument(
+        "--source-sets",
+        nargs="+",
+        default=[],
+        help=(
+            "Additional source sets to fetch. Accepts space-separated names or "
+            "comma-separated lists."
+        ),
+    )
+    parser.add_argument(
+        "--list-source-sets",
+        action="store_true",
+        help="List available source sets and their sources, then exit",
+    )
+
+    # Reference repos for faster submodule clones
+    parser.add_argument(
+        "--reference-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a directory of bare git mirrors (created by "
+            "setup_git_mirrors.py). Submodule clones will use --reference "
+            "to read objects locally instead of over the network. "
+            f"Also reads from ${MIRROR_DIR_ENV} environment variable."
+        ),
     )
 
     # Legacy options
@@ -571,21 +975,14 @@ def main(argv):
         "--math-library-projects",
         nargs="+",
         type=str,
-        default=(
-            []
-            if is_windows()
-            else [
-                # Linux only projects.
-                "libhipcxx",
-            ]
-        ),
+        default=[
+            "libhipcxx",
+        ],
     )
     args = parser.parse_args(argv)
 
     # Handle --list-stages
     if args.list_stages:
-        from _therock_utils.build_topology import BuildTopology
-
         if not TOPOLOGY_PATH.exists():
             print(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
             sys.exit(1)
@@ -600,6 +997,36 @@ def main(argv):
             print(
                 f"    Submodules: {', '.join(submodule_names) if submodule_names else '(none)'}"
             )
+            print()
+        sys.exit(0)
+
+    # Handle --list-source-sets
+    if args.list_source_sets:
+        if not TOPOLOGY_PATH.exists():
+            print(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
+            sys.exit(1)
+
+        topology = BuildTopology(str(TOPOLOGY_PATH))
+        print("Available source sets:\n")
+        for source_set in topology.get_source_sets():
+            submodule_names = [s.name for s in source_set.submodules]
+            external_sources = [
+                f"{s.name} ({s.origin} @ {s.commit} -> {s.path})"
+                for s in source_set.external_git_sources
+            ]
+            print(f"  {source_set.name}:")
+            print(f"    {source_set.description}")
+            print(
+                f"    Submodules: {', '.join(submodule_names) if submodule_names else '(none)'}"
+            )
+            print(
+                "    External git sources: "
+                f"{', '.join(external_sources) if external_sources else '(none)'}"
+            )
+            if source_set.disable_platforms:
+                print(
+                    f"    Disabled platforms: {', '.join(source_set.disable_platforms)}"
+                )
             print()
         sys.exit(0)
 

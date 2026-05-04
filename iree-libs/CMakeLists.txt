@@ -14,6 +14,8 @@ if(THEROCK_ENABLE_IREE_COMPILER)
     NO_MERGE_COMPILE_COMMANDS
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/iree-compiler"
     EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/iree"
+    COMPILER_TOOLCHAIN
+      amd-llvm
     CMAKE_ARGS
       # Build the compiler
       -DIREE_BUILD_COMPILER=ON
@@ -34,6 +36,8 @@ if(THEROCK_ENABLE_IREE_COMPILER)
       -DIREE_BUILD_BINDINGS_TFLITE_JAVA=OFF
       # Disable runtime, it's built into fusilli, we only need the compiler
       -DIREE_HAL_DRIVER_DEFAULTS=OFF
+    INSTALL_OPTIONAL_COMPONENTS
+      IREEDevLibraries-Compiler
     BUILD_DEPS
       hip-clr  # Provides HIP headers for IREE_USE_SYSTEM_DEPS
   )
@@ -45,6 +49,7 @@ if(THEROCK_ENABLE_IREE_COMPILER)
     COMPONENTS
       lib
       dbg
+      dev
     SUBPROJECT_DEPS
       iree-compiler
   )
@@ -106,7 +111,7 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
       therock-nlohmann-json
     RUNTIME_DEPS
       hip-clr
-      hipDNN
+      hipdnn_integration_tests
       iree-compiler  # Provides libIREECompiler.so for CAPI compilation
       rocminfo  # Provides rocm_agent_enumerator
   )

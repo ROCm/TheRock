@@ -1,0 +1,152 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Setup (Multi-Arch)
+
+on:
+  workflow_call:
+    inputs:
+      build_variant:
+        type: string
+        default: "release"
+      release_type:
+        description: >-
+          Release type: "" for CI builds, or "dev", "nightly", "prerelease"
+          for release builds. Controls artifact bucket selection, IAM role,
+          and package versioning.
+        type: string
+        default: ""
+      prerelease_version:
+        description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
+        type: string
+        default: ""
+      linux_amdgpu_families:
+        description: 'Comma-separated Linux GPU families. "all" = all, "none" or empty = skip.'
+        type: string
+        default: ""
+      windows_amdgpu_families:
+        description: 'Comma-separated Windows GPU families. "all" = all, "none" or empty = skip.'
+        type: string
+        default: ""
+      linux_test_labels:
+        description: "Comma-separated list of test labels for Linux."
+        type: string
+        default: ""
+      windows_test_labels:
+        description: "Comma-separated list of test labels for Windows."
+        type: string
+        default: ""
+      prebuilt_stages:
+        description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
+        type: string
+        default: ""
+      baseline_run_id:
+        description: "Workflow run ID to copy prebuilt stage artifacts from."
+        type: string
+        default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+    outputs:
+      enable_build_jobs:
+        description: Whether to enable build jobs.
+        value: ${{ jobs.setup.outputs.enable_build_jobs }}
+      linux_build_config:
+        description: JSON object with Linux build configuration, or empty string if skipped.
+        value: ${{ jobs.setup.outputs.linux_build_config }}
+      windows_build_config:
+        description: JSON object with Windows build configuration, or empty string if skipped.
+        value: ${{ jobs.setup.outputs.windows_build_config }}
+      test_type:
+        description: "The test type to run (quick, standard, comprehensive, full)."
+        value: ${{ jobs.setup.outputs.test_type }}
+      linux_test_labels:
+        description: ROCm projects to run Linux tests on. Optional filter.
+        value: ${{ jobs.setup.outputs.linux_test_labels }}
+      windows_test_labels:
+        description: ROCm projects to run Windows tests on. Optional filter.
+        value: ${{ jobs.setup.outputs.windows_test_labels }}
+      rocm_package_version:
+        description: ROCm package version (primarily for Python packages).
+        value: ${{ jobs.setup.outputs.rocm_package_version }}
+      rocm_deb_package_version:
+        description: ROCm DEB package version for native packages.
+        value: ${{ jobs.setup.outputs.rocm_deb_package_version }}
+      rocm_rpm_package_version:
+        description: ROCm RPM package version for native packages.
+        value: ${{ jobs.setup.outputs.rocm_rpm_package_version }}
+      ref:
+        description: >-
+          Resolved commit SHA from checkout. Use this instead of the input ref
+          to ensure all downstream jobs use the same commit, even if the branch
+          HEAD moves during the workflow run.
+        value: ${{ jobs.setup.outputs.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-24.04
+    outputs:
+      enable_build_jobs: ${{ steps.configure.outputs.enable_build_jobs }}
+      linux_build_config: ${{ steps.configure.outputs.linux_build_config }}
+      windows_build_config: ${{ steps.configure.outputs.windows_build_config }}
+      test_type: ${{ steps.configure.outputs.test_type }}
+      linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
+      windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
+      rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+      rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
+      rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
+      ref: ${{ steps.checkout.outputs.commit }}
+    steps:
+      - name: Checking out repository
+        id: checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          # We need the parent commit to do a diff
+          fetch-depth: 2
+
+      # Note: the script reads PR labels, the base ref, etc. from the event
+      # payload (GITHUB_EVENT_PATH). That is the original event that started
+      # the workflow run, which may not directly map to the "inputs" on
+      # the "workflow_call" trigger for this file.
+      - name: Configuring CI options
+        id: configure
+        env:
+          BUILD_VARIANT: ${{ inputs.build_variant }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
+          WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
+          LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
+          WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
+          PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
+          BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+        run: python ./build_tools/github_actions/configure_multi_arch_ci.py
+
+      # Note: Other scripts treat "dev releases" and "CI builds" differently.
+      # Here we set to a "dev" package version even for CI builds:
+      #
+      # type of build                         | package version | version example
+      # ------------------------------------- | --------------- | ------------------
+      # ci ("" empty string for release_type) | dev             | 7.10.0.dev0+f689a8
+      # dev                                   | dev             | 7.10.0.dev0+f689a8
+      # nightly                               | nightly         | 7.10.0a20251021
+      # prerelease                            | prerelease      | 7.10.0rc2
+      #
+      # Other scripts upload "ci" and "dev release" packages to different
+      # buckets, use different ccache namespaces, etc.
+      - name: Compute package version
+        id: rocm_package_version
+        run: |
+          python ./build_tools/compute_rocm_package_version.py \
+            --release-type=${{ inputs.release_type || 'dev' }} \
+            --prerelease-version=${{ inputs.prerelease_version }} \
+            --override-git-sha=${{ steps.checkout.outputs.commit }}

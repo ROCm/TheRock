@@ -9,7 +9,7 @@ on:
       test_runs_on:
         required: true
         type: string
-        default: "linux-mi325-1gpu-ossci-rocm"
+        default: "linux-gfx942-1gpu-ossci-rocm"
       image_name:
         required: true
         description: JAX docker image to run tests with
@@ -22,7 +22,7 @@ on:
         required: true
         description: JAX plugin branch to checkout
         type: string
-        default: "rocm-jaxlib-v0.6.0"
+        default: "rocm-jaxlib-v0.8.2"
 
   workflow_call:
     inputs:
@@ -40,7 +40,7 @@ on:
       jax_plugin_branch:
         description: JAX plugin branch to checkout to use for test scripts
         type: string
-        default: "rocm-jaxlib-v0.8.0"
+        default: "rocm-jaxlib-v0.8.2"
 
 permissions:
   contents: read

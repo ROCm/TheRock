@@ -27,6 +27,8 @@ import platform
 import shlex
 import subprocess
 
+from manylinux_config import DIST_PYTHON_EXECUTABLES, SHARED_PYTHON_EXECUTABLES
+
 logging.basicConfig(level=logging.INFO)
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
@@ -106,6 +108,13 @@ def build_configure(build_dir, manylinux=False):
             f"-DCMAKE_C_COMPILER_LAUNCHER={c_launcher}",
             f"-DCMAKE_CXX_COMPILER_LAUNCHER={cxx_launcher}",
             "-DBUILD_TESTING=ON",
+            # Opt-out of KPACK_SPLIT_ARTIFACTS for non-multi-arch CI/CD.
+            # * Multi-arch CI/CD uses configure_stage.py instead of this script
+            # * Local developer builds will use the flag default value
+            # Related issues:
+            # * multi-arch kpack parent: https://github.com/ROCm/TheRock/issues/3323
+            # * multi-arch opt-in: https://github.com/ROCm/TheRock/issues/3338
+            "-DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF",
         ]
     )
 
@@ -114,27 +123,14 @@ def build_configure(build_dir, manylinux=False):
 
     # Adding manylinux Python executables if --manylinux is set
     if manylinux:
-        python_executables = (
-            "/opt/python/cp310-cp310/bin/python;"
-            "/opt/python/cp311-cp311/bin/python;"
-            "/opt/python/cp312-cp312/bin/python;"
-            "/opt/python/cp313-cp313/bin/python"
-        )
-        cmd.append(f"-DTHEROCK_DIST_PYTHON_EXECUTABLES={python_executables}")
+        cmd.append(f"-DTHEROCK_DIST_PYTHON_EXECUTABLES={DIST_PYTHON_EXECUTABLES}")
         cmd.append("-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON")
         cmd.append("-DTHEROCK_ENABLE_ROCDECODE=ON")
         cmd.append("-DTHEROCK_ENABLE_ROCJPEG=ON")
 
         # Python executables with shared libpython support. This is needed for
         # ROCgdb.
-        python_shared_executables = (
-            "/opt/python-shared/cp310-cp310/bin/python3;"
-            "/opt/python-shared/cp311-cp311/bin/python3;"
-            "/opt/python-shared/cp312-cp312/bin/python3;"
-            "/opt/python-shared/cp313-cp313/bin/python3;"
-            "/opt/python-shared/cp314-cp314/bin/python3"
-        )
-        cmd.append(f"-DTHEROCK_SHARED_PYTHON_EXECUTABLES={python_shared_executables}")
+        cmd.append(f"-DTHEROCK_SHARED_PYTHON_EXECUTABLES={SHARED_PYTHON_EXECUTABLES}")
 
     # Splitting cmake options into an array (ex: "-flag X" -> ["-flag", "X"]) for subprocess.run
     cmake_options_arr = extra_cmake_options.split()

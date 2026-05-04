@@ -14,9 +14,9 @@ platform = os.getenv("RUNNER_OS").lower()
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-# Importing is_asan from github_actions_utils.py
+# Importing is_asan from github_actions_api.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import is_asan
+from github_actions_api import is_asan
 
 logging.basicConfig(level=logging.INFO)
 
@@ -32,7 +32,7 @@ if is_asan():
     environ_vars["HSA_XNACK"] = "1"
     environ_vars["OMP_NUM_THREADS"] = "1"
 
-# If smoke tests are enabled, we run smoke tests only.
+# If quick tests are enabled, we run quick tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 
@@ -41,7 +41,7 @@ if AMDGPU_FAMILIES == "gfx1151" and platform == "windows":
     test_type = "quick"
 
 test_filter = []
-if test_type == "smoke":
+if test_type == "quick":
     test_filter.append("--gtest_filter=*smoke*")
 elif test_type == "quick":
     test_filter.append("--gtest_filter=*quick*")
@@ -49,4 +49,6 @@ elif test_type == "quick":
 cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test"] + test_filter
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+subprocess.run(
+    cmd, cwd=THEROCK_DIR, check=True, env=environ_vars, stderr=subprocess.STDOUT
+)
