@@ -534,9 +534,7 @@ def main(argv: list[str]) -> int:
     else:
         supported_devices = get_all_supported_devices(args.amdgpu_family)
 
-    selected_devices = set_gpu_execution_policy(
-        supported_devices, policy=gpu_policy
-    )
+    selected_devices = set_gpu_execution_policy(supported_devices, policy=gpu_policy)
 
     selected_archs = sorted({arch for arch, _ in selected_devices})
     device_ids = [str(dev_id) for _, dev_id in selected_devices]
