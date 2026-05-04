@@ -40,15 +40,16 @@ test_type = os.getenv("TEST_TYPE", "full")
 if AMDGPU_FAMILIES == "gfx1151" and platform == "windows":
     test_type = "quick"
 
+sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
+from test_utils import get_gtest_output_arg
+
 test_filter = []
 if test_type == "quick":
     test_filter.append("--gtest_filter=*smoke*")
 elif test_type == "quick":
     test_filter.append("--gtest_filter=*quick*")
 
-cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test"] + test_filter
+cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test", get_gtest_output_arg("hipblaslt")] + test_filter
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(
-    cmd, cwd=THEROCK_DIR, check=True, env=environ_vars, stderr=subprocess.STDOUT
-)
+subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)

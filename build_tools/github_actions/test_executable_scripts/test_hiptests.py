@@ -151,6 +151,11 @@ def setup_env(env):
 
 
 def execute_tests(env):
+    sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
+    from test_utils import get_ctest_junit_path
+
+    # Allow for more time in ASAN mode to run the tests.
+    timeout = 1500 if is_asan() else 600
     cmd = [
         "ctest",
         "--tests-information",
@@ -158,6 +163,11 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
+        "--timeout",
+        f"{timeout}",
+        # Output JUnit XML for failed test reporting
+        "--output-junit",
+        str(get_ctest_junit_path("hip-tests")),
     ]
 
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
