@@ -768,11 +768,12 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
-    ci_inputs: CIInputs,
     all_families: dict[str, dict],
     variant_config: dict,
     test_type: str,
     build_variant: str,
+    pr_labels: list[str],
+    is_schedule: bool,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -791,7 +792,7 @@ def _expand_build_config_for_platform(
     # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
     # Selects kernel-specific test runners for families that support them.
     test_runner_kernel = ""
-    for label in ci_inputs.pr_labels:
+    for label in pr_labels:
         if label.startswith("test_runner:"):
             test_runner_kernel = label.split(":")[1]
             break
@@ -863,7 +864,7 @@ def _expand_build_config_for_platform(
         # If nightly_check_only_for_family is set for schedule runs only
         if (
             platform_info.get("nightly_check_only_for_family", False)
-            and not ci_inputs.is_schedule
+            and not is_schedule
         ):
             test_runs_on = ""
             print(
@@ -891,7 +892,7 @@ def _expand_build_config_for_platform(
     suffix = variant_config.get("build_variant_suffix", "")
 
     # Select build runner using weighted distribution
-    build_runs_on = select_build_runner(platform, ci_inputs.build_variant)
+    build_runs_on = select_build_runner(platform, build_variant)
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -946,11 +947,12 @@ def expand_build_configs(
         config = _expand_build_config_for_platform(
             families=families,
             platform=platform,
-            ci_inputs=ci_inputs,
             all_families=all_families,
             variant_config=variant_config,
             test_type=test_type,
             build_variant=build_variant,
+            pr_labels=ci_inputs.pr_labels,
+            is_schedule=ci_inputs.is_schedule,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
         )
