@@ -29,6 +29,7 @@ Usage:
 """
 
 import argparse
+import json
 import logging
 import platform as platform_module
 import sys
@@ -39,8 +40,17 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from github_actions_api import gha_set_output
 
 logger = logging.getLogger(__name__)
+
+
+def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
+    if not s3_uri.startswith("s3://"):
+        raise ValueError(f"Unexpected S3 URI: {s3_uri}")
+    bucket_and_key = s3_uri[len("s3://") :]
+    bucket, prefix = bucket_and_key.split("/", 1)
+    return bucket, prefix
 
 
 def main(argv: list[str]) -> int:
@@ -99,6 +109,25 @@ def main(argv: list[str]) -> int:
     count = backend.upload_directory(tarballs_dir, dest, include=["*.tar.gz"])
 
     logger.info("Uploaded %d files", count)
+    tarball_urls: dict[str, str] = {}
+    bucket, prefix = parse_s3_uri(dest.s3_uri)
+
+    for f in tarball_files:
+        # Existing tarball naming convention:
+        # therock-dist-<platform>-<family>-<package_version>.tar.gz
+        name = f.name
+        if not name.startswith(f"therock-dist-{args.platform}-") or not name.endswith(
+            ".tar.gz"
+        ):
+            raise ValueError(f"Unexpected tarball name: {name}")
+
+        family_and_version = name[
+            len(f"therock-dist-{args.platform}-") : -len(".tar.gz")
+        ]
+        family = family_and_version.rsplit("-", 1)[0]
+        tarball_urls[family] = f"https://{bucket}.s3.amazonaws.com/{prefix}/{name}"
+
+    gha_set_output({"tarball_urls": json.dumps(tarball_urls)})
     return 0
 
 

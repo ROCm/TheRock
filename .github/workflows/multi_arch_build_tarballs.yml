@@ -59,6 +59,11 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+    outputs:
+      tarball_urls:
+        description: Tarball URLs keyed by family
+        value: ${{ jobs.build_tarballs.outputs.tarball_urls }}
+
 permissions:
   contents: read
 
@@ -70,6 +75,8 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     permissions:
       id-token: write
+    outputs:
+      tarball_urls: ${{ steps.upload.outputs.tarball_urls }}
     env:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       RELEASE_TYPE: ${{ inputs.release_type }}

@@ -3,13 +3,7 @@ name: Build Linux JAX from TheRock tarball
 on:
   workflow_call:
     inputs:
-      artifact_run_id:
-        type: string
-        required: true
       amdgpu_family:
-        type: string
-        required: true
-      dist_amdgpu_families:
         type: string
         required: true
       package_version:
@@ -18,41 +12,13 @@ on:
       release_type:
         type: string
         required: true
-
-permissions:
-  contents: read
-  id-token: write
+      tarball_url:
+        type: string
+        required: true
 
 jobs:
-  generate_tarball_url:
-    name: Generate tarball URL | ${{ inputs.amdgpu_family }}
-    runs-on: ubuntu-24.04
-    outputs:
-      tarball_url: ${{ steps.compute_tarball_url.outputs.tarball_url }}
-    steps:
-      - name: Checking out repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
-        with:
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ github.event_name == 'pull_request' && 'developer' || 'artifact' }}-role
-          aws-region: us-east-2
-
-      - name: Generate tarball download URL
-        id: compute_tarball_url
-        run: |
-          python build_tools/github_actions/generate_tarball_urls.py \
-            --run-id "${{ inputs.artifact_run_id }}" \
-            --platform linux \
-            --release-type "${{ inputs.release_type }}" \
-            --package-version "${{ inputs.package_version }}" \
-            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
-            --family "${{ inputs.amdgpu_family }}"
-
   build_jax:
     name: Build JAX wheels | ${{ inputs.amdgpu_family }}
-    needs: generate_tarball_url
     uses: ./.github/workflows/build_linux_jax_wheels.yml
     secrets: inherit
     with:
@@ -62,8 +28,6 @@ jobs:
       s3_subdir: "v2"
       s3_staging_subdir: "v2-staging"
       rocm_version: ${{ inputs.package_version }}
-      tar_url: ${{ needs.generate_tarball_url.outputs.tarball_url }}
-      cloudfront_url: "https://rocm.devreleases.amd.com/v2"
-      cloudfront_staging_url: "https://rocm.devreleases.amd.com/v2-staging"
+      tar_url: ${{ inputs.tarball_url }}
       run_tests: false
       upload_wheels: false
