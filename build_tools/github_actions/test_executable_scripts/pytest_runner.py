@@ -285,8 +285,13 @@ if __name__ == "__main__":
 
     # Source-based components (run from source tree, not installed artifacts)
     SOURCE_BASED_COMPONENTS = {
-        "tensile": "shared/tensile",
-        "tensilite": "projects/hipblaslt/tensilite",
+        "tensilelite": "projects/hipblaslt/tensilelite",
+    }
+
+    # Components that install to OUTPUT_ARTIFACTS_DIR instead of THEROCK_BIN_DIR
+    # (e.g., Tensile installs to {prefix}/Tensile/ not {prefix}/bin/Tensile/)
+    ARTIFACTS_DIR_COMPONENTS = {
+        "tensile",
     }
 
     # Valid test categories
@@ -294,6 +299,7 @@ if __name__ == "__main__":
 
     # Environment variables
     THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+    OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
     GITHUB_WORKSPACE = os.getenv("GITHUB_WORKSPACE")
     TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
     TEST_TYPE = os.getenv("TEST_TYPE", "quick")
@@ -318,14 +324,26 @@ if __name__ == "__main__":
         component_path = Path(GITHUB_WORKSPACE) / source_path
         logging.info(f"Using source-based tests from: {component_path}")
     else:
-        # Installed component: run from installed artifacts
-        if not THEROCK_BIN_DIR:
-            logging.error("THEROCK_BIN_DIR environment variable is required")
-            sys.exit(1)
+        # Installed component: determine base directory
+        if TEST_COMPONENT_NAME in ARTIFACTS_DIR_COMPONENTS:
+            # Component installs to OUTPUT_ARTIFACTS_DIR (e.g., Tensile -> ./build/Tensile/)
+            if not OUTPUT_ARTIFACTS_DIR:
+                logging.error("OUTPUT_ARTIFACTS_DIR environment variable is required")
+                sys.exit(1)
+            base_dir = Path(OUTPUT_ARTIFACTS_DIR)
+            logging.info(f"Using artifacts directory base: {base_dir}")
+        else:
+            # Component installs to THEROCK_BIN_DIR (e.g., hipblaslt/tensilelite -> ./build/bin/hipblaslt/tensilelite/)
+            if not THEROCK_BIN_DIR:
+                logging.error("THEROCK_BIN_DIR environment variable is required")
+                sys.exit(1)
+            base_dir = Path(THEROCK_BIN_DIR)
+            logging.info(f"Using bin directory base: {base_dir}")
+
         component_dir = PYTEST_COMPONENT_MAPPING.get(
             TEST_COMPONENT_NAME, TEST_COMPONENT_NAME
         )
-        component_path = Path(THEROCK_BIN_DIR) / component_dir
+        component_path = base_dir / component_dir
         logging.info(f"Using installed tests from: {component_path}")
 
     if not component_path.exists():
