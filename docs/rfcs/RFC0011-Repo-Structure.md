@@ -29,7 +29,7 @@ repo.amd.com's open source software release publications need standardization. I
 `repo.amd.com` will have the following folder structure:
 
 - **amdgpu** *(reserved for future use)*
-- **amd-repos**
+- **amdrepos**
      - packages
        - **Linux Distros [a–z]** 
 - **archives** *(unmaintained releasees, for reference only)*
@@ -41,6 +41,7 @@ repo.amd.com's open source software release publications need standardization. I
       - **core**
         - tarball
         - zip
+        - installers
         - whl
         - packages
           - **Linux Distros [a–z]**
