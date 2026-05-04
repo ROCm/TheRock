@@ -79,11 +79,7 @@ except ImportError:
 
 
 def upload_python_files(
-    input_dir: Path,
-    bucket_name: str,
-    bucket_prefix: str,
-    execute: bool,
-    multi_arch: bool = False,
+    input_dir: Path, bucket_name: str, bucket_prefix: str, execute: bool, multi_arch: bool = False
 ) -> int:
     """Upload Python package files to S3 bucket.
 
@@ -254,10 +250,10 @@ Safety Features:
     )
 
     parser.add_argument(
-        "--multi-arch",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Upload to multi-arch flat layout (no arch subdirectories)",
+    "--multi-arch",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Upload to multi-arch flat layout (no arch subdirectories)",
     )
 
     parser.add_argument(
@@ -311,9 +307,9 @@ Safety Features:
         args.bucket = "therock-release-python"
 
         if args.multi_arch:
-            args.bucket_prefix = "v3/whl-multi-arch/"
+            args.bucket_prefix = "v4/whl/"
             args.tarball_bucket = "therock-release-tarball"
-            args.tarball_bucket_prefix = "v3/tarball-multi-arch/"
+            args.tarball_bucket_prefix = "v4/tarball/"
         else:
             args.bucket_prefix = "v3/whl/"
             args.tarball_bucket = "therock-release-tarball"
@@ -404,20 +400,12 @@ def upload_release_packages(
     try:
         if upload_python:
             wheels_uploaded = upload_python_files(
-                input_dir,
-                bucket_name,
-                bucket_prefix,
-                execute,
-                multi_arch=args.multi_arch,
+                input_dir, bucket_name, bucket_prefix, execute, multi_arch=args.multi_arch,
             )
 
         if upload_tarballs:
             tarballs_uploaded = upload_tarball_files(
-                input_dir,
-                tarball_bucket_name,
-                tarball_bucket_prefix,
-                execute,
-                multi_arch=args.multi_arch,
+                input_dir, tarball_bucket_name, tarball_bucket_prefix, execute, multi_arch=args.multi_arch,
             )
 
     except NoCredentialsError:
