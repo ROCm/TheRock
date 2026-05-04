@@ -70,6 +70,7 @@ class FindLatestArtifactsTest(unittest.TestCase):
         results = find_latest_artifacts(
             artifact_groups=["gfx110X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="linux",
         )
 
@@ -96,6 +97,7 @@ class FindLatestArtifactsTest(unittest.TestCase):
         results = find_latest_artifacts(
             artifact_groups=["gfx110X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="linux",
         )
 
@@ -118,6 +120,7 @@ class FindLatestArtifactsTest(unittest.TestCase):
         results = find_latest_artifacts(
             artifact_groups=["gfx110X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="linux",
         )
 
@@ -159,6 +162,7 @@ class FindLatestArtifactsMultiGroupTest(unittest.TestCase):
         results = find_latest_artifacts(
             artifact_groups=["gfx110X-all", "gfx120X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="linux",
         )
 
@@ -191,6 +195,7 @@ class FindLatestArtifactsMultiGroupTest(unittest.TestCase):
         results = find_latest_artifacts(
             artifact_groups=["gfx110X-all", "gfx120X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="linux",
         )
 
@@ -221,6 +226,7 @@ class FindLatestArtifactsMultiGroupTest(unittest.TestCase):
         results = find_latest_artifacts(
             artifact_groups=["gfx110X-all", "gfx120X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="linux",
         )
 
