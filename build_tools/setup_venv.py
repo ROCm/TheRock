@@ -188,7 +188,9 @@ def install_packages_into_venv(
         # Look up known index name.
         index_url = ROCM_INDEX_URLS_MAP[index_name]
 
-    if index_url:
+    if index_url == "":
+        pip_install_cmd.append("--no-index")
+    elif index_url:
         # Join index with subdir.
         if index_subdir:
             index_url = f"{index_url.rstrip('/')}/{index_subdir.strip('/')}"
