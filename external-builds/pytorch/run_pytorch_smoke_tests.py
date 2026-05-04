@@ -20,11 +20,10 @@ Pass additional pytest arguments after "--":
 
 import argparse
 import os
+import subprocess
 import sys
 
 from pathlib import Path
-
-import pytest
 
 from pytorch_utils import (
     get_unique_supported_devices,
@@ -117,7 +116,12 @@ def main() -> int:
             print(f"Running smoke tests on device {device_idx} ({arch})")
             print(f"{'='*60}")
 
-            retcode = pytest.main(pytest_args)
+            # Use a subprocess so PyTorch re-reads HIP_VISIBLE_DEVICES per device.
+            result = subprocess.run(
+                [sys.executable, "-m", "pytest", *pytest_args],
+                env=os.environ.copy(),
+            )
+            retcode = result.returncode
             print(
                 f"Pytest finished for device {device_idx} ({arch}) with return code: {retcode}"
             )
