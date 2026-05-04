@@ -476,7 +476,7 @@ endif()
 ################################################################################
 
 add_custom_target(therock-priority-build ALL)
-if(THEROCK_ENABLE_COMPILER)
+if(THEROCK_ENABLE_AMD_LLVM_BASE)
   add_dependencies(therock-priority-build amd-llvm)
 endif()
 

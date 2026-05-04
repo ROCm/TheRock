@@ -80,6 +80,19 @@
     "Homepage": "https://github.com/ROCm/llvm-project",
     "Artifactory": [
       {
+        "Artifact": "amd-llvm-base",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "amd-llvm",
         "Artifact_Subdir": [
           {
@@ -96,6 +109,29 @@
               "lib",
               "run",
               "doc"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "amd-llvm-flang",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm-flang",
+            "Components": [
+              "run"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "amd-llvm-offload",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm-offload",
+            "Components": [
+              "lib",
+              "run"
             ]
           }
         ]
@@ -157,6 +193,17 @@
     "Homepage": "https://github.com/ROCm/llvm-project",
     "Artifactory": [
       {
+        "Artifact": "amd-llvm-base",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "amd-llvm",
         "Artifact_Subdir": [
           {
@@ -167,6 +214,28 @@
           },
           {
             "Name": "hipcc",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "amd-llvm-flang",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm-flang",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "amd-llvm-offload",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm-offload",
             "Components": [
               "dev"
             ]

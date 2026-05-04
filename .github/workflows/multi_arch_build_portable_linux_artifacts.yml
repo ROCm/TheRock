@@ -4,7 +4,7 @@
 # Reusable Workflow: Build Stage Artifacts
 #
 # This workflow builds TheRock stage artifacts for all stages.
-# Handles both generic stages (foundation, compiler-runtime, etc.) and
+# Handles both generic stages (compiler-runtime, profiler-apps, etc.) and
 # per-arch stages (math-libs, comm-libs) using conditional logic.
 #
 # Artifacts flow between stages via S3 using the artifact_manager.py tool.
@@ -22,7 +22,7 @@ on:
       stage_name:
         type: string
         required: true
-        description: "Stage name (e.g., foundation, math-libs, compiler-runtime)"
+        description: "Stage name (e.g., compiler-runtime, math-libs)"
       stage_display_name:
         type: string
         required: true

@@ -294,6 +294,15 @@ if(THEROCK_ENABLE_ROCPROFV3)
       message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
     endif()
 
+    # rocprofiler-systems' Fortran examples need project-specific compiler
+    # plumbing that does not fit TheRock's split compiler artifacts yet.
+    set(_rocprofsys_disable_examples
+      openmp-target
+      openmp-vv
+      jacobi-fortran-targetdata-markers
+      jacobi-fortran-usm)
+    list(JOIN _rocprofsys_disable_examples "\;" _ROCPROFSYS_DISABLE_EXAMPLES_STR)
+
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
@@ -315,6 +324,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_USE_PYTHON="${_ROCPROFSYS_USE_PYTHON}"
         -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_ROCPROFSYS_PYTHON_VERSIONS_STR}"
         -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}"
+        "-DROCPROFSYS_DISABLE_EXAMPLES:STRING=${_ROCPROFSYS_DISABLE_EXAMPLES_STR}"
         "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
       INSTALL_RPATH_DIRS
         "lib"

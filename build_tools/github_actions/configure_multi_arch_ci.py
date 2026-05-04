@@ -101,8 +101,8 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     Reads stage names from BUILD_TOPOLOGY.toml when 'all' is specified.
 
     Example:
-        "foundation,compiler-runtime" → ["foundation", "compiler-runtime"]
-        "all" → ["foundation", "compiler-runtime", "math-libs", ...]
+        "compiler-runtime,runtime-tests" → ["compiler-runtime", "runtime-tests"]
+        "all" → ["compiler-runtime", "runtime-tests", "math-libs", ...]
     """
     stages = _parse_comma_list(raw)
     if "all" in stages:

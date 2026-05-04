@@ -199,4 +199,4 @@ the `artifact_github_repo` and `artifact_run_id` workflow inputs.
 Eventually we would like for all ROCm CI and CD workflow runs to produce and
 upload artifacts in a compatible schema so that more workflows (e.g. producing
 native Linux or Windows packages, running framework tests, etc.) can extend this
-foundation.
+work.

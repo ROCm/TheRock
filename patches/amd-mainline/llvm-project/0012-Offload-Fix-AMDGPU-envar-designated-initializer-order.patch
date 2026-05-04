@@ -1,0 +1,82 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TheRock Fortran Agent <fortran-agent@local>
+Date: Fri, 1 May 2026 18:10:00 -0700
+Subject: [PATCH] [Offload] Fix AMDGPU envar designated initializer order
+
+GCC 15 rejects the AMDGPU plugin's DeviceEnvarConfigTy designated
+initializers because OMPX_AdjustNumTeamsForXteamRedSmallBlockSize is
+initialized after later struct fields. Keep the existing values but order
+the designators to match the struct declaration.
+---
+ offload/plugins-nextgen/amdgpu/src/rtl.cpp | 36 +++++++++++-----------
+ 1 file changed, 18 insertions(+), 18 deletions(-)
+
+diff --git a/offload/plugins-nextgen/amdgpu/src/rtl.cpp b/offload/plugins-nextgen/amdgpu/src/rtl.cpp
+index 8de512f213b1..2bb3d0e91901 100644
+--- a/offload/plugins-nextgen/amdgpu/src/rtl.cpp
++++ b/offload/plugins-nextgen/amdgpu/src/rtl.cpp
+@@ -5192,43 +5192,43 @@ private:
+ 
+   static inline const std::unordered_map<std::string, DeviceEnvarConfigTy>
+       EnvarConfigs = {{"MI210", {.OMPX_UseMultipleSdmaEngines = true,
++                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=0,
+                                  .OMPX_XteamBlockSize = 512,
+-                                 .OMPX_XTeamReductionOccupancyBasedOpt = true,
+-                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=0}},
++                                 .OMPX_XTeamReductionOccupancyBasedOpt = true}},
+                       {"MI250X",{.OMPX_UseMultipleSdmaEngines = true,
++                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=0,
+                                  .OMPX_XteamBlockSize = 512,
+-                                 .OMPX_XTeamReductionOccupancyBasedOpt = true,
+-                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=0}},
++                                 .OMPX_XTeamReductionOccupancyBasedOpt = true}},
+                       {"MI250X/MI250",{
+                                  .OMPX_UseMultipleSdmaEngines = true,
++                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=0,
+                                  .OMPX_XteamBlockSize = 512,
+-                                 .OMPX_XTeamReductionOccupancyBasedOpt = true,
+-                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=0}},
++                                 .OMPX_XTeamReductionOccupancyBasedOpt = true}},
+                       {"MI300A", {.OMPX_UseMultipleSdmaEngines = false,
++                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=1,
+                                  .OMPX_XteamBlockSize = 512,
+-                                 .OMPX_XTeamReductionOccupancyBasedOpt = false,
+-                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=1}},
++                                 .OMPX_XTeamReductionOccupancyBasedOpt = false}},
+                       {"MI300X", {.OMPX_UseMultipleSdmaEngines = true,
++                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=1,
+                                  .OMPX_XteamBlockSize = 512,
+-                                 .OMPX_XTeamReductionOccupancyBasedOpt = false,
+-                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=1}},
++                                 .OMPX_XTeamReductionOccupancyBasedOpt = false}},
+                       {"MI308X", {.OMPX_UseMultipleSdmaEngines = true,
++                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=0,
+                                  .OMPX_XteamBlockSize = 256,
+-                                 .OMPX_XTeamReductionOccupancyBasedOpt = true,
+-                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=0}},
++                                 .OMPX_XTeamReductionOccupancyBasedOpt = true}},
+                       {"MI350X", {.OMPX_UseMultipleSdmaEngines = true,
++                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=1,
+                                  .OMPX_XteamBlockSize = 512,
+-                                 .OMPX_XTeamReductionOccupancyBasedOpt = false,
+-                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=1}},
++                                 .OMPX_XTeamReductionOccupancyBasedOpt = false}},
+                       {"MI355X", {.OMPX_UseMultipleSdmaEngines = true,
++                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=1,
+                                  .OMPX_XteamBlockSize = 512,
+-                                 .OMPX_XTeamReductionOccupancyBasedOpt = false,
+-                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=1}},
++                                 .OMPX_XTeamReductionOccupancyBasedOpt = false}},
+                       // Default config for unknown devices.
+                       {"DEFAULT", {.OMPX_UseMultipleSdmaEngines = false,
++                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=1,
+                                  .OMPX_XteamBlockSize = 512,
+-                                 .OMPX_XTeamReductionOccupancyBasedOpt = false,
+-                                 .OMPX_AdjustNumTeamsForXteamRedSmallBlockSize=1}}};
++                                 .OMPX_XTeamReductionOccupancyBasedOpt = false}}};
+ 
+   const DeviceEnvarConfigTy &getEnvarConfig() const {
+     std::string DeviceMarketingName = getNormMarketingName();
+-- 
+2.51.0
+

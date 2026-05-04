@@ -3,148 +3,6 @@
 
 if(THEROCK_ENABLE_COMPILER)
   ##############################################################################
-  # amd-llvm
-  # Everything built as part of LLVM installs to lib/llvm
-  # This includes the device-libs, since they must be findable by the compiler
-  # frontend.
-  ##############################################################################
-
-  set(_extra_llvm_cmake_args)
-  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    list(APPEND _extra_llvm_cmake_args "-DLLVM_ENABLE_PEDANTIC=OFF")
-  endif()
-
-  # Building Flang is very memory-intensive on systems with many cores. Allow
-  # users to specify the level of concurrency for these tasks so they can
-  # reduce the risk of running out of memory.
-  if(FLANG_PARALLEL_COMPILE_JOBS)
-    message(STATUS "Flang build concurrency level set to ${FLANG_PARALLEL_COMPILE_JOBS}")
-    list(APPEND _extra_llvm_cmake_args "-DFLANG_PARALLEL_COMPILE_JOBS=${FLANG_PARALLEL_COMPILE_JOBS}")
-  else()
-     message(WARNING "Flang concurrency is unlimited. Memory usage may be much higher. Set -DFLANG_PARALLEL_COMPILE_JOBS to reduce memory use.")
-  endif()
-
-  # LLVM linking is also very memory intensive. Allow users to adjust the number
-  # of parallel link jobs.
-  if(LLVM_PARALLEL_LINK_JOBS)
-    message(STATUS "LLVM parallel link jobs set to ${LLVM_PARALLEL_LINK_JOBS}")
-    list(APPEND _extra_llvm_cmake_args "-DLLVM_PARALLEL_LINK_JOBS=${LLVM_PARALLEL_LINK_JOBS}")
-  else()
-     message(WARNING "LLVM parallel link jobs is unlimited. Memory usage may be much higher. Set -DLLVM_PARALLEL_LINK_JOBS to reduce memory use.")
-  endif()
-
-  # If the compiler is not pristine (i.e. has patches), then there will be a
-  # ".amd-llvm.smrev" file present which must be used instead of the auto
-  # computed git revision. If present, this will have a stable hash of
-  # revision plus applied patches suitable for run to run compiler
-  # fingerprinting.
-  set(LLVM_SMREV_FILE "${CMAKE_CURRENT_SOURCE_DIR}/.amd-llvm.smrev")
-  if(EXISTS "${LLVM_SMREV_FILE}")
-    file(STRINGS "${LLVM_SMREV_FILE}" LLVM_SMREV_LINES)
-    list(GET LLVM_SMREV_LINES 0 LLVM_SMREV_REPO)
-    list(GET LLVM_SMREV_LINES 1 LLVM_SMREV_REVISION)
-    message(STATUS "Using stable amd-llvm revision info: Repo='${LLVM_SMREV_REPO}', Revision='${LLVM_SMREV_REVISION}'")
-  endif()
-
-  therock_cmake_subproject_declare(amd-llvm
-    USE_DIST_AMDGPU_TARGETS
-    NO_INSTALL_RPATH  # See manual handling in the pre_hook.
-    EXTERNAL_SOURCE_DIR "amd-llvm"
-    # Note that LLVM top level CMakeLists.txt is in the llvm subdir of the
-    # monorepo.
-    CMAKE_LISTS_RELPATH "llvm"
-    INTERFACE_PROGRAM_DIRS
-      lib/llvm/bin
-    CMAKE_ARGS
-      # Version configuration
-      # Note that if LLVM_SMREV_REPO and LLVM_FORCE_VC_REVISION are empty,
-      # LLVM will compute the tip of tree revision, which is appropriate for
-      # pristine checkouts.
-      -DLLVM_APPEND_VC_REV=ON
-      "-DLLVM_FORCE_VC_REPOSITORY=${LLVM_SMREV_REPO}"
-      "-DLLVM_FORCE_VC_REVISION=${LLVM_SMREV_REVISION}"
-
-      # LIBCXX
-      -DLIBCXX_ENABLE_SHARED=OFF
-      -DLIBCXX_ENABLE_STATIC=ON
-      -DLIBCXX_INSTALL_LIBRARY=OFF
-      -DLIBCXX_INSTALL_HEADERS=OFF
-      -DLIBCXXABI_ENABLE_SHARED=OFF
-      -DLIBCXXABI_ENABLE_STATIC=ON
-
-      # Features
-      -DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}
-      -DLLVM_ENABLE_ZLIB=FORCE_ON
-      -DLLVM_ENABLE_Z3_SOLVER=OFF
-      -DLLVM_ENABLE_LIBXML2=OFF
-      -DCLANG_DEFAULT_LINKER=lld
-      -DCLANG_DEFAULT_RTLIB=compiler-rt
-      -DCLANG_DEFAULT_UNWINDLIB=libgcc
-      -DCLANG_ENABLE_AMDCLANG=ON
-      -DLLVM_INSTALL_TOOLCHAIN_ONLY=OFF
-      -DLLVM_BUILD_LLVM_C_DYLIB=OFF
-
-      # Build optimizations
-      -DLLVM_BUILD_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
-      -DLLVM_INCLUDE_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
-      -DLLVM_TOOL_LLVM_JITLINK_BUILD=${THEROCK_ENABLE_LLVM_TESTS}
-
-      # Clang features.
-      -DCLANG_ENABLE_ARCMT=OFF
-      -DCLANG_ENABLE_STATIC_ANALYZER=OFF
-      -DCLANG_ENABLE_CLANGD=OFF
-      -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
-
-      -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DCLANG_TOOL_OFFLOAD_ARCH_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime
-      -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
-      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES=openmp
-      # ASAN features.
-      # Note that building AMDGPU ASAN extensions depends on various runtime headers
-      # (since it instruments them). These paths must line up and will be an error
-      # in the compiler-rt build if not found.
-      "-DSANITIZER_AMDGPU=${THEROCK_CONDITION_IS_NON_WINDOWS}"
-      "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
-      "-DSANITIZER_COMGR_INCLUDE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/amd/comgr/include"
-
-      # compiler-rt debug mode
-      "-DCOMPILER_RT_DEBUG=${THEROCK_COMPILER_RT_DEBUG}"
-
-      ${_extra_llvm_cmake_args}
-    BUILD_DEPS
-      rocm-cmake
-    RUNTIME_DEPS
-      ${THEROCK_BUNDLED_ZLIB}
-      ${THEROCK_BUNDLED_ZSTD}
-      ${THEROCK_BUNDLED_NUMACTL}
-      ${THEROCK_BUNDLED_ELFUTILS}
-      ${THEROCK_BUNDLED_LIBDRM}
-    # The entire LLVM install tree is placed inside of the overall ROCM lib/llvm
-    # directory.
-    INSTALL_DESTINATION "lib/llvm"
-    INTERFACE_LINK_DIRS
-      "lib/llvm/lib"
-    INTERFACE_INSTALL_RPATH_DIRS
-      "lib/llvm/lib"
-  )
-  # LLVM is too large to glob by default; opt in with THEROCK_DEV_PROJECTS.
-  if(THEROCK_DEV_PROJECTS AND "amd-llvm" IN_LIST THEROCK_DEV_PROJECTS)
-    therock_cmake_subproject_glob_c_sources(amd-llvm SUBDIRS .)
-  endif()
-
-  therock_cmake_subproject_provide_package(amd-llvm AMDDeviceLibs lib/llvm/lib/cmake/AMDDeviceLibs)
-  therock_cmake_subproject_provide_package(amd-llvm Clang lib/llvm/lib/cmake/clang)
-  therock_cmake_subproject_provide_package(amd-llvm LLD lib/llvm/lib/cmake/lld)
-  therock_cmake_subproject_provide_package(amd-llvm LLVM lib/llvm/lib/cmake/llvm)
-  therock_cmake_subproject_activate(amd-llvm)
-
-
-  ##############################################################################
   # amd-comgr
   # A client of libLLVM which provides an in-process compiler API to the HIP
   # runtime. LLVM/Clang/LLD are statically linked and hidden behind comgr's
@@ -220,6 +78,53 @@ if(THEROCK_ENABLE_COMPILER)
       amd-comgr
   )
 endif(THEROCK_ENABLE_COMPILER)
+
+##############################################################################
+# amd-llvm-flang
+# Fortran compiler (Flang) + MLIR, built separately from base LLVM.
+##############################################################################
+
+if(THEROCK_ENABLE_FLANG)
+  set(_extra_flang_cmake_args)
+  if(FLANG_PARALLEL_COMPILE_JOBS)
+    message(STATUS "Flang build concurrency level set to ${FLANG_PARALLEL_COMPILE_JOBS}")
+    list(APPEND _extra_flang_cmake_args "-DFLANG_PARALLEL_COMPILE_JOBS=${FLANG_PARALLEL_COMPILE_JOBS}")
+  else()
+    message(WARNING "Flang concurrency is unlimited. Memory usage may be much higher. Set -DFLANG_PARALLEL_COMPILE_JOBS to reduce memory use.")
+  endif()
+  if(LLVM_PARALLEL_LINK_JOBS)
+    list(APPEND _extra_flang_cmake_args "-DLLVM_PARALLEL_LINK_JOBS=${LLVM_PARALLEL_LINK_JOBS}")
+  endif()
+
+  therock_cmake_subproject_declare(amd-llvm-flang
+    EXTERNAL_SOURCE_DIR "amd-llvm-flang"
+    BINARY_DIR "amd-llvm-flang"
+    DISABLE_AMDGPU_TARGETS
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      ${_extra_flang_cmake_args}
+    RUNTIME_DEPS
+      amd-llvm
+    INTERFACE_PROGRAM_DIRS
+      lib/llvm/bin
+    INSTALL_DESTINATION "lib/llvm"
+  )
+  therock_cmake_subproject_provide_package(amd-llvm-flang Flang lib/llvm/lib/cmake/flang)
+  therock_cmake_subproject_activate(amd-llvm-flang)
+
+  therock_provide_artifact(amd-llvm-flang
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-amd-llvm-flang.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+    SUBPROJECT_DEPS
+      amd-llvm-flang
+  )
+endif()
 
 if(THEROCK_ENABLE_HIPIFY)
   ##############################################################################

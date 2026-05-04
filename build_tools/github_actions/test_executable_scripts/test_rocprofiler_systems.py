@@ -17,12 +17,15 @@ rocm_base = Path(THEROCK_BIN_DIR).resolve().parent
 # Environment variables
 environ_vars = os.environ.copy()
 ld_paths = [
+    # Libraries from the flattened ROCm artifact install. The installed
+    # examples live under share/rocprofiler-systems/examples, so their RPATHs
+    # do not naturally point back to the root lib/llvm/lib OpenMP runtime.
+    rocm_base / "lib",
+    rocm_base / "lib" / "llvm" / "lib",
+    rocm_base / "lib" / "rocm_sysdeps" / "lib",
+    rocm_base / "lib" / "rocprofiler-systems",
     # Libraries used by examples
-    rocm_base
-    / "share"
-    / "rocprofiler-systems"
-    / "examples"
-    / "lib",
+    rocm_base / "share" / "rocprofiler-systems" / "examples" / "lib",
 ]
 ld_paths_str = ":".join(str(p) for p in ld_paths)
 

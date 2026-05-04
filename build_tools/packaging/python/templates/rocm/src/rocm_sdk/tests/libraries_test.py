@@ -66,6 +66,11 @@ class ROCmLibrariesTest(unittest.TestCase):
                     # Though this is not needed for the amd-smi client.
                     continue
 
+                if "libhipsolver_fortran" in str(so_path):
+                    # The hipSOLVER package config exports this library, but
+                    # standalone dlopen may require the host Fortran runtime.
+                    continue
+
                 extra_setup = ""
                 if (
                     "hipdnn_plugins" in str(so_path) or "test_plugins" in str(so_path)

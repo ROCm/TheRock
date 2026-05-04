@@ -1,0 +1,49 @@
+From 59ad4a0f8dad90618d098e7d30135aded737c50f Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Sun, 3 May 2026 13:59:53 -0700
+Subject: [PATCH] Constrain rocprofiler OpenMP target tests
+
+Keep the OpenMP target tests enabled on multi-GPU systems while making the single-device assumption explicit.
+
+Changes:
+
+- add HSA_VISIBLE_DEVICES=0 and HIP_VISIBLE_DEVICES=0 to the rocprofiler-sdk openmp-tools test environment
+
+- apply the same visibility clamp to the matching OpenMP target sample
+
+Claude Code
+---
+ projects/rocprofiler-sdk/samples/openmp_target/CMakeLists.txt | 3 ++-
+ projects/rocprofiler-sdk/tests/openmp-tools/CMakeLists.txt    | 2 ++
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/projects/rocprofiler-sdk/samples/openmp_target/CMakeLists.txt b/projects/rocprofiler-sdk/samples/openmp_target/CMakeLists.txt
+index f3e09ee196..cf1484ad62 100644
+--- a/projects/rocprofiler-sdk/samples/openmp_target/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/samples/openmp_target/CMakeLists.txt
+@@ -78,7 +78,8 @@ rocprofiler_samples_get_ld_library_path_env(
+ 
+ set(openmp-target-sample-env
+     ${PRELOAD_ENV} ${LIBRARY_PATH_ENV} "OMP_NUM_THREADS=2" "OMP_TARGET_OFFLOAD=mandatory"
+-    "OMP_DISPLAY_ENV=1" "ROCR_VISIBLE_DEVICES=0")
++    "OMP_DISPLAY_ENV=1" "HSA_VISIBLE_DEVICES=0" "HIP_VISIBLE_DEVICES=0"
++    "ROCR_VISIBLE_DEVICES=0")
+ 
+ add_test(NAME openmp-target-sample COMMAND $<TARGET_FILE:openmp-target-sample>)
+ 
+diff --git a/projects/rocprofiler-sdk/tests/openmp-tools/CMakeLists.txt b/projects/rocprofiler-sdk/tests/openmp-tools/CMakeLists.txt
+index 5642ca5950..8e718b512e 100644
+--- a/projects/rocprofiler-sdk/tests/openmp-tools/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/tests/openmp-tools/CMakeLists.txt
+@@ -34,6 +34,8 @@ set(openmp-tools-env
+     "OMP_NUM_THREADS=2"
+     "OMP_DISPLAY_ENV=1"
+     "OMP_TARGET_OFFLOAD=mandatory"
++    "HSA_VISIBLE_DEVICES=0"
++    "HIP_VISIBLE_DEVICES=0"
+     "ROCR_VISIBLE_DEVICES=0"
+     "ROCPROFILER_TOOL_OUTPUT_FILE=openmp-tools-test.json"
+     "LD_LIBRARY_PATH=$<TARGET_FILE_DIR:rocprofiler-sdk::rocprofiler-sdk-shared-library>:$ENV{LD_LIBRARY_PATH}"
+-- 
+2.53.0
+

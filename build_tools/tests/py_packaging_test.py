@@ -10,6 +10,7 @@ These tests cover:
 """
 
 import os
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -393,6 +394,136 @@ class MultiArchPackagingTest(TmpDirTestCase):
             owner,
             core,
             "core (generic) file must be reachable from arch-specific devel",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Tests for build_python_packages artifact selection
+# ---------------------------------------------------------------------------
+
+
+class PythonPackageArtifactSelectionTest(TmpDirTestCase):
+    def _add_artifact(
+        self,
+        artifact_dir: Path,
+        name: str,
+        component: str,
+        target_family: str,
+        files: dict[str, str],
+    ):
+        """Create a minimal artifact directory with the given files under stage/."""
+        subdir = artifact_dir / f"{name}_{component}_{target_family}"
+        stage = subdir / "stage"
+        for relpath, content in files.items():
+            f = stage / relpath
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(content)
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_params(self, artifact_dir: Path) -> Parameters:
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        return Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+        )
+
+    def test_core_filter_includes_split_llvm_runtime_artifacts(self):
+        from build_python_packages import core_artifact_filter
+
+        from _therock_utils.artifacts import ArtifactName
+
+        for artifact_name in [
+            "amd-llvm",
+            "amd-llvm-base",
+            "amd-llvm-flang",
+            "amd-llvm-offload",
+        ]:
+            with self.subTest(artifact=artifact_name):
+                self.assertTrue(
+                    core_artifact_filter(ArtifactName(artifact_name, "lib", "generic"))
+                )
+                self.assertTrue(
+                    core_artifact_filter(ArtifactName(artifact_name, "run", "generic"))
+                )
+                self.assertFalse(
+                    core_artifact_filter(ArtifactName(artifact_name, "dev", "generic"))
+                )
+
+    def test_devel_package_includes_split_llvm_toolchain_components(self):
+        from build_python_packages import core_artifact_filter
+
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "amd-llvm-base",
+            "lib",
+            "generic",
+            {"lib/llvm/lib/libclang-cpp.txt": "base LLVM library"},
+        )
+        self._add_artifact(
+            artifact_dir,
+            "amd-llvm-base",
+            "run",
+            "generic",
+            {"lib/llvm/bin/clang++.txt": "base clang driver"},
+        )
+        self._add_artifact(
+            artifact_dir,
+            "amd-llvm-flang",
+            "run",
+            "generic",
+            {"lib/llvm/bin/flang.txt": "flang driver"},
+        )
+        self._add_artifact(
+            artifact_dir,
+            "amd-llvm-flang",
+            "dev",
+            "generic",
+            {"lib/llvm/include/flang/ISO_Fortran_binding.h": "flang header"},
+        )
+        self._add_artifact(
+            artifact_dir,
+            "amd-llvm-offload",
+            "lib",
+            "generic",
+            {"lib/llvm/lib/libomp.txt": "OpenMP runtime"},
+        )
+        self._add_artifact(
+            artifact_dir,
+            "amd-llvm-offload",
+            "dev",
+            "generic",
+            {"lib/llvm/include/flang-rt/flang-rt.h": "flang runtime header"},
+        )
+
+        params = self._make_params(artifact_dir)
+        core = PopulatedDistPackage(params, logical_name="core")
+        core.populate_runtime_files(params.filter_artifacts(core_artifact_filter))
+
+        devel = PopulatedDistPackage(params, logical_name="devel")
+        devel.populate_devel_files(tarball_compression=False)
+
+        devel_tar = devel.pure_dir / "_devel.tar"
+        with tarfile.open(devel_tar) as tf:
+            names = set(tf.getnames())
+
+        devel_platform = devel._platform_dir.name
+        self.assertIn(
+            f"{devel_platform}/lib/llvm/bin/clang++.txt",
+            names,
+        )
+        self.assertIn(f"{devel_platform}/lib/llvm/bin/flang.txt", names)
+        self.assertIn(
+            f"{devel_platform}/lib/llvm/include/flang/ISO_Fortran_binding.h",
+            names,
+        )
+        self.assertIn(f"{devel_platform}/lib/llvm/lib/libomp.txt", names)
+        self.assertIn(
+            f"{devel_platform}/lib/llvm/include/flang-rt/flang-rt.h",
+            names,
         )
 
 

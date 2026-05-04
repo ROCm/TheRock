@@ -1,0 +1,25 @@
+[options]
+unmatched_exclude = [
+  "lib/llvm/lib/objects-*/**",
+]
+
+[components.lib."compiler/amd-llvm-flang/stage"]
+include = [
+  "lib/llvm/lib/libFortran*.a",
+  "lib/llvm/lib/libflang*.a",
+]
+
+[components.run."compiler/amd-llvm-flang/stage"]
+include = [
+  "lib/llvm/bin/**",
+]
+
+[components.dev."compiler/amd-llvm-flang/stage"]
+include = [
+  "lib/llvm/include/flang/**",
+  "lib/llvm/lib/cmake/flang/**",
+]
+
+[components.dbg."compiler/amd-llvm-flang/stage"]
+
+[components.doc."compiler/amd-llvm-flang/stage"]

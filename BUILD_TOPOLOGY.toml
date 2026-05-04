@@ -130,13 +130,11 @@ disable_platforms = ["windows"]
 # These represent actual CI/CD pipeline jobs optimized for parallel execution
 # Note: Stage names are identifiers, not sequence indicators - many can run in parallel
 
-[build_stages.foundation]
-description = "Foundation - critical path dependencies"
-artifact_groups = ["third-party-sysdeps", "base"]
-
 [build_stages.compiler-runtime]
 description = "Compiler, runtimes, and core profiling"
 artifact_groups = [
+    "third-party-sysdeps",
+    "base",
     "compiler",
     "core-amdsmi",
     "core-runtime",
@@ -144,8 +142,11 @@ artifact_groups = [
     "hip-runtime",
     "opencl-runtime",
     "profiler-core",
-    "rocrtst"
 ]
+
+[build_stages.runtime-tests]
+description = "Runtime tests (parallel to math-libs, not on critical path)"
+artifact_groups = ["runtime-tests"]
 
 [build_stages.math-libs]
 description = "Math and ML libraries per architecture"
@@ -218,7 +219,7 @@ source_sets = ["rocm-systems"]
 [artifact_groups.core-amdsmi]
 description = "AMD SMI tool (amdsmi)"
 type = "generic"
-artifact_group_deps = ["base", "third-party-sysdeps", "compiler"]
+artifact_group_deps = ["base", "third-party-sysdeps"]
 source_sets = ["rocm-systems"]
 
 [artifact_groups.compiler]
@@ -247,10 +248,10 @@ type = "generic"
 artifact_group_deps = ["core-runtime", "compiler"]
 source_sets = ["rocm-systems"]  # clr is in rocm-systems
 
-[artifact_groups.rocrtst]
-description = "Core runtime tests (ROCR-Runtime, rocminfo)"
+[artifact_groups.runtime-tests]
+description = "Runtime tests (hip-tests, rocrtst)"
 type = "generic"
-artifact_group_deps = ["opencl-runtime", "core-runtime"]
+artifact_group_deps = ["hip-runtime", "opencl-runtime", "core-runtime"]
 source_sets = ["rocm-systems"]
 
 [artifact_groups.math-libs]
@@ -468,12 +469,26 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 # --- Compiler Artifacts ---
 
-[artifacts.amd-llvm]
+[artifacts.amd-llvm-base]
 artifact_group = "compiler"
 type = "target-neutral"
 artifact_deps = ["sysdeps"]
+feature_group = "ALL"
+
+[artifacts.amd-llvm]
+artifact_group = "compiler"
+type = "target-neutral"
+artifact_deps = ["amd-llvm-base"]
 feature_name = "COMPILER"
 feature_group = "ALL"
+
+[artifacts.amd-llvm-flang]
+artifact_group = "compiler"
+type = "target-neutral"
+artifact_deps = ["amd-llvm"]
+feature_name = "FLANG"
+feature_group = "ALL"
+disable_platforms = ["windows"]
 
 [artifacts.hipify]
 artifact_group = "compiler"
@@ -486,15 +501,22 @@ feature_group = "ALL"
 [artifacts.core-runtime]
 artifact_group = "core-runtime"
 type = "target-neutral"
-artifact_deps = ["base", "sysdeps", "amd-llvm"]
+artifact_deps = ["base", "sysdeps", "amd-llvm-base"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.amd-llvm-offload]
+artifact_group = "core-runtime"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "amd-llvm-flang", "core-runtime"]
+feature_group = "ALL"
 disable_platforms = ["windows"]
 
 [artifacts.core-amdsmi]
 artifact_group = "core-amdsmi"
 type = "target-neutral"
-artifact_deps = ["base", "sysdeps", "sysdeps-libnl", "sysdeps-libmnl", "amd-llvm"]
+artifact_deps = ["base", "sysdeps", "sysdeps-libnl", "sysdeps-libmnl"]
 feature_name = "CORE_AMDSMI"
 feature_group = "CORE"
 disable_platforms = ["windows"]
@@ -529,9 +551,9 @@ feature_name = "OCL_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.rocrtst]
-artifact_group = "rocrtst"
+artifact_group = "runtime-tests"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-ocl", "sysdeps-hwloc"]
+artifact_deps = ["core-runtime", "core-ocl", "core-amdsmi", "sysdeps-hwloc"]
 feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
 disable_platforms = ["windows"]
@@ -543,10 +565,8 @@ platform = "windows"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
-# --- hip-tests ---
-
 [artifacts.core-hiptests]
-artifact_group = "hip-runtime"
+artifact_group = "runtime-tests"
 type = "target-neutral"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
@@ -556,7 +576,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 [artifacts.blas]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "amd-llvm-offload", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
 split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.rand]
@@ -719,7 +739,7 @@ disable_platforms = ["windows"]
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdlog", "openmpi"]
+artifact_deps = ["amd-llvm", "amd-llvm-offload", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdlog", "openmpi"]
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]

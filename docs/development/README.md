@@ -12,6 +12,7 @@
 - [Build System](build_system.md)
 - [Dependencies](dependencies.md)
 - [Development Guide](development_guide.md)
+- [Fortran Support](fortran.md)
 - [Installing Artifacts](installing_artifacts.md)
 - [Sanitizers](sanitizers.md)
 

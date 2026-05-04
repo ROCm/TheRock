@@ -159,6 +159,75 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   )
 
   ##############################################################################
+  # amd-llvm-offload
+  # OpenMP/offload runtimes and, when Flang is enabled, flang-rt.
+  #
+  # This drives LLVM's standalone runtimes build against the already-staged LLVM
+  # compiler. It still passes ROCr as a source dependency because LLVM offload
+  # has not yet been reworked to consume TheRock's staged ROCr install here.
+  # TODO: Refactor this to depend on the built ROCr/core-runtime package rather
+  # than reaching around to the ROCr source tree.
+  ##############################################################################
+
+  if(THEROCK_ENABLE_AMD_LLVM_OFFLOAD)
+    set(_offload_deps amd-llvm ROCR-Runtime)
+    set(_extra_offload_cmake_args)
+    if(THEROCK_ENABLE_FLANG)
+      if(NOT TARGET amd-llvm-flang)
+        message(FATAL_ERROR "THEROCK_ENABLE_AMD_LLVM_OFFLOAD with THEROCK_ENABLE_FLANG requires amd-llvm-flang")
+      endif()
+      list(APPEND _offload_deps amd-llvm-flang)
+      get_target_property(_flang_dist_dir amd-llvm-flang THEROCK_DIST_DIR)
+      list(APPEND _extra_offload_cmake_args
+        # Flang cannot link until flang-rt exists, so LLVM's runtimes
+        # instructions require bypassing CMake's compiler link check here.
+        -DCMAKE_Fortran_COMPILER_WORKS=YES
+        -DLLVM_Fortran_COMPILER_WORKS=ON
+        "-DCMAKE_Fortran_COMPILER=${_flang_dist_dir}/lib/llvm/bin/flang"
+        "-DLLVM_Fortran_COMPILER=${_flang_dist_dir}/lib/llvm/bin/flang"
+      )
+    endif()
+
+    therock_cmake_subproject_declare(amd-llvm-offload
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm-offload"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amd-llvm-offload"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        -DTHEROCK_ENABLE_FLANG=${THEROCK_ENABLE_FLANG}
+        -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=ON
+        "-DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime"
+        ${_extra_offload_cmake_args}
+      RUNTIME_DEPS
+        ${_offload_deps}
+        ${THEROCK_BUNDLED_ZLIB}
+        ${THEROCK_BUNDLED_ZSTD}
+        ${THEROCK_BUNDLED_NUMACTL}
+        ${THEROCK_BUNDLED_ELFUTILS}
+        ${THEROCK_BUNDLED_LIBDRM}
+      INSTALL_DESTINATION "lib/llvm"
+      INTERFACE_LINK_DIRS
+        "lib/llvm/lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib/llvm/lib"
+    )
+    therock_cmake_subproject_activate(amd-llvm-offload)
+
+    therock_provide_artifact(amd-llvm-offload
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-amd-llvm-offload.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+      SUBPROJECT_DEPS
+        amd-llvm-offload
+    )
+  endif()
+
+  ##############################################################################
   # rocminfo
   ##############################################################################
 
@@ -201,6 +270,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   ##############################################################################
   set(HIP_CLR_CMAKE_ARGS)
   set(HIP_CLR_RUNTIME_DEPS)
+  set(HIP_CLR_COMPILER_TOOLCHAIN "${_system_toolchain}")
+  set(HIP_CLR_COMPILER_DEP amd-llvm)
   if(WIN32)
     # Windows CLR options
     set(_compute_pal_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
@@ -222,6 +293,12 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       rocprofiler-register
       ROCR-Runtime
     )
+    if(TARGET amd-llvm-offload)
+      # With offload available, build CLR against the compiler view that
+      # includes HIP plus OpenMP/offload. Otherwise CLR only sees HIP.
+      set(HIP_CLR_COMPILER_TOOLCHAIN amd-llvm-offload)
+      set(HIP_CLR_COMPILER_DEP amd-llvm-offload)
+    endif()
   endif()
 
 
@@ -234,7 +311,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       bin
     BACKGROUND_BUILD
     COMPILER_TOOLCHAIN
-      "${_system_toolchain}"
+      "${HIP_CLR_COMPILER_TOOLCHAIN}"
     CMAKE_ARGS
       "-DHIP_PLATFORM=amd"
       "-DHIP_COMMON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip"
@@ -248,7 +325,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       rocm-cmake
       therock-simde
     RUNTIME_DEPS
-      amd-llvm
+      ${HIP_CLR_COMPILER_DEP}
       amd-comgr
       hipcc     # For hipconfig
       rocm-core
@@ -319,46 +396,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
-  if(THEROCK_BUILD_TESTING)
-    set(HIP_TESTS_CMAKE_ARGS)
-    set(_hip_tests_subproject_names)
-    therock_cmake_subproject_declare(hip-tests
-      USE_TEST_AMDGPU_TARGETS
-      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/catch"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-tests"
-      BACKGROUND_BUILD
-      COMPILER_TOOLCHAIN
-        amd-hip
-      CMAKE_ARGS
-        -DHIP_PLATFORM="amd"
-        -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
-      BUILD_DEPS
-        rocm-cmake
-        therock-boost
-        therock-catch2
-      RUNTIME_DEPS
-        hip-clr
-        ${THEROCK_BUNDLED_NUMACTL}
-      INTERFACE_LINK_DIRS
-        lib
-        lib/rocm_sysdeps/lib
-      INTERFACE_INSTALL_RPATH_DIRS
-        lib
-        lib/rocm_sysdeps/lib
-    )
-    therock_cmake_subproject_glob_c_sources(hip-tests SUBDIRS .)
-    therock_cmake_subproject_activate(hip-tests)
-    # Provide it as an artifact:
-    therock_provide_artifact(core-hiptests
-      TARGET_NEUTRAL
-      DESCRIPTOR artifact-core-hiptests.toml
-      COMPONENTS
-        test
-      SUBPROJECT_DEPS
-        hip-tests
-    )
-    list(APPEND _hip_tests_subproject_names hip-tests)
-  endif(THEROCK_BUILD_TESTING)
 endif(THEROCK_ENABLE_HIP_RUNTIME)
 
 ################################################################################
@@ -496,63 +533,101 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
 endif(THEROCK_ENABLE_OCL_RUNTIME)
 
 ##############################################################################
-# rocrtst for ROCR-Runtime
+# Runtime tests
+# These are in their own build stage (runtime-tests) so they don't block
+# downstream stages like math-libs, dctools-core, etc.
 ##############################################################################
 
-if(THEROCK_BUILD_TESTING)
-  if(THEROCK_ENABLE_CORE_RUNTIME_TESTS)
+if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
+  set(HIP_TESTS_CMAKE_ARGS)
+  set(_hip_tests_subproject_names)
+  therock_cmake_subproject_declare(hip-tests
+    USE_TEST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/catch"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-tests"
+    BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      amd-hip
+    CMAKE_ARGS
+      -DHIP_PLATFORM="amd"
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+    BUILD_DEPS
+      rocm-cmake
+      therock-boost
+      therock-catch2
+    RUNTIME_DEPS
+      hip-clr
+      ${THEROCK_BUNDLED_NUMACTL}
+    INTERFACE_LINK_DIRS
+      lib
+      lib/rocm_sysdeps/lib
+    INTERFACE_INSTALL_RPATH_DIRS
+      lib
+      lib/rocm_sysdeps/lib
+  )
+  therock_cmake_subproject_glob_c_sources(hip-tests SUBDIRS .)
+  therock_cmake_subproject_activate(hip-tests)
+  therock_provide_artifact(core-hiptests
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-core-hiptests.toml
+    COMPONENTS
+      test
+    SUBPROJECT_DEPS
+      hip-tests
+  )
+  list(APPEND _hip_tests_subproject_names hip-tests)
+endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
 
-    # rocrtst may optionally build against amdsmi when available (Linux).
-    set(_rocrtst_build_deps
-      amd-llvm
-      ocl-clr
-      therock-yaml-cpp
-    )
-    if(TARGET amdsmi)
-      list(APPEND _rocrtst_build_deps amdsmi)
-    endif()
+if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS)
+  # rocrtst requires amd_smi on Linux; the runtime-tests topology pulls it in.
+  set(_rocrtst_build_deps
+    amd-llvm
+    ocl-clr
+    therock-yaml-cpp
+  )
+  if(TARGET amdsmi)
+    list(APPEND _rocrtst_build_deps amdsmi)
+  endif()
 
-    therock_cmake_subproject_declare(rocrtst
-      USE_TEST_AMDGPU_TARGETS
-      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
-      BACKGROUND_BUILD
-      CMAKE_ARGS
-        "-DCMAKE_PREFIX_PATH="
-        "-DLLVM_DIR="
-        "-DROCM_DIR="
-      COMPILER_TOOLCHAIN
-        "${_system_toolchain}"
-      BUILD_DEPS
-        ${_rocrtst_build_deps}
-      RUNTIME_DEPS
-        ROCR-Runtime
-        rocprofiler-register
-        ${THEROCK_BUNDLED_ELFUTILS}
-        ${THEROCK_BUNDLED_HWLOC}
-        ${THEROCK_BUNDLED_LIBDRM}
-        ${THEROCK_BUNDLED_NUMACTL}
-      INTERFACE_LINK_DIRS
-        "lib/rocm_sysdeps/lib"
-      INTERFACE_INSTALL_RPATH_DIRS
-        "lib/rocm_sysdeps/lib"
-    )
-    therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
-    therock_cmake_subproject_activate(rocrtst)
+  therock_cmake_subproject_declare(rocrtst
+    USE_TEST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      "-DCMAKE_PREFIX_PATH="
+      "-DLLVM_DIR="
+      "-DROCM_DIR="
+    COMPILER_TOOLCHAIN
+      "${_system_toolchain}"
+    BUILD_DEPS
+      ${_rocrtst_build_deps}
+    RUNTIME_DEPS
+      ROCR-Runtime
+      rocprofiler-register
+      ${THEROCK_BUNDLED_ELFUTILS}
+      ${THEROCK_BUNDLED_HWLOC}
+      ${THEROCK_BUNDLED_LIBDRM}
+      ${THEROCK_BUNDLED_NUMACTL}
+    INTERFACE_LINK_DIRS
+      "lib/rocm_sysdeps/lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib/rocm_sysdeps/lib"
+  )
+  therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
+  therock_cmake_subproject_activate(rocrtst)
 
-    therock_provide_artifact(rocrtst
-      TARGET_NEUTRAL
-      DESCRIPTOR artifact-core-rocrtst.toml
-      COMPONENTS
-        dbg
-        dev
-        doc
-        lib
-        run
-        test
-      SUBPROJECT_DEPS
-        rocrtst
-    )
-
-  endif(THEROCK_ENABLE_CORE_RUNTIME_TESTS)
-endif(THEROCK_BUILD_TESTING)
+  therock_provide_artifact(rocrtst
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-core-rocrtst.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      rocrtst
+  )
+endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS)
