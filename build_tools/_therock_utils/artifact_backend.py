@@ -424,9 +424,9 @@ class HTTPBackend(ArtifactBackend):
 
         return artifacts
 
-    def _fetch_index(self, gfx_family: str) -> List[str]:
+    def _fetch_index(self) -> List[str]:
         """Fetch artifact list from index-{gfx_family}.html."""
-        index_url = self.output_root.artifact_index(gfx_family).https_url
+        index_url = self.output_root.artifact_index().https_url
         try:
             with urllib.request.urlopen(index_url) as response:
                 html_content = response.read().decode("utf-8")
@@ -488,15 +488,7 @@ class HTTPBackend(ArtifactBackend):
         # Use cache if available
         if self._artifact_cache is None:
             # Fetch from all specified GFX families
-            all_artifacts = set()
-            for family in self.gfx_families:
-                try:
-                    artifacts = self._fetch_index(family)
-                    all_artifacts.update(artifacts)
-                except Exception:
-                    # Index doesn't exist for this family - this is expected until
-                    # master index is available. Skip silently.
-                    continue
+            all_artifacts = self._fetch_index()
             self._artifact_cache = sorted(all_artifacts)
 
         artifacts = self._artifact_cache
