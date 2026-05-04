@@ -26,6 +26,7 @@ def get_gpu_architecture_portable(therock_build_dir):
     """
     therock_build_dir = str(therock_build_dir)
     file_ending = ".exe" if platform.system() == "Windows" else ""
+
     def get_architectures_from_targets() -> str | None:
         amdgpu_targets = os.getenv("AMDGPU_TARGETS", "")
         targets = [
