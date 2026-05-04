@@ -4,6 +4,7 @@
 from __future__ import annotations
 from typing import Literal
 import os
+import re
 from pathlib import Path
 from abc import ABC
 from .utils import cstring, Emoji
@@ -657,6 +658,12 @@ class CheckLD(CheckProgram):
 
 
 class CheckMSVC(CheckProgram):
+    # Prebuilt libraries (e.g. wkmi.lib) may reference STL internals
+    # introduced in newer MSVC versions, causing LNK2019 errors on older
+    # toolchains.  Keep this in sync with validate_windows_install.ps1.
+    # See https://github.com/ROCm/TheRock/issues/5029
+    MIN_MSVC_VERSION = (19, 43)
+
     def __init__(self, required=True):
         super().__init__(required)
         self.program = FindMSVC()
@@ -718,9 +725,39 @@ class CheckMSVC(CheckProgram):
             _result = None
 
         else:
-            _stat = msg_stat("pass", self.name, f"Found MSVC {cl.version} at {cl.exe}")
-            _except = ""
-            _result = True
+            # Check minimum version. cl.version is e.g. "19.42.34436 (v143)".
+            _ver_match = re.match(r"(\d+)\.(\d+)", cl.version or "")
+            if (
+                _ver_match
+                and (
+                    int(_ver_match.group(1)),
+                    int(_ver_match.group(2)),
+                )
+                < self.MIN_MSVC_VERSION
+            ):
+                _min = ".".join(str(v) for v in self.MIN_MSVC_VERSION)
+                _stat = msg_stat(
+                    "err",
+                    self.name,
+                    f"MSVC {cl.version} is too old (>= {_min} required)",
+                )
+                _except = cstring(
+                    f"""
+    Prebuilt libraries require MSVC >= {_min} (Visual Studio 2022 17.13+).
+    Update Visual Studio or install a newer Build Tools version.
+
+        traceback: MSVC version too old
+            > expected >= {_min}, found {cl.version}
+    """,
+                    "err",
+                )
+                _result = None
+            else:
+                _stat = msg_stat(
+                    "pass", self.name, f"Found MSVC {cl.version} at {cl.exe}"
+                )
+                _except = ""
+                _result = True
 
         return _stat, _except, _result
 
