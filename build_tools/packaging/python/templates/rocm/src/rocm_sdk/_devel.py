@@ -60,7 +60,7 @@ def get_devel_root() -> Path:
     site_lib_path = rocm_sdk_devel_path.parent
     devel_py_pkg_name = di.ALL_PACKAGES["devel"].get_py_package_name()
     devel_py_pkg_path = site_lib_path / devel_py_pkg_name
-  
+
     # Skip expanding if the devel package has already been expanded fully.
     # _expand_devel_contents deletes the tarball with tarfile_path.unlink()
     # as the last step of expansion, so presence of the tarball means
@@ -68,13 +68,14 @@ def get_devel_root() -> Path:
     tarfile_path, _ = _find_tarfile(rocm_sdk_devel_path)
     if (devel_py_pkg_path / "__init__.py").exists() and not tarfile_path:
         return devel_py_pkg_path
-      
+
     _expand_devel_contents(rocm_sdk_devel_path, site_lib_path)
     if not (devel_py_pkg_path / "__init__.py").exists():
         raise ImportError(
             f"Expanding {devel_py_pkg_name} did not produce a valid Python package"
         )
     return devel_py_pkg_path
+
 
 # Gets the path of a module presumed to be a package defined by an __init__.py
 # file. Returns None if it is a namespace package or another kind of module.
@@ -152,7 +153,7 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
         raise ImportError(
             f"Expected to find _devel.tar or _devel.tar.xz in {rocm_sdk_devel_path}"
         )
-      
+
     dist_file_path_names = [str(df) for df in dist_files]
     _lock_and_expand(
         site_lib_path,
@@ -161,6 +162,7 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
         record_path,
         dist_file_path_names,
     )
+
 
 def _find_tarfile(rocm_sdk_devel_path: Path):
     tarfile_path = rocm_sdk_devel_path / "_devel.tar.xz"
@@ -173,6 +175,7 @@ def _find_tarfile(rocm_sdk_devel_path: Path):
         else:
             return "", ""
     return tarfile_path, tarfile_mode
+
 
 def _lock_and_expand(
     site_lib_path: Path,
