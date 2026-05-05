@@ -43,6 +43,9 @@ jobs:
     with:
       build_variant: "asan"
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
+      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
+      prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
+      baseline_run_id: ${{ inputs.baseline_run_id || '' }}
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
