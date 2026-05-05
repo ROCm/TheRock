@@ -60,23 +60,35 @@ EXTRAS_REQUIRE = {
     for pkg in dist_info.ALL_PACKAGES.values()
     if not pkg.required
 }
-# Add explicit per-target device extras (rocm[device-gfx942], etc.) alongside
-# the generic 'device' extra for callers that need to name a specific ISA —
-# e.g. kpack-split CI installs on GPU-less runners where offload-arch is not
-# yet available and the generic extra would silently fall back to
-# DEFAULT_TARGET_FAMILY. Keep the generic 'device' extra when target resolution
-# succeeds (normal install on a GPU machine); drop it only when it would produce
-# an incorrect result.
+# For target-specific packages with multiple available targets (e.g. device
+# packages in kpack-split mode), generate per-target extras so users can
+# explicitly request a specific ISA: pip install rocm[device-gfx942]
+# Also generate a device-all extra that installs all available device shards.
+for pkg in dist_info.ALL_PACKAGES.values():
+    if not pkg.is_target_specific or pkg.required:
+        continue
+    if len(dist_info.AVAILABLE_TARGET_FAMILIES) > 1:
+        all_requires = []
+        for tf in sorted(dist_info.AVAILABLE_TARGET_FAMILIES):
+            extra_name = f"{pkg.logical_name}-{tf}"
+            req = pkg.get_dist_package_require(target_family=tf)
+            EXTRAS_REQUIRE[extra_name] = [req]
+            all_requires.append(req)
+        EXTRAS_REQUIRE[f"{pkg.logical_name}-all"] = all_requires
+
+# Drop the generic 'device' extra when target resolution would silently fall
+# back to DEFAULT_TARGET_FAMILY - e.g. kpack-split CI installs on GPU-less
+# runners where offload-arch is not yet available. Callers can still name a
+# specific ISA via the per-target extras emitted above. Keep the generic
+# 'device' extra when target resolution succeeds (normal install on a GPU
+# machine).
 device_entry = dist_info.ALL_PACKAGES.get("device")
 if device_entry and device_entry.is_target_specific:
-    for _target in dist_info.AVAILABLE_TARGET_FAMILIES:
-        EXTRAS_REQUIRE[f"device-{_target}"] = [
-            device_entry.get_dist_package_require(target_family=_target)
-        ]
     try:
         dist_info.determine_target_family()
     except Exception:
         EXTRAS_REQUIRE.pop("device", None)
+
 print(f"extras_require={EXTRAS_REQUIRE}")
 packages = find_packages(where="./src")
 print("Found packages:", packages)

@@ -55,9 +55,10 @@ import time
 from pathlib import Path
 from typing import List, Optional, Set
 
+from _therock_utils.os_util import rmtree_with_retry
 from _therock_utils.cmake_amdgpu_targets import (
-    build_family_to_targets,
-    parse_amdgpu_targets_cmake,
+    amdgpu_family_map,
+    expand_families,
 )
 from _therock_utils.build_topology import BuildTopology
 from _therock_utils.artifact_backend import (
@@ -72,21 +73,6 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Component types that artifacts are split into
 ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
-
-# Lazy-loaded cache for the family -> targets mapping parsed from CMake.
-_family_to_targets_cache: Optional[dict[str, list[str]]] = None
-
-
-def _get_family_to_targets() -> dict[str, list[str]]:
-    """Return the family -> gfx targets mapping, parsed once from CMake."""
-    global _family_to_targets_cache
-    if _family_to_targets_cache is None:
-        cmake_path = (
-            Path(__file__).parent.parent / "cmake" / "therock_amdgpu_targets.cmake"
-        )
-        infos = parse_amdgpu_targets_cmake(cmake_path)
-        _family_to_targets_cache = build_family_to_targets(infos)
-    return _family_to_targets_cache
 
 
 def log(msg: str):
@@ -163,11 +149,10 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
             input_families = args.amdgpu_families.split(";")
             output_families.extend(input_families)
             if args.expand_family_to_targets:
-                family_map = _get_family_to_targets()
-                for input_family in input_families:
-                    for target in family_map.get(input_family, []):
-                        if target not in output_families:
-                            output_families.append(target)
+                family_map = amdgpu_family_map()
+                for target in expand_families(input_families, family_map, strict=False):
+                    if target not in output_families:
+                        output_families.append(target)
         if args.amdgpu_targets:
             output_families.extend(
                 t.strip() for t in args.amdgpu_targets.split(",") if t.strip()
@@ -298,7 +283,7 @@ class BootstrappingPopulator(ArtifactPopulator):
 
             # Do cleanup while holding lock to prevent race with extraction
             if full_path.exists():
-                shutil.rmtree(full_path)
+                rmtree_with_retry(full_path)
             # Write the ".prebuilt" marker file
             prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
             prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -333,7 +318,7 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
         else:
             output_dir = request.output_dir / artifact_name
             if output_dir.exists():
-                shutil.rmtree(output_dir)
+                rmtree_with_retry(output_dir)
             log(f"  ++ Extracting {archive_path.name}")
             with _open_archive_for_read(archive_path) as tf:
                 tf.extractall(output_dir, filter="tar")
@@ -483,7 +468,7 @@ def do_fetch(args: argparse.Namespace):
 
     # Cleanup download cache (skip when using a shared cache dir)
     if download_dir.exists() and not args.no_extract and not shared_cache:
-        shutil.rmtree(download_dir)
+        rmtree_with_retry(download_dir)
 
     # Fail if any downloads failed
     total_requested = len(download_requests)
@@ -744,7 +729,7 @@ def do_push(args: argparse.Namespace):
 
     # Cleanup upload cache
     if upload_dir.exists():
-        shutil.rmtree(upload_dir)
+        rmtree_with_retry(upload_dir)
 
     # Fail if any artifacts failed to upload
     if uploaded_count < total_artifacts:

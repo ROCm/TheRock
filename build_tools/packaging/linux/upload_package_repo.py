@@ -6,21 +6,29 @@
 """
 Packaging + repository upload tool.
 
-Usage:
-python ./build_tools/packaging/linux/upload_package_repo.py \
-             --pkg-type deb \
-             --s3-bucket therock-deb-rpm-test \
-             --amdgpu-family gfx94X-dcgpu \
-             --artifact-id 16418185899 \
-             --job nightly
+Usage (multi-arch CI — new-style, preferred):
+  python ./build_tools/packaging/linux/upload_package_repo.py \
+    --pkg-type deb \
+    --run-id 16418185899
 
-Dev upload location:
-  s3bucket/deb/<YYYYMMDD>-<artifact_id>
-  s3bucket/rpm/<YYYYMMDD>-<artifact_id>
+  Bucket + prefix are resolved automatically via WorkflowOutputRoot using
+  the GITHUB_REPOSITORY and RELEASE_TYPE environment variables:
+    - CI builds    → therock-ci-artifacts / <run_id>-linux/packages/deb
+    - dev builds   → therock-dev-artifacts / <run_id>-linux/packages/deb
+    - nightly      → therock-nightly-artifacts / <run_id>-linux/packages/deb
+    - prerelease   → therock-prerelease-artifacts / <run_id>-linux/packages/deb
 
-Nightly upload location:
-  s3bucket/deb/<YYYYMMDD>-<artifact_id>
-  s3bucket/rpm/<YYYYMMDD>-<artifact_id>
+Usage (single-arch release — legacy, build_native_linux_packages.yml):
+  python ./build_tools/packaging/linux/upload_package_repo.py \
+    --pkg-type deb \
+    --s3-bucket therock-nightly-packages \
+    --amdgpu-family gfx94X-dcgpu \
+    --artifact-id 16418185899 \
+    --job nightly
+
+  Legacy upload locations:
+    dev/nightly  → s3bucket/<pkg_type>/<YYYYMMDD>-<artifact_id>
+    prerelease   → s3bucket/v3/packages/<pkg_type>
 """
 
 import argparse
@@ -32,11 +40,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-
-# Import index generation helpers generate_package_indexes.py
 _THIS_DIR = Path(__file__).resolve().parent
+_BUILD_TOOLS_DIR = _THIS_DIR.parent.parent
+
 if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
+if str(_BUILD_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+
+from _therock_utils.storage_location import StorageLocation
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
+
+# Import index generation helpers generate_package_indexes.py
 
 from generate_package_indexes import (
     generate_index_from_s3,
@@ -599,73 +615,140 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
     return s3, uploaded_packages  # Return S3 client and list of uploaded packages
 
 
+def _emit_github_output(key: str, value: str) -> None:
+    """Write a key=value pair to $GITHUB_OUTPUT if running in GitHub Actions."""
+    github_output = os.environ.get("GITHUB_OUTPUT")
+    if github_output:
+        with open(github_output, "a") as f:
+            f.write(f"{key}={value}\n")
+
+
+def _package_install_url(bucket: str, prefix: str, pkg_type: str) -> str:
+    """Compute the package manager install URL for a given repo location.
+
+    For RPM repos, dnf/yum baseurl must point to the x86_64/ subdirectory
+    (the directory containing repodata/). For DEB repos, apt points to the
+    repo root (it resolves dists/ itself).
+    """
+    base = StorageLocation(bucket, prefix).https_url
+    if pkg_type == "rpm":
+        return f"{base}/x86_64"
+    return base
+
+
+def _resolve_upload_target(
+    args: argparse.Namespace,
+    pkg_type: str,
+) -> tuple[str, str, str, bool, str]:
+    """Resolve S3 bucket, prefix, install URL, dedupe flag, and job type.
+
+    Returns:
+        Tuple of (bucket, prefix, install_url, dedupe, job_type)
+    """
+    if args.run_id:
+        # New-style: derive bucket + prefix from WorkflowOutputRoot.
+        # This is the single source of truth for CI path layout.
+        root = WorkflowOutputRoot.from_workflow_run(
+            run_id=args.run_id, platform="linux"
+        )
+        loc = root.native_linux_packages(pkg_type)
+        job_type = os.environ.get("RELEASE_TYPE", "") or "ci"
+        install_url = _package_install_url(loc.bucket, loc.relative_path, pkg_type)
+        return loc.bucket, loc.relative_path, install_url, True, job_type
+
+    if args.s3_prefix:
+        # Legacy: explicit prefix provided by get_s3_config.py
+        return (
+            args.s3_bucket,
+            args.s3_prefix,
+            _package_install_url(args.s3_bucket, args.s3_prefix, pkg_type),
+            True,
+            args.job,
+        )
+
+    if args.job in ("nightly", "dev"):
+        prefix = f"{pkg_type}/{yyyymmdd()}-{args.artifact_id}"
+        return (
+            args.s3_bucket,
+            prefix,
+            _package_install_url(args.s3_bucket, prefix, pkg_type),
+            True,
+            args.job,
+        )
+
+    if args.job == "prerelease":
+        prefix = f"v3/packages/{pkg_type}"
+        return (
+            args.s3_bucket,
+            prefix,
+            _package_install_url(args.s3_bucket, prefix, pkg_type),
+            True,
+            args.job,
+        )
+
+    raise ValueError(f"Unknown job type: {args.job!r}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pkg-type", required=True, choices=["deb", "rpm"])
-    parser.add_argument("--s3-bucket", required=True)
+
+    # New-style args: use WorkflowOutputRoot for bucket/prefix resolution.
+    # When --run-id is provided, bucket and prefix are derived automatically
+    # from CI context (GITHUB_REPOSITORY, RELEASE_TYPE, fork detection).
     parser.add_argument(
-        "--amdgpu-family", required=False
-    )  # Kept for backward compatibility, not used
-    parser.add_argument("--artifact-id", required=True)
+        "--run-id",
+        help="GitHub Actions workflow run ID (enables WorkflowOutputRoot path resolution)",
+    )
+
+    # Legacy args: kept for backward compatibility with build_native_linux_packages.yml
+    parser.add_argument("--s3-bucket")
+    parser.add_argument("--amdgpu-family", required=False)  # unused, kept for compat
+    parser.add_argument("--artifact-id")
     parser.add_argument(
         "--job",
         default="dev",
-        choices=["dev", "nightly", "prerelease", "ci"],
-        help="Job type: dev, nightly, prerelease, or ci",
+        choices=["dev", "nightly", "prerelease"],
+        help="Job type (legacy, used when --run-id is not provided)",
     )
     parser.add_argument(
         "--s3-prefix",
         required=False,
-        help="Override S3 prefix (for backward compatibility, auto-generated if not provided)",
+        help="Override S3 prefix (legacy, used when --run-id is not provided)",
     )
 
     args = parser.parse_args()
     package_dir = find_package_dir()
 
-    # Setup the prefix based on build type
-    if args.s3_prefix:
-        # Use provided prefix (new behavior for multi-arch CI)
-        prefix = args.s3_prefix
-        dedupe = True
-    elif args.job in ["nightly", "dev"]:
-        # Legacy behavior: <pkg_type>/<YYYYMMDD>-<artifact_id>
-        prefix = f"{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
-        dedupe = True
-    elif args.job == "prerelease":
-        # Legacy behavior: v3/packages/<pkg_type>
-        prefix = f"v3/packages/{args.pkg_type}"
-        dedupe = True
-    elif args.job == "ci":
-        # CI builds: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
-        prefix = f"v3/packages/{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
-        dedupe = True
-    else:
-        raise ValueError(f"Unknown job type: {args.job}")
+    bucket, prefix, install_url, dedupe, job_type = _resolve_upload_target(
+        args, args.pkg_type
+    )
 
     if args.pkg_type == "deb":
-        create_deb_repo(package_dir, args.job)
+        create_deb_repo(package_dir, job_type)
     else:
         create_rpm_repo(package_dir)
 
     # Upload packages and metadata to S3
     s3_client, uploaded_packages = upload_to_s3(
-        package_dir, args.s3_bucket, prefix, dedupe=dedupe
+        package_dir, bucket, prefix, dedupe=dedupe
     )
 
     # Efficiently update repository metadata by merging with existing metadata
-    # (avoids re-downloading all packages from S3)
-    # Only generates metadata for actually uploaded packages (avoids duplicates from deduplication)
     regenerate_repo_metadata_from_s3(
-        s3_client, args.s3_bucket, prefix, args.pkg_type, uploaded_packages, args.job
+        s3_client, bucket, prefix, args.pkg_type, uploaded_packages, job_type
     )
 
-    # Generate index.html files from S3 state (recursive for specific upload)
-    generate_index_from_s3(s3_client, args.s3_bucket, prefix)
+    # Skip index.html generation for CI builds (handled by Lambda function)
+    if job_type != "ci":
+        generate_index_from_s3(s3_client, bucket, prefix)
+        top_prefix = prefix.split("/")[0]
+        generate_top_index_from_s3(s3_client, bucket, top_prefix)
+    else:
+        print("Skipping index.html generation for CI build")
 
-    # Generate a top-level index for the pkg type (e.g., 'deb' or 'rpm')
-    # Uses S3 Delimiter for efficiency (only lists folders, not all nested files)
-    top_prefix = prefix.split("/")[0]
-    generate_top_index_from_s3(s3_client, args.s3_bucket, top_prefix)
+    print(f"Package repository URL: {install_url}")
+    _emit_github_output("package_repository_url", install_url)
 
 
 if __name__ == "__main__":
