@@ -20,7 +20,6 @@ EXCLUDED_TESTS = [
     "openmp-target.*",
     "roctx-sampling",
     "roctx-runtime-instrument",
-    "thread-limit-above.*",
     "jacobi-usm-sys-run",
     "kfd.*",
     "selective-region-region-1-filter.*",
@@ -37,7 +36,7 @@ EXCLUDED_LABELS = [
     "lulesh",
     "network",
     "overflow",
-    "pthreads",
+    "thread_limit",
 ]
 
 # Limited to 15 minutes
