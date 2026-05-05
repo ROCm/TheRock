@@ -35,6 +35,20 @@ TYPICAL USAGE (Command Line):
     --execute \
     --use-release-buckets
 
+  # Upload wheels only using multi-arch (flat layout)
+  python ./build_tools/packaging/upload_release_packages.py \
+    --input-dir=./downloads \
+    --multi-arch \
+    --execute
+
+  # Upload wheels and tarballs using multi-arch (flat layout, production buckets)
+  python ./build_tools/packaging/upload_release_packages.py \
+    --input-dir=./downloads \
+    --upload-tarballs \
+    --multi-arch \
+    --execute \
+    --use-release-buckets
+
 DIRECTORY STRUCTURE:
   Input directory structure (created by download_prerelease_packages.py):
     <input-dir>/
@@ -58,6 +72,16 @@ DIRECTORY STRUCTURE:
       therock-dist-linux-<arch1>-<version>.tar.gz
       therock-dist-windows-<arch2>-<version>.tar.gz
       ...
+
+  S3 bucket structure for mult-arch:
+    v4/whl/
+    package1.whl
+    package2.whl
+    package1.tar.gz
+
+  v4/tarball/
+    therock-dist-linux-<arch1>-<version>.tar.gz
+    therock-dist-windows-<arch2>-<version>.tar.gz
 
 NOTE:
   Index file generation is handled separately by manage.py.
