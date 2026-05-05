@@ -51,12 +51,30 @@ class Submodule:
 
 
 @dataclass
+class ExternalGitSource:
+    """Represents an externally managed git checkout.
+
+    External git sources are not git submodules. They are fetched into ignored
+    locations under optional-sources/ and pinned by commit hash.
+    """
+
+    name: str
+    origin: str
+    commit: str
+    path: str
+
+    def __hash__(self):
+        return hash((self.name, self.path))
+
+
+@dataclass
 class SourceSet:
     """Represents a grouping of submodules for partial checkouts."""
 
     name: str
     description: str
     submodules: List[Submodule] = field(default_factory=list)
+    external_git_sources: List[ExternalGitSource] = field(default_factory=list)
     disable_platforms: List[str] = field(default_factory=list)
 
 
@@ -143,10 +161,20 @@ class BuildTopology:
             # Convert submodule names to Submodule objects
             submodule_names = set_data.get("submodules", [])
             submodules = [Submodule(name=name) for name in submodule_names]
+            external_git_sources = [
+                ExternalGitSource(
+                    name=source_data.get("name", ""),
+                    origin=source_data.get("origin", ""),
+                    commit=source_data.get("commit", ""),
+                    path=source_data.get("path", ""),
+                )
+                for source_data in set_data.get("external_git_sources", [])
+            ]
             self.source_sets[set_name] = SourceSet(
                 name=set_name,
                 description=set_data.get("description", ""),
                 submodules=submodules,
+                external_git_sources=external_git_sources,
                 disable_platforms=set_data.get("disable_platforms", []),
             )
 
@@ -405,12 +433,58 @@ class BuildTopology:
 
         # Validate source set disable_platforms
         for source_set_name, source_set in self.source_sets.items():
+            if not entity_pattern.match(source_set_name):
+                errors.append(
+                    f"Source set '{source_set_name}' should be lowercase-with-hyphens"
+                )
             for platform in source_set.disable_platforms:
                 if platform not in valid_platforms:
                     errors.append(
                         f"Source set '{source_set_name}' has invalid disable_platform '{platform}' "
                         f"(expected: {valid_platforms})"
                     )
+            for source in source_set.external_git_sources:
+                if not source.name:
+                    errors.append(
+                        f"Source set '{source_set_name}' has external git source with missing name"
+                    )
+                elif not entity_pattern.match(source.name):
+                    errors.append(
+                        f"External git source '{source.name}' should be lowercase-with-hyphens"
+                    )
+                if not source.origin:
+                    errors.append(
+                        f"External git source '{source.name}' in source set "
+                        f"'{source_set_name}' has missing origin"
+                    )
+                if not source.commit:
+                    errors.append(
+                        f"External git source '{source.name}' in source set "
+                        f"'{source_set_name}' has missing commit"
+                    )
+                if not source.path:
+                    errors.append(
+                        f"External git source '{source.name}' in source set "
+                        f"'{source_set_name}' has missing path"
+                    )
+                else:
+                    path = Path(source.path)
+                    if path.is_absolute():
+                        errors.append(
+                            f"External git source '{source.name}' path '{source.path}' "
+                            "must be relative"
+                        )
+                    path_parts = path.parts
+                    if (
+                        not path_parts
+                        or path_parts[0] != "optional-sources"
+                        or ".." in path_parts
+                        or len(path_parts) < 2
+                    ):
+                        errors.append(
+                            f"External git source '{source.name}' path '{source.path}' "
+                            "must be under optional-sources/"
+                        )
 
         return errors
 
@@ -440,6 +514,12 @@ class BuildTopology:
                 if dep_name not in self.artifact_groups:
                     errors.append(
                         f"Artifact group '{group.name}' depends on unknown group '{dep_name}'"
+                    )
+            for source_set_name in group.source_sets:
+                if source_set_name not in self.source_sets:
+                    errors.append(
+                        f"Artifact group '{group.name}' references unknown source set "
+                        f"'{source_set_name}'"
                     )
 
         # Check for missing artifact references
@@ -511,6 +591,19 @@ class BuildTopology:
         for artifact_name in self.artifacts:
             if artifact_name not in visited_artifacts:
                 has_artifact_cycle(artifact_name)
+
+        # Check for conflicting external source paths.
+        external_sources_by_path: Dict[str, str] = {}
+        for source_set in self.source_sets.values():
+            for source in source_set.external_git_sources:
+                previous_source_set = external_sources_by_path.get(source.path)
+                if previous_source_set and previous_source_set != source_set.name:
+                    errors.append(
+                        f"External git source path '{source.path}' is used by both "
+                        f"source sets '{previous_source_set}' and '{source_set.name}'"
+                    )
+                else:
+                    external_sources_by_path[source.path] = source_set.name
 
         return errors
 
@@ -607,6 +700,56 @@ class BuildTopology:
             raise ValueError(f"Source set '{source_set_name}' not found")
         return self.source_sets[source_set_name].submodules
 
+    def get_external_git_sources_for_source_set(
+        self, source_set_name: str
+    ) -> List[ExternalGitSource]:
+        """
+        Get the external git sources for a specific source set.
+
+        Args:
+            source_set_name: Name of the source set
+
+        Returns:
+            List of ExternalGitSource objects
+        """
+        if source_set_name not in self.source_sets:
+            raise ValueError(f"Source set '{source_set_name}' not found")
+        return self.source_sets[source_set_name].external_git_sources
+
+    def get_source_sets_for_stage(
+        self, build_stage: str, platform: Optional[str] = None
+    ) -> List[SourceSet]:
+        """
+        Get all source sets needed to build a specific stage.
+
+        Args:
+            build_stage: Name of the build stage
+            platform: Current platform (e.g., "linux", "windows"). If provided,
+                source_sets with this platform in disable_platforms are skipped.
+
+        Returns:
+            List of SourceSet objects needed for this stage
+        """
+        if build_stage not in self.build_stages:
+            raise ValueError(f"Build stage '{build_stage}' not found")
+
+        stage = self.build_stages[build_stage]
+        source_sets_by_name: Dict[str, SourceSet] = {}
+
+        for group_name in stage.artifact_groups:
+            if group_name not in self.artifact_groups:
+                continue
+            group = self.artifact_groups[group_name]
+            for source_set_name in group.source_sets:
+                if source_set_name in self.source_sets:
+                    source_set = self.source_sets[source_set_name]
+                    if platform and platform in source_set.disable_platforms:
+                        continue
+                    if source_set.name not in source_sets_by_name:
+                        source_sets_by_name[source_set.name] = source_set
+
+        return list(source_sets_by_name.values())
+
     def get_submodules_for_stage(
         self, build_stage: str, platform: Optional[str] = None
     ) -> List[Submodule]:
@@ -625,29 +768,41 @@ class BuildTopology:
         Returns:
             List of Submodule objects needed for this stage
         """
-        if build_stage not in self.build_stages:
-            raise ValueError(f"Build stage '{build_stage}' not found")
-
-        stage = self.build_stages[build_stage]
         # Use dict to dedupe by name while preserving order
         submodules_by_name: Dict[str, Submodule] = {}
 
-        for group_name in stage.artifact_groups:
-            if group_name not in self.artifact_groups:
-                continue
-            group = self.artifact_groups[group_name]
-            for source_set_name in group.source_sets:
-                if source_set_name in self.source_sets:
-                    source_set = self.source_sets[source_set_name]
-                    # Skip source sets disabled for this platform
-                    if platform and platform in source_set.disable_platforms:
-                        continue
-                    for submodule in source_set.submodules:
-                        # TODO: When adding sparse_checkout, merge specs here
-                        if submodule.name not in submodules_by_name:
-                            submodules_by_name[submodule.name] = submodule
+        for source_set in self.get_source_sets_for_stage(
+            build_stage, platform=platform
+        ):
+            for submodule in source_set.submodules:
+                # TODO: When adding sparse_checkout, merge specs here
+                if submodule.name not in submodules_by_name:
+                    submodules_by_name[submodule.name] = submodule
 
         return list(submodules_by_name.values())
+
+    def get_external_git_sources_for_stage(
+        self, build_stage: str, platform: Optional[str] = None
+    ) -> List[ExternalGitSource]:
+        """
+        Get all external git sources needed to build a specific stage.
+
+        Args:
+            build_stage: Name of the build stage
+            platform: Current platform (e.g., "linux", "windows"). If provided,
+                source_sets with this platform in disable_platforms are skipped.
+
+        Returns:
+            List of ExternalGitSource objects needed for this stage
+        """
+        sources_by_path: Dict[str, ExternalGitSource] = {}
+        for source_set in self.get_source_sets_for_stage(
+            build_stage, platform=platform
+        ):
+            for source in source_set.external_git_sources:
+                if source.path not in sources_by_path:
+                    sources_by_path[source.path] = source
+        return list(sources_by_path.values())
 
     def get_all_submodules(self) -> List[Submodule]:
         """
@@ -662,6 +817,20 @@ class BuildTopology:
                 if submodule.name not in submodules_by_name:
                     submodules_by_name[submodule.name] = submodule
         return list(submodules_by_name.values())
+
+    def get_all_external_git_sources(self) -> List[ExternalGitSource]:
+        """
+        Get all external git sources defined across all source sets.
+
+        Returns:
+            List of all ExternalGitSource objects (deduplicated by path)
+        """
+        sources_by_path: Dict[str, ExternalGitSource] = {}
+        for source_set in self.source_sets.values():
+            for source in source_set.external_git_sources:
+                if source.path not in sources_by_path:
+                    sources_by_path[source.path] = source
+        return list(sources_by_path.values())
 
     def get_python_requires_for_stage(self, build_stage: str) -> List[str]:
         """
