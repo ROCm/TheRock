@@ -39,6 +39,7 @@ import shutil
 import sys
 
 from _therock_utils.artifact_backend import ArtifactBackend, S3Backend
+from _therock_utils.os_util import rmtree_with_retry
 from _therock_utils.artifacts import (
     ArtifactName,
     ArtifactPopulator,
@@ -164,7 +165,7 @@ def extract_artifact(
     if postprocess_mode == "extract":
         output_dir = archive_file.parent / artifact_name
         if output_dir.exists():
-            shutil.rmtree(output_dir)
+            rmtree_with_retry(output_dir)
         with _open_archive_for_read(archive_file) as tf:
             log(f"++ Extracting '{archive_file.name}' to '{artifact_name}'")
             tf.extractall(archive_file.parent / artifact_name, filter="tar")

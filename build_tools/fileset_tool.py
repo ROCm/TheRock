@@ -20,12 +20,12 @@ from typing import Callable
 import argparse
 from pathlib import Path
 import sys
-import shutil
 import tarfile
 
 from _therock_utils.artifacts import ArtifactPopulator
 import _therock_utils.artifact_builder as artifact_builder
 from _therock_utils.hash_util import calculate_hash, write_hash
+from _therock_utils.os_util import rmtree_with_retry
 from _therock_utils.pattern_match import PatternMatcher
 
 
@@ -68,7 +68,7 @@ def do_artifact(args):
 
         # Setup output dir.
         if output_dir.exists():
-            shutil.rmtree(output_dir)
+            rmtree_with_retry(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         try:
