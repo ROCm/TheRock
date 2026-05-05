@@ -1017,12 +1017,18 @@ function(therock_cmake_subproject_activate target_name)
       OUTPUT_ON_FAILURE "${_output_on_failure}"
     )
 
+    # For HOST_ASAN diagnostic builds of rand subprojects, pass -v to ninja
+    # so the full compile and link commands appear in the build log.
+    set(_build_verbose_option)
+    if(THEROCK_SANITIZER STREQUAL "HOST_ASAN" AND target_name MATCHES "rocRAND|hipRAND")
+      set(_build_verbose_option "--" "-v")
+    endif()
     add_custom_command(
       OUTPUT "${_build_stamp_file}"
       COMMAND
         ${_build_log_prefix}
         "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
-        "${CMAKE_COMMAND}" "--build" "${_binary_dir}"
+        "${CMAKE_COMMAND}" "--build" "${_binary_dir}" ${_build_verbose_option}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_build_stamp_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Building sub-project ${target_name}${_build_comment_suffix}"
