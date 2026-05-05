@@ -25,7 +25,7 @@ on:
         type: string
         default: ""
       external_repo_config:
-        description: "JSON config for external repo checkout (repository, ref, checkout_path, cmake_source_dir_var)"
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
         type: string
         default: ""
       repository:

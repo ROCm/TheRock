@@ -53,7 +53,7 @@ on:
         type: string
         default: ""
       external_repo_config:
-        description: "JSON config for external repo checkout (repository, ref, checkout_path, cmake_source_dir_var)"
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
         type: string
         default: ""
     outputs:
@@ -91,7 +91,7 @@ on:
           HEAD moves during the workflow run.
         value: ${{ jobs.setup.outputs.ref }}
       external_repo_config:
-        description: "JSON config for external repo checkout (repository, ref, checkout_path, cmake_source_dir_var)"
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
         value: ${{ inputs.external_repo_config }}
 
 permissions:

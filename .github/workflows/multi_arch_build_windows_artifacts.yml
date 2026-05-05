@@ -59,7 +59,7 @@ on:
         type: string
         default: ""
       external_repo_config:
-        description: "JSON config for external repo checkout (repository, ref, checkout_path, cmake_source_dir_var)"
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
         type: string
         default: ""
 
@@ -182,7 +182,7 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            ${{ inputs.external_repo_config != '' && format('-D{0}={1}', fromJSON(inputs.external_repo_config).cmake_source_dir_var, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
+            ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
