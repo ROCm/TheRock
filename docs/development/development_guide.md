@@ -315,9 +315,24 @@ extension can be used to configure the superproject and build individual targets
 Settings for CMake builds can be specified in `.vscode/settings.json` or a
 `.vscode/*.code-workspace` file, like so:
 
+> [!IMPORTANT]
+> If using ccache, first run `setup_ccache.py` to generate the config file:
+>
+> ```bash
+> python build_tools/setup_ccache.py
+> ```
+>
+> Then set the `CCACHE_CONFIGPATH` environment variable in your VSCode
+> settings as shown below. See the
+> [README ccache instructions](../../README.md#ccache-usage-on-linux)
+> for full details.
+
 ```jsonc
 {
   "cmake.generator": "Ninja",
+  "cmake.environment": {
+    "CCACHE_CONFIGPATH": "${workspaceFolder}/.ccache/ccache.conf"
+  },
   "cmake.configureArgs": [
     // General settings.
     "-DTHEROCK_VERBOSE=ON",

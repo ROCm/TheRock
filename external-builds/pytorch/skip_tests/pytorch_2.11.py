@@ -60,15 +60,19 @@ skip_tests = {
             # new in 2.11
             # AssertionError: Scalars are not close!
             "test_CTCLoss_cudnn_cuda",
+            # AssertionError: Tensor-likes are not close! - https://github.com/ROCm/TheRock/issues/4744
+            # Failed on gfx1151 and gfx942 (only with python 3.13)
+            "test_Embedding_discontiguous_cuda",
         ],
         "torch": [
             "test_cpp_warnings_have_python_context_cuda",
         ],
     },
-    "gfx1151": {
-        "nn": [
-            # AssertionError: Tensor-likes are not close! - https://github.com/ROCm/TheRock/issues/4744
-            "test_Embedding_discontiguous_cuda",
+    "gfx942": {
+        "cuda": [
+            # new test
+            # AssertionError: Scalars are not equal!
+            "test_graph_capture_reclaim_shared_pool",
         ],
     },
     # "gfx120": {

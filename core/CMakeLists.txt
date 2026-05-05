@@ -175,18 +175,65 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   therock_cmake_subproject_glob_c_sources(rocminfo SUBDIRS .)
   therock_cmake_subproject_activate(rocminfo)
 
+  set(_core_runtime_subproject_deps
+    ROCR-Runtime
+    rocminfo
+  )
+  set(_core_runtime_artifact_components
+    dbg
+    dev
+    doc
+    lib
+    run
+  )
+
+  if(THEROCK_FLAG_INCLUDE_HRX)
+    ############################################################################
+    # HRX
+    ############################################################################
+
+    therock_cmake_subproject_declare(hrx
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/optional-sources/hrx"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hrx"
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
+      CMAKE_ARGS
+        "-DBUILD_SHARED_LIBS=ON"
+        "-DHRX_BUILD_CTS=ON"
+        "-DIREE_BUILD_TESTS=OFF"
+      BUILD_DEPS
+        amd-llvm
+        therock-catch2
+      RUNTIME_DEPS
+        ROCR-Runtime
+      INSTALL_DESTINATION
+        "lib/hrx"
+      INTERFACE_PROGRAM_DIRS
+        "lib/hrx/bin"
+      INTERFACE_LINK_DIRS
+        "lib/hrx/lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib/hrx/lib"
+      INSTALL_RPATH_EXECUTABLE_DIR
+        "lib/hrx/bin"
+      INSTALL_RPATH_LIBRARY_DIR
+        "lib/hrx/lib"
+    )
+    therock_cmake_subproject_provide_package(hrx hrx lib/hrx/lib/cmake/hrx)
+    therock_cmake_subproject_activate(hrx)
+    list(APPEND _core_runtime_subproject_deps hrx)
+    list(APPEND _core_runtime_artifact_components test)
+  endif()
+
   therock_provide_artifact(core-runtime
     TARGET_NEUTRAL
     DESCRIPTOR artifact-core-runtime.toml
     COMPONENTS
-      dbg
-      dev
-      doc
-      lib
-      run
+      ${_core_runtime_artifact_components}
     SUBPROJECT_DEPS
-      ROCR-Runtime
-      rocminfo
+      ${_core_runtime_subproject_deps}
   )
 
 endif(THEROCK_ENABLE_CORE_RUNTIME)
