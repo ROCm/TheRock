@@ -21,6 +21,10 @@ on:
         description: Staging subdirectory to push the wheels for test
         type: string
         default: "v2-staging"
+      cloudfront_url:
+        description: CloudFront URL pointing to Python index
+        required: true
+        type: string
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         required: true
@@ -66,6 +70,10 @@ on:
         description: "Staging subdirectory to push the wheels for test"
         type: string
         default: "v2-staging"
+      cloudfront_url:
+        description: CloudFront URL pointing to Python index
+        type: string
+        default: "https://rocm.devreleases.amd.com/v2"
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         type: string
