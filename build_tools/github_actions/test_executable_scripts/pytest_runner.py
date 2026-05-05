@@ -285,7 +285,8 @@ if __name__ == "__main__":
 
     # Source-based components (run from source tree, not installed artifacts)
     SOURCE_BASED_COMPONENTS = {
-        "tensilelite": "projects/hipblaslt/tensilelite",
+        "tensile": "shared/tensile",
+        "tensilite": "projects/hipblaslt/tensilite",
     }
 
     # Components that install to OUTPUT_ARTIFACTS_DIR instead of THEROCK_BIN_DIR
