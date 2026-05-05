@@ -99,6 +99,17 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "aux-overlay",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "False",
@@ -158,17 +169,6 @@
             "Name": "hipcc",
             "Components": [
               "dev"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "base",
-        "Artifact_Subdir": [
-          {
-            "Name": "aux-overlay",
-            "Components": [
-              "lib"
             ]
           }
         ]
@@ -326,6 +326,59 @@
       }
     ],
     "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-runtime-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime-devel",
+      "amdrocm-sysdeps",
+      "amdrocm-base",
+      "amdrocm-llvm"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime-devel",
+      "amdrocm-sysdeps",
+      "amdrocm-base",
+      "amdrocm-llvm"
+    ],
+    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
+    "Description_Short": "AMD HIP test files for ROCm platforms",
+    "Description_Long": "AMD HIP test files for ROCm platforms",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "core-hiptests",
+        "Artifact_Subdir": [
+          {
+            "Name": "hip-tests",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "rocrtst",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocrtst",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False",
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-fft-test",
@@ -526,7 +579,13 @@
               "doc"
             ]
           },
-
+          {
+            "Name": "origami",
+            "Components": [
+              "lib",
+              "run"
+            ]
+          },
           {
             "Name": "hipBLASLt",
             "Components": [
@@ -541,6 +600,18 @@
               "lib",
               "run",
               "doc"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "hipblasltprovider",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipblasltprovider",
+            "Components": [
+              "lib"
             ]
           }
         ]
@@ -686,9 +757,26 @@
               "test"
             ]
           },
-
+          {
+            "Name": "origami",
+            "Components": [
+              "test"
+            ]
+          },
           {
             "Name": "hipBLASLt",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "hipblasltprovider",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipblasltprovider",
             "Components": [
               "test"
             ]
@@ -1074,6 +1162,64 @@
     "Gfxarch": "True"
   },
   {
+    "Package": "amdrocm-ccl-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-ccl-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-ccl-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm primitive library test files",
+    "Description_Long": "Contains rocprim, hipcub and rocthrust test files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "prim",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocPRIM_tests",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "hipCUB",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "rocThrust",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "rocwmma",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocWMMA",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
     "Package": "amdrocm-ccl-devel",
     "Version": "",
     "Architecture": "amd64",
@@ -1123,6 +1269,17 @@
         "Artifact_Subdir": [
           {
             "Name": "libhipcxx",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "rocwmma",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocWMMA",
             "Components": [
               "dev"
             ]
@@ -1373,6 +1530,28 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocm-cmake",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "half",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
       }
     ],
 
@@ -1553,7 +1732,6 @@
           }
         ]
       },
-
       {
         "Artifact": "sysdeps-expat",
         "Artifact_Subdir": [
@@ -1567,7 +1745,36 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "sysdeps-hwloc",
+        "Artifact_Subdir": [
+          {
+            "Name": "hwloc",
+            "Components": [
+              "lib",
+              "dev",
+              "doc",
+              "run"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "sysdeps-libpciaccess",
+        "Artifact_Subdir": [
+          {
+            "Name": "libpciaccess",
+            "Components": [
+              "lib",
+              "dev",
+              "doc",
+              "run"
+            ]
+          }
+        ]
       }
+
     ],
 
     "Gfxarch": "False",
@@ -1650,18 +1857,6 @@
               "lib",
               "run",
               "doc"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "rocwmma",
-        "Artifact_Gfxarch": "True",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocWMMA",
-            "Components": [
-              "dev"
             ]
           }
         ]
@@ -1778,8 +1973,7 @@
       }
     ],
 
-    "Gfxarch": "True",
-    "DisablePackaging": "True"
+    "Gfxarch": "False"
   },
 
   {
@@ -1823,7 +2017,7 @@
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
 
   {
@@ -1863,7 +2057,84 @@
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "False"
+  },
+
+  {
+    "Package": "amdrocm-rocshmem",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-base"
+    ],
+    "RPMRequires": [
+      "amdrocm-base"
+    ],
+    "Maintainer": "rocSHMEM Maintainer <rocshmem-maintainer@amd.com>",
+    "Description_Short": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Description_Long": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems/",
+    "Artifactory": [
+      {
+        "Artifact": "rocshmem",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocshmem",
+            "Components": [
+              "run",
+              "lib",
+              "doc"
+            ]
+          }
+        ]
+      }
+    ],
+
+    "Gfxarch": "False"
+  },
+
+  {
+    "Package": "amdrocm-rocshmem-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-rocshmem"
+    ],
+    "RPMRequires": [
+      "amdrocm-rocshmem"
+    ],
+    "Maintainer": "rocSHMEM Maintainer <rocshmem-maintainer@amd.com>",
+    "Description_Short": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Description_Long": "The ROCm OpenSHMEM (rocSHMEM) library, is an intra-kernel networking library that provides GPU-centric networking",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems/",
+    "Artifactory": [
+      {
+        "Artifact": "rocshmem",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocshmem",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+
+    "Gfxarch": "False"
   },
 
   {
@@ -1914,6 +2185,30 @@
             "Components": [
               "lib",
               "doc"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "miopenprovider",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "miopenprovider",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "flatbuffers",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "flatbuffers",
+            "Components": [
+              "run"
             ]
           }
         ]
@@ -1972,6 +2267,41 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "miopenprovider",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "miopenprovider",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "hipdnn-samples",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipdnn_samples",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "hipdnn-integration-tests",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipdnn_integration_tests",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "True"
@@ -2018,6 +2348,30 @@
             "Name": "MIOpen",
             "Components": [
               "run",
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "flatbuffers",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "flatbuffers",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "nlohmann-json",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "nlohmann-json",
+            "Components": [
               "dev"
             ]
           }
@@ -2135,6 +2489,53 @@
       }
 
     ],
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-debugger-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "ROCm Debugger Support <rocm-gdb.support@amd.com>",
+    "Description_Short": "ROCm debugger test files",
+    "Description_Long": "Test files for AMD ROCm debugger including rocr-debug-agent-tests and rocgdb-test",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT AND GPL AND NCSA",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocGdb",
+    "Artifactory": [
+      {
+        "Artifact": "rocr-debug-agent-tests",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocr-debug-agent-tests",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "rocgdb",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocgdb",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Disable_DWZ": "True",
     "Gfxarch": "False"
   },
   {
@@ -2377,6 +2778,7 @@
       "amdrocm-ck",
       "amdrocm-dnn",
       "amdrocm-rccl",
+      "amdrocm-rocshmem",
       "amdrocm-math-common",
       "amdrocm-amdsmi",
       "amdrocm-hipify",
@@ -2396,6 +2798,7 @@
       "amdrocm-ck",
       "amdrocm-dnn",
       "amdrocm-rccl",
+      "amdrocm-rocshmem",
       "amdrocm-math-common",
       "amdrocm-amdsmi",
       "amdrocm-hipify",
@@ -2456,6 +2859,7 @@
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
+      "amdrocm-rocshmem-devel",
       "amdrocm-dnn-devel",
       "amdrocm-decode-devel",
       "amdrocm-jpeg-devel"
@@ -2473,6 +2877,7 @@
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
+      "amdrocm-rocshmem-devel",
       "amdrocm-dnn-devel",
       "amdrocm-decode-devel",
       "amdrocm-jpeg-devel"
@@ -2487,6 +2892,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
+    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {

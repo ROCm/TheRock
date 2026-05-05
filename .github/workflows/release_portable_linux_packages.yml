@@ -75,8 +75,8 @@ jobs:
       release_type: ${{ inputs.release_type || 'nightly' }}
     outputs:
       version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
-      rpm_version: ${{ steps.rocm_native_package_version.outputs.rocm_rpm_package_version }}
-      deb_version: ${{ steps.rocm_native_package_version.outputs.rocm_deb_package_version }}
+      rpm_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
+      deb_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       release_type: ${{ env.release_type }}
       package_targets: ${{ steps.configure.outputs.package_targets }}
       cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
@@ -101,22 +101,6 @@ jobs:
           python ./build_tools/compute_rocm_package_version.py \
             --release-type=${{ env.release_type }} \
             --prerelease-version=${{ inputs.prerelease_version }}
-
-      - name: Compute native package version
-        id: rocm_native_package_version
-        run: |
-          # Compute rpm package version
-          # This sets the 'rocm_rpm_package_version' output
-          python ./build_tools/compute_rocm_package_version.py \
-            --release-type=${{ env.release_type }} \
-            --prerelease-version=${{ inputs.prerelease_version }} \
-            --package-type="rpm"
-          # Compute debian package version
-          # This sets the 'rocm_deb_package_version' output
-          python ./build_tools/compute_rocm_package_version.py \
-            --release-type=${{ env.release_type }} \
-            --prerelease-version=${{ inputs.prerelease_version }} \
-            --package-type="deb"
 
       - name: Set variables for nightly release
         if: ${{ env.release_type == 'nightly' }}
@@ -160,7 +144,7 @@ jobs:
     name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
       options: -v /runner/config:/home/awsconfig/
     continue-on-error: ${{ matrix.target_bundle.expect_failure == true }} # for GPU families that are flaky, we mark as xfail
     timeout-minutes: 720 # 12 hour timeout
@@ -322,10 +306,6 @@ jobs:
         run: |
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py  ${{ env.CUSTOM_PREFIX }}
-          python ./build_tools/index_generation_s3_tar.py \
-            --bucket ${{ env.S3_BUCKET_TAR }} \
-            --directory ${{ env.S3_SUBDIR_TAR }} \
-            --upload
 
       - name: Trigger building PyTorch wheels
         if: ${{ github.repository_owner == 'ROCm' && matrix.target_bundle.expect_pytorch_failure == false }}

@@ -17,8 +17,24 @@ include(therock_flag_utils)
 
 therock_declare_flag(
   NAME KPACK_SPLIT_ARTIFACTS
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON
   DESCRIPTION "Split target-specific artifacts into generic and arch-specific components"
+)
+
+therock_declare_flag(
+  NAME HIP_KERNEL_PROVIDER_ENABLE
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable hip-kernel-provider plugin"
+  CMAKE_VARS
+    HIP_KERNEL_PROVIDER_ENABLE=ON
+  SUB_PROJECTS
+    hipkernelprovider
+)
+
+therock_declare_flag(
+  NAME INCLUDE_HRX
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Include experimental HRX runtime in core-runtime"
 )
 
 ###############################################################################
@@ -28,6 +44,10 @@ therock_declare_flag(
 # therock_override_flag_default().
 ###############################################################################
 include("${CMAKE_CURRENT_SOURCE_DIR}/BRANCH_FLAGS.cmake" OPTIONAL)
+include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_branch_config.cmake" OPTIONAL)
+if(COMMAND therock_apply_branch_config_flags)
+  therock_apply_branch_config_flags()
+endif()
 
 ###############################################################################
 # Finalize all flags and report.
