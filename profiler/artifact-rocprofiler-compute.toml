@@ -1,6 +1,7 @@
 # rocprofiler-compute
 [components.lib."profiler/rocprofiler-compute/stage"]
 include = [
+  "lib/rocprofiler-compute/**",
   "libexec/rocprofiler-compute/**",
 ]
 [components.run."profiler/rocprofiler-compute/stage"]
