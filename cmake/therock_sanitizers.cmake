@@ -36,7 +36,15 @@ function(therock_sanitizer_configure
     string(APPEND _stanza "set(THEROCK_SANITIZER \"${_sanitizer}\")\n")
     # TODO: Support ASAN_STATIC to use static ASAN linkage. Shared is almost always the right thing,
     # so make "ASAN" imply shared linkage.
-    string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize=address -fno-omit-frame-pointer -g\")\n")
+    if(_sanitizer STREQUAL "HOST_ASAN")
+      # Confine -fsanitize=address to the host compilation pass only.
+      # -Xarch_host passes the next flag to the host pass exclusively; the device
+      # pass never sees it and never begins ASAN metadata accounting, which would
+      # otherwise corrupt HIP fat binaries on targets without xnack+ (e.g. gfx942).
+      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -Xarch_host -fsanitize=address -fno-omit-frame-pointer -g\")\n")
+    else()
+      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize=address -fno-omit-frame-pointer -g\")\n")
+    endif()
     string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize=address -fno-omit-frame-pointer -g\")\n")
     # Sharp edge: The -shared-libsan flag is compiler frontend specific:
     #   gcc (and gfortran): defaults to shared sanitizer linkage
