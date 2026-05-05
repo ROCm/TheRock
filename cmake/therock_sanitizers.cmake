@@ -53,8 +53,20 @@ function(therock_sanitizer_configure
       # the linker), so -Xarch_host -fsanitize=address is cleanly confined to
       # compilation steps. The link side is handled separately below by
       # directly linking the ASAN runtime library (bypassing -fsanitize=address).
+      # Disable ASAN global variable instrumentation (-asan-globals=0) to
+      # prevent ASAN from inserting redzones around host-side globals like
+      # .hipFatBinSegment. ASAN redzones expand each fat binary wrapper from
+      # 24 bytes to 64 bytes, corrupting the contiguous layout that
+      # split_artifacts.py expects. Heap and stack ASAN detection are retained;
+      # only global variable overflow detection is lost (acceptable trade-off).
+      # -mllvm passes the next arg to LLVM; both need -Xarch_host so they're
+      # confined to the host pass and appear adjacent in the host flag list.
       string(APPEND _stanza "add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Xarch_host>\n")
       string(APPEND _stanza "  $<$<COMPILE_LANGUAGE:CXX>:-fsanitize=address>\n")
+      string(APPEND _stanza "  $<$<COMPILE_LANGUAGE:CXX>:-Xarch_host>\n")
+      string(APPEND _stanza "  $<$<COMPILE_LANGUAGE:CXX>:-mllvm>\n")
+      string(APPEND _stanza "  $<$<COMPILE_LANGUAGE:CXX>:-Xarch_host>\n")
+      string(APPEND _stanza "  $<$<COMPILE_LANGUAGE:CXX>:-asan-globals=0>\n")
       string(APPEND _stanza "  $<$<COMPILE_LANGUAGE:CXX>:-fno-omit-frame-pointer>\n")
       string(APPEND _stanza "  $<$<COMPILE_LANGUAGE:CXX>:-g>)\n")
     else()
