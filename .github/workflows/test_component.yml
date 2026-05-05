@@ -187,12 +187,17 @@ jobs:
             bash -c '${{ fromJSON(inputs.component).test_script }}'
 
       - name: Report failed tests
-        if: ${{ failure() && steps.test.outcome == 'failure' }}
+        if: ${{ !success() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled') }}
+        env:
+          # Map step outcomes to exit codes for fallback reporting
+          # failure = 1, cancelled (timeout) = 124 (standard timeout exit code)
+          TEST_EXIT_CODE: ${{ steps.test.outcome == 'cancelled' && '124' || '1' }}
         run: |
           python ./test_tools/report_failed_tests.py \
             --results-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}/test-results" \
             --output-file "${{ env.OUTPUT_ARTIFACTS_DIR }}/test-results/test-metrics.json" \
-            --step-name "${{ fromJSON(inputs.component).job_name }}"
+            --step-name "${{ fromJSON(inputs.component).job_name }}" \
+            --exit-code "$TEST_EXIT_CODE"
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}

@@ -27,6 +27,11 @@ from pathlib import Path
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+# Add test_tools to path for test_utils
+sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
+from test_utils import add_ctest_junit_args
+
 VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
 TEST_TYPE = os.getenv("TEST_TYPE", "quick")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
@@ -237,9 +242,18 @@ def check_available_labels():
         sys.exit(1)
 
 
-def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels):
+def build_ctest_command(
+    category, gpu_arch, available_gpu_archs, exclude_labels, component: str
+):
     """
     Build the appropriate ctest command based on the category and GPU architecture.
+
+    Args:
+        category: Test category (quick, standard, comprehensive, full)
+        gpu_arch: GPU architecture string (e.g., "gfx942")
+        available_gpu_archs: Set of available GPU architecture labels
+        exclude_labels: Set of labels to exclude
+        component: Component name for JUnit XML output naming
 
     Returns a list of command arguments suitable for subprocess.run()
     """
@@ -293,6 +307,9 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
         ]
     )
 
+    # Add JUnit XML output for structured test reporting
+    cmd = add_ctest_junit_args(cmd, component)
+
     return cmd
 
 
@@ -338,8 +355,10 @@ def main():
         print(f"# Found exclude labels: {sorted(exclude_labels)}")
     print()
 
-    # Build the ctest command
-    cmd = build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
+    # Build the ctest command (use job name for consistent naming in reports)
+    cmd = build_ctest_command(
+        category, gpu_arch, available_gpu_archs, exclude_labels, test_component_job_name
+    )
 
     print(f"# Running: {' '.join(cmd)}")
     print()

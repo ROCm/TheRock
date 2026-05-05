@@ -75,11 +75,18 @@ class FindMatchingGpuArchTest(unittest.TestCase):
 class BuildCtestCommandTest(unittest.TestCase):
     """Tests for build_ctest_command()."""
 
-    def _build(self, category, gpu_arch, available_gpu_archs, exclude_labels=None):
+    def _build(
+        self,
+        category,
+        gpu_arch,
+        available_gpu_archs,
+        exclude_labels=None,
+        component="test-component",
+    ):
         if exclude_labels is None:
             exclude_labels = set()
         return test_runner.build_ctest_command(
-            category, gpu_arch, available_gpu_archs, exclude_labels
+            category, gpu_arch, available_gpu_archs, exclude_labels, component
         )
 
     def test_category_is_first_label(self):
@@ -125,12 +132,24 @@ class BuildCtestCommandTest(unittest.TestCase):
         self.assertIn("-V", cmd)
         self.assertIn("--tests-information", cmd)
 
+    def test_junit_output_added(self):
+        cmd = self._build("quick", "", set(), component="rocblas")
+        self.assertIn("--output-junit", cmd)
+        junit_idx = cmd.index("--output-junit")
+        junit_path = cmd[junit_idx + 1]
+        self.assertIn("ctest-rocblas", junit_path)
+        self.assertTrue(junit_path.endswith(".xml"))
+
     def test_category_exclude_label_applied(self):
         exclude_labels = {"quick_exclude", "standard_exclude"}
         cmd = self._build("quick", "", set(), exclude_labels)
         le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
         le_values = [cmd[i + 1] for i in le_indices]
-        self.assertIn("quick_exclude", le_values)
+        # Labels are now combined with | (OR) semantics
+        self.assertTrue(
+            any("quick_exclude" in v for v in le_values),
+            f"Expected 'quick_exclude' in one of {le_values}",
+        )
 
     def test_category_exclude_label_not_applied_when_absent(self):
         exclude_labels = {"standard_exclude"}
