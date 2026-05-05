@@ -8,6 +8,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+try:
+    from test_filter_utils import run_ctest
+
+    _has_test_filter_utils = True
+except ImportError:
+    _has_test_filter_utils = False
+
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
@@ -29,9 +36,25 @@ if is_asan():
 
 logging.basicConfig(level=logging.INFO)
 
-# If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the normal test suite
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 test_type = os.getenv("TEST_TYPE", "full")
+
+if _has_test_filter_utils:
+    logging.info("Using ctest label-based filtering via test_filter_utils")
+    sys.exit(
+        run_ctest(
+            test_dir=str(Path(THEROCK_BIN_DIR) / "rocblas"),
+            env=environ_vars,
+            cwd=str(THEROCK_DIR),
+            test_type=test_type,
+            amdgpu_families=AMDGPU_FAMILIES,
+            shard_index=int(SHARD_INDEX),
+            total_shards=int(TOTAL_SHARDS),
+        )
+    )
+
+# Fallback: use rocblas-test when test_filter_utils is not available
+logging.info("test_filter_utils not available, falling back to rocblas-test")
 if test_type == "quick":
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 else:

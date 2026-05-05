@@ -83,7 +83,7 @@ test_matrix = {
         # GHA step timeout: max category timeout in rocBLAS should be 24 hours / 6 shards = 4 hours per shard
         # 240 min + 20% margin = 288 min
         "timeout_minutes": 288,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 6,
@@ -249,7 +249,7 @@ test_matrix = {
         # GHA step timeout: max category timeout in hipsparselt should be 6 hours / 6 shards = 60 min per shard
         # 60 min + 20% margin = 72 min
         "timeout_minutes": 72,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 6,
@@ -323,7 +323,7 @@ test_matrix = {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "test_script": f"python {_get_script_path('test_miopen.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 4,
@@ -471,7 +471,7 @@ test_matrix = {
             "libexec/rocprofiler-compute/requirements.txt",
             "libexec/rocprofiler-compute/requirements-test.txt",
         ],
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "test_script": f"python {_get_script_path('test_rocprofiler_compute.py')}",
         "platform": ["linux"],
         "total_shards_dict": {"linux": 2},
     },
