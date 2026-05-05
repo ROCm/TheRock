@@ -160,6 +160,9 @@ _SKIPPABLE_PATH_PATTERNS = [
     "dockerfiles/*",
     # Changes to experimental code do not run standard build/test workflows.
     "experimental/*",
+    # Changes to hipFile do not need to trigger TheRock CI at this time.
+    ".github/workflows/hipfile-*.yml",
+    "projects/hipfile/*",
 ]
 
 # GitHub workflow file patterns that are considered CI-related.
