@@ -129,7 +129,7 @@ jobs:
       amdgpu_family: ${{ matrix.family.amdgpu_family }}
       package_version: ${{ needs.setup.outputs.rocm_package_version }}
       release_type: ""
-      tarball_url: ${{ fromJSON(needs.linux_build_tarballs.outputs.tarball_urls)[matrix.family.amdgpu_family] }}   
+      tarball_url: ${{ fromJSON(needs.linux_build_tarballs.outputs.tarball_urls)[matrix.family.amdgpu_family] }}
 
   windows_build_and_test:
     name: Windows::${{ fromJSON(needs.setup.outputs.windows_build_config || '{}').build_variant_label || 'skip' }}

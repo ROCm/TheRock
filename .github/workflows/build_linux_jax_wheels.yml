@@ -283,10 +283,22 @@ jobs:
           PLATFORM: "linux"
         run: python ./build_tools/github_actions/configure_target_run.py
 
+  validate_test_inputs:
+    name: Validate test configuration
+    runs-on: ubuntu-24.04
+    if: ${{ inputs.run_tests }}
+    steps:
+      - name: Validate cloudfront_staging_url
+        run: |
+          if [ -z "${{ inputs.cloudfront_staging_url }}" ]; then
+            echo "ERROR: run_tests=true requires cloudfront_staging_url to be set"
+            exit 1
+          fi
+
   test_jax_wheels:
     name: Test JAX wheels | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
-    if: ${{ inputs.run_tests && inputs.cloudfront_staging_url != '' && needs.generate_target_to_run.outputs.test_runs_on != '' }}
-    needs: [build_jax_wheels, generate_target_to_run]
+    if: ${{ inputs.run_tests && needs.generate_target_to_run.outputs.test_runs_on != '' }}
+    needs: [build_jax_wheels, generate_target_to_run, validate_test_inputs]
     permissions:
       contents: read
       packages: read
