@@ -91,8 +91,10 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     outputs:
       package_install_url: ${{ steps.upload-packages.outputs.package_repository_url }}
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
+      options: -v /runner/config:/home/awsconfig/
     env:
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || '' }}
       OUTPUT_DIR: ${{ github.workspace }}/output
