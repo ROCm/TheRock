@@ -137,7 +137,6 @@ jobs:
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
       release_type: ${{ inputs.release_type }}
-      external_repo_config: ${{ inputs.external_repo_config }}
 
   build_native_deb_packages:
     needs: [build_multi_arch_stages]
