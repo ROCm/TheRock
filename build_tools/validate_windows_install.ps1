@@ -505,7 +505,6 @@ $sccacheCmd = Get-Command sccache -ErrorAction SilentlyContinue
 if ($ccacheCmd) {
     $ccVer = ((& ccache --version 2>&1 | Select-Object -First 1) -replace "ccache version ", "").Trim()
     Write-Pass "ccache $ccVer (speeds up rebuilds)"
-    Write-Info "Note: use -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded with ccache to avoid /Zi conflicts"
 } elseif ($sccacheCmd) {
     $scVer = ((& sccache --version 2>&1) -replace "sccache ", "").Trim()
     Write-Pass "sccache $scVer (speeds up rebuilds)"

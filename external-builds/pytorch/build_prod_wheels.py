@@ -672,6 +672,10 @@ def do_build(args: argparse.Namespace):
         print("Building with ccache, clearing stats first")
         env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
+        if is_windows:
+            # ccache does not support MSVC's /Zi flag. Embedded (/Z7) is needed.
+            # See: https://github.com/ccache/ccache/issues/1040
+            env["CMAKE_MSVC_DEBUG_INFORMATION_FORMAT"] = "Embedded"
         run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
     elif args.use_sccache:
         build_tools_dir = Path(__file__).resolve().parent.parent.parent / "build_tools"
