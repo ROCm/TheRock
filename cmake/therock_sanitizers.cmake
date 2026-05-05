@@ -54,8 +54,20 @@ function(therock_sanitizer_configure
     # Only enable ASAN for C/C++ for now. Include fortran once the toolchain
     # is available and can be used for portable builds.
     # https://github.com/ROCm/TheRock/issues/1782
-    string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-fsanitize=address>\n")
-    string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
+    #
+    # HOST_ASAN link-flag sharp edge: clang++ in HIP link mode processes link options
+    # the same way as compile options — bare -fsanitize=address triggers ASAN metadata
+    # accounting in the device sections of the fat binary before per-arch splitting,
+    # corrupting .hipFatBinSegment on targets without xnack+ (e.g. gfx942).
+    # -Xarch_host confines the flag to the host link pass only, mirroring the compile fix.
+    if(_sanitizer STREQUAL "HOST_ASAN")
+      string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-Xarch_host>\n")
+      string(APPEND _stanza "  $<$<LINK_LANGUAGE:C,CXX>:-fsanitize=address>\n")
+      string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
+    else()
+      string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-fsanitize=address>\n")
+      string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
+    endif()
     # Device-side ASAN: Only for full ASAN mode, not HOST_ASAN.
     # Filter GPU_TARGETS to enable xnack+ mode only for gfx targets that support it.
     if(_sanitizer STREQUAL "ASAN")
