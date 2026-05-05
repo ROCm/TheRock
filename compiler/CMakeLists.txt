@@ -176,14 +176,15 @@ if(THEROCK_ENABLE_COMPILER)
       COMMAND
         "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
         --target check-lld
-      LABEL check-mlir
-      COMMAND
-        "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
-        --target check-mlir
     )
-    # Flang is only enabled on Linux (not in LLVM_ENABLE_PROJECTS on Windows).
+    # MLIR is implicitly enabled as a dependency of Flang, and Flang is only
+    # enabled on Linux (not in LLVM_ENABLE_PROJECTS on Windows).
     if(NOT WIN32)
       list(APPEND _llvm_test_commands
+        LABEL check-mlir
+        COMMAND
+          "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
+          --target check-mlir
         LABEL check-flang
         COMMAND
           "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build"
