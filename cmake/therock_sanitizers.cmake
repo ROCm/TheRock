@@ -51,7 +51,8 @@ function(therock_sanitizer_configure
       # -fsanitize=address in the link command.
       # add_compile_options populates COMPILE_OPTIONS (compile-only; never passed to
       # the linker), so -Xarch_host -fsanitize=address is cleanly confined to
-      # compilation steps. The link side is handled separately by add_link_options below.
+      # compilation steps. The link side is handled separately below by
+      # directly linking the ASAN runtime library (bypassing -fsanitize=address).
       string(APPEND _stanza "add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Xarch_host>\n")
       string(APPEND _stanza "  $<$<COMPILE_LANGUAGE:CXX>:-fsanitize=address>\n")
       string(APPEND _stanza "  $<$<COMPILE_LANGUAGE:CXX>:-fno-omit-frame-pointer>\n")
@@ -69,15 +70,42 @@ function(therock_sanitizer_configure
     # is available and can be used for portable builds.
     # https://github.com/ROCm/TheRock/issues/1782
     #
-    # HOST_ASAN link-flag sharp edge: clang++ in HIP link mode processes link options
-    # the same way as compile options — bare -fsanitize=address triggers ASAN metadata
-    # accounting in the device sections of the fat binary before per-arch splitting,
-    # corrupting .hipFatBinSegment on targets without xnack+ (e.g. gfx942).
-    # -Xarch_host confines the flag to the host link pass only, mirroring the compile fix.
+    # HOST_ASAN link-flag sharp edge: clang++ in HIP link mode (triggered by
+    # hip::device injecting --hip-link via INTERFACE_LINK_LIBRARIES) processes
+    # ALL link flags — including -fsanitize=address — globally across host and
+    # device sections. -Xarch_host has NO defined meaning at link time, so it
+    # cannot confine -fsanitize=address to the host link pass.
+    #
+    # Any form of -fsanitize=address reaching clang++ during --hip-link causes
+    # ASAN metadata accounting in the device fat binary sections, corrupting
+    # .hipFatBinSegment on targets without xnack+ (e.g. gfx942).
+    #
+    # Solution: bypass -fsanitize=address entirely at link time. Instead, find
+    # the ASAN shared runtime library and link it directly. This gives us ASAN
+    # host-side linking without triggering clang's device-side ASAN processing.
+    # For shared ASAN, the runtime initializes via __attribute__((constructor))
+    # when the library is loaded, so explicit -fsanitize=address is not needed.
+    #
+    # C targets still get -fsanitize=address via CMAKE_C_FLAGS (from
+    # CMAKE_C_FLAGS_INIT above) which bleeds to the C linker. This is fine
+    # because C targets don't use --hip-link mode.
     if(_sanitizer STREQUAL "HOST_ASAN")
-      string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-Xarch_host>\n")
-      string(APPEND _stanza "  $<$<LINK_LANGUAGE:C,CXX>:-fsanitize=address>\n")
-      string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
+      string(APPEND _stanza "execute_process(\n")
+      string(APPEND _stanza "  COMMAND \"\${CMAKE_CXX_COMPILER}\" --print-file-name=libclang_rt.asan.so\n")
+      string(APPEND _stanza "  OUTPUT_VARIABLE _therock_asan_lib\n")
+      string(APPEND _stanza "  OUTPUT_STRIP_TRAILING_WHITESPACE)\n")
+      string(APPEND _stanza "if(NOT EXISTS \"\${_therock_asan_lib}\")\n")
+      string(APPEND _stanza "  execute_process(\n")
+      string(APPEND _stanza "    COMMAND \"\${CMAKE_CXX_COMPILER}\" --print-file-name=libclang_rt.asan-\${CMAKE_HOST_SYSTEM_PROCESSOR}.so\n")
+      string(APPEND _stanza "    OUTPUT_VARIABLE _therock_asan_lib\n")
+      string(APPEND _stanza "    OUTPUT_STRIP_TRAILING_WHITESPACE)\n")
+      string(APPEND _stanza "endif()\n")
+      string(APPEND _stanza "if(EXISTS \"\${_therock_asan_lib}\")\n")
+      string(APPEND _stanza "  message(STATUS \"HOST_ASAN_DIAG: Direct-linking ASAN runtime: \${_therock_asan_lib}\")\n")
+      string(APPEND _stanza "  link_libraries(\"\${_therock_asan_lib}\")\n")
+      string(APPEND _stanza "else()\n")
+      string(APPEND _stanza "  message(FATAL_ERROR \"HOST_ASAN: Cannot find ASAN runtime library via --print-file-name\")\n")
+      string(APPEND _stanza "endif()\n")
     else()
       string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-fsanitize=address>\n")
       string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
@@ -90,6 +118,12 @@ function(therock_sanitizer_configure
       string(APPEND _stanza "message(STATUS \"Override ASAN GPU_TARGETS = \${GPU_TARGETS}\")\n")
     else()
       string(APPEND _stanza "message(STATUS \"HOST_ASAN enabled - GPU_TARGETS unchanged\")\n")
+    endif()
+    # Verbose build output for HOST_ASAN on rand subprojects so the full
+    # compile and link commands appear in the build log for diagnostics.
+    if(_sanitizer STREQUAL "HOST_ASAN" AND subproject_name MATCHES "rocRAND|hipRAND")
+      string(APPEND _stanza "set(CMAKE_VERBOSE_MAKEFILE ON)\n")
+      string(APPEND _stanza "message(STATUS \"HOST_ASAN_DIAG: Verbose build enabled for ${subproject_name}\")\n")
     endif()
     # Action at a distance: Signal that the sub-project should extend its build and install
     # RPATHs to include the clang resource dir.
