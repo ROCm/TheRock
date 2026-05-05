@@ -21,10 +21,6 @@ on:
         description: Staging subdirectory to push the wheels for test
         type: string
         default: "v2-staging"
-      cloudfront_url:
-        description: CloudFront URL pointing to Python index
-        required: true
-        type: string
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         required: true
@@ -70,10 +66,6 @@ on:
         description: "Staging subdirectory to push the wheels for test"
         type: string
         default: "v2-staging"
-      cloudfront_url:
-        description: CloudFront URL pointing to Python index
-        type: string
-        default: "https://rocm.devreleases.amd.com/v2"
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         type: string
@@ -119,7 +111,6 @@ jobs:
       release_type: ${{ inputs.release_type }}
       s3_subdir: ${{ inputs.s3_subdir }}
       s3_staging_subdir: ${{ inputs.s3_staging_subdir }}
-      cloudfront_url: ${{ inputs.cloudfront_url }}
       cloudfront_staging_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}
       tar_url: ${{ inputs.tar_url }}
