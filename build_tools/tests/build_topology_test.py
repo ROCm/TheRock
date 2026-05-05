@@ -87,6 +87,46 @@ class BuildTopologyTest(unittest.TestCase):
         compiler = topology.build_stages["compiler"]
         self.assertEqual(compiler.type, "per-arch")
 
+    def test_parse_external_git_sources(self):
+        """Test parsing external git sources in source sets."""
+        self.write_topology(
+            """
+            [source_sets.optional-hrx]
+            description = "Optional HRX"
+            external_git_sources = [
+              { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "e642a13425f46bcf909078459dd4e07df0723a0d", path = "optional-sources/hrx" },
+            ]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        source_set = topology.source_sets["optional-hrx"]
+
+        self.assertEqual(source_set.description, "Optional HRX")
+        self.assertEqual(len(source_set.external_git_sources), 1)
+        hrx = source_set.external_git_sources[0]
+        self.assertEqual(hrx.name, "hrx")
+        self.assertEqual(hrx.origin, "https://github.com/ROCm/hrx.git")
+        self.assertEqual(hrx.commit, "e642a13425f46bcf909078459dd4e07df0723a0d")
+        self.assertEqual(hrx.path, "optional-sources/hrx")
+
+    def test_validate_external_git_source_path(self):
+        """Test validation rejects external sources outside optional-sources."""
+        self.write_topology(
+            """
+            [source_sets.optional-hrx]
+            description = "Optional HRX"
+            external_git_sources = [
+              { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "e642a13425f46bcf909078459dd4e07df0723a0d", path = "rocm-systems/hrx" },
+            ]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+
+        self.assertTrue(any("must be under optional-sources" in e for e in errors))
+
     def test_parse_artifact_groups(self):
         """Test parsing artifact groups."""
         self.write_topology(
