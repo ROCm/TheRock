@@ -41,7 +41,21 @@ function(therock_sanitizer_configure
       # -Xarch_host passes the next flag to the host pass exclusively; the device
       # pass never sees it and never begins ASAN metadata accounting, which would
       # otherwise corrupt HIP fat binaries on targets without xnack+ (e.g. gfx942).
-      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -Xarch_host -fsanitize=address -fno-omit-frame-pointer -g\")\n")
+      #
+      # CRITICAL: Use add_compile_options, NOT CMAKE_CXX_FLAGS_INIT.
+      # CMAKE_CXX_FLAGS is passed by CMake to the linker as <FLAGS> in shared-library
+      # link rules. When clang++ links a HIP target (via --hip-link), it receives
+      # CMAKE_CXX_FLAGS and processes -fsanitize=address globally — even if preceded
+      # by -Xarch_host — because -Xarch_host is a compile-time flag with no defined
+      # meaning at link time. This causes the same fat binary corruption as bare
+      # -fsanitize=address in the link command.
+      # add_compile_options populates COMPILE_OPTIONS (compile-only; never passed to
+      # the linker), so -Xarch_host -fsanitize=address is cleanly confined to
+      # compilation steps. The link side is handled separately by add_link_options below.
+      string(APPEND _stanza "add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Xarch_host>\n")
+      string(APPEND _stanza "  $<$<COMPILE_LANGUAGE:CXX>:-fsanitize=address>\n")
+      string(APPEND _stanza "  $<$<COMPILE_LANGUAGE:CXX>:-fno-omit-frame-pointer>\n")
+      string(APPEND _stanza "  $<$<COMPILE_LANGUAGE:CXX>:-g>)\n")
     else()
       string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize=address -fno-omit-frame-pointer -g\")\n")
     endif()
