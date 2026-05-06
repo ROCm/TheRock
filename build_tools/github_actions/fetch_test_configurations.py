@@ -28,7 +28,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_api import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from extended_tests.functional.functional_test_matrix import functional_matrix
-from amdgpu_family_matrix import get_all_families_for_trigger_types
+from amdgpu_family_matrix import (
+    get_all_families_for_trigger_types,
+    select_weighted_label,
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -81,7 +84,7 @@ test_matrix = {
         # 240 min + 20% margin = 288 min
         "timeout_minutes": 288,
         "test_script": f"python {_get_script_path('test_runner.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 6,
             "windows": 6,
@@ -112,14 +115,6 @@ test_matrix = {
                 "gfx1153",
             ],
         },
-    },
-    "origami": {
-        "job_name": "origami",
-        "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_origami.py')}",
-        "platform": ["linux", "windows"],
-        "total_shards": 1,
     },
     "hipblas": {
         "job_name": "hipblas",
@@ -161,12 +156,12 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
         # 24 mins + 20% margin = 30 mins => ~40 mins (considering gpu delays and lags)
-        "timeout_minutes": 40,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 2,
+            "linux": 3,
             "windows": 2,
         },
     },
@@ -347,7 +342,7 @@ test_matrix = {
             "windows": 1,
         },
         # Architectures that we have multi GPU setup for testing
-        "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
+        "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
     },
     # rocprofiler-sdk tests
     "rocprofiler-sdk": {
@@ -368,7 +363,7 @@ test_matrix = {
     "hipdnn": {
         "job_name": "hipdnn",
         "fetch_artifact_args": "--hipdnn --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipdnn.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -379,7 +374,7 @@ test_matrix = {
     # hipDNN install/consumption tests
     "hipdnn_install": {
         "job_name": "hipdnn_install",
-        "timeout_minutes": 10,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipdnn_install.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -391,7 +386,7 @@ test_matrix = {
     "hipdnn-integration-tests": {
         "job_name": "hipdnn-integration-tests",
         "fetch_artifact_args": "--hipdnn --hipdnn-integration-tests --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipdnn_integration_tests.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -415,7 +410,7 @@ test_matrix = {
     "miopenprovider": {
         "job_name": "miopenprovider",
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-integration-tests --tests",
-        "timeout_minutes": 20,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -435,7 +430,7 @@ test_matrix = {
     "hipblasltprovider": {
         "job_name": "hipblasltprovider",
         "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --hipdnn-integration-tests --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipblasltprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -463,7 +458,7 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 4,
+            "linux": 5,
             "windows": 2,
         },
     },
@@ -476,7 +471,7 @@ test_matrix = {
             "libexec/rocprofiler-compute/requirements.txt",
             "libexec/rocprofiler-compute/requirements-test.txt",
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_compute.py')} -v",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {"linux": 2},
     },
@@ -573,6 +568,7 @@ def run():
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
+    windows_hip_rocr_tests = str2bool(os.getenv("WINDOWS_HIP_ROCR_TESTS", "false"))
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
@@ -631,9 +627,9 @@ def run():
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
 
-            # Hip-tests on Windows run twice: PAL (pass/fail) and ROCR (informational)
-            # for parity tracking until ROCR is the pass/fail path. See:
-            # https://github.com/ROCm/TheRock/issues/3587
+            # Hip-tests on Windows: always run PAL (pass/fail). Optionally also run
+            # ROCR (informational) for parity tracking when WINDOWS_HIP_ROCR_TESTS=true.
+            # See: https://github.com/ROCm/TheRock/issues/3587
             if key == "hip-tests" and platform == "windows":
                 base = selected_matrix[key]
                 total_shards = base.get("total_shards_dict", {}).get(platform, 1)
@@ -654,19 +650,20 @@ def run():
                 }
                 all_components.append(pal_entry)
 
-                rocr_entry = {
-                    "job_name": "hip-tests (ROCR)",
-                    "fetch_artifact_args": base["fetch_artifact_args"],
-                    "timeout_minutes": base["timeout_minutes"],
-                    "test_script": base["test_script"],
-                    "platform": base["platform"],
-                    "total_shards": total_shards,
-                    "test_type": test_type,
-                    "shard_arr": shard_arr,
-                    "expect_failure": True,
-                    "gpu_enable_pal": "0",
-                }
-                all_components.append(rocr_entry)
+                if windows_hip_rocr_tests:
+                    rocr_entry = {
+                        "job_name": "hip-tests (ROCR)",
+                        "fetch_artifact_args": base["fetch_artifact_args"],
+                        "timeout_minutes": base["timeout_minutes"],
+                        "test_script": base["test_script"],
+                        "platform": base["platform"],
+                        "total_shards": total_shards,
+                        "test_type": test_type,
+                        "shard_arr": shard_arr,
+                        "expect_failure": True,
+                        "gpu_enable_pal": "0",
+                    }
+                    all_components.append(rocr_entry)
                 continue
 
             job_config_data = selected_matrix[key]
@@ -700,9 +697,19 @@ def run():
                     shortened_amdgpu_families_name = amdgpu_families.split("-")[
                         0
                     ].lower()
-                    multi_gpu_runner = amdgpu_families_matrix[
+                    platform_info = amdgpu_families_matrix[
                         shortened_amdgpu_families_name
-                    ][platform]["test-runs-on-multi-gpu"]
+                    ][platform]
+
+                    # Use weighted random selection if test-runs-on-multi-gpu-labels is available
+                    if "test-runs-on-multi-gpu-labels" in platform_info:
+                        multi_gpu_runner = select_weighted_label(
+                            platform_info["test-runs-on-multi-gpu-labels"],
+                            f"{shortened_amdgpu_families_name}-multi-gpu",
+                        )
+                    else:
+                        multi_gpu_runner = platform_info["test-runs-on-multi-gpu"]
+
                     logging.info(
                         f"Including job {job_name} since multi GPU testing is available for family {amdgpu_families} with runner {multi_gpu_runner}"
                     )

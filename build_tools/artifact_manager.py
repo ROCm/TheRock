@@ -55,6 +55,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Set
 
+from _therock_utils.os_util import rmtree_with_retry
 from _therock_utils.cmake_amdgpu_targets import (
     amdgpu_family_map,
     expand_families,
@@ -282,7 +283,7 @@ class BootstrappingPopulator(ArtifactPopulator):
 
             # Do cleanup while holding lock to prevent race with extraction
             if full_path.exists():
-                shutil.rmtree(full_path)
+                rmtree_with_retry(full_path)
             # Write the ".prebuilt" marker file
             prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
             prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -317,7 +318,7 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
         else:
             output_dir = request.output_dir / artifact_name
             if output_dir.exists():
-                shutil.rmtree(output_dir)
+                rmtree_with_retry(output_dir)
             log(f"  ++ Extracting {archive_path.name}")
             with _open_archive_for_read(archive_path) as tf:
                 tf.extractall(output_dir, filter="tar")
@@ -467,7 +468,7 @@ def do_fetch(args: argparse.Namespace):
 
     # Cleanup download cache (skip when using a shared cache dir)
     if download_dir.exists() and not args.no_extract and not shared_cache:
-        shutil.rmtree(download_dir)
+        rmtree_with_retry(download_dir)
 
     # Fail if any downloads failed
     total_requested = len(download_requests)
@@ -728,7 +729,7 @@ def do_push(args: argparse.Namespace):
 
     # Cleanup upload cache
     if upload_dir.exists():
-        shutil.rmtree(upload_dir)
+        rmtree_with_retry(upload_dir)
 
     # Fail if any artifacts failed to upload
     if uploaded_count < total_artifacts:

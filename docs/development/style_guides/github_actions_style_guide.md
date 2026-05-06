@@ -197,7 +197,7 @@ jobs:
   test_artifacts:
     name: Test Artifacts
     needs: build_artifacts
-    runs-on: linux-mi325-1gpu-ossci-rocm  # Expensive GPU runner only for tests
+    runs-on: linux-gfx942-1gpu-ossci-rocm  # Expensive GPU runner only for tests
     steps:
       # ... Download artifacts, setup test environment, etc.
 
@@ -211,7 +211,7 @@ jobs:
 jobs:
   build_and_test:
     name: Build and Test
-    runs-on: linux-mi325-1gpu-ossci-rocm  # Expensive GPU runner
+    runs-on: linux-gfx942-1gpu-ossci-rocm  # Expensive GPU runner
     steps:
       # ...
 

@@ -35,6 +35,9 @@
 #   [source_sets.<name>]
 #   description = "Human-readable description"
 #   submodules = ["submodule1", "submodule2"]  # Git submodule directory names
+#   external_git_sources = [
+#     { name = "name", origin = "https://...", commit = "hash", path = "optional-sources/name" },
+#   ]                                         # Optional, externally fetched git repos
 #   disable_platforms = ["windows"]            # Optional: platforms where disabled
 #
 #   [build_stages.<name>]
@@ -93,6 +96,12 @@ submodules = ["rocgdb"]
 [source_sets.rocm-systems]
 description = "ROCm systems monorepo (runtime, profiler, etc.)"
 submodules = ["rocm-systems"]
+
+[source_sets.optional-hrx]
+description = "Optional HRX source checkout"
+external_git_sources = [
+    { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "56e60cfdc8df89edd43f5ae507cd3fd7f5aafd03", path = "optional-sources/hrx" },
+]
 
 [source_sets.rocm-libraries]
 description = "ROCm libraries monorepo (math libs)"
