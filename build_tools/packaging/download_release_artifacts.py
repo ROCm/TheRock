@@ -835,7 +835,7 @@ Examples:
     if (
         not args.list_archs
         and not args.list_packages_per_arch
-        and not args.list_packages_multi_arch
+        and not args.list_multi_arch_packages
         and not args.output_dir
     ):
         parser.error(
@@ -962,7 +962,7 @@ def download_prerelease_packages(
     bucket_prefix: str = "v3/whl/",
     include_dependencies: bool = False,
     multi_arch: bool = False,
-    list_packages_multi_arch: bool = False,
+    list_multi_arch_packages: bool = False,
     include_tarballs: bool = False,
     tarball_bucket_name: str = "therock-prerelease-tarball",
     tarball_bucket_prefix: str = "v3/tarball/",
@@ -999,11 +999,11 @@ def download_prerelease_packages(
     if (
         not list_archs
         and not list_packages_per_arch
-        and not list_packages_multi_arch
+        and not list_multi_arch_packages
         and output_dir is None
     ):
         print(
-            "[ERROR]: output_dir is required unless list_archs=True, list_packages_per_arch=True, or list_packages_multi_arch=True"
+            "[ERROR]: output_dir is required unless list_archs=True, list_packages_per_arch=True, or list_multi_arch_packages=True"
         )
         sys.exit(1)
 
@@ -1028,7 +1028,7 @@ def download_prerelease_packages(
             print(f"[ERROR]: No packages found for version {version}")
             sys.exit(1)
 
-        if list_packages_multi_arch:
+        if list_multi_arch_packages:
             list_packages_multi_arch_verbose(
                 s3_client,
                 bucket_name,
@@ -1174,7 +1174,7 @@ if __name__ == "__main__":
         architectures=args.arch,
         bucket_name=args.bucket,
         multi_arch=args.multi_arch,
-        list_packages_multi_arch=args.list_packages_multi_arch,
+        list_multi_arch_packages=args.list_multi_arch_packages,
         bucket_prefix=args.bucket_prefix,
         include_dependencies=args.include_dependencies,
         include_tarballs=args.include_tarballs,
