@@ -16,7 +16,7 @@ from github_actions_api import (
     GitHubAPI,
     GitHubAPIError,
     gha_load_github_event,
-    gha_query_last_successful_workflow_run,
+    gha_query_last_workflow_run,
     gha_query_recent_branch_commits,
     gha_query_workflow_run_by_id,
     gha_query_workflow_runs_for_commit,
@@ -556,28 +556,97 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         self.assertEqual(runs[1]["id"], 1, "Older run should be second")
 
     @_skip_unless_authenticated_github_api_is_available
-    def test_gha_query_last_successful_workflow_run(self):
-        """Test querying for the last successful workflow run on a branch."""
-        # Test successful run found on main branch
-        result = gha_query_last_successful_workflow_run(
-            "ROCm/TheRock", "ci_nightly.yml", "main"
-        )
+    def test_gha_query_last_workflow_run(self):
+        """Test querying for the last completed workflow run on a branch."""
+        # Default accepted_statuses={"success"}: must return a successful run.
+        result = gha_query_last_workflow_run("ROCm/TheRock", "ci_nightly.yml", "main")
         self.assertIsNotNone(result)
         self.assertEqual(result["head_branch"], "main")
         self.assertEqual(result["conclusion"], "success")
         self.assertIn("id", result)
 
+        # Broader accepted_statuses should still find a run.
+        result = gha_query_last_workflow_run(
+            "ROCm/TheRock",
+            "ci_nightly.yml",
+            "main",
+            accepted_statuses={"success", "failure"},
+        )
+        self.assertIsNotNone(result)
+        self.assertIn(result["conclusion"], {"success", "failure"})
+
         # Test no matching branch - should return None
-        result = gha_query_last_successful_workflow_run(
+        result = gha_query_last_workflow_run(
             "ROCm/TheRock", "ci_nightly.yml", "nonexistent-branch-12345"
         )
         self.assertIsNone(result)
 
         # Test non-existent workflow - should raise an exception
         with self.assertRaises(Exception):
-            gha_query_last_successful_workflow_run(
+            gha_query_last_workflow_run(
                 "ROCm/TheRock", "nonexistent_workflow_12345.yml", "main"
             )
+
+    def test_gha_query_last_workflow_run_filters_by_status(self):
+        """Unit-level test for client-side conclusion filtering."""
+        runs = [
+            {"id": 3, "conclusion": "cancelled", "created_at": "2026-01-03T00:00:00Z"},
+            {"id": 2, "conclusion": "failure", "created_at": "2026-01-02T00:00:00Z"},
+            {"id": 1, "conclusion": "success", "created_at": "2026-01-01T00:00:00Z"},
+        ]
+
+        # Default accepted_statuses={"success"} skips cancelled/failure.
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            return_value={"workflow_runs": runs},
+        ):
+            result = gha_query_last_workflow_run(
+                "ROCm/TheRock", "ci_nightly.yml", "main"
+            )
+        self.assertIsNotNone(result)
+        self.assertEqual(result["id"], 1)
+
+        # {"success", "failure"} picks up the most recent non-cancelled run.
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            return_value={"workflow_runs": runs},
+        ):
+            result = gha_query_last_workflow_run(
+                "ROCm/TheRock",
+                "ci_nightly.yml",
+                "main",
+                accepted_statuses={"success", "failure"},
+            )
+        self.assertIsNotNone(result)
+        self.assertEqual(result["id"], 2)
+
+        # No run matches -> None.
+        only_cancelled = [
+            {"id": 1, "conclusion": "cancelled", "created_at": "2026-01-01T00:00:00Z"},
+        ]
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            return_value={"workflow_runs": only_cancelled},
+        ):
+            result = gha_query_last_workflow_run(
+                "ROCm/TheRock",
+                "ci_nightly.yml",
+                "main",
+                accepted_statuses={"success", "failure"},
+            )
+        self.assertIsNone(result)
+
+    def test_gha_query_last_workflow_run_rejects_invalid_status(self):
+        """Unknown status values raise ValueError with a helpful message."""
+        with self.assertRaises(ValueError) as ctx:
+            gha_query_last_workflow_run(
+                "ROCm/TheRock",
+                "ci_nightly.yml",
+                "main",
+                accepted_statuses={"success", "bogus"},
+            )
+        self.assertIn("bogus", str(ctx.exception))
+        self.assertIn("Valid values", str(ctx.exception))
 
     @_skip_unless_authenticated_github_api_is_available
     def test_gha_query_recent_branch_commits(self):
