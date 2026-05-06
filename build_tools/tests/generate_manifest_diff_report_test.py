@@ -232,7 +232,9 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_find_last_successful_resolves_start(self):
         """--find-last-successful finds last successful run for start commit."""
-        args = parse_args(["--end", "def456", "--find-last-successful", "ci.yml"])
+        args = parse_args(
+            ["--end", "def456", "--find-last-successful", "multi_arch_ci.yml"]
+        )
 
         with mock.patch(
             "generate_manifest_diff_report.gha_query_last_successful_workflow_run"
