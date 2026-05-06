@@ -25,47 +25,47 @@ PREREQUISITES:
 
 TYPICAL USAGE (Command Line):
   # Download all 7.10.0rc2 packages for all architectures:
-  python ./build_tools/packaging/download_prerelease_packages.py \
+  python ./build_tools/packaging/download_release_artifacts.py \
     --version=7.10.0rc2 \
     --output-dir=./downloads
 
   # Download only for a specific architecture:
-  python ./build_tools/packaging/download_prerelease_packages.py \
+  python ./build_tools/packaging/download_release_artifacts.py \
     --version=7.10.0rc2 \
     --arch=gfx950-dcgpu \
     --output-dir=./downloads
 
   # Download for multiple specific architectures:
-  python ./build_tools/packaging/download_prerelease_packages.py \
+  python ./build_tools/packaging/download_release_artifacts.py \
     --version=7.10.0rc2 \
     --arch=gfx1151,gfx950-dcgpu \
     --output-dir=./downloads
 
   # Download packages including tarballs:
-  python ./build_tools/packaging/download_prerelease_packages.py \
+  python ./build_tools/packaging/download_release_artifacts.py \
     --version=7.10.0rc2 \
     --arch=gfx1151,gfx950-dcgpu \
     --output-dir=./downloads \
     --include-tarballs
 
   # List available architectures without downloading:
-  python ./build_tools/packaging/download_prerelease_packages.py \
+  python ./build_tools/packaging/download_release_artifacts.py \
     --version=7.10.0rc2 \
     --list-archs
 
   # List all packages per architecture without downloading:
-  python ./build_tools/packaging/download_prerelease_packages.py \
+  python ./build_tools/packaging/download_release_artifacts.py \
     --version=7.10.0rc2 \
     --list-packages-per-arch
 
   # List all packages and tarballs per architecture with sizes:
-  python ./build_tools/packaging/download_prerelease_packages.py \
+  python ./build_tools/packaging/download_release_artifacts.py \
     --version=7.10.0rc2 \
     --list-packages-per-arch \
     --include-tarballs
 
   # Download packages to promote and all known PyPI dependencies:
-  python ./build_tools/packaging/download_prerelease_packages.py \
+  python ./build_tools/packaging/download_release_artifacts.py \
     --version=7.10.0rc2 \
     --output-dir=./downloads \
     --include-dependencies
@@ -216,6 +216,37 @@ def is_allowed_multi_arch_package(filename: str) -> bool:
     )
 
 
+def matches_requested_arches(filename: str, requested_arches: list[str]) -> bool:
+    """
+    Check whether a multi-arch package matches one of the requested gfx arches.
+
+    Rules:
+      - If no requested arches are provided -> allow
+      - If filename does not contain gfx -> allow (generic package)
+      - If filename contains gfx -> require one requested arch match
+    """
+
+    if not requested_arches:
+        return True
+
+    lower_filename = filename.lower()
+
+    # Generic package (not gfx-specific)
+    if "gfx" not in lower_filename:
+        return True
+
+    normalized_arches = set()
+
+    for arch in requested_arches:
+        lower_arch = arch.lower()
+
+        normalized_arches.add(lower_arch)
+        normalized_arches.add(lower_arch.replace("-", "_"))
+        normalized_arches.add(lower_arch.split("-")[0])
+
+    return any(arch in lower_filename for arch in normalized_arches)
+
+
 def categorize_package(filename: str) -> str:
     """Categorize a package file.
 
@@ -336,7 +367,13 @@ def has_version_in_directory(s3_client, bucket, prefix, directory, version):
     return False
 
 
-def list_packages_multi_arch_verbose(s3_client, bucket, prefix, version):
+def list_packages_multi_arch_verbose(
+    s3_client,
+    bucket,
+    prefix,
+    version,
+    architectures=None,
+):
     paginator = s3_client.get_paginator("list_objects_v2")
 
     total_size = 0
@@ -362,6 +399,8 @@ def list_packages_multi_arch_verbose(s3_client, bucket, prefix, version):
                 continue
 
             if version in filename and is_allowed_multi_arch_package(filename):
+                if not matches_requested_arches(filename, architectures):
+                    continue
                 found = True
                 size = obj["Size"]
 
@@ -506,6 +545,7 @@ def download_multi_arch_packages(
     prefix,
     version,
     output_dir,
+    architectures=None,
 ):
     paginator = s3_client.get_paginator("list_objects_v2")
 
@@ -538,6 +578,10 @@ def download_multi_arch_packages(
                 continue
 
             if not is_allowed_multi_arch_package(filename):
+                continue
+
+            if not matches_requested_arches(filename, architectures):
+                print(f"  SKIP (arch filter): {filename}")
                 continue
 
             local_path = wheels_dir / filename
@@ -706,28 +750,28 @@ def parse_arguments(argv):
         epilog="""
 Examples:
   # Download all architectures for version 7.10.0rc2
-  python download_prerelease_packages.py --version=7.10.0rc2 --output-dir=./downloads
+  python download_release_artifacts.py --version=7.10.0rc2 --output-dir=./downloads
 
   # Download only specific architecture
-  python download_prerelease_packages.py --version=7.10.0rc2 --arch=gfx950-dcgpu --output-dir=./downloads
+  python download_release_artifacts.py --version=7.10.0rc2 --arch=gfx950-dcgpu --output-dir=./downloads
 
   # Download multiple specific architectures and including tarballs
-  python download_prerelease_packages.py --version=7.10.0rc2 --arch=gfx1151,gfx950-dcgpu --output-dir=./downloads --include-tarballs
+  python download_release_artifacts.py --version=7.10.0rc2 --arch=gfx1151,gfx950-dcgpu --output-dir=./downloads --include-tarballs
 
   # Download packages to promote AND their dependencies
-  python download_prerelease_packages.py --version=7.10.0rc2 --output-dir=./downloads --include-dependencies
+  python download_release_artifacts.py --version=7.10.0rc2 --output-dir=./downloads --include-dependencies
 
   # Use custom bucket prefix
-  python download_prerelease_packages.py --version=7.10.0rc2 --output-dir=./downloads --bucket-prefix=v3/whl/
+  python download_release_artifacts.py --version=7.10.0rc2 --output-dir=./downloads --bucket-prefix=v3/whl/
 
   # List available architectures
-  python download_prerelease_packages.py --version=7.10.0rc2 --list-archs
+  python download_release_artifacts.py --version=7.10.0rc2 --list-archs
 
   # List all packages per architecture with sizes
-  python download_prerelease_packages.py --version=7.10.0rc2 --list-packages-per-arch
+  python download_release_artifacts.py --version=7.10.0rc2 --list-packages-per-arch
 
   # List packages and tarballs with sizes
-  python download_prerelease_packages.py --version=7.10.0rc2 --list-packages-per-arch --include-tarballs
+  python download_release_artifacts.py --version=7.10.0rc2 --list-packages-per-arch --include-tarballs
         """,
     )
 
@@ -1034,6 +1078,7 @@ def download_prerelease_packages(
                 bucket_name,
                 bucket_prefix,
                 version,
+                architectures,
             )
             return
 
@@ -1046,6 +1091,7 @@ def download_prerelease_packages(
             bucket_prefix,
             version,
             output_dir,
+            architectures,
         )
 
         print("\n" + "=" * 80)
