@@ -391,46 +391,35 @@ def find_and_parse_results(
 
 
 def generate_metrics_output(results: list[TestResult], step_name: str) -> dict:
-    """Generate structured metrics output."""
+    """Generate structured metrics output.
+
+    Creates one metric entry per failed test, with the test name as sub_step_name.
+    """
     metrics = []
 
     for result in results:
-        metric = {
-            "exit_code": result.exit_code,
-            "sub_step_name": f"CUSTOM_STEP_{result.component}",
-            "status": result.status,
-        }
+        # Create a metric entry for each failed test
+        for failed_test in result.failed_tests:
+            is_timeout = "(Timeout)" in failed_test
+            status = "timeout" if is_timeout else "failure"
 
-        if result.duration_seconds is not None:
-            metric["duration_seconds"] = round(result.duration_seconds, 2)
+            metric = {
+                "exit_code": 1,
+                "sub_step_name": failed_test,
+                "status": status,
+            }
 
-        if result.failed_tests:
-            metric["failed_tests"] = result.failed_tests
+            if is_timeout:
+                metric["failure_reason"] = "timeout"
 
-        if result.failure_reason:
-            metric["failure_reason"] = result.failure_reason
-
-        if result.timeout_count > 0:
-            metric["timeout_count"] = result.timeout_count
-
-        if result.total_tests > 0:
-            metric["total_tests"] = result.total_tests
-            metric["passed_tests"] = result.passed_tests
-            metric["failed_count"] = result.failed_count
-
-        metrics.append(metric)
+            metrics.append(metric)
 
     output = {
         "metadata": {
             "exit_code": {"metric_type": "exit_code"},
-            "duration_seconds": {"metric_type": "duration_s"},
             "sub_step_name": {"metric_type": "string"},
             "status": {"metric_type": "string"},
             "failure_reason": {"metric_type": "string"},
-            "timeout_count": {"metric_type": "count"},
-            "total_tests": {"metric_type": "count"},
-            "passed_tests": {"metric_type": "count"},
-            "failed_count": {"metric_type": "count"},
         },
         "metrics": metrics,
     }
@@ -493,11 +482,11 @@ def main():
 
     print(f"\nMetrics written to: {output_file}")
 
-    # Also print to stdout for visibility
+    # Also print to stdout for visibility (metrics only, not metadata)
     print(f"\n{'='*60}")
     print("TEST METRICS REPORT")
     print(f"{'='*60}")
-    print(json.dumps(metrics_output, indent=2))
+    print(json.dumps(metrics_output["metrics"], indent=2))
 
     # Return non-zero if any tests failed
     any_failures = any(r.status != "success" for r in results)

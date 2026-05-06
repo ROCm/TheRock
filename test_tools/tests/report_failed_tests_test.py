@@ -258,10 +258,11 @@ class TestFindAndParseResults(unittest.TestCase):
 
 class TestGenerateMetricsOutput(unittest.TestCase):
     def test_generate_metrics_output(self):
+        """Test that each failed test becomes a separate metric entry."""
         results = [
             TestResult(
                 component="rocblas",
-                failed_tests=["Test.Fail"],
+                failed_tests=["Test.Fail1", "Test.Fail2"],
                 exit_code=1,
                 status="failure",
             )
@@ -270,9 +271,15 @@ class TestGenerateMetricsOutput(unittest.TestCase):
 
         self.assertIn("metadata", output)
         self.assertIn("metrics", output)
+        # Each failed test should be a separate metric
+        self.assertEqual(len(output["metrics"]), 2)
+        self.assertEqual(output["metrics"][0]["sub_step_name"], "Test.Fail1")
         self.assertEqual(output["metrics"][0]["status"], "failure")
+        self.assertEqual(output["metrics"][1]["sub_step_name"], "Test.Fail2")
+        self.assertEqual(output["metrics"][1]["status"], "failure")
 
     def test_generate_metrics_with_timeout(self):
+        """Test that timeout tests have status='timeout' and failure_reason."""
         results = [
             TestResult(
                 component="rocblas",
@@ -288,10 +295,49 @@ class TestGenerateMetricsOutput(unittest.TestCase):
         ]
         output = generate_metrics_output(results, step_name="rocblas")
 
+        self.assertEqual(len(output["metrics"]), 1)
         metric = output["metrics"][0]
-        self.assertEqual(metric["timeout_count"], 1)
+        self.assertEqual(metric["sub_step_name"], "rocblas-test (Timeout)")
+        self.assertEqual(metric["status"], "timeout")
         self.assertEqual(metric["failure_reason"], "timeout")
-        self.assertEqual(metric["total_tests"], 1)
+
+    def test_generate_metrics_mixed_failures(self):
+        """Test mix of timeout and regular failures."""
+        results = [
+            TestResult(
+                component="hipblaslt",
+                failed_tests=["Suite.NormalFail", "Suite.TimeoutTest (Timeout)"],
+                exit_code=1,
+                status="failure",
+            )
+        ]
+        output = generate_metrics_output(results, step_name="hipblaslt")
+
+        self.assertEqual(len(output["metrics"]), 2)
+        # Normal failure
+        self.assertEqual(output["metrics"][0]["sub_step_name"], "Suite.NormalFail")
+        self.assertEqual(output["metrics"][0]["status"], "failure")
+        self.assertNotIn("failure_reason", output["metrics"][0])
+        # Timeout failure
+        self.assertEqual(
+            output["metrics"][1]["sub_step_name"], "Suite.TimeoutTest (Timeout)"
+        )
+        self.assertEqual(output["metrics"][1]["status"], "timeout")
+        self.assertEqual(output["metrics"][1]["failure_reason"], "timeout")
+
+    def test_generate_metrics_no_failures(self):
+        """Test that no metrics are generated when there are no failures."""
+        results = [
+            TestResult(
+                component="rocblas",
+                failed_tests=[],
+                exit_code=0,
+                status="success",
+            )
+        ]
+        output = generate_metrics_output(results, step_name="rocblas")
+
+        self.assertEqual(len(output["metrics"]), 0)
 
 
 if __name__ == "__main__":
