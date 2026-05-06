@@ -176,6 +176,7 @@ _GITHUB_WORKFLOWS_CI_PATTERNS = [
     "test_rocm_wheels.yml",
     "test_sanity_check.yml",
     "test_component.yml",
+    "build_native*packages.yml",
 ]
 
 
