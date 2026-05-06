@@ -272,7 +272,9 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         )
 
     def test_major_minor_rocm_version_from_input(self):
-        m = native_linux_package_install_test.NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input
+        m = (
+            native_linux_package_install_test.NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input
+        )
         self.assertIsNone(m(None))
         self.assertIsNone(m(""))
         self.assertEqual(m("7.13"), "7.13")
@@ -720,7 +722,9 @@ class SetupDebRepositoryTest(unittest.TestCase):
         "native_linux_package_install_test.Path.write_text",
         side_effect=OSError("Permission denied"),
     )
-    def test_returns_false_when_write_text_raises(self, mock_write_text, mock_streaming):
+    def test_returns_false_when_write_text_raises(
+        self, mock_write_text, mock_streaming
+    ):
         # Test that setup_deb_repository returns False when Path.write_text raises OSError.
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -745,7 +749,9 @@ class SetupDebRepositoryTest(unittest.TestCase):
 
     @patch("native_linux_package_install_test._run_streaming")
     @patch("native_linux_package_install_test.Path.write_text")
-    def test_returns_false_when_apt_update_times_out(self, mock_write_text, mock_streaming):
+    def test_returns_false_when_apt_update_times_out(
+        self, mock_write_text, mock_streaming
+    ):
         # Test that setup_deb_repository returns False when _run_streaming raises TimeoutExpired.
         import subprocess
 
