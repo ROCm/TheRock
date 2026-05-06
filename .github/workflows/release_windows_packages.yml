@@ -301,7 +301,7 @@ jobs:
       #                                build_python_packages.py
       #   BUILD_DIR/dist/rocm        - flat merged tree for the dist tarball
       - name: Fetch prebuilt artifacts
-        if: ${{ inputs.prebuilt_prefix != '' && github.repository_owner == 'ROCm' }}
+        if: ${{ inputs.prebuilt_prefix != '' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PREBUILT_FETCH_CACHE: ${{ env.BUILD_DIR }}/prebuilt-fetch-cache
@@ -321,7 +321,7 @@ jobs:
             --download-cache-dir="${PREBUILT_FETCH_CACHE}"
 
       - name: Build dist tarball from prebuilt artifacts
-        if: ${{ inputs.prebuilt_prefix != '' && github.repository_owner == 'ROCm' }}
+        if: ${{ inputs.prebuilt_prefix != '' }}
         run: |
           cd ${{ env.BUILD_DIR }}/dist/rocm
           echo "Compressing ${{ env.DIST_ARCHIVE }}"
