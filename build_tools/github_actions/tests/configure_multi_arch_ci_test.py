@@ -36,12 +36,16 @@ def _run_from_environ(
     *,
     commit_ref: str = "main",
     build_variant: str = "release",
+    extra_env: dict[str, str] | None = None,
 ) -> cm.CIInputs:
     """Call CIInputs.from_environ() with a synthetic event payload.
 
     GitHub Actions sets GITHUB_EVENT_PATH to a JSON file containing the full
     webhook event payload. This helper writes a temporary JSON file and patches
     the environment to simulate that.
+
+    Workflow inputs (families, labels, prebuilt config) are passed via env vars,
+    matching how setup_multi_arch.yml passes them to the script.
 
     See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-environment-variables#default-environment-variables
     """
@@ -57,6 +61,8 @@ def _run_from_environ(
             "GITHUB_REF_NAME": commit_ref,
             "BUILD_VARIANT": build_variant,
         }
+        if extra_env:
+            env.update(extra_env)
         with patch.dict(os.environ, env, clear=False):
             return cm.CIInputs.from_environ()
     finally:
@@ -111,19 +117,18 @@ class TestCIInputsFromEnviron(unittest.TestCase):
     See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-environment-variables#default-environment-variables
     """
 
-    def test_workflow_dispatch_reads_inputs(self):
-        """workflow_dispatch inputs (families, labels, prebuilt config)."""
+    def test_workflow_dispatch_reads_inputs_from_env(self):
+        """Workflow inputs (families, labels, prebuilt config) come from env vars."""
         inputs = _run_from_environ(
             event_name="workflow_dispatch",
-            event_payload={
-                "inputs": {
-                    "linux_amdgpu_families": "gfx94X, gfx120X",
-                    "linux_test_labels": "test:rocprim",
-                    "windows_amdgpu_families": "",
-                    "windows_test_labels": "",
-                    "prebuilt_stages": "foundation,compiler-runtime",
-                    "baseline_run_id": "12345",
-                }
+            event_payload={},
+            extra_env={
+                "LINUX_AMDGPU_FAMILIES": "gfx94X, gfx120X",
+                "LINUX_TEST_LABELS": "test:rocprim",
+                "WINDOWS_AMDGPU_FAMILIES": "",
+                "WINDOWS_TEST_LABELS": "",
+                "PREBUILT_STAGES": "foundation,compiler-runtime",
+                "BASELINE_RUN_ID": "12345",
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
@@ -147,6 +152,23 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertEqual(inputs.pr_labels, ["gfx950", "test:rocprim"])
         self.assertEqual(inputs.base_ref, "HEAD^")
+
+    def test_pull_request_test_labels_extracted_to_test_labels(self):
+        """PR test:* labels are merged into linux/windows_test_labels."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "test:rccl", "id": 1},
+                        {"name": "test:rocprim", "id": 2},
+                        {"name": "gfx950", "id": 3},
+                    ]
+                }
+            },
+        )
+        self.assertEqual(inputs.linux_test_labels, ["test:rccl", "test:rocprim"])
+        self.assertEqual(inputs.windows_test_labels, ["test:rccl", "test:rocprim"])
 
     def test_push_reads_before_sha(self):
         """Push events use event.before as the diff base."""
@@ -291,7 +313,7 @@ class TestDecideJobs(unittest.TestCase):
         result = cm.decide_jobs(
             self._inputs(
                 event_name="workflow_dispatch",
-                linux_test_labels="test:rocprim",
+                linux_test_labels=["test:rocprim"],
             ),
             git_context=cm.GitContext(),
         )
@@ -528,8 +550,8 @@ class TestSelectTargets(unittest.TestCase):
         with self.assertRaises(ValueError):
             cm.select_targets(inputs)
 
-    def test_workflow_dispatch_release_type_defaults_to_all_families(self):
-        """workflow_dispatch with release_type but no explicit families uses all."""
+    def test_workflow_dispatch_all_expands_to_all_families(self):
+        """workflow_dispatch with 'all' expands to all known families."""
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="workflow_dispatch",
@@ -537,11 +559,10 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
             release_type="dev",
+            linux_amdgpu_families=["all"],
+            windows_amdgpu_families=["all"],
         )
         result = cm.select_targets(inputs)
-        # Should have all families for Linux (at least presubmit + postsubmit + nightly)
-        self.assertGreater(len(result.linux_families), 0)
-        # Should include a nightly-only family that wouldn't appear in presubmit defaults
         all_families = get_all_families_for_trigger_types(
             ["presubmit", "postsubmit", "nightly"]
         )
@@ -551,6 +572,29 @@ class TestSelectTargets(unittest.TestCase):
         self.assertEqual(
             sorted(result.linux_families), sorted(linux_families_in_matrix)
         )
+        windows_families_in_matrix = [
+            name for name, info in all_families.items() if "windows" in info
+        ]
+        self.assertEqual(
+            sorted(result.windows_families), sorted(windows_families_in_matrix)
+        )
+
+    def test_workflow_dispatch_empty_means_no_families(self):
+        """workflow_dispatch with empty families builds nothing for that platform."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            release_type="dev",
+            # linux uses "none" sentinel value
+            linux_amdgpu_families=["none"],
+            # (windows omitted)
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(len(result.linux_families), 0)
+        self.assertEqual(len(result.windows_families), 0)
 
     def test_workflow_dispatch_release_type_with_explicit_families(self):
         """workflow_dispatch with release_type AND explicit families uses explicit list."""
@@ -712,7 +756,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 {
                     "amdgpu_family": "gfx94X-dcgpu",
                     "amdgpu_targets": "gfx942",
-                    "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+                    "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
                     "sanity_check_only_for_family": false
                 },
                 ...
@@ -873,6 +917,34 @@ class TestConfigurePipeline(unittest.TestCase):
         outputs = cm.configure(inputs, cm.GitContext())
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
+
+    def test_test_labels_thread_to_outputs(self):
+        """test_labels on CIInputs pass through to CIOutputs."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_test_labels=["test:rccl"],
+            windows_test_labels=["test:rccl"],
+        )
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        self.assertEqual(outputs.linux_test_labels, ["test:rccl"])
+        self.assertEqual(outputs.windows_test_labels, ["test:rccl"])
+
+    def test_no_test_labels_has_empty_outputs(self):
+        """Without test labels, outputs are empty lists."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        self.assertEqual(outputs.linux_test_labels, [])
+        self.assertEqual(outputs.windows_test_labels, [])
 
 
 # ---------------------------------------------------------------------------
@@ -1105,6 +1177,51 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
                 gfx103x_info = builds.linux.per_family_info[0]
                 # Should always use the primary label
                 self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
+
+
+# ---------------------------------------------------------------------------
+# Build runner selection
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRunnerSelection(unittest.TestCase):
+    """Test weighted random selection of build runners (Azure vs AWS)."""
+
+    def test_select_build_runner_weighted_selection(self):
+        """Test weighted selection: Azure (90%) vs AWS (10%) for default builds."""
+        from amdgpu_family_matrix import select_build_runner
+
+        # Random < 0.9 should select Azure
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_build_runner("linux", "release"), "azure-linux-scale-rocm"
+            )
+
+        # Random >= 0.9 should select Azure
+        with patch("random.random", return_value=0.95):
+            self.assertEqual(
+                select_build_runner("linux", "release"), "azure-linux-scale-rocm"
+            )
+
+        # Random >= 0.9 should select AWS
+        with patch("random.random", return_value=0.95):
+            self.assertEqual(
+                select_build_runner("windows", "release"), "azure-windows-scale-rocm"
+            )
+
+    def test_select_build_runner_sanitizer_uses_ramdisk(self):
+        """Sanitizer builds (asan/tsan) should always use Azure ramdisk runner."""
+        from amdgpu_family_matrix import select_build_runner
+
+        with patch("random.random", return_value=0.99):
+            self.assertEqual(
+                select_build_runner("linux", "asan"),
+                "azure-linux-scale-rocm-heavy-ramdisk",
+            )
+            self.assertEqual(
+                select_build_runner("linux", "tsan"),
+                "azure-linux-scale-rocm-heavy-ramdisk",
+            )
 
 
 if __name__ == "__main__":

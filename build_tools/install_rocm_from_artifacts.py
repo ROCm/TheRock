@@ -24,6 +24,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--debug-tools | --no-debug-tools]
     [--fft | --no-fft]
     [--hipdnn | --no-hipdnn]
+    [--hipdnn-integration-tests | --no-hipdnn-integration-tests]
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
     [--miopenprovider | --no-miopenprovider]
@@ -347,11 +348,12 @@ def retrieve_artifacts_by_run_id(args):
             args.debug_tools,
             args.fft,
             args.hipdnn,
-            args.hiptensor,
+            args.hipdnn_integration_tests,
             args.hipdnn_samples,
             args.miopen,
             args.miopenprovider,
             args.fusilliprovider,
+            args.hiptensor,
             args.iree_compiler,
             args.hipblasltprovider,
             args.hipkernelprovider,
@@ -393,8 +395,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("fftw3")
         if args.hipdnn:
             extra_artifacts.append("hipdnn")
-        if args.hiptensor:
-            extra_artifacts.append("hiptensor")
+        if args.hipdnn_integration_tests:
+            extra_artifacts.append("hipdnn-integration-tests")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.miopen:
@@ -409,6 +411,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipkernelprovider")
         if args.fusilliprovider:
             extra_artifacts.append("fusilliprovider")
+        if args.hiptensor:
+            extra_artifacts.append("hiptensor")
         if args.iree_compiler:
             extra_artifacts.append("iree-compiler")
         if args.rocdecode:
@@ -685,9 +689,9 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--hiptensor",
+        "--hipdnn-integration-tests",
         default=False,
-        help="Include 'hiptensor' artifacts",
+        help="Include 'hipdnn-integration-tests' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
@@ -723,6 +727,13 @@ def main(argv):
         "--fusilliprovider",
         default=False,
         help="Include 'fusilliprovider' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hiptensor",
+        default=False,
+        help="Include 'hiptensor' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

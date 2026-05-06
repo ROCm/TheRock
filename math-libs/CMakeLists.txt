@@ -428,22 +428,27 @@ if(THEROCK_ENABLE_LIBHIPCXX)
   )
 endif(THEROCK_ENABLE_LIBHIPCXX)
 
-# limit use of composable kernel to the GPU families it is valid for
-if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
-  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx110X gfx1100 gfx1101 gfx1102 gfx1103 gfx1150 gfx1151 gfx1152 gfx1153 gfx120X gfx1200 gfx1201)
-  foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
-    if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
-      message(WARNING
-        "${_gfx_target} (included in THEROCK_AMDGPU_TARGETS) is not supported by composable kernel. "
-        "Disabling composable kernel and it's use in MIOpen.")
-      set(THEROCK_ENABLE_COMPOSABLE_KERNEL OFF)
-      set(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL OFF)
-      set(THEROCK_ENABLE_HIPTENSOR OFF)
-    endif()
-  endforeach()
+# composable_kernel only supports a subset of gfx targets (per its own
+# rocm_check_target_ids allowlist). The per-arch EXCLUDE_TARGET_PROJECTS
+# mechanism in cmake/therock_amdgpu_targets.cmake removes unsupported arches
+# from the CK subproject's GPU_TARGETS at activate time. If no targets remain
+# after that filter (e.g. a single-arch shard for a CK-unsupported arch),
+# declaring CK with an empty GPU_TARGETS list breaks CK's own HIP try-compile
+# with "HIP_ARCHITECTURES is empty", so flip the global gate off here and let
+# MIOpen build with MIOPEN_USE_COMPOSABLEKERNEL=OFF.
+# See https://github.com/ROCm/TheRock/issues/4836
+set(_ck_enabled ${THEROCK_ENABLE_COMPOSABLE_KERNEL})
+if(_ck_enabled)
+  therock_filter_amdgpu_targets(_ck_targets composable_kernel ${THEROCK_AMDGPU_TARGETS})
+  if(NOT _ck_targets)
+    message(STATUS
+      "composable_kernel: no supported gfx targets remain after filtering "
+      "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+    set(_ck_enabled OFF)
+  endif()
 endif()
 
-if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
+if(_ck_enabled)
   ##############################################################################
   # Composable_kernel
   ##############################################################################
@@ -458,7 +463,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       -DROCM_DIR=
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
       -DMIOPEN_REQ_LIBS_ONLY=ON
-      -DHIPTENSOR_REQ_LIBS_ONLY=ON
+      "-DHIPTENSOR_REQ_LIBS_ONLY=$<NOT:$<BOOL:${THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY}>>"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -483,13 +488,11 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       dev
       doc
       lib
-      run
     SUBPROJECT_DEPS
       composable_kernel
   )
 endif()
 
-set(THEROCK_ENABLE_HIPTENSOR OFF)
 if(THEROCK_ENABLE_HIPTENSOR)
   ##############################################################################
   # hipTensor

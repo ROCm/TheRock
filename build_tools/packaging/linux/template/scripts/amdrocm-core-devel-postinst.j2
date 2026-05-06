@@ -44,7 +44,7 @@ do_update_alternatives(){
     # previous patch level is small.
     altscore=$((altscore*1000000+(now-1600000000)/60))
 
-    binaries=( amdclang amdclang++ amdclang-cl amdclang-cpp amdflang amdlld )
+    binaries=( MIOpenDriver )
 
     {% if target == "deb" %}
        PKG_INSTALL_PREFIX={{ install_prefix }}
