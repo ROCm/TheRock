@@ -154,9 +154,7 @@ def get_gpg_key_url_from_release_type(release_type: str) -> str:
     return get_gpg_key_url(minimal)
 
 
-def derive_gpg_key_url_for_repo_outputs(
-    release_type: str, from_url: str | None
-) -> str:
+def derive_gpg_key_url_for_repo_outputs(release_type: str, from_url: str | None) -> str:
     """Return gpg_key_url string for get-repo-url (empty when unsigned release lines)."""
     if not gpg_key_url_needed_for_release_type(release_type):
         return ""
