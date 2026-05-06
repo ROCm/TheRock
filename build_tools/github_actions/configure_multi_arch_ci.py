@@ -48,7 +48,7 @@ import enum
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 
 # Add parent directory to path for _therock_utils imports
@@ -763,6 +763,15 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     linux_names = _filter_families_by_platform(linux_names, "linux", all_families)
     windows_names = _filter_families_by_platform(windows_names, "windows", all_families)
 
+    # DO NOT MERGE (branch users/chi/test-ucicd, PR #4389): on PR triggers, skip
+    # ALL Linux builds + tests (linux verification lives on the sibling PR #4583
+    # branch users/chi/test-ucicd-linux-gfx115). Keep Windows for navi3x
+    # (gfx110X-all), navi4x (gfx120X-all), and stxh (gfx1151) so the OrchestrAI
+    # Windows runner provisioning iterates fast without paying the Linux pipeline
+    # cost on every push. Restore by removing this block before merging.
+    if ci_inputs.is_pull_request:
+        linux_names = []
+
     return TargetSelection(
         linux_families=linux_names,
         windows_families=windows_names,
@@ -1045,6 +1054,23 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
     )
+
+    # DO NOT MERGE (branch users/chi/test-ucicd, PR #4389): on PR triggers, also
+    # skip the Windows PyTorch fat/split build + test (build_pytorch_wheel_fat in
+    # multi_arch_ci_windows.yml). We only care about validating the Windows
+    # rocm build + test on the OrchestrAI navi3x/navi4x/stxh runners; the
+    # downstream pytorch matrix takes ~hours of azure-windows-scale-rocm time
+    # and is irrelevant to runner-provisioning iteration. Restore by removing
+    # this block before merging.
+    if ci_inputs.is_pull_request and builds.windows is not None:
+        print(
+            "\n  DO NOT MERGE: forcing windows.build_pytorch=False on PR trigger"
+        )
+        builds = BuildConfigs(
+            linux=builds.linux,
+            windows=replace(builds.windows, build_pytorch=False),
+        )
+
     builds.log()
 
     return CIOutputs(
