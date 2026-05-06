@@ -35,6 +35,7 @@ Support for JAX is provided via stable release branches of
 
 | JAX version | Linux                                                                                                           | Windows          |
 | ----------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
+| 0.9.2       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.9.2`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.9.2) | ❌ Not supported |
 | 0.9.1       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.9.1`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.9.1) | ❌ Not supported |
 | 0.9.0       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.9.0`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.9.0) | ❌ Not supported |
 | 0.8.2       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.8.2`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.2) | ❌ Not supported |
