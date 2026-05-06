@@ -299,8 +299,33 @@ cmake --build build
 
 #### CCache usage on Windows
 
-We are still investigating the exact proper options for ccache on Windows and
-do not currently recommend that end users enable it.
+- You must have a recent ccache (>= 4.13.3 at the time of writing) that contains
+  bug fixes for MSVC and supports proper caching with the `--offload-compress`
+  option used for compressing AMDGPU device code.
+- `export CCACHE_SLOPPINESS=include_file_ctime,pch_defines,time_macros` to
+  support hard-linking and precompiled headers (amd-llvm is built with PCH).
+- Proper setup of the `compiler_check` directive to do safe caching in the
+  presence of compiler bootstrapping.
+- Set the C/CXX compiler launcher options to cmake appropriately.
+
+Since these options are very fiddly and prone to change over time, we recommend
+using the `./build_tools/setup_ccache.py` script to create a `.ccache` directory
+in the repository root with hard coded configuration suitable for the project.
+
+Example (In Command Prompt):
+
+```bat
+# Any command prompt used to build must eval setup_ccache.py to set environment
+# variables.
+for /f "delims=" %i in ('python build_tools/setup_ccache.py') do @%i
+
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all \
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache ^
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ^
+  .
+
+cmake --build build
+```
 
 ### Running tests
 

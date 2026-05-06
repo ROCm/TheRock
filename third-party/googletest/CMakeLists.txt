@@ -3,9 +3,9 @@
 
 therock_subproject_fetch(therock-googletest-sources
   CMAKE_PROJECT
-  # Originally mirrored from: https://github.com/google/googletest/releases/download/v1.16.0/googletest-1.16.0.tar.gz
-  URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/googletest-1.16.0.tar.gz
-  URL_HASH SHA256=78c676fc63881529bf97bf9d45948d905a66833fbfa5318ea2cd7478cb98f399
+  # Original URL: https://github.com/google/googletest/releases/download/v1.17.0/googletest-1.17.0.tar.gz
+  URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/googletest-1.17.0.tar.gz
+  URL_HASH SHA256=65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c
 )
 
 therock_cmake_subproject_declare(therock-googletest

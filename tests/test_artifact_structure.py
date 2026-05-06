@@ -38,7 +38,8 @@ import pytest
 THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(THIS_DIR.parent / "build_tools"))
 
-from _therock_utils.artifacts import ArtifactName, _open_archive_for_read
+from _therock_utils.artifacts import ArtifactName
+from _therock_utils.archive_util import open_archive_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ def list_archive_files(archive_path: Path) -> tuple[list[str], list[str]]:
     prefixes: list[str] = []
     flattened: list[str] = []
 
-    with _open_archive_for_read(archive_path) as tf:
+    with open_archive_for_read(archive_path) as tf:
         # Extract prefixes from the artifact manifest.
         manifest_member = tf.next()
         if manifest_member is None or manifest_member.name != "artifact_manifest.txt":
