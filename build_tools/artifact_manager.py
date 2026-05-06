@@ -857,30 +857,33 @@ def do_copy(args: argparse.Namespace):
     """Copy produced artifacts for one or more stages from one run to another."""
     topology = get_topology(args.topology)
 
-    # Parse and validate stages. The literal token "all" expands to every
-    # build stage in the topology; otherwise comma-separated stage names are
-    # parsed. Unlike fetch/push which operate on a single stage, copy accepts
-    # multiple stages at once so that a single setup job can copy all
-    # prebuilt stages in one invocation.
-    available_stages = list(topology.build_stages.keys())
+    # Parse and validate stages. The literal token "all" matches every
+    # artifact in the topology, mirroring `fetch --stage=all` semantics
+    # so an artifact present in topology but not produced by any stage is
+    # still copied. Otherwise comma-separated stage names are parsed and
+    # their produced artifacts are unioned. Unlike fetch/push which
+    # operate on a single stage, copy accepts multiple stages at once so
+    # that a single setup job can copy all prebuilt stages in one
+    # invocation.
+    produced: Set[str] = set()
     if args.stage.strip() == "all":
-        stage_names = available_stages
+        produced = set(topology.artifacts.keys())
+        log(f"Copying all {len(produced)} artifacts from topology")
     else:
         stage_names = [s.strip() for s in args.stage.split(",") if s.strip()]
         for stage_name in stage_names:
-            if stage_name not in available_stages:
+            if stage_name not in topology.build_stages:
                 log(f"ERROR: Stage '{stage_name}' not found")
-                log(f"Available stages: {', '.join(available_stages)}")
+                log(
+                    f"Available stages: {', '.join(topology.build_stages.keys())}"
+                )
                 sys.exit(1)
-
-    # Union produced artifacts across all specified stages
-    produced: Set[str] = set()
-    for stage_name in stage_names:
-        stage_produced = topology.get_produced_artifacts(stage_name)
-        log(
-            f"Stage '{stage_name}' produces {len(stage_produced)} artifacts: {', '.join(sorted(stage_produced))}"
-        )
-        produced.update(stage_produced)
+        for stage_name in stage_names:
+            stage_produced = topology.get_produced_artifacts(stage_name)
+            log(
+                f"Stage '{stage_name}' produces {len(stage_produced)} artifacts: {', '.join(sorted(stage_produced))}"
+            )
+            produced.update(stage_produced)
 
     if not produced:
         log("Specified stages produce no artifacts")

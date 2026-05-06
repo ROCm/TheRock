@@ -66,6 +66,17 @@ type = "target-neutral"
 artifact_group = "downstream-group"
 type = "target-neutral"
 artifact_deps = ["test-artifact", "second-artifact"]
+
+# Orphan group that no build stage produces. Used to verify that
+# `copy --stage=all` matches `fetch --stage=all` semantics: the union of
+# all topology artifacts, not just the union of per-stage produced sets.
+[artifact_groups.orphan-group]
+description = "Group not referenced by any build stage"
+type = "generic"
+
+[artifacts.orphan-artifact]
+artifact_group = "orphan-group"
+type = "target-neutral"
 """
 
 # Platform used consistently across all tests
@@ -1171,13 +1182,16 @@ class TestCopyExtensions(ArtifactManagerTestBase):
         ]
 
     @mock.patch("artifact_manager._delay_for_retry")
-    def test_copy_stage_all_unions_every_stage(self, mock_delay):
-        """`--stage=all` should copy artifacts from every build stage."""
+    def test_copy_stage_all_unions_every_topology_artifact(self, mock_delay):
+        """`--stage=all` should copy every topology artifact, including those
+        not produced by any build stage. Mirrors `fetch --stage=all`."""
         import artifact_manager
 
         self._create_source_artifact("test-artifact", "lib", "generic")
         self._create_source_artifact("second-artifact", "lib", "generic")
         self._create_source_artifact("downstream-artifact", "lib", "generic")
+        # orphan-artifact lives in orphan-group, which no build stage owns.
+        self._create_source_artifact("orphan-artifact", "lib", "generic")
 
         artifact_manager.main(self._base_argv(stage="all"))
 
@@ -1187,7 +1201,12 @@ class TestCopyExtensions(ArtifactManagerTestBase):
                 run_id="dest-run", platform=TEST_PLATFORM
             ),
         )
-        for name in ("test-artifact", "second-artifact", "downstream-artifact"):
+        for name in (
+            "test-artifact",
+            "second-artifact",
+            "downstream-artifact",
+            "orphan-artifact",
+        ):
             self.assertTrue(
                 dest_backend.artifact_exists(f"{name}_lib_generic.tar.zst"),
                 f"{name} should be copied under --stage=all",
