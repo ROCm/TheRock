@@ -267,6 +267,17 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            # hipSPARSELt only supports gfx942 and gfx950
+            "linux": [
+                "gfx90a",
+                "gfx1250",
+            ],
+            "windows": [
+                "gfx90a",
+                "gfx1250",
+            ],
+        },
     },
     # RAND tests
     "rocrand": {
