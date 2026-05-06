@@ -65,6 +65,11 @@ if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
+# fPIC needed for rocprofiler-systems
+set(EXTRA_CFLAGS)
+string(APPEND EXTRA_CFLAGS " -fPIC")
+message(STATUS "EXTRA_CFLAGS=${EXTRA_CLFAGS}")
+
 # HACK: elfutils consults pkg-config for cflags for the compression libraries
 # but then does not seem to use them everywhere needed. So we just hard-code
 # paths.
@@ -100,6 +105,7 @@ add_custom_target(
       # Escaping: Double $ to satisfy CMake, then double $ to satisfy configure,
       # then escaped single quotes to make it to the linker command line.
       "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\'"
+      "CFLAGS=${EXTRA_CFLAGS}"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
