@@ -170,7 +170,9 @@ class GpgKeyUrlNeededForReleaseTypeTest(unittest.TestCase):
         self.assertTrue(
             get_url_repo_params.gpg_key_url_needed_for_release_type("release")
         )
-        self.assertTrue(get_url_repo_params.gpg_key_url_needed_for_release_type("stable"))
+        self.assertTrue(
+            get_url_repo_params.gpg_key_url_needed_for_release_type("stable")
+        )
         self.assertTrue(
             get_url_repo_params.gpg_key_url_needed_for_release_type("  Prerelease  ")
         )
@@ -663,7 +665,9 @@ class MainSubcommandsTest(unittest.TestCase):
             ]
         )
         self.assertEqual(code, 0)
-        self.assertIn("gpg_key_url=https://repo.amd.com/rocm/packages/gpg/rocm.gpg", output)
+        self.assertIn(
+            "gpg_key_url=https://repo.amd.com/rocm/packages/gpg/rocm.gpg", output
+        )
 
     def test_get_repo_url_release_minimal_gpg_only_release_host(self):
         code, output = _run_main_with_output(
@@ -753,7 +757,9 @@ class ContractLegacyAndDerivedTest(unittest.TestCase):
             native_package_type=get_url_repo_params.get_native_package_type_from_os_profile(
                 "ubuntu2404"
             ),
-            repo_base_url=get_url_repo_params.get_base_url_from_release_type("prerelease"),
+            repo_base_url=get_url_repo_params.get_base_url_from_release_type(
+                "prerelease"
+            ),
             os_profile="ubuntu2404",
             repo_sub_folder="",
         )
