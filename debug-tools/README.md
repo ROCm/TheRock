@@ -328,6 +328,60 @@ For additional information on the testing container image, see [dockerfiles/READ
 
 For testing reproduction steps, see [docs/development/test_environment_reproduction.md](../docs/development/test_environment_reproduction.md).
 
+### Building with Sanitizers
+
+TheRock provides built-in support for compiler sanitizers to help detect memory errors, data races, and other runtime bugs during development. For comprehensive documentation on sanitizer modes (`ASAN`, `HOST_ASAN`, `TSAN`), configuration options, CMake presets, and implementation details, see [docs/development/sanitizers.md](../docs/development/sanitizers.md).
+
+#### Debug-Tools Specific Configuration
+
+Enable sanitizers for debug-tools components using either project-wide or per-component settings:
+
+```bash
+# Project-wide
+-DTHEROCK_SANITIZER=HOST_ASAN
+
+# Per-component
+-Damd-dbgapi_SANITIZER=HOST_ASAN
+-Drocr-debug-agent_SANITIZER=HOST_ASAN
+-Drocgdb_SANITIZER=HOST_ASAN
+
+# Combined with debug builds
+-DDEBUG_TOOLS_BUILD_TYPE=Debug
+-DTHEROCK_SANITIZER=HOST_ASAN
+```
+
+#### Runtime Environment Configuration
+
+**Address Sanitizer (ASAN_OPTIONS):**
+
+```bash
+export ASAN_OPTIONS=detect_leaks=1:verbosity=1:log_path=/tmp/asan_log
+```
+
+Common ASAN_OPTIONS:
+
+- `detect_leaks=1` - Enable memory leak detection (enabled by default)
+- `verbosity=N` - Increase diagnostic verbosity (0-2)
+- `check_initialization_order=1` - Detect initialization order bugs
+- `detect_stack_use_after_return=1` - Detect use-after-return bugs (more expensive)
+- `halt_on_error=1` - Stop on first error
+- `log_path=<path>` - Write logs to file instead of stderr
+
+**Thread Sanitizer (TSAN_OPTIONS):**
+
+```bash
+export TSAN_OPTIONS=verbosity=1:second_deadlock_stack=1:history_size=7
+```
+
+Common TSAN_OPTIONS:
+
+- `verbosity=N` - Increase diagnostic verbosity (0-2)
+- `halt_on_error=1` - Stop on first error
+- `second_deadlock_stack=1` - Show second stack trace for deadlocks
+- `history_size=N` - Size of per-thread history buffer (default 2, max 7)
+- `report_bugs=0` - Disable bug reporting (useful for performance testing)
+- `log_path=<path>` - Write logs to file instead of stderr
+
 ## Additional information
 
 ### ROCgdb dependency on terminfo for TUI mode
