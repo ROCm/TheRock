@@ -1,0 +1,5 @@
+# hip-samples
+[components.test."core/hip_samples/stage"]
+include = [
+  "share/hip/samples/**",
+]
