@@ -16,7 +16,7 @@ Public API:
 """
 
 import fnmatch
-import os
+from pathlib import Path
 import subprocess
 import sys
 from typing import Iterable, Optional
@@ -227,7 +227,7 @@ def _check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
 
 def _is_path_workflow_file_related_to_ci(path: str) -> bool:
     """Checks if a single path is a CI-related workflow file."""
-    return os.path.basename(path) in _GITHUB_WORKFLOWS_CI_FILENAMES
+    return Path(path).name in _GITHUB_WORKFLOWS_CI_FILENAMES
 
 
 def _check_for_workflow_file_related_to_ci(paths: Optional[Iterable[str]]) -> bool:
