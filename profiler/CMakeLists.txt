@@ -301,7 +301,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
-        -DROCPROFSYS_BUILD_ELFUTILS=ON
         -DROCPROFSYS_BUILD_TBB=ON
         -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
@@ -319,7 +318,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
       INSTALL_RPATH_DIRS
         "lib"
         "lib/rocprofiler-systems"
-        "llvm/lib"
+        "lib/llvm/lib"
+        "lib/rocm_sysdeps/lib"
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
       BUILD_DEPS
@@ -331,6 +331,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
+        ${THEROCK_BUNDLED_ELFUTILS}
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
         ${_openmpi_optional_dep}

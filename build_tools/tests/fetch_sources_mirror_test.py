@@ -5,10 +5,12 @@
 """Unit tests for git mirror/reference integration in fetch_sources.py."""
 
 import os
+import json
 import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import types
 import unittest
 from pathlib import Path
@@ -17,17 +19,47 @@ from unittest import mock
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from fetch_sources import (
+    get_enabled_sources,
+    parse_source_set_args,
     resolve_reference_dir,
     _resolve_mirror_path,
+    _fetch_one_external_git_source,
     _update_one_submodule,
     _update_submodules_with_reference,
 )
+from _therock_utils.build_topology import ExternalGitSource
 from _therock_utils.git_mirrors import MIRROR_DIR_ENV
 
 
 def _make_args(**kwargs) -> types.SimpleNamespace:
     """Build a minimal args namespace for testing."""
     defaults = {"reference_dir": None}
+    defaults.update(kwargs)
+    return types.SimpleNamespace(**defaults)
+
+
+def _make_fetch_args(**kwargs) -> types.SimpleNamespace:
+    """Build args namespace for source selection tests."""
+    defaults = {
+        "stage": None,
+        "source_sets": [],
+        "include_system_projects": False,
+        "system_projects": [],
+        "include_compilers": False,
+        "compiler_projects": [],
+        "include_debug_tools": False,
+        "debug_tools": [],
+        "include_rocm_libraries": False,
+        "include_rocm_systems": False,
+        "include_ml_frameworks": False,
+        "ml_framework_projects": [],
+        "include_media_libs": False,
+        "media_libs_projects": [],
+        "include_iree_libs": False,
+        "iree_libs_projects": [],
+        "include_math_libraries": False,
+        "math_library_projects": [],
+    }
     defaults.update(kwargs)
     return types.SimpleNamespace(**defaults)
 
@@ -101,6 +133,71 @@ class ResolveMirrorPathTest(unittest.TestCase):
             self.temp_dir, "https://github.com/ROCm/llvm-project.git"
         )
         self.assertIsNone(result)
+
+
+class SourceSetSelectionTest(unittest.TestCase):
+    """Tests for source set selection helpers."""
+
+    def setUp(self):
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.topology_path = self.temp_dir / "BUILD_TOPOLOGY.toml"
+        self.branch_config_path = self.temp_dir / "BRANCH_CONFIG.json"
+        self.topology_path.write_text(
+            textwrap.dedent(
+                """
+                [source_sets.optional-hrx]
+                description = "Optional HRX"
+                external_git_sources = [
+                  { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "e642a13425f46bcf909078459dd4e07df0723a0d", path = "optional-sources/hrx" },
+                ]
+
+                [build_stages.compiler-runtime]
+                description = "Compiler runtime"
+                artifact_groups = ["hip-runtime"]
+
+                [artifact_groups.hip-runtime]
+                description = "HIP runtime"
+                type = "generic"
+                source_sets = []
+                """
+            )
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_parse_source_set_args(self):
+        self.assertEqual(
+            parse_source_set_args(["base,optional-hrx", "optional-hrx"]),
+            ["base", "optional-hrx"],
+        )
+
+    def test_explicit_source_sets_add_external_sources(self):
+        args = _make_fetch_args(source_sets=["optional-hrx"])
+        with mock.patch("fetch_sources.TOPOLOGY_PATH", self.topology_path), mock.patch(
+            "fetch_sources.BRANCH_CONFIG_PATH", self.branch_config_path
+        ):
+            projects, external_sources = get_enabled_sources(args)
+
+        self.assertEqual(projects, [])
+        self.assertEqual(len(external_sources), 1)
+        self.assertEqual(external_sources[0].name, "hrx")
+
+    def test_stage_uses_branch_config_artifact_group_source_sets(self):
+        self.branch_config_path.write_text(
+            json.dumps(
+                {"artifact_groups": {"hip-runtime": {"source_sets": ["optional-hrx"]}}}
+            )
+        )
+        args = _make_fetch_args(stage="compiler-runtime")
+        with mock.patch("fetch_sources.TOPOLOGY_PATH", self.topology_path), mock.patch(
+            "fetch_sources.BRANCH_CONFIG_PATH", self.branch_config_path
+        ):
+            projects, external_sources = get_enabled_sources(args)
+
+        self.assertEqual(projects, [])
+        self.assertEqual(len(external_sources), 1)
+        self.assertEqual(external_sources[0].name, "hrx")
 
 
 class UpdateOneSubmoduleTest(unittest.TestCase):
@@ -247,6 +344,53 @@ class UpdateSubmodulesWithReferenceTest(unittest.TestCase):
         _update_submodules_with_reference(["a", "b"], [], self.reference_dir, jobs=4)
 
         self.assertEqual(mock_update_one.call_count, 2)
+
+
+class FetchExternalGitSourceTest(unittest.TestCase):
+    """Tests for external git source fetching."""
+
+    def setUp(self):
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.source = ExternalGitSource(
+            name="hrx",
+            origin="https://github.com/ROCm/hrx.git",
+            commit="e642a13425f46bcf909078459dd4e07df0723a0d",
+            path="optional-sources/hrx",
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    @mock.patch("fetch_sources.run_command")
+    def test_clones_and_checks_out_pinned_commit(self, mock_run):
+        args = _make_args(depth=None, progress=False)
+        with mock.patch("fetch_sources.THEROCK_DIR", self.temp_dir):
+            _fetch_one_external_git_source(args, self.source, None)
+
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        self.assertEqual(commands[0][0:3], ["git", "clone", "--no-checkout"])
+        self.assertEqual(
+            commands[1], ["git", "checkout", "--detach", self.source.commit]
+        )
+        self.assertEqual(commands[2], ["git", "reset", "--hard", self.source.commit])
+
+    @mock.patch("fetch_sources.run_command")
+    def test_updates_existing_checkout(self, mock_run):
+        source_dir = self.temp_dir / self.source.path
+        (source_dir / ".git").mkdir(parents=True)
+        args = _make_args(depth=None, progress=False)
+        with mock.patch("fetch_sources.THEROCK_DIR", self.temp_dir):
+            _fetch_one_external_git_source(args, self.source, None)
+
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        self.assertEqual(
+            commands[0],
+            ["git", "remote", "set-url", "origin", self.source.origin],
+        )
+        self.assertEqual(commands[1], ["git", "fetch", "origin"])
+        self.assertEqual(
+            commands[2], ["git", "checkout", "--detach", self.source.commit]
+        )
 
 
 if __name__ == "__main__":
