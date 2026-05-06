@@ -566,7 +566,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
-split_databases = ["rocblas", "hipblaslt", "hipsparselt", "rocwmma"]
+split_databases = ["rocblas", "hipblaslt", "hipsparselt"]
 
 [artifacts.rand]
 artifact_group = "math-libs"
@@ -597,6 +597,7 @@ artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas"]
+split_databases = ["rocwmma"]
 
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
