@@ -92,6 +92,63 @@ skip_tests = {
             # TestModuleCUDA - CTCLoss forward scalar mismatch
             "test_forward_nn_CTCLoss_cuda_float32",
         ],
+        "export": [
+            # TestExportOnFakeCudaCUDA - subprocess import fails: missing librocm_sysdeps_liblzma.so.5
+            "test_fake_export___getitem___cuda_float32",
+            "test_fake_export_nn_functional_batch_norm_cuda_float32",
+            "test_fake_export_nn_functional_batch_norm_without_cudnn_cuda_float32",
+            "test_fake_export_nn_functional_conv2d_cuda_float32",
+            "test_fake_export_nn_functional_instance_norm_cuda_float32",
+            "test_fake_export_nn_functional_multi_margin_loss_cuda_float32",
+            "test_fake_export_nn_functional_scaled_dot_product_attention_cuda_float32",
+            "test_fake_export_nonzero_cuda_float32",
+            "test_preserve_original_behavior_cuda",
+        ],
+        "inductor": [
+            # inductor/test_aot_inductor_package: AOTI C++ package tests need
+            # more complete CMake/runtime library-path handling in the wheel CI lane.
+            "test_compile_after_package_multi_arch",
+            "test_compile_after_package_static",
+            "test_compile_standalone_cos",
+            "test_compile_with_exporter",
+            "test_compile_with_exporter_weights",
+            #Also failed on https://github.com/ROCm/TheRock/actions/runs/24898379109
+            "test_flex_attention_logging_cuda",
+            "test_linalg_eig_stride_consistency_cuda",
+            "test_linalg_eig_stride_consistency_cuda",
+            "test_linalg_eig_stride_consistency_dynamic_shapes_cuda",
+            "test_repeated_calling_cuda",
+            #new test
+            "test_run2run_determinism_model_name_DistillGPT2_training_or_inference_inference_precision_amp",
+            #Passed in https://github.com/ROCm/TheRock/actions/runs/24898379109
+            "test_return_aux_deprecation_warnings_cuda_float16",
+        ],
+        "functorch": [
+            #passed on https://github.com/ROCm/TheRock/actions/runs/24898379109
+            "test_torch_return_types_returns_cuda",
+        ],
+        "jit_fuser_te": [
+            #passed on https://github.com/ROCm/TheRock/actions/runs/24898379109
+            "test_binary_div_ops",
+            "test_binary_ops",
+            "test_binary_tensor_scalar_ops",
+            "test_ternary_norm_ops",
+            "test_ternary_ops",
+            "test_unary_ops",
+            "test_where_ops",
+            "test_binary_div_ops",
+            "test_binary_ops",
+            "test_binary_tensor_scalar_ops",
+            "test_ternary_norm_ops",
+            "test_ternary_ops",
+            "test_unary_ops",
+            "test_where_ops",
+        ],
+        "torch_config_hash_determinism": [
+            #passed on https://github.com/ROCm/TheRock/actions/runs/24898379109
+            "test_inductor_config_hash_portable_deterministic",
+            "test_inductor_config_hash_portable_without_ignore",
+        ],
     },
     "gfx942": {
         "cuda": [
