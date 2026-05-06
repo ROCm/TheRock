@@ -1364,6 +1364,19 @@ class TestCopyExtensions(ArtifactManagerTestBase):
 
         self.assertEqual(ctx.exception.code, 1)
 
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_require_matches_fails_when_no_artifacts_at_all(self, mock_delay):
+        """--require-matches must fail when nothing matches even without
+        --amdgpu-families. The empty-copy_requests path must honor the flag,
+        otherwise prebuilt copy jobs can succeed while delivering nothing."""
+        import artifact_manager
+
+        # Source has no artifacts at all (no _create_source_artifact call).
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(self._base_argv() + ["--require-matches"])
+
+        self.assertEqual(ctx.exception.code, 1)
+
 
 class ParseTargetFamiliesTest(unittest.TestCase):
     """Unit tests for artifact_manager.parse_target_families."""

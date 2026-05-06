@@ -943,6 +943,8 @@ def do_copy(args: argparse.Namespace):
 
     if not copy_requests:
         log("No matching artifacts found to copy")
+        if args.require_matches:
+            sys.exit(1)
         return
 
     if args.dry_run:
