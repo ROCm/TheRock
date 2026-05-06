@@ -67,16 +67,6 @@ on:
         default: ""
 
 jobs:
-  build_test:
-    name: test
-    runs-on: ${{ inputs.build_runs_on }}
-    steps:
-      - name: "run"
-        run: |
-          ls
-          ls /runner/config
-          ls /runner
-
   build_stage:
     name: ${{ inputs.stage_display_name }}
     runs-on: ${{ inputs.build_runs_on }}
