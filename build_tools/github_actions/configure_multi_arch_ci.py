@@ -1056,6 +1056,9 @@ def main():
     ci_inputs = CIInputs.from_environ()
 
     # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
+    # The "run everything" is initial state for superrepo multi-arch CI migration.
+    # We will eventually support path filtering and component selection.
+    # TODO: Provide custom decision logic to run specific components and paths
     skip_path_filters = os.environ.get("SKIP_PATH_FILTERS", "").lower() == "true"
 
     if skip_path_filters:
