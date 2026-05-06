@@ -219,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--workflow",
         type=str,
-        default="ci.yml",
+        default="multi_arch_ci.yml",
         help="Workflow filename that produces artifacts (default: ci.yml)",
     )
     parser.add_argument(
