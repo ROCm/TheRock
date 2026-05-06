@@ -77,7 +77,9 @@ on:
 permissions:
   contents: read
 
-run-name: Release portable Linux packages (${{ inputs.families || 'default' }}, ${{ inputs.release_type || 'nightly' }})
+run-name: >-
+  Release portable Linux packages
+  (${{ inputs.families || 'default' }}, ${{ inputs.release_type || 'nightly' }})${{ inputs.prebuilt_prefix && format(' | prebuilt: {0}', inputs.prebuilt_prefix) || '' }}
 
 jobs:
   setup_metadata:
