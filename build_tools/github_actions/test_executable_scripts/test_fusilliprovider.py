@@ -22,7 +22,7 @@ cmd = [
     str(fusilli_test_dir),
     "--output-on-failure",
     "--parallel",
-    "8",
+    "1",
 ]
 
 # Set up environment variables

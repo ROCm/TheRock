@@ -36,7 +36,7 @@ cmd = [
     f"{THEROCK_BIN_DIR}/miopen_plugin",
     "--output-on-failure",
     "--parallel",
-    "8",
+    "1",
 ]
 
 if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:

@@ -97,7 +97,7 @@ def execute_tests():
         "--test-dir",
         "build",
         "--parallel",
-        "8",
+        "1",
         "--output-on-failure",
     ]
 
