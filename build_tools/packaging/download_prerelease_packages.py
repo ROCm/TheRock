@@ -804,11 +804,11 @@ Examples:
         "--multi-arch",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="--multi-arch requires prefix like v4/whl/",
+        help="Enable multi-arch package handling. Requires bucket prefix compatible with multi-arch layout (e.g. v4/whl/)",
     )
 
     parser.add_argument(
-        "--list-packages-multi-arch",
+        "--list-multi-arch-packages",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="List all multi-arch packages matching version",
@@ -836,7 +836,7 @@ Examples:
         and not args.output_dir
     ):
         parser.error(
-            "--output-dir is required unless --list-archs, --list-packages-per-arch, or --list-packages-multi-arch is specified"
+            "--output-dir is required unless --list-archs, --list-packages-per-arch, or --list-multi-arch-packages is specified"
         )
 
     return args
