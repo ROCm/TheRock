@@ -145,8 +145,8 @@ def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
 # ============================================================================
 
 # File path patterns that don't trigger CI runs.
-# Changes to files matching these patterns are considered documentation/configuration
-# that don't affect build or test workflows.
+# Changes to files matching these patterns are considered
+# documentation/configuration that don't affect build or test workflows.
 _SKIPPABLE_PATH_PATTERNS = [
     "docs/*",
     "*.gitignore",
@@ -163,13 +163,16 @@ _SKIPPABLE_PATH_PATTERNS = [
     "experimental/*",
 ]
 
-# GitHub workflow files that are considered CI-related.  Changes to any of
-# these trigger CI runs.  This is an explicit list (not glob patterns) so that
+# GitHub workflow files that are used by CI workflows. Changes to any of
+# these trigger CI runs. This is an explicit list (not glob patterns) so that
 # unrelated workflows are never accidentally included.
 #
-# Maintained manually — the unit test
-# ``test_ci_workflow_filenames_cover_all_transitive_uses`` verifies that every
+# This list is maintained manually and a unit test verifies that every
 # workflow transitively called by ci.yml / multi_arch_ci.yml is listed here.
+#
+# TODO: Compute this set dynamically by scanning workflow files for
+# ``uses: ./.github/workflows/...`` references instead of maintaining it
+# by hand.
 _GITHUB_WORKFLOWS_CI_FILENAMES = {
     # ci.yml only
     "ci.yml",

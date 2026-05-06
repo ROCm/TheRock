@@ -60,9 +60,12 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         """_GITHUB_WORKFLOWS_CI_FILENAMES must exactly match the set of
         workflows transitively called by ci.yml and multi_arch_ci.yml.
 
+        This is a change-detector test that can be removed if
+        _GITHUB_WORKFLOWS_CI_FILENAMES is computed dynamically instead of
+        maintained by hand.
+
         If this test fails, update _GITHUB_WORKFLOWS_CI_FILENAMES in
         configure_ci_path_filters.py to match the actual workflow tree.
-        See https://github.com/ROCm/TheRock/pull/5066#issuecomment-4384099586
         """
         all_used = get_transitive_workflow_uses(["ci.yml", "multi_arch_ci.yml"])
         missing = all_used - _GITHUB_WORKFLOWS_CI_FILENAMES
