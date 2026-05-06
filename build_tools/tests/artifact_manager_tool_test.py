@@ -114,13 +114,17 @@ class FailingBackend(ArtifactBackend):
         self.download_count = 0
         self.run_id = run_id
         self.platform = platform
+        # Always expose an output_root so callers (e.g. do_copy) that read
+        # backend.output_root succeed even when no staging_dir was given.
+        self.output_root = WorkflowOutputRoot.for_local(
+            run_id=run_id, platform=platform
+        )
 
         # Use a real backend for successful operations
         if staging_dir:
-            output_root = WorkflowOutputRoot.for_local(run_id=run_id, platform=platform)
             self._real_backend = LocalDirectoryBackend(
                 staging_dir=staging_dir,
-                output_root=output_root,
+                output_root=self.output_root,
             )
         else:
             self._real_backend = None
@@ -1241,8 +1245,11 @@ class TestCopyExtensions(ArtifactManagerTestBase):
         )
 
     @mock.patch("artifact_manager._delay_for_retry")
-    def test_copy_source_prefix_only_uses_lookup_free_factory(self, mock_delay):
-        """`--source-prefix-only` builds an S3 backend with lookup_workflow_run=False."""
+    def test_copy_source_prefix_only_mirrors_dest_bucket(self, mock_delay):
+        """`--source-prefix-only` source backend must mirror dest's bucket
+        and external_repo, not re-derive them from env. This guards against
+        silent divergence if dest's bucket resolution accepts overrides
+        (e.g. --run-github-repo) that the env-only path would not pick up."""
         import artifact_manager
 
         # Force the S3 path by clearing local-staging from argv.
@@ -1253,35 +1260,48 @@ class TestCopyExtensions(ArtifactManagerTestBase):
         ]
         argv.append("--source-prefix-only")
 
-        captured = {}
+        # Dest backend with a deliberately non-env bucket / external_repo
+        # so we can prove the source mirrors dest rather than env.
+        dest_root = WorkflowOutputRoot(
+            bucket="custom-dest-bucket",
+            external_repo="custom-owner-repo/",
+            run_id="dest-run",
+            platform=TEST_PLATFORM,
+        )
+        dest_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=dest_root,
+        )
 
-        def fake_from_workflow_run(run_id, platform, **kwargs):
-            captured["run_id"] = run_id
-            captured["lookup_workflow_run"] = kwargs.get("lookup_workflow_run", False)
-            return WorkflowOutputRoot.for_local(run_id=run_id, platform=platform)
+        captured_source_root = {}
+
+        def fake_s3_backend(output_root):
+            captured_source_root["root"] = output_root
+            mock_inst = mock.MagicMock()
+            mock_inst.output_root = output_root
+            mock_inst.base_uri = f"mock://{output_root.bucket}/{output_root.prefix}"
+            mock_inst.list_artifacts.return_value = []
+            return mock_inst
 
         with (
-            mock.patch.object(
-                artifact_manager.WorkflowOutputRoot,
-                "from_workflow_run",
-                side_effect=fake_from_workflow_run,
-            ),
-            mock.patch("artifact_manager.S3Backend") as mock_s3_cls,
+            mock.patch("artifact_manager.S3Backend", side_effect=fake_s3_backend),
             mock.patch(
                 "artifact_manager.create_backend_from_env",
-                return_value=LocalDirectoryBackend(
-                    staging_dir=self.staging_dir,
-                    output_root=WorkflowOutputRoot.for_local(
-                        run_id="dest-run", platform=TEST_PLATFORM
-                    ),
-                ),
+                return_value=dest_backend,
             ),
+            mock.patch(
+                "_therock_utils.workflow_outputs._retrieve_bucket_info"
+            ) as mock_lookup,
         ):
-            mock_s3_cls.return_value.list_artifacts.return_value = []
             artifact_manager.main(argv)
+            mock_lookup.assert_not_called()
 
-        self.assertEqual(captured.get("run_id"), "source-run")
-        self.assertFalse(captured.get("lookup_workflow_run"))
+        source_root = captured_source_root.get("root")
+        self.assertIsNotNone(source_root, "S3Backend should be constructed for source")
+        self.assertEqual(source_root.bucket, "custom-dest-bucket")
+        self.assertEqual(source_root.external_repo, "custom-owner-repo/")
+        self.assertEqual(source_root.run_id, "source-run")
+        self.assertEqual(source_root.platform, TEST_PLATFORM)
 
     @mock.patch("artifact_manager._delay_for_retry")
     def test_copy_require_matches_passes_when_family_matched(self, mock_delay):

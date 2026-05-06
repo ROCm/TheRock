@@ -798,6 +798,7 @@ def _create_source_backend(
     platform: str,
     local_staging_dir: Optional[Path] = None,
     prefix_only: bool = False,
+    dest_output_root: Optional[WorkflowOutputRoot] = None,
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
@@ -806,11 +807,12 @@ def _create_source_backend(
     the correct bucket via a GitHub API call (which may differ from the
     current run's bucket - e.g. fork or post-cutover).
 
-    For S3 with prefix_only=True, derives the bucket from the same env-based
-    rules used for the dest backend (no API call). The source's prefix is
-    formed from `source_run_id`-`platform` within that bucket. Use this when
-    the source artifacts live under a fixed prefix in the active run's
-    artifact namespace (e.g. a manually populated "prebuilt" prefix).
+    For S3 with prefix_only=True, mirrors the dest backend's resolved
+    bucket and external_repo directly. Use this when the source artifacts
+    live under a fixed prefix in the active run's artifact namespace
+    (e.g. a manually populated "prebuilt" prefix). Mirroring dest avoids
+    silent divergence if dest's resolution accepts overrides (e.g. a
+    --run-github-repo flag) that the env-only path would not pick up.
 
     For local backends, creates a LocalDirectoryBackend in the same staging dir.
     """
@@ -824,10 +826,21 @@ def _create_source_backend(
             output_root=output_root,
         )
 
+    if prefix_only:
+        if dest_output_root is None:
+            raise ValueError("prefix_only requires dest_output_root")
+        output_root = WorkflowOutputRoot(
+            bucket=dest_output_root.bucket,
+            external_repo=dest_output_root.external_repo,
+            run_id=source_run_id,
+            platform=platform,
+        )
+        return S3Backend(output_root=output_root)
+
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=source_run_id,
         platform=platform,
-        lookup_workflow_run=not prefix_only,
+        lookup_workflow_run=True,
     )
     return S3Backend(output_root=output_root)
 
@@ -892,16 +905,18 @@ def do_copy(args: argparse.Namespace):
     target_families = parse_target_families(args)
     input_families = parse_input_families(args)
 
-    # Create source and dest backends
+    # Create dest first; the source backend in prefix-only mode mirrors
+    # dest's resolved bucket/external_repo so the two cannot diverge.
+    dest_backend = create_backend_from_env(
+        run_id=args.run_id,
+        platform=args.platform,
+    )
     source_backend = _create_source_backend(
         source_run_id=args.source_run_id,
         platform=args.platform,
         local_staging_dir=args.local_staging_dir,
         prefix_only=args.source_prefix_only,
-    )
-    dest_backend = create_backend_from_env(
-        run_id=args.run_id,
-        platform=args.platform,
+        dest_output_root=dest_backend.output_root,
     )
 
     log(f"Source: {source_backend.base_uri}")
