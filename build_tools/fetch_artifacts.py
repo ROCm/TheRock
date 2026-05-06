@@ -47,12 +47,7 @@ from _therock_utils.artifacts import (
 )
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from artifact_manager import DownloadRequest, download_artifact
-
-
-# TODO(geomin12): switch out logging library
-def log(*args, **kwargs):
-    print(*args, **kwargs)
-    sys.stdout.flush()
+from _therock_utils.logger import TheRockLogger
 
 
 def list_artifacts_for_group(
@@ -74,7 +69,7 @@ def list_artifacts_for_group(
     Returns:
         Set of artifact filenames matching any of the target families or "generic".
     """
-    log(f"Retrieving artifacts from '{backend.base_uri}'")
+    TheRockLogger.log(f"Retrieving artifacts from '{backend.base_uri}'")
 
     # Build inclusive set of target families to match
     targets_to_match: set[str] = {"generic"}
@@ -83,7 +78,7 @@ def list_artifacts_for_group(
     if amdgpu_targets:
         targets_to_match.update(amdgpu_targets)
 
-    log(f"Matching artifact target families: {sorted(targets_to_match)}")
+    TheRockLogger.log(f"Matching artifact target families: {sorted(targets_to_match)}")
 
     # Get all artifacts from backend
     all_artifacts = backend.list_artifacts()
@@ -96,7 +91,7 @@ def list_artifacts_for_group(
             data.add(filename)
 
     if not data:
-        log(
+        TheRockLogger.log(
             f"Found no artifacts matching {sorted(targets_to_match)} "
             f"at '{backend.base_uri}'"
         )
@@ -167,11 +162,11 @@ def extract_artifact(
         if output_dir.exists():
             rmtree_with_retry(output_dir)
         with _open_archive_for_read(archive_file) as tf:
-            log(f"++ Extracting '{archive_file.name}' to '{artifact_name}'")
+            TheRockLogger.log(f"++ Extracting '{archive_file.name}' to '{artifact_name}'")
             tf.extractall(archive_file.parent / artifact_name, filter="tar")
     elif postprocess_mode == "flatten":
         output_dir = archive_file.parent
-        log(f"++ Flattening '{archive_file.name}' to '{artifact_name}'")
+        TheRockLogger.log(f"++ Flattening '{archive_file.name}' to '{artifact_name}'")
         flattener = ArtifactPopulator(
             output_path=output_dir, verbose=True, flatten=True
         )
@@ -214,7 +209,7 @@ def run(args):
         amdgpu_targets=amdgpu_targets,
     )
     if not available_artifacts:
-        log(f"No matching artifacts for {run_id} exist. Exiting...")
+        TheRockLogger.log(f"No matching artifacts for {run_id} exist. Exiting...")
         sys.exit(1)
 
     # Include/exclude filtering.
@@ -222,7 +217,7 @@ def run(args):
         available_artifacts, args.include, args.exclude
     )
     if not filtered_artifacts:
-        log(f"Filtering artifacts for {run_id} resulted in an empty set. Exiting...")
+        TheRockLogger.log(f"Filtering artifacts for {run_id} resulted in an empty set. Exiting...")
         sys.exit(1)
 
     download_requests = [
@@ -237,10 +232,10 @@ def run(args):
     download_summary = "\n  ".join(
         [f"{req.backend.base_uri}/{req.artifact_key}" for req in download_requests]
     )
-    log(f"\nFiltered artifacts to download:\n  {download_summary}\n")
+    TheRockLogger.log(f"\nFiltered artifacts to download:\n  {download_summary}\n")
 
     if args.dry_run:
-        log("Skipping downloads since --dry-run was set")
+        TheRockLogger.log("Skipping downloads since --dry-run was set")
         return
 
     output_dir.mkdir(parents=True, exist_ok=True)
