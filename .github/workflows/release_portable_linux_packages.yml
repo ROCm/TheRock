@@ -156,11 +156,9 @@ jobs:
   # prebuilt_prefix is empty so the downstream `needs:` graph stays stable
   # in source-build mode.
   #
-  # TODO: when `inputs.families` is empty (caller relies on the defaults
-  # computed by fetch_package_targets.py), this passes an empty
-  # amdgpu_families and copy --require-matches exits 1 in prebuilt mode.
-  # Resolve the family list in setup_metadata and feed both the matrix and
-  # copy_prebuilt from it so empty `families` works in prebuilt mode too.
+  # The family list is derived from the resolved package_targets matrix
+  # (not inputs.families) so an empty inputs.families - which expands via
+  # fetch_package_targets.py defaults - works correctly in prebuilt mode.
   copy_prebuilt:
     needs: [setup_metadata]
     name: Copy Prebuilt Artifacts
@@ -169,7 +167,7 @@ jobs:
     with:
       prebuilt_prefix: ${{ inputs.prebuilt_prefix }}
       platform: linux
-      amdgpu_families: ${{ inputs.families }}
+      amdgpu_families: ${{ join(fromJSON(needs.setup_metadata.outputs.package_targets).*.amdgpu_family, ';') }}
       expand_family_to_targets: false
       release_type: ${{ needs.setup_metadata.outputs.release_type }}
       repository: ${{ inputs.repository || github.repository }}
