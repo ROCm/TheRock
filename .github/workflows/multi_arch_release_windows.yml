@@ -23,13 +23,20 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      prebuilt_prefix:
+        description: >-
+          Optional fixed prefix to copy artifacts from instead of building
+          from source. Empty selects normal source-build mode.
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
-  build_artifacts:
-    name: Build Artifacts
+  build_source:
+    name: Build Artifacts (source)
+    if: ${{ inputs.prebuilt_prefix == '' }}
     uses: ./.github/workflows/multi_arch_build_windows.yml
     secrets: inherit
     with:
@@ -46,6 +53,41 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  copy_prebuilt:
+    name: Copy Prebuilt Artifacts
+    uses: ./.github/workflows/copy_prebuilt_artifacts.yml
+    secrets: inherit
+    with:
+      prebuilt_prefix: ${{ inputs.prebuilt_prefix }}
+      platform: windows
+      amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      expand_family_to_targets: true
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
+  build_artifacts:
+    name: Build Artifacts
+    needs: [build_source, copy_prebuilt]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Verify active producer succeeded
+        run: |
+          python build_tools/github_actions/verify_artifacts_ready.py \
+            --prebuilt-prefix="${{ inputs.prebuilt_prefix }}" \
+            --build-source-result="${{ needs.build_source.result }}" \
+            --copy-prebuilt-result="${{ needs.copy_prebuilt.result }}"
 
   build_tarballs:
     needs: [build_artifacts]
@@ -131,11 +173,15 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 
+  # PyTorch wheels are built from source. The prebuilt path only re-stages
+  # ROCm artifacts; it does not carry PyTorch wheels, so skip the dispatch
+  # in prebuilt mode.
   # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
   #   bucket if the job order is not altered.
   build_pytorch_wheels:
     needs: [build_artifacts, build_python_packages]
     name: Build PyTorch Wheels
+    if: ${{ inputs.prebuilt_prefix == '' }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write

@@ -43,6 +43,13 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      prebuilt_prefix:
+        description: >-
+          Optional fixed prefix component (the part before "-linux"/
+          "-windows") to copy artifacts from instead of building from
+          source. Empty (the default) selects normal source-build mode.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       release_type:
@@ -65,6 +72,12 @@ on:
         description: 'Comma-separated list of Windows GPU families. "all" = all, "none" = skip platform.'
         type: string
         default: "gfx110x"
+      prebuilt_prefix:
+        description: >-
+          Optional fixed prefix component to copy artifacts from instead of
+          building from source. Empty selects normal source-build mode.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -72,7 +85,7 @@ permissions:
 run-name: >-
   Multi-Arch Release (${{ inputs.release_type }})
   | Linux: ${{ inputs.linux_amdgpu_families || 'none' }}
-  | Windows: ${{ inputs.windows_amdgpu_families || 'none' }}
+  | Windows: ${{ inputs.windows_amdgpu_families || 'none' }}${{ inputs.prebuilt_prefix && format(' | prebuilt: {0}', inputs.prebuilt_prefix) || '' }}
 
 jobs:
   setup:
@@ -101,6 +114,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ needs.setup.outputs.ref }}
+      prebuilt_prefix: ${{ inputs.prebuilt_prefix }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
@@ -119,6 +133,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ needs.setup.outputs.ref }}
+      prebuilt_prefix: ${{ inputs.prebuilt_prefix }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows

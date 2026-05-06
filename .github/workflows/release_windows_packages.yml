@@ -36,6 +36,12 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      prebuilt_prefix:
+        description: >-
+          Optional fixed prefix to copy artifacts from instead of building
+          from source. Empty selects normal source-build mode.
+        type: string
+        default: ""
   # Trigger manually (typically to test the workflow or manually build a release [candidate])
   workflow_dispatch:
     inputs:
@@ -63,6 +69,12 @@ on:
       extra_cmake_options:
         description: "Extra options to pass to the CMake configure command"
         type: string
+      prebuilt_prefix:
+        description: >-
+          Optional fixed prefix to copy artifacts from instead of building
+          from source. Empty selects normal source-build mode.
+        type: string
+        default: ""
 
   # Trigger on a schedule to build nightly release candidates.
   schedule:
@@ -141,12 +153,38 @@ jobs:
           THEROCK_PACKAGE_PLATFORM: "windows"
         run: python ./build_tools/github_actions/fetch_package_targets.py
 
+  # Top-level copy job. Always runs; the reusable workflow no-ops when
+  # prebuilt_prefix is empty so the downstream `needs:` graph stays stable
+  # in source-build mode.
+  #
+  # TODO: when `inputs.families` is empty (caller relies on the defaults
+  # computed by fetch_package_targets.py), this passes an empty
+  # amdgpu_families and copy --require-matches exits 1 in prebuilt mode.
+  # Resolve the family list in setup_metadata and feed both the matrix and
+  # copy_prebuilt from it so empty `families` works in prebuilt mode too.
+  copy_prebuilt:
+    needs: [setup_metadata]
+    name: Copy Prebuilt Artifacts
+    uses: ./.github/workflows/copy_prebuilt_artifacts.yml
+    secrets: inherit
+    with:
+      prebuilt_prefix: ${{ inputs.prebuilt_prefix }}
+      platform: windows
+      amdgpu_families: ${{ inputs.families }}
+      expand_family_to_targets: false
+      release_type: ${{ needs.setup_metadata.outputs.release_type }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
   windows_packages:
     name: ${{ matrix.target_bundle.amdgpu_family }}::Build Windows
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
     continue-on-error: ${{ matrix.target_bundle.expect_failure == true }} # for GPU families that are flaky, we mark as xfail
     timeout-minutes: 720 # 12 hour timeout
-    needs: [setup_metadata]
+    needs: [setup_metadata, copy_prebuilt]
     permissions:
       contents: write
       actions: write # Added permission to trigger workflows
@@ -207,13 +245,16 @@ jobs:
 
       # After other installs, so MSVC get priority in the PATH.
       - name: Configure MSVC
+        if: ${{ inputs.prebuilt_prefix == '' }}
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       - name: Runner health status
+        if: ${{ inputs.prebuilt_prefix == '' }}
         run: |
           python ./build_tools/health_status.py
 
       - name: Setup ccache
+        if: ${{ inputs.prebuilt_prefix == '' }}
         run: |
           python ./build_tools/setup_ccache.py \
             --release-type "${{ env.RELEASE_TYPE }}" \
@@ -222,6 +263,7 @@ jobs:
             --log-dir "${BUILD_DIR}/logs/ccache"
 
       - name: Fetch sources
+        if: ${{ inputs.prebuilt_prefix == '' }}
         timeout-minutes: 30
         run: |
           git config fetch.parallel 10
@@ -230,6 +272,7 @@ jobs:
           python ./build_tools/fetch_sources.py --jobs 12
 
       - name: Configure Projects
+        if: ${{ inputs.prebuilt_prefix == '' }}
         env:
           cmake_preset: windows-release
           amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
@@ -239,12 +282,48 @@ jobs:
           python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-dist
+        if: ${{ inputs.prebuilt_prefix == '' }}
         run: cmake --build "${{ env.BUILD_DIR }}" --target therock-dist
 
       - name: Build therock-archives
+        if: ${{ inputs.prebuilt_prefix == '' }}
         run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives
 
       - name: Compress dist folder
+        if: ${{ inputs.prebuilt_prefix == '' }}
+        run: |
+          cd ${{ env.BUILD_DIR }}/dist/rocm
+          echo "Compressing ${{ env.DIST_ARCHIVE }}"
+          tar cfz "${{ env.DIST_ARCHIVE }}" --force-local .
+
+      # Prebuilt mode: the artifacts were copied into this run's prefix by
+      # the top-level copy_prebuilt job. Materialize them in two layouts
+      # using a shared download cache to avoid double-downloading:
+      #   BUILD_DIR/artifacts        - per-artifact subdirs for
+      #                                build_python_packages.py
+      #   BUILD_DIR/dist/rocm        - flat merged tree for the dist tarball
+      - name: Fetch prebuilt artifacts
+        if: ${{ inputs.prebuilt_prefix != '' && github.repository_owner == 'ROCm' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PREBUILT_FETCH_CACHE: ${{ env.BUILD_DIR }}/prebuilt-fetch-cache
+        run: |
+          mkdir -p "${{ env.BUILD_DIR }}/artifacts"
+          mkdir -p "${{ env.BUILD_DIR }}/dist/rocm"
+          python ./build_tools/artifact_manager.py fetch \
+            --stage=all \
+            --amdgpu-families="${{ matrix.target_bundle.amdgpu_family }}" \
+            --output-dir="${{ env.BUILD_DIR }}/artifacts" \
+            --download-cache-dir="${PREBUILT_FETCH_CACHE}"
+          python ./build_tools/artifact_manager.py fetch \
+            --stage=all \
+            --amdgpu-families="${{ matrix.target_bundle.amdgpu_family }}" \
+            --output-dir="${{ env.BUILD_DIR }}/dist/rocm" \
+            --flatten \
+            --download-cache-dir="${PREBUILT_FETCH_CACHE}"
+
+      - name: Build dist tarball from prebuilt artifacts
+        if: ${{ inputs.prebuilt_prefix != '' && github.repository_owner == 'ROCm' }}
         run: |
           cd ${{ env.BUILD_DIR }}/dist/rocm
           echo "Compressing ${{ env.DIST_ARCHIVE }}"
@@ -258,7 +337,7 @@ jobs:
             --version=${{ needs.setup_metadata.outputs.version }}
 
       - name: Build report
-        if: ${{ !cancelled() }}
+        if: ${{ inputs.prebuilt_prefix == '' && !cancelled() }}
         shell: bash
         run: |
           if [ -d "${{ env.BUILD_DIR }}" ]; then
@@ -283,7 +362,7 @@ jobs:
           special-characters-workaround: true
 
       - name: Post Build Upload
-        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
+        if: ${{ inputs.prebuilt_prefix == '' && github.repository_owner == 'ROCm' && !cancelled() }}
         run: |
           python3 build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
