@@ -436,4 +436,4 @@ python build_tools/install_rocm_from_artifacts.py \
 
 #### Step 6: Update Test Configuration (Optional)
 
-If you want to add tests for your component in CI, also update `build_tools/github_actions/fetch_test_configurations.py`. See [Adding Tests](./adding_tests.md) for details.
+If you want to add tests for your component in CI, also update `test_tools/fetch_test_configurations.py`. See [Adding Tests](./adding_tests.md) for details.

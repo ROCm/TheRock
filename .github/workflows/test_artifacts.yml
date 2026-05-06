@@ -138,7 +138,7 @@ jobs:
           TEST_LABELS: ${{ inputs.test_labels }}
           RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
           WINDOWS_HIP_ROCR_TESTS: ${{ inputs.windows_hip_rocr_tests }}
-        run: python ./build_tools/github_actions/fetch_test_configurations.py
+        run: python ./test_tools/fetch_test_configurations.py
 
   test_sanity_check:
     name: 'Test Sanity Check'

@@ -73,7 +73,7 @@ jobs:
       - name: Upload Report to S3
         if: ${{ github.repository == 'ROCm/TheRock' }}
         run: |
-          python3 build_tools/github_actions/upload_test_report_script.py \
+          python3 test_tools/upload_test_report_script.py \
             --run-id ${{ github.run_id }} \
             --amdgpu-family manifest-diff \
             --report-path reports \

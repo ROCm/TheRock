@@ -133,7 +133,7 @@ Update all `pytest` invocations that reference
 `build_tools/github_actions/test_executable_scripts/test_X.py` to point to the
 new canonical locations. Known callers:
 
-- `TheRock/build_tools/github_actions/fetch_test_configurations.py`
+- `TheRock/test_tools/fetch_test_configurations.py`
 - `rocm-systems/.github/workflows/therock-rccl-test-packages-single-node.yml`
 - Any additional callers discovered during the Step 1 inventory.
 
@@ -245,9 +245,9 @@ These scripts test Fusilli provider plugins whose build artifacts come from the
 ### CI caller summary
 
 The primary CI entry point for all scripts is
-`build_tools/github_actions/fetch_test_configurations.py`, which constructs
-`test_script` strings that reference paths relative to the repo root. That file
-and `test_component.yml` will be the main callers to update in Step 4.
+`test_tools/fetch_test_configurations.py`, which constructs `test_script`
+strings that reference paths relative to the repo root. That file and
+`test_component.yml` will be the main callers to update in Step 4.
 
 The `rocm-systems` workflow
 `therock-rccl-test-packages-single-node.yml` also directly invokes
