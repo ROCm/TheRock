@@ -382,6 +382,55 @@ Common TSAN_OPTIONS:
 - `report_bugs=0` - Disable bug reporting (useful for performance testing)
 - `log_path=<path>` - Write logs to file instead of stderr
 
+### Testing Debug-Tools
+
+TheRock provides test scripts for ROCgdb and ROCr Debug Agent. Both scripts work with locally-built ROCm trees or downloaded nightly tarballs from https://rocm.nightlies.amd.com/.
+
+**Scripts location:** `build_tools/github_actions/test_executable_scripts/`
+
+#### Setup
+
+Set environment variables pointing to your ROCm installation:
+
+```bash
+# For TheRock builds
+export THEROCK_BIN_DIR=/therock/output/build/dist/rocm/bin
+export OUTPUT_ARTIFACTS_DIR=/therock/output/build/dist/rocm
+
+# For nightly tarballs
+export THEROCK_BIN_DIR=/path/to/rocm-developer-nightly/bin
+export OUTPUT_ARTIFACTS_DIR=/path/to/rocm-developer-nightly
+```
+
+For container testing, use the testing container described in [Container Environments](#testing-container).
+
+#### Running Tests
+
+**ROCgdb:**
+
+```bash
+python3 build_tools/github_actions/test_executable_scripts/test_rocgdb.py
+```
+
+The script runs the GDB test suite against ROCgdb using both GCC and LLVM compilers. By default it will run the gdb.rocm and gdb.dwarf2 test categories.
+
+**ROCr Debug Agent:**
+
+```bash
+python3 build_tools/github_actions/test_executable_scripts/test_rocr-debug-agent.py
+```
+
+The script includes automatic retry logic for flaky GPU-dependent tests.
+
+#### Results
+
+Both scripts report pass/fail status and exit with code 0 on success. ROCgdb tracks expected failures in the script's `XFAILED_TESTS` dictionary and reports:
+
+- Per-compiler results (GCC and LLVM)
+- Flaky tests (passed on retry)
+- Unexpected failures
+- Comparison of compiler-specific failures
+
 ## Additional information
 
 ### ROCgdb dependency on terminfo for TUI mode
