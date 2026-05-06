@@ -10,15 +10,13 @@ Output is always KEY=value (suitable for GITHUB_OUTPUT).
 Subcommands (get operations):
 
   get-base-url         Get base URL (scheme + netloc) from --from-url or from --release-type. Prints repo_base_url=<value>.
-  get-gpg-url          Get GPG key URL for GITHUB_OUTPUT. Provide --from-url and/or --release-type (at least one). With --release-type only, uses canonical package hosts. With --release-type, emits a non-empty URL only for signed-repo lines (prerelease/release/stable); otherwise gpg_key_url=. Legacy: --from-url only always derives.
   get-repo-sub-folder  Get repo_sub_folder from an S3 prefix (last segment if YYYYMMDD-<id>, else empty). Prints repo_sub_folder=<value>.
-  get-repo-url         Full native install repo URL (see docs/packaging/native_packaging.md). Required: --release-type, --os-profile. Optional: --repo-sub-folder, --repo-base-url, --native-package-type. Prints repo_url=<value>.
+  get-repo-url         Native install repo URL and gpg_key_url (see docs/packaging/native_packaging.md). Required: --release-type, --os-profile. Optional: --repo-sub-folder, --repo-base-url, --native-package-type, --from-url (optional override for GPG derivation on signed repos). Prints repo_url=<value> and gpg_key_url=<value>.
   extract-gfx-arch     Extract and normalize GPU architecture from artifact group. Prints gfx_arch=<value>.
   get-container-image  Get container image for a given OS profile. Prints container_image=<value>.
 
 Usage:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url (--from-url <url> | --release-type <type>)
-  python build_tools/packaging/linux/get_url_repo_params.py get-gpg-url (--from-url <url> | --release-type <type> | both)
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix <prefix>
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url ...
   python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch --artifact-group <group>
@@ -27,8 +25,6 @@ Usage:
 Examples:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url https://example.com/v2/whl
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --release-type prerelease
-  python build_tools/packaging/linux/get_url_repo_params.py get-gpg-url --release-type prerelease --from-url https://rocm.prereleases.amd.com/packages/ubuntu2404  # → .../packages/gpg/rocm.gpg
-  python build_tools/packaging/linux/get_url_repo_params.py get-gpg-url --release-type prerelease  # same GPG URL without --from-url
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix v3/packages/deb/20260204-12345
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --os-profile ubuntu2404
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --native-package-type deb --repo-base-url https://x.com --os-profile ubuntu2404 --repo-sub-folder ''
@@ -158,6 +154,17 @@ def get_gpg_key_url_from_release_type(release_type: str) -> str:
     return get_gpg_key_url(minimal)
 
 
+def derive_gpg_key_url_for_repo_outputs(
+    release_type: str, from_url: str | None
+) -> str:
+    """Return gpg_key_url string for get-repo-url (empty when unsigned release lines)."""
+    if not gpg_key_url_needed_for_release_type(release_type):
+        return ""
+    if from_url is not None:
+        return get_gpg_key_url(from_url)
+    return get_gpg_key_url_from_release_type(release_type)
+
+
 def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
     """
     Whether install workflows should use a repo GPG key URL for this release line.
@@ -173,28 +180,6 @@ def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
         return True
     rt = release_type.strip().lower()
     return rt in ("prerelease", "prereleases", "release", "stable")
-
-
-def cmd_gpg_key_url(args: argparse.Namespace) -> int:
-    if args.from_url is None and args.release_type is None:
-        print(
-            "Error: get-gpg-url requires --from-url and/or --release-type",
-            file=sys.stderr,
-        )
-        return 1
-    if not gpg_key_url_needed_for_release_type(args.release_type):
-        gha_set_output({"gpg_key_url": ""})
-        return 0
-    try:
-        if args.from_url is not None:
-            gpg_url = get_gpg_key_url(args.from_url)
-        else:
-            gpg_url = get_gpg_key_url_from_release_type(args.release_type)
-    except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
-    gha_set_output({"gpg_key_url": gpg_url})
-    return 0
 
 
 # --- repo_sub_folder ---
@@ -290,10 +275,13 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
             os_profile=args.os_profile,
             repo_sub_folder=args.repo_sub_folder or "",
         )
+        gpg_url = derive_gpg_key_url_for_repo_outputs(
+            args.release_type, getattr(args, "from_url", None)
+        )
     except (ValueError, TypeError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-    gha_set_output({"repo_url": url})
+    gha_set_output({"repo_url": url, "gpg_key_url": gpg_url})
     return 0
 
 
@@ -405,26 +393,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_base.set_defaults(func=cmd_base_url)
 
-    # get-gpg-url: get GPG key URL from package repository URL
-    p_gpg = subparsers.add_parser(
-        "get-gpg-url",
-        help="Print gpg_key_url= for GITHUB_OUTPUT. At least one of --from-url or --release-type. If only --release-type, use canonical hosts.",
-    )
-    p_gpg.add_argument(
-        "--from-url",
-        type=str,
-        default=None,
-        metavar="URL",
-        help="Package repository URL for GPG derivation when provided (wins over release-type-only path). With --release-type, signed-repo lines only.",
-    )
-    p_gpg.add_argument(
-        "--release-type",
-        type=str,
-        default=None,
-        help="Release line: with --from-url, gates non-empty GPG to prerelease/prereleases/release/stable. Alone (no --from-url), derive GPG URL from canonical ROCm hosts.",
-    )
-    p_gpg.set_defaults(func=cmd_gpg_key_url)
-
     # get-repo-sub-folder: get repo_sub_folder from S3 prefix
     p_repo = subparsers.add_parser(
         "get-repo-sub-folder",
@@ -442,10 +410,17 @@ def main(argv: list[str] | None = None) -> int:
     # get-repo-url: full repo URL from components (replaces inline logic in workflows)
     p_url = subparsers.add_parser(
         "get-repo-url",
-        help="Get full native install repo URL (docs/packaging/native_packaging.md). Requires --release-type and --os-profile; optional --repo-sub-folder; --repo-base-url and --native-package-type default from release line and OS profile.",
+        help="Native repo URL and gpg_key_url (docs/packaging/native_packaging.md). Requires --release-type and --os-profile; optional --repo-sub-folder, --repo-base-url, --native-package-type, --from-url (GPG override).",
     )
     p_url.add_argument(
         "--release-type", type=str, required=True, help="e.g. prerelease, dev, nightly"
+    )
+    p_url.add_argument(
+        "--from-url",
+        type=str,
+        default=None,
+        metavar="URL",
+        help="Optional package repo URL to derive gpg_key_url when signed-repo applies; overrides canonical host from --release-type",
     )
     p_url.add_argument(
         "--native-package-type",
