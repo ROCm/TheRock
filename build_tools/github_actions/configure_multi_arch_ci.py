@@ -1063,9 +1063,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     # and is irrelevant to runner-provisioning iteration. Restore by removing
     # this block before merging.
     if ci_inputs.is_pull_request and builds.windows is not None:
-        print(
-            "\n  DO NOT MERGE: forcing windows.build_pytorch=False on PR trigger"
-        )
+        print("\n  DO NOT MERGE: forcing windows.build_pytorch=False on PR trigger")
         builds = BuildConfigs(
             linux=builds.linux,
             windows=replace(builds.windows, build_pytorch=False),
