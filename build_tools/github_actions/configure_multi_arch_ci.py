@@ -137,8 +137,8 @@ class CIInputs:
     # Per-platform workflow_dispatch overrides (parsed from comma-separated input)
     linux_amdgpu_families: list[str] = field(default_factory=list)
     windows_amdgpu_families: list[str] = field(default_factory=list)
-    linux_test_labels: str = ""
-    windows_test_labels: str = ""
+    linux_test_labels: list[str] = field(default_factory=list)
+    windows_test_labels: list[str] = field(default_factory=list)
 
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
@@ -196,6 +196,18 @@ class CIInputs:
         elif event_name == "push":
             base_ref = event.get("before", "HEAD^1")
 
+        # Test labels come from two sources:
+        # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
+        # 2. PR test:* labels (apply to both platforms)
+        pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
+        linux_test_labels = (
+            _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", "")) + pr_test_labels
+        )
+        windows_test_labels = (
+            _parse_comma_list(os.environ.get("WINDOWS_TEST_LABELS", ""))
+            + pr_test_labels
+        )
+
         return CIInputs(
             run_id=run_id,
             event_name=event_name,
@@ -210,12 +222,8 @@ class CIInputs:
             windows_amdgpu_families=_parse_comma_list(
                 os.environ.get("WINDOWS_AMDGPU_FAMILIES", "")
             ),
-            linux_test_labels=_parse_comma_list(
-                os.environ.get("LINUX_TEST_LABELS", "")
-            ),
-            windows_test_labels=_parse_comma_list(
-                os.environ.get("WINDOWS_TEST_LABELS", "")
-            ),
+            linux_test_labels=linux_test_labels,
+            windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
         )
@@ -462,9 +470,10 @@ class CIOutputs:
     is_ci_enabled: bool = True
     builds: BuildConfigs = field(default_factory=BuildConfigs)
     jobs: JobDecisions | None = None
-    # Test labels pass through from inputs to outputs for downstream workflows.
-    linux_test_labels: str = ""
-    windows_test_labels: str = ""
+    # Test labels for downstream workflows. Merged from workflow_dispatch inputs
+    # and PR test:* labels.
+    linux_test_labels: list[str] = field(default_factory=list)
+    windows_test_labels: list[str] = field(default_factory=list)
 
     @staticmethod
     def skipped() -> "CIOutputs":
