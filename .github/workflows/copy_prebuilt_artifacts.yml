@@ -91,6 +91,10 @@ on:
 permissions:
   contents: read
 
+run-name: >-
+  Copy Prebuilt Artifacts
+  (${{ inputs.platform }}, ${{ inputs.release_type }}) | prebuilt: ${{ inputs.prebuilt_prefix }}
+
 jobs:
   copy:
     name: Copy Prebuilt Artifacts
