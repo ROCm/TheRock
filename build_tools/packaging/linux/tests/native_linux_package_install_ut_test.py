@@ -311,7 +311,9 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         )
 
     def test_major_minor_rocm_version_from_input(self):
-        m = native_linux_package_install_test.NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input
+        m = (
+            native_linux_package_install_test.NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input
+        )
         self.assertIsNone(m(None))
         self.assertIsNone(m(""))
         self.assertEqual(m("7.13"), "7.13")

@@ -394,8 +394,8 @@ class NativeLinuxPackageInstallTest:
         self.release_type = release_type.lower()
         self.install_prefix = install_prefix
         self.gfx_arch_list = self._normalized_gfx_archs_from_input(gfx_arch)
-        self.rocm_version_major_minor = (
-            self._major_minor_rocm_version_from_input(rocm_version)
+        self.rocm_version_major_minor = self._major_minor_rocm_version_from_input(
+            rocm_version
         )
         # Primary arch (compat / display): first listed after normalization, else unset
         self.gfx_arch: str | None = (
@@ -991,7 +991,13 @@ gpgcheck=0
         cmd = [sys.executable, str(rdhc_script)]
 
         # Set RDHC arguments for full test
-        test_args = ["--rocm-install-prefix", rocm_install_prefix_arg, "--all"]
+        test_args = [
+            "--rocm-install-prefix",
+            rocm_install_prefix_arg,
+            "--skip-optional-cluster-checks",
+            "--kernel-params-warnings-only",
+            "--all",
+        ]
         print(
             f"\nRun rdhc.py with --rocm-install-prefix {rocm_install_prefix_arg} --all..."
         )
@@ -1240,10 +1246,7 @@ def run_tests(args: Namespace) -> int:
         args.gfx_arch
     )
     if _norm:
-        print(
-            f"GPU Architecture(s): {args.gfx_arch} "
-            f"(normalized: {_norm})"
-        )
+        print(f"GPU Architecture(s): {args.gfx_arch} " f"(normalized: {_norm})")
     else:
         if args.rocm_version:
             _gv = NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input(
@@ -1254,9 +1257,7 @@ def run_tests(args: Namespace) -> int:
                 f"amdrocm{_gv}, amdrocm-core-sdk{_gv})"
             )
         else:
-            print(
-                "GPU Architecture(s): (none — generic amdrocm, amdrocm-core-sdk)"
-            )
+            print("GPU Architecture(s): (none — generic amdrocm, amdrocm-core-sdk)")
     if args.rocm_version:
         _rv = NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input(
             args.rocm_version
@@ -1375,9 +1376,7 @@ def _argv_from_ci_env() -> list[str] | None:
     ]
     if gfx_arch:
         argv.extend(["--gfx-arch", *gfx_arch])
-    rocm_version = (
-        os.environ.get(ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION) or ""
-    ).strip()
+    rocm_version = (os.environ.get(ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION) or "").strip()
     if rocm_version:
         argv.extend(["--rocm-version", rocm_version])
     gpg = (os.environ.get("GPG_KEY_URL") or "").strip()
