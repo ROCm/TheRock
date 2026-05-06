@@ -425,6 +425,12 @@ class TestSelectTargets(unittest.TestCase):
         push_result = cm.select_targets(push_inputs)
         self.assertGreater(len(result.linux_families), len(push_result.linux_families))
 
+    @unittest.skip(
+        "DO NOT MERGE (branch users/chi/test-ucicd, PR #4389): the filter in "
+        "select_targets() forces linux_families=[] on PR triggers; this test's "
+        "linux assertions no longer hold. Re-enable when the DO NOT MERGE block "
+        "is removed before merging."
+    )
     def test_pull_request_defaults_to_presubmit_only(self):
         """PR without labels gets presubmit families only, not postsubmit."""
         inputs = cm.CIInputs(
@@ -439,6 +445,12 @@ class TestSelectTargets(unittest.TestCase):
         # gfx950 is postsubmit-only, should NOT be in PR defaults
         self.assertNotIn("gfx950", result.linux_families)
 
+    @unittest.skip(
+        "DO NOT MERGE (branch users/chi/test-ucicd, PR #4389): the filter in "
+        "select_targets() forces linux_families=[] on PR triggers; this test's "
+        "linux assertions no longer hold. Re-enable when the DO NOT MERGE block "
+        "is removed before merging."
+    )
     def test_pull_request_gfx_label_adds_family(self):
         """PR with a gfx label adds that family to the defaults."""
         inputs_without = cm.CIInputs(
@@ -462,6 +474,12 @@ class TestSelectTargets(unittest.TestCase):
         self.assertNotIn("gfx906", result_without.linux_families)
         self.assertIn("gfx906", result_with.linux_families)
 
+    @unittest.skip(
+        "DO NOT MERGE (branch users/chi/test-ucicd, PR #4389): the filter in "
+        "select_targets() forces linux_families=[] on PR triggers; this test's "
+        "linux assertions no longer hold. Re-enable when the DO NOT MERGE block "
+        "is removed before merging."
+    )
     def test_pull_request_run_all_archs_label(self):
         """PR with ci:run-all-archs label selects all families."""
         inputs = cm.CIInputs(
@@ -1015,22 +1033,28 @@ class TestFamilyTestFilters(unittest.TestCase):
 
     def test_real_family_gfx90a_nightly_check_only(self):
         """Integration test: gfx90a has nightly_check_only_for_family in the matrix."""
-        # gfx90a (in nightly matrix) has nightly_check_only_for_family=True for linux
+        # gfx90a (in nightly matrix) has nightly_check_only_for_family=True for linux.
+        # DO NOT MERGE (branch users/chi/test-ucicd, PR #4389): the filter in
+        # select_targets() forces linux_families=[] on PR triggers, so a
+        # pull_request event would yield builds.linux=None. Use workflow_dispatch
+        # with linux_amdgpu_families=["gfx90a"] to exercise the matrix-flag
+        # behavior (also a "non-schedule" trigger). Restore the pull_request +
+        # ci:run-all-archs path when the DO NOT MERGE block is removed.
         ci_inputs = cm.CIInputs(
             run_id="12345",
-            event_name="pull_request",  # Non-schedule run
-            commit_ref="feature-branch",
-            base_ref="HEAD^",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
             build_variant="release",
-            pr_labels=["ci:run-all-archs"],  # Include gfx90a from nightly matrix
+            linux_amdgpu_families=["gfx90a"],
         )
         targets = cm.select_targets(ci_inputs)
         git_context = cm.GitContext.empty()
         outputs = cm.configure(ci_inputs, git_context)
 
         # Find gfx90a in the linux build config
+        gfx90a_info = None
         if outputs.builds.linux:
-            gfx90a_info = None
             for family_info in outputs.builds.linux.per_family_info:
                 if family_info["amdgpu_family"] == "gfx90a":
                     gfx90a_info = family_info
