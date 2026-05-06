@@ -452,7 +452,7 @@ def gha_query_workflow_runs_for_commit(
 
     Args:
         github_repository: Repository in "owner/repo" format (e.g., "ROCm/TheRock")
-        workflow_file_name: Workflow filename (e.g., "ci.yml")
+        workflow_file_name: Workflow filename (e.g., "multi_arch_ci.yml")
         git_commit_sha: Full git commit SHA
 
     Returns:
@@ -476,7 +476,7 @@ def gha_query_workflow_runs_for_commit(
 
 def gha_query_last_successful_workflow_run(
     github_repository: str = "ROCm/TheRock",
-    workflow_name: str = "ci.yml",
+    workflow_name: str = "multi_arch_ci.yml",
     branch: str = "main",
 ) -> dict | None:
     """Find the last successful run of a specific workflow on the specified branch.
