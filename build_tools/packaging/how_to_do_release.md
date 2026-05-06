@@ -39,6 +39,7 @@ Use this mode when packages are stored without per-architecture subdirectories
 (e.g., `v4/whl/` layout).
 
 Requirements for multi-arch mode:
+
 - Must use a compatible bucket prefix (e.g., `v4/whl/`)
 - Output is a flat directory (no `<arch>/` folders)
 - All downloaded wheels are placed under `<output-dir>/wheels/`.
@@ -63,12 +64,15 @@ python build_tools/packaging/download_release_artifacts.py \
   --output-dir=./promotion/download/
 
 ```
+
 Output structure:
+
 ```
 <output-dir>/
   wheels/
     *.whl
 ```
+
 ## 2. Promote prerelease candidates to release
 
 Need:
