@@ -1276,8 +1276,8 @@ def main(argv: Optional[List[str]] = None):
         required=True,
         help=(
             "Build stage name(s), comma-separated (e.g., "
-            "'foundation,compiler-runtime'). Pass 'all' to union every "
-            "build stage in the topology."
+            "'foundation,compiler-runtime'). Pass 'all' to copy every "
+            "artifact in the topology (matching `fetch --stage=all`)."
         ),
     )
     _add_target_args(copy_parser)

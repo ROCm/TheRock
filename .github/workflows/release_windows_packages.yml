@@ -409,6 +409,8 @@ jobs:
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py  ${{ env.CUSTOM_PREFIX }}
 
+      # The prebuilt path only re-stages ROCm artifacts; it does not carry PyTorch wheels,
+      # so skip the dispatch in prebuilt mode.
       - name: Trigger building PyTorch wheels
         if: ${{ inputs.prebuilt_prefix == '' && github.repository_owner == 'ROCm' && matrix.target_bundle.expect_pytorch_failure == false }}
         uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
