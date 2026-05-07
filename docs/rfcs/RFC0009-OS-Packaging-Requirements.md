@@ -115,12 +115,11 @@ The primary OS root folder will include the following distributions where the pa
 | sles15     |                          |
 | azl3       |                          |
 
-ASAN packages may be separated into:
-
+ASAN packages coexist in the same folder structure as the standard build packages.
+ASAN packages follow the same naming conventions as standard packages but the 
+contain an additional prefix after amdrocm
 ```
-repo.amd.com/rocm/packages/$OS/$package-type
-
-Package-type = standard, asan, future variant
+amdrocm-asan-[regular package naming]
 ```
 
 This will reduce the number of packages visible via the package manager.
@@ -144,25 +143,38 @@ Users are encouraged to identify their local GPU architecture and install packag
 
 | Component         | Meta package for all device packages                                                               |
 | :---------------- | :------------------------------------------------------------------------------------------------- |
+| component         | meta package for host + all device packages                                                        |
 | component-host    | Host-only package                                                                                  |
-| component-$device | $device is the llvm gfx architecture; each device package must have no conflict with other devices |
+| component-$device | $device is the llvm gfx architecture; each device package must have no conflict with other devices, is dependent on host|
+| component-dev     | headers, static libraries (if any), cmake, example codes and other utils                           |]
+| component-src     | source files for the component, has dependencies only only other src packages                      |
 
-Example:
+Example behaviour for amdrocm-blas:
+```
+yum install amdrocm-blas # installs all GPU architectures i.e. is a meta pacakge with host and all device packages
+yum install amdrocm-blas-host # install host only packages
 
+yum install amdrocm-blas-gfx90a # is depedent on amdrocm-blas-host
+yum install amdrocm-blas-gfx90a amdrocm-blas-gfx94x # is depedent on amdrocm-blas-host, installs two GPU architectures
 ```
-yum install miopen-gfx906 miopen-gfx908
-apt intall rocm-gfx906 rocm-gfx-908 # Host + two device architectures
-apt install rocm # Every architecture
-```
+The rules for host, device and dev packages apply to other meta packages including amdrocm. The default behaviour for installing
+the meta package amdrocm is to install all GPU architectures.
+
+`component-host` is installable without device packages. It contains host-side
+runtime files only. Features requiring precompiled device code may not work
+unless a matching `component-$device` package is installed. Runtime compilation
+fallback support is TBD and must be documented per component.
 
 All device-specific packages must:
 
 - Not conflict with each other
 - Be independently installable
 - Support meta-packages
-- Allow autodetection of local GPUs
 
-TheRock must provide a GPU detection interface for package managers.
+ROCm must provide a GPU detection tool, for example `amdrocm-detect-gpu`,
+that reports the local LLVM gfx architectures and can print recommended package
+names. Native package managers are not expected to perform hardware detection
+during dependency resolution.
 
 ### Meta Packages
 
@@ -180,13 +192,14 @@ The following table shows the meta packages that will be available:
 
 | Name                    | Content                                                              | Description                                                                   |
 | :---------------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------- |
-| amdrocm & amdrocm-core  | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Needed to run software built with ROCm Core                                   |
+| Real package: amdrocm Provides: amdrocm-core | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Run software built on  ROCm Core                       |
 | amdrocm-core-devel      | rocm-core + compiler cmake, static library files, and headers        | Needed to build software with ROCm Core                                       |
 | amdrocm-developer-tools | Profiler, debugger, and related tools                                | Independent set of tools to debug and profile any application built with ROCm |
 | amdrocm-fortran         |                                                                      | Fortran compiler and related components                                       |
 | amdrocm-opencl          |                                                                      | Components needed to run OpenCL                                               |
 | amdrocm-openmp          |                                                                      | Components needed to build OpenMP                                             |
 | amdrocm-core-sdk        |                                                                      | Everything                                                                    |
+| amdrocm-src             | Inclucludes all src packages in ROCm Core SDK                                   |
 
 ## Package Granularity
 
