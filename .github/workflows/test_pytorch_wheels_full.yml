@@ -49,6 +49,12 @@ on:
         description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
         default: ""
+      multi_arch:
+        description: >-
+          Install from a multi-arch index using device extras
+          (e.g. torch[device-gfx942]) instead of per-family index subdirs.
+        type: boolean
+        default: false
 
   workflow_call:
     inputs:
@@ -77,6 +83,12 @@ on:
       pytorch_git_repo:
         type: string
         default: "pytorch/pytorch"
+      multi_arch:
+        description: >-
+          Install from a multi-arch index using device extras
+          (e.g. torch[device-gfx942]) instead of per-family index subdirs.
+        type: boolean
+        default: false
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -169,6 +181,17 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
+      # Multi-arch packages use pip extras (e.g. torch[device-gfx942]) to
+      # select GPU-specific device packages. Expand the family to get the
+      # comma-separated device extras string for pip install.
+      - name: Expand GPU family to device extras
+        if: ${{ inputs.multi_arch }}
+        id: expand
+        run: |
+          python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${{ inputs.amdgpu_family }}" \
+            --output-mode=device-extras
+
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
         run: |
@@ -188,16 +211,28 @@ jobs:
 
       - name: Set up virtual environment
         run: |
-          python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages torch==${{ inputs.torch_version }} \
-            --index-url=${{ inputs.package_index_url }} \
-            --index-subdir=${{ inputs.amdgpu_family }} \
-            --activate-in-future-github-actions-steps
+          if [ "${{ inputs.multi_arch }}" = "true" ]; then
+            python build_tools/setup_venv.py ${VENV_DIR} \
+              --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
+              --index-url=${{ inputs.package_index_url }} \
+              --activate-in-future-github-actions-steps
+          else
+            python build_tools/setup_venv.py ${VENV_DIR} \
+              --packages torch==${{ inputs.torch_version }} \
+              --index-url=${{ inputs.package_index_url }} \
+              --index-subdir=${{ inputs.amdgpu_family }} \
+              --activate-in-future-github-actions-steps
+          fi
 
       - name: Install ROCm devel packages
         run: |
-          pip install "rocm[devel]" \
-            --index-url=${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
+          if [ "${{ inputs.multi_arch }}" = "true" ]; then
+            pip install "rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
+              --index-url=${{ inputs.package_index_url }}
+          else
+            pip install "rocm[devel]" \
+              --index-url=${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
+          fi
 
       - name: Initialize ROCm SDK and configure environment
         run: |

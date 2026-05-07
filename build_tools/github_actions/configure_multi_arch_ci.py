@@ -137,8 +137,8 @@ class CIInputs:
     # Per-platform workflow_dispatch overrides (parsed from comma-separated input)
     linux_amdgpu_families: list[str] = field(default_factory=list)
     windows_amdgpu_families: list[str] = field(default_factory=list)
-    linux_test_labels: str = ""
-    windows_test_labels: str = ""
+    linux_test_labels: list[str] = field(default_factory=list)
+    windows_test_labels: list[str] = field(default_factory=list)
 
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
@@ -196,6 +196,18 @@ class CIInputs:
         elif event_name == "push":
             base_ref = event.get("before", "HEAD^1")
 
+        # Test labels come from two sources:
+        # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
+        # 2. PR test:* labels (apply to both platforms)
+        pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
+        linux_test_labels = (
+            _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", "")) + pr_test_labels
+        )
+        windows_test_labels = (
+            _parse_comma_list(os.environ.get("WINDOWS_TEST_LABELS", ""))
+            + pr_test_labels
+        )
+
         return CIInputs(
             run_id=run_id,
             event_name=event_name,
@@ -210,12 +222,8 @@ class CIInputs:
             windows_amdgpu_families=_parse_comma_list(
                 os.environ.get("WINDOWS_AMDGPU_FAMILIES", "")
             ),
-            linux_test_labels=_parse_comma_list(
-                os.environ.get("LINUX_TEST_LABELS", "")
-            ),
-            windows_test_labels=_parse_comma_list(
-                os.environ.get("WINDOWS_TEST_LABELS", "")
-            ),
+            linux_test_labels=linux_test_labels,
+            windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
         )
@@ -462,9 +470,10 @@ class CIOutputs:
     is_ci_enabled: bool = True
     builds: BuildConfigs = field(default_factory=BuildConfigs)
     jobs: JobDecisions | None = None
-    # Test labels pass through from inputs to outputs for downstream workflows.
-    linux_test_labels: str = ""
-    windows_test_labels: str = ""
+    # Test labels for downstream workflows. Merged from workflow_dispatch inputs
+    # and PR test:* labels.
+    linux_test_labels: list[str] = field(default_factory=list)
+    windows_test_labels: list[str] = field(default_factory=list)
 
     @staticmethod
     def skipped() -> "CIOutputs":
@@ -1055,7 +1064,16 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 def main():
     ci_inputs = CIInputs.from_environ()
 
-    if ci_inputs.is_pull_request or ci_inputs.is_push:
+    # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
+    # The "run everything" is initial state for superrepo multi-arch CI migration.
+    # We will eventually support path filtering and component selection.
+    # TODO: Provide custom decision logic to run specific components and paths
+    skip_path_filters = os.environ.get("SKIP_PATH_FILTERS", "").lower() == "true"
+
+    if skip_path_filters:
+        # External repo: skip path filtering, run everything
+        git_context = GitContext.empty()
+    elif ci_inputs.is_pull_request or ci_inputs.is_push:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
         git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)
