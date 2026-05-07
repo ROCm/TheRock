@@ -170,7 +170,11 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "windows-gfx110X-gpu-rocm",
                     },
-                    "fetch-gfx-targets": ["gfx1100", "gfx1101"],
+                    # gfx110X-all family in cmake/therock_amdgpu_targets.cmake includes
+                    # gfx1100/gfx1101/gfx1102, so split artifacts for all three exist.
+                    # gfx1102 (Navi33: RX 7600/7600 XT/7700S) needs to be in the fetch
+                    # list to avoid "device kernel image is invalid" on those boxes.
+                    "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102"],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {

@@ -27,12 +27,15 @@ class ConfigureTargetRunTest(unittest.TestCase):
 
     def test_windows_gfx115x(self):
         runner_label = configure_target_run.get_runner_label("gfx1151", "windows")
-        self.assertEqual(runner_label, "windows-gfx1151-gpu-rocm")
+        self.assertEqual(runner_label, "test_setup_windows_igpu_stxh")
+
+    def test_windows_gfx110X_all(self):
+        runner_label = configure_target_run.get_runner_label("gfx110X-all", "windows")
+        self.assertEqual(runner_label, "test_setup_windows_gpu_navi3x")
 
     def test_windows_gfx120X_all(self):
         runner_label = configure_target_run.get_runner_label("gfx120X-all", "windows")
-        # No runner label yet.
-        self.assertEqual(runner_label, "windows-gfx120X-gpu-rocm")
+        self.assertEqual(runner_label, "test_setup_windows_gpu_navi4x")
 
 
 if __name__ == "__main__":

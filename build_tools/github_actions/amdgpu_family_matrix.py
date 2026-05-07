@@ -190,9 +190,15 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx110X-gpu-rocm",
+            "test-runs-on": "test_setup_windows_gpu_navi3x",
             "family": "gfx110X-all",
-            "fetch-gfx-targets": ["gfx1100", "gfx1101"],
+            # gfx110X-all family in cmake/therock_amdgpu_targets.cmake includes
+            # gfx1100/gfx1101/gfx1102, so the build already produces split artifacts
+            # for all three. The OrchestrAI test_setup_windows_gpu_navi3x box has
+            # gfx1102 silicon (RX 7600 XT, Navi33), so the test step needs to fetch
+            # the gfx1102 split artifact too -- otherwise HIP fails with
+            # "device kernel image is invalid" / hipErrorInvalidImage on it.
+            "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
@@ -210,14 +216,15 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx1151-gpu-rocm",
+            "test-runs-on": "test_setup_windows_igpu_stxh",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
+            "benchmark-runs-on": "test_setup_windows_igpu_stxh",
             "family": "gfx1151",
             "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
-            # TODO(#3299): Re-enable quick tests once capacity is available for Windows gfx1151
-            "nightly_check_only_for_family": True,
+            # nightly_check_only_for_family removed on this branch so that
+            # PR-triggered CI exercises the OrchestrAI test_setup_windows_igpu_stxh
+            # runner setup. Restore before merging the runner-label change to main.
         },
     },
     "gfx120x": {
@@ -230,12 +237,14 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx120X-gpu-rocm",
+            "test-runs-on": "test_setup_windows_gpu_navi4x",
             "family": "gfx120X-all",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            # nightly_check_only_for_family removed on this branch so that
+            # PR-triggered CI exercises the OrchestrAI test_setup_windows_gpu_navi4x
+            # runner setup. Restore before merging the runner-label change to main.
         },
     },
 }

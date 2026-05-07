@@ -763,6 +763,15 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     linux_names = _filter_families_by_platform(linux_names, "linux", all_families)
     windows_names = _filter_families_by_platform(windows_names, "windows", all_families)
 
+    # DO NOT MERGE (branch users/chi/test-ucicd): on PR triggers, skip ALL
+    # Linux builds/tests so the OrchestrAI Windows navi3x/navi4x/stxh runner
+    # provisioning can iterate quickly without paying the Linux pipeline
+    # cost on every push (linux verification lives on PR #4583 branch
+    # users/chi/test-ucicd-linux-gfx115). Restore by removing this block
+    # before merging.
+    if ci_inputs.is_pull_request:
+        linux_names = []
+
     return TargetSelection(
         linux_families=linux_names,
         windows_families=windows_names,
