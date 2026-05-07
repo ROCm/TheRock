@@ -1,4 +1,4 @@
-boto3==1.39.15
+botocore==1.42.84
 pytest==9.0.3 # This versions has subtests built-in.
 pytest-check==2.5.3
 pytest-cov==6.0.0
@@ -12,6 +12,8 @@ requests==2.33.0
 jsonschema==4.23.0
 packaging==25.0
 python-magic==0.4.27; sys_platform != "win32"
+msgpack==1.1.2
+zstandard==0.25.0
 
 # libhipcxx test requirement
 lit==18.1.8
