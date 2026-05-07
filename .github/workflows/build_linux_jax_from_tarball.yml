@@ -20,6 +20,10 @@ jobs:
   build_jax:
     name: Build JAX wheels | ${{ inputs.amdgpu_family }}
     uses: ./.github/workflows/build_linux_jax_wheels.yml
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
     secrets: inherit
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}

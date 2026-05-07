@@ -120,6 +120,10 @@ jobs:
   linux_build_jax:
     name: Linux JAX | ${{ matrix.family.amdgpu_family }}
     needs: [setup, linux_build_tarballs]
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
     if: >-
       ${{
         needs.setup.outputs.linux_build_config != '' &&
