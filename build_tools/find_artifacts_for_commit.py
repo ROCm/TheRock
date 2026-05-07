@@ -214,13 +214,13 @@ def main(argv: list[str] | None = None) -> int:
         "--repo",
         type=str,
         default="ROCm/TheRock",
-        help="Repository in 'owner/repo' format (default: ROCm/TheRock)",
+        help="Repository in 'owner/repo' format",
     )
     parser.add_argument(
         "--workflow",
         type=str,
-        default="ci.yml",
-        help="Workflow filename that produces artifacts (default: ci.yml)",
+        default="multi_arch_ci.yml",
+        help="Workflow filename that produces artifacts",
     )
     parser.add_argument(
         "--platform",
