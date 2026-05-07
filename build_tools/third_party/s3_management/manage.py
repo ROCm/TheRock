@@ -70,6 +70,12 @@ PREFIXES = [
     # and the developer wants to more safely cancel the script.
     "v2-staging/gfx110X-all",
     "v2-staging/gfx1151",
+    "v2-staging/gfx1152",
+    "v2-staging/gfx1153",
+    "v2-staging/gfx900",
+    "v2-staging/gfx90a",
+    "v2-staging/gfx908",
+    "v2-staging/gfx906",
     "v2-staging/gfx120X-all",
     "v2-staging/gfx94X-dcgpu",
     "v2-staging/gfx950-dcgpu",
@@ -77,6 +83,7 @@ PREFIXES = [
     "v2/gfx1151",
     "v2/gfx1152",
     "v2/gfx1153",
+    "v2/gfx900",
     "v2/gfx90a",
     "v2/gfx908",
     "v2/gfx906",
@@ -249,7 +256,6 @@ class S3Index:
         for obj in all_sorted_packages:
             full_package_name = path.basename(obj)
             package_name = full_package_name.split('-')[0]
-            print(f"[DEBUG] Evaluating package: {package_name}")
             pkg = package_name.lower()
             # Allow legacy packages + explicitly handle dynamic multi-arch packages
             if (
@@ -510,13 +516,17 @@ def update_pep503_index(prefix: str, compute_sha256: bool = False, upload: bool 
     checksums, and uploads (or saves) the generated index.html files.
 
     This function is used both by the CLI (via main()) and by the AWS Lambda
-    wrapper (lambda_function.py). It must remain callable without relying on
+    wrapper (lambda_function.py).
 
     IMPORTANT:
         `initialize_bucket()` must be called prior to invoking this function.
-        The function depends on module-level globals (BUCKET_NAME, BUCKET,
-        INDEX_BUCKETS) that are configured via initialize_bucket().
-        CLI argument parsing or main() initialization.
+
+        This function is not fully self-contained and depends on the
+        module-level globals `BUCKET_NAME`, `BUCKET`, and `INDEX_BUCKETS`
+        being initialized beforehand via `initialize_bucket()`.
+
+        Both the CLI flow and the Lambda wrapper perform this initialization
+        before calling `update_pep503_index()`.
 
     Returns:
         int: The number of S3 objects included in the index after filtering.
