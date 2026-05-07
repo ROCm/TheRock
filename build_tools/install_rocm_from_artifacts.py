@@ -356,6 +356,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipblasltprovider,
             args.hipkernelprovider,
             args.prim,
+            args.mpi,
             args.rand,
             args.rccl,
             args.rocdecode,
@@ -418,6 +419,12 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocdecode_test")
             argv.append("base_dev")
             argv.append("amd-llvm_dev")
+        if args.mpi:
+            extra_artifacts.append("openmpi")
+            # Ensure binaries like mpiexec are installed
+            argv.append("openmpi_run")
+            # Optional but useful (headers, dev libs)
+            argv.append("openmpi_dev")
         if args.rocjpeg:
             extra_artifacts.append("sysdeps-amd-mesa")
             extra_artifacts.append("rocjpeg")
@@ -772,6 +779,13 @@ def main(argv):
         "--rccl",
         default=False,
         help="Include 'rccl' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--mpi",
+        default=False,
+        help="Include OpenMPI (vendored by TheRock build)",
         action=argparse.BooleanOptionalAction,
     )
 

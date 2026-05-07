@@ -36,11 +36,11 @@ on:
         type: boolean
         default: false
       repository:
-          description: "Repository to checkout. Otherwise, defaults to `github.repository`."
-          type: string
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        type: string
       ref:
-          description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
-          type: string
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -74,8 +74,8 @@ on:
         type: boolean
         default: false
       ref:
-          description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
-          type: string
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
 
 permissions:
   id-token: write
@@ -89,6 +89,8 @@ jobs:
     strategy:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    outputs:
+      package_install_url: ${{ steps.upload-packages.outputs.package_repository_url }}
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
@@ -112,7 +114,7 @@ jobs:
 
       - name: Install Python requirements
         run: |
-          pip install pyelftools boto3 jinja2
+          pip install pyelftools boto3 jinja2 pyzstd
 
       - name: Install System requirements
         run: |
@@ -138,11 +140,19 @@ jobs:
           echo "Building ${{ inputs.native_package_type }} packages for ${{ inputs.artifact_group }} ${{ inputs.artifact_run_id }}"
           python ./build_tools/packaging/linux/build_package.py \
             --dest-dir ${{ env.PACKAGE_DIST_DIR }} \
-            --rocm-version  ${{ inputs.rocm_version }} \
-            --target  ${{ inputs.artifact_group }} \
+            --rocm-version ${{ inputs.rocm_version }} \
+            --target ${{ inputs.artifact_group }} \
             --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
             --pkg-type ${{ inputs.native_package_type }} \
             --version-suffix ${{ env.ARTIFACT_RUN_ID }}
+
+      - name: Simulated install Test
+        id: test-packages
+        run: |
+          python ./build_tools/packaging/linux/native_linux_package_install_test.py \
+            --test-type simulate \
+            --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --pkg-type ${{ inputs.native_package_type }}
 
       - name: Configure AWS Credentials
         if: ${{ !inputs.skip_package_upload }}
@@ -155,10 +165,9 @@ jobs:
         if: ${{ !inputs.skip_package_upload }}
         id: upload-packages
         run: |
-          echo "Uploading to s3 bucket : ${{ inputs.release_type }}"
           python ./build_tools/packaging/linux/upload_package_repo.py \
             --pkg-type ${{ inputs.native_package_type }} \
-            --s3-bucket ${{ env.S3_BUCKET_NATIVE }} \
+            --s3-bucket "${{ env.S3_BUCKET_NATIVE }}" \
             --amdgpu-family ${{ inputs.artifact_group }} \
             --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
             --job ${{ inputs.release_type }}
