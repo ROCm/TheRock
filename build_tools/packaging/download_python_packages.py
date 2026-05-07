@@ -25,47 +25,47 @@ PREREQUISITES:
 
 TYPICAL USAGE (Command Line):
   # Download all 7.10.0rc2 packages for all architectures:
-  python ./build_tools/packaging/download_release_artifacts.py \
+  python ./build_tools/packaging/download_python_packages.py \
     --version=7.10.0rc2 \
     --output-dir=./downloads
 
   # Download only for a specific architecture:
-  python ./build_tools/packaging/download_release_artifacts.py \
+  python ./build_tools/packaging/download_python_packages.py \
     --version=7.10.0rc2 \
     --arch=gfx950-dcgpu \
     --output-dir=./downloads
 
   # Download for multiple specific architectures:
-  python ./build_tools/packaging/download_release_artifacts.py \
+  python ./build_tools/packaging/download_python_packages.py \
     --version=7.10.0rc2 \
     --arch=gfx1151,gfx950-dcgpu \
     --output-dir=./downloads
 
   # Download packages including tarballs:
-  python ./build_tools/packaging/download_release_artifacts.py \
+  python ./build_tools/packaging/download_python_packages.py \
     --version=7.10.0rc2 \
     --arch=gfx1151,gfx950-dcgpu \
     --output-dir=./downloads \
     --include-tarballs
 
   # List available architectures without downloading:
-  python ./build_tools/packaging/download_release_artifacts.py \
+  python ./build_tools/packaging/download_python_packages.py \
     --version=7.10.0rc2 \
     --list-archs
 
   # List all packages per architecture without downloading:
-  python ./build_tools/packaging/download_release_artifacts.py \
+  python ./build_tools/packaging/download_python_packages.py \
     --version=7.10.0rc2 \
     --list-packages-per-arch
 
   # List all packages and tarballs per architecture with sizes:
-  python ./build_tools/packaging/download_release_artifacts.py \
+  python ./build_tools/packaging/download_python_packages.py \
     --version=7.10.0rc2 \
     --list-packages-per-arch \
     --include-tarballs
 
   # Download packages to promote and all known PyPI dependencies:
-  python ./build_tools/packaging/download_release_artifacts.py \
+  python ./build_tools/packaging/download_python_packages.py \
     --version=7.10.0rc2 \
     --output-dir=./downloads \
     --include-dependencies
@@ -750,28 +750,28 @@ def parse_arguments(argv):
         epilog="""
 Examples:
   # Download all architectures for version 7.10.0rc2
-  python download_release_artifacts.py --version=7.10.0rc2 --output-dir=./downloads
+  python download_python_packages.py --version=7.10.0rc2 --output-dir=./downloads
 
   # Download only specific architecture
-  python download_release_artifacts.py --version=7.10.0rc2 --arch=gfx950-dcgpu --output-dir=./downloads
+  python download_python_packages.py --version=7.10.0rc2 --arch=gfx950-dcgpu --output-dir=./downloads
 
   # Download multiple specific architectures and including tarballs
-  python download_release_artifacts.py --version=7.10.0rc2 --arch=gfx1151,gfx950-dcgpu --output-dir=./downloads --include-tarballs
+  python download_python_packages.py --version=7.10.0rc2 --arch=gfx1151,gfx950-dcgpu --output-dir=./downloads --include-tarballs
 
   # Download packages to promote AND their dependencies
-  python download_release_artifacts.py --version=7.10.0rc2 --output-dir=./downloads --include-dependencies
+  python download_python_packages.py --version=7.10.0rc2 --output-dir=./downloads --include-dependencies
 
   # Use custom bucket prefix
-  python download_release_artifacts.py --version=7.10.0rc2 --output-dir=./downloads --bucket-prefix=v3/whl/
+  python download_python_packages.py --version=7.10.0rc2 --output-dir=./downloads --bucket-prefix=v3/whl/
 
   # List available architectures
-  python download_release_artifacts.py --version=7.10.0rc2 --list-archs
+  python download_python_packages.py --version=7.10.0rc2 --list-archs
 
   # List all packages per architecture with sizes
-  python download_release_artifacts.py --version=7.10.0rc2 --list-packages-per-arch
+  python download_python_packages.py --version=7.10.0rc2 --list-packages-per-arch
 
   # List packages and tarballs with sizes
-  python download_release_artifacts.py --version=7.10.0rc2 --list-packages-per-arch --include-tarballs
+  python download_python_packages.py --version=7.10.0rc2 --list-packages-per-arch --include-tarballs
         """,
     )
 
