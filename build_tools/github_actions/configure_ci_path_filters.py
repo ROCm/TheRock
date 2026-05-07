@@ -191,7 +191,6 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
     "multi_arch_build_portable_linux_artifacts.yml",
     "multi_arch_build_windows.yml",
     "multi_arch_build_windows_artifacts.yml",
-    "multi_arch_build_tarballs.yml",
     "setup_multi_arch.yml",
     "test_artifacts_structure.yml",
     "test_native_linux_packages_install.yml",
@@ -200,11 +199,9 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
     "build_portable_linux_pytorch_wheels_ci.yml",
     "build_windows_python_packages.yml",
     "build_windows_pytorch_wheels_ci.yml",
-    "build_linux_jax_wheels.yml",
     "test_artifacts.yml",
     "test_component.yml",
     "test_rocm_wheels.yml",
-    "test_linux_jax_wheels.yml",
 }
 
 
