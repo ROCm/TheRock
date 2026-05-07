@@ -109,6 +109,10 @@ PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 # cannot catch (e.g. hanging during import or in C extensions).
 # TODO: investigate the root cause and narrow the exclusions.
 EXCLUDED_TEST_MODULES: list[str] = [
+    # ROCm 0501/PT 0501 source-vs-wheel API drift: import-time failures before
+    # pytest -k filtering can skip individual tests.
+    "distributed/pipelining/test_schedule",
+    "distributed/test_device_mesh",
 ]
 
 

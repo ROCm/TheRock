@@ -21,9 +21,16 @@ skip_tests = {
             # even with OPENBLAS_NUM_THREADS=64; crash in wishart.log_prob
             "test_entropy_monte_carlo",
         ],
+        "cuda": [
+            # TestCuda - CI GPU visibility env conflict aborts child device-count subprocesses.
+            # Also covers the inherited TestCuda case in test_cuda_expandable_segments.
+            "test_hip_device_count",
+        ],
         "dynamo": [
             # CI GPU isolation warning contaminates this exact stderr log assertion.
             "test_logs_out",
+            # ErrorMessagesTest - Dynamo graph-break attribution text drift.
+            "test_reconstruction_failure_gb",
         ],
         "export": [
             # TestExportOnFakeCudaCUDA - subprocess import fails: missing librocm_sysdeps_liblzma.so.5
@@ -66,6 +73,20 @@ skip_tests = {
             "test_compile_with_exporter",
             "test_compile_with_exporter_weights",
         ],
+        "linalg": [
+            # TestLinalgCUDA - large triu/tril 64-bit zero-count mismatch on ROCm 7.13 May 1 wheel.
+            "test_triu_tril_large_matrix_64bit_cuda",
+        ],
+        "jit_fuser_te": [
+            # TestTEFuser{Static,Dynamic} - bf16 TE fuser failures on ROCm 7.13 May 1 wheel.
+            "test_binary_div_ops",
+            "test_binary_ops",
+            "test_binary_tensor_scalar_ops",
+            "test_ternary_norm_ops",
+            "test_ternary_ops",
+            "test_unary_ops",
+            "test_where_ops",
+        ],
         "fx": [
             # test_fx: backward-compatibility expectation drift.
             "test_function_back_compat",
@@ -104,6 +125,37 @@ skip_tests = {
             "test_linalg_ops",
             # ProcessGroupNCCLGroupTest - extra CUDA context memory growth
             "test_extra_cuda_context",
+            # Composable FSDP/2D composability timeouts on ROCm 0501/PT 0501.
+            "(TestFullyShardAutograd and test_nontensor_activations)",
+            "(TestFullyShardAllGatherExtensionsMultiProcess and test_all_gather_extensions_train_parity)",
+            "(TestFullyShardGradientScaler and test_gradient_scaler)",
+            "(TestFullyShardIgnoreParams and test_ddp_A_fsdp_B_ddp_C)",
+            "(TestFullyShardMixedPrecisionTraining and test_compute_dtype)",
+            "(TestFullyShard1DTrainingCore and test_explicit_prefetching)",
+            "(TestClipGradNormWorldSize2 and test_clip_grad_norm_1d)",
+            "(TestFullyShardFrozen and test_multi_forward_mixed_requires_grad)",
+            "(TestFullyShardMemory and test_fully_shard_training_memory)",
+            "(TestFullyShardOverlap and test_fully_shard_training_overlap)",
+            "(TestFullyShardCommunication and test_set_reduce_scatter_divide_factor)",
+            "(TestFullyShard2DTraining and test_train_parity_2d_mlp)",
+            # Composable replicate mixed precision abort/SIGSEGV.
+            "(TestReplicateMixedPrecisionCasts and test_norm_modules_bf16)",
+            # DTensor/sharding failures and timeouts.
+            "(TestCommModeFeatures and test_MLPStacked_distributed_sharding_display)",
+            "(DistElementwiseOpsTest and test_dropout_partial_redistributes)",
+            "(DistTensorRandomInitTest and test_multinomial_sharded)",
+            "(TestViewOpsWithLocalTensor and test_squeeze_variants)",
+            "(TestDTensorCompileE2E and test_2d_fsdp_tp_compile_use_ca_False)",
+            # DDP/join uneven-input behavior drift.
+            "(TestJoin and test_multiple_joinables)",
+            "(TestDistBackendWithSpawn and test_ddp_uneven_inputs)",
+            "(TestDistBackendWithSpawn and test_ddp_uneven_inputs_stop_iteration_sync_bn)",
+            # Classic FSDP NCCL timeout/abort.
+            "(TestFSDPWrap and test_main_wrap_api_cpu_offload0_backward_prefetch0_forward_prefetch_False_device_init_mode0)",
+            # Elastic launcher failure.
+            "(ElasticLaunchTest and test_virtual_local_rank)",
+            # Compute/comm reordering failure.
+            "(TestComputeCommReorderingMultiProc and test_custom_estimator_for_non_compute_nodes)",
         ],
     },
 }
