@@ -8,8 +8,6 @@ import subprocess
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
-AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
-platform = os.getenv("RUNNER_OS").lower()
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
@@ -49,10 +47,9 @@ elif test_type == "regression":
     test_subdir = "/regression"
     timeout = "720"
 
-# Make per-device adjustments
-ctest_parallelism = "2"
-if AMDGPU_FAMILIES == "gfx1153":
-    ctest_parallelism = "1"
+# ROCM-24171: Default CTest --parallel was 2; intermittent lockups / 60m timeouts on
+# gfx942 TheRock CI suggested avoiding concurrent GPU tests — use 1 until root cause is found.
+ctest_parallelism = "1"
 
 cmd = [
     "ctest",
