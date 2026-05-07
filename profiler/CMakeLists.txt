@@ -357,7 +357,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       # the artifact splitter strips per-arch HIP offload bundles out of the example binaries,
       # preventing llvm-objdump (used in our tests) from detecting the offload architectures
       # See https://github.com/ROCm/TheRock/issues/4848
-      if(${THEROCK_BUILD_TESTING})
+      if(THEROCK_BUILD_TESTING)
         # Escape semicolons in GPU targets list to prevent shell interpretation
         if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
           set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
@@ -379,7 +379,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
             "llvm/lib"
           RUNTIME_DEPS
             rocprofiler-systems
-            ${_rocprofsys_examples_optional_deps}
         )
         therock_cmake_subproject_glob_c_sources(rocprofiler-systems-examples
           SUBDIRS .
@@ -392,7 +391,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
           COMPONENTS
             test
           SUBPROJECT_DEPS
-            rocprofiler-systems
             rocprofiler-systems-examples
         )
       endif()

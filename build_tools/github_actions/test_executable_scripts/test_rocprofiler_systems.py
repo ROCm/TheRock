@@ -45,7 +45,7 @@ QUICK_TESTS_REGEX = [
     "rocprofiler-systems.*",  # Binary tests
     "config.*",
     "jpegdecode.*",  # TODO: Binary is not built, so test is skipped
-    "videodeocde.*",  # TODO: Binary is not built, so test is skipped
+    "videodecode.*",  # TODO: Binary is not built, so test is skipped
     "openmp.*",
     "roctx.*",
     "trace-time-window.*",
