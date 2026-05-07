@@ -200,7 +200,6 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
     "build_portable_linux_pytorch_wheels_ci.yml",
     "build_windows_python_packages.yml",
     "build_windows_pytorch_wheels_ci.yml",
-    "build_linux_jax_from_tarball.yml",
     "build_linux_jax_wheels.yml",
     "test_artifacts.yml",
     "test_component.yml",
