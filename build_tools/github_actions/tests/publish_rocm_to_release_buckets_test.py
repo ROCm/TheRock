@@ -74,7 +74,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(python_dest.bucket, "therock-nightly-python")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
-    def test_kpack_split_uses_v4_staging_then_release(self, mock_copy):
+    def test_kpack_split_uses_v4_whl_directly(self, mock_copy):
         mock_copy.return_value = 2
         main(
             [
@@ -91,12 +91,10 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             ]
         )
 
-        # Calls: tarballs, python -> v4/whl-staging, python -> v4/whl
-        self.assertEqual(mock_copy.call_count, 3)
-        _, python_dest_staging = mock_copy.call_args_list[1].args
-        self.assertEqual(python_dest_staging.relative_path, "v4/whl-staging")
-        _, python_dest_release = mock_copy.call_args_list[2].args
-        self.assertEqual(python_dest_release.relative_path, "v4/whl")
+        # Calls: tarballs, python -> v4/whl (no staging for multi-arch)
+        self.assertEqual(mock_copy.call_count, 2)
+        _, python_dest = mock_copy.call_args_list[1].args
+        self.assertEqual(python_dest.relative_path, "v4/whl")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_dev_linux_copies_native_packages(self, mock_copy):

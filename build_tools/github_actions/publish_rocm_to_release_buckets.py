@@ -18,16 +18,12 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     s3://therock-dev-artifacts/12345-linux/tarballs/therock-dist-linux-gfx94X-dcgpu-7.10.0.tar.gz
       -> s3://therock-dev-tarball/v4/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0.tar.gz
 
-    python (kpack split enabled):
+    python (kpack split enabled, multi-arch):
 
     s3://therock-dev-artifacts/12345-linux/python/rocm-7.13.0.tar.gz
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
-      -> s3://therock-dev-python/v4/whl-staging/rocm-7.13.0.tar.gz
-      -> s3://therock-dev-python/v4/whl-staging/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
-      -> s3://therock-dev-python/v4/whl-staging/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
-      -> s3://therock-dev-python/v4/whl-staging/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
       -> s3://therock-dev-python/v4/whl/rocm-7.13.0.tar.gz
       -> s3://therock-dev-python/v4/whl/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
       -> s3://therock-dev-python/v4/whl/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
@@ -103,16 +99,12 @@ def publish_python_packages(
 ) -> None:
     """Copy python packages from the artifacts bucket to the release python bucket.
 
-    Wheels always land in both the -staging index (canonical superset) and
-    the release index (current promoted set). The release path is treated as
-    a subset of -staging, so anything visible from the release URL is also
-    visible from the staging URL. A future test-gated promotion step would
-    move the second copy out of this script.
-
     The destination layout depends on kpack_split:
-      - kpack_split=False uses the v3 per-family layout (v3/whl-staging,
-        v3/whl).
-      - kpack_split=True uses the v4 flat layout (v4/whl-staging, v4/whl).
+      - kpack_split=False (per-family): publishes to both v3/whl-staging and
+        v3/whl. Test-gated promotion may later move wheels from staging to
+        release separately.
+      - kpack_split=True (multi-arch): publishes directly to v4/whl (no
+        staging index — tests run post-publish as a signal, not a gate).
 
     Examples:
 
@@ -123,13 +115,16 @@ def publish_python_packages(
 
         kpack split enabled (flat):
         s3://therock-dev-artifacts/12345-linux/python/*.whl
-          -> s3://therock-dev-python/v4/whl-staging/*.whl
           -> s3://therock-dev-python/v4/whl/*.whl
     """
     source = artifacts_root.python_packages()
     dest_bucket = get_release_bucket_config(release_type, "python")
-    release_subdir = "v4/whl" if kpack_split else "v3/whl"
-    s3_subdirs = [f"{release_subdir}-staging", release_subdir]
+    if kpack_split:
+        # Multi-arch: publish directly (no staging index).
+        s3_subdirs = ["v4/whl"]
+    else:
+        # Per-family: publish to both staging and release.
+        s3_subdirs = ["v3/whl-staging", "v3/whl"]
 
     for s3_subdir in s3_subdirs:
         dest = StorageLocation(dest_bucket.name, s3_subdir)

@@ -181,20 +181,6 @@ for a full list of supported AMD GPUs.
 
 A `[device-all]` extra is also provided which installs device code for all GPUs.
 
-> [!WARNING]
-> The `[device-all]` extra may not work consistently for nightly releases because
-> packages are promoted per-target as they pass tests. If tests are still
-> running or if they failed for an individual target, this extra will not be
-> able to find all required packages.
->
-> We also publish **untested** packages to the nightly "whl-staging-multi-arch"
-> index which is not affected by this limitation.
->
-> | Package index                                          | Safe to use `[device-all]`?                              |
-> | ------------------------------------------------------ | -------------------------------------------------------- |
-> | https://rocm.nightlies.amd.com/whl-multi-arch/         | ❌ No (some packages may not be available)               |
-> | https://rocm.nightlies.amd.com/whl-staging-multi-arch/ | ✅ Yes (index includes all packages, even if tests fail) |
-
 <!-- TODO: add repo.amd.com URL to the list of package indexes once we publish a stable release? -->
 
 ### Installing multi-arch PyTorch Python packages
@@ -203,9 +189,7 @@ Install PyTorch with ROCm support using the same unified index:
 
 ```bash
 # Replace device-gfx942 with your GPU, see the section above for details
-# Note: we'll recommend 'whl-multi-arch' instead of 'whl-staging-multi-arch'
-#       as soon as we test run automate tests on these packages
-pip install --index-url https://rocm.nightlies.amd.com/whl-staging-multi-arch/ \
+pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
     "torch[device-gfx942]" "torchvision[device-gfx942]" torchaudio
 
 # Optional additional packages on Linux:
@@ -219,7 +203,7 @@ pip install --index-url https://rocm.nightlies.amd.com/whl-staging-multi-arch/ \
 > install ROCm separately:
 >
 > ```bash
-> pip install --index-url https://rocm.nightlies.amd.com/whl-staging-multi-arch/ \
+> pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
 >     "torch[device-gfx1100]"
 >
 > pip freeze  # with approximate download sizes:
