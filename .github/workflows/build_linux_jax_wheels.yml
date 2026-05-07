@@ -131,6 +131,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  packages: read
 
 run-name: Build Linux JAX Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.python_version }}, ${{ inputs.release_type }})
 

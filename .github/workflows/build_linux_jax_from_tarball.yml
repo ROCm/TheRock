@@ -16,6 +16,11 @@ on:
         type: string
         required: true
 
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
 jobs:
   build_jax:
     name: Build JAX wheels | ${{ inputs.amdgpu_family }}
