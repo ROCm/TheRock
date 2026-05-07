@@ -101,13 +101,21 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Standard flags are handled by CMAKE_C_FLAGS, CMAKE_C_FLAGS_DEBUG, etc.
-set(CUSTOM_C_FLAGS)
-set(CUSTOM_CXX_FLAGS)
+# Initialize with base flags and build-type-specific flags.
+set(CUSTOM_C_FLAGS "${CMAKE_C_FLAGS}")
+set(CUSTOM_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+
+# Append build-type-specific flags.
+string(TOUPPER "${CMAKE_BUILD_TYPE}" _build_type_upper)
+if(_build_type_upper)
+  string(APPEND CUSTOM_C_FLAGS " ${CMAKE_C_FLAGS_${_build_type_upper}}")
+  string(APPEND CUSTOM_CXX_FLAGS " ${CMAKE_CXX_FLAGS_${_build_type_upper}}")
+endif()
 
 # Set custom flags for Debug builds.
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-  set(CUSTOM_C_FLAGS "-O0 -g3")
-  set(CUSTOM_CXX_FLAGS "-O0 -g3")
+  string(APPEND CUSTOM_C_FLAGS " -O0 -g3")
+  string(APPEND CUSTOM_CXX_FLAGS " -O0 -g3")
 endif()
 
 # Compiler commands to chain to autotools.
@@ -163,8 +171,20 @@ if(THEROCK_BUNDLE_SYSDEPS)
   endif()
 endif()
 
-# Adjust LDFLAGS. NCURSES_RPATH is empty when not using bundled sysdeps.
-set(LDFLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NCURSES_RPATH} -Wl,--enable-new-dtags")
+# Add RPATH entries for sanitizer runtime libraries if needed.
+# THEROCK_PRIVATE_BUILD_RPATH_DIRS contains absolute paths to directories
+# needed during build/configure (e.g., clang sanitizer runtime).
+set(SANITIZER_RPATH "")
+if(DEFINED THEROCK_PRIVATE_BUILD_RPATH_DIRS AND NOT "${THEROCK_PRIVATE_BUILD_RPATH_DIRS}" STREQUAL "")
+  foreach(build_rpath_dir ${THEROCK_PRIVATE_BUILD_RPATH_DIRS})
+    string(APPEND SANITIZER_RPATH "-Wl,-rpath,${build_rpath_dir} ")
+  endforeach()
+  string(STRIP "${SANITIZER_RPATH}" SANITIZER_RPATH)
+  message(STATUS "Adding sanitizer RPATH for configure/build: ${SANITIZER_RPATH}")
+endif()
+
+# Adjust LDFLAGS. NCURSES_RPATH and SANITIZER_RPATH are empty when not using bundled sysdeps or sanitizers.
+set(LDFLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NCURSES_RPATH} ${SANITIZER_RPATH} -Wl,--enable-new-dtags")
 
 # Replace all semicolons (the CMake separator) with colons (the ENV separator).
 # We need this to pass it on to rocgdb's configure.
