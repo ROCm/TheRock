@@ -1,4 +1,4 @@
-botocore==1.42.84
+boto3==1.39.15
 pytest==9.0.3 # This versions has subtests built-in.
 pytest-check==2.5.3
 pytest-cov==6.0.0
