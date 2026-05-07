@@ -170,9 +170,10 @@ function(therock_set_implicit_llvm_options type tools_dir required_tool_names)
   endforeach()
 endfunction()
 
-# When LLVM tests, tools, or Comgr tests are enabled, build all tools (don't selectively disable).
-# Otherwise, only build the minimum required tools for production.
-if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS AND NOT THEROCK_BUILD_COMGR_TESTS)
+# When LLVM LIT tests or all tools are requested, build everything (don't selectively disable).
+# Comgr tests only need tools already in the minimal required set (clang, llvm-dis, llvm-objdump,
+# FileCheck via LLVM_INSTALL_UTILS), so they don't need the full tool build.
+if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS)
   block()
     # This list contains the minimum tooling that must be enabled to build LLVM.
     # It is empically derived (either configure or ninja invocation will fail
