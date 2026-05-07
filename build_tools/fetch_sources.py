@@ -646,6 +646,7 @@ def apply_patches(args, projects):
                 "user.email=therockbot@amd.com",
                 "am",
                 "--whitespace=nowarn",
+                "--no-gpg-sign",
             ]
             + patch_files,
             cwd=project_dir,
