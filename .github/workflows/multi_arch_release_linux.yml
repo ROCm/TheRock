@@ -190,4 +190,30 @@ jobs:
               "ref": "${{ inputs.ref || '' }}"
             }
 
-  # TODO: dispatch jax wheels (release_portable_linux_jax_wheels.yml)
+  dispatch_jax_wheels:
+    needs: [build_artifacts, build_tarballs]
+    name: Build JAX Wheels
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
+    steps:
+      - name: Trigger JAX Build
+        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        with:
+          workflow: release_portable_linux_jax_wheels.yml
+          inputs: |
+            {
+              "amdgpu_family": "${{ matrix.family_info.amdgpu_family }}",
+              "release_type": "${{ inputs.release_type }}",
+              "s3_subdir": "v2",
+              "s3_staging_subdir": "v2-staging",
+              "cloudfront_url": "https://rocm.devreleases.amd.com/v2",
+              "cloudfront_staging_url": "https://rocm.devreleases.amd.com/v2-staging",
+              "rocm_version": "${{ inputs.rocm_package_version }}",
+              "tar_url": "${{ fromJSON(needs.build_tarballs.outputs.tarball_urls)[matrix.family_info.amdgpu_family] }}",
+              "ref": "${{ inputs.ref || '' }}"
+            }
