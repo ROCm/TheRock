@@ -65,6 +65,19 @@ jobs:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
       RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
+      - name: Debug credentials path
+        run: |
+          echo "=== Checking paths ==="
+          ls -la /runner/ 2>&1 || echo "/runner does not exist"
+          ls -la /runner/config/ 2>&1 || echo "/runner/config does not exist"
+          echo "=== File info (no content) ==="
+          stat /runner/config/credentials.ini 2>&1 || echo "Cannot stat credentials.ini"
+          file /runner/config/credentials.ini 2>&1 || echo "Cannot identify file type"
+          echo "=== Searching for credentials.ini ==="
+          find / -name "credentials.ini" -type f 2>/dev/null | head -5 || echo "Not found"
+          echo "=== Mount points ==="
+          mount | grep -i runner || echo "No runner mounts"
+
       - name: Checking out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
