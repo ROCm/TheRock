@@ -130,7 +130,7 @@ class BuildCtestCommandTest(unittest.TestCase):
         cmd = self._build("quick", "", set(), exclude_labels)
         le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
         le_values = [cmd[i + 1] for i in le_indices]
-        self.assertIn("quick_exclude", le_values)
+        self.assertIn("quick_exclude|ex_gpu", le_values)
 
     def test_category_exclude_label_not_applied_when_absent(self):
         exclude_labels = {"standard_exclude"}
