@@ -14,7 +14,7 @@
 #     torchaudio ships as-is (no split).
 #   - Upload the result to s3://therock-{release_type}-python/v4/whl/
 #     (server-side indexing handles the index page) via
-#     publish_pytorch_to_staging.py.
+#     publish_pytorch_to_release_bucket.py.
 #
 # For convergence with CI and testing plans see:
 # * https://github.com/ROCm/TheRock/issues/3332
@@ -356,6 +356,6 @@ jobs:
 
       - name: Upload PyTorch wheels to release bucket
         run: |
-          python build_tools/github_actions/publish_pytorch_to_staging.py \
+          python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"

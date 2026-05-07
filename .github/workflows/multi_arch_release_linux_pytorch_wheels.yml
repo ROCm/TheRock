@@ -310,6 +310,6 @@ jobs:
 
       - name: Upload PyTorch wheels to release bucket
         run: |
-          python build_tools/github_actions/publish_pytorch_to_staging.py \
+          python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"

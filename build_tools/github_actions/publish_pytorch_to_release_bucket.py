@@ -17,7 +17,7 @@ Example with ``--source-dir /tmp/dist --release-type dev``::
 
 Test usage::
 
-    python build_tools/github_actions/publish_pytorch_to_staging.py \\
+    python build_tools/github_actions/publish_pytorch_to_release_bucket.py \\
         --source-dir /tmp/dist --release-type dev --dry-run
 """
 

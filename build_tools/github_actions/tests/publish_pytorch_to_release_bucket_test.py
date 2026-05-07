@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Unit tests for publish_pytorch_to_staging.py."""
+"""Unit tests for publish_pytorch_to_release_bucket.py."""
 
 import os
 import sys
@@ -10,7 +10,7 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
-from github_actions.publish_pytorch_to_staging import main
+from github_actions.publish_pytorch_to_release_bucket import main
 
 
 class TestPublishPytorchToStaging(unittest.TestCase):
