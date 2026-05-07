@@ -111,6 +111,18 @@ PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 EXCLUDED_TEST_MODULES: list[str] = [
 ]
 
+
+def disable_distributed_stepcurrent_retries(pytorch_dir: Path) -> None:
+    run_test_path = pytorch_dir / "test" / "run_test.py"
+    text = run_test_path.read_text()
+    old = '        and not is_cpp_test\n        and "-n" not in command\n'
+    new = '        and not is_cpp_test\n        and not is_distributed_test\n        and "-n" not in command\n'
+    if new in text:
+        return
+    if old not in text:
+        raise RuntimeError("Could not disable distributed stepcurrent retries")
+    run_test_path.write_text(text.replace(old, new, 1))
+
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
 # The inductor config requires TWO separate run_test.py invocations:
 #   1. Generic tests run with --inductor (sets PYTORCH_TEST_WITH_INDUCTOR=1)
@@ -473,6 +485,8 @@ def main(argv: list[str]) -> int:
     check_pytorch_source_version(
         pytorch_dir=args.pytorch_dir, allow_mismatch=args.allow_version_mismatch
     )
+    if args.test_config == "distributed":
+        disable_distributed_stepcurrent_retries(args.pytorch_dir)
 
     # Determine AMDGPU family and set HIP_VISIBLE_DEVICES BEFORE importing
     # torch or running pytest.  Once torch.cuda is initialized, changing
