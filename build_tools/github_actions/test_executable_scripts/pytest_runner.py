@@ -285,7 +285,6 @@ if __name__ == "__main__":
 
     # Source-based components (run from source tree, not installed artifacts)
     SOURCE_BASED_COMPONENTS = {
-        "tensile": "shared/tensile",
         "tensilite": "projects/hipblaslt/tensilite",
     }
 
