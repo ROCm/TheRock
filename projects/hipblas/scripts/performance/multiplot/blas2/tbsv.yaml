@@ -1,0 +1,30 @@
+---
+include: ../../../../clients/include/hipblas_common.yaml
+
+Definitions:
+  - &sizes
+    - {M:  2048, lda:  2048 }
+    - {M:  4096, lda:  4096 }
+    - {M:  6144, lda:  6144 }
+    - {M:  8192, lda:  8192 }
+    - {M: 10240, lda: 10240 }
+    - {M: 12288, lda: 12288 }
+    - {M: 14336, lda: 14336 }
+    - {M: 16384, lda: 16384 }
+    - {M: 18432, lda: 18432 }
+    - {M: 20480, lda: 20480 }
+
+
+Tests:
+- name: tbsv
+  function: tbsv
+  precision: *single_double_precisions_complex_real
+  samples: 10
+  uplo: L
+  transA: N
+  diag: N
+  incx: 1
+  kl: 256
+  ku: 256
+  matrix_size: *sizes
+...

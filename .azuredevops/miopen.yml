@@ -1,0 +1,63 @@
+variables:
+- group: common
+- template: /.azuredevops/variables-global.yml@pipelines_repo
+
+parameters:
+- name: pipelinesRepoRef
+  type: string
+  default: refs/heads/develop
+- name: mivisionxRepoRef
+  type: string
+  default: refs/heads/develop
+- name: amdmigraphxRepoRef
+  type: string
+  default: refs/heads/develop
+- name: triggerDownstreamJobs
+  type: boolean
+  default: true
+
+resources:
+  repositories:
+  - repository: pipelines_repo
+    type: github
+    endpoint: ROCm
+    name: ROCm/ROCm
+    ref: ${{ parameters.pipelinesRepoRef }}
+  - repository: mivisionx_repo
+    type: github
+    endpoint: ROCm
+    name: ROCm/MIVisionX
+    ref: ${{ parameters.mivisionxRepoRef }}
+  - repository: amdmigraphx_repo
+    type: github
+    endpoint: ROCm
+    name: ROCm/AMDMIGraphX
+    ref: ${{ parameters.amdmigraphxRepoRef }}
+
+trigger:
+  batch: true
+  branches:
+    include:
+    - develop
+    - release-staging/rocm-rel-7.*
+  paths:
+    include:
+    - projects/miopen
+    exclude:
+    - projects/miopen/.githooks
+    - projects/miopen/.github
+    - projects/miopen/docs
+    - projects/miopen/.*.y*ml
+    - projects/miopen/*.md
+    - projects/miopen/LICENSE.txt
+
+pr: none
+
+stages:
+- stage: miopen
+  jobs:
+  - template: ${{ variables.CI_COMPONENT_PATH }}/MIOpen.yml@pipelines_repo
+    parameters:
+      sparseCheckoutDir: projects/miopen
+      triggerDownstreamJobs: ${{ parameters.triggerDownstreamJobs }}
+- template: templates/report-summary-check-wrapper.yml

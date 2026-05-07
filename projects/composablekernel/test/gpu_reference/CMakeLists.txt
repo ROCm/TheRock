@@ -1,0 +1,11 @@
+# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+# SPDX-License-Identifier: MIT
+
+add_gtest_executable(test_gpu_reference_conv_fwd test_gpu_reference_conv_fwd.cpp)
+target_link_libraries(test_gpu_reference_conv_fwd PRIVATE utility)
+
+add_gtest_executable(test_gpu_reference_conv_bwd_data test_gpu_reference_conv_bwd_data.cpp)
+target_link_libraries(test_gpu_reference_conv_bwd_data PRIVATE utility)
+
+add_gtest_executable(test_gpu_reference_conv_bwd_weight test_gpu_reference_conv_bwd_weight.cpp)
+target_link_libraries(test_gpu_reference_conv_bwd_weight PRIVATE utility)

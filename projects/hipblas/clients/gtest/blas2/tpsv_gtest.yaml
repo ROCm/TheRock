@@ -1,0 +1,79 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &N_range
+    - [ -1, 65 ]
+
+  - &incx_range
+    - [ -2 ]
+
+  - &batch_count_range
+    - [ -1, 5 ]
+
+Tests:
+  - name: tpsv_general
+    category: quick
+    function: tpsv
+    precision: *single_double_precisions_complex_real
+    transA: [ 'N', 'T', 'C' ]
+    uplo: [ 'L', 'U' ]
+    diag: [ 'N', 'U' ]
+    N: *N_range
+    incx: *incx_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+
+  - name: tpsv_batched_general
+    category: quick
+    function: tpsv_batched
+    precision: *single_double_precisions_complex_real
+    transA: [ 'N', 'T', 'C' ]
+    uplo: [ 'L', 'U' ]
+    diag: [ 'N', 'U' ]
+    N: *N_range
+    incx: *incx_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: tpsv_strided_batched_general
+    category: quick
+    function: tpsv_strided_batched
+    precision: *single_double_precisions_complex_real
+    transA: [ 'N', 'T', 'C' ]
+    uplo: [ 'L', 'U' ]
+    diag: [ 'N', 'U' ]
+    N: *N_range
+    incx: *incx_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: tpsv_bad_arg
+    category: pre_checkin
+    function:
+      - tpsv_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: tpsv_bad_arg
+    category: pre_checkin
+    function:
+      - tpsv_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+
+  - name: tpsv_bad_arg
+    category: pre_checkin
+    function:
+      - tpsv_batched_bad_arg
+      - tpsv_strided_batched_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+...

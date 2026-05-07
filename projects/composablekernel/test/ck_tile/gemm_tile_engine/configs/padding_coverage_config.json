@@ -1,0 +1,34 @@
+{
+  "problem": {
+    "description": "Padding coverage testing - fixed config with fp16/rcr, varying only padding combinations"
+  },
+  "test_params": {
+    "problem_sizes": [
+      {"m": 104, "n": 104, "k": 56, "split_k": 1},
+      {"m": 200, "n": 152, "k": 80, "split_k": 1},
+      {"m": 152, "n": 200, "k": 64, "split_k": 1}
+    ]
+  },
+  "tile_config": {
+    "tile_m": {"values": [64]},
+    "tile_n": {"values": [64]},
+    "tile_k": {"values": [32]},
+    "warp_m": {"values": [2]},
+    "warp_n": {"values": [2]},
+    "warp_k": {"values": [1]},
+    "warp_tile_m": {"values": [32]},
+    "warp_tile_n": {"values": [32]},
+    "warp_tile_k": {"values": [16]}
+  },
+  "trait_config": {
+    "pipeline": {"values": ["compv3"]},
+    "epilogue": {"values": ["default"]},
+    "scheduler": {"values": ["intrawave"]},
+    "pad_m": {"values": [true]},
+    "pad_n": {"values": [true]},
+    "pad_k": {"values": [true]},
+    "persistent": {"values": [false]}
+  },
+  "k_block_per_cu": 1,
+  "permute_n": false
+}

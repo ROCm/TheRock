@@ -1,0 +1,77 @@
+name: TheRock Test Packages
+
+on:
+  workflow_call:
+    inputs:
+      project_to_test:
+        type: string
+      amdgpu_families:
+        type: string
+      test_runs_on:
+        type: string
+      platform:
+        type: string
+      test_type:
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  configure_test_matrix:
+    name: "Configure test matrix"
+    runs-on: ${{ inputs.test_runs_on }}
+    if: ${{ inputs.test_runs_on != '' }}
+    outputs:
+      components: ${{ steps.configure.outputs.components }}
+    steps:
+      - name: "Fetch 'build_tools' from repository"
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          sparse-checkout: build_tools
+          path: "prejob"
+          repository: "ROCm/TheRock"
+          ref: 98493c8c29f8303bfbe860e2f1c2cf3fb9e487f1 # 2026-01-05 commit
+
+      # Checkout failure is possible on Windows, as it's the first job on a GPU test runner.
+      # Post-job cleanup isn't necessary since no executables are launched in this job.
+      - name: Pre-job cleanup processes on Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
+
+      - name: "Checking out repository"
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: "ROCm/TheRock"
+          ref: 98493c8c29f8303bfbe860e2f1c2cf3fb9e487f1 # 2026-01-05 commit
+
+      - name: Setting up Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: 3.12
+
+      - name: "Configuring CI options"
+        env:
+          project_to_test: ${{ inputs.project_to_test }}
+          TEST_TYPE: ${{ inputs.test_type }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+        id: configure
+        run: python ./build_tools/github_actions/fetch_test_configurations.py
+
+  test_components:
+    name: 'Test ${{ matrix.components.job_name }}'
+    needs: [configure_test_matrix]
+    # skip tests if no test matrix to run
+    if: ${{ needs.configure_test_matrix.outputs.components != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
+    uses: './.github/workflows/therock-test-component.yml'
+    with:
+      artifact_run_id: ${{  github.run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      platform: ${{ inputs.platform }}
+      component: ${{ toJSON(matrix.components) }}

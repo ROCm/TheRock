@@ -1,0 +1,66 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { M:  -1, N:  -1, lda:  -1, ldb:  -1, ldc:  -1 }
+    - { M: 192, N: 180, lda: 201, ldb: 205, ldc: 208 }
+
+  - &alpha_range
+    - { alpha: 2.0, alphai: -3.0 }
+
+  - &batch_count_range
+    - [ -1, 5 ]
+
+Tests:
+  - name: trsm_ex_general
+    category: quick
+    function: trsm_ex
+    precision: *single_double_precisions_complex_real
+    side: [ 'L', 'R' ]
+    uplo: [ 'L', 'U' ]
+    transA: [ 'N', 'T', 'C' ]
+    diag: [ 'N', 'U' ]
+    matrix_size: *size_range
+    alpha_beta: *alpha_range
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: trsm_batched_ex_general
+    category: quick
+    function: trsm_batched_ex
+    precision: *single_double_precisions_complex_real
+    side: [ 'L', 'R' ]
+    uplo: [ 'L', 'U' ]
+    transA: [ 'N', 'T', 'C' ]
+    diag: [ 'N', 'U' ]
+    matrix_size: *size_range
+    alpha_beta: *alpha_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: trsm_strided_batched_ex_general
+    category: quick
+    function: trsm_strided_batched_ex
+    precision: *single_double_precisions_complex_real
+    side: [ 'L', 'R' ]
+    uplo: [ 'L', 'U' ]
+    transA: [ 'N', 'T', 'C' ]
+    diag: [ 'N', 'U' ]
+    matrix_size: *size_range
+    alpha_beta: *alpha_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: trsm_ex_bad_arg
+    category: pre_checkin
+    function:
+      - trsm_ex_bad_arg: *single_double_precisions_complex_real
+      - trsm_batched_ex_bad_arg: *single_double_precisions_complex_real
+      - trsm_strided_batched_ex_bad_arg: *single_double_precisions_complex_real
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+...

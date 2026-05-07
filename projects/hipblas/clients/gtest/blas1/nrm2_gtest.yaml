@@ -1,0 +1,97 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &N_range
+    - [ -1, 0, 1000 ]
+
+  - &incx_range
+    - [-1, 2 ]
+
+  - &batch_count_range
+    - [ -1, 0, 5 ]
+
+Tests:
+  - name: nrm2_general
+    category: quick
+    function: nrm2
+    precision: *single_double_precisions_complex_real
+    N: *N_range
+    incx: *incx_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+  - name: nrm2_batched_general
+    category: quick
+    function: nrm2_batched
+    precision: *single_double_precisions_complex_real
+    N: *N_range
+    incx: *incx_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: nrm2_strided_batched_general
+    category: quick
+    function: nrm2_strided_batched
+    precision: *single_double_precisions_complex_real
+    N: *N_range
+    incx: *incx_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+    # ILP-64 tests
+  # - name: nrm2_64
+  #   category: stress
+  #   function:
+  #     - nrm2: *single_precision
+  #   arguments:
+  #     - { N: 2147483649, incx:  1 }
+  #     - { N: 2, incx:  2147483649 }
+  #   initialization: hpl
+  #   api: [ C_64 ]
+  #   os_flags: [ LINUX ]
+  #   gpu_arch: '90a'
+
+  # - name: nrm2_64
+  #   category: stress
+  #   function:
+  #     - nrm2_batched: *single_precision
+  #     - nrm2_strided_batched: *single_precision
+  #   arguments:
+  #     - { N: 2147483649, incx:  1, batch_count: 1 }
+  #     - { N: 2, incx:  2147483649, batch_count: 1 }
+  #     - { N: 2, incx:  1, stride_x: 2, batch_count: 666666 }
+  #   initialization: hpl
+  #   api: [ C_64 ]
+  #   os_flags: [ LINUX ]
+  #   gpu_arch: '90a'
+  #   backend_flags: AMD
+
+  - name: nrm2_bad_arg
+    category: pre_checkin
+    function:
+      - nrm2_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: nrm2_bad_arg
+    category: pre_checkin
+    function:
+      - nrm2_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+
+  - name: nrm2_bad_arg
+    category: pre_checkin
+    function:
+      - nrm2_batched_bad_arg
+      - nrm2_strided_batched_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+...

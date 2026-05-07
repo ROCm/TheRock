@@ -1,0 +1,81 @@
+---
+globs: ["*.cpp", "*.hpp", "*.h", "*.cxx", "*.cc"]
+---
+
+# C++ Code Style
+
+## Naming Conventions
+
+- Use CamelCase for class and struct names (e.g., `BatchNormTestCase`, `SimpleTensorBundle`)
+- Use camelBack for functions, variables, and private members (e.g., `setupEnvironment()`, `tensorData`)
+- Prefix private members with underscore (e.g., `_handle`, `_testData`)
+
+## File Headers
+
+- Always add copyright header to all source files:
+  ```cpp
+  // Copyright © Advanced Micro Devices, Inc., or its affiliates.
+  // SPDX-License-Identifier:  MIT
+  ```
+- For header files (.h, .hpp), add `#pragma once` immediately after copyright
+
+## Code Practices
+
+- Use `auto` when initializing with a cast to avoid duplicating the type name
+  ```cpp
+  // Good
+  auto tensor = static_cast<float*>(data);
+  // Avoid
+  float* tensor = static_cast<float*>(data);
+  ```
+- Use auto when initializing variables, unless the type is not obvious.
+- **Avoid implicit casts** - use explicit `static_cast<>` for type conversions. The codebase compiles with `-Wconversion` and `-Wsign-conversion` which will error on implicit narrowing or sign conversions.
+- Always use {}'s for if/for/while bodies, even if single line
+  ```cpp
+  // Good
+  if(condition)
+  {
+      doSomething();
+  }
+  // Avoid
+  if(condition) doSomething();
+  ```
+
+## Build System
+
+- Always use CMake for managing C/C++ dependencies
+- When discussing dependencies or build configuration, provide CMake-based solutions
+
+## Serialization
+
+- Use Flatbuffers for serialization needs
+- Provide Flatbuffer schema definitions when creating serializable data structures
+
+## Example Code Structure
+
+```cpp
+// Copyright © Advanced Micro Devices, Inc., or its affiliates.
+// SPDX-License-Identifier:  MIT
+
+#pragma once  // For header files only
+
+#include <memory>
+#include <vector>
+
+// Class names in PascalCase
+class MyTestClass
+{
+public:
+    // Public methods in camelCase
+    void setupTest();
+    int getValue() const;
+
+private:
+    // Private members prefixed with _
+    int _testValue;
+    std::vector<float> _data;
+};
+
+// Functions in camelCase
+void processData(const MyTestClass& obj);
+```

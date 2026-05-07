@@ -1,0 +1,17 @@
+---
+include: ../../../tests/data/hipblaslt_common.yaml
+include: ../../../tests/data/matmul_common.yaml
+
+Tests:
+- name: matmul_example
+  function:
+    matmul: *real_precisions
+  M: 128
+  N: 128
+  K: 128
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+  iters: 1000
+  cold_iters: 1000
+  rotating: 512
+...

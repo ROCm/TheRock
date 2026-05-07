@@ -1,0 +1,37 @@
+defaults:
+  numbered: False
+root: index
+subtrees:
+- caption: Installation
+  entries:
+    - file: install/prerequisites
+      title: hipBLAS prerequisites
+    - file: install/Linux_Install_Guide
+      title: Install hipBLAS on Linux
+    - file: install/Windows_Install_Guide
+      title: Install hipBLAS on Windows
+- caption: Conceptual
+  entries:
+    - file: conceptual/library-source-code-organization
+      title: Library source code organization
+- caption: How to
+  entries:
+    - file: how-to/using-hipblas-clients
+      title: Use hipBLAS clients
+- caption: Examples
+  entries:
+  - url: https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipblas/clients/samples
+    title: hipBLAS client examples
+- caption: API Reference
+  entries:
+    - file: reference/data-type-support
+      title: Data type support
+    - file: reference/hipblas-api-functions
+      title: hipBLAS API
+    - file: reference/deprecation
+      title: Deprecations by version
+- caption: About
+  entries:
+    - file: license
+    - file: contribute
+      title: Contribute to hipBLAS

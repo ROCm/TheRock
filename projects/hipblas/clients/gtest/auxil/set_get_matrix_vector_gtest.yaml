@@ -1,0 +1,31 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { rows: -1, cols: -1, lda: 4, ldb: 5, ldc: 6, M:  -1 }
+    - { rows:  3, cols: 30, lda: 4, ldb: 5, ldc: 6, M: 100 }
+
+  - &incx_incy_range
+    - { incx:  2, incy:  1, incd: 3 }
+    - { incx: -1, incy: -1, incd: 3 }
+
+
+Tests:
+  - name: set_get_matrix_general
+    category: quick
+    function:
+      - set_get_matrix: *single_double_precisions_complex_real
+      - set_get_matrix_async: *single_double_precisions_complex_real
+    matrix_size: *size_range
+    api: [ FORTRAN, C ]
+
+  - name: set_get_vector_general
+    category: quick
+    function:
+      - set_get_vector: *single_double_precisions_complex_real
+      - set_get_vector_async: *single_double_precisions_complex_real
+    matrix_size: *size_range
+    incx_incy: *incx_incy_range
+    api: [ FORTRAN, C ]
+...

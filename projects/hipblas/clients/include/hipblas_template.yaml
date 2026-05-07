@@ -1,0 +1,14 @@
+# Template used to process YAML from log files
+---
+include: hipblas_common.yaml
+
+Functions:
+
+  ######
+  # L1 #
+  ######
+
+  # scal
+  # hipblas_sscal:  { function: scal, <<: *single_precision }
+
+Tests:

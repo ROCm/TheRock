@@ -1,0 +1,64 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# vim tags
+tags
+.tags
+.*.swp
+
+# Editors
+.vscode
+
+# build-in-source directory and documentation artifacts
+build*/
+_build/
+_deps/
+_images/
+_static/
+_templates/
+_toc.yml
+Tensile.egg-info
+CMakeCache.txt
+cmake_install.cmake
+*.make
+*.cmake
+*.o.d
+
+# matrices
+*.csr
+*.mtx
+
+# Python
+**/__pycache__
+*.egg-info/
+
+#clangd
+.cache
+
+build_*

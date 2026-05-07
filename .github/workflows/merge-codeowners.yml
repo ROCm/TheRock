@@ -1,0 +1,40 @@
+name: Merge CODEOWNERS Files
+
+on:
+  workflow_dispatch:
+
+jobs:
+  merge-codeowners:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # Required to commit and push changes
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Run merge script
+        run: python .github/scripts/merge-codeowners.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/CODEOWNERS
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: merge CODEOWNERS files"
+            git push
+          fi

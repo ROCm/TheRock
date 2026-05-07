@@ -1,0 +1,34 @@
+---
+include: ../../../../clients/include/hipblas_common.yaml
+
+Definitions:
+  - &sizes
+    - {M:  512, N:  512, lda:  512, ldb:  512, ldc:  512 }
+    - {M: 1024, N: 1024, lda: 1024, ldb: 1024, ldc: 1024 }
+    - {M: 1536, N: 1536, lda: 1536, ldb: 1536, ldc: 1536 }
+    - {M: 2048, N: 2048, lda: 2048, ldb: 2048, ldc: 2048 }
+    - {M: 2560, N: 2560, lda: 2560, ldb: 2560, ldc: 2560 }
+    - {M: 3072, N: 3072, lda: 3072, ldb: 3072, ldc: 3072 }
+    - {M: 3584, N: 3584, lda: 3584, ldb: 3584, ldc: 3584 }
+    - {M: 4096, N: 4096, lda: 4096, ldb: 4096, ldc: 4096 }
+    - {M: 4608, N: 4608, lda: 4608, ldb: 4608, ldc: 4608 }
+    - {M: 5120, N: 5120, lda: 5120, ldb: 5120, ldc: 5120 }
+    - {M: 5632, N: 5632, lda: 5632, ldb: 5632, ldc: 5632 }
+    - {M: 6144, N: 6144, lda: 6144, ldb: 6144, ldc: 6144 }
+    - {M: 6656, N: 6656, lda: 6656, ldb: 6656, ldc: 6656 }
+    - {M: 7168, N: 7168, lda: 7168, ldb: 7168, ldc: 7168 }
+    - {M: 7680, N: 7680, lda: 7680, ldb: 7680, ldc: 7680 }
+    - {M: 8192, N: 8192, lda: 8192, ldb: 8192, ldc: 8192 }
+
+Tests:
+  - name: trmm
+    function: trmm
+    precision: *single_double_precisions_complex_real
+    side: L
+    uplo: L
+    transA: N
+    diag: N
+    alpha: 1
+    beta: 1
+    matrix_size: *sizes
+...

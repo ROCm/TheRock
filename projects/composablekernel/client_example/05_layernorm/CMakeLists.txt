@@ -1,0 +1,14 @@
+# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+# SPDX-License-Identifier: MIT
+
+add_executable(client_layernorm2d_bwd_data layernorm2d_bwd_data.cpp)
+target_link_libraries(client_layernorm2d_bwd_data PRIVATE composable_kernel::device_other_operations)
+
+add_executable(client_layernorm2d_bwd_gamma_beta layernorm2d_bwd_gamma_beta.cpp)
+target_link_libraries(client_layernorm2d_bwd_gamma_beta PRIVATE composable_kernel::device_other_operations)
+
+add_executable(client_layernorm2d_fwd layernorm2d_fwd.cpp)
+target_link_libraries(client_layernorm2d_fwd PRIVATE composable_kernel::device_other_operations)
+
+add_executable(client_layernorm4d_fwd layernorm4d_fwd.cpp)
+target_link_libraries(client_layernorm4d_fwd PRIVATE composable_kernel::device_other_operations)

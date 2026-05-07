@@ -1,0 +1,57 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { N: -1, lda:  -1, ldb: -1 }
+    - {N: 500, lda: 601, ldb: 700 }
+
+  - &batch_count_range
+    - [ -1, 0, 5 ]
+
+Tests:
+  - name: getrs_general
+    category: quick
+    function: getrs
+    precision: *single_double_precisions_complex_real
+    matrix_size: *size_range
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: getrs_batched_general
+    category: quick
+    function: getrs_batched
+    precision: *single_double_precisions_complex_real
+    matrix_size: *size_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C ]
+
+  - name: getrs_strided_batched_general
+    category: quick
+    function: getrs_strided_batched
+    precision: *single_double_precisions_complex_real
+    matrix_size: *size_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.0 ]
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: getrs_bad_arg
+    category: quick
+    function:
+      - getrs_bad_arg
+      - getrs_batched_bad_arg
+      - getrs_strided_batched_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: getrs_bad_arg
+    category: quick
+    function:
+      - getrs_batched_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+...

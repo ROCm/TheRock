@@ -1,0 +1,46 @@
+variables:
+- group: common
+- template: /.azuredevops/variables-global.yml@pipelines_repo
+
+parameters:
+- name: pipelinesRepoRef
+  type: string
+  default: refs/heads/develop
+- name: triggerDownstreamJobs
+  type: boolean
+  default: true
+
+resources:
+  repositories:
+  - repository: pipelines_repo
+    type: github
+    endpoint: ROCm
+    name: ROCm/ROCm
+    ref: ${{ parameters.pipelinesRepoRef }}
+
+trigger:
+  batch: true
+  branches:
+    include:
+    - develop
+    - release-staging/rocm-rel-7.*
+  paths:
+    include:
+    - projects/rocsolver
+    exclude:
+    - projects/rocsolver/.github
+    - projects/rocsolver/.jenkins
+    - projects/rocsolver/docs
+    - projects/rocsolver/.*.y*ml
+    - projects/rocsolver/*.md
+
+pr: none
+
+stages:
+- stage: rocsolver
+  jobs:
+  - template: ${{ variables.CI_COMPONENT_PATH }}/rocSOLVER.yml@pipelines_repo
+    parameters:
+      sparseCheckoutDir: projects/rocsolver
+      triggerDownstreamJobs: ${{ parameters.triggerDownstreamJobs }}
+- template: templates/report-summary-check-wrapper.yml

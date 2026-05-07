@@ -1,0 +1,8 @@
+# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+# SPDX-License-Identifier: MIT
+
+add_gtest_executable(test_conv_tensor_rearrange test_conv_tensor_rearrange.cpp)
+target_link_libraries(test_conv_tensor_rearrange PRIVATE utility device_image_to_column_instance device_column_to_image_instance)
+
+add_gtest_executable(test_conv_tensor_rearrange_interface test_conv_tensor_rearrange_interface.cpp)
+target_link_libraries(test_conv_tensor_rearrange_interface PRIVATE utility)

@@ -1,0 +1,48 @@
+variables:
+- group: common
+- template: /.azuredevops/variables-global.yml@pipelines_repo
+
+parameters:
+- name: pipelinesRepoRef
+  type: string
+  default: refs/heads/develop
+- name: triggerDownstreamJobs
+  type: boolean
+  default: true
+
+resources:
+  repositories:
+  - repository: pipelines_repo
+    type: github
+    endpoint: ROCm
+    name: ROCm/ROCm
+    ref: ${{ parameters.pipelinesRepoRef }}
+
+trigger:
+  batch: true
+  branches:
+    include:
+    - develop
+    - release-staging/rocm-rel-7.*
+  paths:
+    include:
+    - projects/hiprand
+    exclude:
+    - projects/hiprand/.githooks
+    - projects/hiprand/.github
+    - projects/hiprand/.jenkins
+    - projects/hiprand/docs
+    - projects/hiprand/.*.y*ml
+    - projects/hiprand/*.md
+    - projects/hiprand/LICENSE.txt
+
+pr: none
+
+stages:
+- stage: hiprand
+  jobs:
+  - template: ${{ variables.CI_COMPONENT_PATH }}/hipRAND.yml@pipelines_repo
+    parameters:
+      sparseCheckoutDir: projects/hiprand
+      triggerDownstreamJobs: ${{ parameters.triggerDownstreamJobs }}
+- template: templates/report-summary-check-wrapper.yml

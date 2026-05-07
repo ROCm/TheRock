@@ -1,0 +1,404 @@
+---
+include: hipblaslt_common.yaml
+include: known_bugs.yaml
+include: matmul_common.yaml
+
+Definitions:
+  - &alpha_beta_range
+    - { alpha:  5, beta:  0 }
+    - { alpha:  0, beta:  3 }
+    - { alpha:  1, beta:  3 }
+    - { alpha:  1, beta:  1 }
+
+  - &alpha_beta_range_small
+    - { alpha: 2, alphai: 2, beta: -1.0, betai: 2.0 }
+
+  - &transA_transB_range
+    - { transA: N, transB: N }
+    - { transA: N, transB: T }
+    - { transA: T, transB: N }
+    - { transA: T, transB: T }
+
+Tests:
+- name: matmul_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions
+  matrix_size: *smoke_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha_beta: *alpha_beta_range
+
+- name: matmul_bias_relu_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions
+  matrix_size: *smoke_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  activation_type: relu
+  bias_vector: [0, 1]
+  unit_check: 1
+
+- name: matmul_bias_sigmoid_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions
+  matrix_size: *smoke_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  activation_type: sigmoid
+  bias_vector: [0, 1]
+  unit_check: 1
+
+- name: matmul_bias_gelu_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions
+  matrix_size: *smoke_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  activation_type: gelu
+  bias_vector: [0, 1]
+  unit_check: 0
+  norm_check: 1
+
+- name: matmul_bias_only_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions
+  matrix_size: *smoke_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  bias_vector: 1
+  unit_check: 1
+
+- name: matmul_bias_type_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_2b
+  matrix_size: *smoke_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  bias_vector: 1
+  bias_type: [default, f32_r]
+  unit_check: 1
+
+- name: matmul_f8_bf8_fnuz_dst_fp16_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_f16
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_f8_bf8_fnuz_dst_bf16_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_bf16
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: bf16_r
+  unit_check: 1
+  gpu_arch: '942'
+
+### GFX12 FP8
+- name: matmul_f8_bf8_dst_fp32_gfx12_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_1b_dst_f32
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: bf16_r
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '120[0-1]'
+
+- name: matmul_f8_bf8_dst_fp16_gfx12_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_1b_dst_f16
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 1
+  gpu_arch: '120[0-1]'
+
+- name: matmul_f8_bf8_dst_bf16_gfx12_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_1b_dst_bf16
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: bf16_r
+  unit_check: 1
+  gpu_arch: '120[0-1]'
+
+- name: matmul_real_1b_dst_f8_SCDInt1_gfx12_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_1b_dst_f8
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [0] # will use default value '1'
+  scaleD: [0] # will use default value '1'
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 1
+  gpu_arch: '120[0-1]'
+
+- name: matmul_real_1b_dst_f8_SCDNotInt_gfx12_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_1b_dst_f8
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [1] # will use random value from 0.0 to 1.0
+  scaleD: [1] # will use random value from 0.0 to 1.0
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 1
+  gpu_arch: '120[0-1]'
+
+- name: matmul_one_integer_precisions_i8_gfx12_smoke
+  category: smoke
+  function:
+    matmul: *integer_precisions_i8
+  matrix_size: *one_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: [ 0.0, 1.0 ]
+  beta: [ 0.0, 2.0 ]
+  gpu_arch: '120[0-1]'
+
+- name: matmul_real_1b_fnuz_dst_f8_fnuz_SCDInt1_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_f8_fnuz
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [0] # will use default value '1'
+  scaleD: [0] # will use default value '1'
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_real_1b_fnuz_dst_1b_fnuz_smallsize_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_1b_fnuz
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [0]
+  scaleD: [0]
+  bias_vector: [0, 1]
+  bias_type: f32_r
+  unit_check: 1
+  gpu_arch: '942'
+
+#TODO: extend to all f8 transpose and datatype if necessary
+- name: matmul_real_f8_fnuz_dst_fp32_smoke
+  category: smoke
+  function:
+    matmul: *f8_fnuz_precision_dst_fp32
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [0]
+  scaleD: [0]
+  bias_vector: [0, 1]
+  bias_type: f32_r
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_real_1b_fnuz_dst_f8_fnuz_SCDNotInt_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_f8_fnuz
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [1] # will use random value from 0.0 to 1.0
+  scaleD: [1] # will use random value from 0.0 to 1.0
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '942'
+
+- name: matmul_real_1b_fnuz_dst_bf8_fnuz_SCDInt1_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_bf8_fnuz
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [0] # will use default value '1'
+  scaleD: [0] # will use default value '1'
+  bias_vector: [0,1]
+  bias_type: f16_r
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_real_1b_fnuz_dst_bf8_fnuz_SCDNotInt_smoke
+  category: smoke
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_bf8_fnuz
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [1] # will use random value from 0.0 to 1.0
+  scaleD: [1] # will use random value from 0.0 to 1.0
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '942'
+
+- name: matmul_gemm_xf32_smoke
+  category: smoke
+  function:
+    matmul: *xf32_precision
+  matrix_size: *smoke_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_gemm_double_smoke
+  category: smoke
+  function:
+    matmul: *double_precision
+  matrix_size: *smoke_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  gpu_arch: '9(0a|4[0-2])'
+
+- name: matmul_gemm_i8_dst_i32_smoke
+  category: smoke
+  function:
+    matmul: *i8_precision_dst_i32
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  unit_check: 1
+  gpu_arch: '90a'
+
+- name: matmul_gemm_i8_dst_i32_94x_smoke
+  category: smoke
+  function:
+    matmul: *i8_precision_dst_i32
+  matrix_size: *smoke_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  scaleAlpha_vector: [0, 1]
+  activation_type: [relu, sigmoid]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_gemm_i8_dst_i8_1xxx_smoke
+  category: smoke
+  function:
+    matmul: *i8_precision_dst_i8
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  scaleAlpha_vector: [0, 1]
+  activation_type: [relu, sigmoid]
+  unit_check: 1
+  gpu_arch: '1[1-2]\d{2}'
+
+- name: matmul_gemm_i8_dst_i32_1xxx_smoke
+  category: smoke
+  function:
+    matmul: *i8_precision_dst_i32
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  scaleAlpha_vector: [0, 1]
+  activation_type: [relu, sigmoid]
+  unit_check: 1
+  gpu_arch: '1[1-2]\d{2}'
+...

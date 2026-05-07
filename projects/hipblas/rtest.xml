@@ -1,0 +1,11 @@
+<testset>
+<var name="GTEST_FILTER" value="hipblas-test --gtest_output=xml --gtest_color=yes --gtest_filter"></var>
+<test sets="psdb">
+  <!--tests are so fast we run all for both psdb and osdb-->
+  <run name="all-tests">{GTEST_FILTER}=*-*known_bug*</run>
+</test>
+<test sets="osdb">
+  <!--run name="all-tests">{GTEST_FILTER}=*quick*:*pre_checkin*-*known_bug*</run-->
+  <run name="all-tests">{GTEST_FILTER}=*-*known_bug*</run>
+</test>
+</testset>

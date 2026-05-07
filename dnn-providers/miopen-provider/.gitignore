@@ -1,0 +1,82 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+*.ipch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Hipdnn Local install
+install/
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# vim tags
+tags
+.tags
+.*.swp
+
+# Editors
+.vscode
+.cline_storage
+
+#code ql
+scripts*/codeql-*/
+scripts*/*_codeql_*/
+
+# build-in-source directory
+
+# emacs temporary/backup files
+.\#*
+\#*\#
+*~
+
+# GDB temporary files
+.gdb_history
+install.dir*
+
+# documentation artifacts
+_build/
+_images/
+_static/
+_templates/
+_toc.yml
+_doxygen/
+
+# JetBrains IDE
+.idea/
+cmake-build*/
+build*/
+CMakeUserPresets.json
+
+# Python virtualenv
+.venv/
+hipdnn_env/
+
+# Python cache
+__pycache__/
+
+# Python egg
+*.egg-info/
+
+*.profraw

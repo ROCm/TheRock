@@ -1,0 +1,94 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+*.ipch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# vim tags
+tags
+.tags
+.*.swp
+
+# Editors
+.vscode
+
+# CMake formatting configuration (local)
+.cmake-format.yaml
+
+# Cline
+.cline*
+
+# build-in-source directory (see exceptions below)
+build*
+
+# emacs temporary/backup files
+.\#*
+\#*\#
+*~
+
+# GDB temporary files
+.gdb_history
+install.dir*
+
+# documentation artifacts
+_build/
+_images/
+_static/
+_templates/
+_toc.yml
+_doxygen/
+docs/doxygen/html
+docs/doxygen/xml
+
+# JetBrains IDE (see build* exceptions below)
+.idea/
+cmake-build*/
+build*/
+
+# LSP configuration
+.clangd
+
+# User-defined CMake presets
+CMakeUserPresets.json
+
+# Python virtualenv
+.venv/
+
+# Python cache
+__pycache__/
+
+.cache/
+
+# Generated test data
+test_data/*
+!test_data/*.py
+!test_data/*.sh
+
+# Exceptions to build* patterns above
+# The experimental/builder directory should be tracked despite matching build*
+!experimental/builder
+!experimental/builder/**

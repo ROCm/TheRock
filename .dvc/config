@@ -1,0 +1,6 @@
+[core]
+    remote = storage
+    autostage = true
+['remote "storage"']
+    url = s3://therock-dvc/rocm-libraries
+    allow_anonymous_login = true

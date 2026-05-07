@@ -1,0 +1,114 @@
+Query device success: there are 8 devices
+Device ID 0 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 1 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 2 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 3 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 4 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 5 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 6 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 7 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_r,f32_r,f32_r,f32_r,f32_r,N,2048,2048,1,2048,1,1,1,123.969, 248.059, 67.7,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_r,f64_r,f64_r,f64_r,f64_r,N,2048,2048,1,2048,1,1,1,54.64, 218.667, 153.6,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_c,f32_c,f32_c,f32_c,f32_c,N,2048,2048,'(1:0)',2048,1,'(1:0)',1,207.458, 207.585, 161.8,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_c,f64_c,f64_c,f64_c,f64_c,N,2048,2048,'(1:0)',2048,1,'(1:0)',1,357.854, 716.145, 93.8,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_r,f32_r,f32_r,f32_r,f32_r,N,4096,4096,1,4096,1,1,1,251.594, 503.311, 133.4,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_r,f64_r,f64_r,f64_r,f64_r,N,4096,4096,1,4096,1,1,1,105.842, 423.473, 317.1,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_c,f32_c,f32_c,f32_c,f32_c,N,4096,4096,'(1:0)',4096,1,'(1:0)',1,414.968, 415.095, 323.5,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_c,f64_c,f64_c,f64_c,f64_c,N,4096,4096,'(1:0)',4096,1,'(1:0)',1,621.205, 1242.79, 216.1,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_r,f32_r,f32_r,f32_r,f32_r,N,6144,6144,1,6144,1,1,1,368.52, 737.16, 204.9,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_r,f64_r,f64_r,f64_r,f64_r,N,6144,6144,1,6144,1,1,1,151.748, 607.09, 497.6,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_c,f32_c,f32_c,f32_c,f32_c,N,6144,6144,'(1:0)',6144,1,'(1:0)',1,590.588, 590.708, 511.4,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_c,f64_c,f64_c,f64_c,f64_c,N,6144,6144,'(1:0)',6144,1,'(1:0)',1,673.115, 1346.5, 448.7,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_r,f32_r,f32_r,f32_r,f32_r,N,8192,8192,1,8192,1,1,1,474.829, 949.774, 282.7,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_r,f64_r,f64_r,f64_r,f64_r,N,8192,8192,1,8192,1,1,1,208.697, 834.891, 643.2,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_c,f32_c,f32_c,f32_c,f32_c,N,8192,8192,'(1:0)',8192,1,'(1:0)',1,805.823, 805.946, 666.3,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_c,f64_c,f64_c,f64_c,f64_c,N,8192,8192,'(1:0)',8192,1,'(1:0)',1,406.112, 812.347, 1322.1,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_r,f32_r,f32_r,f32_r,f32_r,N,10240,10240,1,10240,1,1,1,510.679, 1021.46, 410.7,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_r,f64_r,f64_r,f64_r,f64_r,N,10240,10240,1,10240,1,1,1,249.656, 998.72, 840.1,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_c,f32_c,f32_c,f32_c,f32_c,N,10240,10240,'(1:0)',10240,1,'(1:0)',1,952.347, 952.463, 880.9,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_c,f64_c,f64_c,f64_c,f64_c,N,10240,10240,'(1:0)',10240,1,'(1:0)',1,445.737, 891.583, 1882.1,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_r,f32_r,f32_r,f32_r,f32_r,N,12288,12288,1,12288,1,1,1,577.245, 1154.58, 523.2,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_r,f64_r,f64_r,f64_r,f64_r,N,12288,12288,1,12288,1,1,1,279.075, 1116.39, 1082.2,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_c,f32_c,f32_c,f32_c,f32_c,N,12288,12288,'(1:0)',12288,1,'(1:0)',1,1066.98, 1067.09, 1132.2,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_c,f64_c,f64_c,f64_c,f64_c,N,12288,12288,'(1:0)',12288,1,'(1:0)',1,509.568, 1019.24, 2370.7,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_r,f32_r,f32_r,f32_r,f32_r,N,14336,14336,1,14336,1,1,1,612.624, 1225.33, 671,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_r,f64_r,f64_r,f64_r,f64_r,N,14336,14336,1,14336,1,1,1,300.82, 1203.36, 1366.5,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_c,f32_c,f32_c,f32_c,f32_c,N,14336,14336,'(1:0)',14336,1,'(1:0)',1,1147.18, 1147.28, 1433.3,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_c,f64_c,f64_c,f64_c,f64_c,N,14336,14336,'(1:0)',14336,1,'(1:0)',1,444.934, 889.945, 3695.5,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_r,f32_r,f32_r,f32_r,f32_r,N,16384,16384,1,16384,1,1,1,636.67, 1273.42, 843.3,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_r,f64_r,f64_r,f64_r,f64_r,N,16384,16384,1,16384,1,1,1,306.855, 1227.49, 1749.7,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_c,f32_c,f32_c,f32_c,f32_c,N,16384,16384,'(1:0)',16384,1,'(1:0)',1,1237.94, 1238.04, 1734.8,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_c,f64_c,f64_c,f64_c,f64_c,N,16384,16384,'(1:0)',16384,1,'(1:0)',1,452.943, 905.954, 4741.4,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_r,f32_r,f32_r,f32_r,f32_r,N,18432,18432,1,18432,1,1,1,636.368, 1272.81, 1067.8,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_r,f64_r,f64_r,f64_r,f64_r,N,18432,18432,1,18432,1,1,1,321.314, 1285.32, 2114.8,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_c,f32_c,f32_c,f32_c,f32_c,N,18432,18432,'(1:0)',18432,1,'(1:0)',1,1264.55, 1264.63, 2149.4,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_c,f64_c,f64_c,f64_c,f64_c,N,18432,18432,'(1:0)',18432,1,'(1:0)',1,486.316, 972.698, 5589,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_r,f32_r,f32_r,f32_r,f32_r,N,20480,20480,1,20480,1,1,1,664.003, 1328.07, 1263.4,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_r,f64_r,f64_r,f64_r,f64_r,N,20480,20480,1,20480,1,1,1,323.426, 1293.77, 2593.8,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f32_c,f32_c,f32_c,f32_c,f32_c,N,20480,20480,'(1:0)',20480,1,'(1:0)',1,1270.18, 1270.26, 2641.8,
+function,a_type,b_type,c_type,d_type,compute_type,transA,M,N,alpha,lda,incx,beta,incy,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+gemv,f64_c,f64_c,f64_c,f64_c,f64_c,N,20480,20480,'(1:0)',20480,1,'(1:0)',1,524.931, 1049.93, 6392.4,

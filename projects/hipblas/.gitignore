@@ -1,0 +1,49 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Editors
+.vscode
+
+# build-in-source directory
+build*
+
+# emacs temporary/backup files
+.\#*
+\#*\#
+*~
+
+# documentation artifacts
+build/
+_build/
+_images/
+_static/
+_templates/
+_toc.yml
+_doxygen/

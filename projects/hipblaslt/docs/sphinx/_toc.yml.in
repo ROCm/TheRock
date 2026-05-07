@@ -1,0 +1,61 @@
+# Anywhere {branch} is used, the branch name will be substituted.
+# These comments will also be removed.
+root: index
+subtrees:
+
+- entries:
+  - file: what-is-hipBLASLt
+    title: What is hipBLASLt?
+
+- caption: Install
+  entries:
+  - file: install/building-installing-hipblaslt
+    title: Installation guide
+
+- caption: Conceptual
+  entries:
+  - file: conceptual/hipblaslt-library-organization
+    title: hipBLASLt library organization
+  - file: conceptual/hipblaslt-clients
+    title: hipBLASLt clients
+
+- caption: How to
+  entries:
+  - file: how-to/how-to-use-hipblaslt-tuning-utility
+    title: Use the hipBLASLt tuning utility
+  - file: how-to/how-to-use-hipblaslt-offline-tuning
+    title: Use hipBLASLt offline tuning
+  - file: how-to/use-logging-heuristics
+    title: Use logging and heuristics
+  - file: how-to/how-to-use-streamk
+    title: Use Stream-K with hipBLASLt
+
+- caption: Examples
+  entries:
+  - file: samples/samples
+    title: hipBLASLt code samples
+    subtrees:
+    - entries:
+      - file: samples/client_extop_softmax
+      - file: samples/sample_hipblaslt_ext_op_layernorm
+      - file: samples/sample_hipblaslt_ext_op_amax
+  - url: https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipblaslt/clients/samples
+    title: hipBLASLt client examples
+
+- caption: API reference
+  entries:
+  - file: reference/data-type-support
+  - file: reference/datatypes
+    title: hipBLASLt datatypes
+  - file: reference/env-variables
+    title: hipBLASLt environment variables
+  - file: reference/api-reference
+    title: hipBLASLt API
+  - file: reference/ext-reference
+    title: hipBLASLtExt API
+  - file: reference/ext-ops
+    title: hipBLASLtExt operation API
+
+- caption: About
+  entries:
+  - file: license

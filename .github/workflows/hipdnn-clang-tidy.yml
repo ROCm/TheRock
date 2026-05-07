@@ -1,0 +1,64 @@
+name: hipDNN Clang Tidy
+
+on:
+  pull_request:
+    paths:
+      - 'projects/hipdnn/**/*.[ch]p?p?'
+      - 'projects/hipdnn/cmake/ClangTidy.cmake'
+      - '.github/workflows/hipdnn-clang-tidy.yml'
+  workflow_dispatch:
+
+jobs:
+  clang-tidy:
+    runs-on: azure-linux-scale-rocm
+    steps:
+      - name: Checkout rocm-libraries
+        uses: actions/checkout@v4
+
+      - name: Checkout TheRock
+        uses: actions/checkout@v4
+        with:
+          repository: ROCm/TheRock
+          path: TheRock
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            python3-venv \
+            lsb-release wget \
+            software-properties-common \
+            gnupg
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 20
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-tidy-20 \
+            clang-tools-20
+          python3 -m venv .venv
+          . .venv/bin/activate
+          pip install boto3 cmake
+          pip install -r TheRock/requirements.txt
+
+      - name: Install ROCm
+        run: |
+          sudo .venv/bin/python3 TheRock/build_tools/install_rocm_from_artifacts.py \
+            --release 7.9.0rc20251008 \
+            --amdgpu-family gfx94X-dcgpu \
+            --output-dir /opt/rocm \
+            --base-only
+
+      - name: Run clang-tidy
+        run: |
+          . .venv/bin/activate
+          export PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH
+          export CXX=/opt/rocm/llvm/bin/clang++
+          cmake -S projects/hipdnn -B build -G Ninja \
+            -DENABLE_CLANG_TIDY=ON \
+            -DROCM_PATH=/opt/rocm \
+            -DCMAKE_PREFIX_PATH=/opt/rocm \
+            -DENABLE_CLANG_FORMAT=OFF \
+            -DHIP_PLATFORM=amd
+          ninja -C build tidy

@@ -1,0 +1,50 @@
+variables:
+- group: common
+- template: /.azuredevops/variables-global.yml@pipelines_repo
+
+parameters:
+- name: pipelinesRepoRef
+  type: string
+  default: refs/heads/develop
+- name: triggerDownstreamJobs
+  type: boolean
+  default: true
+
+resources:
+  repositories:
+  - repository: pipelines_repo
+    type: github
+    endpoint: ROCm
+    name: ROCm/ROCm
+    ref: ${{ parameters.pipelinesRepoRef }}
+
+trigger:
+  batch: true
+  branches:
+    include:
+    - develop
+    - release-staging/rocm-rel-7.*
+  paths:
+    include:
+    - projects/hipcub
+    exclude:
+    - projects/hipcub/.githooks
+    - projects/hipcub/.github
+    - projects/hipcub/.gitlab
+    - projects/hipcub/.jenkins
+    - projects/hipcub/docs
+    - projects/hipcub/.*.y*ml
+    - projects/hipcub/*.md
+    - projects/hipcub/LICENSE.txt
+    - projects/hipcub/NOTICES.txt
+
+pr: none
+
+stages:
+- stage: hipcub
+  jobs:
+  - template: ${{ variables.CI_COMPONENT_PATH }}/hipCUB.yml@pipelines_repo
+    parameters:
+      sparseCheckoutDir: projects/hipcub
+      triggerDownstreamJobs: ${{ parameters.triggerDownstreamJobs }}
+- template: templates/report-summary-check-wrapper.yml

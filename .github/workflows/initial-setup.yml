@@ -1,0 +1,44 @@
+name: Setup Monorepo
+
+on:
+  workflow_dispatch:
+
+env:
+  MONOREPO_URL: github.com/ROCm/rocm-libraries.git
+  MONOREPO_BRANCH: develop
+
+jobs:
+  setup-monorepo:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b # v2.1.1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout the Monorepo
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+
+      - name: Set up Git user and Git LFS
+        run: |
+          git config user.name "assistant-librarian[bot]"
+          git config user.email "assistant-librarian[bot]@users.noreply.github.com"
+
+      - name: Add Repositories to the Monorepo
+        run: |
+          for repo in $(cat .github/repos-config.json | jq -r '.repositories[].name'); do
+            repo_name=$(cat .github/repos-config.json | jq -r ".repositories[] | select(.name == \"$repo\") | .reponame")
+            url=$(cat .github/repos-config.json | jq -r ".repositories[] | select(.name == \"$repo\") | .url")
+            branch=$(cat .github/repos-config.json | jq -r ".repositories[] | select(.name == \"$repo\") | .branch")
+            category=$(cat .github/repos-config.json | jq -r ".repositories[] | select(.name == \"$repo\") | .category")
+
+            git subtree add --prefix "${category}/${repo}" https://github.com/${url}.git "$branch"
+          done
+
+      - name: Push changes to Monorepo
+        run: git push https://${{ env.MONOREPO_URL }} ${{ env.MONOREPO_BRANCH }}

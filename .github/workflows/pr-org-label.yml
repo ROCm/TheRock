@@ -1,0 +1,81 @@
+# Label PRs by Author Org Membership
+# -------------
+# This workflow is designed to automatically label pull requests based on the author's membership in the ROCm organization.
+name: "Label PRs by Author Org Membership"
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"  # every 30 minutes
+
+jobs:
+  label-prs:
+    if: github.repository == 'ROCm/rocm-libraries'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      ORG_TO_CHECK: ROCm
+      ORG_LABEL: "organization: ROCm"
+      STREAMHPC_TEAM: streamhpc
+      STREAMHPC_LABEL: "organization: streamhpc"
+      EXTERNAL_LABEL: "external contribution"
+    steps:
+      - name: Generate GitHub App token
+        id: generate-token
+        uses: actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b # v2.1.1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          sparse-checkout: |
+            .github
+            ${{ github.event.inputs.subrepo-prefix }}
+          sparse-checkout-cone-mode: true
+          token: ${{ steps.generate-token.outputs.token }}
+          fetch-depth: 0  #for subtree operations
+
+      - name: Get open PR numbers
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          gh pr list --state open --json number,labels \
+            --jq '[.[] | select(
+              ([.labels[].name] | index(env.ORG_LABEL) | not) and
+              ([.labels[].name] | index(env.EXTERNAL_LABEL) | not)
+            ) | .number] | .[]' \
+            > pr_numbers.txt
+
+      - name: Label PRs based on author membership
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          while read pr; do
+            echo "Checking PR #$pr"
+
+            labels=$(gh pr view "$pr" --json labels --jq '.labels[].name')
+
+            if echo "$labels" | grep -qFx "${{ env.ORG_LABEL }}" \
+              || echo "$labels" | grep -qFx "${{ env.STREAMHPC_LABEL }}" \
+              || echo "$labels" | grep -qFx "${{ env.EXTERNAL_LABEL }}"; then
+              echo "PR #$pr already labeled, skipping."
+              continue
+            fi
+
+            author=$(gh pr view "$pr" --json author --jq '.author.login')
+
+            if gh api orgs/${{ env.ORG_TO_CHECK }}/members/$author --silent; then
+              if gh api orgs/${{ env.ORG_TO_CHECK }}/teams/${{ env.STREAMHPC_TEAM }}/members/$author --silent; then
+                gh pr edit "$pr" --add-label "${{ env.STREAMHPC_LABEL }}"
+              else
+                gh pr edit "$pr" --add-label "${{ env.ORG_LABEL }}"
+              fi
+            else
+              gh pr edit "$pr" --add-label "${{ env.EXTERNAL_LABEL }}"
+            fi
+          done < pr_numbers.txt

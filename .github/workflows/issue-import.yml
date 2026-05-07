@@ -1,0 +1,135 @@
+# Import Issue Workflow
+# ---------------------
+# This workflow imports a single issue from a source repository into this monorepo repository,
+# as part of a migration. It preserves key metadata including title, body, labels, and comment
+# history with timestamps and authorship.
+#
+# Trigger: Manually via `workflow_dispatch` with the following inputs:
+#   - source_repo:   Full source repository name (e.g., "ROCm/rocBLAS")
+#   - issue_number:  Issue number in the source repository to import
+#
+# Steps:
+#   1. Validate that the caller has 'admin' or 'maintain' permission on the monorepo
+#   2. Fetch the issue body, title, labels, and comments using the GitHub CLI (`gh api`)
+#   3. Create a new issue in the target repo, preserving:
+#      - Original title
+#      - Original body
+#      - All labels
+#      - A reference link back to the source issue
+#   4. Recreate each comment from the original issue with:
+#      - Original comment body
+#      - Original author and timestamp
+#   5. Post a comment on the original issue linking to the new one
+#
+# Notes:
+# - This workflow requires GitHub App credentials (APP_ID and APP_PRIVATE_KEY)
+# - Only issue metadata is migrated; cross-linked issues, reactions, assignees, and milestones are not yet handled
+
+name: Import Subrepo Issue
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repo:
+        description: 'Full name of subrepo repo (e.g., ROCm/rocBLAS)'
+        required: true
+      issue_number:
+        description: 'Issue number to import'
+        required: true
+
+jobs:
+  import:
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Validate maintainer permissions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Actor is: ${{ github.actor }}"
+          PERMISSION=$(gh api \
+            repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission \
+            --jq .permission)
+          if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" ]]; then
+            echo "❌ User ${{ github.actor }} is not authorized to run this workflow"
+            exit 1
+          fi
+
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b # v2.1.1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Fetch issue and comments from source repo
+        id: fetch
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          gh api "repos/${{ github.event.inputs.source_repo }}/issues/${{ github.event.inputs.issue_number }}" > issue.json
+          gh api "repos/${{ github.event.inputs.source_repo }}/issues/${{ github.event.inputs.issue_number }}/comments" > comments.json
+
+      - name: Create issue in target repo
+        id: create
+        env:
+            GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          TITLE=$(jq -r .title issue.json)
+          AUTHOR=$(jq -r .user.login issue.json)
+          BODY=$(jq -r .body issue.json)
+
+          LINK_TO_OLD="**[Migrated from original issue] ${{ github.event.inputs.source_repo }}#${{ github.event.inputs.issue_number }}**"
+          AUTHOR_LINE="*Original issue author: @$AUTHOR*"
+          FULL_BODY=$(printf "%b\n\n%b\n\n%s" "$LINK_TO_OLD" "$AUTHOR_LINE" "$BODY")
+
+          # Read labels into array
+          mapfile -t LABELS < <(jq -r '.labels[].name' issue.json)
+
+          # Prepare gh api args for labels
+          LABEL_ARGS=()
+          for label in "${LABELS[@]}"; do
+            LABEL_ARGS+=( -f "labels[]=$label" )
+          done
+
+          if [ ${#LABEL_ARGS[@]} -gt 0 ]; then
+            NEW_ISSUE_JSON=$(gh api repos/${{ github.repository }}/issues \
+              -f title="$TITLE" \
+              -f body="$FULL_BODY" \
+              "${LABEL_ARGS[@]}")
+          else
+            NEW_ISSUE_JSON=$(gh api repos/${{ github.repository }}/issues \
+              -f title="$TITLE" \
+              -f body="$FULL_BODY")
+          fi
+
+          echo "$NEW_ISSUE_JSON" > new_issue.json
+          echo "new_issue_number=$(jq -r .number new_issue.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Recreate comments on new issue
+        env:
+            GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          jq -c '.[]' comments.json | while read -r comment; do
+            AUTHOR=$(echo "$comment" | jq -r .user.login)
+            CREATED_AT=$(echo "$comment" | jq -r .created_at)
+            BODY=$(echo "$comment" | jq -r .body | sed 's/"/\\"/g')
+
+            ORIG_AUTHOR="**Comment by @$AUTHOR on $CREATED_AT**"
+            FORMATTED_BODY=$(printf "%b\n\n%s" "$ORIG_AUTHOR" "$BODY")
+
+            gh api "repos/${{ github.repository }}/issues/${{ steps.create.outputs.new_issue_number }}/comments" \
+              -f body="$FORMATTED_BODY"
+          done
+
+      - name: Optionally comment back on original issue
+        env:
+            GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          COMMENT="This issue has been migrated to: https://github.com/${{ github.repository }}/issues/${{ steps.create.outputs.new_issue_number }}"
+
+          gh api "repos/${{ github.event.inputs.source_repo }}/issues/${{ github.event.inputs.issue_number }}/comments" \
+            -f body="$COMMENT"

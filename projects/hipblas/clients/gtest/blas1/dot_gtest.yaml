@@ -1,0 +1,116 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &N_range
+    - [ -1, 0, 1000 ]
+
+  - &incx_incy_range
+    - { incx:  1, incy:  1 }
+    - { incx: -1, incy: -2 }
+
+  - &batch_count_range
+    - [ -1, 0, 5 ]
+
+Tests:
+  - name: dot_general_nv
+    category: quick
+    function:
+      - dot: *single_double_precisions_complex_real
+      - dotc: *single_double_precisions_complex
+    N: *N_range
+    incx_incy: *incx_incy_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+  # half/bf16 precision only rocBLAS backend
+  - name: dot_general_amd
+    category: quick
+    function:
+      - dot: *half_precision
+      - dot: *bf16_precision
+    N: *N_range
+    incx_incy: *incx_incy_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: dot_batched_general
+    category: quick
+    function:
+      - dot_batched: *half_bfloat_single_double_complex_real_precisions
+      - dotc_batched: *single_double_precisions_complex
+    N: *N_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: dot_strided_batched_general
+    category: quick
+    function:
+      - dot_strided_batched: *half_bfloat_single_double_complex_real_precisions
+      - dotc_strided_batched: *single_double_precisions_complex
+    N: *N_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  # ILP-64 tests
+  # - name: dot_64
+  #   category: stress
+  #   function:
+  #     - dot: *single_precision
+  #   arguments:
+  #     - { N: 2147483649, incx:  1, incy:  1 }
+  #     - { N: 2, incx:  2147483649, incy:  1 }
+  #     - { N: 2, incx:  1, incy:  2147483649 }
+  #   api: [ C_64 ]
+  #   os_flags: [ LINUX ]
+  #   gpu_arch: '90a'
+  #   initialization: hpl
+
+  # - name: dot_64
+  #   category: stress
+  #   function:
+  #     - dot_batched: *single_precision
+  #     - dot_strided_batched: *single_precision
+  #   arguments:
+  #     - { N: 2147483649, incx:  1, incy:  1, batch_count: 1 }
+  #     - { N: 2, incx:  2147483649, incy:  1, batch_count: 1 }
+  #     - { N: 2, incx:  1, incy:  2147483649, batch_count: 1 }
+  #     - { N: 2, incx:  1, incy:  1, stride_x: 2, stride_y: 2, batch_count: 666666 }
+  #   api: [ C_64 ]
+  #   os_flags: [ LINUX ]
+  #   gpu_arch: '90a'
+  #   initialization: hpl
+
+  - name: dot_bad_arg
+    category: pre_checkin
+    function:
+      - dot_bad_arg: *single_double_precisions_complex_real
+      - dotc_bad_arg: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: dot_bad_arg
+    category: pre_checkin
+    function:
+      - dot_bad_arg: *single_double_precisions_complex_real
+      - dotc_bad_arg: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+
+  - name: dot_bad_arg
+    category: pre_checkin
+    function:
+      - dot_bad_arg: *half_precision
+      - dot_bad_arg: *bf16_precision
+      - dot_batched_bad_arg: *half_bfloat_single_double_complex_real_precisions
+      - dot_strided_batched_bad_arg: *half_bfloat_single_double_complex_real_precisions
+      - dotc_batched_bad_arg: *single_double_precisions_complex
+      - dotc_strided_batched_bad_arg: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+...

@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025, Advanced Micro Devices, Inc. All rights reserved.
+
+#include "ck/library/tensor_operation_instance/add_device_operation_instance.hpp"
+#include "ck/library/tensor_operation_instance/gpu/grouped_conv_fwd/device_grouped_conv_fwd_xdl_comp_instance.hpp"
+#include "ck/host_utility/device_prop.hpp"
+#include "ck/utility/filter_tuple.hpp"
+
+namespace ck::tensor_operation::device::instance {
+
+using device_grouped_conv2d_fwd_xdl_ngchw_gkcyx_ngkhw_bf16_comp_instances =
+    std::vector<std::unique_ptr<DeviceGroupedConvFwdMultipleABD<2,
+                                                                NGCHW,
+                                                                GKCYX,
+                                                                Empty_Tuple,
+                                                                NGKHW,
+                                                                BF16,
+                                                                BF16,
+                                                                Empty_Tuple,
+                                                                BF16,
+                                                                PassThrough,
+                                                                PassThrough,
+                                                                PassThrough>>>;
+
+// Compilation parameters for in[n, hi, wi, g, c] * wei[g, k, y, x, c] = out[n, ho, wo, g, k]
+template <int Shards, int ShardIndex>
+void add_device_grouped_conv2d_fwd_xdl_ngchw_gkcyx_ngkhw_bf16_comp_instances_shard([[maybe_unused]]
+    device_grouped_conv2d_fwd_xdl_ngchw_gkcyx_ngkhw_bf16_comp_instances& instances)
+{
+    add_device_operation_instances(
+        instances,
+        ck::util::filter_tuple_by_modulo_t<device_grouped_conv_fwd_xdl_bf16_comp_instances<2,
+                                                                                           NGCHW,
+                                                                                           GKCYX,
+                                                                                           Empty_Tuple,
+                                                                                           NGKHW,
+                                                                                           ConvFwdDefault>,
+                                           Shards,
+                                           ShardIndex>{});
+}
+
+} // namespace ck::tensor_operation::device::instance

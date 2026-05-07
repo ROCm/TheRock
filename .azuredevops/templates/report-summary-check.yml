@@ -1,0 +1,147 @@
+parameters:
+- name: checkConclusion
+  type: string
+  default: success
+  values:
+  - success
+  - failure
+  - cancelled
+
+jobs:
+- job: report_summary_check
+  displayName: 'Report check status: ${{ parameters.checkConclusion }}'
+  variables:
+  - group: assistant-librarian
+  pool:
+    vmImage: ubuntu-latest
+  steps:
+  - checkout: none
+  - task: Bash@3
+    displayName: Install GitHub CLI
+    condition: always()
+    inputs:
+      targetType: 'inline'
+      script: |
+        (type -p wget >/dev/null || (sudo apt update && sudo apt install wget -y)) \
+          && sudo mkdir -p -m 755 /etc/apt/keyrings \
+          && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+          && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+          && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+          && sudo mkdir -p -m 755 /etc/apt/sources.list.d \
+          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+          && sudo apt update \
+          && sudo apt install gh jq -y
+  - task: Bash@3
+    displayName: Report CI status to GitHub PR Summary Check
+    condition: always()
+    env:
+      APP_ID: $(APP_ID)
+      APP_INSTALLATION_ID: $(APP_INSTALLATION_ID)
+      APP_PRIVATE_KEY: $(APP_PRIVATE_KEY)
+    inputs:
+      targetType: 'inline'
+      script: |
+        if [[ ! "$(Build.SourceBranch)" =~ ^refs/pull/ ]]; then
+          echo "This is not a PR build. Exiting."
+          exit 0
+        fi
+
+        # APP_PRIVATE_KEY is generated with `base64 app_private_key.pem | tr -d '\n'`
+        echo "$APP_PRIVATE_KEY" | base64 -d > app_private_key.pem
+        chmod 600 app_private_key.pem
+        create_jwt() {
+          local header=$(echo -n '{"alg":"RS256","typ":"JWT"}' | openssl base64 -e | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+          local payload=$(echo -n "{\"iat\":$(date +%s),\"exp\":$(($(date +%s) + 600)),\"iss\":\"$APP_ID\"}" | openssl base64 -e | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+          local unsigned_token="${header}.${payload}"
+          local signature=$(echo -n "$unsigned_token" | openssl dgst -sha256 -sign "app_private_key.pem" | openssl base64 -e | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+          echo "${unsigned_token}.${signature}"
+        }
+        JWT=$(create_jwt)
+        export GH_TOKEN=$(curl -sSX POST \
+          -H "Authorization: Bearer $JWT" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/app/installations/$APP_INSTALLATION_ID/access_tokens" | jq -r .token)
+
+        PR_NUMBER=$(echo "$(Build.SourceBranch)" | sed 's|refs/pull/\([0-9]*\)/.*|\1|')
+        BUILD_ID="$(Build.BuildId)"
+        echo "PR Number: $PR_NUMBER, Build ID: $BUILD_ID"
+
+        # Get the current HEAD SHA
+        PR_HEAD_SHA=$(curl -s -H "Authorization: token $GH_TOKEN" \
+          "https://api.github.com/repos/ROCm/rocm-libraries/pulls/$PR_NUMBER" | jq -r '.head.sha')
+        echo "Current HEAD SHA: $PR_HEAD_SHA"
+
+        # Find the Azure CI Summary check-run on current HEAD
+        # GitHub API returns max 30 check-runs per page, so we paginate for PRs with many checks
+        PAGE=1
+        CHECK=""
+        while true; do
+          echo "Searching for Azure CI Summary (page $PAGE)..."
+          RESPONSE=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/ROCm/rocm-libraries/commits/$PR_HEAD_SHA/check-runs?per_page=100&page=$PAGE")
+          CHECK=$(echo "$RESPONSE" | jq -r '.check_runs[] | select(.name == "Azure CI Summary")')
+          PAGE_COUNT=$(echo "$RESPONSE" | jq '.check_runs | length')
+
+          if [[ -n "$CHECK" ]] || [[ $PAGE_COUNT -eq 0 ]]; then
+            break
+          fi
+          PAGE=$((PAGE + 1))
+          if [[ $PAGE -gt 10 ]]; then
+            echo "Warning: Exceeded 1000 check-runs without finding Azure CI Summary"
+            break
+          fi
+        done
+
+        CHECK_ID=$(echo "$CHECK" | jq -r '.id')
+        CHECK_SUMMARY=$(echo "$CHECK" | jq -r '.output.summary')
+        CHECK_TEXT=$(echo "$CHECK" | jq -r '.output.text')
+
+        if [[ -z "$CHECK_ID" ]]; then
+          echo "No Azure CI Summary check found for commit $PR_HEAD_SHA"
+          exit 0
+        fi
+
+        # Verify this check-run contains our build ID (prevents updating wrong check-run)
+        # This handles the case where a build was cancelled due to a newer commit
+        if [[ "$CHECK_TEXT" != *"$BUILD_ID="* ]]; then
+          echo "Check-run does not contain this build ID ($BUILD_ID)."
+          echo "This build was likely superseded by a newer commit. Exiting gracefully."
+          exit 0
+        fi
+
+        echo "Found check-run ID $CHECK_ID with build ID $BUILD_ID"
+
+        # Update summary and text with this build's status
+        CHECK_SUMMARY=$(echo "$CHECK_SUMMARY" | sed "s/buildId=$BUILD_ID[^|]*|[^|]*|/buildId=$BUILD_ID) | ${{ parameters.checkConclusion }} |/")
+        CHECK_TEXT=$(echo "$CHECK_TEXT" | sed "s/$BUILD_ID=[^;]*;/$BUILD_ID=${{ parameters.checkConclusion }};/")
+
+        CHECK_STATUS=$(echo "$CHECK_TEXT" | grep -q "pending" && echo "in_progress" || echo "completed")
+        CHECK_CONCLUSION=$(echo "$CHECK_TEXT" | grep -q -e "cancelled" -e "failure" && echo "failure" || echo "success")
+
+        if [[ "$CHECK_STATUS" == "completed" ]]; then
+          gh_output=$(gh api repos/ROCm/rocm-libraries/check-runs/$CHECK_ID \
+            -X PATCH \
+            -f "name=Azure CI Summary" \
+            -f "head_sha=$PR_HEAD_SHA" \
+            -f "status=$CHECK_STATUS" \
+            -f "conclusion=$CHECK_CONCLUSION" \
+            -f "output[title]=Azure CI Summary" \
+            -f "output[summary]=$CHECK_SUMMARY" \
+            -f "output[text]=$CHECK_TEXT")
+        else
+          gh_output=$(gh api repos/ROCm/rocm-libraries/check-runs/$CHECK_ID \
+            -X PATCH \
+            -f "name=Azure CI Summary" \
+            -f "head_sha=$PR_HEAD_SHA" \
+            -f "output[title]=Azure CI Summary" \
+            -f "output[summary]=$CHECK_SUMMARY" \
+            -f "output[text]=$CHECK_TEXT")
+        fi
+
+        echo "Reported status '${{ parameters.checkConclusion }}' to summary check: $(echo "$gh_output" | jq -r '.id')"
+        if [[ "$CHECK_STATUS" == "completed" ]]; then
+          echo "All checks completed with overall conclusion: $CHECK_CONCLUSION"
+        else
+          echo "Some checks are still in progress: $CHECK_STATUS"
+        fi
+        echo "Summary check URL: $(echo "$gh_output" | jq -r '.html_url')"

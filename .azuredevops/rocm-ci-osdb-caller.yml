@@ -1,0 +1,58 @@
+pr: none
+trigger:
+  batch: true
+  branches:
+    include:
+      - develop
+  paths:
+    include:
+      - projects/*
+      - shared/*
+
+variables:
+  - group: internal
+  - name: REPOSITORY_NAME
+    value: 'rocm/rocm-libraries'
+  - name: BASE_REF
+    value: 'develop'
+  - name: EVENT_TYPE
+    value: 'push'
+  - name: GH_PAT
+    value: '$(svc_acc_org_secret)'
+
+jobs:
+- job: Trigger_Pipeline
+  displayName: 'Trigger Pipeline'
+  pool: rocm-ci-caller
+  steps:
+  - checkout: none
+  - script: |
+      rm -rf $(repo_name)
+      git clone $(gh_repo)
+    displayName: Checkout Code
+  - script: |
+      echo "Fetching latest commit SHA for 'develop' in rocm/rocm-libraries via git ls-remote"
+      HEAD_SHA=$(git ls-remote https://github.com/rocm/rocm-libraries.git refs/heads/develop | awk '{print $1}')
+      echo "HEAD_SHA=$HEAD_SHA"
+      echo "##vso[task.setvariable variable=HEAD_SHA]$HEAD_SHA"
+    displayName: Get HEAD_SHA using git ls-remote
+  - script: |
+      cd $(repo_name)
+      LOG_FILE="/home/jenkins/azure-logs/$(date +'%Y%m%d_%H%M%S').txt"
+      set -e
+      docker run \
+        -v "$PWD:/src" \
+        -w /src \
+        -e GH_TOKEN="$(svc_acc_org_secret)" \
+        -e svc_acc_org_secret="$(svc_acc_org_secret)" \
+        $(base_image) \
+        bash -c "python3 jenkins_api.py \
+          -ghr '$(REPOSITORY_NAME)' \
+          -ghsha '$(HEAD_SHA)' \
+          -ghpat '$(GH_PAT)' \
+          -br   '$(BASE_REF)' \
+          -et   '$(EVENT_TYPE)'" \
+        | tee "$LOG_FILE" > /dev/null
+    displayName: Invoke jenkins_api.py in Docker
+    env:
+      svc_acc_org_secret: $(svc_acc_org_secret)

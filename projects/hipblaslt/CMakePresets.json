@@ -1,0 +1,141 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "default:release",
+      "displayName": "Configure release build with installation to /opt/rocm",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "/opt/rocm/bin/amdclang++",
+        "CMAKE_C_COMPILER": "/opt/rocm/bin/amdclang",
+        "CMAKE_PREFIX_PATH": "/opt/rocm",
+        "CMAKE_INSTALL_PREFIX": "/opt/rocm",
+        "CMAKE_BUILD_TYPE": "Release",
+        "HIPBLASLT_ENABLE_FETCH": "ON"
+      }
+    },
+    {
+      "name": "tensilelite",
+      "displayName": "TensileLite",
+      "description": "Configures just tensilelite host and client",
+      "inherits": "default:release",
+      "cacheVariables": {
+        "HIPBLASLT_BUILD_TESTING": "OFF",
+        "HIPBLASLT_ENABLE_CLIENT": "OFF",
+        "HIPBLASLT_ENABLE_DEVICE": "OFF",
+        "HIPBLASLT_ENABLE_HOST": "OFF",
+        "HIPBLASLT_ENABLE_MSGPACK": "ON",
+        "HIPBLASLT_ENABLE_LLVM": "ON",
+        "TENSILELITE_ENABLE_CLIENT": "ON",
+        "TENSILELITE_BUILD_TESTING": "OFF",
+        "TENSILELITE_ENABLE_AUTOBUILD": "ON",
+        "HIPBLASLT_ENABLE_ROCROLLER": "OFF"
+      }
+    },
+    {
+      "name": "rocisa",
+      "displayName": "rocisa",
+      "description": "Configures just rocisa",
+      "inherits": "default:release",
+      "cacheVariables": {
+        "HIPBLASLT_BUILD_TESTING": "OFF",
+        "HIPBLASLT_ENABLE_CLIENT": "OFF",
+        "HIPBLASLT_ENABLE_DEVICE": "OFF",
+        "HIPBLASLT_ENABLE_HOST": "OFF",
+        "HIPBLASLT_ENABLE_MSGPACK": "OFF",
+        "HIPBLASLT_ENABLE_LLVM": "OFF",
+        "TENSILELITE_ENABLE_CLIENT": "OFF",
+        "TENSILELITE_ENABLE_HOST": "OFF",
+        "TENSILELITE_BUILD_TESTING": "OFF",
+        "TENSILELITE_ENABLE_AUTOBUILD": "OFF",
+        "HIPBLASLT_ENABLE_ROCROLLER": "OFF"
+      }
+    },
+    {
+      "name": "hipblaslt",
+      "displayName": "hipBLASLt",
+      "description": "Build just the hipblaslt library and required deps",
+      "inherits": "default:release",
+      "cacheVariables": {
+        "HIPBLASLT_ENABLE_HOST": "ON",
+        "HIPBLASLT_ENABLE_DEVICE": "OFF",
+        "HIPBLASLT_ENABLE_CLIENT": "OFF"
+      }
+    },
+    {
+      "name": "gemm-libs",
+      "displayName": "Build gemm libraries",
+      "description": "Configures just tensilelite host and client",
+      "inherits": "default:release",
+      "cacheVariables": {
+        "HIPBLASLT_ENABLE_HOST": "OFF",
+        "HIPBLASLT_ENABLE_DEVICE": "ON",
+        "HIPBLASLT_ENABLE_CLIENT": "OFF",
+        "TENSILELITE_ENABLE_HOST": "OFF",
+        "TENSILELITE_ENABLE_CLIENT": "OFF"
+      }
+    },
+    {
+      "name": "hipblaslt-clients",
+      "displayName": "hipBLASLt Clients",
+      "description": "Configures targets required to build clients",
+      "inherits": "default:release",
+      "cacheVariables": {
+        "HIPBLASLT_ENABLE_HOST": "ON",
+        "HIPBLASLT_ENABLE_DEVICE": "ON",
+        "HIPBLASLT_ENABLE_CLIENT": "ON",
+        "TENSILELITE_ENABLE_HOST": "ON",
+        "TENSILELITE_ENABLE_CLIENT": "OFF",
+        "HIPBLASLT_ENABLE_SAMPLES": "OFF"
+      }
+    },
+    {
+      "name": "rocm-7.0.0",
+      "displayName": "hipblaslt 7.0.0 config",
+      "description": "Configuration command used in 7.0.0 builds",
+      "cacheVariables": {
+        "CMAKE_Fortran_COMPILER": "gfortran",
+        "CMAKE_CXX_COMPILER": "/opt/rocm/bin/amdclang++",
+        "CMAKE_C_COMPILER": "/opt/rocm/bin/amdclang",
+        "CMAKE_PREFIX_PATH": "/opt/rocm-7.0.0/lib/llvm;/opt/rocm-7.0.0",
+        "CMAKE_SHARED_LINKER_FLAGS_INIT": "-Wl,--enable-new-dtags,--build-id=sha1,--rpath,\\$ORIGIN",
+        "CMAKE_EXE_LINKER_FLAGS_INIT": "-Wl,--enable-new-dtags,--build-id=sha1,--rpath,\\$ORIGIN/../lib",
+        "CMAKE_INSTALL_PREFIX": "/opt/rocm-7.0.0",
+        "CMAKE_PACKAGING_INSTALL_PREFIX": "/opt/rocm-7.0.0",
+        "ROCM_SYMLINK_LIBS": "OFF",
+        "ROCM_DISABLE_LDCONFIG": "ON",
+        "CPACK_SET_DESTDIR": "OFF",
+        "CPACK_DEBIAN_DEBUGINFO_PACKAGE": "FALSE",
+        "ROCM_PATH": "/opt/rocm-7.0.0",
+        "CMAKE_BUILD_TYPE": "Release",
+        "HIPBLASLT_ENABLE_FETCH": "ON",
+        "CMAKE_INSTALL_LIBDIR": "lib",
+        "BLA_STATIC": "ON"
+      }
+    },
+    {
+      "name": "rocm-7.0.2",
+      "displayName": "hipblaslt 7.0.2 config",
+      "description": "Configuration command used in 7.0.2 builds",
+      "cacheVariables": {
+        "CMAKE_Fortran_COMPILER": "gfortran",
+        "CMAKE_CXX_COMPILER": "/opt/rocm/bin/amdclang++",
+        "CMAKE_C_COMPILER": "/opt/rocm/bin/amdclang",
+        "CMAKE_PREFIX_PATH": "/opt/rocm-7.0.2/lib/llvm;/opt/rocm-7.0.2",
+        "CMAKE_SHARED_LINKER_FLAGS_INIT": "-Wl,--enable-new-dtags,--build-id=sha1,--rpath,\\$ORIGIN",
+        "CMAKE_EXE_LINKER_FLAGS_INIT": "-Wl,--enable-new-dtags,--build-id=sha1,--rpath,\\$ORIGIN/../lib",
+        "CMAKE_INSTALL_PREFIX": "/opt/rocm-7.0.2",
+        "CMAKE_PACKAGING_INSTALL_PREFIX": "/opt/rocm-7.0.2",
+        "ROCM_SYMLINK_LIBS": "OFF",
+        "ROCM_DISABLE_LDCONFIG": "ON",
+        "CPACK_SET_DESTDIR": "OFF",
+        "CPACK_DEBIAN_DEBUGINFO_PACKAGE": "FALSE",
+        "ROCM_PATH": "/opt/rocm-7.0.2",
+        "CMAKE_BUILD_TYPE": "Release",
+        "HIPBLASLT_ENABLE_FETCH": "ON",
+        "CMAKE_INSTALL_LIBDIR": "lib",
+        "BLA_STATIC": "ON"
+      }
+    }
+  ]
+}

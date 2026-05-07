@@ -1,0 +1,50 @@
+variables:
+- group: common
+- template: /.azuredevops/variables-global.yml@pipelines_repo
+
+parameters:
+- name: pipelinesRepoRef
+  type: string
+  default: refs/heads/develop
+- name: triggerDownstreamJobs
+  type: boolean
+  default: true
+
+resources:
+  repositories:
+  - repository: pipelines_repo
+    type: github
+    endpoint: ROCm
+    name: ROCm/ROCm
+    ref: ${{ parameters.pipelinesRepoRef }}
+
+trigger:
+  batch: true
+  branches:
+    include:
+    - develop
+    - release-staging/rocm-rel-7.*
+  paths:
+    include:
+    - projects/rocprim
+    exclude:
+    - projects/rocprim/.githooks
+    - projects/rocprim/.github
+    - projects/rocprim/.gitlab
+    - projects/rocprim/.jenkins
+    - projects/rocprim/docs
+    - projects/rocprim/.*.y*ml
+    - projects/rocprim/*.md
+    - projects/rocprim/LICENSE.txt
+    - projects/rocprim/NOTICES.txt
+
+pr: none
+
+stages:
+- stage: rocprim
+  jobs:
+  - template: ${{ variables.CI_COMPONENT_PATH }}/rocPRIM.yml@pipelines_repo
+    parameters:
+      sparseCheckoutDir: projects/rocprim
+      triggerDownstreamJobs: ${{ parameters.triggerDownstreamJobs }}
+- template: templates/report-summary-check-wrapper.yml

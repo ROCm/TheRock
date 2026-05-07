@@ -1,0 +1,17 @@
+// Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+// SPDX-License-Identifier: MIT
+
+#include "test_gemm_streamk_common_includes.hpp"
+
+template <typename Tuple>
+class TestCkTileStreamKFp8NonPersistent : public TestCkTileStreamK<Tuple>
+{
+};
+
+#define TEST_SUITE_NAME TestCkTileStreamKFp8NonPersistent
+
+TYPED_TEST_SUITE(TestCkTileStreamKFp8NonPersistent, KernelTypesStreamKFp8NonPersistent);
+
+#include "test_gemm_streamk_smoke_cases.inc"
+
+#undef TEST_SUITE_NAME

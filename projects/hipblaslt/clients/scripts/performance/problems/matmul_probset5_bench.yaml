@@ -1,0 +1,41 @@
+---
+include: ../../../tests/data/hipblaslt_common.yaml
+include: ../../../tests/data/matmul_common.yaml
+
+Definitions:
+Tests:
+- name: test_rvs
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M: 1024, N: 1024, K: 1024 }
+    - { M: 2048, N: 2048, K: 2048 }
+    - { M: 3072, N: 3072, K: 3072 }
+    - { M: 4096, N: 8192, K: 4096 }
+    - { M: 4864, N: 8192, K: 4096 }
+    - { M: 8096, N: 8096, K: 8096 }
+    - { M: 8192, N: 8192, K: 8192 }
+    - { M: 8192, N: 16384, K: 8192 }
+    - { M: 8640, N: 8640, K: 8640 }
+    - { M: 16182, N: 16182, K: 16182 }
+    - { M: 28000, N: 28000, K: 28000 }
+  initialization: trig_float
+  transA: N
+  transB: N
+  iters: 1000
+  cold_iters: 1000
+  rotating: 512
+
+- name: test_rvs_batched
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M: 8640, N: 8640, K: 8640 }
+  initialization: trig_float
+  transA: N
+  transB: N
+  batch_count: 96
+  iters: 1000
+  cold_iters: 1000
+  rotating: 512
+...

@@ -1,0 +1,57 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { M: -1, N: -1, lda: -1 }
+    - { M: 600, N: 500, lda: 700 }
+
+  - &batch_count_range
+    - [ -1, 0, 5 ]
+
+Tests:
+  - name: geqrf_general
+    category: quick
+    function: geqrf
+    precision: *single_double_precisions_complex_real
+    matrix_size: *size_range
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: geqrf_batched_general
+    category: quick
+    function: geqrf_batched
+    precision: *single_double_precisions_complex_real
+    matrix_size: *size_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C ]
+
+  - name: geqrf_strided_batched_general
+    category: quick
+    function: geqrf_strided_batched
+    precision: *single_double_precisions_complex_real
+    matrix_size: *size_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.0 ]
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: geqrf_bad_arg
+    category: quick
+    function:
+      - geqrf_bad_arg
+      - geqrf_batched_bad_arg
+      - geqrf_strided_batched_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: geqrf_bad_arg
+    category: quick
+    function:
+      - geqrf_batched_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+...
