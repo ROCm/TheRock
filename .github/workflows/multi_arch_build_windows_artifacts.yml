@@ -159,6 +159,68 @@ jobs:
             --output-dir="${BUILD_DIR}" \
             --bootstrap
 
+      - name: Validate Windows build path mapping
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Continue"
+          Write-Host "BUILD_DIR=$env:BUILD_DIR"
+          Write-Host "GITHUB_WORKSPACE=$env:GITHUB_WORKSPACE"
+          Write-Host "RUNNER_TEMP=$env:RUNNER_TEMP"
+
+          Write-Host "Drive aliases from subst:"
+          cmd.exe /c subst
+
+          Write-Host "B: volume information:"
+          cmd.exe /c "vol B:"
+          cmd.exe /c "fsutil reparsepoint query B:\build"
+
+          Write-Host "PowerShell path details:"
+          $paths = @(
+            $env:BUILD_DIR,
+            "B:\build",
+            "B:\build\core\clr\dist\lib\llvm\bin\clang++.exe",
+            "B:\build\compiler\amd-llvm\dist\lib\llvm\bin\clang++.exe"
+          )
+          foreach ($path in $paths) {
+            if (Test-Path -LiteralPath $path) {
+              $item = Get-Item -LiteralPath $path -Force
+              [pscustomobject]@{
+                Path = $path
+                Exists = $true
+                FullName = $item.FullName
+                Attributes = [string]$item.Attributes
+                LinkType = $item.LinkType
+                Target = ($item.Target -join ";")
+              } | Format-List
+            } else {
+              [pscustomobject]@{
+                Path = $path
+                Exists = $false
+              } | Format-List
+            }
+          }
+
+          $buildDirForward = $env:BUILD_DIR -replace "\\", "/"
+          $clangPaths = @(
+            "$buildDirForward/core/clr/dist/lib/llvm/bin/clang++.exe",
+            "$buildDirForward/compiler/amd-llvm/dist/lib/llvm/bin/clang++.exe"
+          )
+          foreach ($clangxx in $clangPaths) {
+            Write-Host "Inspecting $clangxx"
+            if (Test-Path -LiteralPath $clangxx -PathType Leaf) {
+              & $clangxx --version
+              Write-Host "resource-dir:"
+              & $clangxx --print-resource-dir
+              Write-Host "compiler-rt builtins:"
+              & $clangxx -print-libgcc-file-name --rtlib=compiler-rt
+            } else {
+              Write-Host "Not present: $clangxx"
+            }
+          }
+
+          exit 0
+
       - name: Fetch sources
         timeout-minutes: 30
         run: python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
