@@ -213,6 +213,7 @@ if(THEROCK_ENABLE_COMPILER)
       # symbols inside libamd_comgr.so, preventing symbol interposition without
       # requiring namespace isolation via dlmopen.
       -DCOMGR_STATIC_LLVM=ON
+      -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       -DTHEROCK_HIP_MAJOR_VERSION=${THEROCK_HIP_MAJOR_VERSION}
       -DTHEROCK_HIP_MINOR_VERSION=${THEROCK_HIP_MINOR_VERSION}
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"

@@ -1213,7 +1213,8 @@ function(therock_cmake_subproject_build_test target_name)
     message(FATAL_ERROR "Empty COMMAND in build tests for '${target_name}'")
   endif()
 
-  set(_build_test_commands)
+  # Generate a runner script that executes all test commands independently,
+  # so a failure in one does not prevent the others from running.
   _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
   set(_runner_script "${_prefix_dir}/build-test-runner.cmake")
   set(_runner_content "set(_any_failed FALSE)\n")
@@ -1246,12 +1247,32 @@ function(therock_cmake_subproject_build_test target_name)
     )
 
     set(_test_command_var "_test_command_${_command_index}")
-    list(APPEND _build_test_commands
-      COMMAND
-        ${_test_log_prefix}
-        "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
-        ${${_test_command_var}}
+    set(_full_cmd
+      ${_test_log_prefix}
+      "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
+      ${${_test_command_var}}
     )
+
+    # Serialize the command list into a quoted string for the script.
+    set(_cmd_str "")
+    foreach(_arg IN LISTS _full_cmd)
+      string(APPEND _cmd_str " \"${_arg}\"")
+    endforeach()
+
+    if(_command_index GREATER 1)
+      string(APPEND _runner_content "message(STATUS \"\")\n")
+    endif()
+    string(APPEND _runner_content "message(STATUS \"----------------------------------------\")\n")
+    string(APPEND _runner_content "message(STATUS \"Running: ${_log_label}\")\n")
+    string(APPEND _runner_content "message(STATUS \"----------------------------------------\")\n")
+    string(APPEND _runner_content "execute_process(\n")
+    string(APPEND _runner_content "  COMMAND${_cmd_str}\n")
+    string(APPEND _runner_content "  WORKING_DIRECTORY \"${_binary_dir}\"\n")
+    string(APPEND _runner_content "  RESULT_VARIABLE _rc${_command_index}\n")
+    string(APPEND _runner_content ")\n")
+    string(APPEND _runner_content "if(_rc${_command_index})\n")
+    string(APPEND _runner_content "  set(_any_failed TRUE)\n")
+    string(APPEND _runner_content "endif()\n\n")
   endforeach()
 
   # Restore TEATIME_FORCE_INTERACTIVE before the summary.
@@ -1297,12 +1318,13 @@ function(therock_cmake_subproject_build_test target_name)
   string(APPEND _runner_content "endif()\n")
 
   file(GENERATE OUTPUT "${_runner_script}" CONTENT "${_runner_content}")
+
   set(_build_stamp_file "${_stamp_dir}/build.stamp")
   set(_build_test_stamp_file "${_stamp_dir}/build-test.stamp")
 
   add_custom_command(
     OUTPUT "${_build_test_stamp_file}"
-    ${_build_test_commands}
+    COMMAND "${CMAKE_COMMAND}" -P "${_runner_script}"
     COMMAND "${CMAKE_COMMAND}" -E touch "${_build_test_stamp_file}"
     WORKING_DIRECTORY "${_binary_dir}"
     COMMENT "Running build tests for sub-project ${target_name}"
