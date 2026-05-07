@@ -98,6 +98,9 @@ jobs:
 
   linux_build_tarballs:
     needs: [setup, linux_build_and_test]
+    permissions:
+      contents: read
+      id-token: write
     if: >-
       ${{
         needs.setup.outputs.linux_build_config != '' &&
