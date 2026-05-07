@@ -340,7 +340,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;TEST_SUBPROJECTS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -512,6 +512,8 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_BUILD_DEPS "${ARG_BUILD_DEPS}"
     # Transitive runtime deps.
     THEROCK_RUNTIME_DEPS "${_transitive_runtime_deps}"
+    # Optional override for test dependencies (subproject names to test when this changes).
+    THEROCK_TEST_SUBPROJECTS "${ARG_TEST_SUBPROJECTS}"
     # Include dirs that this project compiles with.
     THEROCK_PRIVATE_INCLUDE_DIRS "${_private_include_dirs}"
     # Include dirs that are advertised to dependents.
@@ -1147,7 +1149,6 @@ function(therock_cmake_subproject_build_test target_name)
 
   get_target_property(_binary_dir "${target_name}" THEROCK_BINARY_DIR)
   get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
-  get_target_property(_prefix_dir "${target_name}" THEROCK_PREFIX_DIR)
   get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
   get_target_property(_stage_dir "${target_name}" THEROCK_STAGE_DIR)
 
@@ -1211,8 +1212,7 @@ function(therock_cmake_subproject_build_test target_name)
     message(FATAL_ERROR "Empty COMMAND in build tests for '${target_name}'")
   endif()
 
-  # Generate a runner script that executes all test commands independently,
-  # so a failure in one does not prevent the others from running.
+  set(_build_test_commands)
   _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
   set(_runner_script "${_prefix_dir}/build-test-runner.cmake")
   set(_runner_content "set(_any_failed FALSE)\n")
@@ -1245,32 +1245,12 @@ function(therock_cmake_subproject_build_test target_name)
     )
 
     set(_test_command_var "_test_command_${_command_index}")
-    set(_full_cmd
-      ${_test_log_prefix}
-      "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
-      ${${_test_command_var}}
+    list(APPEND _build_test_commands
+      COMMAND
+        ${_test_log_prefix}
+        "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
+        ${${_test_command_var}}
     )
-
-    # Serialize the command list into a quoted string for the script.
-    set(_cmd_str "")
-    foreach(_arg IN LISTS _full_cmd)
-      string(APPEND _cmd_str " \"${_arg}\"")
-    endforeach()
-
-    if(_command_index GREATER 1)
-      string(APPEND _runner_content "message(STATUS \"\")\n")
-    endif()
-    string(APPEND _runner_content "message(STATUS \"----------------------------------------\")\n")
-    string(APPEND _runner_content "message(STATUS \"Running: ${_log_label}\")\n")
-    string(APPEND _runner_content "message(STATUS \"----------------------------------------\")\n")
-    string(APPEND _runner_content "execute_process(\n")
-    string(APPEND _runner_content "  COMMAND${_cmd_str}\n")
-    string(APPEND _runner_content "  WORKING_DIRECTORY \"${_binary_dir}\"\n")
-    string(APPEND _runner_content "  RESULT_VARIABLE _rc${_command_index}\n")
-    string(APPEND _runner_content ")\n")
-    string(APPEND _runner_content "if(_rc${_command_index})\n")
-    string(APPEND _runner_content "  set(_any_failed TRUE)\n")
-    string(APPEND _runner_content "endif()\n\n")
   endforeach()
 
   # Restore TEATIME_FORCE_INTERACTIVE before the summary.
@@ -1316,13 +1296,12 @@ function(therock_cmake_subproject_build_test target_name)
   string(APPEND _runner_content "endif()\n")
 
   file(GENERATE OUTPUT "${_runner_script}" CONTENT "${_runner_content}")
-
   set(_build_stamp_file "${_stamp_dir}/build.stamp")
   set(_build_test_stamp_file "${_stamp_dir}/build-test.stamp")
 
   add_custom_command(
     OUTPUT "${_build_test_stamp_file}"
-    COMMAND "${CMAKE_COMMAND}" -P "${_runner_script}"
+    ${_build_test_commands}
     COMMAND "${CMAKE_COMMAND}" -E touch "${_build_test_stamp_file}"
     WORKING_DIRECTORY "${_binary_dir}"
     COMMENT "Running build tests for sub-project ${target_name}"
