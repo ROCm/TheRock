@@ -646,6 +646,7 @@ def apply_patches(args, projects):
                 "user.email=therockbot@amd.com",
                 "am",
                 "--whitespace=nowarn",
+                "--no-gpg-sign",
             ]
             + patch_files,
             cwd=project_dir,
@@ -885,7 +886,7 @@ def main(argv):
     )
     parser.add_argument(
         "--include-iree-libs",
-        default=False,
+        default=True,
         action=argparse.BooleanOptionalAction,
         help="Include IREE and related libraries",
     )
