@@ -1,0 +1,39 @@
+From 9a84fb7b3a1c1305a66677704a2a31393d21624a Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Thu, 7 May 2026 16:11:40 -0500
+Subject: [PATCH 3/3] [roctracer] Fix ignored hipSetDevice return value in
+ MatrixTranspose_test
+
+hipSetDevice() returns hipError_t with [[nodiscard]], and clang's
+-Werror,-Wunused-value treated the unchecked call as an error. Wrap it
+with the existing CHECK_HIP macro consistent with the neighboring
+hipGetDeviceProperties call.
+---
+ projects/roctracer/test/app/MatrixTranspose_test.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/projects/roctracer/test/app/MatrixTranspose_test.cpp b/projects/roctracer/test/app/MatrixTranspose_test.cpp
+index 4b146255de..0955a0af92 100644
+--- a/projects/roctracer/test/app/MatrixTranspose_test.cpp
++++ b/projects/roctracer/test/app/MatrixTranspose_test.cpp
+@@ -138,7 +138,7 @@ int main() {
+ #if HIP_TEST
+   int gpuCount = 1;
+ #if MGPU_TEST
+-  hipGetDeviceCount(&gpuCount);
++  CHECK_HIP(hipGetDeviceCount(&gpuCount));
+   fprintf(stderr, "Number of GPUs: %d\n", gpuCount);
+ #endif
+   iterations *= gpuCount;
+@@ -150,7 +150,7 @@ int main() {
+ #if HIP_TEST
+     // set GPU
+     const int devIndex = iterations % gpuCount;
+-    hipSetDevice(devIndex);
++    CHECK_HIP(hipSetDevice(devIndex));
+ 
+     hipDeviceProp_t devProp;
+     CHECK_HIP(hipGetDeviceProperties(&devProp, 0));
+-- 
+2.53.0
+
