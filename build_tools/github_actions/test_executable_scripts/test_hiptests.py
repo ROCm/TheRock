@@ -152,6 +152,9 @@ def execute_tests(env):
         f"{timeout}",
     ]
 
+    if AMDGPU_FAMILIES in ['gfx1250']:
+        cmd.append("-L model_1250")
+        
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
         ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
         cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
