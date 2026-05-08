@@ -53,7 +53,13 @@ def collect_pytest_tests(test_dir, marker_expr=None):
             check=True,
         )
     except subprocess.CalledProcessError as e:
-        logging.error(f"Failed to collect tests: {e.stderr}")
+        logging.error(f"Failed to collect tests")
+        logging.error(f"Command: {' '.join(cmd)}")
+        logging.error(f"Exit code: {e.returncode}")
+        if e.stdout:
+            logging.error(f"STDOUT:\n{e.stdout}")
+        if e.stderr:
+            logging.error(f"STDERR:\n{e.stderr}")
         sys.exit(1)
 
     # Parse test IDs from pytest collection output
