@@ -83,6 +83,21 @@ class ExpandAmdgpuFamiliesMainTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             expand_amdgpu_families.main(["--amdgpu-families", "gfxNOPE"])
 
+    def test_main_device_extras_mode(self):
+        out = self._run_and_capture(
+            "--amdgpu-families", "gfx94X-dcgpu", "--output-mode", "device-extras"
+        )
+        # gha_set_output logs extra lines to stdout; the result is the first line.
+        first_line = out.split("\n")[0]
+        self.assertIn("device-gfx942", first_line.split(","))
+        for token in first_line.split(","):
+            self.assertTrue(token.startswith("device-"), token)
+
+    def test_main_targets_mode_is_default(self):
+        out = self._run_and_capture("--amdgpu-families", "gfx94X-dcgpu")
+        self.assertIn("gfx942", out.split(","))
+        self.assertNotIn("device-", out)
+
 
 if __name__ == "__main__":
     unittest.main()
