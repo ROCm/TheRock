@@ -78,7 +78,7 @@ jobs:
       id-token: write
 
   ci_summary:
-    name: CI ASAN Summary
+    name: CI Summary
     if: always()
     needs:
       - setup
