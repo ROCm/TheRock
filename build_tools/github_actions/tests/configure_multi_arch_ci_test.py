@@ -238,6 +238,42 @@ class TestShouldSkipCI(unittest.TestCase):
         self.assertFalse(cm.should_skip_ci(inputs, git))
         mock_filter.assert_not_called()
 
+    def test_asan_pr_without_submodule_change_skips(self):
+        """ASAN PR without submodule changes skips CI."""
+        inputs = self._inputs(build_variant="asan", pr_labels=[])
+        git = cm.GitContext(
+            changed_files=["CMakeLists.txt", "build_tools/script.py"],
+            submodule_paths=["external/rocm-libraries", "external/rocm-systems"],
+        )
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_asan_pr_with_submodule_change_runs(self):
+        """ASAN PR with submodule changes runs CI."""
+        inputs = self._inputs(build_variant="asan", pr_labels=[])
+        git = cm.GitContext(
+            changed_files=["external/rocm-libraries", "CMakeLists.txt"],
+            submodule_paths=["external/rocm-libraries", "external/rocm-systems"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_asan_non_pr_runs_regardless_of_submodule(self):
+        """ASAN on schedule/push runs regardless of submodule changes."""
+        inputs = self._inputs(event_name="schedule", build_variant="asan")
+        git = cm.GitContext(
+            changed_files=None,
+            submodule_paths=["external/rocm-libraries"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_release_pr_without_submodule_change_runs(self):
+        """Release variant PR without submodule changes still runs (not skipped)."""
+        inputs = self._inputs(build_variant="release", pr_labels=[])
+        git = cm.GitContext(
+            changed_files=["CMakeLists.txt"],
+            submodule_paths=["external/rocm-libraries"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
 
 # ---------------------------------------------------------------------------
 # Step 3: Decide Jobs
