@@ -78,7 +78,7 @@ jobs:
       id-token: write
 
   ci_summary:
-    name: CI Summary
+    name: CI ASAN Summary
     if: always()
     needs:
       - setup
@@ -91,6 +91,4 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python build_tools/github_actions/workflow_summary.py \
-            --workflow-name="${{ github.workflow }}" \
-            --run-id="${{ github.run_id }}" \
-            --run-attempt="${{ github.run_attempt }}"
+            --needs-json '${{ toJSON(needs) }}'
