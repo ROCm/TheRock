@@ -243,7 +243,7 @@ class TestShouldSkipCI(unittest.TestCase):
         inputs = self._inputs(build_variant="asan", pr_labels=[])
         git = cm.GitContext(
             changed_files=["CMakeLists.txt", "build_tools/script.py"],
-            submodule_paths=["external/rocm-libraries", "external/rocm-systems"],
+            submodule_paths=["rocm-libraries", "rocm-systems"],
         )
         self.assertTrue(cm.should_skip_ci(inputs, git))
 
@@ -251,8 +251,8 @@ class TestShouldSkipCI(unittest.TestCase):
         """ASAN PR with submodule changes runs CI."""
         inputs = self._inputs(build_variant="asan", pr_labels=[])
         git = cm.GitContext(
-            changed_files=["external/rocm-libraries", "CMakeLists.txt"],
-            submodule_paths=["external/rocm-libraries", "external/rocm-systems"],
+            changed_files=["rocm-libraries", "CMakeLists.txt"],
+            submodule_paths=["rocm-libraries", "rocm-systems"],
         )
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
@@ -261,7 +261,7 @@ class TestShouldSkipCI(unittest.TestCase):
         inputs = self._inputs(event_name="schedule", build_variant="asan")
         git = cm.GitContext(
             changed_files=None,
-            submodule_paths=["external/rocm-libraries"],
+            submodule_paths=["rocm-libraries"],
         )
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
@@ -270,7 +270,7 @@ class TestShouldSkipCI(unittest.TestCase):
         inputs = self._inputs(build_variant="release", pr_labels=[])
         git = cm.GitContext(
             changed_files=["CMakeLists.txt"],
-            submodule_paths=["external/rocm-libraries"],
+            submodule_paths=["rocm-libraries"],
         )
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
