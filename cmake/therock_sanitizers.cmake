@@ -59,10 +59,12 @@ function(therock_sanitizer_configure
     string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
 
     # For autotools-based builds (like rocgdb) that use CMAKE_*_LINKER_FLAGS directly,
-    # always include -fsanitize=<sanitizer> for linking. Also add -shared-libsan since
-    # we know we are dealing with a non-system compiler.
-    string(APPEND _stanza "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -fsanitize=${_sanitizer_string} -shared-libsan\")\n")
-    string(APPEND _stanza "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -fsanitize=${_sanitizer_string} -shared-libsan\")\n")
+    # include -fsanitize=<sanitizer> for linking. Do not append -shared-libsan here: those
+    # flags apply to every link (including CMake's Fortran compiler probe with gfortran),
+    # and -shared-libsan is Clang-only (ROCM-24371). C/C++ still get -shared-libsan from
+    # add_link_options() above when using Clang.
+    string(APPEND _stanza "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -fsanitize=${_sanitizer_string}\")\n")
+    string(APPEND _stanza "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -fsanitize=${_sanitizer_string}\")\n")
 
     # Device-side ASAN: Only for full ASAN mode, not HOST_ASAN.
     # Filter GPU_TARGETS to enable xnack+ mode only for gfx targets that support it.
