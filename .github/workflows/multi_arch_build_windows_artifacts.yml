@@ -76,7 +76,7 @@ jobs:
     env:
       STAGE_NAME: ${{ inputs.stage_name }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
-      BUILD_DIR: B:\build
+      BUILD_DIR: D:\build
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       CACHE_DIR: ${{ github.workspace }}/.cache
       TEATIME_FORCE_INTERACTIVE: 0
@@ -84,6 +84,16 @@ jobs:
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
 
     steps:
+      # Map B:\build to a stable drive letter via subst. B:\ is a volume mount
+      # to C:\{GUID}\ where the GUID changes per runner VM. Clang resolves
+      # paths through the mount, embedding the GUID in include paths, which
+      # defeats ccache (entries become runner-specific). subst is transparent
+      # to path resolution, so D:\build paths stay as D:\build in ccache
+      # manifests regardless of which runner executes the job.
+      - name: Stabilize build drive path
+        shell: cmd
+        run: "subst D: B:\\"
+
       # Enable git longpaths before checkout (needed for external repos with long paths)
       - name: Enable git longpaths
         if: ${{ inputs.external_repo_config != '' }}
