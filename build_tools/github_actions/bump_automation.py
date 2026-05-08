@@ -3,13 +3,17 @@
 # SPDX-License-Identifier: MIT
 
 import argparse
+import json
+import os
+import re
 import subprocess
 import tempfile
-import os
 from datetime import datetime
 import requests
 
 THEROCK_REPO = "ROCm/TheRock"
+
+_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 ROCM_SYSTEMS_FILES = [
     ".github/workflows/therock-ci-linux.yml",
@@ -83,9 +87,9 @@ def latest_commit(repo, token):
     return data[0]["sha"]
 
 
-def generate_pr_body(repo, base, head):
+def generate_pr_body(repo, base, head, propagated=None):
     compare = f"https://github.com/{repo}/compare/{base}...{head}"
-    return f"""
+    body = f"""
 Bumps [{repo}](https://github.com/{repo}) from `{base[:7]}` to `{head[:7]}`.
 
 <details>
@@ -98,6 +102,22 @@ See full comparison here:
 </details>
 <br />
 """
+    if propagated:
+        body += "\n**Propagated from `dep_overrides.json`:**\n\n"
+        for name, old, new in propagated:
+            url = run(
+                [
+                    "git",
+                    "config",
+                    "--file",
+                    ".gitmodules",
+                    "--get",
+                    f"submodule.{name}.url",
+                ]
+            )
+            compare_url = url.removesuffix(".git") + f"/compare/{old}...{new}"
+            body += f"- [{name}]({compare_url}): `{old[:7]}` to `{new[:7]}`\n"
+    return body
 
 
 def update_ref_in_file(file_path, new_sha):
@@ -183,6 +203,81 @@ def close_stale_prs(submodule, old_sha, systems_token):
             )
 
 
+def propagate_submodule_overrides(rocm_libraries_path):
+    """Read <rocm_libraries_path>/dep_overrides.json and update TheRock submodule
+    pointers to match.
+
+    Returns a list of (project_name, old_sha, new_sha) per propagated
+    submodule. No-op matches with TheRock's current pin are excluded from the
+    list (not errors).
+    """
+    overrides_path = os.path.join(rocm_libraries_path, "dep_overrides.json")
+    if not os.path.exists(overrides_path):
+        raise FileNotFoundError(f"dep_overrides.json not found: {overrides_path}")
+
+    try:
+        with open(overrides_path) as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{overrides_path}: malformed JSON: {e}") from e
+
+    overrides = data.get("submodule_overrides")
+    if not isinstance(overrides, dict):
+        raise ValueError(
+            f"{overrides_path}: top-level 'submodule_overrides' must be an object"
+        )
+
+    result = []
+    for project_name, target_sha in overrides.items():
+        if not isinstance(target_sha, str) or not _SHA_RE.match(target_sha):
+            raise ValueError(
+                f"{overrides_path}: invalid SHA for {project_name!r}: {target_sha!r}. "
+                f"Expected 40-char lowercase hex."
+            )
+        if project_name == "rocm-libraries":
+            raise ValueError(
+                f"{overrides_path}: 'rocm-libraries' self-entry is not allowed in submodule_overrides"
+            )
+        try:
+            target_path = run(
+                [
+                    "git",
+                    "config",
+                    "--file",
+                    ".gitmodules",
+                    "--get",
+                    f"submodule.{project_name}.path",
+                ]
+            )
+        except RuntimeError:
+            raise ValueError(
+                f"{overrides_path}: unknown project name {project_name!r} "
+                f"(no matching submodule.<name> entry in .gitmodules)"
+            )
+
+        if not os.path.exists(os.path.join(target_path, ".git")):
+            run(["git", "submodule", "update", "--init", "--depth", "1", target_path])
+
+        current_sha = get_submodule_sha("HEAD", target_path)
+        if current_sha == target_sha:
+            print(
+                f"[INFO] propagate no-op: {project_name} ({target_path}) "
+                f"already at {target_sha[:7]}"
+            )
+            continue
+
+        print(
+            f"[INFO] propagate: {project_name} ({target_path}) "
+            f"{current_sha[:7]} to {target_sha[:7]}"
+        )
+        run(["git", "-C", target_path, "fetch", "--depth=1", "origin", target_sha])
+        run(["git", "-C", target_path, "checkout", "--detach", target_sha])
+        run(["git", "add", target_path])
+        result.append((project_name, current_sha, target_sha))
+
+    return result
+
+
 def create_therock_bump(submodule, token):
     """Create a bump PR for the given submodule in TheRock."""
     repo = SUBMODULE_CONFIG[submodule]["repo"]
@@ -220,9 +315,19 @@ def create_therock_bump(submodule, token):
         # Stage the submodule change
         run(["git", "add", sub_path])
 
+        # Propagate dep_overrides.json from rocm-libraries into TheRock's
+        # submodule pins.
+        propagated = []
+        if submodule == "rocm-libraries":
+            propagated = propagate_submodule_overrides(sub_path)
+
         # Commit and push
-        title = f"Bump {submodule} from {current_sha[:7]} to {latest[:7]}"
-        body = generate_pr_body(repo, current_sha, latest)
+        title_parts = [f"Bump {submodule} from {current_sha[:7]} to {latest[:7]}"]
+        for name, old, new in propagated:
+            title_parts.append(f"bump {name} from {old[:7]} to {new[:7]}")
+        title = ", ".join(title_parts)
+
+        body = generate_pr_body(repo, current_sha, latest, propagated)
         run(
             [
                 "git",
