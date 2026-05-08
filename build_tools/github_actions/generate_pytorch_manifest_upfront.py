@@ -59,6 +59,8 @@ class RepoConfig:
     # When set, stable builds resolve from related_commits; when None,
     # the repo uses custom resolution logic (pytorch itself, triton).
     related_commits_key: str | None = None
+    # Platforms this repo is excluded from. Empty means all platforms.
+    exclude_platforms: tuple[str, ...] = ()
 
 
 REPOS: dict[str, RepoConfig] = {
@@ -92,6 +94,7 @@ REPOS: dict[str, RepoConfig] = {
         nightly_branch="master",
         version_file="version.txt",
         related_commits_key="apex",
+        exclude_platforms=("windows",),
     ),
 }
 
@@ -125,18 +128,30 @@ def _parse_related_commits(content: str) -> dict[str, dict[str, str]]:
 
 
 def _resolve_triton(
-    pytorch_repo: str, pytorch_sha: str, *, nightly: bool, version_suffix: str
+    pytorch_repo: str,
+    pytorch_sha: str,
+    *,
+    nightly: bool,
+    version_suffix: str,
+    platform: str,
 ) -> GitSourceInfo:
     """Resolve triton commit and version from pytorch's pin files.
 
-    The triton base version lives in pytorch's ``.ci/docker/triton_version.txt``,
-    not in the triton repo itself. The commit pin comes from
-    ``ci_commit_pins/triton.txt`` (stable) or is derived from the version
-    (nightly).
+    The triton base version lives in pytorch's ``.ci/docker/triton_version.txt``.
+    On Linux the commit comes from ``ci_commit_pins/triton.txt``; on Windows
+    from ``ci_commit_pins/triton-windows.txt`` using a different repo.
     """
-    triton_repo = (
-        REPOS["triton"].nightly_repo if nightly else REPOS["triton"].stable_repo
-    )
+    is_windows = platform == "windows"
+
+    if is_windows:
+        triton_repo = "triton-lang/triton-windows"
+        pin_file = ".ci/docker/ci_commit_pins/triton-windows.txt"
+        fallback_branch = "main-windows"
+    else:
+        config = REPOS["triton"]
+        triton_repo = config.nightly_repo if nightly else config.stable_repo
+        pin_file = ".ci/docker/ci_commit_pins/triton.txt"
+        fallback_branch = None
 
     # Base version is always in pytorch's triton_version.txt.
     base_version = gha_fetch_file_contents(
@@ -145,7 +160,7 @@ def _resolve_triton(
     version = f"{base_version}{version_suffix}"
     log(f"  triton: {base_version} -> {version}")
 
-    if nightly:
+    if not is_windows and nightly:
         major, minor, *_ = base_version.split(".")
         branch = f"release/{major}.{minor}.x"
         sha = _resolve_ref(triton_repo, branch)
@@ -156,19 +171,31 @@ def _resolve_triton(
             version=version,
         )
 
-    # Stable: use ci_commit_pins
-    pin = gha_fetch_file_contents(
-        pytorch_repo, ".ci/docker/ci_commit_pins/triton.txt", pytorch_sha
-    ).strip()
-    log(f"  triton pin: {pin[:12]}")
-    return GitSourceInfo(
-        commit=pin,
-        repo=f"https://github.com/{triton_repo}.git",
-        version=version,
-    )
+    # Stable (both platforms) or Windows nightly: use ci_commit_pins.
+    try:
+        pin = gha_fetch_file_contents(pytorch_repo, pin_file, pytorch_sha).strip()
+        log(f"  triton pin: {pin[:12]}")
+        return GitSourceInfo(
+            commit=pin,
+            repo=f"https://github.com/{triton_repo}.git",
+            version=version,
+        )
+    except Exception:
+        if fallback_branch:
+            log(f"  triton: no pin file, falling back to {fallback_branch}")
+            sha = _resolve_ref(triton_repo, fallback_branch)
+            return GitSourceInfo(
+                commit=sha,
+                repo=f"https://github.com/{triton_repo}.git",
+                branch=fallback_branch,
+                version=version,
+            )
+        raise
 
 
-def resolve_sources(pytorch_ref: str, version_suffix: str) -> dict[str, GitSourceInfo]:
+def resolve_sources(
+    pytorch_ref: str, version_suffix: str, platform: str
+) -> dict[str, GitSourceInfo]:
     """Resolve all source commits for a given pytorch_git_ref."""
     nightly = pytorch_ref == "nightly"
     sources: dict[str, GitSourceInfo] = {}
@@ -199,6 +226,9 @@ def resolve_sources(pytorch_ref: str, version_suffix: str) -> dict[str, GitSourc
         if name == "pytorch":
             continue
 
+        if platform in config.exclude_platforms:
+            continue
+
         # Triton has its own pin mechanism.
         if name == "triton":
             sources[name] = _resolve_triton(
@@ -206,6 +236,7 @@ def resolve_sources(pytorch_ref: str, version_suffix: str) -> dict[str, GitSourc
                 pytorch_sha,
                 nightly=nightly,
                 version_suffix=version_suffix,
+                platform=platform,
             )
             continue
 
@@ -259,14 +290,15 @@ def generate_manifest(
     pytorch_git_ref: str,
     rocm_version: str,
     version_suffix: str,
+    platform: str,
     therock_commit: str,
     therock_repo: str,
     therock_branch: str,
 ) -> dict[str, object]:
     """Generate a single manifest for one pytorch_git_ref."""
-    log(f"Generating manifest for {pytorch_git_ref}")
+    log(f"Generating manifest for {pytorch_git_ref} ({platform})")
 
-    sources = resolve_sources(pytorch_git_ref, version_suffix)
+    sources = resolve_sources(pytorch_git_ref, version_suffix, platform)
     sources = fetch_versions(sources, version_suffix)
 
     manifest: dict[str, object] = {
@@ -289,6 +321,12 @@ def main(argv: list[str]) -> None:
     parser.add_argument("--rocm-version", required=True, help="e.g. 7.13.0a20260501")
     parser.add_argument(
         "--version-suffix", required=True, help="e.g. +rocm7.13.0a20260501"
+    )
+    parser.add_argument(
+        "--platform",
+        choices=["linux", "windows"],
+        default="linux",
+        help="Target platform (affects repo selection and exclusions)",
     )
     parser.add_argument("--manifest-dir", type=Path, required=True)
     parser.add_argument(
@@ -321,6 +359,7 @@ def main(argv: list[str]) -> None:
     therock_branch = args.therock_branch or therock_info.branch
 
     log(f"ROCm version: {args.rocm_version}, suffix: {args.version_suffix}")
+    log(f"Platform: {args.platform}")
     log(f"TheRock: {therock_commit[:12]} ({therock_branch})")
     log(f"PyTorch refs: {refs}")
     log("")
@@ -332,11 +371,12 @@ def main(argv: list[str]) -> None:
             pytorch_git_ref=ref,
             rocm_version=args.rocm_version,
             version_suffix=args.version_suffix,
+            platform=args.platform,
             therock_commit=therock_commit,
             therock_repo=therock_repo,
             therock_branch=therock_branch,
         )
-        filename = f"therock-manifest_torch_{normalize_ref_for_filename(ref)}.json"
+        filename = f"therock-manifest_torch_{args.platform}_{normalize_ref_for_filename(ref)}.json"
         out_path = args.manifest_dir / filename
         out_path.write_text(
             json.dumps(manifest, indent=2, sort_keys=False) + "\n", encoding="utf-8"
