@@ -58,6 +58,10 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package, fetch_sources_args)"
+        type: string
+        default: ""
 
 jobs:
   build_stage:
@@ -77,13 +81,27 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.cache
       TEATIME_FORCE_INTERACTIVE: 0
       RELEASE_TYPE: ${{ inputs.release_type }}
+      EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
 
     steps:
+      # Enable git longpaths before checkout (needed for external repos with long paths)
+      - name: Enable git longpaths
+        if: ${{ inputs.external_repo_config != '' }}
+        run: git config --system core.longpaths true
+
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
+
+      - name: Checkout external repository
+        if: ${{ inputs.external_repo_config != '' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ fromJSON(inputs.external_repo_config).repository }}
+          ref: ${{ fromJSON(inputs.external_repo_config).ref }}
+          path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
@@ -143,7 +161,7 @@ jobs:
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
+        run: python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
 
       - name: Get stage configuration
         id: stage_config
@@ -165,6 +183,7 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
