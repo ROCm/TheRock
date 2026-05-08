@@ -28,6 +28,14 @@ on:
         description: ROCm package version to install and build against.
         type: string
         required: true
+      s3_subdir:
+        description: S3 subdirectory, not including the GPU-family.
+        type: string
+        default: "v2"
+      s3_staging_subdir:
+        description: Staging subdirectory to push the wheels for test.
+        type: string
+        default: "v2-staging"
       tar_url:
         description: URL to the TheRock tarball to build against.
         type: string
@@ -76,6 +84,14 @@ on:
         description: ROCm package version to install and build against.
         type: string
         required: true
+      s3_subdir:
+        description: S3 subdirectory, not including the GPU-family.
+        type: string
+        default: "v2"
+      s3_staging_subdir:
+        description: Staging subdirectory to push the wheels for test.
+        type: string
+        default: "v2-staging"
       tar_url:
         description: URL to the TheRock tarball to build against.
         type: string
@@ -106,7 +122,8 @@ run-name: Multi-Arch Release Linux JAX Wheels (${{ inputs.amdgpu_family }}, ${{ 
 
 jobs:
   build_jax_wheels:
-    name: Build JAX Wheels | py ${{ matrix.python_version }} | jax ${{ matrix.jax_ref }}
+    name: Build Linux JAX Wheels (${{ inputs.amdgpu_family }}, ${{ matrix.python_version }}, ${{ inputs.release_type }})
+
     strategy:
       fail-fast: false
       matrix:
