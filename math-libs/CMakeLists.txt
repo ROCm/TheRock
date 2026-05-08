@@ -507,6 +507,7 @@ if(THEROCK_ENABLE_HIPTENSOR)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DHIPTENSOR_BUILD_TESTS=$<BOOL:${THEROCK_BUILD_TESTING}>"
+      -DHIPTENSOR_USE_SYSTEM_GOOGLETEST=ON # Use therock-googletest
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
