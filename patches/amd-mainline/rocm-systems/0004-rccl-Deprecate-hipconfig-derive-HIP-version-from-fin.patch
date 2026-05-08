@@ -1,0 +1,40 @@
+From 4d0c1ed6c362b20a34793f17f48c25d9f2e1a8f0 Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Fri, 8 May 2026 15:27:08 -0500
+Subject: [PATCH] [rccl] Deprecate hipconfig: derive HIP version from
+ find_package(hip)
+
+Replace the hipconfig -v call used to populate hip_version_string with
+hip_VERSION, which is already set by the find_package(hip REQUIRED) call
+above. hipconfig is being deprecated in favor of CMake-native HIP
+introspection.
+
+Without this change, when hipconfig is absent from the dist, the version
+string is empty, causing rccl to incorrectly fall into the legacy
+--hipcc-func-supp code path, which fails with amdclang++ since that flag
+is hipcc-specific and not recognized by clang directly.
+---
+ projects/rccl/CMakeLists.txt | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/projects/rccl/CMakeLists.txt b/projects/rccl/CMakeLists.txt
+index 52062e7051..e7fafb1ad9 100644
+--- a/projects/rccl/CMakeLists.txt
++++ b/projects/rccl/CMakeLists.txt
+@@ -250,11 +250,8 @@ execute_process(
+ message(STATUS "${COMPILER_EXE_NAME} version:    ${compiler_version_string}")
+ 
+ ## Check for HIP version
+-find_program(hipconfig_executable hipconfig)
+-message(STATUS "hipconfig executable: ${hipconfig_executable}")
+-execute_process(
+-  COMMAND         bash "-c" "${hipconfig_executable} -v | awk -F\"-\" '{ printf $1 }'"
+-  OUTPUT_VARIABLE hip_version_string)
++# Use hip_VERSION from find_package(hip) above instead of hipconfig (deprecated).
++string(REGEX MATCH "^([0-9]+\\.[0-9]+\\.[0-9]+)" hip_version_string "${hip_VERSION}")
+ message(STATUS "${COMPILER_EXE_NAME} HIP version:    ${hip_version_string}")
+ 
+ ## Check for ROCm version
+-- 
+2.53.0
+
