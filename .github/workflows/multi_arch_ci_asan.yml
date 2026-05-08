@@ -4,6 +4,13 @@
 name: Multi-Arch CI ASAN
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      # Trigger ASAN build (no tests) on submodule bumps
+      - rocm-systems
+      - rocm-libraries
   schedule:
     # Runs at 02:00 AM UTC, which is 7:00 PM PST (UTC-8)
     - cron: '0 02 * * *'
