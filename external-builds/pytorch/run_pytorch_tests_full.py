@@ -134,6 +134,7 @@ def disable_distributed_stepcurrent_retries(pytorch_dir: Path) -> None:
         raise RuntimeError("Could not disable distributed stepcurrent retries")
     run_test_path.write_text(text.replace(old, new, 1))
 
+
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
 # The inductor config requires TWO separate run_test.py invocations:
 #   1. Generic tests run with --inductor (sets PYTORCH_TEST_WITH_INDUCTOR=1)
