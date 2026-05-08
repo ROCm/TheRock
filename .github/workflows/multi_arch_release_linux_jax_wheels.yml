@@ -9,7 +9,7 @@
 #   - build directly from a TheRock tarball
 #   - upload wheels to the release staging bucket
 #
-# Triggered via workflow_call from multi_arch_release_linux.yml's 
+# Triggered via workflow_call from multi_arch_release_linux.yml's
 # build_jax_wheels job, and can also be run manually via workflow_dispatch.
 #
 # Build phase only: testing and promotion are deferred follow-ups.
