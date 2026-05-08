@@ -1064,7 +1064,16 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 def main():
     ci_inputs = CIInputs.from_environ()
 
-    if ci_inputs.is_pull_request or ci_inputs.is_push:
+    # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
+    # The "run everything" is initial state for superrepo multi-arch CI migration.
+    # We will eventually support path filtering and component selection.
+    # TODO: Provide custom decision logic to run specific components and paths
+    skip_path_filters = os.environ.get("SKIP_PATH_FILTERS", "").lower() == "true"
+
+    if skip_path_filters:
+        # External repo: skip path filtering, run everything
+        git_context = GitContext.empty()
+    elif ci_inputs.is_pull_request or ci_inputs.is_push:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
         git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)

@@ -49,12 +49,12 @@ import os
 import platform as platform_module
 import shutil
 import sys
-import tarfile
 import threading
 import time
 from pathlib import Path
 from typing import List, Optional, Set
 
+from _therock_utils.archive_util import open_archive_for_read
 from _therock_utils.os_util import rmtree_with_retry
 from _therock_utils.cmake_amdgpu_targets import (
     amdgpu_family_map,
@@ -83,31 +83,6 @@ def log(msg: str):
 def _delay_for_retry(seconds: float):
     """Sleep for retry delay. Mockable for testing."""
     time.sleep(seconds)
-
-
-def _get_pyzstd():
-    """Lazy import pyzstd with helpful error message."""
-    try:
-        import pyzstd
-
-        return pyzstd
-    except ModuleNotFoundError:
-        raise ModuleNotFoundError(
-            "pyzstd is required for zstd artifact decompression. "
-            "Install it with: pip install pyzstd"
-        )
-
-
-def _open_archive_for_read(path: Path) -> tarfile.TarFile:
-    """Open a tar archive for reading, auto-detecting compression type."""
-    if path.name.endswith(".tar.zst"):
-        pyzstd = _get_pyzstd()
-        zstd_file = pyzstd.ZstdFile(path, mode="rb")
-        return tarfile.TarFile(fileobj=zstd_file, mode="r")
-    elif path.name.endswith(".tar.xz"):
-        return tarfile.TarFile.open(path, mode="r:xz")
-    else:
-        raise ValueError(f"Unknown archive format: {path}")
 
 
 def get_default_topology_path() -> Path:
@@ -320,7 +295,7 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
             if output_dir.exists():
                 rmtree_with_retry(output_dir)
             log(f"  ++ Extracting {archive_path.name}")
-            with _open_archive_for_read(archive_path) as tf:
+            with open_archive_for_read(archive_path) as tf:
                 tf.extractall(output_dir, filter="tar")
 
         if request.delete_archive:

@@ -170,7 +170,7 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "windows-gfx110X-gpu-rocm",
                     },
-                    "fetch-gfx-targets": ["gfx1100", "gfx1101"],
+                    "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -378,13 +378,12 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-                    # fetch-gfx-targets should be ["gfx1200", "gfx1201"] when re-enabled
+                    # TODO(#2962): Re-enable run_tests once sanity checks work with this architecture.
                     "run_tests": False,
                     "runs_on": {
                         "test": "windows-gfx120X-gpu-rocm",
                     },
-                    "fetch-gfx-targets": [],
+                    "fetch-gfx-targets": ["gfx1200", "gfx1201"],
                 },
                 "release": {
                     "push_on_success": True,
