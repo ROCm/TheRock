@@ -17,8 +17,10 @@
 import argparse
 import concurrent.futures
 import hashlib
+import json
 from pathlib import Path
 import platform
+import re
 import shlex
 import shutil
 import subprocess
@@ -120,6 +122,90 @@ def _get_submodule_url_map() -> dict[str, str]:
         except subprocess.CalledProcessError:
             continue
     return path_to_url
+
+
+_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def load_submodule_overrides(
+    args: argparse.Namespace, projects: list[str]
+) -> dict[str, str]:
+    """Load --override-file into a project-name -> 40-char SHA dict.
+
+    Returns {} when --override-file is not set. Entries whose project is not in
+    the current run's projects (e.g. a stage that doesn't fetch that project)
+    are skipped.
+    """
+    if args.override_file is None:
+        return {}
+
+    path: Path = args.override_file
+    if not path.exists():
+        raise FileNotFoundError(f"--override-file not found: {path}")
+
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        raise ValueError(f"--override-file {path}: malformed JSON: {e}") from e
+
+    overrides = data.get("submodule_overrides")
+    if not isinstance(overrides, dict):
+        raise ValueError(
+            f"--override-file {path}: top-level 'submodule_overrides' must be an object"
+        )
+
+    projects_set = set(projects)
+    result: dict[str, str] = {}
+    for key, value in overrides.items():
+        if not isinstance(value, str) or not _SHA_RE.match(value):
+            raise ValueError(
+                f"--override-file {path}: invalid SHA for {key!r}: {value!r}. "
+                f"Expected 40-char lowercase hex."
+            )
+        if key not in projects_set:
+            log(f"Override skip: {key!r} not in this run's projects")
+            continue
+        result[key] = value
+
+    return result
+
+
+def apply_submodule_overrides(args: argparse.Namespace, projects: list[str]) -> None:
+    """Switch each in-scope submodule to its override SHA via fetch + checkout.
+
+    For each (project_name, sha) returned by load_submodule_overrides:
+      - skip if the submodule HEAD is already at the override SHA
+      - otherwise: git fetch --depth=1 origin <sha> (with full-fetch fallback)
+                   + git checkout --detach <sha>
+    """
+    overrides = load_submodule_overrides(args, projects)
+    if not overrides:
+        return
+
+    for project_name, sha in overrides.items():
+        sub_path = get_submodule_path(project_name)
+
+        orig_sha = (
+            subprocess.check_output(
+                ["git", "-C", sub_path, "rev-parse", "HEAD"],
+                cwd=str(THEROCK_DIR),
+            )
+            .decode()
+            .strip()
+        )
+        if orig_sha == sha:
+            log(f"Override no-op: {project_name} ({sub_path}) already at {sha[:7]}")
+            continue
+
+        log(f"Override: {project_name} ({sub_path}) {orig_sha[:7]} -> {sha[:7]}")
+        run_command(
+            ["git", "-C", sub_path, "fetch", "--depth=1", "origin", sha],
+            cwd=THEROCK_DIR,
+        )
+        run_command(
+            ["git", "-C", sub_path, "checkout", "--detach", sha],
+            cwd=THEROCK_DIR,
+        )
 
 
 def _submodule_is_initialized(submodule_path: str) -> bool:
@@ -553,6 +639,11 @@ def run(args):
     if args.dvc_projects:
         pull_large_files(args.dvc_projects, projects)
 
+    # Apply --override-file overrides BEFORE nested-submodule init,
+    # so nested submodules track the override SHA's .gitmodules.
+    if args.update_submodules:
+        apply_submodule_overrides(args, projects)
+
     # Fetch nested submodules
     if args.update_submodules:
         fetch_nested_submodules(args, projects)
@@ -782,6 +873,21 @@ def main(argv):
             "setup_git_mirrors.py). Submodule clones will use --reference "
             "to read objects locally instead of over the network. "
             f"Also reads from ${MIRROR_DIR_ENV} environment variable."
+        ),
+    )
+
+    # Submodule SHA overrides (e.g., for rocm-libraries CI to drive iree/fusilli pins)
+    parser.add_argument(
+        "--override-file",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a JSON file with submodule SHA overrides. After the standard "
+            "submodule update, switches each listed submodule to the override SHA. "
+            'Schema: {"submodule_overrides": {"<project_name>": "<sha>", ...}} '
+            "where <project_name> is the submodule name from .gitmodules (e.g. "
+            '"fusilli", "iree"). Only applies to submodules already in this run\'s '
+            "project set; entries whose target isn't being fetched are skipped silently."
         ),
     )
 
