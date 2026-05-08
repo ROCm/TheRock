@@ -270,8 +270,8 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
             ["amdrocm", "amdrocm-core-sdk"],
         )
 
-    def test_gfx_arch_string_normalized_to_list(self):
-        # Test that a single gfx_arch string is used and package_names include that arch.
+    def test_gfx_arch_without_rocm_version_ignored_for_package_names(self):
+        # gfx_arch is stored but not used in package names without rocm_version.
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="rhel8",
@@ -322,8 +322,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             m("not-a-version")
 
-    def test_gfx_arch_list_multi_arch_package_names(self):
-        # Test that when gfx_arch is a list, each arch gets amdrocm / amdrocm-core-sdk pairs.
+    def test_gfx_arch_list_without_rocm_version_uses_generic_packages(self):
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="ubuntu2404",
@@ -333,6 +332,23 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(
             t.package_names,
             ["amdrocm", "amdrocm-core-sdk"],
+        )
+
+    def test_gfx_arch_list_with_rocm_version_multi_arch_package_names(self):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch=["gfx1151", "gfx94x"],
+            rocm_version="7.13",
+        )
+        self.assertEqual(
+            t.package_names,
+            [
+                "amdrocm7.13-gfx1151",
+                "amdrocm-core-sdk7.13-gfx1151",
+                "amdrocm7.13-gfx94x",
+                "amdrocm-core-sdk7.13-gfx94x",
+            ],
         )
 
     def test_gfx_arch_empty_string_uses_generic_packages(self):
