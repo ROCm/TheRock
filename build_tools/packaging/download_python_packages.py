@@ -80,7 +80,8 @@ DIRECTORY STRUCTURE:
       <arch2>/
         package1.whl
         ...
-      tarball/  (if --include-tarballs is specified)
+      tarball/              (single-arch tarballs)
+      tarball-multi-arch/   (multi-arch tarballs)
         therock-dist-linux-<arch1>-<version>.tar.gz
         therock-dist-windows-<arch2>-<version>.tar.gz
         ...
@@ -592,7 +593,11 @@ def download_multi_arch_packages(
                 continue
 
             size = obj["Size"]
-            print(f"  Downloading: {filename} ({size / BYTES_TO_MB:.2f} MB)")
+
+            print(
+                f"  Downloading: {filename} "
+                f"({size / BYTES_TO_MB:.2f} MB)"
+            )
 
             if download_file(s3_client, bucket, key, local_path):
                 total_success += 1
@@ -601,6 +606,78 @@ def download_multi_arch_packages(
 
     return total_success, total_fail
 
+def download_multi_arch_tarballs(
+    s3_client,
+    bucket,
+    prefix,
+    version,
+    output_dir,
+    architectures=None,
+):
+    paginator = s3_client.get_paginator("list_objects_v2")
+
+    # IMPORTANT:
+    # Keep separate from regular tarballs to avoid overwrites
+    tarball_dir = output_dir / "tarball-multi-arch"
+    tarball_dir.mkdir(parents=True, exist_ok=True)
+
+    total_success = 0
+    total_fail = 0
+
+    pages = paginator.paginate(
+        Bucket=bucket,
+        Prefix=prefix,
+    )
+
+    print("\nDownloading multi-arch tarballs")
+    print("=" * 80)
+
+    for page in pages:
+        if "Contents" not in page:
+            continue
+
+        for obj in page["Contents"]:
+            key = obj["Key"]
+            filename = key.split("/")[-1]
+
+            # Skip directories/indexes
+            if not filename or filename == "index.html":
+                continue
+
+            # Version filter
+            if version not in filename:
+                continue
+
+            # Only tarballs
+            if not filename.endswith(".tar.gz"):
+                continue
+
+            # Reuse existing arch matching helper
+            if not matches_requested_arches(filename, architectures):
+                print(f"  SKIP (arch filter): {filename}")
+                continue
+
+            local_path = tarball_dir / filename
+
+            # Skip existing
+            if local_path.exists():
+                print(f"  SKIP (exists): {filename}")
+                total_success += 1
+                continue
+
+            size = obj["Size"]
+
+            print(
+                f"  Downloading: {filename} "
+                f"({size / BYTES_TO_MB:.2f} MB)"
+            )
+
+            if download_file(s3_client, bucket, key, local_path):
+                total_success += 1
+            else:
+                total_fail += 1
+
+    return total_success, total_fail
 
 def download_packages(
     s3_client,
@@ -1093,6 +1170,19 @@ def download_prerelease_packages(
             output_dir,
             architectures,
         )
+
+        if include_tarballs:
+            tar_success, tar_fail = download_multi_arch_tarballs(
+                s3_client,
+                tarball_bucket_name,
+                tarball_bucket_prefix,
+                version,
+                output_dir,
+                architectures,
+            )
+
+            success += tar_success
+            fail += tar_fail
 
         print("\n" + "=" * 80)
         print("DOWNLOAD COMPLETE (MULTI-ARCH)")
