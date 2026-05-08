@@ -84,20 +84,29 @@ include = [
 exclude = [
   "lib/llvm/lib/clang/**",
   # Test-only clang-* tools (excluded from the clang* wildcard above)
+  "lib/llvm/bin/clang-apply-replacements*",
+  "lib/llvm/bin/clang-change-namespace*",
   "lib/llvm/bin/clang-check*",
   "lib/llvm/bin/clang-diff*",
+  "lib/llvm/bin/clang-doc*",
   "lib/llvm/bin/clang-extdef-mapping*",
   "lib/llvm/bin/clang-format*",
   "lib/llvm/bin/clang-fuzzer*",
   "lib/llvm/bin/clang-import-test*",
+  "lib/llvm/bin/clang-include-cleaner*",
+  "lib/llvm/bin/clang-include-fixer*",
   "lib/llvm/bin/clang-installapi*",
+  "lib/llvm/bin/clang-move*",
   "lib/llvm/bin/clang-nvlink-wrapper*",
+  "lib/llvm/bin/clang-query*",
   "lib/llvm/bin/clang-refactor*",
+  "lib/llvm/bin/clang-reorder-fields*",
   "lib/llvm/bin/clang-repl*",
   "lib/llvm/bin/clang-scan-deps*",
+  "lib/llvm/bin/clang-ssaf-linker*",
   "lib/llvm/bin/clang-sycl-linker*",
   "lib/llvm/bin/clang-tblgen*",
-  "lib/llvm/bin/clang-ssaf-linker*",
+  "lib/llvm/bin/clang-tidy*",
 ]
 [components.dbg."compiler/amd-llvm/stage"]
 [components.dev."compiler/amd-llvm/stage"]
