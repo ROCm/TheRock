@@ -1701,6 +1701,15 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER \"@AMD_LLVM_C_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@AMD_LLVM_LINKER@\")\n")
+    # Explicitly set clang's resource directory using the toolchain path rather
+    # than letting clang auto-detect it. On Windows CI, B:\ is a volume mount
+    # to C:\{GUID}\ and clang resolves its binary path through the mount when
+    # computing the resource dir. This embeds the GUID in include paths, which
+    # defeats ccache. Passing -resource-dir with the unresolved path avoids this.
+    string(APPEND _toolchain_contents "file(GLOB _therock_clang_resource_dirs \"@_amd_llvm_dist_dir@/lib/llvm/lib/clang/*\")\n")
+    string(APPEND _toolchain_contents "list(GET _therock_clang_resource_dirs 0 _therock_clang_resource_dir)\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" -resource-dir \${_therock_clang_resource_dir}\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" -resource-dir \${_therock_clang_resource_dir}\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_amd_llvm_cxx_flags_spaces}\")\n")
 
     therock_sanitizer_configure(
