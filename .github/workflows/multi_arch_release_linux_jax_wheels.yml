@@ -9,7 +9,10 @@
 #   - build directly from a TheRock tarball
 #   - upload wheels to the release staging bucket
 #
-# This is build-only. Testing/promotion are handled elsewhere.
+# Triggered via workflow_call from multi_arch_release_linux.yml's 
+# build_jax_wheels job, and can also be run manually via workflow_dispatch.
+#
+# Build phase only: testing and promotion are deferred follow-ups.
 
 name: Multi-Arch Release Linux JAX Wheels
 
@@ -40,18 +43,15 @@ on:
         description: URL to the TheRock tarball to build against.
         type: string
         required: true
-      repository:
-        description: Repository to checkout. Defaults to github.repository.
-        type: string
-        default: ""
       ref:
         description: Branch, tag, or SHA to checkout.
         type: string
         default: ""
-      cache_type:
-        description: Compiler cache type ('none', 'sccache', or 'ccache').
+      repository:
+        description: Repository to checkout. Defaults to github.repository.
         type: string
-        default: "none"
+        default: ""
+
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -96,22 +96,14 @@ on:
         description: URL to the TheRock tarball to build against.
         type: string
         required: true
-      repository:
-        description: Repository to checkout.
-        type: string
-        default: ""
       ref:
         description: Branch, tag, or SHA to checkout.
         type: string
         default: ""
-      cache_type:
-        description: Compiler cache type.
-        type: choice
-        options:
-          - none
-          - sccache
-          - ccache
-        default: none
+      repository:
+        description: Repository to checkout.
+        type: string
+        default: ""
 
 permissions:
   contents: read
