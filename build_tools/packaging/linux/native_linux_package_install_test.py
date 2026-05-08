@@ -12,11 +12,10 @@ Test modes (--test-type):
   verification (steps 1, 2, and 3).
   Steps (invoked one by one from main):
   1. Repo setup and install: set up package-manager repository and install
-     ROCm packages. If ``--gfx-arch`` is omitted, installs generic ``amdrocm`` /
-     ``amdrocm-core-sdk``, or versioned ``amdrocm7.13`` / ``amdrocm-core-sdk7.13``
-     when ``--rocm-version`` is set. If ``--gfx-arch`` is set, installs
-     arch-specific metapackages; with ``--rocm-version`` uses names like
-     ``amdrocm7.13-gfx1100``.
+     ROCm packages. Arch suffixes in metapackage names are used only when both
+     ``--gfx-arch`` and ``--rocm-version`` are set (e.g. ``amdrocm7.13-gfx1100``).
+     With ``--rocm-version`` only: ``amdrocm7.13`` / ``amdrocm-core-sdk7.13``.
+     With neither or ``--gfx-arch`` alone: ``amdrocm`` / ``amdrocm-core-sdk``.
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
   3. Full verification: rdhc.py / RDHC test. (Run only for full.)
@@ -49,8 +48,7 @@ CI typically runs this module under pytest (same file; reporting handled by pyte
     pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=short
 
 Workflow/container ``env`` maps to CLI flags via :func:`_argv_from_ci_env` + ``test_native_linux_package_install``.
-For versioned metapackage names only, set ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` from
-build metadata elsewhere). Omit it and omit ``--rocm-version`` when unversioned packages are desired.
+For versioned metapackage names only, set ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` and omit ``--rocm-version`` when unversioned packages are desired.
 You can still invoke this file as a script for ad-hoc runs (no pytest required).
 
 Example invocations:
@@ -137,7 +135,7 @@ VERIFY_KEY_COMPONENTS = [
 # Relative path from install prefix to rdhc binary (script); overridable via ROCM_RDHC_REL_PATH
 RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
 
-# Pytest/CI only: becomes ``--rocm-version`` (distinct from CMake / global ROCM_VERSION).
+# Pytest/CI only: becomes ``--rocm-version``.
 ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
 
 # Timeouts (seconds) and verification threshold
@@ -343,13 +341,14 @@ class NativeLinuxPackageInstallTest:
         os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3)
         release_type: Type of release ('nightly' or 'prerelease')
         install_prefix: Installation prefix (default: /opt/rocm/core)
-        gfx_arch: Optional GPU architecture(s) as a single value or list. If
-        omitted or empty after normalization, installs generic packages; see
-        ``rocm_version`` for optional versioned names without arch suffix.
+        gfx_arch: Optional GPU architecture(s). Used in package names only
+        together with ``rocm_version``; otherwise ignored for install targets.
         rocm_version: Optional ROCm release (e.g. ``7.13`` or ``7.13.1``).
-        Major.minor only is used in package names. With ``gfx_arch``: ``amdrocm{version}-{arch}``.
-        Without ``gfx_arch``: ``amdrocm{version}`` and ``amdrocm-core-sdk{version}``
-        (e.g. ``amdrocm7.13``). If unset, unversioned ``amdrocm`` / ``amdrocm-core-sdk``.
+        Major.minor only is used in package names. With ``gfx_arch`` and
+        ``rocm_version``: ``amdrocm{version}-{arch}`` per arch. With
+        ``rocm_version`` only: ``amdrocm{version}`` / ``amdrocm-core-sdk{version}``.
+        If unset: unversioned ``amdrocm`` / ``amdrocm-core-sdk`` (``gfx_arch`` alone
+        does not add arch suffixes).
         gpg_key_url: GPG key URL
         """
         self.os_profile = os_profile.lower()
@@ -367,30 +366,23 @@ class NativeLinuxPackageInstallTest:
         )
         self.gpg_key_url = gpg_key_url
 
-        if self.gfx_arch_list:
-            self.package_names: list[str] = []
-            ver = self.rocm_version_major_minor
+        ver = self.rocm_version_major_minor
+        if self.gfx_arch_list and ver:
+            self.package_names = []
             for arch in self.gfx_arch_list:
-                if ver:
-                    self.package_names.extend(
-                        [
-                            f"amdrocm{ver}-{arch}",
-                            f"amdrocm-core-sdk{ver}-{arch}",
-                        ]
-                    )
-                else:
-                    self.package_names.extend(
-                        [f"amdrocm-{arch}", f"amdrocm-core-sdk-{arch}"]
-                    )
+                self.package_names.extend(
+                    [
+                        f"amdrocm{ver}-{arch}",
+                        f"amdrocm-core-sdk{ver}-{arch}",
+                    ]
+                )
+        elif ver:
+            self.package_names = [
+                f"amdrocm{ver}",
+                f"amdrocm-core-sdk{ver}",
+            ]
         else:
-            ver = self.rocm_version_major_minor
-            if ver:
-                self.package_names = [
-                    f"amdrocm{ver}",
-                    f"amdrocm-core-sdk{ver}",
-                ]
-            else:
-                self.package_names = ["amdrocm", "amdrocm-core-sdk"]
+            self.package_names = ["amdrocm", "amdrocm-core-sdk"]
 
     def setup_gpg_key(self) -> bool:
         """Setup GPG key for repositories that require GPG verification.
@@ -797,8 +789,14 @@ gpgcheck=0
         print("=" * 80)
         print(f"\nOS Profile: {self.os_profile}")
         print(f"Package Type (derived): {self.package_type.upper()}")
-        if self.gfx_arch_list:
-            print(f"GPU Architecture(s): {self.gfx_arch_list}")
+        if self.gfx_arch_list and self.rocm_version_major_minor:
+            print(f"GPU Architecture(s): {self.gfx_arch_list} (used in package names)")
+        elif self.gfx_arch_list:
+            print(
+                f"GPU Architecture(s): {self.gfx_arch_list} "
+                "(not used in package names without --rocm-version / "
+                f"{ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION})"
+            )
         else:
             ver = self.rocm_version_major_minor
             if ver:
@@ -955,13 +953,7 @@ gpgcheck=0
         cmd = [sys.executable, str(rdhc_script)]
 
         # Set RDHC arguments for full test
-        test_args = [
-            "--rocm-install-prefix",
-            rocm_install_prefix_arg,
-            "--skip-optional-cluster-checks",
-            "--kernel-params-warnings-only",
-            "--all",
-        ]
+        test_args = ["--rocm-install-prefix", rocm_install_prefix_arg, "--all"]
         print(
             f"\nRun rdhc.py with --rocm-install-prefix {rocm_install_prefix_arg} --all..."
         )
@@ -1062,11 +1054,10 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         nargs="+",
         default=None,
         metavar="ARCH",
-        help="GPU architecture(s), optional. Omit for generic packages; use --rocm-version for "
-        "amdrocm7.13-style names without arch. "
-        "Repeat flag or list multiple values; commas split (e.g. gfx94x gfx110x or gfx94x,gfx110x). "
-        "When set, installs amdrocm-ARCH per arch (or versioned if --rocm-version). "
-        "Not used for simulate.",
+        help="GPU architecture(s), optional. Used in package names only with --rocm-version "
+        "(e.g. amdrocm7.13-gfx94x). Without --rocm-version, arch is ignored for install targets "
+        "(generic amdrocm / amdrocm-core-sdk). "
+        "Repeat flag or list; commas split. Not used for simulate.",
     )
     parser.add_argument(
         "--rocm-version",
@@ -1074,8 +1065,9 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         default=None,
         metavar="VER",
         help=(
-            "ROCm release (major.minor only in package names). With --gfx-arch: amdrocm7.13-ARCH; "
-            "without --gfx-arch: amdrocm7.13 and amdrocm-core-sdk7.13. Optional. Not used for simulate."
+            "ROCm release (major.minor only in package names). With --gfx-arch: amdrocm7.13-ARCH per arch; "
+            "without --gfx-arch: amdrocm7.13 and amdrocm-core-sdk7.13. Required for arch in package names. "
+            "Optional. Not used for simulate."
         ),
     )
     parser.add_argument(
@@ -1198,7 +1190,16 @@ def run_tests(args: Namespace) -> int:
         args.gfx_arch
     )
     if _norm:
-        print(f"GPU Architecture(s): {args.gfx_arch} " f"(normalized: {_norm})")
+        if args.rocm_version:
+            print(
+                f"GPU Architecture(s): {args.gfx_arch} "
+                f"(normalized: {_norm}; used in package names with --rocm-version)"
+            )
+        else:
+            print(
+                f"GPU Architecture(s): {args.gfx_arch} "
+                f"(normalized: {_norm}; not used in package names without --rocm-version)"
+            )
     else:
         if args.rocm_version:
             _gv = NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input(
