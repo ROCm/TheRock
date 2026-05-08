@@ -30,10 +30,14 @@ on:
       tar_url:
         description: URL to TheRock tarball to build against
         type: string
+      cloudfront_url:
+        description: CloudFront URL pointing to Python index
+        required: true
+        type: string
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
+        required: true
         type: string
-        default: ""
       repository:
         description: "Repository to checkout. Defaults to `ROCm/TheRock`."
         type: string
@@ -47,14 +51,6 @@ on:
         default: "rocm-jaxlib-v0.8.2"
       build_jaxlib:
         description: "Whether to build jaxlib from source. Set to false for JAX >= 0.9.1 where jaxlib is installed from upstream PyPI."
-        type: boolean
-        default: true
-      run_tests:
-        description: "Whether to run JAX wheel tests"
-        type: boolean
-        default: true
-      upload_wheels:
-        description: "Whether to upload/promote JAX wheels"
         type: boolean
         default: true
   workflow_dispatch:
@@ -103,6 +99,10 @@ on:
       tar_url:
         description: URL to TheRock tarball to build against
         type: string
+      cloudfront_url:
+        description: CloudFront base URL pointing to Python index
+        type: string
+        default: "https://rocm.devreleases.amd.com/v2"
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         type: string
@@ -119,19 +119,10 @@ on:
         description: Whether to build jaxlib from source. Set to false for JAX >= 0.9.1.
         type: boolean
         default: true
-      run_tests:
-        description: "Whether to run JAX wheel tests"
-        type: boolean
-        default: true
-      upload_wheels:
-        description: "Whether to upload/promote JAX wheels"
-        type: boolean
-        default: true
 
 permissions:
   id-token: write
   contents: read
-  packages: read
 
 run-name: Build Linux JAX Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.python_version }}, ${{ inputs.release_type }})
 
@@ -221,29 +212,29 @@ jobs:
             --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
       - name: Install AWS CLI
-        if: ${{ inputs.upload_wheels }}
+        if: always()
         run: bash ./dockerfiles/install_awscli.sh
 
       - name: Configure AWS Credentials
-        if: ${{ inputs.upload_wheels }}
+        if: always()
         uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
 
       - name: Upload wheels to staging S3
-        if: ${{ github.repository_owner == 'ROCm' && inputs.upload_wheels }}
+        if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
 
       - name: Install boto3 for manifest upload
-        if: ${{ github.repository_owner == 'ROCm' && inputs.upload_wheels }}
+        if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           python3 -m pip install boto3
 
       - name: Upload JAX manifest to artifacts S3
-        if: ${{ github.repository_owner == 'ROCm' && inputs.upload_wheels && inputs.build_jaxlib }}
+        if: ${{ github.repository_owner == 'ROCm' && inputs.build_jaxlib }}
         working-directory: build_tools
         run: |
           python3 -m github_actions.upload_jax_manifest \
@@ -254,7 +245,7 @@ jobs:
             --jax-git-ref "${{ inputs.jax_ref }}"
 
       - name: (Re-)Generate Python package release index
-        if: ${{ github.repository_owner == 'ROCm' && inputs.upload_wheels }}
+        if: ${{ github.repository_owner == 'ROCm' }}
         env:
           # Environment variables to be set for `manage.py`
           CUSTOM_PREFIX: "${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}"
@@ -284,22 +275,10 @@ jobs:
           PLATFORM: "linux"
         run: python ./build_tools/github_actions/configure_target_run.py
 
-  validate_test_inputs:
-    name: Validate test configuration
-    runs-on: ubuntu-24.04
-    if: ${{ inputs.run_tests }}
-    steps:
-      - name: Validate cloudfront_staging_url
-        run: |
-          if [ -z "${{ inputs.cloudfront_staging_url }}" ]; then
-            echo "ERROR: run_tests=true requires cloudfront_staging_url to be set"
-            exit 1
-          fi
-
   test_jax_wheels:
     name: Test JAX wheels | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
-    if: ${{ inputs.run_tests && needs.generate_target_to_run.outputs.test_runs_on != '' }}
-    needs: [build_jax_wheels, generate_target_to_run, validate_test_inputs]
+    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
+    needs: [build_jax_wheels, generate_target_to_run]
     permissions:
       contents: read
       packages: read
@@ -323,7 +302,7 @@ jobs:
   upload_jax_wheels:
     name: Release JAX Wheels to S3
     needs: [build_jax_wheels, generate_target_to_run, test_jax_wheels]
-    if: ${{ always() && !cancelled() && inputs.upload_wheels }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     env:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
@@ -340,7 +319,7 @@ jobs:
           ref: ${{ inputs.ref || '' }}
 
       - name: Configure AWS Credentials
-        if: ${{ inputs.upload_wheels }}
+        if: always()
         uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
         with:
           aws-region: us-east-2
@@ -349,7 +328,7 @@ jobs:
       - name: Determine upload flag
         env:
           BUILD_RESULT: ${{ needs.build_jax_wheels.result }}
-          TEST_RESULT: ${{ inputs.run_tests && needs.test_jax_wheels.result || 'skipped' }}
+          TEST_RESULT: ${{ needs.test_jax_wheels.result }}
           TEST_RUNS_ON: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
           BYPASS_TESTS_FOR_RELEASES: ${{ needs.generate_target_to_run.outputs.bypass_tests_for_releases }}
         run: python ./build_tools/github_actions/promote_wheels_based_on_policy.py
