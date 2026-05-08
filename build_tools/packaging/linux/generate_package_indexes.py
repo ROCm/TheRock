@@ -81,7 +81,9 @@ def generate_indexes_recursive(root: str) -> None:
         generate_index_html(d)
 
 
-def generate_top_index_from_s3(s3, bucket: str, prefix: str) -> None:
+def generate_top_index_from_s3(
+    s3, bucket: str, prefix: str, dry_run: bool = False
+) -> None:
     """Generate index.html for top-level directory using S3 Delimiter.
 
     This is much more efficient than listing all objects recursively,
@@ -91,6 +93,7 @@ def generate_top_index_from_s3(s3, bucket: str, prefix: str) -> None:
         s3: boto3 S3 client
         bucket: S3 bucket name
         prefix: S3 prefix (e.g., 'deb' or 'rpm')
+        dry_run: If True, log what would be uploaded without uploading.
     """
     print(f"Generating top index from S3: s3://{bucket}/{prefix}/")
 
@@ -119,6 +122,10 @@ def generate_top_index_from_s3(s3, bucket: str, prefix: str) -> None:
     index_content = HTML_HEAD + "\n".join(rows) + HTML_FOOT
     index_key = f"{prefix}/index.html"
 
+    if dry_run:
+        print(f"[DRY-RUN] Would upload top index: {index_key} ({len(rows)} entries)")
+        return
+
     print(f"Uploading top index: {index_key}")
     s3.put_object(
         Bucket=bucket,
@@ -130,7 +137,11 @@ def generate_top_index_from_s3(s3, bucket: str, prefix: str) -> None:
 
 
 def generate_index_from_s3(
-    s3, bucket: str, prefix: str, max_depth: int | None = None
+    s3,
+    bucket: str,
+    prefix: str,
+    max_depth: int | None = None,
+    dry_run: bool = False,
 ) -> None:
     """Generate index.html files based on what's actually in S3.
 
@@ -143,6 +154,7 @@ def generate_index_from_s3(
         prefix: S3 prefix (e.g., 'deb/20260223-12345')
         max_depth: Maximum directory depth to generate indexes for.
                    None = unlimited (recursive), 0 = only root level, 1 = root + immediate children
+        dry_run: If True, log what would be uploaded without uploading.
     """
     depth_msg = (
         f" (max depth: {max_depth})" if max_depth is not None else " (recursive)"
@@ -242,6 +254,14 @@ def generate_index_from_s3(
         else:
             index_key = f"{prefix}/index.html"
 
+        if dry_run:
+            print(
+                f"[DRY-RUN] Would upload index: {index_key} "
+                f"({len(subdirs)} subdirs, {len(files)} files)"
+            )
+            uploaded_indexes += 1
+            continue
+
         try:
             print(f"Uploading index: {index_key}")
             s3.put_object(
@@ -254,7 +274,8 @@ def generate_index_from_s3(
         except Exception as e:
             print(f"Error uploading index {index_key}: {e}")
 
-    print(f"Generated and uploaded {uploaded_indexes} index files from S3 state")
+    verb = "Would generate" if dry_run else "Generated and uploaded"
+    print(f"{verb} {uploaded_indexes} index files from S3 state")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -272,16 +293,29 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Optional max depth for per-prefix index generation.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be uploaded without actually uploading.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
     s3 = boto3.client("s3")
-    generate_index_from_s3(s3, args.s3_bucket, args.prefix, max_depth=args.max_depth)
+    generate_index_from_s3(
+        s3,
+        args.s3_bucket,
+        args.prefix,
+        max_depth=args.max_depth,
+        dry_run=args.dry_run,
+    )
 
     if args.top_prefix is not None:
-        generate_top_index_from_s3(s3, args.s3_bucket, args.top_prefix)
+        generate_top_index_from_s3(
+            s3, args.s3_bucket, args.top_prefix, dry_run=args.dry_run
+        )
 
 
 if __name__ == "__main__":
