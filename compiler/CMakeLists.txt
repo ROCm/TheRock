@@ -284,6 +284,7 @@ if(THEROCK_ENABLE_COMPILER)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS
       amd-llvm
       hipcc

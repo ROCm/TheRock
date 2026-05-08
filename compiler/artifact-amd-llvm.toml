@@ -24,14 +24,80 @@ include = [
 force_include = [
   "lib/llvm/lib/clang/**",
 ]
+
+# Production tools only. Test-only tools (needed by check-llvm, check-clang,
+# etc.) fall through to the test component via the extends chain.
+# The production set mirrors _llvm_required_tools and _clang_required_tools
+# from pre_hook_amd-llvm.cmake.
 [components.run."compiler/amd-llvm/stage"]
 include = [
-  "lib/llvm/bin/**",
+  # Production LLVM tools and their symlinks
+  "lib/llvm/bin/llvm-addr2line*",
+  "lib/llvm/bin/llvm-ar*",
+  "lib/llvm/bin/llvm-as*",
+  "lib/llvm/bin/llvm-bitcode-strip*",
+  "lib/llvm/bin/llvm-config*",
+  "lib/llvm/bin/llvm-dis*",
+  "lib/llvm/bin/llvm-dlltool*",
+  "lib/llvm/bin/llvm-dwarfdump*",
+  "lib/llvm/bin/llvm-install-name-tool*",
+  "lib/llvm/bin/llvm-lib",
+  "lib/llvm/bin/llvm-lib.exe",
+  "lib/llvm/bin/llvm-link*",
+  "lib/llvm/bin/llvm-mc",
+  "lib/llvm/bin/llvm-mc.exe",
+  "lib/llvm/bin/llvm-nm*",
+  "lib/llvm/bin/llvm-objcopy*",
+  "lib/llvm/bin/llvm-objdump*",
+  "lib/llvm/bin/llvm-offload-binary*",
+  "lib/llvm/bin/llvm-otool*",
+  "lib/llvm/bin/llvm-ranlib*",
+  "lib/llvm/bin/llvm-readelf*",
+  "lib/llvm/bin/llvm-readobj*",
+  "lib/llvm/bin/llvm-spirv*",
+  "lib/llvm/bin/llvm-strip*",
+  "lib/llvm/bin/llvm-symbolizer*",
+  "lib/llvm/bin/opt",
+  "lib/llvm/bin/opt.exe",
+  "lib/llvm/bin/yaml2obj*",
+  # Production Clang tools. The clang* wildcard covers the versioned binary
+  # (e.g. clang-20), symlinks (clang++, clang-cl, clang-cpp), and production
+  # clang-offload-*, clang-linker-wrapper, clang-hip. Test-only clang-* tools
+  # are excluded below.
+  "lib/llvm/bin/clang*",
+  "lib/llvm/bin/offload-arch*",
+  "lib/llvm/bin/amdgpu-arch*",
+  "lib/llvm/bin/nvptx-arch*",
+  # Production project tools (lld, flang, amd wrappers)
+  "lib/llvm/bin/dsymutil*",
+  "lib/llvm/bin/lld*",
+  "lib/llvm/bin/ld.lld*",
+  "lib/llvm/bin/ld64.lld*",
+  "lib/llvm/bin/wasm-ld*",
+  "lib/llvm/bin/flang*",
+  "lib/llvm/bin/amdclang*",
+  "lib/llvm/bin/amdflang*",
+  # Non-tool directories
   "lib/llvm/libexec/**",
   "lib/llvm/hip/**",
 ]
 exclude = [
   "lib/llvm/lib/clang/**",
+  # Test-only clang-* tools (excluded from the clang* wildcard above)
+  "lib/llvm/bin/clang-check*",
+  "lib/llvm/bin/clang-diff*",
+  "lib/llvm/bin/clang-extdef-mapping*",
+  "lib/llvm/bin/clang-format*",
+  "lib/llvm/bin/clang-fuzzer*",
+  "lib/llvm/bin/clang-import-test*",
+  "lib/llvm/bin/clang-installapi*",
+  "lib/llvm/bin/clang-nvlink-wrapper*",
+  "lib/llvm/bin/clang-refactor*",
+  "lib/llvm/bin/clang-repl*",
+  "lib/llvm/bin/clang-scan-deps*",
+  "lib/llvm/bin/clang-sycl-linker*",
+  "lib/llvm/bin/clang-tblgen*",
+  "lib/llvm/bin/clang-ssaf-linker*",
 ]
 [components.dbg."compiler/amd-llvm/stage"]
 [components.dev."compiler/amd-llvm/stage"]
@@ -42,6 +108,12 @@ exclude = [
   "lib/llvm/lib/clang/**",
 ]
 [components.doc."compiler/amd-llvm/stage"]
+
+# Test-only tools (everything in bin/ not claimed by the run component).
+[components.test."compiler/amd-llvm/stage"]
+include = [
+  "lib/llvm/bin/**",
+]
 
 # comgr and hipcc are considered part of the LLVM artifact (they are separated
 # in the build tree because they need to be built separately in order to
