@@ -25,88 +25,117 @@ force_include = [
   "lib/llvm/lib/clang/**",
 ]
 
-# Production tools only. Test-only tools (needed by check-llvm, check-clang,
-# etc.) fall through to the test component via the extends chain.
-# The production set mirrors _llvm_required_tools and _clang_required_tools
-# from pre_hook_amd-llvm.cmake.
+# All tools go to run by default. Test-only tools (those built exclusively
+# when LLVM tests are enabled) are excluded below and fall through to the
+# test component via the extends chain. This blacklist approach fails safe:
+# new upstream tools default to run (larger artifact is acceptable; a missing
+# production tool is not).
 [components.run."compiler/amd-llvm/stage"]
 include = [
-  # Production LLVM tools and their symlinks
-  "lib/llvm/bin/llvm-addr2line*",
-  "lib/llvm/bin/llvm-ar*",
-  "lib/llvm/bin/llvm-as*",
-  "lib/llvm/bin/llvm-bitcode-strip*",
-  "lib/llvm/bin/llvm-config*",
-  "lib/llvm/bin/llvm-dis*",
-  "lib/llvm/bin/llvm-dlltool*",
-  "lib/llvm/bin/llvm-dwarfdump*",
-  "lib/llvm/bin/llvm-install-name-tool*",
-  "lib/llvm/bin/llvm-lib",
-  "lib/llvm/bin/llvm-lib.exe",
-  "lib/llvm/bin/llvm-link*",
-  "lib/llvm/bin/llvm-mc",
-  "lib/llvm/bin/llvm-mc.exe",
-  "lib/llvm/bin/llvm-nm*",
-  "lib/llvm/bin/llvm-objcopy*",
-  "lib/llvm/bin/llvm-objdump*",
-  "lib/llvm/bin/llvm-offload-binary*",
-  "lib/llvm/bin/llvm-otool*",
-  "lib/llvm/bin/llvm-ranlib*",
-  "lib/llvm/bin/llvm-readelf*",
-  "lib/llvm/bin/llvm-readobj*",
-  "lib/llvm/bin/llvm-spirv*",
-  "lib/llvm/bin/llvm-strip*",
-  "lib/llvm/bin/llvm-symbolizer*",
-  "lib/llvm/bin/opt",
-  "lib/llvm/bin/opt.exe",
-  "lib/llvm/bin/yaml2obj*",
-  # Production Clang tools. The clang* wildcard covers the versioned binary
-  # (e.g. clang-20), symlinks (clang++, clang-cl, clang-cpp), and production
-  # clang-offload-*, clang-linker-wrapper, clang-hip. Test-only clang-* tools
-  # are excluded below.
-  "lib/llvm/bin/clang*",
-  "lib/llvm/bin/offload-arch*",
-  "lib/llvm/bin/amdgpu-arch*",
-  "lib/llvm/bin/nvptx-arch*",
-  # Production project tools (lld, flang, amd wrappers)
-  "lib/llvm/bin/dsymutil*",
-  "lib/llvm/bin/lld*",
-  "lib/llvm/bin/ld.lld*",
-  "lib/llvm/bin/ld64.lld*",
-  "lib/llvm/bin/wasm-ld*",
-  "lib/llvm/bin/flang*",
-  "lib/llvm/bin/amdclang*",
-  "lib/llvm/bin/amdflang*",
-  # Non-tool directories
+  "lib/llvm/bin/**",
   "lib/llvm/libexec/**",
   "lib/llvm/hip/**",
 ]
 exclude = [
   "lib/llvm/lib/clang/**",
-  # Test-only clang-* tools (excluded from the clang* wildcard above)
-  "lib/llvm/bin/clang-apply-replacements*",
-  "lib/llvm/bin/clang-change-namespace*",
+
+  # -- LIT test infrastructure utilities --
+  "lib/llvm/bin/count*",
+  "lib/llvm/bin/FileCheck*",
+  "lib/llvm/bin/not",
+  "lib/llvm/bin/not.exe",
+  "lib/llvm/bin/split-file*",
+  "lib/llvm/bin/UnicodeNameMappingGenerator*",
+  "lib/llvm/bin/verify-uselistorder*",
+  "lib/llvm/bin/yaml-bench*",
+
+  # -- Clang test-only tools --
+  "lib/llvm/bin/c-index-test*",
   "lib/llvm/bin/clang-check*",
   "lib/llvm/bin/clang-diff*",
-  "lib/llvm/bin/clang-doc*",
   "lib/llvm/bin/clang-extdef-mapping*",
   "lib/llvm/bin/clang-format*",
   "lib/llvm/bin/clang-fuzzer*",
   "lib/llvm/bin/clang-import-test*",
-  "lib/llvm/bin/clang-include-cleaner*",
-  "lib/llvm/bin/clang-include-fixer*",
   "lib/llvm/bin/clang-installapi*",
-  "lib/llvm/bin/clang-move*",
   "lib/llvm/bin/clang-nvlink-wrapper*",
-  "lib/llvm/bin/clang-query*",
   "lib/llvm/bin/clang-refactor*",
-  "lib/llvm/bin/clang-reorder-fields*",
   "lib/llvm/bin/clang-repl*",
-  "lib/llvm/bin/clang-scan-deps*",
+  # clang-scan-deps is NOT excluded: it is a production tool on Windows
+  # (added to _clang_required_tools when WIN32).
   "lib/llvm/bin/clang-ssaf-linker*",
   "lib/llvm/bin/clang-sycl-linker*",
-  "lib/llvm/bin/clang-tblgen*",
-  "lib/llvm/bin/clang-tidy*",
+  "lib/llvm/bin/diagtool*",
+  "lib/llvm/bin/git-clang-format*",
+  "lib/llvm/bin/ssaf-format*",
+
+  # -- LLVM test-only tools --
+  "lib/llvm/bin/llc",
+  "lib/llvm/bin/llc.exe",
+  "lib/llvm/bin/lli",
+  "lib/llvm/bin/lli.exe",
+  "lib/llvm/bin/lli-child-target*",
+  "lib/llvm/bin/llubi*",
+  "lib/llvm/bin/llvm-bcanalyzer*",
+  "lib/llvm/bin/llvm-cas*",
+  "lib/llvm/bin/llvm-cat*",
+  "lib/llvm/bin/llvm-cfi-verify*",
+  "lib/llvm/bin/llvm-cgdata*",
+  "lib/llvm/bin/llvm-cov*",
+  "lib/llvm/bin/llvm-c-test*",
+  "lib/llvm/bin/llvm-ctxprof-util*",
+  "lib/llvm/bin/llvm-cvtres*",
+  "lib/llvm/bin/llvm-cxx*",
+  "lib/llvm/bin/llvm-debuginfo-analyzer*",
+  "lib/llvm/bin/llvm-debuginfod*",
+  "lib/llvm/bin/llvm-diff*",
+  "lib/llvm/bin/llvm-dwarfutil*",
+  "lib/llvm/bin/llvm-dwp*",
+  "lib/llvm/bin/llvm-exegesis*",
+  "lib/llvm/bin/llvm-extract*",
+  "lib/llvm/bin/llvm-gpu-loader*",
+  "lib/llvm/bin/llvm-gsymutil*",
+  "lib/llvm/bin/llvm-ifs*",
+  "lib/llvm/bin/llvm-ir2vec*",
+  "lib/llvm/bin/llvm-jitlink*",
+  "lib/llvm/bin/llvm-libtool-darwin*",
+  "lib/llvm/bin/llvm-lipo*",
+  "lib/llvm/bin/llvm-lto*",
+  "lib/llvm/bin/llvm-mca*",
+  "lib/llvm/bin/llvm-ml*",
+  "lib/llvm/bin/llvm-modextract*",
+  "lib/llvm/bin/llvm-offload-wrapper*",
+  "lib/llvm/bin/llvm-opt-report*",
+  "lib/llvm/bin/llvm-pdbutil*",
+  "lib/llvm/bin/llvm-PerfectShuffle*",
+  "lib/llvm/bin/llvm-profdata*",
+  "lib/llvm/bin/llvm-profgen*",
+  "lib/llvm/bin/llvm-rc*",
+  "lib/llvm/bin/llvm-readtapi*",
+  "lib/llvm/bin/llvm-reduce*",
+  "lib/llvm/bin/llvm-remarkutil*",
+  "lib/llvm/bin/llvm-rtdyld*",
+  "lib/llvm/bin/llvm-sim*",
+  "lib/llvm/bin/llvm-size*",
+  "lib/llvm/bin/llvm-split*",
+  "lib/llvm/bin/llvm-stress*",
+  "lib/llvm/bin/llvm-strings*",
+  "lib/llvm/bin/llvm-test-mustache-spec*",
+  "lib/llvm/bin/llvm-tli-checker*",
+  "lib/llvm/bin/llvm-undname*",
+  "lib/llvm/bin/llvm-windres*",
+  "lib/llvm/bin/llvm-xray*",
+
+  # -- MLIR test-only tools --
+  "lib/llvm/bin/mlir-cat*",
+  "lib/llvm/bin/mlir-minimal-opt*",
+  "lib/llvm/bin/mlir-transform-opt*",
+
+  # -- Other test-only tools --
+  "lib/llvm/bin/obj2yaml*",
+  "lib/llvm/bin/reduce-chunk-list*",
+  "lib/llvm/bin/sancov*",
+  "lib/llvm/bin/sanstats*",
 ]
 [components.dbg."compiler/amd-llvm/stage"]
 [components.dev."compiler/amd-llvm/stage"]
