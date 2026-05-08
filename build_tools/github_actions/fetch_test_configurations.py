@@ -450,6 +450,22 @@ test_matrix = {
     #         "windows": 1,
     #     },
     # },
+    # hipDNN gestalt support matrix - load all providers, run with
+    # --skip-graph-validation, dump combined support matrix to stdout
+    # so it appears in the GHA log. Append --hipkernelprovider when the
+    # disabled hipkernelprovider job above is re-enabled.
+    "hipdnn-gestalt-matrix": {
+        "job_name": "hipdnn-gestalt-matrix",
+        "fetch_artifact_args": (
+            "--blas --miopen --hipdnn --iree-compiler"
+            " --miopenprovider --fusilliprovider --hipblasltprovider"
+            " --hipdnn-integration-tests --tests"
+        ),
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_hipdnn_gestalt_matrix.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {"linux": 1},
+    },
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",
