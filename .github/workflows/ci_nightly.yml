@@ -47,11 +47,15 @@ permissions:
   contents: read
 
 concurrency:
-  # A PR number if a pull request and otherwise the commit hash. This cancels
-  # queued and in-progress runs for the same PR (presubmit) or commit
-  # (postsubmit). The workflow name is prepended to avoid conflicts between
-  # different workflows.
-  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+  #
+  # Only allow one run at a time for 'pull_request' events.
+  # Allow multiple runs for 'push' and 'workflow_dispatch'.
+  #
+  # `github.workflow`: each workflow gets its own concurrency group
+  # `github.head_ref`: the branch name (only defined for pull_request events)
+  # `github.run_id`  : fallback, unique for each run
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -79,7 +83,7 @@ jobs:
       artifact_group: ${{ matrix.variant.artifact_group }}
       test_runs_on: ${{ matrix.variant.test-runs-on }}
       benchmark_runs_on: ${{ matrix.variant.benchmark-runs-on }}
-      run_functional_tests: ${{ needs.setup.outputs.run_functional_tests == 'true' }}
+      run_extended_tests: ${{ needs.setup.outputs.run_extended_tests }}
       build_variant_label: ${{ matrix.variant.build_variant_label }}
       build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
       build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}
@@ -114,7 +118,7 @@ jobs:
       artifact_group: ${{ matrix.variant.artifact_group }}
       test_runs_on: ${{ matrix.variant.test-runs-on }}
       benchmark_runs_on: ${{ matrix.variant.benchmark-runs-on }}
-      run_functional_tests: ${{ needs.setup.outputs.run_functional_tests == 'true' }}
+      run_extended_tests: ${{ needs.setup.outputs.run_extended_tests }}
       build_variant_label: ${{ matrix.variant.build_variant_label }}
       build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
       build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}

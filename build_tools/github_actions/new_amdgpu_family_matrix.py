@@ -68,7 +68,7 @@ amdgpu_family_predefined_groups = {
     "amdgpu_nightly": [
         "gfx90X-dcgpu",
         "gfx101X-dgpu",
-        "gfx103X-dgpu",
+        "gfx103X-all",
         "gfx1150",
         "gfx1152",
         "gfx1153",
@@ -170,7 +170,7 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "windows-gfx110X-gpu-rocm",
                     },
-                    "fetch-gfx-targets": ["gfx1100", "gfx1101"],
+                    "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -378,13 +378,12 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-                    # fetch-gfx-targets should be ["gfx1200", "gfx1201"] when re-enabled
+                    # TODO(#2962): Re-enable run_tests once sanity checks work with this architecture.
                     "run_tests": False,
                     "runs_on": {
                         "test": "windows-gfx120X-gpu-rocm",
                     },
-                    "fetch-gfx-targets": [],
+                    "fetch-gfx-targets": ["gfx1200", "gfx1201"],
                 },
                 "release": {
                     "push_on_success": True,
@@ -412,8 +411,6 @@ amdgpu_family_info_matrix_all = {
                     "bypass_tests_for_releases": False,
                 },
             },
-            # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`,
-            # to enable PyTorch builds
             "windows": {
                 "build": {
                     "build_variants": ["release"],
@@ -422,7 +419,6 @@ amdgpu_family_info_matrix_all = {
                     "run_tests": False,
                     "runs_on": {},
                     "fetch-gfx-targets": [],
-                    "expect_pytorch_failure": True,
                 },
                 "release": {
                     "push_on_success": False,
@@ -496,7 +492,6 @@ amdgpu_family_info_matrix_all = {
                     },
                     "fetch-gfx-targets": [],
                     "sanity_check_only_for_family": True,
-                    "expect_pytorch_failure": True,
                 },
                 "release": {
                     "push_on_success": False,

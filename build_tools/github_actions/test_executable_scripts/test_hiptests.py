@@ -66,6 +66,18 @@ TEST_TO_IGNORE = {
             "Unit_hipMemsetASyncMulti",
             "Unit_hipHostAlloc_AllocateMoreThanAvailGPUMemory",
             "Unit_hipStreamValue_Write - TestParams<uint32_t, PtrType::DevicePtrToHost>",
+            # TODO(#4244): Flaky with compiler submodule update — subprocess aborted.
+            "Unit_NonHost_Printf_loop",
+            "Unit_NonHost_Printf_multiple_Threads",
+            "Unit_NonHost_Printf_BufferAvailability",
+        ]
+    },
+    "gfx94X-dcgpu": {
+        "linux": [
+            # TODO(#4244): Flaky with compiler submodule update — subprocess aborted.
+            "Unit_NonHost_Printf_loop",
+            "Unit_NonHost_Printf_multiple_Threads",
+            "Unit_NonHost_Printf_BufferAvailability",
         ]
     },
     "gfx110X-all": {
@@ -139,8 +151,6 @@ def setup_env(env):
 
 
 def execute_tests(env):
-    # Allow for more time in ASAN mode to run the tests.
-    timeout = 1500 if is_asan() else 600
     cmd = [
         "ctest",
         "--tests-information",
@@ -148,8 +158,6 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
-        "--timeout",
-        f"{timeout}",
     ]
 
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:

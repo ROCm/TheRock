@@ -11,18 +11,18 @@ add_custom_target(therock-third-party)
 
 # No-dep third party libraries (alphabetical)
 add_subdirectory(boost)
+add_subdirectory(Catch2)
 add_subdirectory(eigen)
+add_subdirectory(fftw3)
 add_subdirectory(flatbuffers)
 add_subdirectory(fmt)
+add_subdirectory(FunctionalPlus)
 add_subdirectory(googletest)
 add_subdirectory(libdivide)
 add_subdirectory(msgpack-cxx)
 add_subdirectory(nlohmann-json)
 add_subdirectory(simde)
 add_subdirectory(yaml-cpp)
-add_subdirectory(Catch2)
-add_subdirectory(FunctionalPlus)
-add_subdirectory(fftw3)
 
 # frugally-deep depends on eigen, FunctionalPlus and nlohmann-json
 add_subdirectory(frugally-deep)
@@ -30,6 +30,11 @@ add_subdirectory(frugally-deep)
 # spdlog depends on fmt and amd-llvm toolchain.
 if(THEROCK_ENABLE_SPDLOG)
   add_subdirectory(spdlog)
+endif()
+
+# elfio depends on amd-llvm toolchain.
+if(THEROCK_ENABLE_ELFIO)
+  add_subdirectory(elfio)
 endif()
 
 # Host math libraries.

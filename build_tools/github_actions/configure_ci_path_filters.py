@@ -16,6 +16,7 @@ Public API:
 """
 
 import fnmatch
+from pathlib import Path
 import subprocess
 import sys
 from typing import Iterable, Optional
@@ -144,8 +145,8 @@ def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
 # ============================================================================
 
 # File path patterns that don't trigger CI runs.
-# Changes to files matching these patterns are considered documentation/configuration
-# that don't affect build or test workflows.
+# Changes to files matching these patterns are considered
+# documentation/configuration that don't affect build or test workflows.
 _SKIPPABLE_PATH_PATTERNS = [
     "docs/*",
     "*.gitignore",
@@ -162,21 +163,46 @@ _SKIPPABLE_PATH_PATTERNS = [
     "experimental/*",
 ]
 
-# GitHub workflow file patterns that are considered CI-related.
-# Changes to workflow files matching these patterns will trigger CI runs,
-# as they may affect the CI pipeline itself.
-_GITHUB_WORKFLOWS_CI_PATTERNS = [
+# GitHub workflow files that are used by CI workflows. Changes to any of
+# these trigger CI runs. This is an explicit list (not glob patterns) so that
+# unrelated workflows are never accidentally included.
+#
+# This list is maintained manually and a unit test verifies that every
+# workflow transitively called by ci.yml / multi_arch_ci.yml is listed here.
+#
+# TODO: Compute this set dynamically by scanning workflow files for
+# ``uses: ./.github/workflows/...`` references instead of maintaining it
+# by hand.
+_GITHUB_WORKFLOWS_CI_FILENAMES = {
+    # ci.yml only
+    "ci.yml",
     "setup.yml",
-    "ci*.yml",
-    "multi_arch*.yml",
-    "build*artifact*.yml",
-    "build*ci.yml",
-    "build*python_packages.yml",
-    "test*artifacts.yml",
-    "test_rocm_wheels.yml",
-    "test_sanity_check.yml",
+    "ci_linux.yml",
+    "ci_windows.yml",
+    "build_native_linux_packages.yml",
+    "build_portable_linux_artifacts.yml",
+    "build_windows_artifacts.yml",
+    # multi_arch_ci.yml only
+    "multi_arch_ci.yml",
+    "multi_arch_ci_linux.yml",
+    "multi_arch_ci_windows.yml",
+    "multi_arch_build_native_linux_packages.yml",
+    "multi_arch_build_portable_linux.yml",
+    "multi_arch_build_portable_linux_artifacts.yml",
+    "multi_arch_build_windows.yml",
+    "multi_arch_build_windows_artifacts.yml",
+    "setup_multi_arch.yml",
+    "test_artifacts_structure.yml",
+    "test_native_linux_packages_install.yml",
+    # both
+    "build_portable_linux_python_packages.yml",
+    "build_portable_linux_pytorch_wheels_ci.yml",
+    "build_windows_python_packages.yml",
+    "build_windows_pytorch_wheels_ci.yml",
+    "test_artifacts.yml",
     "test_component.yml",
-]
+    "test_rocm_wheels.yml",
+}
 
 
 # ============================================================================
@@ -201,10 +227,7 @@ def _check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
 
 def _is_path_workflow_file_related_to_ci(path: str) -> bool:
     """Checks if a single path is a CI-related workflow file."""
-    return any(
-        fnmatch.fnmatch(path, ".github/workflows/" + pattern)
-        for pattern in _GITHUB_WORKFLOWS_CI_PATTERNS
-    )
+    return Path(path).name in _GITHUB_WORKFLOWS_CI_FILENAMES
 
 
 def _check_for_workflow_file_related_to_ci(paths: Optional[Iterable[str]]) -> bool:
