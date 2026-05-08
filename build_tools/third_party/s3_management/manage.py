@@ -257,10 +257,20 @@ class S3Index:
             full_package_name = path.basename(obj)
             package_name = full_package_name.split('-')[0]
             pkg = package_name.lower()
+            BLACKLISTED_PACKAGES = {
+                "rocm_sdk_libraries_dev",
+                "rocm_sdk_libraries_doc",
+                "rocm_sdk_libraries_run",
+            }
+            if pkg in BLACKLISTED_PACKAGES:
+                print(f"[BLACKLISTED] {package_name}")
+                to_hide.add(obj)
+                continue
             # Allow legacy packages + explicitly handle dynamic multi-arch packages
             if (
                 pkg in PACKAGE_ALLOW_LIST
                 or pkg.startswith("rocm_sdk_device_")
+                or pkg.startswith("rocm_sdk_libraries_")
                 or pkg.startswith("amd_torch_device")
                 or pkg.startswith("amd_torchvision_device")
             ):
