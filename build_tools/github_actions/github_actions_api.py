@@ -435,6 +435,9 @@ def gha_query_workflow_run_by_id(github_repository: str, workflow_run_id: str) -
     return gha_send_request(url)
 
 
+# TODO: Consider accepting a git ref (branch/tag) here and resolving it
+# to a SHA via gha_resolve_git_ref, so callers don't need to do that
+# themselves. Same for other functions that take a commit SHA.
 def gha_query_workflow_runs_for_commit(
     github_repository: str,
     workflow_file_name: str,
@@ -529,6 +532,53 @@ def gha_query_recent_branch_commits(
     response = gha_send_request(url)
 
     return [commit["sha"] for commit in response]
+
+
+def gha_resolve_git_ref(github_repository: str, ref: str) -> str:
+    """Resolve a git ref (branch, tag, or SHA) to a full commit SHA.
+
+    Args:
+        github_repository: Repository in "owner/repo" format (e.g. "ROCm/pytorch").
+        ref: Git ref to resolve (branch name, tag, or commit SHA).
+
+    Returns:
+        The full 40-character commit SHA.
+
+    Raises:
+        GitHubAPIError: If the ref cannot be resolved.
+
+    See: https://docs.github.com/en/rest/commits/commits#get-a-commit
+    """
+    url = f"https://api.github.com/repos/{github_repository}/commits/{ref}"
+    response = gha_send_request(url)
+    return response["sha"]
+
+
+def gha_fetch_file_contents(github_repository: str, path: str, ref: str) -> str:
+    """Fetch a file's contents from a GitHub repo at a specific ref.
+
+    Uses the Contents API to retrieve and decode a single file. The file
+    must be small enough for the Contents API (< 1 MB); for larger files
+    use the Blobs API instead.
+
+    Args:
+        github_repository: Repository in "owner/repo" format (e.g. "ROCm/pytorch").
+        path: File path within the repo (e.g. "version.txt").
+        ref: Git ref (branch, tag, or commit SHA).
+
+    Returns:
+        The decoded file contents as a UTF-8 string.
+
+    Raises:
+        GitHubAPIError: If the file cannot be fetched (not found, API error, etc.).
+
+    See: https://docs.github.com/en/rest/repos/contents#get-repository-content
+    """
+    import base64
+
+    url = f"https://api.github.com/repos/{github_repository}/contents/{path}?ref={ref}"
+    response = gha_send_request(url)
+    return base64.b64decode(response["content"]).decode("utf-8")
 
 
 # TODO: Consider moving str2bool to a general-purpose utils module. It's useful
