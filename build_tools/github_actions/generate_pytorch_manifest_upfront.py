@@ -2,37 +2,26 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Generate PyTorch build manifests upfront, before any checkouts or builds.
+"""Generate PyTorch build manifests before any checkouts or builds.
 
 Resolves git refs to commit SHAs and fetches version files via the GitHub
 API, producing one manifest JSON per pytorch_git_ref. The manifests pin
 exact commits so that downstream build and test jobs use identical source
 revisions.
 
-For stable releases (e.g. release/2.10), the ``related_commits`` file in
-the ROCm/pytorch fork is parsed to resolve torchaudio, torchvision, apex,
-and triton pins. For nightly builds, each repo is resolved at its nightly
-(or master) branch independently.
-
 Usage::
 
-    # Generate manifests for all default pytorch refs:
     python generate_pytorch_manifest_upfront.py \
         --rocm-version 7.13.0a20260501 \
-        --manifest-dir /tmp/manifests
-
-    # Generate for a single ref:
-    python generate_pytorch_manifest_upfront.py \
-        --rocm-version 7.13.0a20260501 \
+        --version-suffix "+rocm7.13.0a20260501" \
         --manifest-dir /tmp/manifests \
         --pytorch-git-refs "release/2.11"
 """
 
 import argparse
 import json
-import logging
-import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
@@ -43,13 +32,12 @@ from github_actions.github_actions_api import (
     gha_resolve_git_ref,
 )
 from github_actions.manifest_utils import (
+    GitSourceInfo,
+    detect_therock_source_info,
     log,
     normalize_ref_for_filename,
 )
 
-logger = logging.getLogger(__name__)
-
-# Default pytorch refs to generate manifests for.
 DEFAULT_PYTORCH_GIT_REFS = [
     "release/2.8",
     "release/2.9",
@@ -58,54 +46,68 @@ DEFAULT_PYTORCH_GIT_REFS = [
     "nightly",
 ]
 
-# Repo configuration: (owner/repo, default nightly branch)
-REPO_CONFIG = {
-    "pytorch": {
-        "stable_repo": "ROCm/pytorch",
-        "nightly_repo": "pytorch/pytorch",
-        "nightly_branch": "nightly",
-        "version_file": "version.txt",
-    },
-    "pytorch_audio": {
-        "stable_repo": "pytorch/audio",
-        "nightly_repo": "pytorch/audio",
-        "nightly_branch": "nightly",
-        "version_file": "version.txt",
-    },
-    "pytorch_vision": {
-        "stable_repo": "pytorch/vision",
-        "nightly_repo": "pytorch/vision",
-        "nightly_branch": "nightly",
-        "version_file": "version.txt",
-    },
-    "triton": {
-        "stable_repo": "ROCm/triton",
-        "nightly_repo": "ROCm/triton",
-        "nightly_branch": None,  # Resolved from pytorch's triton_version.txt
-        "version_file": None,  # Version is complex (git hash); not computed here
-    },
-    "apex": {
-        "stable_repo": "ROCm/apex",
-        "nightly_repo": "ROCm/apex",
-        "nightly_branch": "master",
-        "version_file": "version.txt",
-    },
+
+@dataclass(frozen=True)
+class RepoConfig:
+    """Configuration for a pytorch ecosystem repository."""
+
+    stable_repo: str
+    nightly_repo: str
+    nightly_branch: str | None = None
+    version_file: str | None = None
+    # Key in ROCm/pytorch's ``related_commits`` file (e.g. "torchaudio").
+    # When set, stable builds resolve from related_commits; when None,
+    # the repo uses custom resolution logic (pytorch itself, triton).
+    related_commits_key: str | None = None
+
+
+REPOS: dict[str, RepoConfig] = {
+    "pytorch": RepoConfig(
+        stable_repo="ROCm/pytorch",
+        nightly_repo="pytorch/pytorch",
+        nightly_branch="nightly",
+        version_file="version.txt",
+    ),
+    "pytorch_audio": RepoConfig(
+        stable_repo="pytorch/audio",
+        nightly_repo="pytorch/audio",
+        nightly_branch="nightly",
+        version_file="version.txt",
+        related_commits_key="torchaudio",
+    ),
+    "pytorch_vision": RepoConfig(
+        stable_repo="pytorch/vision",
+        nightly_repo="pytorch/vision",
+        nightly_branch="nightly",
+        version_file="version.txt",
+        related_commits_key="torchvision",
+    ),
+    "triton": RepoConfig(
+        stable_repo="ROCm/triton",
+        nightly_repo="ROCm/triton",
+    ),
+    "apex": RepoConfig(
+        stable_repo="ROCm/apex",
+        nightly_repo="ROCm/apex",
+        nightly_branch="master",
+        version_file="version.txt",
+        related_commits_key="apex",
+    ),
 }
 
 
 def _resolve_ref(repo: str, ref: str) -> str:
-    """Resolve a git ref and log the result."""
     sha = gha_resolve_git_ref(repo, ref)
-    log(f"  Resolved {repo}@{ref} -> {sha[:12]}")
+    log(f"  {repo}@{ref} -> {sha[:12]}")
     return sha
 
 
-def parse_related_commits(content: str) -> dict[str, dict[str, str]]:
-    """Parse the ROCm/pytorch ``related_commits`` file.
+def _parse_related_commits(content: str) -> dict[str, dict[str, str]]:
+    """Parse ROCm/pytorch's ``related_commits`` file.
 
-    Returns a dict keyed by project name (e.g. "torchaudio"), with values
-    containing "origin" and "commit" fields. Only ``centos`` entries are
-    returned (used for both Linux and Windows builds).
+    Returns a dict keyed by project name (e.g. "torchaudio") with
+    "origin" and "commit" fields. Only ``centos`` entries are returned
+    (used for both Linux and Windows builds).
     """
     pins: dict[str, dict[str, str]] = {}
     for line in content.splitlines():
@@ -114,7 +116,7 @@ def parse_related_commits(content: str) -> dict[str, dict[str, str]]:
             continue
         parts = line.split("|")
         if len(parts) != 6:
-            log(f"  WARNING: Could not parse related_commits line: {line}")
+            log(f"  WARNING: skipping malformed related_commits line: {line}")
             continue
         rec_os, _source, rec_project, _branch, rec_commit, rec_origin = parts
         if rec_os == "centos":
@@ -122,173 +124,134 @@ def parse_related_commits(content: str) -> dict[str, dict[str, str]]:
     return pins
 
 
-def resolve_nightly_sources(
-    pytorch_ref: str,
-) -> dict[str, dict[str, str]]:
-    """Resolve source commits for a nightly build.
+def _resolve_triton(
+    pytorch_repo: str, pytorch_sha: str, *, nightly: bool, version_suffix: str
+) -> GitSourceInfo:
+    """Resolve triton commit and version from pytorch's pin files.
 
-    Each repo is resolved at its nightly branch independently.
+    The triton base version lives in pytorch's ``.ci/docker/triton_version.txt``,
+    not in the triton repo itself. The commit pin comes from
+    ``ci_commit_pins/triton.txt`` (stable) or is derived from the version
+    (nightly).
     """
-    sources: dict[str, dict[str, str]] = {}
-
-    for name, config in REPO_CONFIG.items():
-        repo = config["nightly_repo"]
-        branch = config["nightly_branch"]
-
-        if name == "pytorch":
-            branch = pytorch_ref  # "nightly"
-
-        if branch is None:
-            # triton: resolve from pytorch's triton pin file
-            continue
-
-        sha = _resolve_ref(repo, branch)
-        entry: dict[str, str] = {
-            "commit": sha,
-            "repo": f"https://github.com/{repo}.git",
-            "branch": branch,
-        }
-        sources[name] = entry
-
-    # Resolve triton from pytorch's pin file
-    pytorch_sha = sources["pytorch"]["commit"]
-    pytorch_repo = REPO_CONFIG["pytorch"]["nightly_repo"]
-    triton_version_content = gha_fetch_file_contents(
-        pytorch_repo, ".ci/docker/triton_version.txt", pytorch_sha
+    triton_repo = (
+        REPOS["triton"].nightly_repo if nightly else REPOS["triton"].stable_repo
     )
-    triton_version = triton_version_content.strip()
-    triton_major, triton_minor, *_ = triton_version.split(".")
-    triton_branch = f"release/{triton_major}.{triton_minor}.x"
-    triton_repo = REPO_CONFIG["triton"]["nightly_repo"]
-    triton_sha = _resolve_ref(triton_repo, triton_branch)
-    sources["triton"] = {
-        "commit": triton_sha,
-        "repo": f"https://github.com/{triton_repo}.git",
-        "branch": triton_branch,
-    }
 
-    return sources
+    # Base version is always in pytorch's triton_version.txt.
+    base_version = gha_fetch_file_contents(
+        pytorch_repo, ".ci/docker/triton_version.txt", pytorch_sha
+    ).strip()
+    version = f"{base_version}{version_suffix}"
+    log(f"  triton: {base_version} -> {version}")
+
+    if nightly:
+        major, minor, *_ = base_version.split(".")
+        branch = f"release/{major}.{minor}.x"
+        sha = _resolve_ref(triton_repo, branch)
+        return GitSourceInfo(
+            commit=sha,
+            repo=f"https://github.com/{triton_repo}.git",
+            branch=branch,
+            version=version,
+        )
+
+    # Stable: use ci_commit_pins
+    pin = gha_fetch_file_contents(
+        pytorch_repo, ".ci/docker/ci_commit_pins/triton.txt", pytorch_sha
+    ).strip()
+    log(f"  triton pin: {pin[:12]}")
+    return GitSourceInfo(
+        commit=pin,
+        repo=f"https://github.com/{triton_repo}.git",
+        version=version,
+    )
 
 
-def resolve_stable_sources(
-    pytorch_ref: str,
-) -> dict[str, dict[str, str]]:
-    """Resolve source commits for a stable release.
+def resolve_sources(pytorch_ref: str, version_suffix: str) -> dict[str, GitSourceInfo]:
+    """Resolve all source commits for a given pytorch_git_ref."""
+    nightly = pytorch_ref == "nightly"
+    sources: dict[str, GitSourceInfo] = {}
 
-    Pytorch is resolved at the given ref in ROCm/pytorch. Other repos
-    are resolved from the ``related_commits`` file in that checkout.
-    """
-    pytorch_repo = REPO_CONFIG["pytorch"]["stable_repo"]
+    # Resolve pytorch first — other repos depend on it for pin files.
+    pytorch_config = REPOS["pytorch"]
+    pytorch_repo = (
+        pytorch_config.nightly_repo if nightly else pytorch_config.stable_repo
+    )
     pytorch_sha = _resolve_ref(pytorch_repo, pytorch_ref)
+    sources["pytorch"] = GitSourceInfo(
+        commit=pytorch_sha,
+        repo=f"https://github.com/{pytorch_repo}.git",
+        branch=pytorch_ref,
+    )
 
-    sources: dict[str, dict[str, str]] = {
-        "pytorch": {
-            "commit": pytorch_sha,
-            "repo": f"https://github.com/{pytorch_repo}.git",
-            "branch": pytorch_ref,
-        },
-    }
-
-    # Fetch related_commits to resolve other repos
-    try:
+    # For stable builds, load related_commits once (used by repos that have
+    # a related_commits_key).
+    pins: dict[str, dict[str, str]] = {}
+    if not nightly:
         related_content = gha_fetch_file_contents(
             pytorch_repo, "related_commits", pytorch_sha
         )
-    except Exception as e:
-        log(f"  WARNING: Could not fetch related_commits: {e}")
-        log("  Falling back to nightly branches for sub-repos")
-        # Fall back: resolve each at its default branch
-        for name in ["pytorch_audio", "pytorch_vision", "apex", "triton"]:
-            config = REPO_CONFIG[name]
-            repo = config["stable_repo"]
-            branch = config["nightly_branch"] or "main"
-            sha = _resolve_ref(repo, branch)
-            sources[name] = {
-                "commit": sha,
-                "repo": f"https://github.com/{repo}.git",
-                "branch": branch,
-            }
-        return sources
+        pins = _parse_related_commits(related_content)
 
-    pins = parse_related_commits(related_content)
+    # Resolve remaining repos.
+    for name, config in REPOS.items():
+        if name == "pytorch":
+            continue
 
-    # Resolve audio, vision, apex from related_commits
-    project_name_map = {
-        "torchaudio": "pytorch_audio",
-        "torchvision": "pytorch_vision",
-        "apex": "apex",
-    }
+        # Triton has its own pin mechanism.
+        if name == "triton":
+            sources[name] = _resolve_triton(
+                pytorch_repo,
+                pytorch_sha,
+                nightly=nightly,
+                version_suffix=version_suffix,
+            )
+            continue
 
-    for project_name, internal_name in project_name_map.items():
-        if project_name in pins:
-            pin = pins[project_name]
-            sources[internal_name] = {
-                "commit": pin["commit"],
-                "repo": pin["origin"],
-            }
+        if nightly:
+            sha = _resolve_ref(config.nightly_repo, config.nightly_branch)
+            sources[name] = GitSourceInfo(
+                commit=sha,
+                repo=f"https://github.com/{config.nightly_repo}.git",
+                branch=config.nightly_branch,
+            )
+        elif config.related_commits_key and config.related_commits_key in pins:
+            pin = pins[config.related_commits_key]
+            sources[name] = GitSourceInfo(commit=pin["commit"], repo=pin["origin"])
         else:
-            config = REPO_CONFIG[internal_name]
-            repo = config["stable_repo"]
-            branch = config["nightly_branch"] or "main"
-            sha = _resolve_ref(repo, branch)
-            sources[internal_name] = {
-                "commit": sha,
-                "repo": f"https://github.com/{repo}.git",
-                "branch": branch,
-            }
-
-    # Resolve triton from ci_commit_pins (not related_commits).
-    # This matches the logic in pytorch_triton_repo.py.
-    triton_repo = REPO_CONFIG["triton"]["stable_repo"]
-    try:
-        triton_pin = gha_fetch_file_contents(
-            pytorch_repo, ".ci/docker/ci_commit_pins/triton.txt", pytorch_sha
-        ).strip()
-        log(f"  Triton pin from ci_commit_pins: {triton_pin[:12]}")
-        sources["triton"] = {
-            "commit": triton_pin,
-            "repo": f"https://github.com/{triton_repo}.git",
-        }
-    except Exception as e:
-        log(f"  WARNING: Could not fetch triton pin: {e}")
-        sha = _resolve_ref(triton_repo, "main")
-        sources["triton"] = {
-            "commit": sha,
-            "repo": f"https://github.com/{triton_repo}.git",
-            "branch": "main",
-        }
+            fallback = config.nightly_branch or "main"
+            sha = _resolve_ref(config.stable_repo, fallback)
+            sources[name] = GitSourceInfo(
+                commit=sha, repo=f"https://github.com/{config.stable_repo}.git"
+            )
 
     return sources
 
 
 def fetch_versions(
-    sources: dict[str, dict[str, str]],
-    version_suffix: str,
-) -> None:
-    """Fetch version.txt from each repo and add computed versions to sources.
-
-    Modifies ``sources`` in place, adding a "version" key to each entry
-    that has a version_file configured.
-    """
-    for name, config in REPO_CONFIG.items():
-        version_file = config.get("version_file")
-        if version_file is None or name not in sources:
+    sources: dict[str, GitSourceInfo], version_suffix: str
+) -> dict[str, GitSourceInfo]:
+    """Fetch version.txt for each repo and return updated GitSourceInfo entries."""
+    updated: dict[str, GitSourceInfo] = {}
+    for name, info in sources.items():
+        version_file = REPOS[name].version_file
+        if version_file is None:
+            updated[name] = info
             continue
 
-        entry = sources[name]
-        repo_url = entry["repo"]
-        # Extract owner/repo from URL like https://github.com/ROCm/pytorch.git
-        repo = repo_url.replace("https://github.com/", "").rstrip(".git").rstrip("/")
-        commit = entry["commit"]
-
-        try:
-            content = gha_fetch_file_contents(repo, version_file, commit)
-            base_version = content.strip()
-            full_version = f"{base_version}{version_suffix}"
-            entry["version"] = full_version
-            log(f"  {name}: {base_version} -> {full_version}")
-        except Exception as e:
-            log(f"  WARNING: Could not fetch {version_file} for {name}: {e}")
+        repo = (
+            info.repo.removeprefix("https://github.com/")
+            .removesuffix(".git")
+            .rstrip("/")
+        )
+        base_version = gha_fetch_file_contents(repo, version_file, info.commit).strip()
+        full_version = f"{base_version}{version_suffix}"
+        log(f"  {name}: {base_version} -> {full_version}")
+        updated[name] = GitSourceInfo(
+            commit=info.commit, repo=info.repo, branch=info.branch, version=full_version
+        )
+    return updated
 
 
 def generate_manifest(
@@ -296,72 +259,51 @@ def generate_manifest(
     pytorch_git_ref: str,
     rocm_version: str,
     version_suffix: str,
+    therock_commit: str,
+    therock_repo: str,
+    therock_branch: str,
 ) -> dict[str, object]:
     """Generate a single manifest for one pytorch_git_ref."""
-    log(f"Generating manifest for pytorch_git_ref={pytorch_git_ref}")
+    log(f"Generating manifest for {pytorch_git_ref}")
 
-    is_nightly = pytorch_git_ref == "nightly"
+    sources = resolve_sources(pytorch_git_ref, version_suffix)
+    sources = fetch_versions(sources, version_suffix)
 
-    if is_nightly:
-        sources = resolve_nightly_sources(pytorch_git_ref)
-    else:
-        sources = resolve_stable_sources(pytorch_git_ref)
-
-    fetch_versions(sources, version_suffix)
-
-    # Add therock info from the CI environment
-    server_url = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
-    repo = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
-    sha = os.environ.get("GITHUB_SHA", "unknown")
-    ref = os.environ.get("GITHUB_REF", "")
-
-    therock_branch = "unknown"
-    if ref.startswith("refs/heads/"):
-        therock_branch = ref[len("refs/heads/") :]
-    elif ref:
-        therock_branch = ref
-
-    manifest: dict[str, object] = {}
-    manifest.update(sources)
+    manifest: dict[str, object] = {
+        name: info.to_dict() for name, info in sources.items()
+    }
     manifest["therock"] = {
-        "commit": sha,
-        "repo": f"{server_url}/{repo}.git",
+        "commit": therock_commit,
+        "repo": therock_repo,
         "branch": therock_branch,
     }
     manifest["rocm_version"] = rocm_version
     manifest["version_suffix"] = version_suffix
-
     return manifest
 
 
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
-        description="Generate PyTorch build manifests upfront (before checkout/build)"
+        description="Generate PyTorch build manifests (before checkout/build)"
+    )
+    parser.add_argument("--rocm-version", required=True, help="e.g. 7.13.0a20260501")
+    parser.add_argument(
+        "--version-suffix", required=True, help="e.g. +rocm7.13.0a20260501"
+    )
+    parser.add_argument("--manifest-dir", type=Path, required=True)
+    parser.add_argument(
+        "--therock-commit", help="Override TheRock commit (default: detect from git)"
     )
     parser.add_argument(
-        "--rocm-version",
-        required=True,
-        help="ROCm version (e.g. 7.13.0a20260501)",
+        "--therock-repo", help="Override TheRock repo URL (default: detect from git)"
     )
     parser.add_argument(
-        "--version-suffix",
-        required=True,
-        help="Version suffix for wheel versions (e.g. +rocm7.13.0a20260501)",
-    )
-    parser.add_argument(
-        "--manifest-dir",
-        type=Path,
-        required=True,
-        help="Output directory for manifest JSON files",
+        "--therock-branch", help="Override TheRock branch (default: detect from git)"
     )
     parser.add_argument(
         "--pytorch-git-refs",
-        type=str,
         default="",
-        help=(
-            "Space-separated list of pytorch git refs to generate manifests for. "
-            "Empty means all default refs."
-        ),
+        help="Space-separated pytorch refs (empty = all defaults)",
     )
     args = parser.parse_args(argv)
 
@@ -370,39 +312,37 @@ def main(argv: list[str]) -> None:
         if args.pytorch_git_refs
         else DEFAULT_PYTORCH_GIT_REFS
     )
-    log(f"ROCm version: {args.rocm_version}")
-    log(f"Version suffix: {args.version_suffix}")
+
+    # Detect TheRock source info from the local repo, then apply CLI overrides.
+    therock_root = Path(__file__).resolve().parents[2]
+    therock_info = detect_therock_source_info(therock_root)
+    therock_commit = args.therock_commit or therock_info.commit
+    therock_repo = args.therock_repo or therock_info.repo
+    therock_branch = args.therock_branch or therock_info.branch
+
+    log(f"ROCm version: {args.rocm_version}, suffix: {args.version_suffix}")
+    log(f"TheRock: {therock_commit[:12]} ({therock_branch})")
     log(f"PyTorch refs: {refs}")
     log("")
 
-    manifest_dir = args.manifest_dir.resolve()
-    manifest_dir.mkdir(parents=True, exist_ok=True)
-
-    manifest_paths: list[str] = []
+    args.manifest_dir.mkdir(parents=True, exist_ok=True)
 
     for ref in refs:
         manifest = generate_manifest(
             pytorch_git_ref=ref,
             rocm_version=args.rocm_version,
             version_suffix=args.version_suffix,
+            therock_commit=therock_commit,
+            therock_repo=therock_repo,
+            therock_branch=therock_branch,
         )
-
         filename = f"therock-manifest_torch_{normalize_ref_for_filename(ref)}.json"
-        out_path = manifest_dir / filename
+        out_path = args.manifest_dir / filename
         out_path.write_text(
-            json.dumps(manifest, indent=2, sort_keys=False) + "\n",
-            encoding="utf-8",
+            json.dumps(manifest, indent=2, sort_keys=False) + "\n", encoding="utf-8"
         )
-        manifest_paths.append(str(out_path))
-        log(f"Wrote {out_path}")
-        log("")
-
-    # Write summary of generated manifests
-    log(f"Generated {len(manifest_paths)} manifest(s)")
-    for p in manifest_paths:
-        log(f"  {p}")
+        log(f"Wrote {out_path}\n")
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     main(sys.argv[1:])

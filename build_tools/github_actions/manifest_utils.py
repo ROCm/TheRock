@@ -23,11 +23,14 @@ class GitSourceInfo:
     commit: str
     repo: str
     branch: str | None = None
+    version: str | None = None
 
     def to_dict(self) -> dict[str, str]:
         d = {"commit": self.commit, "repo": self.repo}
         if self.branch is not None:
             d["branch"] = self.branch
+        if self.version is not None:
+            d["version"] = self.version
         return d
 
 
@@ -130,6 +133,21 @@ def resolve_branch(*, inferred: str | None, provided: str | None) -> str | None:
     if provided:
         return provided
     return None
+
+
+def detect_therock_source_info(repo_root: Path) -> GitSourceInfo:
+    """Detect TheRock commit, repo, and branch from a local git checkout.
+
+    Falls back to "unknown" for fields that cannot be determined (e.g. when
+    not inside a git worktree).
+    """
+    commit = capture_optional(["git", "rev-parse", "HEAD"], cwd=repo_root) or "unknown"
+    repo_url = (
+        capture_optional(["git", "remote", "get-url", "origin"], cwd=repo_root)
+        or "https://github.com/ROCm/TheRock.git"
+    )
+    branch = git_branch_best_effort(repo_root) or "unknown"
+    return GitSourceInfo(commit=commit, repo=repo_url, branch=branch)
 
 
 def normalize_python_version_for_filename(python_version: str) -> str:
