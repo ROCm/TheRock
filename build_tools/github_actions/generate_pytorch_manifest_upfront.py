@@ -193,12 +193,27 @@ def _resolve_triton(
         raise
 
 
+def default_projects_for_platform(platform: str) -> list[str]:
+    """Return the default project list for a platform."""
+    return [
+        name
+        for name, config in REPOS.items()
+        if platform not in config.exclude_platforms
+    ]
+
+
 def resolve_sources(
-    pytorch_ref: str, version_suffix: str, platform: str
+    pytorch_ref: str,
+    version_suffix: str,
+    platform: str,
+    projects: list[str],
 ) -> dict[str, GitSourceInfo]:
-    """Resolve all source commits for a given pytorch_git_ref."""
+    """Resolve source commits for the requested projects."""
     nightly = pytorch_ref == "nightly"
     sources: dict[str, GitSourceInfo] = {}
+
+    if "pytorch" not in projects:
+        raise ValueError("pytorch must be in the projects list")
 
     # Resolve pytorch first — other repos depend on it for pin files.
     pytorch_config = REPOS["pytorch"]
@@ -223,10 +238,7 @@ def resolve_sources(
 
     # Resolve remaining repos.
     for name, config in REPOS.items():
-        if name == "pytorch":
-            continue
-
-        if platform in config.exclude_platforms:
+        if name == "pytorch" or name not in projects:
             continue
 
         # Triton has its own pin mechanism.
@@ -291,6 +303,7 @@ def generate_manifest(
     rocm_version: str,
     version_suffix: str,
     platform: str,
+    projects: list[str],
     therock_commit: str,
     therock_repo: str,
     therock_branch: str,
@@ -298,7 +311,7 @@ def generate_manifest(
     """Generate a single manifest for one pytorch_git_ref."""
     log(f"Generating manifest for {pytorch_git_ref} ({platform})")
 
-    sources = resolve_sources(pytorch_git_ref, version_suffix, platform)
+    sources = resolve_sources(pytorch_git_ref, version_suffix, platform, projects)
     sources = fetch_versions(sources, version_suffix)
 
     manifest: dict[str, object] = {
@@ -339,6 +352,14 @@ def main(argv: list[str]) -> None:
         "--therock-branch", help="Override TheRock branch (default: detect from git)"
     )
     parser.add_argument(
+        "--projects",
+        default="",
+        help=(
+            "Space-separated list of projects to include in the manifest "
+            "(default: all projects for the platform)"
+        ),
+    )
+    parser.add_argument(
         "--pytorch-git-refs",
         default="",
         help="Space-separated pytorch refs (empty = all defaults)",
@@ -350,6 +371,11 @@ def main(argv: list[str]) -> None:
         if args.pytorch_git_refs
         else DEFAULT_PYTORCH_GIT_REFS
     )
+    projects = (
+        args.projects.split()
+        if args.projects
+        else default_projects_for_platform(args.platform)
+    )
 
     # Detect TheRock source info from the local repo, then apply CLI overrides.
     therock_root = Path(__file__).resolve().parents[2]
@@ -359,7 +385,7 @@ def main(argv: list[str]) -> None:
     therock_branch = args.therock_branch or therock_info.branch
 
     log(f"ROCm version: {args.rocm_version}, suffix: {args.version_suffix}")
-    log(f"Platform: {args.platform}")
+    log(f"Platform: {args.platform}, projects: {projects}")
     log(f"TheRock: {therock_commit[:12]} ({therock_branch})")
     log(f"PyTorch refs: {refs}")
     log("")
@@ -372,6 +398,7 @@ def main(argv: list[str]) -> None:
             rocm_version=args.rocm_version,
             version_suffix=args.version_suffix,
             platform=args.platform,
+            projects=projects,
             therock_commit=therock_commit,
             therock_repo=therock_repo,
             therock_branch=therock_branch,
