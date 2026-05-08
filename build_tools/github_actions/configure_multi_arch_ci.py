@@ -375,14 +375,10 @@ class TestRocmDecision(JobGroupDecision):
     - "standard"      — via test_filter:standard PR label
     - "comprehensive" — schedule/nightly
     - "full"          — submodule changes, test:* labels, or test_filter:full
-
-    build_only: when True, skip all tests (e.g., ASAN builds on submodule bumps).
     """
 
     test_type: str = "quick"
     test_type_reason: str = "default"
-    build_only: bool = False
-    build_only_reason: str = ""
     # TODO: Consolidate test_type, test labels, and run_functional_tests
     # (from the single-arch pipeline) into a per-platform test config object
     # (e.g. linux_test_config JSON) instead of separate top-level outputs.
@@ -409,8 +405,6 @@ class JobDecisions:
             f"  test_type: {self.test_rocm.test_type} "
             f"({self.test_rocm.test_type_reason})"
         )
-        if self.test_rocm.build_only:
-            print(f"  build_only: True ({self.test_rocm.build_only_reason})")
         print(f"  build_rocm: {self.build_rocm.action.value}")
         print(f"  test_rocm: {self.test_rocm.action.value}")
         print(f"  build_rocm_python: {self.build_rocm_python.action.value}")
@@ -597,28 +591,6 @@ def _determine_test_type(
     return "quick", "default"
 
 
-def _should_skip_tests(
-    ci_inputs: CIInputs,
-    git_context: GitContext,
-) -> tuple[bool, str]:
-    """Determine if tests should be skipped entirely (build-only mode).
-
-    Returns (skip_tests, reason).
-    """
-    # ASAN builds triggered by submodule bumps are build-only.
-    # This validates ASAN compilation without consuming test runner capacity.
-    # Nightly ASAN runs (schedule) still run full tests.
-    if ci_inputs.build_variant == "asan" and not ci_inputs.is_schedule:
-        if (
-            git_context.changed_files is not None
-            and git_context.submodule_paths is not None
-        ):
-            matching = set(git_context.submodule_paths) & set(git_context.changed_files)
-            if matching:
-                return True, f"ASAN build-only for submodule(s): {sorted(matching)}"
-    return False, ""
-
-
 def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
@@ -645,16 +617,10 @@ def decide_jobs(
         ci_inputs=ci_inputs,
         git_context=git_context,
     )
-    build_only, build_only_reason = _should_skip_tests(
-        ci_inputs=ci_inputs,
-        git_context=git_context,
-    )
     test_rocm = TestRocmDecision(
         action=JobAction.RUN,
         test_type=test_type,
         test_type_reason=test_type_reason,
-        build_only=build_only,
-        build_only_reason=build_only_reason,
     )
 
     # Other jobs run unconditionally with no configuration.
@@ -815,7 +781,6 @@ def _expand_build_config_for_platform(
     all_families: dict[str, dict],
     variant_config: dict,
     test_type: str,
-    build_only: bool = False,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -896,11 +861,6 @@ def _expand_build_config_for_platform(
                     f"disabling tests"
                 )
 
-        # If build_only is set, disable all testing (e.g., ASAN submodule bumps)
-        if build_only:
-            test_runs_on = ""
-            print(f"  {family_name}: build_only mode, disabling tests")
-
         # If run-full-tests-only is set and test_type is "quick", disable testing
         if platform_info.get("run-full-tests-only", False) and test_type == "quick":
             test_runs_on = ""
@@ -961,7 +921,6 @@ def expand_build_configs(
     targets: TargetSelection,
     ci_inputs: CIInputs,
     test_type: str,
-    build_only: bool = False,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfigs:
@@ -996,7 +955,6 @@ def expand_build_configs(
             all_families=all_families,
             variant_config=variant_config,
             test_type=test_type,
-            build_only=build_only,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
         )
@@ -1084,7 +1042,6 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         targets=targets,
         ci_inputs=ci_inputs,
         test_type=jobs.test_rocm.test_type,
-        build_only=jobs.test_rocm.build_only,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
     )
