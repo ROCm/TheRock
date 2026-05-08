@@ -8,13 +8,14 @@ CI environment variables, run subprocesses, or exit the process. Runner scripts
 own their project-specific paths, environment setup, timeouts, and dispatch.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 import logging
+import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 from typing import Iterable, Mapping
-
 
 VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
 
@@ -67,6 +68,128 @@ def _positive_int(name: str, value: str | int) -> int:
     if parsed < 1:
         raise ValueError(f"{name} must be >= 1, got {parsed}")
     return parsed
+
+
+@dataclass(frozen=True)
+class TestRunSettings:
+    """Common test runner settings parsed once and passed through helpers."""
+
+    test_dir: str | Path
+    rocm_path: str | Path | None = None
+    category: str | None = "quick"
+    gpu_arch: str | None = ""
+    shard_index: str | int = 1
+    total_shards: str | int = 1
+    available_gpu_archs: frozenset[str] = field(default_factory=frozenset)
+    exclude_labels: frozenset[str] = field(default_factory=frozenset)
+    ctest_parallel: str | int | None = None
+    ctest_timeout_seconds: str | int | None = None
+    ctest_output_on_failure: bool = True
+    ctest_verbose: bool = True
+    extra_ctest_args: tuple[str, ...] = field(default_factory=tuple)
+
+    def __post_init__(self):
+        object.__setattr__(self, "test_dir", Path(self.test_dir))
+        if self.rocm_path is not None:
+            object.__setattr__(self, "rocm_path", Path(self.rocm_path))
+        object.__setattr__(self, "category", normalize_test_category(self.category))
+        object.__setattr__(self, "gpu_arch", (self.gpu_arch or "").strip().lower())
+        parsed_shard_index = _positive_int("shard_index", self.shard_index)
+        parsed_total_shards = _positive_int("total_shards", self.total_shards)
+        if parsed_shard_index > parsed_total_shards:
+            raise ValueError(
+                "shard_index must be less than or equal to total_shards, "
+                f"got {parsed_shard_index} > {parsed_total_shards}"
+            )
+        object.__setattr__(self, "shard_index", parsed_shard_index)
+        object.__setattr__(self, "total_shards", parsed_total_shards)
+
+        if self.ctest_parallel is not None:
+            object.__setattr__(
+                self,
+                "ctest_parallel",
+                _positive_int("ctest_parallel", self.ctest_parallel),
+            )
+        if self.ctest_timeout_seconds is not None:
+            object.__setattr__(
+                self,
+                "ctest_timeout_seconds",
+                _positive_int("ctest_timeout_seconds", self.ctest_timeout_seconds),
+            )
+
+        object.__setattr__(
+            self,
+            "available_gpu_archs",
+            frozenset(str(v) for v in self.available_gpu_archs),
+        )
+        object.__setattr__(
+            self,
+            "exclude_labels",
+            frozenset(str(v) for v in self.exclude_labels),
+        )
+        object.__setattr__(
+            self,
+            "extra_ctest_args",
+            tuple(str(v) for v in self.extra_ctest_args),
+        )
+
+    @classmethod
+    def from_env(
+        cls,
+        *,
+        test_dir: str | Path,
+        rocm_path: str | Path | None = None,
+        env: Mapping[str, str] | None = None,
+        **kwargs,
+    ) -> "TestRunSettings":
+        """Create settings from common CI environment variables."""
+        env = os.environ if env is None else env
+        return cls(
+            test_dir=test_dir,
+            rocm_path=rocm_path,
+            category=env.get("TEST_TYPE", "quick"),
+            gpu_arch=extract_gpu_arch(env.get("AMDGPU_FAMILIES")),
+            shard_index=env.get("SHARD_INDEX", 1),
+            total_shards=env.get("TOTAL_SHARDS", 1),
+            **kwargs,
+        )
+
+    def with_ctest(
+        self,
+        *,
+        available_gpu_archs: Iterable[str] | None = None,
+        exclude_labels: Iterable[str] | None = None,
+        parallel: str | int | None = None,
+        timeout_seconds: str | int | None = None,
+        output_on_failure: bool | None = None,
+        verbose: bool | None = None,
+        extra_args: Iterable[str] | None = None,
+    ) -> "TestRunSettings":
+        """Return settings with CTest-specific values replaced."""
+        updates = {}
+        if available_gpu_archs is not None:
+            updates["available_gpu_archs"] = frozenset(available_gpu_archs)
+        if exclude_labels is not None:
+            updates["exclude_labels"] = frozenset(exclude_labels)
+        if parallel is not None:
+            updates["ctest_parallel"] = parallel
+        if timeout_seconds is not None:
+            updates["ctest_timeout_seconds"] = timeout_seconds
+        if output_on_failure is not None:
+            updates["ctest_output_on_failure"] = output_on_failure
+        if verbose is not None:
+            updates["ctest_verbose"] = verbose
+        if extra_args is not None:
+            updates["extra_ctest_args"] = tuple(extra_args)
+        return replace(self, **updates)
+
+    def with_ctest_labels(self, labels: CTestLabels) -> "TestRunSettings":
+        """Return settings with discovered CTest labels applied."""
+        return replace(
+            self,
+            available_gpu_archs=frozenset(labels.gpu_archs),
+            exclude_labels=frozenset(labels.exclude_labels),
+        )
 
 
 def gtest_shard_env(
@@ -184,6 +307,100 @@ def parse_ctest_labels(labels: Iterable[str]) -> CTestLabels:
             exclude_labels.add(label)
 
     return CTestLabels(gpu_archs=gpu_archs, exclude_labels=exclude_labels)
+
+
+def discover_ctest_labels(
+    test_dir: str | Path,
+    runner=subprocess.run,
+    *,
+    require_tests: bool = True,
+) -> CTestLabels:
+    """Run CTest discovery and return parsed GPU/category-exclude labels."""
+    if require_tests and count_ctest_tests(test_dir, runner=runner) == 0:
+        raise RuntimeError(f"No CTest tests found in {Path(test_dir)}")
+    return parse_ctest_labels(read_ctest_labels(test_dir, runner=runner))
+
+
+def build_ctest_command(settings: TestRunSettings) -> list[str]:
+    """Build a CTest command from generic test run settings."""
+    cmd = ["ctest"]
+    cmd.extend(
+        build_ctest_label_args(
+            settings.category,
+            settings.gpu_arch,
+            set(settings.available_gpu_archs),
+            set(settings.exclude_labels),
+        )
+    )
+
+    if settings.ctest_output_on_failure:
+        cmd.append("--output-on-failure")
+    if settings.ctest_parallel is not None:
+        cmd.extend(["--parallel", str(settings.ctest_parallel)])
+    if settings.ctest_timeout_seconds is not None:
+        cmd.extend(["--timeout", str(settings.ctest_timeout_seconds)])
+    cmd.extend(["--test-dir", str(settings.test_dir)])
+    if settings.ctest_verbose:
+        cmd.append("-V")
+    cmd.extend(ctest_shard_args(settings.shard_index, settings.total_shards))
+    cmd.extend(settings.extra_ctest_args)
+    return cmd
+
+
+def _prepend_env_paths(
+    env: dict[str, str],
+    paths_by_var: Mapping[str, Iterable[str | Path]] | None,
+) -> None:
+    if not paths_by_var:
+        return
+    for env_key, paths in paths_by_var.items():
+        new_paths = [str(path) for path in paths]
+        existing_path = env.get(env_key, "")
+        env[env_key] = os.pathsep.join(filter(None, new_paths + [existing_path]))
+
+
+def build_test_env(
+    settings: TestRunSettings,
+    *,
+    base_env: Mapping[str, str] | None = None,
+    path_prepend: Mapping[str, Iterable[str | Path]] | None = None,
+    extra_env: Mapping[str, str | Path] | None = None,
+) -> dict[str, str]:
+    """Build a test environment with common ROCm and GTest settings."""
+    env = dict(base_env or {})
+    if settings.rocm_path is not None:
+        env["ROCM_PATH"] = str(settings.rocm_path)
+    env.update(gtest_shard_env(settings.shard_index, settings.total_shards))
+    _prepend_env_paths(env, path_prepend)
+    if extra_env:
+        env.update({key: str(value) for key, value in extra_env.items()})
+    return env
+
+
+def run_ctest(
+    settings: TestRunSettings,
+    *,
+    cwd: str | Path | None = None,
+    env: Mapping[str, str] | None = None,
+    runner=subprocess.run,
+    check: bool = False,
+    discover_labels: bool = False,
+    require_tests: bool = True,
+):
+    """Run CTest with settings-owned common mechanics and caller-owned env/cwd."""
+    if discover_labels:
+        settings = settings.with_ctest_labels(
+            discover_ctest_labels(
+                settings.test_dir,
+                runner=runner,
+                require_tests=require_tests,
+            )
+        )
+    cmd = build_ctest_command(settings)
+    if cwd is None:
+        cwd = settings.rocm_path
+    logging.info("++ Exec [%s]$ %s", cwd or Path.cwd(), shlex.join(cmd))
+    return runner(cmd, cwd=cwd, env=env, check=check)
 
 
 def _rocminfo_command(rocm_bin_dir: str | Path | None = None) -> str:

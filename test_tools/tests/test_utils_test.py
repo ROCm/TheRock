@@ -94,6 +94,82 @@ class ShardingTest(unittest.TestCase):
             test_utils.ctest_shard_args("5", "4")
 
 
+class TestRunSettingsTest(unittest.TestCase):
+    def test_from_env_parses_common_ci_settings(self):
+        settings = test_utils.TestRunSettings.from_env(
+            test_dir="tests",
+            rocm_path="install",
+            env={
+                "TEST_TYPE": "STANDARD",
+                "AMDGPU_FAMILIES": "family=gfx942",
+                "SHARD_INDEX": "2",
+                "TOTAL_SHARDS": "4",
+            },
+        )
+
+        self.assertEqual(settings.test_dir, Path("tests"))
+        self.assertEqual(settings.rocm_path, Path("install"))
+        self.assertEqual(settings.category, "standard")
+        self.assertEqual(settings.gpu_arch, "gfx942")
+        self.assertEqual(settings.shard_index, 2)
+        self.assertEqual(settings.total_shards, 4)
+
+    def test_invalid_env_category_falls_back_to_quick(self):
+        settings = test_utils.TestRunSettings.from_env(
+            test_dir="tests",
+            env={
+                "TEST_TYPE": "smoke",
+                "SHARD_INDEX": "1",
+                "TOTAL_SHARDS": "1",
+            },
+        )
+        self.assertEqual(settings.category, "quick")
+
+    def test_invalid_shards_raise(self):
+        with self.assertRaises(ValueError):
+            test_utils.TestRunSettings(
+                test_dir="tests", shard_index="3", total_shards="2"
+            )
+
+    def test_with_ctest_returns_updated_settings(self):
+        settings = test_utils.TestRunSettings(
+            test_dir="tests",
+            category="quick",
+            gpu_arch="gfx1151",
+        )
+
+        updated = settings.with_ctest(
+            available_gpu_archs={"gfx115X"},
+            exclude_labels={"quick_exclude"},
+            parallel="8",
+            timeout_seconds="7200",
+            output_on_failure=False,
+            verbose=False,
+            extra_args=["--tests-regex", "smoke"],
+        )
+
+        self.assertEqual(settings.available_gpu_archs, frozenset())
+        self.assertEqual(updated.available_gpu_archs, frozenset({"gfx115X"}))
+        self.assertEqual(updated.exclude_labels, frozenset({"quick_exclude"}))
+        self.assertEqual(updated.ctest_parallel, 8)
+        self.assertEqual(updated.ctest_timeout_seconds, 7200)
+        self.assertFalse(updated.ctest_output_on_failure)
+        self.assertFalse(updated.ctest_verbose)
+        self.assertEqual(updated.extra_ctest_args, ("--tests-regex", "smoke"))
+
+    def test_with_ctest_labels_applies_discovered_label_sets(self):
+        settings = test_utils.TestRunSettings(test_dir="tests")
+        updated = settings.with_ctest_labels(
+            test_utils.CTestLabels(
+                gpu_archs={"gfx942"},
+                exclude_labels={"quick_exclude"},
+            )
+        )
+
+        self.assertEqual(updated.available_gpu_archs, frozenset({"gfx942"}))
+        self.assertEqual(updated.exclude_labels, frozenset({"quick_exclude"}))
+
+
 class CTestLabelArgsTest(unittest.TestCase):
     def test_category_label_is_included(self):
         self.assertEqual(
@@ -176,6 +252,163 @@ class CTestDiscoveryTest(unittest.TestCase):
         )
         self.assertEqual(labels.gpu_archs, {"gfx115X", "gfx942"})
         self.assertEqual(labels.exclude_labels, {"standard_exclude"})
+
+    def test_discover_ctest_labels_requires_tests_by_default(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+
+            def runner(cmd, **kwargs):
+                if "-N" in cmd:
+                    return SimpleNamespace(stdout="Test project\n")
+                return SimpleNamespace(stdout="quick\n")
+
+            with self.assertRaises(RuntimeError):
+                test_utils.discover_ctest_labels(temp_dir, runner)
+
+    def test_discover_ctest_labels_can_skip_test_count_check(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            calls = []
+
+            def runner(cmd, **kwargs):
+                calls.append(cmd)
+                return SimpleNamespace(stdout="quick\nex_gpu_gfx115X\n")
+
+            labels = test_utils.discover_ctest_labels(
+                temp_dir, runner, require_tests=False
+            )
+
+            self.assertEqual(labels.gpu_archs, {"gfx115X"})
+            self.assertEqual(labels.exclude_labels, set())
+            self.assertEqual(
+                calls,
+                [["ctest", "--print-labels", "--test-dir", os.fspath(temp_dir)]],
+            )
+
+
+class CTestRunSettingsHelpersTest(unittest.TestCase):
+    def test_build_ctest_command_from_settings(self):
+        settings = test_utils.TestRunSettings(
+            test_dir="tests",
+            category="standard",
+            gpu_arch="gfx1151",
+            shard_index=2,
+            total_shards=4,
+        ).with_ctest(
+            available_gpu_archs={"gfx115X"},
+            exclude_labels={"standard_exclude"},
+            parallel=8,
+            timeout_seconds=7200,
+            extra_args=["--tests-regex", "smoke"],
+        )
+
+        self.assertEqual(
+            test_utils.build_ctest_command(settings),
+            [
+                "ctest",
+                "-L",
+                "standard",
+                "-L",
+                "ex_gpu_gfx115X",
+                "-LE",
+                "standard_exclude",
+                "--output-on-failure",
+                "--parallel",
+                "8",
+                "--timeout",
+                "7200",
+                "--test-dir",
+                "tests",
+                "-V",
+                "--tests-information",
+                "2,,4",
+                "--tests-regex",
+                "smoke",
+            ],
+        )
+
+    def test_build_test_env_applies_common_and_project_settings(self):
+        settings = test_utils.TestRunSettings(
+            test_dir="tests",
+            rocm_path="install",
+            shard_index=2,
+            total_shards=4,
+        )
+
+        env = test_utils.build_test_env(
+            settings,
+            base_env={"PATH": "base-bin", "LD_LIBRARY_PATH": "base-lib"},
+            path_prepend={
+                "PATH": [Path("install") / "bin"],
+                "LD_LIBRARY_PATH": [Path("install") / "lib"],
+            },
+            extra_env={"HIP_VISIBLE_DEVICES": "0"},
+        )
+
+        self.assertEqual(env["ROCM_PATH"], "install")
+        self.assertEqual(env["GTEST_SHARD_INDEX"], "1")
+        self.assertEqual(env["GTEST_TOTAL_SHARDS"], "4")
+        self.assertEqual(
+            env["PATH"],
+            os.pathsep.join([os.fspath(Path("install") / "bin"), "base-bin"]),
+        )
+        self.assertEqual(
+            env["LD_LIBRARY_PATH"],
+            os.pathsep.join([os.fspath(Path("install") / "lib"), "base-lib"]),
+        )
+        self.assertEqual(env["HIP_VISIBLE_DEVICES"], "0")
+
+    def test_run_ctest_uses_settings_command_and_default_cwd(self):
+        calls = []
+
+        def runner(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+            return SimpleNamespace(returncode=0)
+
+        settings = test_utils.TestRunSettings(
+            test_dir="tests",
+            rocm_path="install",
+            category="quick",
+            shard_index=1,
+            total_shards=2,
+        )
+        env = {"ROCM_PATH": "install"}
+
+        result = test_utils.run_ctest(settings, env=env, runner=runner, check=True)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(calls[0][0][0], "ctest")
+        self.assertEqual(calls[0][1]["cwd"], Path("install"))
+        self.assertEqual(calls[0][1]["env"], env)
+        self.assertTrue(calls[0][1]["check"])
+
+    def test_run_ctest_can_discover_labels_before_running(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            calls = []
+
+            def runner(cmd, **kwargs):
+                calls.append((cmd, kwargs))
+                if "-N" in cmd:
+                    return SimpleNamespace(stdout="  Test #1: alpha\n")
+                if "--print-labels" in cmd:
+                    return SimpleNamespace(stdout="quick_exclude\nex_gpu_gfx115X\n")
+                return SimpleNamespace(returncode=0)
+
+            settings = test_utils.TestRunSettings(
+                test_dir=temp_dir,
+                category="quick",
+                gpu_arch="gfx1151",
+            )
+
+            result = test_utils.run_ctest(
+                settings,
+                runner=runner,
+                discover_labels=True,
+            )
+
+            self.assertEqual(result.returncode, 0)
+            final_cmd = calls[-1][0]
+            self.assertIn("ex_gpu_gfx115X", final_cmd)
+            self.assertIn("quick_exclude", final_cmd)
+            self.assertEqual(len(calls), 3)
 
 
 class RocminfoTest(unittest.TestCase):
