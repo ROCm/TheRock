@@ -19,9 +19,7 @@ from typing import Iterable, Mapping
 VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
 
 _GPU_ARCH_PATTERN = re.compile(r"gfx[0-9a-zA-Z]+", re.IGNORECASE)
-_ROCMINFO_NAME_PATTERN = re.compile(
-    r"^\s*Name:\s+(gfx[0-9a-z]+)\s*$", re.IGNORECASE
-)
+_ROCMINFO_NAME_PATTERN = re.compile(r"^\s*Name:\s+(gfx[0-9a-z]+)\s*$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -124,9 +122,7 @@ def build_ctest_label_args(
     if normalized_gpu_arch in ("", "generic", "none"):
         le_patterns.append("ex_gpu")
     else:
-        matching_arch = find_matching_gpu_arch(
-            normalized_gpu_arch, available_gpu_archs
-        )
+        matching_arch = find_matching_gpu_arch(normalized_gpu_arch, available_gpu_archs)
         if matching_arch:
             args.extend(["-L", f"ex_gpu_{matching_arch}"])
         else:
@@ -154,9 +150,7 @@ def count_ctest_tests(test_dir: str | Path, runner=subprocess.run) -> int:
         check=True,
     )
     return sum(
-        1
-        for line in result.stdout.splitlines()
-        if re.search(r"Test\s+#\d+:", line)
+        1 for line in result.stdout.splitlines() if re.search(r"Test\s+#\d+:", line)
     )
 
 

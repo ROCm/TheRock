@@ -33,9 +33,7 @@ class GpuArchTest(unittest.TestCase):
         self.assertEqual(test_utils.extract_gpu_arch(None), "")
         self.assertEqual(test_utils.extract_gpu_arch(""), "")
         self.assertEqual(test_utils.extract_gpu_arch("gfx1151"), "gfx1151")
-        self.assertEqual(
-            test_utils.extract_gpu_arch("family=gfx942,gfx90a"), "gfx942"
-        )
+        self.assertEqual(test_utils.extract_gpu_arch("family=gfx942,gfx90a"), "gfx942")
         self.assertEqual(test_utils.extract_gpu_arch("GFX90A"), "gfx90a")
         self.assertEqual(test_utils.extract_gpu_arch("generic"), "")
 
@@ -116,9 +114,7 @@ class CTestLabelArgsTest(unittest.TestCase):
         self.assertEqual(args, ["-L", "quick", "-L", "ex_gpu_gfx115X"])
 
     def test_no_matching_gpu_excludes_gpu_specific_tests(self):
-        args = test_utils.build_ctest_label_args(
-            "quick", "gfx1151", {"gfx94X"}, set()
-        )
+        args = test_utils.build_ctest_label_args("quick", "gfx1151", {"gfx94X"}, set())
         self.assertEqual(args, ["-L", "quick", "-LE", "ex_gpu"])
 
     def test_category_exclude_is_combined_with_gpu_exclude(self):
@@ -128,9 +124,7 @@ class CTestLabelArgsTest(unittest.TestCase):
         self.assertEqual(args, ["-L", "quick", "-LE", "quick_exclude|ex_gpu"])
 
     def test_invalid_category_uses_quick_policy(self):
-        args = test_utils.build_ctest_label_args(
-            "smoke", "", set(), {"quick_exclude"}
-        )
+        args = test_utils.build_ctest_label_args("smoke", "", set(), {"quick_exclude"})
         self.assertEqual(args, ["-L", "quick", "-LE", "quick_exclude|ex_gpu"])
 
 
@@ -227,9 +221,7 @@ class RocminfoTest(unittest.TestCase):
                 return SimpleNamespace(stdout=self.ROCMINFO_OUTPUT)
 
             self.assertEqual(
-                test_utils.get_visible_gpu_count(
-                    rocm_bin_dir=temp_dir, runner=runner
-                ),
+                test_utils.get_visible_gpu_count(rocm_bin_dir=temp_dir, runner=runner),
                 3,
             )
             self.assertEqual(calls[0][0], [os.fspath(rocminfo_path)])
@@ -238,9 +230,7 @@ class RocminfoTest(unittest.TestCase):
         def runner(cmd, **kwargs):
             return SimpleNamespace(stdout=self.ROCMINFO_OUTPUT)
 
-        self.assertEqual(
-            test_utils.get_first_gpu_architecture(runner=runner), "gfx942"
-        )
+        self.assertEqual(test_utils.get_first_gpu_architecture(runner=runner), "gfx942")
 
     def test_get_first_gpu_architecture_raises_without_visible_gpu(self):
         def runner(cmd, **kwargs):
