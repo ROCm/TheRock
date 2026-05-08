@@ -233,6 +233,8 @@ if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
       amd-hip
+    INSTALL_RPATH_DIRS
+      "lib/rocprofiler-compute"
     RUNTIME_DEPS
       rocprofiler-sdk
       aqlprofile
