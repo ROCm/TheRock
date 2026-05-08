@@ -142,6 +142,7 @@ def generate_index_from_s3(
     prefix: str,
     max_depth: int | None = None,
     dry_run: bool = False,
+    skip_top_levels: int = 0,
 ) -> None:
     """Generate index.html files based on what's actually in S3.
 
@@ -155,6 +156,11 @@ def generate_index_from_s3(
         max_depth: Maximum directory depth to generate indexes for.
                    None = unlimited (recursive), 0 = only root level, 1 = root + immediate children
         dry_run: If True, log what would be uploaded without uploading.
+        skip_top_levels: Skip the top N directory levels under prefix.
+                         0 = no skipping (default), 1 = skip prefix root,
+                         2 = skip prefix root + immediate children, ...
+                         Useful when those upper indexes are managed elsewhere
+                         (e.g. via separate --top-prefix invocations).
     """
     depth_msg = (
         f" (max depth: {max_depth})" if max_depth is not None else " (recursive)"
@@ -220,6 +226,14 @@ def generate_index_from_s3(
         if max_depth is not None:
             depth = dir_path.count("/") if dir_path else 0
             if depth > max_depth:
+                continue
+
+        # Skip top-level directories. Depth here is the number of path
+        # components in dir_path: 0 for the prefix root (""), 1 for
+        # immediate children ("deb"), 2 for "deb/dists", etc.
+        if skip_top_levels > 0:
+            top_depth = len(dir_path.split("/")) if dir_path else 0
+            if top_depth < skip_top_levels:
                 continue
 
         rows: list[str] = []
@@ -298,6 +312,17 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print what would be uploaded without actually uploading.",
     )
+    parser.add_argument(
+        "--skip-top-levels",
+        type=int,
+        default=0,
+        help=(
+            "Skip generating index.html for the top N directory levels "
+            "under --prefix. 1 skips just the prefix root, 2 also skips "
+            "its immediate children, etc. Useful when those upper indexes "
+            "are managed by separate --top-prefix invocations."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -310,6 +335,7 @@ def main() -> None:
         args.prefix,
         max_depth=args.max_depth,
         dry_run=args.dry_run,
+        skip_top_levels=args.skip_top_levels,
     )
 
     if args.top_prefix is not None:
