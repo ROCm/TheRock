@@ -300,9 +300,12 @@ class ResourceMonitor:
             or stats.get("cpu_percent", 0) >= WARN_PERCENT
         ):
             proc_strs = []
+            cpu_count = stats.get("cpu_count", 1)
             for p in top_procs[:4]:
+                # Convert raw cpu_percent (can exceed 100% on multi-core) to cores
+                cores_used = p["cpu_pct"] / 100
                 proc_strs.append(
-                    f"{p['cmd']}({p['mem_pct']:.1f}%m,{p['cpu_pct']:.0f}%c)"
+                    f"{p['cmd']}({p['mem_pct']:.1f}% mem, {cores_used:.1f} CPUs)"
                 )
             main_line += f"\n           Top: {', '.join(proc_strs)}"
 
@@ -395,7 +398,7 @@ class ResourceMonitor:
                     + ", ".join(f"{cmd}({pct:.1f}%)" for cmd, pct in top_mem_procs)
                 )
 
-        # Top CPU consumers (by average CPU usage)
+        # Top CPU consumers (by average CPU usage, shown as cores)
         if proc_cpu_totals:
             top_cpu_procs = sorted(
                 [(cmd, sum(cpus) / len(cpus)) for cmd, cpus in proc_cpu_totals.items()],
@@ -405,7 +408,9 @@ class ResourceMonitor:
             if top_cpu_procs and top_cpu_procs[0][1] > 10.0:
                 print(
                     "Top CPU:      "
-                    + ", ".join(f"{cmd}({pct:.0f}%)" for cmd, pct in top_cpu_procs)
+                    + ", ".join(
+                        f"{cmd}({pct / 100:.1f} CPUs)" for cmd, pct in top_cpu_procs
+                    )
                 )
 
         # GPU summary
