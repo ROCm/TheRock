@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Kirill Kasaurov <kirill.kasaurov@amd.com>
+Date: Tue, 6 May 2026 00:00:00 +0000
+Subject: [PATCH] [clang] Guard optional tool test deps with if(TARGET)
+
+clang-linker-wrapper, clang-nvlink-wrapper, and clang-sycl-linker are
+unconditionally listed in CLANG_TEST_DEPS but can be disabled via
+CLANG_TOOL_<NAME>_BUILD=OFF, causing configure-time failures when
+LLVM_INCLUDE_TESTS=ON.
+
+Guard them with if(TARGET ...) following the existing pattern used for
+lld and llvm-lto.
+
+diff --git a/clang/test/CMakeLists.txt b/clang/test/CMakeLists.txt
+index 1120870889d5..b1b13c2be379 100644
+--- a/clang/test/CMakeLists.txt
++++ b/clang/test/CMakeLists.txt
+@@ -101,16 +101,19 @@ list(APPEND CLANG_TEST_DEPS
+   clang-diff
+   clang-installapi
+   clang-scan-deps
+-  clang-linker-wrapper
+-  clang-nvlink-wrapper
+   clang-offload-bundler
+   clang-ssaf-linker
+-  clang-sycl-linker
+   diagtool
+   hmaptool
+   ssaf-format
+   )
+ 
++foreach(_tool clang-linker-wrapper clang-nvlink-wrapper clang-sycl-linker)
++  if(TARGET ${_tool})
++    list(APPEND CLANG_TEST_DEPS ${_tool})
++  endif()
++endforeach()
++
+ if(CLANG_ENABLE_CIR)
+   list(APPEND CLANG_TEST_DEPS
+     cir-opt
