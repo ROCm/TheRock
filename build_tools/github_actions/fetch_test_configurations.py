@@ -84,7 +84,7 @@ test_matrix = {
         # 240 min + 20% margin = 288 min
         "timeout_minutes": 288,
         "test_script": f"python {_get_script_path('test_runner.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 6,
             "windows": 6,
@@ -363,7 +363,7 @@ test_matrix = {
     "hipdnn": {
         "job_name": "hipdnn",
         "fetch_artifact_args": "--hipdnn --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipdnn.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -374,7 +374,7 @@ test_matrix = {
     # hipDNN install/consumption tests
     "hipdnn_install": {
         "job_name": "hipdnn_install",
-        "timeout_minutes": 10,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipdnn_install.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -386,7 +386,7 @@ test_matrix = {
     "hipdnn-integration-tests": {
         "job_name": "hipdnn-integration-tests",
         "fetch_artifact_args": "--hipdnn --hipdnn-integration-tests --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipdnn_integration_tests.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -410,7 +410,7 @@ test_matrix = {
     "miopenprovider": {
         "job_name": "miopenprovider",
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-integration-tests --tests",
-        "timeout_minutes": 20,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -430,7 +430,7 @@ test_matrix = {
     "hipblasltprovider": {
         "job_name": "hipblasltprovider",
         "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --hipdnn-integration-tests --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipblasltprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {

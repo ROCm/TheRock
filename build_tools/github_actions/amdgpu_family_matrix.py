@@ -51,8 +51,8 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
-            {"label": "azure-linux-scale-rocm", "weight": 0.90},
-            {"label": "aws-linux-scale-rocm", "weight": 0.10},
+            {"label": "azure-linux-scale-rocm", "weight": 1.0},
+            {"label": "aws-linux-scale-rocm", "weight": 0.0},
         ],
         "sanitizer": [
             {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
@@ -192,7 +192,7 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
-            "fetch-gfx-targets": ["gfx1100", "gfx1101"],
+            "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
@@ -232,7 +232,7 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "windows-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,

@@ -19,11 +19,13 @@ Features are about "what to build". Flags are about "how to build it".
 ```
 FLAGS.cmake              Central declarations (project root)
   └── therock_declare_flag()   →  THEROCK_FLAG_{NAME} cache var
-  └── BRANCH_FLAGS.cmake       →  Optional per-branch default overrides
+  └── BRANCH_FLAGS.cmake       →  Legacy per-branch default overrides
+  └── BRANCH_CONFIG.json       →  Per-branch defaults and optional sources
   └── therock_finalize_flags() →  Propagation data + flag_settings.json
   └── therock_report_flags()   →  Status output
 
 cmake/therock_flag_utils.cmake   Processing functions
+build_tools/topology_to_cmake.py Generated branch config CMake helpers
 cmake/therock_subproject.cmake   Injection via project_init.cmake
 ```
 
@@ -87,9 +89,61 @@ if(THEROCK_FLAG_KPACK_SPLIT_ARTIFACTS)
 endif()
 ```
 
-## Branch Flag Overrides
+## Branch Configuration
 
-Integration branches can change flag defaults by creating a
+Integration branches can change flag defaults and request optional source sets
+by creating a `BRANCH_CONFIG.json` file in the project root:
+
+```json
+{
+  "flags": {
+    "INCLUDE_HRX": "ON"
+  },
+  "source_sets": ["optional-hrx"],
+  "artifact_groups": {
+    "core-runtime": {
+      "source_sets": ["optional-hrx"]
+    }
+  }
+}
+```
+
+At configure time, `build_tools/topology_to_cmake.py` reads
+`BRANCH_CONFIG.json` and generates a `therock_apply_branch_config_flags()`
+macro that calls `therock_override_flag_default()` for each entry in `flags`.
+`FLAGS.cmake` invokes that generated macro before `therock_finalize_flags()`.
+
+Explicit `-D` flags on the cmake command line always take precedence over
+branch defaults.
+
+### Optional Source Sets
+
+`BRANCH_CONFIG.json` also controls optional source fetching:
+
+- Top-level `"source_sets"` are fetched by the default
+  `build_tools/fetch_sources.py` invocation when no `--stage` is specified.
+- `"artifact_groups"` source sets are fetched when `fetch_sources.py --stage`
+  selects a stage containing that artifact group.
+- `fetch_sources.py --source-sets <name>` can force extra source sets for any
+  invocation.
+- `fetch_sources.py --list-source-sets` lists available source sets, including
+  optional external git checkouts.
+
+Optional external git sources are declared in `BUILD_TOPOLOGY.toml` source sets
+with `external_git_sources` entries and are fetched under the ignored
+`optional-sources/` directory. For example:
+
+```toml
+[source_sets.optional-hrx]
+description = "Optional HRX source checkout"
+external_git_sources = [
+  { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "e642a13425f46bcf909078459dd4e07df0723a0d", path = "optional-sources/hrx" },
+]
+```
+
+### Legacy Branch Flags
+
+Existing branches can still change flag defaults by creating a
 `BRANCH_FLAGS.cmake` file in the project root:
 
 ```cmake
@@ -98,12 +152,9 @@ Integration branches can change flag defaults by creating a
 therock_override_flag_default(KPACK_SPLIT_ARTIFACTS ON)
 ```
 
-`BRANCH_FLAGS.cmake` is `.gitignore`d on main but can be committed on
-integration branches. Overrides are logged to the configure output so they are
-visible in CI.
-
-Explicit `-D` flags on the cmake command line always take precedence over
-branch overrides.
+`BRANCH_FLAGS.cmake` remains supported for compatibility. When both files are
+present, `BRANCH_CONFIG.json` flag defaults are applied after
+`BRANCH_FLAGS.cmake`.
 
 ## Manifest Integration
 
