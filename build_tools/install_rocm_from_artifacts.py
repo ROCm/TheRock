@@ -396,6 +396,9 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipdnn")
         if args.hipdnn_integration_tests:
             extra_artifacts.append("hipdnn-integration-tests")
+            # Contains bin/hipdnn_integration_tests (the runner binary), which
+            # the artifact descriptor places exclusively in the run component.
+            argv.append("hipdnn-integration-tests_run")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.miopen:
