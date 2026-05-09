@@ -132,10 +132,12 @@ exclude = [
   "lib/llvm/bin/mlir-transform-opt*",
 
   # -- Other test-only tools --
+  "lib/llvm/bin/dsymutil*",
   "lib/llvm/bin/obj2yaml*",
   "lib/llvm/bin/reduce-chunk-list*",
   "lib/llvm/bin/sancov*",
   "lib/llvm/bin/sanstats*",
+  "lib/llvm/bin/yaml2obj*",
 ]
 [components.dbg."compiler/amd-llvm/stage"]
 [components.dev."compiler/amd-llvm/stage"]
