@@ -1219,14 +1219,11 @@ function(therock_cmake_subproject_build_test target_name)
   set(_runner_script "${_prefix_dir}/build-test-runner.cmake")
   set(_runner_content "set(_any_failed FALSE)\n")
 
-  # Explicitly control teatime output instead of relying on the job-level
-  # TEATIME_FORCE_INTERACTIVE env var, which may not propagate reliably
-  # through the cmake -P / execute_process chain on all platforms.
-  string(APPEND _runner_content "set(_saved_teatime_interactive \"\$ENV{TEATIME_FORCE_INTERACTIVE}\")\n")
+  # VERBOSE forces TEATIME_FORCE_INTERACTIVE=1 so output streams to the
+  # console even when teatime was invoked with --no-interactive.
   if(ARG_VERBOSE)
+    string(APPEND _runner_content "set(_saved_teatime_interactive \"\$ENV{TEATIME_FORCE_INTERACTIVE}\")\n")
     string(APPEND _runner_content "set(ENV{TEATIME_FORCE_INTERACTIVE} \"1\")\n")
-  else()
-    string(APPEND _runner_content "set(ENV{TEATIME_FORCE_INTERACTIVE} \"0\")\n")
   endif()
   string(APPEND _runner_content "\n")
 
@@ -1243,10 +1240,19 @@ function(therock_cmake_subproject_build_test target_name)
       set(_log_file "${target_name}_build_test.log")
       set(_log_label "${target_name} build-test")
     endif()
+    # Non-VERBOSE tests use --no-interactive so teatime buffers output
+    # (only dumped on failure). VERBOSE tests use --interactive for live
+    # streaming. This is more reliable than env var overrides which may
+    # not propagate through cmake -P / execute_process on all platforms.
+    if(ARG_VERBOSE)
+      set(_test_output_on_failure "${_output_on_failure}")
+    else()
+      set(_test_output_on_failure TRUE)
+    endif()
     therock_subproject_log_command(_test_log_prefix
       LOG_FILE "${_log_file}"
       LABEL "${_log_label}"
-      OUTPUT_ON_FAILURE "${_output_on_failure}"
+      OUTPUT_ON_FAILURE "${_test_output_on_failure}"
     )
 
     set(_test_command_var "_test_command_${_command_index}")
@@ -1279,7 +1285,9 @@ function(therock_cmake_subproject_build_test target_name)
   endforeach()
 
   # Restore TEATIME_FORCE_INTERACTIVE before the summary.
-  string(APPEND _runner_content "set(ENV{TEATIME_FORCE_INTERACTIVE} \"\${_saved_teatime_interactive}\")\n\n")
+  if(ARG_VERBOSE)
+    string(APPEND _runner_content "set(ENV{TEATIME_FORCE_INTERACTIVE} \"\${_saved_teatime_interactive}\")\n\n")
+  endif()
 
   # Write per-command results to a file so the total summary can aggregate them.
   set(_results_dir "${CMAKE_BINARY_DIR}/build-test-results")
