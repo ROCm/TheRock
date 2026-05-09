@@ -1219,11 +1219,14 @@ function(therock_cmake_subproject_build_test target_name)
   set(_runner_script "${_prefix_dir}/build-test-runner.cmake")
   set(_runner_content "set(_any_failed FALSE)\n")
 
-  # VERBOSE forces TEATIME_FORCE_INTERACTIVE=1 so output streams to the
-  # console even when the CI job defaults to quiet.
+  # Explicitly control teatime output instead of relying on the job-level
+  # TEATIME_FORCE_INTERACTIVE env var, which may not propagate reliably
+  # through the cmake -P / execute_process chain on all platforms.
+  string(APPEND _runner_content "set(_saved_teatime_interactive \"\$ENV{TEATIME_FORCE_INTERACTIVE}\")\n")
   if(ARG_VERBOSE)
-    string(APPEND _runner_content "set(_saved_teatime_interactive \"\$ENV{TEATIME_FORCE_INTERACTIVE}\")\n")
     string(APPEND _runner_content "set(ENV{TEATIME_FORCE_INTERACTIVE} \"1\")\n")
+  else()
+    string(APPEND _runner_content "set(ENV{TEATIME_FORCE_INTERACTIVE} \"0\")\n")
   endif()
   string(APPEND _runner_content "\n")
 
@@ -1276,9 +1279,7 @@ function(therock_cmake_subproject_build_test target_name)
   endforeach()
 
   # Restore TEATIME_FORCE_INTERACTIVE before the summary.
-  if(ARG_VERBOSE)
-    string(APPEND _runner_content "set(ENV{TEATIME_FORCE_INTERACTIVE} \"\${_saved_teatime_interactive}\")\n\n")
-  endif()
+  string(APPEND _runner_content "set(ENV{TEATIME_FORCE_INTERACTIVE} \"\${_saved_teatime_interactive}\")\n\n")
 
   # Write per-command results to a file so the total summary can aggregate them.
   set(_results_dir "${CMAKE_BINARY_DIR}/build-test-results")
