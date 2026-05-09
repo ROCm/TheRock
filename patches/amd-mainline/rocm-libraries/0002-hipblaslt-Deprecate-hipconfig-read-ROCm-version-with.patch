@@ -1,24 +1,26 @@
-From a9b4e589246544b2507cfcb30f01732e86ebba90 Mon Sep 17 00:00:00 2001
+From ed46cb655138830a199182513ef4dc8d61b3c6d8 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Fri, 8 May 2026 21:30:58 -0500
 Subject: [PATCH] [hipblaslt] Deprecate hipconfig: read ROCm version without
  hipconfig
 
-Replace hipconfig --version call in get_rocm_version() with a direct
-read of the ROCm version, avoiding the hipconfig dependency:
+Replace hipconfig dependency in tensilelite with alternatives:
 
 - hipblaslt_python.cmake: pass ROCM_VERSION=${hip_VERSION} (from
   find_package(hip CONFIG)) into the Python env at configure time
 - Component.py: read ROCM_VERSION env var first, then fall back to
   $ROCM_PATH/.info/version, $HIP_PATH/.info/version, /opt/rocm/.info/version
+- TensileCreateLibrary/Run.py: remove hipconfig from validateToolchain
+  call; its result was already discarded and it is no longer needed
 
 hipconfig is deprecated in favor of amdclang++ directly.
 
 Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
 ---
  .../hipblaslt/cmake/hipblaslt_python.cmake    |  1 +
+ .../Tensile/TensileCreateLibrary/Run.py       |  3 +--
  .../Tensile/Toolchain/Component.py            | 24 +++++++++++++++----
- 2 files changed, 21 insertions(+), 4 deletions(-)
+ 3 files changed, 22 insertions(+), 6 deletions(-)
 
 diff --git a/projects/hipblaslt/cmake/hipblaslt_python.cmake b/projects/hipblaslt/cmake/hipblaslt_python.cmake
 index 658f50fe23..0eb4c71e01 100644
@@ -32,6 +34,24 @@ index 658f50fe23..0eb4c71e01 100644
          "${asan_options}"
          --
          "${Python3_EXECUTABLE}"
+diff --git a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
+index c4356c0727..7a663b76c3 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
++++ b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
+@@ -813,12 +813,11 @@ def run():
+     arguments = parseArguments()
+     setVerbosity(arguments["PrintLevel"])
+     outputPath = Path(ensurePath(os.path.abspath(arguments["OutputPath"])))
+-    cxxCompiler, _, offloadBundler, _, _ = validateToolchain(
++    cxxCompiler, _, offloadBundler, _ = validateToolchain(
+         arguments["CxxCompiler"],
+         arguments["CCompiler"],
+         arguments["OffloadBundler"],
+         arguments["Assembler"],
+-        ToolchainDefaults.HIP_CONFIG,
+     )
+ 
+     if ";" in arguments["Architecture"]:
 diff --git a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
 index fd5a986f44..f85821846a 100644
 --- a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
