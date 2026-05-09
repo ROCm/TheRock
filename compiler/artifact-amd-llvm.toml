@@ -132,6 +132,7 @@ exclude = [
   "lib/llvm/bin/mlir-transform-opt*",
 
   # -- Other test-only tools --
+  "lib/llvm/bin/KillTheDoctor*",
   "lib/llvm/bin/dsymutil*",
   "lib/llvm/bin/obj2yaml*",
   "lib/llvm/bin/reduce-chunk-list*",
