@@ -214,7 +214,7 @@ def _cdash_build_name() -> str:
             safe = f" [Branch: {safe}]"
             prefix = f"Manual_"
         else:
-            prefix = ""
+            prefix = "CI_" if os.getenv("CI") else "Local_"
     label = _default_cdash_matrix_label() or os.getenv("THEROCK_CDASH_LABEL")
     run_key = (
         os.getenv("GITHUB_RUN_ID")
