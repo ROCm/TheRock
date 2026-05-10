@@ -263,16 +263,6 @@ include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 ################################################################################
 # Manual features that don't map to artifacts
 ################################################################################
-# Base Features.
-therock_add_feature(COMPILER
-  GROUP ALL
-  DESCRIPTION "Enables the AMDGPU+host compiler toolchain"
-)
-therock_add_feature(HIPIFY
-  GROUP ALL
-  DESCRIPTION "Enables the hipify tool"
-  REQUIRES COMPILER
-)
 therock_add_feature(FLANG
   GROUP ALL
   DESCRIPTION "Enables flang support"
