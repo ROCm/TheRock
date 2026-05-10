@@ -48,10 +48,12 @@ env["ROCM_PATH"] = str(ROCM_PATH)
 
 with tempfile.TemporaryDirectory() as tmpdir:
     matrix_file = Path(tmpdir) / "support_matrix.md"
+    # Use '=' to force argparse to attach the path to the flag. Without it,
+    # argparse-cpp treats the flag as taking its implicit_value (the default
+    # filename "support_matrix.md") and leaves the path as a stray arg.
     cmd = [
         str(binary),
-        "--generate-support-matrix",
-        str(matrix_file),
+        f"--generate-support-matrix={matrix_file}",
         "--skip-graph-validation",
     ]
     logging.info("++ Exec $ %s", shlex.join(cmd))
