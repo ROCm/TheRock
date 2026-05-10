@@ -6,6 +6,7 @@
 - Generate CTestCustom.cmake (settings + configure/build commands) and dashboard.cmake (build, test, report to CDash).
 """
 
+import argparse
 import logging
 import os
 import platform
@@ -330,17 +331,23 @@ set(CTEST_COVERAGE_COMMAND "@gcov_command")
     )
 
 
-def _generate_dashboard() -> str:
+def _generate_dashboard(enable_cdash: bool) -> str:
     """Generate dashboard.cmake for CDash.
 
     Script includes CTestCustom.cmake, then runs configure, build, test,
-    and submit stages.
+    and (optionally) submit stages.
+
+    Args:
+        enable_cdash: When True, ``ctest_submit`` is invoked to upload results
+            to CDash. When False, ``dashboard_submit`` is a no-op and ctest
+            output remains local (terminal + ``Testing/Temporary/`` log files).
 
     Returns:
         CMake script content for dashboard.cmake.
     """
 
-    return _CMakeTemplate("""
+    return _CMakeTemplate(
+        """
     cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 
     macro(dashboard_submit)
@@ -388,8 +395,9 @@ def _generate_dashboard() -> str:
     endif()
 
     dashboard_submit(PARTS Done RETURN_VALUE _submit_ret)
-    """).substitute(
-        submit="1",
+    """
+    ).substitute(
+        submit="1" if enable_cdash else "0",
         model="Experimental",
         group="TheRock",
         repo_source_dir=THEROCK_BIN_PATH,
@@ -397,15 +405,49 @@ def _generate_dashboard() -> str:
     )
 
 
-def main() -> int:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments for the rocprofiler SDK test runner."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run rocprofiler SDK ctest dashboard. By default, results stay "
+            "local (terminal output + Testing/Temporary/ log files). Pass "
+            "--enable-cdash to upload results to CDash."
+        ),
+    )
+    parser.add_argument(
+        "--enable-cdash",
+        action="store_true",
+        default=False,
+        help=(
+            "Submit ctest results to CDash. When omitted, ctest_submit is a "
+            "no-op and output is kept local only."
+        ),
+    )
+    parser.add_argument(
+        "-V",
+        "--verbose",
+        action="store_true",
+        default=False,
+        help=(
+            "Pass -V to ctest for verbose output (shows configure/build/test "
+            "command output as it runs, not only on failure)."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
     """Generate CTest/dashboard scripts and run ctest for ROCProfiler SDK tests.
 
     Writes CTestCustom.cmake and dashboard.cmake into the binary dir, then
-    runs ctest -S to configure, build, test, and submit to CDash.
+    runs ctest -S to configure, build, test, and (when ``--enable-cdash`` is
+    set) submit to CDash.
 
     Returns:
         Exit code from ctest (0 on success).
     """
+    args = _parse_args(argv)
+
     setup_env()
 
     cmake_cmd = _which_cmake()
@@ -413,7 +455,7 @@ def main() -> int:
     os.makedirs(BINARY_DIR, exist_ok=True)
 
     ctest_custom = _generate_ctest_custom(cmake_cmd)
-    dashboard = _generate_dashboard()
+    dashboard = _generate_dashboard(enable_cdash=args.enable_cdash)
 
     ctest_custom_path = os.path.join(BINARY_DIR, "CTestCustom.cmake")
     dashboard_path = os.path.join(BINARY_DIR, "dashboard.cmake")
@@ -434,6 +476,9 @@ def main() -> int:
         "build",
         "--output-on-failure",
     ]
+
+    if args.verbose:
+        ctest_argv.append("-V")
 
     try:
         r = subprocess.run(ctest_argv, cwd=SOURCE_DIR, check=True, env=environ_vars)
