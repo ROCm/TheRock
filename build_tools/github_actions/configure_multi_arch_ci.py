@@ -504,6 +504,8 @@ def should_skip_ci(
     # Skip ASAN on PRs unless submodule changes are present.
     # This avoids running expensive ASAN builds on every PR while still
     # catching ASAN issues when library code (submodules) changes.
+    # TODO: Contributors may open draft PRs with submodule updates which run ASAN builds.
+    #       If overly expensive, remove that option
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
