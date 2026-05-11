@@ -840,6 +840,15 @@ def wheel_change_extra_files(
             files_to_change = [
                 new_dir_path / package_name_no_version / "version.py",
             ]
+        if "torchvision" in package_name_no_version:
+            update_metadata_rocm_requires_dist(
+                new_dir_path,
+                package_name_no_version,
+                old_version,
+                old_rocm_version,
+                new_rocm_version,
+            )
+        return
         else:
             # no additional (rocm-specific) files needed to be changed that contain the version
             # currently applying to: triton, jax_rocm7_pjrt
