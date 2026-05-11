@@ -1,0 +1,46 @@
+From 92c331eb698792b2df95fbe91e9f493b44c8b57c Mon Sep 17 00:00:00 2001
+From: Steve Leung <Steve.Leung@amd.com>
+Date: Fri, 8 May 2026 10:31:23 -0600
+Subject: [PATCH] hipsolver: make internal OpenBLAS symbols private (#7176)
+
+## Motivation
+
+542bf80271f9471f878b66af47daee2cd70e9e81 added an internal OpenBLAS
+implementation, but accidentally exported all of the BLAS symbols as
+public symbols in hipSOLVER.
+
+## Technical Details
+
+Set symbol visibility to hidden for the internal implementation.
+
+## Test Plan
+
+Run regular tests and manually inspect the exported hipSOLVER symbols.
+
+## Test Result
+
+Tests pass, and only hipSOLVER symbols are exported.
+
+## Submission Checklist
+
+- [x] Look over the contributing guidelines at
+https://github.com/ROCm/ROCm/blob/develop/CONTRIBUTING.md#pull-requests.
+---
+ projects/hipsolver/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/projects/hipsolver/CMakeLists.txt b/projects/hipsolver/CMakeLists.txt
+index 6ddbd9c6302..3dce2206a11 100644
+--- a/projects/hipsolver/CMakeLists.txt
++++ b/projects/hipsolver/CMakeLists.txt
+@@ -184,6 +184,7 @@ if(NOT "${HIP_PLATFORM}" STREQUAL "nvidia")
+             -DBUILD_BENCHMARKS=OFF
+             -DUSE_OPENMP=OFF
+             -DUSE_THREAD=OFF
++            -DCMAKE_C_VISIBILITY_PRESET=hidden
+         )
+ 
+         # Only pass CMAKE_BUILD_TYPE for single-config generators (it is
+-- 
+2.51.0
+

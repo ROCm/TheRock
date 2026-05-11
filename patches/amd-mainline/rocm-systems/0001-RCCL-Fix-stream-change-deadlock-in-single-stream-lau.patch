@@ -1,0 +1,150 @@
+From 4fb2d7ca9d6c29a6ba3a731833fb64a13ec75160 Mon Sep 17 00:00:00 2001
+From: Arm Patinyasakdikul <arm.patinyasakdikul@amd.com>
+Date: Wed, 6 May 2026 09:40:09 -0500
+Subject: [PATCH] [RCCL] Fix stream-change deadlock in single-stream launch
+ path (#5800)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+## Summary
+
+A training workload that runs collectives on one stream and then
+switches to a fresh user stream (e.g. an eval phase started after the
+training loop) deadlocks at the first AllGather on the new stream.
+
+`ncclLaunchPrepare` has an else-if intended to install a
+`hipStreamWaitEvent(launchStream, comm->doneEvent, 0)` on stream-change.
+Two defects make it dead code: the `lastStream != nullptr` clause
+excludes callers running on the default stream (so the guard never fires
+when the prior stream was the default), and `comm->doneEvent` has not
+been recorded anywhere in the source tree since PR #3741 swapped
+`hipExtLaunchKernel` (which recorded it via its 8th arg) for
+`cuLaunchKernel` (which does not). The result is a wait that either
+never fires or waits on an unposted event.
+
+This PR fixes both: the guard becomes `(lastStreamValid && lastStream !=
+launchStream)` using a new bool that distinguishes "no prior launch"
+from "prior launch on the default stream," and `cuLaunchKernel` is
+followed by `hipEventRecord(comm->doneEvent, launchStream)` in both the
+fast and slow paths.
+
+## Why
+
+A direct event-based dependency, rather than the
+`ncclStreamWaitStream(launchStream, deviceStream, ...)` chain used in
+the unguarded path, is required because the single-stream fast path
+skips `ncclLaunchFinish`'s `ncclStreamAdvanceToEvent`. With
+`deviceStream` left stale across fast-path collectives, a
+deviceStream-mediated wait on stream-change resolves to a no-op and the
+deadlock returns. Recording `doneEvent` on `launchStream` after every
+kernel and waiting on it directly bypasses `deviceStream` entirely.
+
+## Change
+
+- \`src/enqueue.cc\` — replace the dead else-if in
+\`ncclLaunchPrepare\`; record \`doneEvent\` after \`cuLaunchKernel\` in
+both paths of \`ncclLaunchKernel\`; mirror the
+\`lastStream\`/\`lastStreamValid\` bookkeeping into the slow path.
+- \`src/include/comm.h\` — add \`bool lastStreamValid\` to \`ncclComm\`.
+- \`src/init.cc\` — initialize \`comm->lastStreamValid = false\` in
+\`commAlloc\`.
+
+## Test plan
+
+- [x] Run the originally-affected training-then-eval workload on the
+patched RCCL: PASS, \`eval_loss = 30.2495\`, \`eval_runtime = 25.76s\`
+(matches stock-baseline values within run-to-run noise).
+- [x] Ablation: gating the wait on \`plan->hasProxyOps\` HANGS
+(intra-node xGMI never enqueues proxy ops);
+\`ncclStreamWaitStream(launchStream, deviceStream)\` on stream-change
+HANGS (deviceStream stays stale when fast path skips Finish);
+\`hipStreamWaitEvent(launchStream, doneEvent)\` PASSES — confirms the
+direct event dependency is the load-bearing piece.
+- [x] rccl-tests / internal CI on push.
+
+## Refs
+
+ROCM-21756.
+---
+ projects/rccl/src/enqueue.cc     | 20 +++++++++++++++++---
+ projects/rccl/src/include/comm.h |  4 ++++
+ projects/rccl/src/init.cc        |  1 +
+ 3 files changed, 22 insertions(+), 3 deletions(-)
+
+diff --git a/projects/rccl/src/enqueue.cc b/projects/rccl/src/enqueue.cc
+index 40dad58033..617deb7b91 100644
+--- a/projects/rccl/src/enqueue.cc
++++ b/projects/rccl/src/enqueue.cc
+@@ -1810,9 +1810,14 @@ ncclResult_t ncclLaunchPrepare(struct ncclComm* comm) {
+       }
+       // userStream[0] waits on deviceStream
+       NCCLCHECKGOTO(ncclStreamWaitStream(launchStream, deviceStream, comm->sharedRes->scratchEvent), result, failure);
+-    } else if (planner->streams->stream != comm->lastStream && comm->lastStream != nullptr && !persistent) {
+-      // Stream changed from last call, create dependency against last NCCL kernel launch
+-      CUDACHECKGOTO(hipStreamWaitEvent(planner->streams->stream, comm->doneEvent, 0), result, failure);
++    } else if (comm->lastStreamValid && comm->lastStream != launchStream) {
++      // Stream changed from last call. The new launchStream has no implicit edge to the
++      // previous kernel's completion; install a direct event-based dependency on doneEvent
++      // (which the fast/slow path now records after every kernel launch). This bypasses
++      // deviceStream entirely so we don't depend on Finish-side advance to keep deviceStream
++      // fresh — the fast path skips that advance, which is why the deviceStream-mediated
++      // sync hangs in this scenario.
++      CUDACHECKGOTO(hipStreamWaitEvent(launchStream, comm->doneEvent, 0), result, failure);
+     }
+ 
+     bool capturing = ncclCudaGraphValid(planner->capturingGraph);
+@@ -1910,7 +1915,11 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
+   if (planner->numStreams == 1 && !plan->persistent) {
+     latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
+     comm->lastStream = planner->streams->stream;
++    comm->lastStreamValid = true;
+     CUCHECKGOTO(cuLaunchKernel(fn, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra), ret, do_return);
++    // Record doneEvent so a future ncclLaunchPrepare on a different stream can wait on it.
++    // Cheap (one event record per fast-path launch) and load-bearing for stream-change correctness.
++    CUDACHECKGOTO(hipEventRecord(comm->doneEvent, launchStream), ret, do_return);
+     latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
+     return ncclSuccess;
+   }
+@@ -1997,6 +2006,11 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
+   latency_profiler::collTraceRecordStartEvent(comm, launchStream, event.get());
+   CUCHECKGOTO(cuLaunchKernel(fn, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra), ret, do_return);
+   latency_profiler::collTraceRecordEndEvent(comm, plan, launchStream, std::move(event));
++  // Mirror fast-path bookkeeping so the next ncclLaunchPrepare can detect stream-change
++  // and find a fresh doneEvent to wait on.
++  comm->lastStream = launchStream;
++  comm->lastStreamValid = true;
++  CUDACHECKGOTO(hipEventRecord(comm->doneEvent, launchStream), ret, do_return);
+ 
+ do_return:
+   NCCLCHECK(ncclProfilerStopKernelLaunchEvent(plan));
+diff --git a/projects/rccl/src/include/comm.h b/projects/rccl/src/include/comm.h
+index 8485ae44be..fc677175c6 100644
+--- a/projects/rccl/src/include/comm.h
++++ b/projects/rccl/src/include/comm.h
+@@ -706,6 +706,10 @@ struct ncclComm {
+ 
+   hipEvent_t doneEvent;
+   hipStream_t lastStream;
++  // False until the first kernel launch on this comm. Distinguishes "no prior launch"
++  // from "prior launch on the default stream (lastStream==nullptr)" so ncclLaunchPrepare
++  // can correctly detect a stream change in either case.
++  bool lastStreamValid;
+   latency_profiler::CollTrace* ctrace;
+ 
+ #ifdef ENABLE_COLLTRACE
+diff --git a/projects/rccl/src/init.cc b/projects/rccl/src/init.cc
+index f852ab6c37..29470d0480 100644
+--- a/projects/rccl/src/init.cc
++++ b/projects/rccl/src/init.cc
+@@ -741,6 +741,7 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
+ 
+   comm->doneEvent = doneEvent;
+   comm->lastStream = nullptr;
++  comm->lastStreamValid = false;
+   CUDACHECK(cudaGetDevice(&comm->cudaDev));
+ 
+   // RCCL: create persistent stream for calloc
+-- 
+2.51.0
+
