@@ -214,7 +214,9 @@ jobs:
         env:
           amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
           package_version: ${{ needs.setup_metadata.outputs.version }}
-          extra_cmake_options: ''
+          # TODO: Use cmake_preset: linux-release-package once this workflow is
+          # wired to the release preset.
+          extra_cmake_options: '-DTHEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS=ON'
           cmake_preset: ''
         run: |
           python3 ./build_tools/github_actions/build_configure.py \
