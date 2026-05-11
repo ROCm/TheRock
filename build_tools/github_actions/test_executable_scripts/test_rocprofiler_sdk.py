@@ -427,11 +427,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "-V",
         "--verbose",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help=(
             "Pass -V to ctest for verbose output (shows configure/build/test "
-            "command output as it runs, not only on failure)."
+            "command output as it runs). Use --no-verbose to disable."
         ),
     )
     return parser.parse_args(argv)
