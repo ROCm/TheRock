@@ -24,9 +24,26 @@ import sys
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 import psutil
+
+
+def is_in_container() -> bool:
+    """Detect if we're running inside a container."""
+    # Check for Docker
+    if Path("/.dockerenv").exists():
+        return True
+    # Check for container cgroup
+    try:
+        cgroup = Path("/proc/1/cgroup").read_text()
+        if "docker" in cgroup or "kubepods" in cgroup or "containerd" in cgroup:
+            return True
+    except (OSError, IOError):
+        pass
+    return False
+
 
 # Constants
 GB = 1024**3
@@ -262,23 +279,11 @@ class ResourceMonitor:
         if stats["swap_used_gb"] > 0.1:
             parts.append(f"Swap: {stats['swap_used_gb']:.1f}GB")
 
-        # CPU with load context
+        # CPU as cores in use (more intuitive than percentage)
         cpu_count = stats.get("cpu_count", 1)
         if "cpu_percent" in stats and stats["cpu_percent"] > 0:
-            parts.append(f"CPU: {stats['cpu_percent']:.0f}%")
-
-        # Load average - show as load, not "jobs"
-        if "load_1m" in stats:
-            load = stats["load_1m"]
-            # Show load relative to CPU count for context
-            load_ratio = load / cpu_count if cpu_count > 0 else load
-            if load_ratio > 2.0:
-                # System is heavily overloaded
-                parts.append(f"Load: {load:.0f} ({load_ratio:.1f}x overload)")
-            elif load_ratio > 1.0:
-                parts.append(f"Load: {load:.0f}/{cpu_count}")
-            else:
-                parts.append(f"Load: {load:.0f}/{cpu_count}")
+            cores_in_use = (stats["cpu_percent"] / 100) * cpu_count
+            parts.append(f"CPU: {cores_in_use:.0f}/{cpu_count} cores")
 
         # GPU
         for gpu in stats.get("gpus", []):
@@ -300,14 +305,15 @@ class ResourceMonitor:
             or stats.get("cpu_percent", 0) >= WARN_PERCENT
         ):
             proc_strs = []
-            cpu_count = stats.get("cpu_count", 1)
             for p in top_procs[:4]:
                 # Convert raw cpu_percent (can exceed 100% on multi-core) to cores
                 cores_used = p["cpu_pct"] / 100
                 proc_strs.append(
-                    f"{p['cmd']}({p['mem_pct']:.1f}% mem, {cores_used:.1f} CPUs)"
+                    f"{p['cmd']}({p['mem_pct']:.1f}% mem, {cores_used:.1f} cores)"
                 )
-            main_line += f"\n           Top: {', '.join(proc_strs)}"
+            # Clarify scope when in container (process list is container-local)
+            prefix = "Container" if is_in_container() else "Top"
+            main_line += f"\n           {prefix}: {', '.join(proc_strs)}"
 
         return main_line
 
@@ -361,7 +367,6 @@ class ResourceMonitor:
 
         # CPU stats
         cpu_count = samples[0].get("cpu_count", 1) if samples else 1
-        max_load = max((s.get("load_1m", 0) for s in samples), default=0)
         avg_cpu = sum(s.get("cpu_percent", 0) for s in samples) / len(samples)
 
         # Aggregate top processes across all samples
@@ -382,8 +387,11 @@ class ResourceMonitor:
         )
         if max_swap > 1:
             print(f"Swap:         {max_swap:.0f}% peak")
-        print(f"CPU:          {avg_cpu:.0f}% avg")
-        print(f"Load:         {max_load:.0f} peak (vs {cpu_count} CPUs)")
+        avg_cores = (avg_cpu / 100) * cpu_count
+        max_cores = (max(s.get("cpu_percent", 0) for s in samples) / 100) * cpu_count
+        print(
+            f"CPU:          {avg_cores:.0f}/{cpu_count} cores avg, {max_cores:.0f} peak"
+        )
 
         # Top memory consumers (by peak memory usage)
         if proc_mem_totals:
@@ -409,7 +417,7 @@ class ResourceMonitor:
                 print(
                     "Top CPU:      "
                     + ", ".join(
-                        f"{cmd}({pct / 100:.1f} CPUs)" for cmd, pct in top_cpu_procs
+                        f"{cmd}({pct / 100:.1f} cores)" for cmd, pct in top_cpu_procs
                     )
                 )
 
