@@ -3,6 +3,7 @@
 exclude = [
   "lib/libhipdnn_backend_private.a",
   "lib/test_plugins/**",
+  "python_bindings/**",
 ]
 [components.run."ml-libs/hipDNN/stage"]
 include = [
