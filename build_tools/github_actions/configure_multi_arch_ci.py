@@ -425,7 +425,6 @@ class BuildConfig:
     artifact_group: str
     build_variant_label: str
     build_variant_suffix: str
-    build_variant_cmake_preset: str
     expect_failure: bool
     build_pytorch: bool
     # Build runner label for this platform/variant combination
@@ -924,7 +923,6 @@ def _expand_build_config_for_platform(
         artifact_group=f"multi-arch-{suffix or 'release'}",
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
-        build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         expect_failure=expect_failure,
         build_pytorch=not expect_failure and not expect_pytorch_failure,
         build_runs_on=build_runs_on,

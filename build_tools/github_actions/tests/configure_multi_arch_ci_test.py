@@ -707,7 +707,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             artifact_group="multi-arch-release",
             build_variant_label="release",
             build_variant_suffix="",
-            build_variant_cmake_preset="",
             expect_failure=False,
             build_pytorch=True,
         )
@@ -734,7 +733,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             artifact_group="multi-arch-release",
             build_variant_label="release",
             build_variant_suffix="",
-            build_variant_cmake_preset="release",
             expect_failure=False,
             build_pytorch=True,
         )
