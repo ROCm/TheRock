@@ -1240,19 +1240,10 @@ function(therock_cmake_subproject_build_test target_name)
       set(_log_file "${target_name}_build_test.log")
       set(_log_label "${target_name} build-test")
     endif()
-    # Non-VERBOSE tests use --no-interactive so teatime buffers output
-    # (only dumped on failure). VERBOSE tests use --interactive for live
-    # streaming. This is more reliable than env var overrides which may
-    # not propagate through cmake -P / execute_process on all platforms.
-    if(ARG_VERBOSE)
-      set(_test_output_on_failure "${_output_on_failure}")
-    else()
-      set(_test_output_on_failure TRUE)
-    endif()
     therock_subproject_log_command(_test_log_prefix
       LOG_FILE "${_log_file}"
       LABEL "${_log_label}"
-      OUTPUT_ON_FAILURE "${_test_output_on_failure}"
+      OUTPUT_ON_FAILURE "${_output_on_failure}"
     )
 
     set(_test_command_var "_test_command_${_command_index}")
@@ -1278,9 +1269,30 @@ function(therock_cmake_subproject_build_test target_name)
     string(APPEND _runner_content "  COMMAND${_cmd_str}\n")
     string(APPEND _runner_content "  WORKING_DIRECTORY \"${_binary_dir}\"\n")
     string(APPEND _runner_content "  RESULT_VARIABLE _rc${_command_index}\n")
+    if(NOT ARG_VERBOSE)
+      string(APPEND _runner_content "  OUTPUT_QUIET\n")
+      string(APPEND _runner_content "  ERROR_QUIET\n")
+    endif()
     string(APPEND _runner_content ")\n")
     string(APPEND _runner_content "if(_rc${_command_index})\n")
     string(APPEND _runner_content "  set(_any_failed TRUE)\n")
+    if(NOT ARG_VERBOSE)
+      set(_log_path "${THEROCK_BINARY_DIR}/logs/${_log_file}")
+      string(APPEND _runner_content "  set(_log_path \"${_log_path}\")\n")
+      string(APPEND _runner_content "  if(EXISTS \"\${_log_path}\")\n")
+      string(APPEND _runner_content "    file(STRINGS \"\${_log_path}\" _log_lines)\n")
+      string(APPEND _runner_content "    set(_in_summary FALSE)\n")
+      string(APPEND _runner_content "    foreach(_line IN LISTS _log_lines)\n")
+      string(APPEND _runner_content "      if(_line MATCHES \"[*][*][*][*]\")\n")
+      string(APPEND _runner_content "        set(_in_summary TRUE)\n")
+      string(APPEND _runner_content "      endif()\n")
+      string(APPEND _runner_content "      if(_in_summary)\n")
+      string(APPEND _runner_content "        string(REGEX REPLACE \"^[0-9.]+\\\\t\" \"\" _clean_line \"\${_line}\")\n")
+      string(APPEND _runner_content "        message(\"\${_clean_line}\")\n")
+      string(APPEND _runner_content "      endif()\n")
+      string(APPEND _runner_content "    endforeach()\n")
+      string(APPEND _runner_content "  endif()\n")
+    endif()
     string(APPEND _runner_content "endif()\n\n")
   endforeach()
 
