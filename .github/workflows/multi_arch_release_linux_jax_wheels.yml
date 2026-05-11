@@ -6,7 +6,8 @@ name: Multi-Arch Release Linux JAX Wheels
 on:
   workflow_call:
     inputs:
-      amdgpu_family:
+      amdgpu_families:
+        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
         type: string
         required: true
       release_type:
@@ -26,30 +27,15 @@ on:
         default: ""
   workflow_dispatch:
     inputs:
-      amdgpu_family:
-        type: choice
-        options:
-          - gfx101X-dgpu
-          - gfx103X-all
-          - gfx110X-all
-          - gfx1150
-          - gfx1151
-          - gfx1152
-          - gfx1153
-          - gfx120X-all
-          - gfx900
-          - gfx906
-          - gfx908
-          - gfx90a
-          - gfx94X-dcgpu
-          - gfx950-dcgpu
-        default: gfx94X-dcgpu
+      amdgpu_families:
+        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
+        type: string
+        default: "gfx94X-dcgpu"
       release_type:
+        description: 'Release type. All developer-triggered jobs should use "dev"!' 
         type: choice
         options:
           - dev
-          - nightly
-          - prerelease
         default: dev
       rocm_version:
         type: string
@@ -69,11 +55,10 @@ permissions:
   id-token: write
   packages: read
 
-run-name: Multi-Arch Release Linux JAX Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.release_type }}, ${{ inputs.rocm_version }})
-
+run-name: Multi-Arch Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 jobs:
   build_jax_wheels:
-    name: Build Linux JAX Wheels (${{ inputs.amdgpu_family }}, py${{ matrix.python_version }}, ${{ inputs.release_type }})
+    name: Build Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
     strategy:
       fail-fast: false
@@ -105,8 +90,8 @@ jobs:
       - name: Build JAX wheels
         env:
           ROCM_VERSION: ${{ inputs.rocm_version }}
+        working-directory: rocm-jax
         run: |
-          pushd rocm-jax
 
           python3 build/ci_build \
             --compiler=clang \
@@ -114,5 +99,3 @@ jobs:
             --rocm-version="${ROCM_VERSION}" \
             --therock-path="${{ inputs.tar_url }}" \
             dist_wheels
-
-          popd
