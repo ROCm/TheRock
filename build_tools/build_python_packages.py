@@ -176,7 +176,7 @@ def _run_kpack_split(
             filter=functools.partial(libraries_artifact_filter, "generic"),
         )
     )
-    lib.populate_python_packages(
+    lib.populate_python_bindings(
         params.filter_artifacts(
             filter=functools.partial(libraries_artifact_filter, "generic"),
         )
@@ -258,7 +258,7 @@ def _run_legacy(
                 filter=functools.partial(libraries_artifact_filter, target_family),
             )
         )
-        lib.populate_python_packages(
+        lib.populate_python_bindings(
             params.filter_artifacts(
                 filter=functools.partial(libraries_artifact_filter, target_family),
             )

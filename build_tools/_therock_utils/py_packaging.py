@@ -331,63 +331,26 @@ class PopulatedDistPackage:
         self.params.populated_packages.append(self)
         return self
 
-    def populate_python_packages(
+    def populate_python_bindings(
         self, artifacts: ArtifactCatalog
     ) -> "PopulatedDistPackage":
         """Promotes Python packages from artifacts into the wheel's src/ directory.
 
         Artifacts that install files under ``python/<package_name>/`` are detected
         and copied to ``src/<package_name>/`` so that setuptools' find_packages()
-        discovers them as top-level importable packages in the wheel. Binary
-        extensions (.so) get RPATH patching so they can find shared libraries in
-        the platform directory at runtime.
+        discovers them as top-level importable packages in the wheel.
         """
         log(
             f"::: Promoting Python packages {self.logical_name}[{self.target_family}]: "
             f"{self.path}"
         )
-        src_dir = self.path / "src"
         for relpath, dir_entry in artifacts.pm.matches():
             if not relpath.startswith("python/"):
                 continue
             # Rewrite python/<pkg>/... → src/<pkg>/...
             src_relpath = "src/" + relpath[len("python/"):]
             dest_path = self.path / src_relpath
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-            if dir_entry.is_dir():
-                dest_path.mkdir(parents=False, exist_ok=True)
-                continue
-
-            src_path = Path(dir_entry.path)
-            if dir_entry.is_symlink():
-                src_path = src_path.resolve()
-            if dest_path.exists():
-                os.unlink(dest_path)
-            shutil.copy2(src_path, dest_path)
-
-            if not is_windows:
-                file_type = get_file_type(dest_path)
-                if file_type == "exe" or file_type == "so":
-                    # Patch RPATH so the extension can find shared libraries
-                    # in the platform directory (e.g. libhipdnn_backend.so).
-                    platform_lib = (
-                        f"$ORIGIN/../{self.platform_dir.name}/lib"
-                    )
-                    log(f"  ADD_RPATH (python pkg): {dest_path}: {platform_lib}")
-                    subprocess.check_call(
-                        ["patchelf", "--add-rpath", platform_lib, str(dest_path)]
-                    )
-                    for dep_project, rpath in self.rpath_deps:
-                        dep_py_package_name = dep_project.entry.get_py_package_name(
-                            self.target_family
-                        )
-                        addl_rpath = f"$ORIGIN/../{dep_py_package_name}/{rpath}"
-                        log(f"  ADD_RPATH (python pkg): {dest_path}: {addl_rpath}")
-                        subprocess.check_call(
-                            ["patchelf", "--add-rpath", addl_rpath, str(dest_path)]
-                        )
-                    self._normalize_rpath(dest_path)
+            self._populate_file(src_relpath, dest_path, dir_entry, resolve_src=True)
         return self
 
     def populate_device_files(
