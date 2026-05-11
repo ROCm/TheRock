@@ -356,11 +356,6 @@ def main(argv=None):
         "Alternative to --external-repo-json for direct invocation.",
     )
     parser.add_argument(
-        "--workspace",
-        type=str,
-        help="GitHub workspace path for formatting CMake options and checkout_path",
-    )
-    parser.add_argument(
         "--list",
         action="store_true",
         help="List all known repository configurations",
@@ -407,16 +402,8 @@ def main(argv=None):
         print(f"Detected repository: {args.repository}", file=sys.stderr)
         print(f"Configuration: {config}", file=sys.stderr)
 
-        # Format the full CMake option if workspace path provided
-        # checkout_path is workspace/repo_name
-        checkout_path = f"{args.workspace}/{args.repository}" if args.workspace else args.repository
-        if args.workspace:
-            cmake_var = config["cmake_source_var"]
-            config["extra_cmake_options"] = f"-D{cmake_var}={checkout_path}"
-            print(
-                f"Generated CMake option: {config['extra_cmake_options']}",
-                file=sys.stderr,
-            )
+        # checkout_path is relative (for actions/checkout path: parameter)
+        checkout_path = args.repository
 
         # Generate fetch_sources_args from skip_submodules
         if "skip_submodules" in config and config["skip_submodules"]:
@@ -431,11 +418,10 @@ def main(argv=None):
         # This is the primary output used by downstream workflow jobs
         # source_repository/source_ref come from --external-repo-json parsing above
         final_source_repo = source_repository or f"ROCm/{args.repository}"
-        checkout_path = f"{args.workspace}/{args.repository}" if args.workspace else args.repository
         config_json = {
             "repository": final_source_repo,
             "ref": source_ref,
-            "checkout_path": checkout_path,
+            "checkout_path": checkout_path,  # relative path for actions/checkout
             "source_package": config["cmake_source_var"].replace(
                 "THEROCK_", ""
             ).replace("_SOURCE_DIR", ""),
