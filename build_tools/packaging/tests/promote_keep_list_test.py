@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for the keep-list (--keep-gfx-archs) logic in
+"""Unit tests for the keep-list (--multi-arch-targets) logic in
 promote_packages.py.
 
 These tests exercise the pure-function helpers (multi-arch detection, keep-list
@@ -296,6 +296,8 @@ AVAILABLE_TARGET_FAMILIES.append('gfx1010')
 AVAILABLE_TARGET_FAMILIES.append('gfx906')
 AVAILABLE_TARGET_FAMILIES.append('gfx1030')
 AVAILABLE_TARGET_FAMILIES.append('gfx1151')
+AVAILABLE_TARGET_FAMILIES.append('gfx11')
+AVAILABLE_TARGET_FAMILIES.append('gfx1201')
 """
 
     def _dist_info_single_arch_body(self) -> str:
@@ -323,6 +325,14 @@ AVAILABLE_TARGET_FAMILIES.append('gfx94X-dcgpu')
         self.assertIn("AVAILABLE_TARGET_FAMILIES.append('gfx906')", result)
         self.assertIn("AVAILABLE_TARGET_FAMILIES.append('gfx1030')", result)
         self.assertIn('DEFAULT_TARGET_FAMILY = "gfx906"', result)
+
+    def test_repoint_prefers_specific_arch_over_family_prefix(self):
+        # Keep list mixes a family prefix (gfx11, 2 digits) and a specific
+        # arch (gfx1201, 4 digits). When the default arch (gfx1010) is dropped,
+        # `_repoint_priority` must prefer the specific arch — so the repoint
+        # target is 'gfx1201', not 'gfx11', regardless of keep-list order.
+        result = self._apply(self._dist_info_multi_arch_body(), ["gfx11", "gfx1201"])
+        self.assertIn('DEFAULT_TARGET_FAMILY = "gfx1201"', result)
 
     def test_default_pointing_at_kept_arch_is_preserved(self):
         # Default arch (gfx1010) is in the keep list → line stays verbatim
@@ -383,7 +393,7 @@ class ParseArgumentsMutexTest(unittest.TestCase):
         self.assertEqual(ns.dest_version, "release")
         self.assertEqual(ns.src_version_type, "rc")
 
-    def test_skip_version_promotion_requires_keep_gfx_archs(self):
+    def test_skip_version_promotion_requires_multi_arch_targets(self):
         with self.assertRaises(SystemExit):
             self._parse(["--input-dir", "/tmp", "--skip-version-promotion"])
 
@@ -394,7 +404,7 @@ class ParseArgumentsMutexTest(unittest.TestCase):
                     "--input-dir",
                     "/tmp",
                     "--skip-version-promotion",
-                    "--keep-gfx-archs",
+                    "--multi-arch-targets",
                     "gfx950",
                     "--dest-version",
                     "release",
@@ -408,7 +418,7 @@ class ParseArgumentsMutexTest(unittest.TestCase):
                     "--input-dir",
                     "/tmp",
                     "--skip-version-promotion",
-                    "--keep-gfx-archs",
+                    "--multi-arch-targets",
                     "gfx950",
                     "--src-version-type",
                     "rc",
@@ -424,9 +434,9 @@ class ParseArgumentsMutexTest(unittest.TestCase):
             # Feb 30 doesn't exist.
             self._parse(["--input-dir", "/tmp", "--dest-version", "a20260230"])
 
-    def test_keep_gfx_archs_passthrough(self):
-        ns = self._parse(["--input-dir", "/tmp", "--keep-gfx-archs", "gfx1010,gfx1201"])
-        self.assertEqual(ns.keep_gfx_archs, "gfx1010,gfx1201")
+    def test_multi_arch_targets_passthrough(self):
+        ns = self._parse(["--input-dir", "/tmp", "--multi-arch-targets", "gfx1010,gfx1201"])
+        self.assertEqual(ns.multi_arch_targets, "gfx1010,gfx1201")
 
 
 if __name__ == "__main__":

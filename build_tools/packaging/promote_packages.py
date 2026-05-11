@@ -19,10 +19,10 @@ Common workflows:
   - a  -> rc                 e.g. 7.13.0a20260501 -> 7.13.0rc1
 Other combinations are mechanically possible but not typical.
 
-The keep-list pass (--keep-gfx-archs) is independent of version promotion: it
-runs whenever --keep-gfx-archs is supplied, alongside any version rewrite. To
+The keep-list pass (--multi-arch-targets) is independent of version promotion: it
+runs whenever --multi-arch-targets is supplied, alongside any version rewrite. To
 run ONLY the keep-list pass and leave the version untouched, use
---skip-version-promotion (which requires --keep-gfx-archs and is mutually
+--skip-version-promotion (which requires --multi-arch-targets and is mutually
 exclusive with --dest-version / --src-version-type).
 
 Arch filtering for multi-arch uses a positive list: the operator names the archs they want
@@ -40,7 +40,7 @@ SIDE EFFECTS:
   - Creates NEW promoted package files side-by-side with the original files
   - By default, DOES NOT delete original files (safe to run with no --delete flag)
   - With --delete-old-on-success flag, removes original files after promotion
-  - Multi-arch per-gfx wheels for archs NOT in --keep-gfx-archs are always skipped
+  - Multi-arch per-gfx wheels for archs NOT in --multi-arch-targets are always skipped
     (and deleted with --delete-old-on-success), since they are not retained
 
 TYPICAL USAGE:
@@ -61,7 +61,7 @@ TYPICAL USAGE:
 
   # Restrict to a positive arch list (no version change); per-gfx wheels for
   # other archs are skipped/deleted, multi-arch aggregator wheels are rewritten:
-  python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/ --skip-version-promotion --keep-gfx-archs=gfx1201,gfx1010,gfx11
+  python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/ --skip-version-promotion --multi-arch-targets=gfx1201,gfx1010,gfx11
 
 TESTING:
   python ./build_tools/packaging/tests/promote_packages_test.py
@@ -154,25 +154,22 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         default=None,
     )
     parser.add_argument(
-        "--keep-gfx-archs",
+        "--multi-arch-targets",
         help=(
-            "Comma-separated positive list of gfx targets to retain "
-            "(e.g. 'gfx1201,gfx1010,gfx11'). Everything not in this list is dropped: "
-            "multi-arch aggregator wheels (rocm, torch, torchvision) lose matching "
-            "Provides-Extra/Requires-Dist entries, multi-arch _dist_info.py loses "
-            "matching AVAILABLE_TARGET_FAMILIES entries (and DEFAULT_TARGET_FAMILY "
-            "is repointed at the first kept arch if it referenced a dropped one), "
-            "and per-gfx wheels for non-kept archs are skipped (or deleted with "
-            "--delete-old-on-success). Single-arch packages are detected and pass "
-            "through untouched."
+            "Optional. Comma-separated positive list of gfx targets to retain "
+            "(e.g. 'gfx1201,gfx1010,gfx11'). When set, multi-arch aggregator "
+            "wheels and per-gfx wheels for archs not in this list are dropped "
+            "or rewritten; single-arch packages pass through untouched. "
+            "When NOT set (default), no arch filtering is applied — multi-arch "
+            "wheels are promoted unchanged with all their gfx targets."
         ),
         default=None,
     )
     parser.add_argument(
         "--skip-version-promotion",
         help=(
-            "Only apply --keep-gfx-archs and repack; do not change the version. "
-            "Requires --keep-gfx-archs and is mutually exclusive with "
+            "Only apply --multi-arch-targets and repack; do not change the version. "
+            "Requires --multi-arch-targets and is mutually exclusive with "
             "--dest-version / --src-version-type. "
             "NOTE: Will match all versions found, ignoring --src-version-type. "
             "Use --match-files to limit the scope if needed."
@@ -202,8 +199,8 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
                 )
 
     if args.skip_version_promotion:
-        if not args.keep_gfx_archs:
-            parser.error("--skip-version-promotion requires --keep-gfx-archs")
+        if not args.multi_arch_targets:
+            parser.error("--skip-version-promotion requires --multi-arch-targets")
         # In --skip-version-promotion mode, version-related flags are ignored —
         # reject them explicitly rather than silently dropping the user's input.
         # The sentinel defaults (None) tell us whether each flag was passed explicitly.
@@ -304,7 +301,7 @@ def _assert_keep_overlaps_found(
     """Raise if `keep_archs` shares no element with `found_archs`."""
     if not (found_archs & set(keep_archs)):
         raise ValueError(
-            f"--keep-gfx-archs={keep_archs} has no overlap with archs in "
+            f"--multi-arch-targets={keep_archs} has no overlap with archs in "
             f"{label}: {sorted(found_archs)}"
         )
 
@@ -724,14 +721,14 @@ def wheel_change_extra_files(
     new_dir_path: pathlib.Path,
     old_version: Version,
     new_version: Version,
-    keep_gfx_archs: list[str] | None = None,
+    multi_arch_targets: list[str] | None = None,
 ) -> None:
     # Always run the keep-list pass when archs are requested; do this *before*
     # version rewrites so the version replacement sees a consistent file
     # (and so we also cover --skip-version-promotion mode where
     # old_version == new_version).
-    if keep_gfx_archs:
-        wheel_apply_gfx_keep_list(new_dir_path, keep_gfx_archs)
+    if multi_arch_targets:
+        wheel_apply_gfx_keep_list(new_dir_path, multi_arch_targets)
 
     if old_version == new_version:
         # No version change requested — nothing else to do here.
@@ -838,7 +835,7 @@ def promote_wheel(
     filename: pathlib.Path,
     src_version_type: str,
     dest_version: str = "release",
-    keep_gfx_archs: list[str] | None = None,
+    multi_arch_targets: list[str] | None = None,
     skip_version_promotion: bool = False,
 ) -> bool:
     print(f"Promoting whl from rc to final: {filename}")
@@ -851,14 +848,14 @@ def promote_wheel(
     # Bound callback matching change_wheel_version's expected signature:
     #   callback(new_dir_path: Path, old_version: Version, new_version: Version) -> None
     callback = functools.partial(
-        wheel_change_extra_files, keep_gfx_archs=keep_gfx_archs
+        wheel_change_extra_files, multi_arch_targets=multi_arch_targets
     )
 
     if skip_version_promotion:
         # No version change; just repack with the keep-list callback applied.
-        # `keep_gfx_archs` presence is enforced at the main() boundary.
+        # `multi_arch_targets` presence is enforced at the main() boundary.
         print(
-            f"  --skip-version-promotion: applying keep list {keep_gfx_archs}, "
+            f"  --skip-version-promotion: applying keep list {multi_arch_targets}, "
             f"version {original_version} unchanged"
         )
         new_wheel_path = change_wheel_version.change_wheel_version(
@@ -915,7 +912,7 @@ def promote_targz_sdist(
     filename: pathlib.Path,
     src_version_type: str,
     dest_version: str = "release",
-    keep_gfx_archs: list[str] | None = None,
+    multi_arch_targets: list[str] | None = None,
     skip_version_promotion: bool = False,
 ) -> bool:
     print(f"Found tar.gz: {filename}")
@@ -943,7 +940,7 @@ def promote_targz_sdist(
         print(f"  Detected version: {version}")
 
         if skip_version_promotion:
-            # `keep_gfx_archs` presence is enforced at the main() boundary.
+            # `multi_arch_targets` presence is enforced at the main() boundary.
             new_version_str = str(version)
         else:
             if src_version_type not in str(version):
@@ -955,8 +952,8 @@ def promote_targz_sdist(
                 str(version), src_version_type, dest_version
             )
 
-        if keep_gfx_archs:
-            wheel_apply_gfx_keep_list(tmp_path / package_name, keep_gfx_archs)
+        if multi_arch_targets:
+            wheel_apply_gfx_keep_list(tmp_path / package_name, multi_arch_targets)
 
         if new_version_str != str(version):
             print(
@@ -1041,12 +1038,12 @@ def main(
     delete: bool = False,
     src_version_type: str = "rc",
     dest_version: str = "release",
-    keep_gfx_archs: list[str] | None = None,
+    multi_arch_targets: list[str] | None = None,
     skip_version_promotion: bool = False,
 ) -> None:
-    if skip_version_promotion and not keep_gfx_archs:
+    if skip_version_promotion and not multi_arch_targets:
         raise ValueError(
-            "skip_version_promotion=True requires a non-empty keep_gfx_archs"
+            "skip_version_promotion=True requires a non-empty multi_arch_targets"
         )
 
     print(f"Looking for .whl and .tar.gz in {input_dir}/{match_files}")
@@ -1054,7 +1051,7 @@ def main(
     # Materialize the glob: promotion renames files in place, and a lazy
     # iterator would pick up the newly created destination wheels mid-loop.
     files = sorted(input_dir.glob(match_files))
-    keep_set = set(keep_gfx_archs) if keep_gfx_archs else None
+    keep_set = set(multi_arch_targets) if multi_arch_targets else None
 
     for file in files:
         print("")
@@ -1086,7 +1083,7 @@ def main(
                     file,
                     src_version_type,
                     dest_version=dest_version,
-                    keep_gfx_archs=keep_gfx_archs,
+                    multi_arch_targets=multi_arch_targets,
                     skip_version_promotion=skip_version_promotion,
                 )
                 and delete
@@ -1104,7 +1101,7 @@ def main(
                         file,
                         src_version_type,
                         dest_version=dest_version,
-                        keep_gfx_archs=keep_gfx_archs,
+                        multi_arch_targets=multi_arch_targets,
                         skip_version_promotion=skip_version_promotion,
                     )
                     and delete
@@ -1120,9 +1117,9 @@ if __name__ == "__main__":
     p = parse_arguments(sys.argv[1:])
     print(" ...done")
 
-    keep_gfx_archs = (
-        [a.strip() for a in p.keep_gfx_archs.split(",") if a.strip()]
-        if p.keep_gfx_archs
+    multi_arch_targets = (
+        [a.strip() for a in p.multi_arch_targets.split(",") if a.strip()]
+        if p.multi_arch_targets
         else None
     )
 
@@ -1132,6 +1129,6 @@ if __name__ == "__main__":
         p.delete_old_on_success,
         p.src_version_type,
         dest_version=p.dest_version,
-        keep_gfx_archs=keep_gfx_archs,
+        multi_arch_targets=multi_arch_targets,
         skip_version_promotion=p.skip_version_promotion,
     )

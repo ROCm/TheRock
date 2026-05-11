@@ -81,26 +81,31 @@ python build_tools/packaging/promote_packages.py \
 `a<YYYYMMDD>` (e.g. `a20260501`). The downstream RC -> release flow above is
 unchanged.
 
-### Multi-arch packages: restricting which gfx targets ship
+### Multi-arch packages: restricting which gfx targets to ship
 
 Multi-arch aggregator wheels (`rocm`, `torch`, `torchvision`, …) reference
 several gfx targets via `Provides-Extra` / `Requires-Dist` entries, and the
 download directory may contain per-gfx wheels (`rocm_sdk_device_gfx1010-…`,
 `amd_torch_device_gfx1010-…`) for each of those targets.
 
+**Default behavior:** if `--multi-arch-targets` is not passed, no arch filtering
+is applied — multi-arch wheels are promoted unchanged with all their gfx targets
+intact, and every per-gfx wheel in the input directory is promoted.
+
 If a release should only ship a subset of those archs, pass
-`--keep-gfx-archs` (positive list — everything else is dropped):
+`--multi-arch-targets`. This is a positive list: list the target "gfx"
+you want to keep, including for aotriton the sub-family kernels like "gfx11":
 
 ```bash
 # Promote the version AND drop per-gfx wheels / aggregator entries for
 # archs not in the keep list.
 python build_tools/packaging/promote_packages.py \
    --input-dir=./promotion/download/<multiarch> \
-   --keep-gfx-archs=gfx1201,gfx1010 \
+   --multi-arch-targets=gfx1201,gfx1010 \
    --delete-old-on-success
 ```
 
-Effects of `--keep-gfx-archs`:
+Effects of `--multi-arch-targets`:
 
 - Per-gfx wheels for non-kept archs are skipped (and deleted with
   `--delete-old-on-success`).
@@ -121,11 +126,11 @@ release-versioned multi-arch wheels and just want to narrow them), use
 python build_tools/packaging/promote_packages.py \
    --input-dir=./promotion/download/<multiarch> \
    --skip-version-promotion \
-   --keep-gfx-archs=gfx1201,gfx1010
+   --multi-arch-targets=gfx1201,gfx1010
 ```
 
 `--skip-version-promotion` is mutually exclusive with `--src-version-type` /
-`--dest-version` and requires `--keep-gfx-archs`.
+`--dest-version` and requires `--multi-arch-targets`.
 
 ## 3. Upload release packages
 
