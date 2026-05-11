@@ -59,8 +59,9 @@ function(therock_sanitizer_configure
     string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
 
     # For autotools-based builds (like rocgdb) that use CMAKE_*_LINKER_FLAGS directly,
-    # always include -fsanitize=<sanitizer> for linking. Also add -shared-libsan since
-    # we know we are dealing with a non-system compiler.
+    # include -fsanitize=<sanitizer> and -shared-libsan for linking. Note: Projects that
+    # enable Fortran (which uses system gfortran) need to strip -shared-libsan from these
+    # flags in their pre-hook since gfortran doesn't recognize it. See hipBLASLt pre-hook.
     string(APPEND _stanza "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -fsanitize=${_sanitizer_string} -shared-libsan\")\n")
     string(APPEND _stanza "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -fsanitize=${_sanitizer_string} -shared-libsan\")\n")
 

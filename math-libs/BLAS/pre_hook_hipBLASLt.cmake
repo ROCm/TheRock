@@ -25,3 +25,13 @@ block(SCOPE_FOR VARIABLES)
   set(ENV{PATH} "${new_path}")
   message(STATUS "Augmented toolchain PATH=$ENV{PATH}")
 endblock()
+
+# hipBLASLt enables Fortran which uses system gfortran. The -shared-libsan flag
+# is Clang-specific and not recognized by gfortran, so remove it from the global
+# linker flags. The sanitizer flag (-fsanitize=address/thread) remains for all
+# languages, and add_link_options() in therock_sanitizers.cmake already handles
+# -shared-libsan correctly for C/C++ via generator expressions.
+string(REPLACE " -shared-libsan" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+string(REPLACE " -shared-libsan" "" CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}" PARENT_SCOPE)
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}" PARENT_SCOPE)
