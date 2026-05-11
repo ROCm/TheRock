@@ -128,7 +128,10 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         "--delete-old-on-success",
         help="Deletes old file after successful promotion",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        # Sentinel default: lets us distinguish "user did not pass --delete-old-on-success"
+        # from "user explicitly passed --delete-old-on-success" (needed for the
+        # --skip-version-promotion mutex check below). Resolved to False after that check.
+        default=None,
     )
     parser.add_argument(
         "--src-version-type",
@@ -212,12 +215,21 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
             parser.error(
                 "--skip-version-promotion is mutually exclusive with --src-version-type"
             )
+        # Do not allow deletion of packages when we do not change the version.
+        # Could nuke otherwise the packages.
+        if args.delete_old_on_success is True:
+            parser.error(
+                "--skip-version-promotion is mutually exclusive with "
+                "--delete-old-on-success"
+            )
 
     # Resolve sentinel defaults after the mutex check.
     if args.dest_version is None:
         args.dest_version = "release"
     if args.src_version_type is None:
         args.src_version_type = "rc"
+    if args.delete_old_on_success is None:
+        args.delete_old_on_success = False
 
     return args
 
