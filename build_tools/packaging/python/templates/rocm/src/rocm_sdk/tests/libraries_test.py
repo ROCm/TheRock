@@ -103,6 +103,17 @@ class ROCmLibrariesTest(unittest.TestCase):
 
                 subprocess.check_call([sys.executable, "-c", command, str(so_path)])
 
+    def testHipDNNFrontendImport(self):
+        """The hipdnn_frontend Python bindings must be importable."""
+        try:
+            import hipdnn_frontend
+        except ImportError:
+            self.skipTest("hipdnn_frontend not included in this build")
+        self.assertTrue(
+            hasattr(hipdnn_frontend, "__file__"),
+            msg="hipdnn_frontend has no __file__ attribute",
+        )
+
     def testConsoleScripts(self):
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:
             script_path = utils.find_console_script(script_name)
