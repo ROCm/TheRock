@@ -176,6 +176,11 @@ def _run_kpack_split(
             filter=functools.partial(libraries_artifact_filter, "generic"),
         )
     )
+    lib.populate_python_packages(
+        params.filter_artifacts(
+            filter=functools.partial(libraries_artifact_filter, "generic"),
+        )
+    )
 
     # Build core + libraries wheels. The rocm, rocm-sdk-devel, and
     # rocm-sdk-device staging dirs do not exist yet, so the default scan
@@ -249,6 +254,11 @@ def _run_legacy(
         lib.rpath_dep(core, "lib/rocm_sysdeps/lib")
         lib.rpath_dep(core, "lib/host-math/lib")
         lib.populate_runtime_files(
+            params.filter_artifacts(
+                filter=functools.partial(libraries_artifact_filter, target_family),
+            )
+        )
+        lib.populate_python_packages(
             params.filter_artifacts(
                 filter=functools.partial(libraries_artifact_filter, target_family),
             )
