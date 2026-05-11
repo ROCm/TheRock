@@ -175,7 +175,7 @@ def _os_release_id_version() -> str:
 
 
 def _default_cdash_matrix_label() -> str:
-    """``ROCm/rocm-systems-<os>`` or ``ROCm/rocm-systems-<os>-<gpu>`` when ``THEROCK_CDASH_LABEL`` is unset.
+    """Label format: ``ROCm/rocm-systems-<os>-<gpu>``
 
     * OS segment from ``/etc/os-release`` (or ``platform.system()``).
     * Optional GPU segment from ``THEROCK_CDASH_GPU`` (default empty). When set, e.g.
@@ -215,7 +215,7 @@ def _cdash_build_name() -> str:
             prefix = f"Manual_"
         else:
             prefix = "CI_" if os.getenv("CI") else "Local_"
-    label = _default_cdash_matrix_label() or os.getenv("THEROCK_CDASH_LABEL")
+    label = _default_cdash_matrix_label()
     run_key = (
         os.getenv("GITHUB_RUN_ID")
         or os.getenv("THEROCK_RUN_ID")
