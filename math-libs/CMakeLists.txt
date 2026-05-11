@@ -24,6 +24,8 @@ if(THEROCK_ENABLE_RAND)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+    TEST_SUBPROJECTS
+      hipRAND
   )
   therock_cmake_subproject_glob_c_sources(rocRAND
     SUBDIRS
@@ -99,6 +101,10 @@ if(THEROCK_ENABLE_PRIM)
       rocm-cmake
     RUNTIME_DEPS
       hip-clr
+    TEST_SUBPROJECTS
+      hipCUB
+      rocThrust
+      rocSPARSE
   )
   therock_cmake_subproject_glob_c_sources(rocPRIM
     SUBDIRS
@@ -257,6 +263,8 @@ if(THEROCK_ENABLE_FFT)
     RUNTIME_DEPS
       hip-clr
       hipRAND
+    TEST_SUBPROJECTS
+      hipFFT
   )
   therock_cmake_subproject_glob_c_sources(rocFFT
     SUBDIRS

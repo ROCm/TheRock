@@ -36,6 +36,18 @@ class CMakeParserTest(unittest.TestCase):
         self.assertIn("hipsparselt", test_deps)
         self.assertEqual(set(test_deps["hipsparselt"]), {"hipsparselt"})
 
+        # Verify rocRAND test dependencies
+        self.assertIn("rocrand", test_deps)
+        self.assertEqual(set(test_deps["rocrand"]), {"hiprand"})
+
+        # Verify rocPRIM test dependencies
+        self.assertIn("rocprim", test_deps)
+        self.assertEqual(set(test_deps["rocprim"]), {"hipcub", "rocthrust", "rocsparse"})
+
+        # Verify rocFFT test dependencies
+        self.assertIn("rocfft", test_deps)
+        self.assertEqual(set(test_deps["rocfft"]), {"hipfft"})
+
     def test_get_subprojects_to_test(self):
         """Test get_subprojects_to_test with real CMake files."""
         therock_dir = Path(__file__).parent.parent.parent
