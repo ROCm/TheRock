@@ -30,6 +30,7 @@ Output (GitHub Actions format):
 
 import argparse
 import importlib.util
+import json
 import os
 import sys
 from functools import lru_cache
@@ -351,7 +352,19 @@ def main(argv=None):
     parser.add_argument(
         "--workspace",
         type=str,
-        help="GitHub workspace path for formatting CMake options",
+        help="GitHub workspace path for formatting CMake options and checkout_path",
+    )
+    parser.add_argument(
+        "--source-repository",
+        type=str,
+        help="Full repository name for checkout (e.g., 'ROCm/rocm-libraries'). "
+        "If not provided, defaults to 'ROCm/<repository>'.",
+    )
+    parser.add_argument(
+        "--source-ref",
+        type=str,
+        default="",
+        help="Git ref (branch, tag, SHA) for checkout. Passed through to config_json.",
     )
     parser.add_argument(
         "--list",
@@ -401,6 +414,21 @@ def main(argv=None):
                 f"Generated fetch_sources_args: {config['fetch_sources_args']}",
                 file=sys.stderr,
             )
+
+        # Build config_json with all fields needed by workflows
+        # This is the primary output used by downstream workflow jobs
+        source_repo = args.source_repository or f"ROCm/{args.repository}"
+        config_json = {
+            "repository": source_repo,
+            "ref": args.source_ref,
+            "checkout_path": args.workspace or args.repository,
+            "source_package": config["cmake_source_var"].replace(
+                "THEROCK_", ""
+            ).replace("_SOURCE_DIR", ""),
+            "fetch_sources_args": config.get("fetch_sources_args", ""),
+        }
+        config["config_json"] = json.dumps(config_json)
+        print(f"Generated config_json: {config['config_json']}", file=sys.stderr)
 
         output_github_actions_vars(config)
         return 0

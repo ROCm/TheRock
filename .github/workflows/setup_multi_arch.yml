@@ -52,8 +52,16 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
-      external_repo_config:
-        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
+      external_repo_name:
+        description: "External repository name (e.g., 'rocm-libraries', 'rocm-systems'). Used to auto-detect configuration."
+        type: string
+        default: ""
+      external_repo_full_name:
+        description: "Full external repository name for checkout (e.g., 'ROCm/rocm-libraries'). Defaults to 'ROCm/<external_repo_name>'."
+        type: string
+        default: ""
+      external_repo_ref:
+        description: "Git ref for external repository checkout."
         type: string
         default: ""
     outputs:
@@ -91,8 +99,8 @@ on:
           HEAD moves during the workflow run.
         value: ${{ jobs.setup.outputs.ref }}
       external_repo_config:
-        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
-        value: ${{ inputs.external_repo_config }}
+        description: "JSON config for external repo checkout (generated from external_repo_name)"
+        value: ${{ jobs.setup.outputs.external_repo_config }}
 
 permissions:
   contents: read
@@ -111,6 +119,7 @@ jobs:
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
+      external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
     steps:
       - name: Checking out repository
         id: checkout
@@ -159,3 +168,13 @@ jobs:
             --release-type=${{ inputs.release_type || 'dev' }} \
             --prerelease-version=${{ inputs.prerelease_version }} \
             --override-git-sha=${{ steps.checkout.outputs.commit }}
+
+      - name: Detect external repo config
+        id: external_repo_config
+        if: ${{ inputs.external_repo_name != '' }}
+        run: |
+          python ./build_tools/github_actions/detect_external_repo_config.py \
+            --repository=${{ inputs.external_repo_name }} \
+            --workspace="${{ github.workspace }}/${{ inputs.external_repo_name }}" \
+            --source-repository="${{ inputs.external_repo_full_name || format('ROCm/{0}', inputs.external_repo_name) }}" \
+            --source-ref="${{ inputs.external_repo_ref }}"
