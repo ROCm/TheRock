@@ -31,4 +31,5 @@ cat >> "$AMDGPU_IDS" << 'EOF'
 75A3,	00,	AMD Instinct MI355X
 75B0,	00,	AMD Instinct MI350X VF
 75B3,	00,	AMD Instinct MI355X VF
+75A8,	00,	AMD Instinct MI350P
 EOF
