@@ -94,7 +94,6 @@ jobs:
     secrets: inherit
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
-      cmake_preset: "linux-release"
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
@@ -115,7 +114,6 @@ jobs:
     secrets: inherit
     with:
       build_config: ${{ needs.setup.outputs.windows_build_config }}
-      cmake_preset: "windows-release"
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       release_type: ${{ inputs.release_type }}
