@@ -403,7 +403,8 @@ def main(argv=None):
         print(f"Configuration: {config}", file=sys.stderr)
 
         # checkout_path is relative (for actions/checkout path: parameter)
-        checkout_path = args.repository
+        # Use "external-" prefix to avoid collisions with submodule paths
+        checkout_path = f"external-{args.repository}"
 
         # Generate fetch_sources_args from skip_submodules
         if "skip_submodules" in config and config["skip_submodules"]:

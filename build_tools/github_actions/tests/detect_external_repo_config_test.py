@@ -136,9 +136,9 @@ class TestOutputGithubActionsVars(unittest.TestCase):
         with open(self.temp_file, "r") as f:
             output = f.read()
 
-        # Verify config_json is included with correct checkout_path (relative)
+        # Verify config_json is included with correct checkout_path (relative with external- prefix)
         self.assertIn("config_json=", output)
-        self.assertIn('"checkout_path": "rocm-libraries"', output)
+        self.assertIn('"checkout_path": "external-rocm-libraries"', output)
 
 
 class TestGetExternalRepoPath(unittest.TestCase):
