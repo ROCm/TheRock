@@ -36,14 +36,14 @@ class TestGetRepoConfig(unittest.TestCase):
             config["cmake_source_var"], "THEROCK_ROCM_LIBRARIES_SOURCE_DIR"
         )
         self.assertEqual(config["submodule_path"], "rocm-libraries")
-        self.assertEqual(config["fetch_exclusion"], "--no-include-rocm-libraries")
+        self.assertEqual(config["skip_submodules"], ["rocm-libraries"])
 
     def test_rocm_systems_config(self):
         """Test rocm-systems configuration"""
         config = get_repo_config("rocm-systems")
         self.assertEqual(config["cmake_source_var"], "THEROCK_ROCM_SYSTEMS_SOURCE_DIR")
         self.assertEqual(config["submodule_path"], "rocm-systems")
-        self.assertEqual(config["fetch_exclusion"], "--no-include-rocm-systems")
+        self.assertEqual(config["skip_submodules"], ["rocm-systems"])
 
     def test_unknown_repo_raises_error(self):
         """Test that unknown repository raises ValueError"""
@@ -57,7 +57,7 @@ class TestGetRepoConfig(unittest.TestCase):
         required_keys = {
             "cmake_source_var",
             "submodule_path",
-            "fetch_exclusion",
+            "skip_submodules",
         }
         for repo_name, config in REPO_CONFIGS.items():
             with self.subTest(repo=repo_name):
@@ -91,7 +91,7 @@ class TestOutputGithubActionsVars(unittest.TestCase):
         config = {
             "cmake_source_var": "TEST_VAR",
             "submodule_path": "test-dir",
-            "fetch_exclusion": "--no-include-test",
+            "skip_submodules": ["test-submodule"],
         }
 
         output_github_actions_vars(config)
@@ -103,7 +103,7 @@ class TestOutputGithubActionsVars(unittest.TestCase):
         # Verify output format
         self.assertIn("cmake_source_var=TEST_VAR", output)
         self.assertIn("submodule_path=test-dir", output)
-        self.assertIn("fetch_exclusion=--no-include-test", output)
+        self.assertIn("skip_submodules=['test-submodule']", output)
 
     def test_boolean_conversion(self):
         """Test that booleans are converted to lowercase strings"""

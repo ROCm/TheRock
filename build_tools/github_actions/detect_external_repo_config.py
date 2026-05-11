@@ -25,7 +25,7 @@ Examples:
 Output (GitHub Actions format):
     cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR
     submodule_path=rocm-libraries
-    fetch_exclusion=--no-include-rocm-libraries
+    fetch_sources_args=--skip-submodules rocm-libraries
 """
 
 import argparse
@@ -44,12 +44,12 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
     "rocm-libraries": {
         "cmake_source_var": "THEROCK_ROCM_LIBRARIES_SOURCE_DIR",
         "submodule_path": "rocm-libraries",
-        "fetch_exclusion": "--no-include-rocm-libraries",
+        "skip_submodules": ["rocm-libraries"],
     },
     "rocm-systems": {
         "cmake_source_var": "THEROCK_ROCM_SYSTEMS_SOURCE_DIR",
         "submodule_path": "rocm-systems",
-        "fetch_exclusion": "--no-include-rocm-systems",
+        "skip_submodules": ["rocm-systems"],
     },
     # Future repos can be added here:
     # "llvm-project": {...},
@@ -326,7 +326,7 @@ def main(argv=None):
             "Output Format (GitHub Actions):\n"
             "  cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR\n"
             "  submodule_path=rocm-libraries\n"
-            "  fetch_exclusion=--no-include-rocm-libraries"
+            "  fetch_sources_args=--skip-submodules rocm-libraries"
         ),
         epilog=(
             "Examples:\n"
@@ -390,6 +390,15 @@ def main(argv=None):
             config["extra_cmake_options"] = f"-D{cmake_var}={args.workspace}"
             print(
                 f"Generated CMake option: {config['extra_cmake_options']}",
+                file=sys.stderr,
+            )
+
+        # Generate fetch_sources_args from skip_submodules
+        if "skip_submodules" in config and config["skip_submodules"]:
+            skip_args = " ".join(config["skip_submodules"])
+            config["fetch_sources_args"] = f"--skip-submodules {skip_args}"
+            print(
+                f"Generated fetch_sources_args: {config['fetch_sources_args']}",
                 file=sys.stderr,
             )
 
