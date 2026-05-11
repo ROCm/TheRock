@@ -86,7 +86,9 @@ jobs:
       run_extended_tests: ${{ needs.setup.outputs.run_extended_tests }}
       build_variant_label: ${{ matrix.variant.build_variant_label }}
       build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
-      build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}
+      # TODO: Use linux-dev once capacity and rccl link issues are
+      # resolved. https://github.com/ROCm/TheRock/issues/1781
+      build_variant_cmake_preset: ""
       test_labels: ${{ needs.setup.outputs.linux_test_labels }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       expect_failure: ${{ matrix.variant.expect_failure == true }}
@@ -121,7 +123,7 @@ jobs:
       run_extended_tests: ${{ needs.setup.outputs.run_extended_tests }}
       build_variant_label: ${{ matrix.variant.build_variant_label }}
       build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
-      build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}
+      build_variant_cmake_preset: "windows-dev"
       test_labels: ${{ needs.setup.outputs.windows_test_labels }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       expect_failure: ${{ matrix.variant.expect_failure == true }}
