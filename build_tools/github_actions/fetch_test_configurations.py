@@ -60,7 +60,7 @@ _BASE_CONTAINER_OPTIONS = [
     "--security-opt seccomp=unconfined",
 ]
 
-# GPU-specific container options (only applied when cpu_runner != True)
+# GPU-specific container options (only applied when linux_cpu_runner != True)
 # --group-add video - Grants access to GPU video group
 # --device /dev/kfd - AMD KFD device for GPU compute
 # --device /dev/dri - Direct Rendering Infrastructure devices
@@ -96,7 +96,7 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
     options_parts = _BASE_CONTAINER_OPTIONS.copy()
 
     # Add GPU-specific options unless this is a CPU-only runner
-    if not job_config.get("cpu_runner", False):
+    if not job_config.get("linux_cpu_runner", False):
         options_parts.extend(_GPU_CONTAINER_OPTIONS)
 
     # Add any job-specific container options
@@ -108,6 +108,16 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
 
     return job_config
 
+
+# Common settings for rocgdb jobs
+_rocgdb_common = {
+    "fetch_artifact_args": "--debug-tools --tests",
+    "timeout_minutes": 30,
+    "platform": ["linux"],
+    "total_shards": 1,
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:7063e922b4b9145c92f20011674571f1c97b8fad6faaeb0b7d2d165b0bd9ae8b",  # 2026-04-02T21:47:07.506375216Z
+    "container_options": ["--cap-add=SYS_PTRACE"],
+}
 
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
@@ -249,15 +259,16 @@ test_matrix = {
             "windows": 1,
         },
     },
-    "rocgdb": {
-        "job_name": "rocgdb",
-        "fetch_artifact_args": "--debug-tools --tests",
-        "timeout_minutes": 45,
-        "test_script": f"python {_get_script_path('test_rocgdb.py')}",
-        "platform": ["linux"],
-        "total_shards": 1,
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:7063e922b4b9145c92f20011674571f1c97b8fad6faaeb0b7d2d165b0bd9ae8b",  # 2026-04-02T21:47:07.506375216Z
-        "container_options": "--cap-add=SYS_PTRACE",
+    "rocgdb-cpu": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-cpu",
+        "test_script": f"python {_get_script_path('test_rocgdb.py')} --tests gdb.dwarf2",
+        "linux_cpu_runner": True,
+    },
+    "rocgdb-gpu": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-gpu",
+        "test_script": f"python {_get_script_path('test_rocgdb.py')} --tests gdb.rocm",
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
