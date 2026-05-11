@@ -31,6 +31,7 @@
 - [S3 Buckets](s3_buckets.md)
 - [GitHub Actions Debugging](github_actions_debugging.md)
 - [CI Behavior Manipulation](ci_behavior_manipulation.md)
+- [WSL ROCDXG CI Stage](wsl_rocdxg.md)
 
 ### Other topics
 
