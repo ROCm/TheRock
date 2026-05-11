@@ -67,7 +67,7 @@ jobs:
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
-      build_variant: "release"
+      build_variant: "ci"
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families || '' }}
       linux_test_labels: ${{ inputs.linux_test_labels || '' }}

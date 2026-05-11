@@ -35,7 +35,7 @@ def _run_from_environ(
     event_payload: dict,
     *,
     commit_ref: str = "main",
-    build_variant: str = "release",
+    build_variant: str = "ci",
     extra_env: dict[str, str] | None = None,
 ) -> cm.CIInputs:
     """Call CIInputs.from_environ() with a synthetic event payload.
@@ -84,7 +84,7 @@ class TestCIInputs(unittest.TestCase):
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
         )
         self.assertTrue(inputs.is_pull_request)
         self.assertFalse(inputs.is_push)
@@ -98,7 +98,7 @@ class TestCIInputs(unittest.TestCase):
             event_name="push",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
         )
         self.assertEqual(inputs.pr_labels, [])
         self.assertEqual(inputs.linux_amdgpu_families, [])
@@ -198,7 +198,7 @@ class TestShouldSkipCI(unittest.TestCase):
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
         )
         defaults.update(kwargs)
         return cm.CIInputs(**defaults)
@@ -240,7 +240,7 @@ class TestShouldSkipCI(unittest.TestCase):
 
     def test_asan_pr_without_submodule_change_skips(self):
         """ASAN PR without submodule changes skips CI."""
-        inputs = self._inputs(build_variant="asan", pr_labels=[])
+        inputs = self._inputs(build_variant="ci_asan", pr_labels=[])
         git = cm.GitContext(
             changed_files=["CMakeLists.txt", "build_tools/script.py"],
             submodule_paths=["rocm-libraries", "rocm-systems"],
@@ -249,7 +249,7 @@ class TestShouldSkipCI(unittest.TestCase):
 
     def test_asan_pr_with_submodule_change_runs(self):
         """ASAN PR with submodule changes runs CI."""
-        inputs = self._inputs(build_variant="asan", pr_labels=[])
+        inputs = self._inputs(build_variant="ci_asan", pr_labels=[])
         git = cm.GitContext(
             changed_files=["rocm-libraries", "CMakeLists.txt"],
             submodule_paths=["rocm-libraries", "rocm-systems"],
@@ -258,7 +258,7 @@ class TestShouldSkipCI(unittest.TestCase):
 
     def test_asan_non_pr_runs_regardless_of_submodule(self):
         """ASAN on schedule/push runs regardless of submodule changes."""
-        inputs = self._inputs(event_name="schedule", build_variant="asan")
+        inputs = self._inputs(event_name="schedule", build_variant="ci_asan")
         git = cm.GitContext(
             changed_files=None,
             submodule_paths=["rocm-libraries"],
@@ -267,7 +267,7 @@ class TestShouldSkipCI(unittest.TestCase):
 
     def test_release_pr_without_submodule_change_runs(self):
         """Release variant PR without submodule changes still runs (not skipped)."""
-        inputs = self._inputs(build_variant="release", pr_labels=[])
+        inputs = self._inputs(build_variant="ci", pr_labels=[])
         git = cm.GitContext(
             changed_files=["CMakeLists.txt"],
             submodule_paths=["rocm-libraries"],
@@ -289,7 +289,7 @@ class TestDecideJobs(unittest.TestCase):
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
         )
         defaults.update(kwargs)
         return cm.CIInputs(**defaults)
@@ -434,7 +434,7 @@ class TestSelectTargets(unittest.TestCase):
             event_name="push",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
         )
         result = cm.select_targets(inputs)
         # gfx950 is postsubmit-only, should be present for push
@@ -447,7 +447,7 @@ class TestSelectTargets(unittest.TestCase):
             event_name="schedule",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
         )
         result = cm.select_targets(inputs)
         # Schedule should have more families than push (nightly families added)
@@ -456,7 +456,7 @@ class TestSelectTargets(unittest.TestCase):
             event_name="push",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
         )
         push_result = cm.select_targets(push_inputs)
         self.assertGreater(len(result.linux_families), len(push_result.linux_families))
@@ -468,7 +468,7 @@ class TestSelectTargets(unittest.TestCase):
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
         )
         result = cm.select_targets(inputs)
         self.assertGreater(len(result.linux_families), 0)
@@ -482,14 +482,14 @@ class TestSelectTargets(unittest.TestCase):
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
         )
         inputs_with = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
             # gfx906 is nightly-only, not in presubmit+postsubmit defaults
             pr_labels=["gfx906"],
         )
@@ -505,7 +505,7 @@ class TestSelectTargets(unittest.TestCase):
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
             pr_labels=["ci:run-all-archs"],
         )
         result = cm.select_targets(inputs)
@@ -519,7 +519,7 @@ class TestSelectTargets(unittest.TestCase):
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
             pr_labels=["gfx9999"],
         )
         with self.assertRaises(ValueError, msg="Unknown GPU families"):
@@ -532,7 +532,7 @@ class TestSelectTargets(unittest.TestCase):
             event_name="workflow_dispatch",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
             linux_amdgpu_families=["gfx94x", "gfx110x"],
             windows_amdgpu_families=["gfx110x"],
         )
@@ -550,7 +550,7 @@ class TestSelectTargets(unittest.TestCase):
             event_name="workflow_dispatch",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
         )
         result = cm.select_targets(inputs)
         self.assertEqual(result.linux_families, [])
@@ -563,7 +563,7 @@ class TestSelectTargets(unittest.TestCase):
             event_name="workflow_dispatch",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
             linux_amdgpu_families=["gfx_bogus"],
         )
         with self.assertRaises(ValueError, msg="Unknown GPU families"):
@@ -579,7 +579,7 @@ class TestSelectTargets(unittest.TestCase):
             event_name="workflow_dispatch",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
             # gfx950 has no windows entry — this should be an error, not silently dropped
             windows_amdgpu_families=["gfx950"],
         )
@@ -655,7 +655,7 @@ class TestSelectTargets(unittest.TestCase):
             event_name="repository_dispatch",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
         )
         with self.assertRaises(ValueError, msg="Unsupported event type"):
             cm.select_targets(inputs)
@@ -667,7 +667,7 @@ class TestSelectTargets(unittest.TestCase):
             event_name="push",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
         )
         result = cm.select_targets(inputs)
         # gfx94x is linux-only (no windows entry in presubmit matrix)
@@ -694,7 +694,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             event_name="push",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
         )
         defaults.update(kwargs)
         return cm.CIInputs(**defaults)
@@ -705,7 +705,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             per_family_info=[],
             dist_amdgpu_families="",
             artifact_group="multi-arch-release",
-            build_variant_label="release",
+            build_variant_label="ci",
             build_variant_suffix="",
             build_variant_cmake_preset="",
             expect_failure=False,
@@ -732,7 +732,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             per_family_info=[{"amdgpu_family": "gfx110x"}],
             dist_amdgpu_families="gfx110x",
             artifact_group="multi-arch-release",
-            build_variant_label="release",
+            build_variant_label="ci",
             build_variant_suffix="",
             build_variant_cmake_preset="release",
             expect_failure=False,
@@ -756,7 +756,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             event_name="push",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
         )
         targets = cm.select_targets(inputs)
         result = cm.expand_build_configs(
@@ -840,7 +840,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
         result = cm.expand_build_configs(
             targets=targets,
-            ci_inputs=self._inputs(build_variant="asan"),
+            ci_inputs=self._inputs(build_variant="ci_asan"),
             test_type="quick",
         )
         # Only gfx94x on linux survives.
@@ -890,7 +890,7 @@ class TestFormatSummary(unittest.TestCase):
             event_name="push",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
         )
         defaults.update(kwargs)
         return cm.CIInputs(**defaults)
@@ -948,7 +948,7 @@ class TestConfigurePipeline(unittest.TestCase):
             event_name="workflow_dispatch",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
         )
         outputs = cm.configure(inputs, cm.GitContext())
         self.assertFalse(outputs.is_ci_enabled)
@@ -961,7 +961,7 @@ class TestConfigurePipeline(unittest.TestCase):
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
             linux_test_labels=["test:rccl"],
             windows_test_labels=["test:rccl"],
         )
@@ -976,7 +976,7 @@ class TestConfigurePipeline(unittest.TestCase):
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
         )
         outputs = cm.configure(inputs, cm.GitContext.empty())
         self.assertEqual(outputs.linux_test_labels, [])
@@ -1057,7 +1057,7 @@ class TestFamilyTestFilters(unittest.TestCase):
             event_name="pull_request",  # Non-schedule run
             commit_ref="feature-branch",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
             pr_labels=["ci:run-all-archs"],  # Include gfx90a from nightly matrix
         )
         targets = cm.select_targets(ci_inputs)
@@ -1137,7 +1137,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
@@ -1157,7 +1157,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
@@ -1179,7 +1179,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
-            build_variant="release",
+            build_variant="ci",
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
@@ -1201,7 +1201,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
             event_name="schedule",
             commit_ref="main",
             base_ref="HEAD^1",
-            build_variant="release",
+            build_variant="ci",
         )
         # gfx103x doesn't have multi-label config
         targets = cm.TargetSelection(linux_families=["gfx103x"])

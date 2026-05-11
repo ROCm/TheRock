@@ -128,7 +128,7 @@ class CIInputs:
     event_name: str  # GITHUB_EVENT_NAME value (e.g. "push", "pull_request", "schedule", "workflow_dispatch")
     commit_ref: str  # GITHUB_REF_NAME value
     base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
-    build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
+    build_variant: str  # Build variant key, e.g. "ci", "release", "ci_asan", "ci_tsan"
     release_type: str = ""  # "" for CI, or "dev", "nightly", "prerelease" for releases
 
     # PR labels (from event payload for pull_request events)
@@ -179,7 +179,7 @@ class CIInputs:
         # Workflow inputs are passed as environment variables by
         # setup_multi_arch.yml. GitHub-specific context (PR labels,
         # push before-commit) comes from the event payload.
-        build_variant = os.environ.get("BUILD_VARIANT", "release")
+        build_variant = os.environ.get("BUILD_VARIANT", "ci")
         release_type = os.environ.get("RELEASE_TYPE", "")
 
         pr_labels: list[str] = []
@@ -508,7 +508,7 @@ def should_skip_ci(
     #       If overly expensive, remove that option
     if (
         ci_inputs.is_pull_request
-        and ci_inputs.build_variant == "asan"
+        and ci_inputs.build_variant == "ci_asan"
         and git_context.changed_files is not None
         and git_context.submodule_paths is not None
     ):
@@ -828,11 +828,14 @@ def _expand_build_config_for_platform(
         # amdgpu_family_matrix_test.py. We can index directly here.
         platform_info = all_families[family_name][platform]
 
-        # Filter out families missing the build variant (e.g. 'asan').
-        if build_variant not in platform_info["build_variants"]:
+        # Filter families by the variant's allow-list. Variants without a
+        # "families" key apply to all families (e.g. ci, release). Variants
+        # with a "families" key only apply to listed families (e.g. ci_asan).
+        allowed_families = variant_config.get("families")
+        if allowed_families is not None and family_name not in allowed_families:
             print(
-                f"  Family {family_name} does not support variant "
-                f"{build_variant} on {platform}, skipping"
+                f"  Family {family_name} not in {build_variant} allow-list, "
+                f"skipping"
             )
             continue
 
@@ -866,7 +869,7 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove sandbox logic once ASAN tests are passing
         # For ASAN builds, use sandbox runner to avoid impacting production
-        if build_variant == "asan":
+        if build_variant == "ci_asan":
             if "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")

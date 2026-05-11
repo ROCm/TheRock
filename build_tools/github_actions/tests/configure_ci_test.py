@@ -510,7 +510,7 @@ class ConfigureCITest(unittest.TestCase):
 
     # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
     def test_sandbox_test_runner_with_asan(self):
-        base_args = {"build_variant": "asan"}
+        base_args = {"build_variant": "ci_asan"}
         build_families = {"amdgpu_families": "gfx94X"}
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(
             is_pull_request=True,
