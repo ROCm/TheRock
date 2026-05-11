@@ -48,6 +48,67 @@ def _get_script_path(script_name: str) -> str:
     return str(posix_path)
 
 
+# Base container options applied to all Linux containers
+# --ipc host - Allows shared memory between host and container
+# --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
+# --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
+# --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
+_BASE_CONTAINER_OPTIONS = [
+    "--ipc host",
+    "--user 0:0",
+    "--ulimit memlock=-1:-1",
+    "--security-opt seccomp=unconfined",
+]
+
+# GPU-specific container options (only applied when cpu_runner != True)
+# --group-add video - Grants access to GPU video group
+# --device /dev/kfd - AMD KFD device for GPU compute
+# --device /dev/dri - Direct Rendering Infrastructure devices
+# --group-add 993,992,110 - Additional GPU-related groups
+# --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
+_GPU_CONTAINER_OPTIONS = [
+    "--group-add video",
+    "--device /dev/kfd",
+    "--device /dev/dri",
+    "--group-add 993",
+    "--group-add 992",
+    "--group-add 110",
+    "--env-file /etc/podinfo/gha-gpu-isolation-settings",
+]
+
+
+def _build_container_options(job_config: dict, platform: str) -> dict:
+    """
+    Build the final container_options string by concatenating base, GPU, and job-specific options.
+
+    Args:
+        job_config: The job configuration dictionary
+        platform: The platform (e.g., "linux", "windows")
+
+    Returns:
+        The modified job_config with updated container_options
+    """
+    # Only apply container options for Linux platforms
+    if platform != "linux":
+        return job_config
+
+    # Start with base options (always applied on Linux)
+    options_parts = _BASE_CONTAINER_OPTIONS.copy()
+
+    # Add GPU-specific options unless this is a CPU-only runner
+    if not job_config.get("cpu_runner", False):
+        options_parts.extend(_GPU_CONTAINER_OPTIONS)
+
+    # Add any job-specific container options
+    if "container_options" in job_config:
+        options_parts.extend(job_config["container_options"])
+
+    # Concatenate all parts with a space separator
+    job_config["container_options"] = " ".join(options_parts)
+
+    return job_config
+
+
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
     "sanity": {
@@ -62,7 +123,7 @@ test_matrix = {
         },
         # Running docker with cap-add and -v /lib/modules, by recommendation of GitHub:
         # https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
-        "container_options": "--cap-add SYS_MODULE -v /lib/modules:/lib/modules",
+        "container_options": ["--cap-add SYS_MODULE", "-v /lib/modules:/lib/modules"],
     },
     # hip-tests
     "hip-tests": {
@@ -354,7 +415,7 @@ test_matrix = {
         ],
         "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')}",
         "platform": ["linux"],
-        "container_options": "--cap-add=SYS_PTRACE",
+        "container_options": ["--cap-add=SYS_PTRACE"],
         "total_shards_dict": {
             "linux": 1,
         },
@@ -723,6 +784,9 @@ def run():
                     continue
 
             all_components.append(job_config_data)
+
+    # Build container options for all components (concatenates base, GPU, and job-specific options)
+    all_components = [_build_container_options(c, platform) for c in all_components]
 
     # Separate sanity (always a prerequisite) from the regular component matrix.
     sanity_component = next(
