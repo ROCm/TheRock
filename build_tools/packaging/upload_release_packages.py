@@ -130,24 +130,45 @@ def upload_python_files(
     s3_client = boto3.client("s3") if execute else None
     upload_count = 0
 
-    for arch_dir in input_dir.iterdir():
-        if not arch_dir.is_dir():
-            continue
+    if multi_arch:
+        wheels_dir = input_dir / "wheels"
 
-        # Skip tarball directory (handled separately)
-        if arch_dir.name == "tarball":
-            continue
+        if not wheels_dir.exists():
+            print(f"[ERROR]: Multi-arch wheels directory not found: {wheels_dir}")
+            return 0
 
-        arch = arch_dir.name
-        print(f"\nArchitecture: {arch}")
+        print("\nMulti-arch wheels")
 
-        # Find all wheel and tar.gz files (rocm sdist)
         files_to_upload = []
-        files_to_upload.extend(arch_dir.glob("*.whl"))
-        files_to_upload.extend(arch_dir.glob("*.tar.gz"))
+        files_to_upload.extend(wheels_dir.glob("*.whl"))
+        files_to_upload.extend(wheels_dir.glob("*.tar.gz"))
+
+        upload_dirs = [(None, files_to_upload)]
+
+    else:
+        upload_dirs = []
+
+        for arch_dir in input_dir.iterdir():
+            if not arch_dir.is_dir():
+                continue
+
+            if arch_dir.name in ["tarball", "tarball-multi-arch", "wheels"]:
+                continue
+
+            arch = arch_dir.name
+
+            files_to_upload = []
+            files_to_upload.extend(arch_dir.glob("*.whl"))
+            files_to_upload.extend(arch_dir.glob("*.tar.gz"))
+
+            upload_dirs.append((arch, files_to_upload))
+
+    for arch, files_to_upload in upload_dirs:
+        if arch:
+            print(f"\nArchitecture: {arch}")
 
         if not files_to_upload:
-            print(f"  No files to upload")
+            print("  No files to upload")
             continue
 
         print(f"  Found {len(files_to_upload)} file(s) to upload:")
@@ -178,7 +199,11 @@ def upload_python_files(
 
 
 def upload_tarball_files(
-    input_dir: Path, bucket_name: str, bucket_prefix: str, execute: bool
+    input_dir: Path,
+    bucket_name: str,
+    bucket_prefix: str,
+    execute: bool,
+    multi_arch: bool = False,
 ) -> int:
     """Upload tarball files to S3 bucket.
 
@@ -198,7 +223,10 @@ def upload_tarball_files(
         print("DRY-RUN MODE: No actual uploads will be performed")
         print("=" * 80)
 
-    tarball_dir = input_dir / "tarball"
+    if multi_arch:
+        tarball_dir = input_dir / "tarball-multi-arch"
+    else:
+        tarball_dir = input_dir / "tarball"
 
     if not tarball_dir.exists() or not tarball_dir.is_dir():
         print(f"  No tarball directory found at {tarball_dir}")
@@ -331,6 +359,10 @@ Safety Features:
 
     args = parser.parse_args(argv)
 
+    # Adjust testing tarball prefix for multi-arch uploads
+    if args.multi_arch and not args.use_release_buckets:
+        args.tarball_bucket_prefix = "release-upload-testing/tarball-multi-arch/"
+
     if args.use_release_buckets:
         args.bucket = "therock-release-python"
 
@@ -362,6 +394,7 @@ def upload_release_packages(
     tarball_bucket_name: str = "therock-testing-bucket",
     tarball_bucket_prefix: str = "release-upload-testing/tarball/",
     execute: bool = False,
+    multi_arch: bool = False,
 ) -> Tuple[int, int]:
     """Upload promoted packages to S3 release bucket.
 
@@ -404,13 +437,15 @@ def upload_release_packages(
 
     # Count architectures (exclude tarball directory)
     architectures = [
-        d for d in input_dir.iterdir() if d.is_dir() and d.name != "tarball"
+        d
+        for d in input_dir.iterdir()
+        if d.is_dir() and d.name not in ["tarball", "tarball-multi-arch", "wheels"]
     ]
     print(f"\nFound {len(architectures)} architecture(s):")
     for arch_dir in architectures:
         print(f"  - {arch_dir.name}")
 
-    if not architectures:
+    if not architectures and not multi_arch:
         print("\n[ERROR]: No architecture directories found in input directory")
         sys.exit(1)
 
@@ -432,7 +467,7 @@ def upload_release_packages(
                 bucket_name,
                 bucket_prefix,
                 execute,
-                multi_arch=args.multi_arch,
+                multi_arch=multi_arch,
             )
 
         if upload_tarballs:
@@ -441,6 +476,7 @@ def upload_release_packages(
                 tarball_bucket_name,
                 tarball_bucket_prefix,
                 execute,
+                multi_arch=multi_arch,
             )
 
     except NoCredentialsError:
@@ -500,4 +536,5 @@ if __name__ == "__main__":
         tarball_bucket_name=args.tarball_bucket,
         tarball_bucket_prefix=args.tarball_bucket_prefix,
         execute=args.execute,
+        multi_arch=args.multi_arch,
     )
