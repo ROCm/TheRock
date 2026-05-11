@@ -9,7 +9,6 @@ from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
-platform = os.getenv("RUNNER_OS").lower()
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
@@ -42,7 +41,8 @@ test_subdir = ""
 # CTest --timeout is per-test (seconds), not wall-clock for the whole shard.
 # A value near the GitHub step limit lets one hung test burn the entire job (ROCM-24171).
 # rocWMMA unit/gemm binaries should finish well under this on healthy runners; a stuck
-# test then fails with a clear CTest timeout instead of an opaque 60m workflow cancel.
+# test then fails with a clear CTest timeout instead of an opaque workflow cancel at the
+# GitHub Actions step limit.
 _PER_TEST_TIMEOUT_FULL_SEC = 1800
 _PER_TEST_TIMEOUT_QUICK_SEC = 720
 timeout = str(_PER_TEST_TIMEOUT_FULL_SEC)
