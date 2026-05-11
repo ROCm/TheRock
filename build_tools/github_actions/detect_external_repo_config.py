@@ -346,25 +346,19 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
+        "--external-repo-json",
+        type=str,
+        help="JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields.",
+    )
+    parser.add_argument(
         "--repository",
-        help="Repository name (e.g., rocm-libraries, rocm-systems). Required.",
+        help="Repository name (e.g., rocm-libraries, rocm-systems). "
+        "Alternative to --external-repo-json for direct invocation.",
     )
     parser.add_argument(
         "--workspace",
         type=str,
         help="GitHub workspace path for formatting CMake options and checkout_path",
-    )
-    parser.add_argument(
-        "--source-repository",
-        type=str,
-        help="Full repository name for checkout (e.g., 'ROCm/rocm-libraries'). "
-        "If not provided, defaults to 'ROCm/<repository>'.",
-    )
-    parser.add_argument(
-        "--source-ref",
-        type=str,
-        default="",
-        help="Git ref (branch, tag, SHA) for checkout. Passed through to config_json.",
     )
     parser.add_argument(
         "--list",
@@ -380,9 +374,28 @@ def main(argv=None):
             print(f"  - {repo_name}")
         return 0
 
+    # Parse external repo JSON if provided, extract repository name
+    source_repository = None
+    source_ref = ""
+    if args.external_repo_json:
+        try:
+            external_repo = json.loads(args.external_repo_json)
+            source_repository = external_repo.get("repository", "")
+            source_ref = external_repo.get("ref", "")
+            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries")
+            if "/" in source_repository:
+                repo_name = source_repository.split("/")[-1]
+            else:
+                repo_name = source_repository
+            args.repository = repo_name
+            print(f"Parsed external_repo: repository={source_repository}, ref={source_ref}", file=sys.stderr)
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON in --external-repo-json: {e}", file=sys.stderr)
+            return 1
+
     if not args.repository:
         print(
-            "ERROR: --repository is required",
+            "ERROR: --repository or --external-repo-json is required",
             file=sys.stderr,
         )
         return 1
@@ -395,12 +408,11 @@ def main(argv=None):
         print(f"Configuration: {config}", file=sys.stderr)
 
         # Format the full CMake option if workspace path provided
+        # checkout_path is workspace/repo_name
+        checkout_path = f"{args.workspace}/{args.repository}" if args.workspace else args.repository
         if args.workspace:
-            workspace_path = Path(args.workspace)
-            if not workspace_path.is_absolute():
-                _log_warning("Workspace path is not absolute, using as-is")
             cmake_var = config["cmake_source_var"]
-            config["extra_cmake_options"] = f"-D{cmake_var}={args.workspace}"
+            config["extra_cmake_options"] = f"-D{cmake_var}={checkout_path}"
             print(
                 f"Generated CMake option: {config['extra_cmake_options']}",
                 file=sys.stderr,
@@ -417,11 +429,13 @@ def main(argv=None):
 
         # Build config_json with all fields needed by workflows
         # This is the primary output used by downstream workflow jobs
-        source_repo = args.source_repository or f"ROCm/{args.repository}"
+        # source_repository/source_ref come from --external-repo-json parsing above
+        final_source_repo = source_repository or f"ROCm/{args.repository}"
+        checkout_path = f"{args.workspace}/{args.repository}" if args.workspace else args.repository
         config_json = {
-            "repository": source_repo,
-            "ref": args.source_ref,
-            "checkout_path": args.workspace or args.repository,
+            "repository": final_source_repo,
+            "ref": source_ref,
+            "checkout_path": checkout_path,
             "source_package": config["cmake_source_var"].replace(
                 "THEROCK_", ""
             ).replace("_SOURCE_DIR", ""),

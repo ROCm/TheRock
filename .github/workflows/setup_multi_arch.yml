@@ -52,16 +52,8 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
-      external_repo_name:
-        description: "External repository name (e.g., 'rocm-libraries', 'rocm-systems'). Used to auto-detect configuration."
-        type: string
-        default: ""
-      external_repo_full_name:
-        description: "Full external repository name for checkout (e.g., 'ROCm/rocm-libraries'). Defaults to 'ROCm/<external_repo_name>'."
-        type: string
-        default: ""
-      external_repo_ref:
-        description: "Git ref for external repository checkout."
+      external_repo:
+        description: "JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields for external repo builds."
         type: string
         default: ""
     outputs:
@@ -171,10 +163,10 @@ jobs:
 
       - name: Detect external repo config
         id: external_repo_config
-        if: ${{ inputs.external_repo_name != '' }}
+        if: ${{ inputs.external_repo != '' }}
+        env:
+          EXTERNAL_REPO_JSON: ${{ inputs.external_repo }}
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
-            --repository=${{ inputs.external_repo_name }} \
-            --workspace="${{ github.workspace }}/${{ inputs.external_repo_name }}" \
-            --source-repository="${{ inputs.external_repo_full_name || format('ROCm/{0}', inputs.external_repo_name) }}" \
-            --source-ref="${{ inputs.external_repo_ref }}"
+            --external-repo-json="${EXTERNAL_REPO_JSON}" \
+            --workspace="${{ github.workspace }}"
