@@ -47,21 +47,23 @@ env["HIPDNN_PLUGIN_DIR"] = str(plugin_dir)
 env["ROCM_PATH"] = str(ROCM_PATH)
 
 with tempfile.TemporaryDirectory() as tmpdir:
+    # argparse-cpp does not reliably consume a value for --generate-support-matrix
+    # (neither space-separated nor '=' form attaches when both default_value and
+    # implicit_value are set on the binary's argument). Sidestep it: pass the flag
+    # alone, let the binary write its hardcoded default filename, and pin CWD so
+    # the file lands in our tempdir.
     matrix_file = Path(tmpdir) / "support_matrix.md"
-    # Use '=' to force argparse to attach the path to the flag. Without it,
-    # argparse-cpp treats the flag as taking its implicit_value (the default
-    # filename "support_matrix.md") and leaves the path as a stray arg.
     cmd = [
         str(binary),
-        f"--generate-support-matrix={matrix_file}",
+        "--generate-support-matrix",
         "--skip-graph-validation",
     ]
-    logging.info("++ Exec $ %s", shlex.join(cmd))
+    logging.info("++ Exec [%s]$ %s", tmpdir, shlex.join(cmd))
 
     # Don't fail on test exit code 1 (gtest reports failures for unrelated
     # bugs). We only care that the matrix file gets written. Hard failures
     # (segfault, plugin load crash) get returncode > 1 and are surfaced.
-    result = subprocess.run(cmd, env=env)
+    result = subprocess.run(cmd, env=env, cwd=tmpdir)
     if result.returncode not in (0, 1):
         raise SystemExit(
             f"hipdnn_integration_tests exited with code {result.returncode}"
