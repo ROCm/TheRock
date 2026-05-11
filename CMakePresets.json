@@ -7,8 +7,8 @@
   },
   "configurePresets": [
     {
-      "name": "linux-release-package",
-      "displayName": "Linux release packages",
+      "name": "linux-base",
+      "displayName": "Linux base preset",
       "description": "Ninja generator, default compiler, RelWithDebInfo for most subprojects",
       "generator": "Ninja",
       "cacheVariables": {
@@ -18,9 +18,27 @@
         "therock-SuiteSparse_BUILD_TYPE": "Release",
         "THEROCK_SPLIT_DEBUG_INFO": "ON",
         "THEROCK_MINIMAL_DEBUG_INFO": "ON",
-        "THEROCK_QUIET_INSTALL": "OFF",
-        "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
+        "THEROCK_QUIET_INSTALL": "OFF"
       }
+    },
+    {
+      "name": "linux-dev",
+      "displayName": "Linux CI/development builds",
+      "description": "For CI and development builds (no git version stamping for ccache friendliness)",
+      "inherits": [
+        "linux-base"
+      ]
+    },
+    {
+      "name": "linux-release",
+      "displayName": "Linux release packages",
+      "description": "Extends linux-base with release-only flags (git version stamping)",
+      "cacheVariables": {
+        "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
+      },
+      "inherits": [
+        "linux-base"
+      ]
     },
     {
       "name": "linux-release-asan",
@@ -127,6 +145,17 @@
         "lhs": "${hostSystemName}",
         "rhs": "Windows"
       }
+    },
+    {
+      "name": "windows-dev",
+      "displayName": "Windows CI/development builds",
+      "description": "For CI and development builds (no git version stamping for ccache friendliness)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "inherits": [
+        "windows-base"
+      ]
     },
     {
       "name": "windows-release",
