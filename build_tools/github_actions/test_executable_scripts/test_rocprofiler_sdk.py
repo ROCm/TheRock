@@ -288,6 +288,8 @@ set(CTEST_UPDATE_VERSION_ONLY TRUE)
 set(CTEST_GIT_COMMAND "@git_command")
 set(CTEST_GIT_INIT_SUBMODULES FALSE)
 
+set(CTEST_OUTPUT_ON_FAILURE TRUE)
+
 set(CTEST_CUSTOM_MAXIMUM_NUMBER_OF_ERRORS "100")
 set(CTEST_CUSTOM_MAXIMUM_NUMBER_OF_WARNINGS "100")
 set(CTEST_CUSTOM_MAXIMUM_PASSED_TEST_OUTPUT_SIZE "51200")
@@ -458,9 +460,8 @@ def main(argv: list[str] | None = None) -> int:
 
     ctest_cmd = _which_ctest()
 
-    # Single source of truth for ctest CLI args.
     # To add/remove a ctest argument, edit this list.
-    CTEST_ARGS = ["--output-on-failure", "--parallel", "8"]
+    CTEST_ARGS = ["--parallel", "8"]
     if is_asan():
         CTEST_ARGS += ["--exclude-regex", "|".join(ASAN_EXCLUDED_TESTS)]
 
