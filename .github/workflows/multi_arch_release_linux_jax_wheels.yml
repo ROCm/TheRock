@@ -9,27 +9,21 @@ on:
       amdgpu_family:
         type: string
         required: true
-
       release_type:
         type: string
         required: true
-
       rocm_version:
         type: string
         required: true
-
       tar_url:
         type: string
         required: true
-
       repository:
         type: string
         default: ""
-
       ref:
         type: string
         default: ""
-
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -50,7 +44,6 @@ on:
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx94X-dcgpu
-
       release_type:
         type: choice
         options:
@@ -58,19 +51,15 @@ on:
           - nightly
           - prerelease
         default: dev
-
       rocm_version:
         type: string
         required: true
-
       tar_url:
         type: string
         required: true
-
       repository:
         type: string
         default: ""
-
       ref:
         type: string
         default: ""
