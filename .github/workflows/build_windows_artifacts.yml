@@ -179,8 +179,8 @@ jobs:
         run: |
           python build_tools/artifact_manager.py push \
             --run-id ${{ github.run_id }} \
-            --stage=all \
             --build-dir=${{ env.BUILD_DIR }} \
+            --stage=all
 
       - name: Post Build Upload
         if: always()

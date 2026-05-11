@@ -264,8 +264,8 @@ jobs:
         run: |
           python build_tools/artifact_manager.py push \
             --run-id ${{ github.run_id }} \
-            --stage=all \
-            --build-dir=${{ env.OUTPUT_DIR }}/build
+            --build-dir ${{ env.OUTPUT_DIR }}/build \
+            --stage all
 
       - name: Post Build Upload
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
