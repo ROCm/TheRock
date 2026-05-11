@@ -252,7 +252,9 @@ def update_metadata_rocm_requires_dist(
         inplace=True,
     ) as f:
         for line in f:
-            if "Requires-Dist" in line and "rocm" in line:
+            if line.startswith("Summary:") and ("TheRock" in line or "rocm" in line):
+                print(line.replace(old_rocm_version, new_rocm_version), end="")
+            elif line.startswith("Requires-Dist") and "rocm" in line:
                 print(line.replace(old_rocm_version, new_rocm_version), end="")
             else:
                 print(line, end="")
@@ -773,9 +775,18 @@ def wheel_change_extra_files(
 
     print("    Changing ROCm-specific files that contain the version")
 
-    # device packages do not need any extra changes
-    # amd_torch_device_gfx, amd_torchvision_device_gfx, rocm_sdk_device_gfx
+    # Per-arch device wheels (amd_torch_device_gfx, amd_torchvision_device_gfx,
+    # rocm_sdk_device_gfx) carry no package-specific files that reference the
+    # version, but they DO have METADATA Requires-Dist lines pinning a sister
+    # rocm-* package to the build's rocm version. Rewrite those, then return.
     if "device_gfx" in new_dir_path.name:
+        update_metadata_rocm_requires_dist(
+            new_dir_path,
+            package_name_no_version,
+            old_version,
+            old_rocm_version,
+            new_rocm_version,
+        )
         return
     # rocm packages needing extra handling
     elif new_dir_path.name.startswith("rocm"):
