@@ -1,6 +1,13 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # This script builds the upstream libhsakmt WSL rocdxg target from inside the
 # WSL-hosted top-level TheRock build. It is intentionally narrow and only stages
 # the upstream install tree back into this subproject's artifact directory.
+#
+# The GitHub Actions wsl-bash wrapper uses fail-fast shell settings, but this
+# generated script is launched later by CMake as a fresh bash process.
+set -euo pipefail
 
 rocdxg_source_dir="@THEROCK_WSL_ROCDXG_SOURCE_DIR@"
 win_sdk="@THEROCK_WSL_WIN_SDK@"

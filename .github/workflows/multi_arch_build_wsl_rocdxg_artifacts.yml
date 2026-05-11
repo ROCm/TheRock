@@ -26,8 +26,25 @@ on:
         type: string
         required: true
         description: "ROCm package version string"
+      build_variant_cmake_preset:
+        type: string
+        required: false
+        default: ""
+        description: "CMake preset name for this build variant (optional)"
       release_type:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+        type: string
+        default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package, fetch_sources_args)"
         type: string
         default: ""
 
@@ -48,10 +65,22 @@ jobs:
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
       THEROCK_HOST_BUILD_DIR: ${{ github.workspace }}\build-wsl-rocdxg
       WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_HOST_BUILD_DIR/p
+      EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Checkout external repository
+        if: ${{ inputs.external_repo_config != '' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ fromJSON(inputs.external_repo_config).repository }}
+          ref: ${{ fromJSON(inputs.external_repo_config).ref }}
+          path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
 
       - name: Setting up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -95,7 +124,7 @@ jobs:
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
+        run: python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
 
       - name: Set up WSL with Ubuntu
         uses: Vampire/setup-wsl@6a8db447be7ed35f2f499c02c6e60ff77ef11278 # v6.0.0
@@ -180,6 +209,8 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DTHEROCK_BUNDLE_SYSDEPS=OFF \
             -DTHEROCK_WSL_WIN_SDK="$win_sdk" \
+            ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
+            ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
