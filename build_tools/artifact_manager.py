@@ -110,6 +110,20 @@ def get_topology(topology_path: Optional[Path] = None) -> BuildTopology:
 # =============================================================================
 
 
+def parse_input_families(args: argparse.Namespace) -> List[str]:
+    """Return the user-specified input families (no generic, no expansions).
+
+    Accepts either ';' (canonical) or ',' as a separator so callers that
+    receive a CSV family list (e.g. workflow inputs whose docs say
+    comma-separated) can pass it through unchanged. Returns an empty list
+    if --generic-only was passed or no families were specified.
+    """
+    if args.generic_only or not args.amdgpu_families:
+        return []
+    raw = args.amdgpu_families.replace(",", ";")
+    return [f.strip() for f in raw.split(";") if f.strip()]
+
+
 def parse_target_families(args: argparse.Namespace) -> List[str]:
     """Parse target families from argparse args.
 
@@ -120,8 +134,8 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
     if args.generic_only:
         log("Using generic (host) artifacts only")
     else:
-        if args.amdgpu_families:
-            input_families = args.amdgpu_families.split(";")
+        input_families = parse_input_families(args)
+        if input_families:
             output_families.extend(input_families)
             if args.expand_family_to_targets:
                 family_map = amdgpu_family_map()
@@ -755,12 +769,25 @@ def copy_single_artifact(request: CopyRequest) -> bool:
 
 
 def _create_source_backend(
-    source_run_id: str, platform: str, local_staging_dir: Optional[Path] = None
+    source_run_id: str,
+    platform: str,
+    local_staging_dir: Optional[Path] = None,
+    prefix_only: bool = False,
+    dest_output_root: Optional[WorkflowOutputRoot] = None,
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
-    For S3, uses WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True)
-    to resolve the correct bucket (which may differ from the current run's bucket).
+    For S3 with prefix_only=False (default), uses
+    WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True) to resolve
+    the correct bucket via a GitHub API call (which may differ from the
+    current run's bucket - e.g. fork or post-cutover).
+
+    For S3 with prefix_only=True, mirrors the dest backend's resolved
+    bucket and external_repo directly. Use this when the source artifacts
+    live under a fixed prefix in the active run's artifact namespace
+    (e.g. a manually populated "prebuilt" prefix). Mirroring dest avoids
+    silent divergence if dest's resolution accepts overrides (e.g. a
+    --run-github-repo flag) that the env-only path would not pick up.
 
     For local backends, creates a LocalDirectoryBackend in the same staging dir.
     """
@@ -774,51 +801,97 @@ def _create_source_backend(
             output_root=output_root,
         )
 
+    if prefix_only:
+        if dest_output_root is None:
+            raise ValueError("prefix_only requires dest_output_root")
+        output_root = WorkflowOutputRoot(
+            bucket=dest_output_root.bucket,
+            external_repo=dest_output_root.external_repo,
+            run_id=source_run_id,
+            platform=platform,
+        )
+        return S3Backend(output_root=output_root)
+
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=source_run_id, platform=platform, lookup_workflow_run=True
+        run_id=source_run_id,
+        platform=platform,
+        lookup_workflow_run=True,
     )
     return S3Backend(output_root=output_root)
+
+
+def _families_satisfied_by_matches(
+    artifact_names: Set[str],
+    matched_filenames: List[str],
+) -> Set[str]:
+    """Return the set of target_family tokens present in matched filenames."""
+    satisfied: Set[str] = set()
+    for filename in matched_filenames:
+        stem = filename
+        for ext in ARTIFACT_EXTENSIONS:
+            if stem.endswith(ext):
+                stem = stem[: -len(ext)]
+                break
+        for an in artifact_names:
+            for comp in ARTIFACT_COMPONENTS:
+                prefix = f"{an}_{comp}_"
+                if stem.startswith(prefix):
+                    satisfied.add(stem[len(prefix) :])
+                    break
+    return satisfied
 
 
 def do_copy(args: argparse.Namespace):
     """Copy produced artifacts for one or more stages from one run to another."""
     topology = get_topology(args.topology)
 
-    # Parse and validate stages (comma-separated). Unlike fetch/push which
-    # operate on a single stage, copy accepts multiple stages at once so that
-    # a single setup job can copy all prebuilt stages in one invocation.
-    stage_names = [s.strip() for s in args.stage.split(",") if s.strip()]
-    available_stages = topology.build_stages.keys()
-    for stage_name in stage_names:
-        if stage_name not in available_stages:
-            log(f"ERROR: Stage '{stage_name}' not found")
-            log(f"Available stages: {', '.join(available_stages)}")
-            sys.exit(1)
-
-    # Union produced artifacts across all specified stages
+    # Parse and validate stages. The literal token "all" matches every
+    # artifact in the topology, mirroring `fetch --stage=all` semantics
+    # so an artifact present in topology but not produced by any stage is
+    # still copied. Otherwise comma-separated stage names are parsed and
+    # their produced artifacts are unioned. Unlike fetch/push which
+    # operate on a single stage, copy accepts multiple stages at once so
+    # that a single setup job can copy all prebuilt stages in one
+    # invocation.
     produced: Set[str] = set()
-    for stage_name in stage_names:
-        stage_produced = topology.get_produced_artifacts(stage_name)
-        log(
-            f"Stage '{stage_name}' produces {len(stage_produced)} artifacts: {', '.join(sorted(stage_produced))}"
-        )
-        produced.update(stage_produced)
+    if args.stage.strip() == "all":
+        produced = set(topology.artifacts.keys())
+        log(f"Copying all {len(produced)} artifacts from topology")
+    else:
+        stage_names = [s.strip() for s in args.stage.split(",") if s.strip()]
+        for stage_name in stage_names:
+            if stage_name not in topology.build_stages:
+                log(f"ERROR: Stage '{stage_name}' not found")
+                log(
+                    f"Available stages: {', '.join(topology.build_stages.keys())}"
+                )
+                sys.exit(1)
+        for stage_name in stage_names:
+            stage_produced = topology.get_produced_artifacts(stage_name)
+            log(
+                f"Stage '{stage_name}' produces {len(stage_produced)} artifacts: {', '.join(sorted(stage_produced))}"
+            )
+            produced.update(stage_produced)
 
     if not produced:
         log("Specified stages produce no artifacts")
         return
 
     target_families = parse_target_families(args)
+    input_families = parse_input_families(args)
 
-    # Create source and dest backends
+    # Create dest first; the source backend in prefix-only mode mirrors
+    # dest's resolved bucket/external_repo so the two cannot diverge.
+    dest_backend = create_backend_from_env(
+        run_id=args.run_id,
+        platform=args.platform,
+    )
     source_backend = _create_source_backend(
         source_run_id=args.source_run_id,
         platform=args.platform,
         local_staging_dir=args.local_staging_dir,
-    )
-    dest_backend = create_backend_from_env(
-        run_id=args.run_id,
-        platform=args.platform,
+        prefix_only=args.source_prefix_only,
+        dest_output_root=dest_backend.output_root,
     )
 
     log(f"Source: {source_backend.base_uri}")
@@ -830,6 +903,28 @@ def do_copy(args: argparse.Namespace):
 
     # Build copy requests from matched artifacts
     matched_filenames = find_available_artifacts(produced, target_families, available)
+
+    if args.require_matches and input_families:
+        # With --expand-family-to-targets, an input family is satisfied by
+        # either a family-named artifact or any of its expanded targets.
+        family_map = (
+            amdgpu_family_map() if args.expand_family_to_targets else {}
+        )
+        satisfied_families = _families_satisfied_by_matches(produced, matched_filenames)
+        unsatisfied = []
+        for family in input_families:
+            candidates = {family}
+            if args.expand_family_to_targets:
+                candidates.update(family_map.get(family, []))
+            if not (candidates & satisfied_families):
+                unsatisfied.append(family)
+        if unsatisfied:
+            log(
+                f"ERROR: --require-matches: no source artifacts found for "
+                f"families: {', '.join(unsatisfied)}"
+            )
+            sys.exit(1)
+
     copy_requests = [
         CopyRequest(
             artifact_key=filename,
@@ -841,6 +936,8 @@ def do_copy(args: argparse.Namespace):
 
     if not copy_requests:
         log("No matching artifacts found to copy")
+        if args.require_matches:
+            sys.exit(1)
         return
 
     if args.dry_run:
@@ -912,9 +1009,13 @@ def do_info(args: argparse.Namespace):
         else:
             log(f"  - {name}")
 
-    # Show target families if provided
+    # Show target families if provided. Accept comma or semicolon.
     if args.amdgpu_families:
-        families = args.amdgpu_families.split(";")
+        families = [
+            f.strip()
+            for f in args.amdgpu_families.replace(",", ";").split(";")
+            if f.strip()
+        ]
         target_families = ["generic"] + families
         log(f"\nTarget families: {', '.join(target_families)}")
 
@@ -1126,15 +1227,45 @@ def main(argv: Optional[List[str]] = None):
         "--source-run-id",
         type=str,
         required=True,
-        help="Run ID to copy artifacts from (bucket resolved via GitHub API)",
+        help=(
+            "Source run ID (or fixed prefix component) to copy artifacts "
+            "from. By default the source bucket is resolved via the GitHub "
+            "API; pass --source-prefix-only to skip the lookup and reuse the "
+            "active run's bucket selection."
+        ),
+    )
+    copy_parser.add_argument(
+        "--source-prefix-only",
+        action="store_true",
+        help=(
+            "Treat --source-run-id as a fixed prefix component and skip the "
+            "GitHub workflow run lookup. The source bucket is derived from "
+            "the same env-based rules as the dest bucket. Use when the "
+            "source artifacts live under a manually populated prefix in the "
+            "active run's artifact namespace."
+        ),
     )
     copy_parser.add_argument(
         "--stage",
         type=str,
         required=True,
-        help="Build stage name(s), comma-separated (e.g., 'foundation,compiler-runtime')",
+        help=(
+            "Build stage name(s), comma-separated (e.g., "
+            "'foundation,compiler-runtime'). Pass 'all' to copy every "
+            "artifact in the topology (matching `fetch --stage=all`)."
+        ),
     )
     _add_target_args(copy_parser)
+    copy_parser.add_argument(
+        "--require-matches",
+        action="store_true",
+        help=(
+            "Fail with non-zero exit if any requested family yields no "
+            "matching source artifact. With --expand-family-to-targets, a "
+            "family is satisfied by either a family-named artifact or any "
+            "of its expanded target-named artifacts."
+        ),
+    )
     copy_parser.add_argument(
         "--concurrency",
         type=int,

@@ -66,6 +66,17 @@ type = "target-neutral"
 artifact_group = "downstream-group"
 type = "target-neutral"
 artifact_deps = ["test-artifact", "second-artifact"]
+
+# Orphan group that no build stage produces. Used to verify that
+# `copy --stage=all` matches `fetch --stage=all` semantics: the union of
+# all topology artifacts, not just the union of per-stage produced sets.
+[artifact_groups.orphan-group]
+description = "Group not referenced by any build stage"
+type = "generic"
+
+[artifacts.orphan-artifact]
+artifact_group = "orphan-group"
+type = "target-neutral"
 """
 
 # Platform used consistently across all tests
@@ -103,13 +114,17 @@ class FailingBackend(ArtifactBackend):
         self.download_count = 0
         self.run_id = run_id
         self.platform = platform
+        # Always expose an output_root so callers (e.g. do_copy) that read
+        # backend.output_root succeed even when no staging_dir was given.
+        self.output_root = WorkflowOutputRoot.for_local(
+            run_id=run_id, platform=platform
+        )
 
         # Use a real backend for successful operations
         if staging_dir:
-            output_root = WorkflowOutputRoot.for_local(run_id=run_id, platform=platform)
             self._real_backend = LocalDirectoryBackend(
                 staging_dir=staging_dir,
-                output_root=output_root,
+                output_root=self.output_root,
             )
         else:
             self._real_backend = None
@@ -1136,6 +1151,272 @@ class TestCopy(ArtifactManagerTestBase):
         )
 
 
+class TestCopyExtensions(ArtifactManagerTestBase):
+    """Tests for copy --stage=all, --source-prefix-only, --require-matches."""
+
+    def _create_source_artifact(
+        self,
+        name: str,
+        component: str,
+        target_family: str,
+        run_id: str = "source-run",
+    ) -> str:
+        return self._create_staged_artifact(name, component, target_family, run_id)
+
+    def _base_argv(
+        self,
+        stage: str = "upstream-stage",
+        source_run_id: str = "source-run",
+        dest_run_id: str = "dest-run",
+    ):
+        return [
+            "copy",
+            "--source-run-id",
+            source_run_id,
+            "--stage",
+            stage,
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            dest_run_id,
+        ]
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_stage_all_unions_every_topology_artifact(self, mock_delay):
+        """`--stage=all` should copy every topology artifact, including those
+        not produced by any build stage. Mirrors `fetch --stage=all`."""
+        import artifact_manager
+
+        self._create_source_artifact("test-artifact", "lib", "generic")
+        self._create_source_artifact("second-artifact", "lib", "generic")
+        self._create_source_artifact("downstream-artifact", "lib", "generic")
+        # orphan-artifact lives in orphan-group, which no build stage owns.
+        self._create_source_artifact("orphan-artifact", "lib", "generic")
+
+        artifact_manager.main(self._base_argv(stage="all"))
+
+        dest_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
+        )
+        for name in (
+            "test-artifact",
+            "second-artifact",
+            "downstream-artifact",
+            "orphan-artifact",
+        ):
+            self.assertTrue(
+                dest_backend.artifact_exists(f"{name}_lib_generic.tar.zst"),
+                f"{name} should be copied under --stage=all",
+            )
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_source_prefix_only_skips_workflow_run_lookup(self, mock_delay):
+        """`--source-prefix-only` must not call the GitHub API to resolve the bucket."""
+        import artifact_manager
+
+        self._create_source_artifact("test-artifact", "lib", "generic")
+
+        with mock.patch(
+            "_therock_utils.workflow_outputs._retrieve_bucket_info"
+        ) as mock_lookup:
+            # Local staging is set, so the S3 path (and the bucket lookup) should
+            # never be invoked. This guards against accidental regressions where
+            # the prefix-only branch accidentally goes through the API path.
+            artifact_manager.main(
+                self._base_argv() + ["--source-prefix-only"]
+            )
+            mock_lookup.assert_not_called()
+
+        dest_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
+        )
+        self.assertTrue(
+            dest_backend.artifact_exists("test-artifact_lib_generic.tar.zst")
+        )
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_source_prefix_only_mirrors_dest_bucket(self, mock_delay):
+        """`--source-prefix-only` source backend must mirror dest's bucket
+        and external_repo, not re-derive them from env. This guards against
+        silent divergence if dest's bucket resolution accepts overrides
+        (e.g. --run-github-repo) that the env-only path would not pick up."""
+        import artifact_manager
+
+        # Force the S3 path by clearing local-staging from argv.
+        argv = [
+            arg
+            for arg in self._base_argv()
+            if arg not in ("--local-staging-dir", str(self.staging_dir))
+        ]
+        argv.append("--source-prefix-only")
+
+        # Dest backend with a deliberately non-env bucket / external_repo
+        # so we can prove the source mirrors dest rather than env.
+        dest_root = WorkflowOutputRoot(
+            bucket="custom-dest-bucket",
+            external_repo="custom-owner-repo/",
+            run_id="dest-run",
+            platform=TEST_PLATFORM,
+        )
+        dest_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=dest_root,
+        )
+
+        captured_source_root = {}
+
+        def fake_s3_backend(output_root):
+            captured_source_root["root"] = output_root
+            mock_inst = mock.MagicMock()
+            mock_inst.output_root = output_root
+            mock_inst.base_uri = f"mock://{output_root.bucket}/{output_root.prefix}"
+            mock_inst.list_artifacts.return_value = []
+            return mock_inst
+
+        with (
+            mock.patch("artifact_manager.S3Backend", side_effect=fake_s3_backend),
+            mock.patch(
+                "artifact_manager.create_backend_from_env",
+                return_value=dest_backend,
+            ),
+            mock.patch(
+                "_therock_utils.workflow_outputs._retrieve_bucket_info"
+            ) as mock_lookup,
+        ):
+            artifact_manager.main(argv)
+            mock_lookup.assert_not_called()
+
+        source_root = captured_source_root.get("root")
+        self.assertIsNotNone(source_root, "S3Backend should be constructed for source")
+        self.assertEqual(source_root.bucket, "custom-dest-bucket")
+        self.assertEqual(source_root.external_repo, "custom-owner-repo/")
+        self.assertEqual(source_root.run_id, "source-run")
+        self.assertEqual(source_root.platform, TEST_PLATFORM)
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_require_matches_passes_when_family_matched(self, mock_delay):
+        """--require-matches succeeds when the input family has a match."""
+        import artifact_manager
+
+        self._create_source_artifact("test-artifact", "lib", "gfx94X-dcgpu")
+
+        artifact_manager.main(
+            self._base_argv()
+            + ["--amdgpu-families", "gfx94X-dcgpu", "--require-matches"]
+        )
+
+        dest_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
+        )
+        self.assertTrue(
+            dest_backend.artifact_exists("test-artifact_lib_gfx94X-dcgpu.tar.zst")
+        )
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_require_matches_fails_when_family_missing(self, mock_delay):
+        """--require-matches exits non-zero when no source artifact for a family."""
+        import artifact_manager
+
+        # Source has only a generic artifact; the requested gfx94X-dcgpu has
+        # no match.
+        self._create_source_artifact("test-artifact", "lib", "generic")
+
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(
+                self._base_argv()
+                + ["--amdgpu-families", "gfx94X-dcgpu", "--require-matches"]
+            )
+
+        self.assertEqual(ctx.exception.code, 1)
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_require_matches_satisfied_by_expanded_target(self, mock_delay):
+        """A family is satisfied if any of its expanded targets is matched."""
+        import artifact_manager
+
+        # Source only has the per-target artifact (kpack-split layout).
+        self._create_source_artifact("test-artifact", "lib", "gfx942")
+
+        fake_map = {"gfx94X-dcgpu": ["gfx942"]}
+        with mock.patch.object(
+            artifact_manager, "amdgpu_family_map", return_value=fake_map
+        ):
+            artifact_manager.main(
+                self._base_argv()
+                + [
+                    "--amdgpu-families",
+                    "gfx94X-dcgpu",
+                    "--expand-family-to-targets",
+                    "--require-matches",
+                ]
+            )
+
+        dest_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
+        )
+        self.assertTrue(
+            dest_backend.artifact_exists("test-artifact_lib_gfx942.tar.zst")
+        )
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_require_matches_fails_with_expand_when_neither_match(
+        self, mock_delay
+    ):
+        """With --expand-family-to-targets, fail when neither family nor any
+        expanded target produced a match."""
+        import artifact_manager
+
+        # Source only has a generic artifact; the requested family expands
+        # to gfx942 but neither gfx94X-dcgpu nor gfx942 has a match.
+        self._create_source_artifact("test-artifact", "lib", "generic")
+
+        fake_map = {"gfx94X-dcgpu": ["gfx942"]}
+        with mock.patch.object(
+            artifact_manager, "amdgpu_family_map", return_value=fake_map
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                artifact_manager.main(
+                    self._base_argv()
+                    + [
+                        "--amdgpu-families",
+                        "gfx94X-dcgpu",
+                        "--expand-family-to-targets",
+                        "--require-matches",
+                    ]
+                )
+
+        self.assertEqual(ctx.exception.code, 1)
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_require_matches_fails_when_no_artifacts_at_all(self, mock_delay):
+        """--require-matches must fail when nothing matches even without
+        --amdgpu-families. The empty-copy_requests path must honor the flag,
+        otherwise prebuilt copy jobs can succeed while delivering nothing."""
+        import artifact_manager
+
+        # Source has no artifacts at all (no _create_source_artifact call).
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(self._base_argv() + ["--require-matches"])
+
+        self.assertEqual(ctx.exception.code, 1)
+
+
 class ParseTargetFamiliesTest(unittest.TestCase):
     """Unit tests for artifact_manager.parse_target_families."""
 
@@ -1215,6 +1496,19 @@ class ParseTargetFamiliesTest(unittest.TestCase):
         self.assertIn("gfx110X-all", result)
         self.assertIn("gfx1100", result)
         self.assertIn("gfx1101", result)
+
+    def test_comma_separated_families_accepted(self):
+        # Workflow inputs that document `families` as comma-separated should
+        # pass through unchanged. Mixed separators are also tolerated.
+        args = self._make_args(amdgpu_families="gfx94X-dcgpu,gfx110X-all")
+        result = self.am.parse_target_families(args)
+        self.assertIn("gfx94X-dcgpu", result)
+        self.assertIn("gfx110X-all", result)
+
+        args = self._make_args(amdgpu_families="gfx94X-dcgpu;gfx110X-all,gfx120X-all")
+        result = self.am.parse_target_families(args)
+        for f in ("gfx94X-dcgpu", "gfx110X-all", "gfx120X-all"):
+            self.assertIn(f, result)
 
 
 if __name__ == "__main__":
