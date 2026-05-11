@@ -49,6 +49,13 @@ TYPICAL USAGE (Command Line):
     --execute \
     --use-release-buckets
 
+  # Upload single-arch wheels and tarballs to production release buckets
+  python ./build_tools/packaging/upload_release_packages.py \
+    --input-dir=./downloads \
+    --upload-tarballs \
+    --execute \
+    --use-release-buckets
+
 DIRECTORY STRUCTURE:
   Input directory structure (created by download_prerelease_packages.py):
     <input-dir>/
