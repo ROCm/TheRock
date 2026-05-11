@@ -334,21 +334,22 @@ class PopulatedDistPackage:
     def populate_python_bindings(
         self, artifacts: ArtifactCatalog
     ) -> "PopulatedDistPackage":
-        """Promotes Python packages from artifacts into the wheel's src/ directory.
+        """Promotes Python bindings from artifacts into the wheel's src/ directory.
 
-        Artifacts that install files under ``python/<package_name>/`` are detected
-        and copied to ``src/<package_name>/`` so that setuptools' find_packages()
-        discovers them as top-level importable packages in the wheel.
+        Artifacts that install files under ``python_bindings/<package_name>/``
+        are detected and copied to ``src/<package_name>/`` so that setuptools'
+        find_packages() discovers them as top-level importable packages in the
+        wheel.
         """
         log(
-            f"::: Promoting Python packages {self.logical_name}[{self.target_family}]: "
+            f"::: Promoting Python bindings {self.logical_name}[{self.target_family}]: "
             f"{self.path}"
         )
         for relpath, dir_entry in artifacts.pm.matches():
-            if not relpath.startswith("python/"):
+            if not relpath.startswith("python_bindings/"):
                 continue
-            # Rewrite python/<pkg>/... → src/<pkg>/...
-            src_relpath = "src/" + relpath[len("python/"):]
+            # Rewrite python_bindings/<pkg>/... → src/<pkg>/...
+            src_relpath = "src/" + relpath[len("python_bindings/"):]
             dest_path = self.path / src_relpath
             self._populate_file(src_relpath, dest_path, dir_entry, resolve_src=True)
         return self
