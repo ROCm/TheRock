@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # Copyright (c) 2024-2025 Advanced Micro Devices, Inc. All rights reserved.
 # SPDX-License-Identifier: MIT
-"""
-- Report rocprofiler SDK tests within TheRock to CDash.
-- Generate CTestCustom.cmake (settings + configure/build commands) and dashboard.cmake (build, test, report to CDash).
+"""This script is used to test the rocprofiler-sdk within TheRock, and optionally
+uploads the results to CDash so they can be tracked alongside other CI
+runs.
 """
 
 import argparse
