@@ -107,7 +107,11 @@ endif()
 # we have never enabled benchmarks,
 # disabling more explicitly after a bug fix enabled.
 set(LLVM_INCLUDE_BENCHMARKS OFF)
-set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
+if(THEROCK_BUILD_LLVM_SPIRV_BACKEND)
+  set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86;SPIRV" CACHE STRING "Enable LLVM Targets" FORCE)
+else()
+  set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
+endif()
 
 # Packaging.
 set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
