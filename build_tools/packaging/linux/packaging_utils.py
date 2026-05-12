@@ -226,6 +226,12 @@ def is_gfxarch_package(pkg_info, enable_kpack=False):
         if pkgname.endswith("-devel"):
             return False
 
+        # Override RCCL Gfxarch behavior in kpack mode
+        # When --enable-kpack is used, RCCL should look for architecture-specific artifacts
+        # instead of generic artifacts to ensure GPU-specific kernel support (e.g., gfx1201)
+        if pkgname in ["amdrocm-rccl", "amdrocm-rccl-test"]:
+            return True
+
     return is_key_defined(pkg_info, "Gfxarch")
 
 
