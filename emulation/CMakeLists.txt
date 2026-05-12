@@ -3,7 +3,7 @@
 
 # ROCm Emulation Tools
 
-if(THEROCK_ENABLE_ROCJITSU)
+if(THEROCK_ENABLE_ROCJITSU AND THEROCK_ENABLE_EMULATION)
   ##############################################################################
   # rocjitsu
   #
