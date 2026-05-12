@@ -27,9 +27,6 @@ CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_t
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from github_actions_api import is_asan
 
-sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
-from test_utils import get_ctest_junit_path
-
 env = os.environ.copy()
 
 if THEROCK_BIN_DIR_STR is None:
@@ -161,9 +158,6 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
-        # Output JUnit XML for failed test reporting
-        "--output-junit",
-        str(get_ctest_junit_path("hip-tests")),
     ]
 
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
