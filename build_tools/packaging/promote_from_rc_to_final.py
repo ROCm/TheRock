@@ -245,19 +245,21 @@ def update_metadata_rocm_requires_dist(
     metadata_path = (
         new_dir_path / f"{package_name_no_version}-{old_version}.dist-info" / "METADATA"
     )
-    print(f"      {metadata_path}")
-    with fileinput.input(
-        files=metadata_path,
-        encoding="utf-8",
-        inplace=True,
-    ) as f:
-        for line in f:
-            if line.startswith("Summary:") and ("TheRock" in line or "rocm" in line):
-                print(line.replace(old_rocm_version, new_rocm_version), end="")
-            elif line.startswith("Requires-Dist") and "rocm" in line:
-                print(line.replace(old_rocm_version, new_rocm_version), end="")
-            else:
-                print(line, end="")
+    if metadata_path.exists():
+        print(f"      {metadata_path}")
+        with fileinput.input(
+            files=metadata_path,
+            encoding="utf-8",
+            inplace=True,
+        ) as f:
+            for line in f:
+                if line.startswith("Summary:") and ("TheRock" in line or "rocm" in line):
+                    print(line.replace(old_rocm_version, new_rocm_version), end="")
+                elif line.startswith("Requires-Dist") and "rocm" in line:
+                    print(line.replace(old_rocm_version, new_rocm_version), end="")
+                else:
+                    print(line, end="")
+
 
 
 def compute_new_version_str(
@@ -775,21 +777,26 @@ def wheel_change_extra_files(
 
     print("    Changing ROCm-specific files that contain the version")
 
+    # Every wheel: rewrite METADATA Summary / Requires-Dist rocm refs.
+    # No-op when no rocm refs are present (e.g. triton, apex)
+    update_metadata_rocm_requires_dist(
+        new_dir_path,
+        package_name_no_version,
+        old_version,
+        old_rocm_version,
+        new_rocm_version,
+    )
     # Per-arch device wheels (amd_torch_device_gfx, amd_torchvision_device_gfx,
     # rocm_sdk_device_gfx) carry no package-specific files that reference the
     # version, but they DO have METADATA Requires-Dist lines pinning a sister
     # rocm-* package to the build's rocm version. Rewrite those, then return.
     if "device_gfx" in new_dir_path.name:
-        update_metadata_rocm_requires_dist(
-            new_dir_path,
-            package_name_no_version,
-            old_version,
-            old_rocm_version,
-            new_rocm_version,
-        )
         return
+    if "jax_rocm7_plugin" in package_name_no_version or "jax_rocm7_pjrt" in package_name_no_version:
+        return
+
     # rocm packages needing extra handling
-    elif new_dir_path.name.startswith("rocm"):
+    if new_dir_path.name.startswith("rocm"):
         if "rocm_sdk_libraries" in new_dir_path.name and "gfx" not in new_dir_path.name:
             package_name_no_version = "rocm_sdk_libraries_None"
         files_to_change = [
@@ -810,28 +817,10 @@ def wheel_change_extra_files(
             new_dir_path / package_name_no_version / "_rocm_init.py",
             new_dir_path / package_name_no_version / "version.py",
         ]
-
-        # special handling: we only want to change Requires-Dist matching "rocm"
-        update_metadata_rocm_requires_dist(
-            new_dir_path,
-            package_name_no_version,
-            old_version,
-            old_rocm_version,
-            new_rocm_version,
-        )
     elif "apex" in package_name_no_version:
         files_to_change = [
             new_dir_path / package_name_no_version / "git_version_info_installed.py",
         ]
-    elif "jax_rocm7_plugin" in package_name_no_version or "jax_rocm7_pjrt" in package_name_no_version:
-        update_metadata_rocm_requires_dist(
-            new_dir_path,
-            package_name_no_version,
-            old_version,
-            old_rocm_version,
-            new_rocm_version,
-        )
-        return
     else:
         # we have multiple packages that have a version.py that needs updating
         need_change_version_py = ["torchaudio", "torchvision", "jaxlib"]
@@ -839,14 +828,6 @@ def wheel_change_extra_files(
             files_to_change = [
                 new_dir_path / package_name_no_version / "version.py",
             ]
-            if "torchvision" in package_name_no_version:
-                update_metadata_rocm_requires_dist(
-                    new_dir_path,
-                    package_name_no_version,
-                    old_version,
-                    old_rocm_version,
-                    new_rocm_version,
-                )
         else:
             # no additional (rocm-specific) files needed to be changed that contain the version
             # currently applying to: triton
