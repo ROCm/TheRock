@@ -258,6 +258,31 @@ jobs:
             pip install jax==${JAX_VERSION} jaxlib==${JAX_VERSION}
           fi
 
+      - name: Probe GPU devices (fail fast if none)
+        env:
+          JAX_PLATFORMS: rocm
+          HIP_DEVICE_LIB_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
+          JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
+          JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH: /opt/rocm/lib/llvm/bin
+        run: |
+          set -euo pipefail
+          echo "::group::rocm-smi"
+          if command -v rocm-smi >/dev/null 2>&1; then
+            rocm-smi --showid --showproductname || true
+          else
+            echo "rocm-smi not on PATH; skipping"
+          fi
+          echo "::endgroup::"
+          python - <<'PY'
+          import sys, jax
+          backend = jax.default_backend()
+          devs = jax.devices()
+          print(f"default_backend={backend}  num_devices={len(devs)}  devices={devs}")
+          if backend != "rocm" or not devs:
+              sys.stderr.write("ERROR: no ROCm devices visible to JAX; aborting test run\n")
+              sys.exit(2)
+          PY
+
       - name: Run JAX tests
         env:
           JAX_PLATFORMS: rocm
