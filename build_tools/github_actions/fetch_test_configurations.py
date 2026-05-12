@@ -84,6 +84,7 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_opencl_cts.py')}",
         "platform": ["linux"],
         "total_shards": 1,
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubi10@sha256:a10f34d6006a20d02cf688982de9dea147710927ed405a3b0d5c73b58a6030c0",
     },
     # BLAS tests
     "rocblas": {

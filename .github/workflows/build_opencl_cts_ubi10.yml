@@ -1,0 +1,139 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Build opencl-cts (ubi10)
+
+on:
+  workflow_call:
+    inputs:
+      amdgpu_families:
+        type: string
+      artifact_group:
+        type: string
+      package_version:
+        type: string
+        default: ADHOCBUILD
+      release_type:
+        type: string
+        default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        type: string
+        default: gfx94X-dcgpu
+      artifact_group:
+        type: string
+        default: gfx94X-dcgpu
+      package_version:
+        type: string
+        default: ADHOCBUILD
+
+permissions:
+  contents: read
+
+jobs:
+  build_opencl_cts_ubi10:
+    name: Build opencl-cts (ubi10)
+    runs-on: azure-linux-scale-rocm
+    timeout-minutes: 120
+    permissions:
+      id-token: write
+    container:
+      # TODO: Switch to ghcr.io/rocm/build_opencl_cts_ubi10 once the image is published.
+      image: ghcr.io/rocm/no_rocm_image_ubi10@sha256:a10f34d6006a20d02cf688982de9dea147710927ed405a3b0d5c73b58a6030c0
+      options: --user 0:0
+    env:
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      CACHE_DIR: ${{ github.workspace }}/.container-cache
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+    steps:
+      - name: Install opencl-cts build dependencies
+        run: |
+          sudo dnf install -y --nodocs \
+            ocl-icd-devel \
+            opencl-headers \
+            spirv-headers-devel \
+            spirv-tools \
+            spirv-tools-devel \
+          && sudo dnf clean all
+
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Setup ccache
+        run: |
+          ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-dev" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
+
+      - name: Fetch sources
+        timeout-minutes: 30
+        run: |
+          ./build_tools/fetch_sources.py --jobs 12 --source-sets opencl-cts
+
+      - name: Configure
+        env:
+          amdgpu_families: ${{ inputs.amdgpu_families }}
+          package_version: ${{ inputs.package_version }}
+          extra_cmake_options: >-
+            -DTHEROCK_ENABLE_ALL=OFF
+            -DTHEROCK_ENABLE_CORE=ON
+            -DTHEROCK_ENABLE_OPENCL_CTS=ON
+          BUILD_DIR: build
+        run: |
+          python3 build_tools/github_actions/build_configure.py
+
+      - name: Build opencl-cts
+        run: |
+          cmake --build build --target opencl-cts -- -k 0
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -d "./build" ]; then
+            echo "Artifact Archives:"
+            echo "------------------"
+            ls -lh build/artifacts/*.tar.xz || true
+            echo "CCache Stats:"
+            echo "-------------"
+            ccache -s -v
+          else
+            echo "[ERROR] Build directory ./build does not exist."
+            exit 1
+          fi
+
+      - name: Configure AWS Credentials
+        if: ${{ always() }}
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ${{ inputs.release_type }}
+
+      - name: Post Build Upload
+        if: always()
+        run: |
+          python3 build_tools/github_actions/post_build_upload.py \
+            --run-id ${{ github.run_id }} \
+            --artifact-group "${{ inputs.artifact_group }}" \
+            --build-dir build \
+            --upload

@@ -125,8 +125,8 @@ submodules = ["amd-mesa"]
 disable_platforms = ["windows"]
 
 [source_sets.opencl-cts]
-description = "OpenCL Conformance Test Suite and dependencies"
-submodules = ["opencl/opencl-cts", "opencl/opencl-headers", "opencl/opencl-icd-loader", "opencl/spirv-headers", "opencl/spirv-tools"]
+description = "OpenCL Conformance Test Suite"
+submodules = ["opencl/opencl-cts"]
 
 [source_sets.iree-libs]
 description = "IREE integration submodules"
