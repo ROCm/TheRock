@@ -152,6 +152,35 @@ skip_tests = {
             "(TestDistBackendWithSpawn and test_ddp_uneven_inputs_stop_iteration_sync_bn)",
             # Classic FSDP NCCL timeout/abort.
             "(TestFSDPWrap and test_main_wrap_api_cpu_offload0_backward_prefetch0_forward_prefetch_False_device_init_mode0)",
+
+            # ROCm 0501/PT 0501 second distributed run: post-acc-grad parity timeout.
+            "(TestFullyShardPostAccGradHookMultiProcess and test_post_acc_grad_hook_optim_parity)",
+            # ROCm 0501/PT 0501 second distributed run: mixed-precision grad accumulation timeout.
+            "(TestFullyShardMixedPrecisionTraining and test_grad_acc_with_reduce_dtype)",
+            # ROCm 0501/PT 0501 second distributed run: comm-mode transformer tracing failure.
+            "(TestCommModeFeatures and test_transformer_module_tracing)",
+            # ROCm 0501/PT 0501 second distributed run: DTensor 2D FSDP/TP compile timeout.
+            "(TestDTensorCompileE2E and test_2d_fsdp_tp_compile_use_ca_True)",
+            # ROCm 0501/PT 0501 second distributed run: 2D clip-grad-norm timeout.
+            "(TestClipGradNormWorldSize4 and test_clip_grad_norm_2d)",
+            # ROCm 0501/PT 0501 second distributed run: frozen-parameter mixed-grad-groups timeout.
+            "(TestFullyShardFrozen and test_train_mixed_requires_grad_across_groups)",
+            # ROCm 0501/PT 0501 second distributed run: HSDP sync correctness mixed-dtype timeout.
+            "(TestFullyShardHSDPSyncCorrectness and test_ar_buffer_lifetime_mixed_dtype)",
+            # ROCm 0501/PT 0501 second distributed run: per-param mesh overlap timeout.
+            "(TestFullyShardPerParamMeshOverlap and test_fully_shard_per_param_mesh_training_overlap)",
+            # ROCm 0501/PT 0501 second distributed run: join single-joinable hooks scalar mismatch.
+            "(TestJoin and test_single_joinable_main_hooks)",
+            # ROCm 0501/PT 0501 second distributed run: FSDP wrap NCCL watchdog abort.
+            "(TestFSDPWrap and test_main_wrap_api_cpu_offload0_backward_prefetch0_forward_prefetch_True_device_init_mode0)",
+            # ROCm 0501/PT 0501 second distributed run: DDP buffer hook allreduce future failure.
+            "(TestDistBackendWithSpawn and test_ddp_buffer_hook_allreduce_return_future)",
+            # ROCm 0501/PT 0501 second distributed run: fully-shard backward misprefetch timeout.
+            "(TestFullyShardPrefetch and test_backward_misprefetch)",
+            # ROCm 0501/PT 0501 second distributed run: 2D transformer training parity timeout.
+            "(TestFullyShard2DTraining and test_train_parity_2d_transformer)",
+            # ROCm 0501/PT 0501 second distributed run: replicate mixed-precision fp16 abort/SIGSEGV.
+            "(TestReplicateMixedPrecisionCasts and test_norm_modules_fp16)",
             # Elastic launcher failure.
             "(ElasticLaunchTest and test_virtual_local_rank)",
             # Compute/comm reordering failure.
