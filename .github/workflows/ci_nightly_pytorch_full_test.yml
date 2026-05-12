@@ -18,10 +18,10 @@
 #       release_portable_linux_packages.yml) so tests only run after a
 #       successful build, or use a workflow_dispatch trigger / Quartz.
 #
-# Scheduled runs rotate the PyTorch source/wheel pair by UTC day-of-year mod 3:
-#   - day % 3 == 0 -> release/2.10 (latest 2.10.x wheel + release/2.10 sources)
-#   - day % 3 == 1 -> release/2.11 (latest 2.11.x wheel + release/2.11 sources)
-#   - day % 3 == 2 -> release/2.12 (latest 2.12.x wheel + release/2.12 sources)
+# Scheduled runs test all supported release branch source/wheel pairs nightly:
+#   - release/2.10 (latest 2.10.x wheel + release/2.10 sources)
+#   - release/2.11 (latest 2.11.x wheel + release/2.11 sources)
+#   - release/2.12 (latest 2.12.x wheel + release/2.12 sources)
 # workflow_dispatch runs honor the pytorch_git_ref input as-is.
 
 name: CI Nightly PyTorch Full Test
@@ -74,7 +74,7 @@ permissions:
 run-name: >-
   CI Nightly PyTorch Full Test
   (${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }},
-   ${{ github.event_name == 'schedule' && 'release branch rotation' || (inputs.pytorch_git_ref || 'nightly') }})
+   ${{ github.event_name == 'schedule' && 'all release branches' || (inputs.pytorch_git_ref || 'nightly') }})
 
 env:
   AMDGPU_FAMILY: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
@@ -88,56 +88,20 @@ env:
   PYTHON_VERSION: ${{ inputs.python_version || '3.12' }}
 
 jobs:
-  resolve_torch_version:
+  resolve_torch_versions:
     runs-on: ubuntu-24.04
     outputs:
-      torch_version: ${{ steps.resolve.outputs.torch_version }}
-      pytorch_git_ref: ${{ steps.select_ref.outputs.pytorch_git_ref }}
+      matrix: ${{ steps.resolve.outputs.matrix }}
     steps:
-      - name: Select PyTorch git ref
-        id: select_ref
-        run: |
-          # Scheduled runs rotate between release/2.10, release/2.11, and
-          # release/2.12 by UTC day-of-year mod 3.
-          # workflow_dispatch runs honor the input as-is.
-          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
-            DAY_OF_YEAR="$(date -u +%j)"
-            # Strip leading zeros to avoid base-8 interpretation in $(( ... )).
-            DAY_OF_YEAR="${DAY_OF_YEAR#0}"
-            DAY_OF_YEAR="${DAY_OF_YEAR#0}"
-            SLOT=$(( DAY_OF_YEAR % 3 ))
-            case "${SLOT}" in
-              0)
-                REF="release/2.10"
-                REASON="schedule day-of-year ${DAY_OF_YEAR} mod 3 == 0"
-                ;;
-              1)
-                REF="release/2.11"
-                REASON="schedule day-of-year ${DAY_OF_YEAR} mod 3 == 1"
-                ;;
-              2)
-                REF="release/2.12"
-                REASON="schedule day-of-year ${DAY_OF_YEAR} mod 3 == 2"
-                ;;
-            esac
-          else
-            REF="${PYTORCH_GIT_REF_INPUT}"
-            REASON="${GITHUB_EVENT_NAME} input"
-          fi
-          echo "Selected pytorch_git_ref=${REF} (${REASON})"
-          echo "pytorch_git_ref=${REF}" >> "$GITHUB_OUTPUT"
-
-      - name: Resolve torch version
+      - name: Resolve torch versions
         id: resolve
-        env:
-          PYTORCH_GIT_REF: ${{ steps.select_ref.outputs.pytorch_git_ref }}
         run: |
           INDEX_URL="${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}"
 
-          if [ -n "${TORCH_VERSION_INPUT}" ]; then
-            echo "torch_version=${TORCH_VERSION_INPUT}" >> "$GITHUB_OUTPUT"
-            echo "Using provided torch_version: ${TORCH_VERSION_INPUT}"
-            exit 0
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            REFS=("release/2.10" "release/2.11" "release/2.12")
+          else
+            REFS=("${PYTORCH_GIT_REF_INPUT}")
           fi
 
           pip install packaging
@@ -153,42 +117,81 @@ jobs:
             --platform linux_x86_64 2>/dev/null \
             | grep -E '^(torch \(|Available versions:)')
 
-          # When testing a release branch, pin the wheel version to the matching
-          # X.Y minor series so we don't accidentally pull a newer nightly wheel
-          # whose ABI/APIs don't match the release/X.Y test sources.
-          case "${PYTORCH_GIT_REF}" in
-            release/*)
-              MINOR="${PYTORCH_GIT_REF#release/}"
-              TORCH_VERSION=$(printf '%s\n' "${AVAILABLE}" \
-                | sed -n 's/^Available versions: //p' \
-                | tr ',' '\n' \
-                | sed 's/^ *//;s/ *$//' \
-                | grep "^${MINOR}\." \
-                | head -1)
-              if [ -z "${TORCH_VERSION}" ]; then
-                echo "::error::No torch version matching ${MINOR}.* in ${INDEX_URL} for ref ${PYTORCH_GIT_REF}"
-                echo "${AVAILABLE}"
-                exit 1
-              fi
-              ;;
-            *)
-              TORCH_VERSION=$(printf '%s\n' "${AVAILABLE}" \
-                | grep '^torch (' \
-                | head -1 \
-                | sed 's/torch (\(.*\))/\1/')
-              ;;
-          esac
+          resolve_torch_version() {
+            local pytorch_git_ref="$1"
+            local torch_version=""
 
-          if [ -z "${TORCH_VERSION}" ]; then
-            echo "::error::Failed to resolve torch version from ${INDEX_URL}"
-            exit 1
-          fi
+            if [ -n "${TORCH_VERSION_INPUT}" ]; then
+              printf '%s\n' "${TORCH_VERSION_INPUT}"
+              return
+            fi
 
-          echo "torch_version=${TORCH_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Resolved torch_version for ${PYTORCH_GIT_REF}: ${TORCH_VERSION}"
+            # When testing a release branch, pin the wheel version to the matching
+            # X.Y minor series so we don't accidentally pull a newer nightly wheel
+            # whose ABI/APIs don't match the release/X.Y test sources.
+            case "${pytorch_git_ref}" in
+              release/*)
+                local minor="${pytorch_git_ref#release/}"
+                torch_version=$(printf '%s\n' "${AVAILABLE}" \
+                  | sed -n 's/^Available versions: //p' \
+                  | tr ',' '\n' \
+                  | sed 's/^ *//;s/ *$//' \
+                  | grep "^${minor}\." \
+                  | head -1)
+                if [ -z "${torch_version}" ]; then
+                  echo "::error::No torch version matching ${minor}.* in ${INDEX_URL} for ref ${pytorch_git_ref}" >&2
+                  echo "${AVAILABLE}" >&2
+                  exit 1
+                fi
+                ;;
+              *)
+                torch_version=$(printf '%s\n' "${AVAILABLE}" \
+                  | grep '^torch (' \
+                  | head -1 \
+                  | sed 's/torch (\(.*\))/\1/')
+                ;;
+            esac
+
+            if [ -z "${torch_version}" ]; then
+              echo "::error::Failed to resolve torch version from ${INDEX_URL} for ref ${pytorch_git_ref}" >&2
+              exit 1
+            fi
+
+            printf '%s\n' "${torch_version}"
+          }
+
+          MATRIX_LINES=""
+          for pytorch_git_ref in "${REFS[@]}"; do
+            torch_version="$(resolve_torch_version "${pytorch_git_ref}")"
+            echo "Resolved torch_version for ${pytorch_git_ref}: ${torch_version}"
+            MATRIX_LINES="${MATRIX_LINES}${pytorch_git_ref} ${torch_version}"$'\n'
+          done
+
+          MATRIX=$(MATRIX_LINES="${MATRIX_LINES}" python - <<'PY'
+          import json
+          import os
+
+          rows = []
+          for line in os.environ["MATRIX_LINES"].splitlines():
+              pytorch_git_ref, torch_version = line.split(" ", 1)
+              rows.append({
+                  "pytorch_git_ref": pytorch_git_ref,
+                  "torch_version": torch_version,
+              })
+
+          print(json.dumps(rows, separators=(",", ":")))
+          PY
+          )
+
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
 
   run_full_tests:
-    needs: resolve_torch_version
+    needs: resolve_torch_versions
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.resolve_torch_versions.outputs.matrix) }}
+    name: Run Full Tests (${{ matrix.pytorch_git_ref }})
     uses: ./.github/workflows/test_pytorch_wheels_full.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
@@ -196,8 +199,8 @@ jobs:
       test_runs_on_multi_gpu: ${{ inputs.test_runs_on_multi_gpu || 'linux-gfx942-8gpu-ossci-rocm' }}
       package_index_url: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
       python_version: ${{ inputs.python_version || '3.12' }}
-      torch_version: ${{ needs.resolve_torch_version.outputs.torch_version }}
+      torch_version: ${{ matrix.torch_version }}
       pytorch_git_repo: ${{ inputs.pytorch_git_repo || 'pytorch/pytorch' }}
-      pytorch_git_ref: ${{ needs.resolve_torch_version.outputs.pytorch_git_ref }}
+      pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       test_configs: ${{ inputs.test_configs || 'default distributed inductor' }}
       tests_to_include: ""
