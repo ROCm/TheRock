@@ -28,7 +28,13 @@ See the unified project HUD at https://therock-hud-dev.amd.com/
 
 ### Nightly release status
 
-Packages and Python wheels:
+Multi-arch releases (all GPU architectures):
+
+| Release type                               | Status                                                                                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prebuilt tarballs and ROCm Python packages | [![Multi-arch release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml) |
+
+Per-family releases (one GPU family per package):
 
 | Platform |                                                                                                                                                                                                                                                   Prebuilt tarballs and ROCm Python packages |                                                                                                                                                                                                                                                        PyTorch Python packages | Native Packages                                                                                                                                                                                                                                  |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -62,11 +68,16 @@ instructions and configurations for alternatives.
 ```bash
 # Install Ubuntu dependencies
 sudo apt update
-sudo apt install gfortran git ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev texinfo bison flex
+sudo apt install gfortran git ninja-build cmake g++ pkg-config xxd automake libtool python3-venv python3-dev libegl1-mesa-dev texinfo bison flex
 
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
 cd TheRock
+
+# Install a patched patchelf from source. For details see
+# https://github.com/ROCm/TheRock/blob/main/docs/environment_setup_guide.md#patchelf
+sudo apt install curl make
+sudo env INSTALL_PREFIX=/usr/local ./dockerfiles/install_pinned_patchelf.sh
 
 # Init python virtual environment and install python dependencies
 python3 -m venv .venv && source .venv/bin/activate
@@ -234,9 +245,10 @@ The following components accept specifying alternative source locations:
 
 Further flags allow to build components with specific features enabled.
 
-| Other flags                | Description                                                              |
-| -------------------------- | ------------------------------------------------------------------------ |
-| `-DTHEROCK_ENABLE_MPI=OFF` | Enables building components with Message Passing Interface (MPI) support |
+| Other flags                                       | Description                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| `-DTHEROCK_ENABLE_MPI=OFF`                        | Enables building components with Message Passing Interface (MPI) support |
+| `-DTHEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY=OFF` | Builds composable_kernel with only the targets required for MIOpen       |
 
 > [!NOTE]
 > Building components with MPI support, currently requires MPI to be
@@ -287,8 +299,33 @@ cmake --build build
 
 #### CCache usage on Windows
 
-We are still investigating the exact proper options for ccache on Windows and
-do not currently recommend that end users enable it.
+- You must have a recent ccache (>= 4.13.3 at the time of writing) that contains
+  bug fixes for MSVC and supports proper caching with the `--offload-compress`
+  option used for compressing AMDGPU device code.
+- `export CCACHE_SLOPPINESS=include_file_ctime,pch_defines,time_macros` to
+  support hard-linking and precompiled headers (amd-llvm is built with PCH).
+- Proper setup of the `compiler_check` directive to do safe caching in the
+  presence of compiler bootstrapping.
+- Set the C/CXX compiler launcher options to cmake appropriately.
+
+Since these options are very fiddly and prone to change over time, we recommend
+using the `./build_tools/setup_ccache.py` script to create a `.ccache` directory
+in the repository root with hard coded configuration suitable for the project.
+
+Example (In Command Prompt):
+
+```bat
+# Any command prompt used to build must eval setup_ccache.py to set environment
+# variables.
+for /f "delims=" %i in ('python build_tools/setup_ccache.py') do @%i
+
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all \
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache ^
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ^
+  .
+
+cmake --build build
+```
 
 ### Running tests
 

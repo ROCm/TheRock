@@ -56,7 +56,7 @@ on:
         type: choice
         options:
           - gfx101X-dgpu
-          - gfx103X-dgpu
+          - gfx103X-all
           - gfx110X-all
           - gfx1150
           - gfx1151
@@ -110,6 +110,8 @@ on:
           - sccache
           - ccache
         default: none
+
+run-name: Build Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.amdgpu_family }})
 
 jobs:
   build_pytorch_wheels:

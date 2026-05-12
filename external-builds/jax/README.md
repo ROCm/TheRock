@@ -36,8 +36,8 @@ Support for JAX is provided via stable release branches of
 | JAX version | Linux                                                                                                           | Windows          |
 | ----------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
 | 0.9.1       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.9.1`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.9.1) | ❌ Not supported |
+| 0.9.0       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.9.0`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.9.0) | ❌ Not supported |
 | 0.8.2       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.8.2`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.2) | ❌ Not supported |
-| 0.8.0       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.8.0`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.0) | ❌ Not supported |
 
 See also:
 
@@ -97,7 +97,7 @@ provide it via **tarballs** with arbitrary install locations.
 
 1. Choose your configuration:
 
-   - **JAX version**: e.g. `0.8.2` or `0.8.0`
+   - **JAX version**: e.g. `0.9.1`, `0.9.0`, or `0.8.2`
    - **Python version**: e.g. `3.12`
    - **TheRock tarball**: A tarball URL, a local tarball file path, or a
      directory containing a ROCm installation. Nightly tarballs are available
@@ -118,8 +118,10 @@ provide it via **tarballs** with arbitrary install locations.
    ```
 
    > [!NOTE]
-   > The `--jax-source-dir` flag is required for JAX 0.8.2 and points to the
-   > cloned `jax` repository directory. For JAX 0.8.0, this flag can be omitted.
+   > The `--jax-source-dir` flag is required when building jaxlib from source
+   > (JAX \<= 0.9.0) and points to the cloned `jax` repository directory.
+   > For JAX >= 0.9.1, jaxlib is installed from upstream PyPI, so this flag
+   > can be omitted.
 
 1. Locate built wheels:
 
