@@ -355,6 +355,28 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.test_type, "full")
 
+    def test_nightly_release_is_comprehensive(self):
+        """Nightly release → comprehensive tests."""
+        result = cm.decide_jobs(
+            self._inputs(release_type="nightly"), git_context=cm.GitContext()
+        )
+        self.assertEqual(result.test_rocm.test_type, "comprehensive")
+        self.assertIn("release", result.test_rocm.test_type_reason)
+
+    def test_prerelease_is_full(self):
+        """Prerelease → full tests."""
+        result = cm.decide_jobs(
+            self._inputs(release_type="prerelease"), git_context=cm.GitContext()
+        )
+        self.assertEqual(result.test_rocm.test_type, "full")
+        self.assertIn("release", result.test_rocm.test_type_reason)
+
+    def test_dev_release_falls_through_to_default(self):
+        """Dev release without other signals → quick (falls through)."""
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.decide_jobs(self._inputs(release_type="dev"), git_context=git)
+        self.assertEqual(result.test_rocm.test_type, "quick")
+
     def test_test_filter_label_overrides(self):
         """test_filter: PR label overrides the computed test_type."""
         # Even though schedule would set comprehensive, test_filter overrides.
