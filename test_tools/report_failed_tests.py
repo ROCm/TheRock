@@ -3,13 +3,15 @@
 # SPDX-License-Identifier: MIT
 
 """
-Parse test results and report failed tests with structured metrics output.
+Parse test output from stdout and report failed tests with structured metrics.
 
-This script parses test output from stdout/stderr and produces a metrics report
-suitable for CI analysis. It supports multiple test frameworks:
+Supports parsing test frameworks:
+- GTest: Parses [FAILED], [PASSED], [RUN] markers
+- CTest: Parses test execution lines, timeouts, and summary
 
-- GTest: Parses [FAILED], [PASSED] markers from stdout
-- CTest: Parses test execution lines, timeouts, and failure summaries
+Future support planned for:
+- pytest
+- Catch2
 
 When ctest wraps gtest (common pattern), it extracts both the inner gtest failures
 and the outer ctest status, using different field names:
@@ -29,21 +31,272 @@ Examples:
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
+from typing import Optional
 
-from parse_test_output import (
-    ParsedTestOutput,
-    TestFramework,
-    TestStatus,
-    parse_test_output,
-)
+
+# =============================================================================
+# Test Output Parser
+# =============================================================================
+
+
+class TestFramework(Enum):
+    """Supported test frameworks."""
+
+    GTEST = "gtest"
+    CTEST = "ctest"
+    PYTEST = "pytest"  # Future
+    CATCH2 = "catch2"  # Future
+    UNKNOWN = "unknown"
+
+
+class TestStatus(Enum):
+    """Test execution status."""
+
+    PASSED = "passed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    TIMEOUT = "timeout"
+    RUNNING = "running"  # Started but no completion seen
+
+
+@dataclass
+class TestCase:
+    """A single test case result from parsing."""
+
+    name: str
+    status: TestStatus
+    framework: TestFramework
+    duration_ms: Optional[float] = None
+    failure_message: Optional[str] = None
+    parent_test: Optional[str] = None  # For nested tests (gtest inside ctest)
+
+
+@dataclass
+class ParsedTestOutput:
+    """Complete parsed test output."""
+
+    tests: list[TestCase] = field(default_factory=list)
+    total_tests: int = 0
+    passed_count: int = 0
+    failed_count: int = 0
+    skipped_count: int = 0
+    timeout_count: int = 0
+    frameworks_detected: set[TestFramework] = field(default_factory=set)
+    has_failures: bool = False
+    ctest_context: Optional[str] = None
+
+
+def _parse_gtest_output(content: str) -> list[TestCase]:
+    """Parse GTest output from stdout."""
+    seen_tests: dict[str, TestCase] = {}
+
+    # Pattern for test results: [OK], [FAILED], [SKIPPED]
+    result_pattern = re.compile(
+        r"\[\s*(OK|FAILED|SKIPPED)\s*\]\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_/]*)+)(?:\s+\((\d+)\s*ms\))?"
+    )
+
+    # Pattern for [RUN] to track started tests
+    run_pattern = re.compile(r"\[\s*RUN\s*\]\s+(\S+)")
+
+    # Track started tests
+    started_tests: set[str] = set()
+    for match in run_pattern.finditer(content):
+        started_tests.add(match.group(1))
+
+    # Parse test results
+    for match in result_pattern.finditer(content):
+        status_str, name, duration_str = match.groups()
+        if name.isdigit() or name.endswith("tests") or name.endswith("test"):
+            continue
+
+        status_map = {
+            "OK": TestStatus.PASSED,
+            "FAILED": TestStatus.FAILED,
+            "SKIPPED": TestStatus.SKIPPED,
+        }
+        seen_tests[name] = TestCase(
+            name=name,
+            status=status_map.get(status_str, TestStatus.FAILED),
+            framework=TestFramework.GTEST,
+            duration_ms=float(duration_str) if duration_str else None,
+        )
+
+    # Parse failure summary section
+    summary_section = re.search(
+        r"\[\s*FAILED\s*\]\s+\d+\s+tests?,\s+listed\s+below:(.*?)(?:\n\n|\Z)",
+        content,
+        re.DOTALL,
+    )
+    if summary_section:
+        summary_failed_pattern = re.compile(
+            r"\[\s*FAILED\s*\]\s+(\S+)\s*$", re.MULTILINE
+        )
+        for match in summary_failed_pattern.finditer(summary_section.group(1)):
+            name = match.group(1)
+            if name.isdigit() or "TEST" in name.upper():
+                continue
+            if name not in seen_tests:
+                seen_tests[name] = TestCase(
+                    name=name,
+                    status=TestStatus.FAILED,
+                    framework=TestFramework.GTEST,
+                )
+
+    # Check for interrupted tests (started but never completed)
+    for name in started_tests:
+        if name not in seen_tests:
+            seen_tests[name] = TestCase(
+                name=name,
+                status=TestStatus.RUNNING,
+                framework=TestFramework.GTEST,
+            )
+
+    return list(seen_tests.values())
+
+
+def _parse_ctest_output(content: str) -> list[TestCase]:
+    """Parse CTest output from stdout."""
+    seen_tests: dict[str, TestCase] = {}
+
+    # Pattern for test execution lines
+    exec_pattern = re.compile(
+        r"\d+/\d+\s+Test\s+#\d+:\s+(\S+)\s+\.+\s*(\*\*\*)?(Passed|Failed|Timeout|Not Run)\s+([\d.]+)\s*sec"
+    )
+
+    for match in exec_pattern.finditer(content):
+        name, _, status_str, duration_str = match.groups()
+        status_map = {
+            "Passed": TestStatus.PASSED,
+            "Failed": TestStatus.FAILED,
+            "Timeout": TestStatus.TIMEOUT,
+            "Not Run": TestStatus.SKIPPED,
+        }
+        seen_tests[name] = TestCase(
+            name=name,
+            status=status_map.get(status_str, TestStatus.FAILED),
+            framework=TestFramework.CTEST,
+            duration_ms=float(duration_str) * 1000,
+        )
+
+    # Parse failure summary
+    summary_pattern = re.compile(
+        r"^\s*\d+\s+-\s+(\S+)\s+\((Failed|Timeout)\)", re.MULTILINE
+    )
+    for match in summary_pattern.finditer(content):
+        name, status_str = match.groups()
+        if name not in seen_tests:
+            seen_tests[name] = TestCase(
+                name=name,
+                status=(
+                    TestStatus.TIMEOUT if status_str == "Timeout" else TestStatus.FAILED
+                ),
+                framework=TestFramework.CTEST,
+            )
+
+    return list(seen_tests.values())
+
+
+def _detect_frameworks(content: str) -> set[TestFramework]:
+    """Detect which test frameworks are present in the output."""
+    frameworks = set()
+    if re.search(r"\[\s*(RUN|OK|FAILED|PASSED)\s*\]", content):
+        frameworks.add(TestFramework.GTEST)
+    if re.search(r"Test\s+#\d+:", content) or re.search(
+        r"ctest", content, re.IGNORECASE
+    ):
+        frameworks.add(TestFramework.CTEST)
+    return frameworks
+
+
+def _get_ctest_context(content: str) -> Optional[str]:
+    """Extract the ctest test name that was running."""
+    start_pattern = re.compile(r"Start\s+\d+:\s+(\S+)")
+    matches = list(start_pattern.finditer(content))
+    if matches:
+        return matches[-1].group(1)
+
+    exec_pattern = re.compile(r"\d+/\d+\s+Test\s+#\d+:\s+(\S+)")
+    matches = list(exec_pattern.finditer(content))
+    if matches:
+        return matches[-1].group(1)
+
+    return None
+
+
+def parse_test_output(content: str) -> ParsedTestOutput:
+    """Parse test output and extract all test results.
+
+    This is the main parsing entry point. It detects frameworks and parses accordingly.
+    When both ctest and gtest are detected (nested), it captures both inner gtest
+    failures and outer ctest status.
+
+    Args:
+        content: Raw stdout/stderr content from test execution
+
+    Returns:
+        ParsedTestOutput with all parsed test cases and summary info
+    """
+    result = ParsedTestOutput()
+    result.frameworks_detected = _detect_frameworks(content)
+
+    all_tests: list[TestCase] = []
+
+    if TestFramework.GTEST in result.frameworks_detected:
+        all_tests.extend(_parse_gtest_output(content))
+
+    if TestFramework.CTEST in result.frameworks_detected:
+        ctest_tests = _parse_ctest_output(content)
+
+        if TestFramework.GTEST in result.frameworks_detected:
+            # Associate gtest tests with their ctest parent
+            ctest_context = _get_ctest_context(content)
+            result.ctest_context = ctest_context
+            for test in all_tests:
+                if test.framework == TestFramework.GTEST and ctest_context:
+                    test.parent_test = ctest_context
+
+            # Include ctest failures/timeouts alongside inner gtest failures
+            for ctest_test in ctest_tests:
+                if ctest_test.status in (TestStatus.TIMEOUT, TestStatus.FAILED):
+                    all_tests.append(ctest_test)
+        else:
+            all_tests.extend(ctest_tests)
+
+    result.tests = all_tests
+
+    # Calculate summary
+    for test in all_tests:
+        result.total_tests += 1
+        if test.status == TestStatus.PASSED:
+            result.passed_count += 1
+        elif test.status == TestStatus.FAILED:
+            result.failed_count += 1
+            result.has_failures = True
+        elif test.status == TestStatus.TIMEOUT:
+            result.timeout_count += 1
+            result.has_failures = True
+        elif test.status == TestStatus.SKIPPED:
+            result.skipped_count += 1
+        elif test.status == TestStatus.RUNNING:
+            result.failed_count += 1
+            result.has_failures = True
+
+    return result
+
+
+# =============================================================================
+# Test Result Reporting
+# =============================================================================
 
 
 @dataclass
 class FailedTest:
-    """A single failed test with metadata."""
+    """A single failed test with metadata for reporting."""
 
     name: str
     status: str  # "failure", "timeout", "interrupted"
@@ -68,7 +321,7 @@ class TestResult:
 
 
 def parse_stdout_log(log_file: Path, component: str) -> TestResult:
-    """Parse test stdout/stderr log using the new parser.
+    """Parse test stdout/stderr log.
 
     Args:
         log_file: Path to the stdout/stderr log file
@@ -83,45 +336,41 @@ def parse_stdout_log(log_file: Path, component: str) -> TestResult:
         content = log_file.read_text(errors="replace")
         parsed = parse_test_output(content)
 
-        # Convert parsed output to TestResult
         result.total_tests = parsed.total_tests
         result.passed_tests = parsed.passed_count
         result.failed_count = parsed.failed_count
         result.skipped_count = parsed.skipped_count
         result.timeout_count = parsed.timeout_count
 
-        # Build failed test list with framework info
         for test in parsed.tests:
             if test.status == TestStatus.PASSED:
                 continue
 
-            # Determine if this is an outer (ctest) or inner (gtest) test
             is_outer = test.framework == TestFramework.CTEST
 
             if test.status == TestStatus.FAILED:
-                failed = FailedTest(
-                    name=test.name,
-                    status="failure",
-                    is_outer=is_outer,
+                result.failed_tests.append(
+                    FailedTest(name=test.name, status="failure", is_outer=is_outer)
                 )
-                result.failed_tests.append(failed)
             elif test.status == TestStatus.TIMEOUT:
-                failed = FailedTest(
-                    name=test.name,
-                    status="timeout",
-                    is_outer=is_outer,
-                    failure_reason="timeout",
+                result.failed_tests.append(
+                    FailedTest(
+                        name=test.name,
+                        status="timeout",
+                        is_outer=is_outer,
+                        failure_reason="timeout",
+                    )
                 )
-                result.failed_tests.append(failed)
                 result.timeout_count += 1
             elif test.status == TestStatus.RUNNING:
-                failed = FailedTest(
-                    name=test.name,
-                    status="failure",
-                    is_outer=is_outer,
-                    failure_reason="interrupted",
+                result.failed_tests.append(
+                    FailedTest(
+                        name=test.name,
+                        status="failure",
+                        is_outer=is_outer,
+                        failure_reason="interrupted",
+                    )
                 )
-                result.failed_tests.append(failed)
 
         if parsed.has_failures:
             result.status = "failure"
@@ -140,18 +389,7 @@ def parse_stdout_log(log_file: Path, component: str) -> TestResult:
 def create_fallback_result(
     component: str, exit_code: int, failure_reason: str | None = None
 ) -> TestResult:
-    """Create a fallback TestResult when no test output is available.
-
-    Used when tests fail without producing parseable output.
-
-    Args:
-        component: Component name
-        exit_code: Process exit code (non-zero indicates failure)
-        failure_reason: Optional reason for failure (e.g., "timeout", "cancelled")
-
-    Returns:
-        TestResult indicating the failure
-    """
+    """Create a fallback TestResult when no test output is available."""
     result = TestResult(component=component)
     result.exit_code = exit_code
 
@@ -192,58 +430,34 @@ def find_and_parse_results(
     step_name: str | None = None,
     fallback_exit_code: int | None = None,
 ) -> list[TestResult]:
-    """Parse test results from stdout log.
-
-    Args:
-        stdout_log: Path to stdout/stderr log file
-        step_name: Step name for the result
-        fallback_exit_code: Exit code to use for fallback result
-
-    Returns:
-        List of TestResult objects
-    """
+    """Parse test results from stdout log."""
     results = []
     component = step_name or "unknown"
 
-    # Parse stdout log
     if stdout_log and stdout_log.exists():
         print(f"Parsing stdout log: {stdout_log}")
         result = parse_stdout_log(stdout_log, component)
         if result.total_tests > 0 or result.failed_count > 0 or result.failed_tests:
             results.append(result)
         elif fallback_exit_code is not None and fallback_exit_code != 0:
-            # No test output found but we have a failure exit code
-            print(f"No test results found in log, using exit code fallback")
+            print("No test results found in log, using exit code fallback")
             failure_reason = _get_failure_reason(fallback_exit_code)
-            result = create_fallback_result(
-                component, fallback_exit_code, failure_reason
+            results.append(
+                create_fallback_result(component, fallback_exit_code, failure_reason)
             )
-            results.append(result)
     elif fallback_exit_code is not None and step_name:
-        # No log file, use exit code fallback
         print(f"No stdout log found, creating fallback result for {step_name}")
         failure_reason = _get_failure_reason(fallback_exit_code)
-        result = create_fallback_result(step_name, fallback_exit_code, failure_reason)
-        results.append(result)
+        results.append(
+            create_fallback_result(step_name, fallback_exit_code, failure_reason)
+        )
 
     return results
 
 
 def _get_failure_reason(exit_code: int) -> str | None:
-    """Determine failure reason from exit code.
-
-    Args:
-        exit_code: Process exit code
-
-    Returns:
-        Failure reason string or None
-    """
-    # Common timeout/kill exit codes
-    if exit_code == 124:  # timeout command exit code
-        return "timeout"
-    elif exit_code == 143:  # SIGTERM (128 + 15)
-        return "timeout"
-    elif exit_code == 137:  # SIGKILL (128 + 9)
+    """Determine failure reason from exit code."""
+    if exit_code in (124, 143, 137):  # timeout, SIGTERM, SIGKILL
         return "timeout"
     return None
 
@@ -254,13 +468,6 @@ def generate_metrics_output(results: list[TestResult], step_name: str) -> dict:
     Creates one metric entry per failed test:
     - Inner tests (gtest): uses sub_step_name
     - Outer wrapper (ctest): uses step_name
-
-    Args:
-        results: List of TestResult objects
-        step_name: Name of the test step
-
-    Returns:
-        Dict with metadata and metrics suitable for JSON output
     """
     metrics = []
 
@@ -271,7 +478,6 @@ def generate_metrics_output(results: list[TestResult], step_name: str) -> dict:
                 "status": failed_test.status,
             }
 
-            # Use step_name for outer (ctest) tests, sub_step_name for inner tests
             if failed_test.is_outer:
                 metric["step_name"] = failed_test.name
             else:
@@ -282,7 +488,7 @@ def generate_metrics_output(results: list[TestResult], step_name: str) -> dict:
 
             metrics.append(metric)
 
-    output = {
+    return {
         "metadata": {
             "exit_code": {"metric_type": "exit_code"},
             "step_name": {"metric_type": "string"},
@@ -292,8 +498,6 @@ def generate_metrics_output(results: list[TestResult], step_name: str) -> dict:
         },
         "metrics": metrics,
     }
-
-    return output
 
 
 def main():
@@ -321,7 +525,6 @@ def main():
         type=int,
         help="Test process exit code (used for fallback when no test output found)",
     )
-    # Legacy argument for backwards compatibility
     parser.add_argument(
         "--results-dir",
         type=Path,
@@ -330,7 +533,6 @@ def main():
 
     args = parser.parse_args()
 
-    # Handle legacy results-dir argument
     if args.results_dir and not args.output_file:
         args.output_file = args.results_dir / "test-metrics.json"
 
@@ -342,19 +544,12 @@ def main():
 
     metrics_output = generate_metrics_output(results, step_name=args.step_name)
 
-    # Determine output file path
-    output_file = args.output_file
-    if output_file is None:
-        output_file = Path("test-metrics.json")
-
-    # Write metrics to file
+    output_file = args.output_file or Path("test-metrics.json")
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, "w") as f:
         json.dump(metrics_output, f, indent=2)
 
     print(f"\nMetrics written to: {output_file}")
-
-    # Also print to stdout for visibility
     print(f"\n{'='*60}")
     print("TEST METRICS REPORT")
     print(f"{'='*60}")
@@ -363,9 +558,7 @@ def main():
     else:
         print("No test failures detected.")
 
-    # Return non-zero if any tests failed
-    any_failures = any(r.status != "success" for r in results)
-    return 1 if any_failures else 0
+    return 1 if any(r.status != "success" for r in results) else 0
 
 
 if __name__ == "__main__":
