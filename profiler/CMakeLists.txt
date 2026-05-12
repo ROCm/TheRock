@@ -271,9 +271,7 @@ endif(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 ##############################################################################
 # rocprofiler-systems
 ##############################################################################
-# rocprofiler-systems requires GCC, but sanitizer builds use Clang.
-# Skip enabling rocprofiler-systems when building with sanitizers.
-if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
+if(THEROCK_ENABLE_ROCPROFSYS)
   # Escape semicolons in GPU targets list to prevent shell interpretation
   if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
     set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
@@ -365,4 +363,4 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
       rocprofiler-sdk
       rocprofiler-systems
     )
-endif(THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
+endif(THEROCK_ENABLE_ROCPROFSYS)
