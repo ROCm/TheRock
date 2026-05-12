@@ -139,38 +139,12 @@ amdgpu_family_info_matrix dictionary fields:
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            # TODO: Remove multi-label config once we get dedicated set of machines
-            # As we are bringing up mi325, we are using a multi-label configuration to distribute load
-            "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
-            "test-runs-on-labels": [
-                {
-                    "label": "linux-gfx942-1gpu-ossci-rocm",
-                    "weight": 0.369,
-                },  # vultr (17/46)
-                {
-                    "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.086,
-                },  # cirrascale (4/46)
-                {
-                    "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 0.543,
-                },  # core42 (25/46)
-            ],
+            "test-runs-on": "linux-gfx942-2gpu-core42-ossci-rocm",
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "",
-            "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
-            "test-runs-on-multi-gpu-labels": [
-                {
-                    "label": "linux-gfx942-8gpu-ossci-rocm",
-                    "weight": 0.78,
-                },  # cirrascale (11/14)
-                {
-                    "label": "linux-gfx942-8gpu-core42-ossci-rocm",
-                    "weight": 0.21,
-                },  # core42 (3/14)
-            ],
+            "test-runs-on-multi-gpu": "linux-gfx942-2gpu-core42-ossci-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
+            "benchmark-runs-on": "linux-gfx942-2gpu-core42-ossci-rocm",
             "family": "gfx94X-dcgpu",
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
