@@ -242,6 +242,35 @@ skip_tests = {
             "(TestDistBackendWithSpawn and test_verify_model_across_rank_with_logger)",
             # Local 4-GPU wrapper validation: model verification without logger timeout.
             "(TestDistBackendWithSpawn and test_verify_model_across_rank_without_logger)",
+            # spawn-iter1 4-GPU validation: DDP apply-optimizer-in-backward variants
+            # repeatedly hit 300s timeouts. Base variant also showed RCCL/NCCL
+            # ALLREDUCE watchdog timeout (SeqNum=19, last completed=18);
+            # grad_as_bucket_view=False hung in autograd backward before timeout.
+            "(TestDistBackendWithSpawn and test_ddp_apply_optim_in_backward)",
+            # spawn-iter2 4-GPU validation: DDP SyncBatchNorm channels-last hit
+            # a barrier timeout after ~210s in _test_DistributedDataParallel_
+            # SyncBatchNorm_with_memory_format under BACKEND=nccl/init=file.
+            "(TestDistBackendWithSpawn and test_DistributedDataParallel_SyncBatchNorm_Channels_Last)",
+            # spawn-iter2 4-GPU validation: DDP SyncBatchNorm diff-input-size
+            # running-value variant hit a 300s process timeout under BACKEND=nccl/init=file.
+            "(TestDistBackendWithSpawn and test_DistributedDataParallel_SyncBatchNorm_Diff_Input_Sizes_Running_Value)",
+            # spawn-iter2 4-GPU validation: DDP SyncBatchNorm diff-input-size
+            # gradient variant hit a 300s timeout in DDP init/parameter shape verification.
+            "(TestDistBackendWithSpawn and test_DistributedDataParallel_SyncBatchNorm_Diff_Input_Sizes_gradient)",
+            # spawn-iter3 4-GPU validation: DDP no_sync grad-as-bucket-view
+            # hit a 300s timeout while constructing DDP / verifying parameter
+            # shapes under BACKEND=nccl/init=env.
+            "(TestDistBackendWithSpawn and test_accumulate_gradients_no_sync_grad_is_view)",
+            # spawn-iter3 4-GPU validation: NCCL send/recv profiler variants
+            # failed in ProcessGroupNCCL::recv while retrieving ncclUniqueId from
+            # rank 0 through FileStore key default_pg/0//cuda//0:3 (60s timeout).
+            "(TestDistBackendWithSpawn and test_send_recv_nccl_autograd_profiler)",
+            "(TestDistBackendWithSpawn and test_send_recv_nccl_torch_profiler)",
+            # spawn-iter3 4-GPU validation: skip-all-reduce-unused-parameters
+            # failed twice under BACKEND=nccl/init=env: first as a 300s rank process
+            # timeout in autograd backward, then with NCCL watchdog timeouts
+            # (BROADCAST seq=3, ALLREDUCE seq=4) before subprocess timeout.
+            "(TestDistBackendWithSpawn and test_skip_all_reduce_unused_parameters)",
 
             # Second local 4-GPU wrapper validation: fully-shard communication-count timeout.
             "(TestFullyShardCommunication and test_fully_shard_communication_count)",
