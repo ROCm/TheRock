@@ -83,6 +83,21 @@ Process killed
         running = [t for t in result.tests if t.status == TestStatus.RUNNING]
         assert len(running) == 1
 
+    def test_gtest_with_getparam(self):
+        content = """
+[ RUN      ] quick/check_matrix_hyb.util/f32_r_50_50_0b_general_L_sorted_rand_auto_0
+[  FAILED  ] quick/check_matrix_hyb.util/f32_r_50_50_0b_general_L_sorted_rand_auto_0, where GetParam() = { function: "check_matrix_hyb" }
+"""
+        result = parse_test_output(content)
+        failed = [t for t in result.tests if t.status == TestStatus.FAILED]
+        assert len(failed) == 1
+        assert (
+            failed[0].name
+            == "quick/check_matrix_hyb.util/f32_r_50_50_0b_general_L_sorted_rand_auto_0"
+        )
+        running = [t for t in result.tests if t.status == TestStatus.RUNNING]
+        assert len(running) == 0
+
 
 class TestParseStdoutLog:
     def test_parses_failures(self):

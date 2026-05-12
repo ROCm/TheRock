@@ -53,7 +53,7 @@ def _parse_gtest_output(content: str) -> list[TestCase]:
     seen_tests: dict[str, TestCase] = {}
 
     result_pattern = re.compile(
-        r"\[\s*(OK|FAILED|SKIPPED)\s*\]\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_/]*)+)(?:\s+\((\d+)\s*ms\))?"
+        r"\[\s*(OK|FAILED|SKIPPED)\s*\]\s+(\S+?)(?:,\s*where\s+GetParam|\s+\((\d+)\s*ms\)|$)"
     )
     run_pattern = re.compile(r"\[\s*RUN\s*\]\s+(\S+)")
 
