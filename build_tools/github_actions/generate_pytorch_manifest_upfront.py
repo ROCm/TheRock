@@ -166,7 +166,7 @@ def _resolve_triton(
         sha = _resolve_ref(triton_repo, branch)
         return GitSourceInfo(
             commit=sha,
-            repo=f"https://github.com/{triton_repo}.git",
+            repo=f"https://github.com/{triton_repo}",
             branch=branch,
             version=version,
         )
@@ -177,7 +177,7 @@ def _resolve_triton(
         log(f"  triton pin: {pin[:12]}")
         return GitSourceInfo(
             commit=pin,
-            repo=f"https://github.com/{triton_repo}.git",
+            repo=f"https://github.com/{triton_repo}",
             version=version,
         )
     except Exception:
@@ -186,7 +186,7 @@ def _resolve_triton(
             sha = _resolve_ref(triton_repo, fallback_branch)
             return GitSourceInfo(
                 commit=sha,
-                repo=f"https://github.com/{triton_repo}.git",
+                repo=f"https://github.com/{triton_repo}",
                 branch=fallback_branch,
                 version=version,
             )
@@ -223,7 +223,7 @@ def resolve_sources(
     pytorch_sha = _resolve_ref(pytorch_repo, pytorch_ref)
     sources["pytorch"] = GitSourceInfo(
         commit=pytorch_sha,
-        repo=f"https://github.com/{pytorch_repo}.git",
+        repo=f"https://github.com/{pytorch_repo}",
         branch=pytorch_ref,
     )
 
@@ -256,7 +256,7 @@ def resolve_sources(
             sha = _resolve_ref(config.nightly_repo, config.nightly_branch)
             sources[name] = GitSourceInfo(
                 commit=sha,
-                repo=f"https://github.com/{config.nightly_repo}.git",
+                repo=f"https://github.com/{config.nightly_repo}",
                 branch=config.nightly_branch,
             )
         elif config.related_commits_key and config.related_commits_key in pins:
@@ -266,7 +266,7 @@ def resolve_sources(
             fallback = config.nightly_branch or "main"
             sha = _resolve_ref(config.stable_repo, fallback)
             sources[name] = GitSourceInfo(
-                commit=sha, repo=f"https://github.com/{config.stable_repo}.git"
+                commit=sha, repo=f"https://github.com/{config.stable_repo}"
             )
 
     return sources
@@ -318,12 +318,11 @@ def generate_manifest(
         name: info.to_dict() for name, info in sources.items()
     }
     manifest["therock"] = {
-        "commit": therock_commit,
         "repo": therock_repo,
+        "commit": therock_commit,
         "branch": therock_branch,
+        "rocm_version": rocm_version,
     }
-    manifest["rocm_version"] = rocm_version
-    manifest["version_suffix"] = version_suffix
     return manifest
 
 

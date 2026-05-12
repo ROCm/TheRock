@@ -18,15 +18,15 @@ def log(*args, **kwargs) -> None:
 
 @dataclass(frozen=True)
 class GitSourceInfo:
-    """Git commit and origin repo for a source checkout."""
+    """Git source info for a repository checkout."""
 
-    commit: str
     repo: str
+    commit: str
     branch: str | None = None
     version: str | None = None
 
     def to_dict(self) -> dict[str, str]:
-        d = {"commit": self.commit, "repo": self.repo}
+        d = {"repo": self.repo, "commit": self.commit}
         if self.branch is not None:
             d["branch"] = self.branch
         if self.version is not None:
@@ -144,8 +144,9 @@ def detect_therock_source_info(repo_root: Path) -> GitSourceInfo:
     commit = capture_optional(["git", "rev-parse", "HEAD"], cwd=repo_root) or "unknown"
     repo_url = (
         capture_optional(["git", "remote", "get-url", "origin"], cwd=repo_root)
-        or "https://github.com/ROCm/TheRock.git"
+        or "https://github.com/ROCm/TheRock"
     )
+    repo_url = repo_url.removesuffix(".git")
     branch = git_branch_best_effort(repo_root) or "unknown"
     return GitSourceInfo(commit=commit, repo=repo_url, branch=branch)
 
