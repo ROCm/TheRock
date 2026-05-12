@@ -127,6 +127,12 @@ skip_tests = {
             "test_extra_cuda_context",
             # Composable FSDP/2D composability timeouts on ROCm 0501/PT 0501.
             "(TestFullyShardAutograd and test_nontensor_activations)",
+            # training-iter1/retry1 4-GPU validation plus prior ROCm 0501/PT 0501 runs:
+            # TestFullyShard1DTrainingCore has repeated 300s distributed timeouts.
+            # Observed tests include explicit_prefetching, non_root_forward_backward,
+            # post_optim_event, multi_forward_module, and retry1
+            # test_train_parity_single_group_shard_dim0.
+            "(TestFullyShard1DTrainingCore)",
             "(TestFullyShardAllGatherExtensionsMultiProcess and test_all_gather_extensions_train_parity)",
             "(TestFullyShardGradientScaler and test_gradient_scaler)",
             "(TestFullyShardIgnoreParams and test_ddp_A_fsdp_B_ddp_C)",
@@ -146,6 +152,10 @@ skip_tests = {
             "(DistTensorRandomInitTest and test_multinomial_sharded)",
             "(TestViewOpsWithLocalTensor and test_squeeze_variants)",
             "(TestDTensorCompileE2E and test_2d_fsdp_tp_compile_use_ca_False)",
+            # wrap-iter1 4-GPU validation plus prior ROCm 0501/PT 0501 runs:
+            # TestFSDPWrap has repeated RCCL/NCCL watchdog aborts across wrap API
+            # parameterizations; latest was _ALLGATHER_BASE timeout and exit -6.
+            "(TestFSDPWrap)",
             # DDP/join uneven-input behavior drift.
             "(TestJoin and test_multiple_joinables)",
             "(TestDistBackendWithSpawn and test_ddp_uneven_inputs)",
@@ -169,6 +179,28 @@ skip_tests = {
             "(TestFullyShardHSDPSyncCorrectness and test_ar_buffer_lifetime_mixed_dtype)",
             # ROCm 0501/PT 0501 second distributed run: per-param mesh overlap timeout.
             "(TestFullyShardPerParamMeshOverlap and test_fully_shard_per_param_mesh_training_overlap)",
+            # training-iter2/iter3 4-GPU validation: TestFullyShard1DTrainingCompose class
+            # has multiple 300s timeout tests (test_double_forward_with_nested_fsdp_and_checkpoint,
+            # test_partial_group_forward_grad_accum_chunked) hanging in run_subtests path.
+            "(TestFullyShard1DTrainingCompose)",
+            # training-iter5/iter6 4-GPU validation: TestFullyShardSharedParams has
+            # multiple 300s hangs after prior training-layer skips were applied.
+            # Observed tests: test_layer_by_layer_shard_no_false_positive and
+            # test_train_parity_with_shared_params; iter6 split ranks between assertEqual
+            # comparison and DDP forward_pre_hook before process-0 timeout.
+            "(TestFullyShardSharedParams)",
+            # training-iter8 4-GPU validation: TestFullyShardGradientAccumulation
+            # test_1f1b_microbatching hit a 300s timeout in the parity/assertEqual path
+            # after Core/Compose/SharedParams training classes were skipped.
+            "(TestFullyShardGradientAccumulation)",
+            # training-iter9 4-GPU validation: TestFullyShardNDTraining
+            # test_2d_mlp_with_nd_mesh hit a 300s timeout in _test_2d_mlp_with_nd_mesh
+            # / assertEqual path after prior training class skips were applied.
+            "(TestFullyShardNDTraining)",
+            # training-iter10 4-GPU validation: TestFullyShardHSDPTraining
+            # test_train_parity_hsdp hit a 300s timeout in backward; traceback also
+            # showed FSDP finalize_backward waiting on torch.cuda stream synchronize.
+            "(TestFullyShardHSDPTraining)",
             # ROCm 0501/PT 0501 second distributed run: join single-joinable hooks scalar mismatch.
             "(TestJoin and test_single_joinable_main_hooks)",
             # ROCm 0501/PT 0501 second distributed run: FSDP wrap NCCL watchdog abort.
