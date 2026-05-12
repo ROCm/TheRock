@@ -3,24 +3,32 @@
 
 # Multi-arch release variant of the JAX wheel build flow.
 #
-# This workflow is the JAX counterpart to
-# multi_arch_release_linux_pytorch_wheels.yml:
-#   - one matrixed build job per (python_version, jax_ref)
-#   - build directly from a TheRock tarball
-#   - upload wheels to the release staging bucket
+# Built shape:
+#   - One build/ci_build invocation per (python_version, jax_ref)
+#     matrix cell.
+#   - Builds directly against a TheRock ROCm tarball passed in
+#     via inputs.tar_url.
+#   - Uploads built wheels to:
+#       s3://therock-{release_type}-python/v2-staging/
 #
-# Triggered via workflow_call from multi_arch_release_linux.yml's
-# build_jax_wheels job, and can also be run manually via workflow_dispatch.
+# Triggered via workflow_call from
+# multi_arch_release_linux.yml's build_jax_wheels job.
 #
 # Build phase only: testing and promotion are deferred follow-ups.
+#
+# Similar orchestration pattern to:
+#   .github/workflows/multi_arch_release_linux_pytorch_wheels.yml
+#
+# Related:
+#   https://github.com/ROCm/TheRock/issues/3878
 
 name: Multi-Arch Release Linux JAX Wheels
 
 on:
   workflow_call:
     inputs:
-      amdgpu_family:
-        description: AMD GPU family to build JAX for.
+      amdgpu_families:
+        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
         type: string
         required: true
       release_type:
@@ -28,80 +36,48 @@ on:
         type: string
         required: true
       rocm_version:
-        description: ROCm package version to install and build against.
+        description: ROCm package version to build against.
         type: string
         required: true
-      s3_subdir:
-        description: S3 subdirectory, not including the GPU-family.
-        type: string
-        default: "v2"
-      s3_staging_subdir:
-        description: Staging subdirectory to push the wheels for test.
-        type: string
-        default: "v2-staging"
       tar_url:
-        description: URL to the TheRock tarball to build against.
+        description: URL to the TheRock tarball used for the build.
         type: string
         required: true
-      ref:
-        description: Branch, tag, or SHA to checkout.
-        type: string
-        default: ""
       repository:
         description: Repository to checkout. Defaults to github.repository.
+        type: string
+        default: ""
+      ref:
+        description: Branch, tag, or SHA to checkout.
         type: string
         default: ""
 
   workflow_dispatch:
     inputs:
-      amdgpu_family:
-        type: choice
-        options:
-          - gfx101X-dgpu
-          - gfx103X-all
-          - gfx110X-all
-          - gfx1150
-          - gfx1151
-          - gfx1152
-          - gfx1153
-          - gfx120X-all
-          - gfx900
-          - gfx906
-          - gfx908
-          - gfx90a
-          - gfx94X-dcgpu
-          - gfx950-dcgpu
-        default: gfx94X-dcgpu
+      amdgpu_families:
+        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
+        type: string
+        default: "gfx94X-dcgpu"
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease".'
+        description: Release type for developer-triggered runs.
         type: choice
         options:
           - dev
-          - nightly
-          - prerelease
         default: dev
       rocm_version:
-        description: ROCm package version to install and build against.
+        description: ROCm package version to build against.
         type: string
         required: true
-      s3_subdir:
-        description: S3 subdirectory, not including the GPU-family.
-        type: string
-        default: "v2"
-      s3_staging_subdir:
-        description: Staging subdirectory to push the wheels for test.
-        type: string
-        default: "v2-staging"
       tar_url:
-        description: URL to the TheRock tarball to build against.
+        description: URL to the TheRock tarball used for the build.
         type: string
         required: true
-      ref:
-        description: Branch, tag, or SHA to checkout.
-        type: string
-        default: ""
       repository:
         description: Repository to checkout.
+        type: string
+        default: ""
+      ref:
+        description: Branch, tag, or SHA to checkout.
         type: string
         default: ""
 
@@ -110,17 +86,20 @@ permissions:
   id-token: write
   packages: read
 
-run-name: Multi-Arch Release Linux JAX Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.release_type }}, ${{ inputs.rocm_version }})
+run-name: Multi-Arch Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
 jobs:
   build_jax_wheels:
-    name: Build Linux JAX Wheels (${{ inputs.amdgpu_family }}, ${{ matrix.python_version }}, ${{ inputs.release_type }})
+    name: Build Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
     strategy:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", "3.13", "3.14"]
-        jax_ref: ["rocm-jaxlib-v0.8.2", "rocm-jaxlib-v0.9.0", "rocm-jaxlib-v0.9.1"]
+        jax_ref:
+          - "rocm-jaxlib-v0.8.2"
+          - "rocm-jaxlib-v0.9.0"
+          - "rocm-jaxlib-v0.9.1"
         include:
           # JAX >= 0.9.1 installs jaxlib from upstream PyPI.
           - jax_ref: "rocm-jaxlib-v0.8.2"
@@ -129,15 +108,19 @@ jobs:
             build_jaxlib: true
           - jax_ref: "rocm-jaxlib-v0.9.1"
             build_jaxlib: false
+
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+
     permissions:
       contents: read
       id-token: write
       packages: read
+
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       RELEASE_TYPE: ${{ inputs.release_type }}
+
     steps:
       - name: Checkout TheRock
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -199,8 +182,8 @@ jobs:
       - name: Build JAX wheels
         env:
           ROCM_VERSION: ${{ inputs.rocm_version }}
+        working-directory: rocm-jax
         run: |
-          pushd rocm-jax
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ matrix.python_version }}" \
@@ -208,64 +191,10 @@ jobs:
             --therock-path="${{ inputs.tar_url }}" \
             ${SOURCE_ARG} \
             dist_wheels
-          popd
-
-      - name: Generate JAX manifest
-        if: ${{ matrix.build_jaxlib }}
-        working-directory: build_tools
-        run: |
-          python3 -m github_actions.generate_jax_manifest \
-            --manifest-dir "${{ env.PACKAGE_DIST_DIR }}/manifests" \
-            --python-version "${{ matrix.python_version }}" \
-            --jax-git-ref "${{ matrix.jax_ref }}" \
-            --jax-dir "${{ github.workspace }}/jax"
 
       - name: Extract JAX versions from built wheels
-        id: write_jax_versions
         run: |
           python ./build_tools/github_actions/write_jax_versions.py \
-            --dist-dir ${{ env.PACKAGE_DIST_DIR }}
+            --dist-dir "${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse"
 
-      - name: Install AWS CLI
-        if: ${{ github.repository_owner == 'ROCm' }}
-        run: bash ./dockerfiles/install_awscli.sh
 
-      - name: Configure AWS Credentials
-        if: ${{ github.repository_owner == 'ROCm' }}
-        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
-
-      - name: Upload wheels to staging S3
-        if: ${{ github.repository_owner == 'ROCm' }}
-        run: |
-          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ \
-            s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive --exclude "*" --include "*.whl"
-
-      - name: Install boto3 for manifest upload
-        if: ${{ github.repository_owner == 'ROCm' && matrix.build_jaxlib }}
-        run: |
-          python3 -m pip install boto3
-
-      - name: Upload JAX manifest to artifacts S3
-        if: ${{ github.repository_owner == 'ROCm' && matrix.build_jaxlib }}
-        working-directory: build_tools
-        run: |
-          python3 -m github_actions.upload_jax_manifest \
-            --dist-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --run-id "${{ github.run_id }}" \
-            --amdgpu-family "${{ inputs.amdgpu_family }}" \
-            --python-version "${{ matrix.python_version }}" \
-            --jax-git-ref "${{ matrix.jax_ref }}"
-
-      - name: (Re-)Generate Python package release index
-        if: ${{ github.repository_owner == 'ROCm' }}
-        env:
-          CUSTOM_PREFIX: "${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}"
-        run: |
-          python3 -m venv .venv
-          source .venv/bin/activate
-          pip3 install boto3 packaging
-          python3 ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
