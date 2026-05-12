@@ -566,8 +566,8 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hiptensor.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 4,
-            "windows": 2,
+            "linux": 1,
+            "windows": 1,
         },
     },
 }
