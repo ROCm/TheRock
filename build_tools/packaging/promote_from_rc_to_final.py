@@ -426,6 +426,18 @@ def _apply_keep_arch_list_to_metadata(
                 new_lines.append(line)
                 continue
 
+            # `extra == "device-gfx<N>"` ties this dep to a specific arch's
+            # extra. Drop the line if that arch was cut, regardless of the
+            # package arch (e.g. `amd-torch-device-gfx11` for the `gfx1100`
+            # extra must go when gfx1100 is not in the keep list).
+            if qualifier and qualifier.startswith("device-"):
+                qualifier_arch = qualifier[len("device-"):]
+                if (
+                    re.fullmatch(_GFX_ARCH, qualifier_arch)
+                    and qualifier_arch not in keep_set
+                ):
+                    continue
+
             # Other Requires-Dist with gfx<N>: keep iff arch is in keep_set.
             if arch in keep_set:
                 new_lines.append(line)
