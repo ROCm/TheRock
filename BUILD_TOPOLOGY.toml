@@ -153,9 +153,12 @@ artifact_groups = [
     "hip-runtime",
     "opencl-runtime",
     "profiler-core",
-    "rocrtst",
-    "rocjitsu"
+    "rocrtst"
 ]
+
+[build_stages.emulation]
+description = "ROCm emulation, virtualization, and instrumentation tools"
+artifact_groups = ["rocjitsu"]
 
 [build_stages.math-libs]
 description = "Math and ML libraries per architecture"
