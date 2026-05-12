@@ -84,7 +84,7 @@ repo.amd.com's open source software release publications need standardization. I
 
 ## Repository Package
 
-Allow users to install the ROCm repositories via a convienient package. The package provides
+Allow users to install the all ROCm repositories via a convienient package. The package provides
 all the repository files. Example, the rpm repo file will add files to /etc/yum.repos.d/ and
 debian repo file will add to /etc/apt/sources.list.d/. The
 repo file will also install the gpg key, ideally prompting the user to accept the key. Updating
