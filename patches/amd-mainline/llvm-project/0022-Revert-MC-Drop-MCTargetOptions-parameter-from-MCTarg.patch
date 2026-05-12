@@ -1,0 +1,654 @@
+From 0e11fd548a449b20bde0978b223babc8bbf0a297 Mon Sep 17 00:00:00 2001
+From: Ron Lieberman <ron.lieberman@amd.com>
+Date: Mon, 11 May 2026 19:21:35 -0500
+Subject: [PATCH] Revert "[MC] Drop MCTargetOptions parameter from
+ MCTargetAsmParser (#194120)"
+
+This reverts commit b614c152def35fe4411208570327b81ce43e8ba5.
+---
+ amd/comgr/src/comgr-compiler.cpp                 |  2 +-
+ amd/comgr/src/comgr-hotswap-llvm.cpp             |  2 +-
+ clang/lib/Parse/ParseStmtAsm.cpp                 |  2 +-
+ clang/tools/driver/cc1as_main.cpp                |  3 ++-
+ .../include/llvm/MC/MCParser/MCTargetAsmParser.h | 13 ++++++-------
+ llvm/include/llvm/MC/TargetRegistry.h            | 16 +++++++++-------
+ .../CodeGen/AsmPrinter/AsmPrinterInlineAsm.cpp   |  4 ++--
+ llvm/lib/MC/MCParser/MCTargetAsmParser.cpp       |  5 +++--
+ llvm/lib/Object/ModuleSymbolTable.cpp            |  2 +-
+ .../AArch64/AsmParser/AArch64AsmParser.cpp       |  4 ++--
+ .../Target/AMDGPU/AsmParser/AMDGPUAsmParser.cpp  |  4 ++--
+ llvm/lib/Target/ARM/AsmParser/ARMAsmParser.cpp   |  4 ++--
+ llvm/lib/Target/AVR/AsmParser/AVRAsmParser.cpp   |  4 ++--
+ llvm/lib/Target/BPF/AsmParser/BPFAsmParser.cpp   |  4 ++--
+ llvm/lib/Target/CSKY/AsmParser/CSKYAsmParser.cpp |  4 ++--
+ .../Hexagon/AsmParser/HexagonAsmParser.cpp       |  5 +++--
+ .../Target/Lanai/AsmParser/LanaiAsmParser.cpp    |  6 +++---
+ .../LoongArch/AsmParser/LoongArchAsmParser.cpp   |  4 ++--
+ llvm/lib/Target/M68k/AsmParser/M68kAsmParser.cpp |  4 ++--
+ .../Target/MSP430/AsmParser/MSP430AsmParser.cpp  |  4 ++--
+ llvm/lib/Target/Mips/AsmParser/MipsAsmParser.cpp |  9 ++++-----
+ .../Target/PowerPC/AsmParser/PPCAsmParser.cpp    |  5 +++--
+ .../Target/RISCV/AsmParser/RISCVAsmParser.cpp    |  6 +++---
+ .../Target/Sparc/AsmParser/SparcAsmParser.cpp    |  4 ++--
+ .../SystemZ/AsmParser/SystemZAsmParser.cpp       |  4 ++--
+ llvm/lib/Target/VE/AsmParser/VEAsmParser.cpp     |  4 ++--
+ .../AsmParser/WebAssemblyAsmParser.cpp           |  8 ++++----
+ llvm/lib/Target/X86/AsmParser/X86AsmParser.cpp   |  7 ++++---
+ .../Target/Xtensa/AsmParser/XtensaAsmParser.cpp  |  4 ++--
+ llvm/tools/llvm-exegesis/lib/SnippetFile.cpp     |  3 ++-
+ .../llvm-mc-assemble-fuzzer.cpp                  |  2 +-
+ llvm/tools/llvm-mc/llvm-mc.cpp                   |  2 +-
+ llvm/tools/llvm-mca/CodeRegionGenerator.cpp      |  2 +-
+ llvm/tools/llvm-ml/llvm-ml.cpp                   |  2 +-
+ .../unittests/MC/SystemZ/SystemZAsmLexerTest.cpp |  3 ++-
+ mlir/lib/Target/LLVM/ROCDL/Target.cpp            |  2 +-
+ 36 files changed, 85 insertions(+), 78 deletions(-)
+
+diff --git a/amd/comgr/src/comgr-compiler.cpp b/amd/comgr/src/comgr-compiler.cpp
+index b225f5394060..77ada909a971 100644
+--- a/amd/comgr/src/comgr-compiler.cpp
++++ b/amd/comgr/src/comgr-compiler.cpp
+@@ -499,7 +499,7 @@ bool executeAssemblerImpl(AssemblerInvocation &Opts, DiagnosticsEngine &Diags,
+   // FIXME: init MCTargetOptions from sanitizer flags here.
+   MCTargetOptions Options;
+   std::unique_ptr<MCTargetAsmParser> TAP(
+-      TheTarget->createMCAsmParser(*STI, *Parser, *MCII));
++      TheTarget->createMCAsmParser(*STI, *Parser, *MCII, Options));
+   if (!TAP) {
+     Failed = Diags.Report(diag::err_target_unknown_triple) << Opts.Triple;
+   }
+diff --git a/amd/comgr/src/comgr-hotswap-llvm.cpp b/amd/comgr/src/comgr-hotswap-llvm.cpp
+index cf0cf7f854e4..a68b31f82b7a 100644
+--- a/amd/comgr/src/comgr-hotswap-llvm.cpp
++++ b/amd/comgr/src/comgr-hotswap-llvm.cpp
+@@ -165,7 +165,7 @@ static SmallVector<MCInst, 2> parseAsmToMCInsts(StringRef AsmStr,
+   std::unique_ptr<MCAsmParser> Parser(
+       createMCAsmParser(*SrcMgr, *S.Ctx, Streamer, *S.MAI));
+   std::unique_ptr<MCTargetAsmParser> TAP(
+-      S.Target->createMCAsmParser(*S.STI, *Parser, *S.MCII));
++      S.Target->createMCAsmParser(*S.STI, *Parser, *S.MCII, McOpts));
+   if (!TAP) {
+     log() << "hotswap: error: parseAsmToMCInsts: createMCAsmParser returned "
+           << "null for asm:\n    " << AsmStr << "\n";
+diff --git a/clang/lib/Parse/ParseStmtAsm.cpp b/clang/lib/Parse/ParseStmtAsm.cpp
+index e708efe98856..68ffe3c83b20 100644
+--- a/clang/lib/Parse/ParseStmtAsm.cpp
++++ b/clang/lib/Parse/ParseStmtAsm.cpp
+@@ -582,7 +582,7 @@ StmtResult Parser::ParseMicrosoftAsmStatement(SourceLocation AsmLoc) {
+       createMCAsmParser(TempSrcMgr, Ctx, *Str, *MAI));
+ 
+   std::unique_ptr<llvm::MCTargetAsmParser> TargetParser(
+-      TheTarget->createMCAsmParser(*STI, *Parser, *MII));
++      TheTarget->createMCAsmParser(*STI, *Parser, *MII, MCOptions));
+   // Target AsmParser may not be linked in clang-based tools.
+   if (!TargetParser) {
+     Diag(AsmLoc, diag::err_msasm_unable_to_create_target)
+diff --git a/clang/tools/driver/cc1as_main.cpp b/clang/tools/driver/cc1as_main.cpp
+index 33c34dd04d0e..bc215d76abaf 100644
+--- a/clang/tools/driver/cc1as_main.cpp
++++ b/clang/tools/driver/cc1as_main.cpp
+@@ -625,8 +625,9 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
+   std::unique_ptr<MCAsmParser> Parser(
+       createMCAsmParser(SrcMgr, Ctx, *Str, *MAI));
+ 
++  // FIXME: init MCTargetOptions from sanitizer flags here.
+   std::unique_ptr<MCTargetAsmParser> TAP(
+-      TheTarget->createMCAsmParser(*STI, *Parser, *MCII));
++      TheTarget->createMCAsmParser(*STI, *Parser, *MCII, MCOptions));
+   if (!TAP)
+     Failed = Diags.Report(diag::err_target_unknown_triple) << Opts.Triple.str();
+ 
+diff --git a/llvm/include/llvm/MC/MCParser/MCTargetAsmParser.h b/llvm/include/llvm/MC/MCParser/MCTargetAsmParser.h
+index 7dbca79e2880..7628987b9587 100644
+--- a/llvm/include/llvm/MC/MCParser/MCTargetAsmParser.h
++++ b/llvm/include/llvm/MC/MCParser/MCTargetAsmParser.h
+@@ -345,7 +345,8 @@ public:
+   };
+ 
+ protected: // Can only create subclasses.
+-  MCTargetAsmParser(const MCSubtargetInfo &STI, const MCInstrInfo &MII);
++  MCTargetAsmParser(MCTargetOptions const &, const MCSubtargetInfo &STI,
++                    const MCInstrInfo &MII);
+ 
+   /// Create a copy of STI and return a non-const reference to it.
+   MCSubtargetInfo &copySTI();
+@@ -360,6 +361,9 @@ protected: // Can only create subclasses.
+   /// ms-style inline assembly.
+   MCAsmParserSemaCallback *SemaCallback = nullptr;
+ 
++  /// Set of options which affects instrumentation of inline assembly.
++  MCTargetOptions MCOptions;
++
+   /// Current STI.
+   const MCSubtargetInfo *STI;
+ 
+@@ -383,12 +387,7 @@ public:
+   bool isParsingMSInlineAsm () { return ParsingMSInlineAsm; }
+   void setParsingMSInlineAsm (bool Value) { ParsingMSInlineAsm = Value; }
+ 
+-  const MCTargetOptions &getTargetOptions() const {
+-    return const_cast<MCTargetAsmParser *>(this)
+-        ->getParser()
+-        .getContext()
+-        .getTargetOptions();
+-  }
++  MCTargetOptions getTargetOptions() const { return MCOptions; }
+ 
+   void setSemaCallback(MCAsmParserSemaCallback *Callback) {
+     SemaCallback = Callback;
+diff --git a/llvm/include/llvm/MC/TargetRegistry.h b/llvm/include/llvm/MC/TargetRegistry.h
+index b111342aec14..cc7198b2fecf 100644
+--- a/llvm/include/llvm/MC/TargetRegistry.h
++++ b/llvm/include/llvm/MC/TargetRegistry.h
+@@ -176,9 +176,9 @@ public:
+                                                const MCSubtargetInfo &STI,
+                                                const MCRegisterInfo &MRI,
+                                                const MCTargetOptions &Options);
+-  using MCAsmParserCtorTy = MCTargetAsmParser *(*)(const MCSubtargetInfo &STI,
+-                                                   MCAsmParser &P,
+-                                                   const MCInstrInfo &MII);
++  using MCAsmParserCtorTy = MCTargetAsmParser *(*)(
++      const MCSubtargetInfo &STI, MCAsmParser &P, const MCInstrInfo &MII,
++      const MCTargetOptions &Options);
+   using MCDisassemblerCtorTy = MCDisassembler *(*)(const Target &T,
+                                                    const MCSubtargetInfo &STI,
+                                                    MCContext &Ctx);
+@@ -501,10 +501,11 @@ public:
+   /// parsing and lexing.
+   MCTargetAsmParser *createMCAsmParser(const MCSubtargetInfo &STI,
+                                        MCAsmParser &Parser,
+-                                       const MCInstrInfo &MII) const {
++                                       const MCInstrInfo &MII,
++                                       const MCTargetOptions &Options) const {
+     if (!MCAsmParserCtorFn)
+       return nullptr;
+-    return MCAsmParserCtorFn(STI, Parser, MII);
++    return MCAsmParserCtorFn(STI, Parser, MII, Options);
+   }
+ 
+   /// createAsmPrinter - Create a target specific assembly printer pass.  This
+@@ -1334,8 +1335,9 @@ template <class MCAsmParserImpl> struct RegisterMCAsmParser {
+ 
+ private:
+   static MCTargetAsmParser *Allocator(const MCSubtargetInfo &STI,
+-                                      MCAsmParser &P, const MCInstrInfo &MII) {
+-    return new MCAsmParserImpl(STI, P, MII);
++                                      MCAsmParser &P, const MCInstrInfo &MII,
++                                      const MCTargetOptions &Options) {
++    return new MCAsmParserImpl(STI, P, MII, Options);
+   }
+ };
+ 
+diff --git a/llvm/lib/CodeGen/AsmPrinter/AsmPrinterInlineAsm.cpp b/llvm/lib/CodeGen/AsmPrinter/AsmPrinterInlineAsm.cpp
+index b3bcfc08643f..30b64ed1171c 100644
+--- a/llvm/lib/CodeGen/AsmPrinter/AsmPrinterInlineAsm.cpp
++++ b/llvm/lib/CodeGen/AsmPrinter/AsmPrinterInlineAsm.cpp
+@@ -114,8 +114,8 @@ void AsmPrinter::emitInlineAsm(StringRef Str, const MCSubtargetInfo &STI,
+   // because it's not subtarget dependent.
+   std::unique_ptr<MCInstrInfo> MII(TM.getTarget().createMCInstrInfo());
+   assert(MII && "Failed to create instruction info");
+-  std::unique_ptr<MCTargetAsmParser> TAP(
+-      TM.getTarget().createMCAsmParser(STI, *Parser, *MII));
++  std::unique_ptr<MCTargetAsmParser> TAP(TM.getTarget().createMCAsmParser(
++      STI, *Parser, *MII, MCOptions));
+   if (!TAP)
+     report_fatal_error("Inline asm not supported by this streamer because"
+                        " we don't have an asm parser for this target\n");
+diff --git a/llvm/lib/MC/MCParser/MCTargetAsmParser.cpp b/llvm/lib/MC/MCParser/MCTargetAsmParser.cpp
+index d9da7fdeb5f7..d7b0546d7055 100644
+--- a/llvm/lib/MC/MCParser/MCTargetAsmParser.cpp
++++ b/llvm/lib/MC/MCParser/MCTargetAsmParser.cpp
+@@ -13,9 +13,10 @@
+ 
+ using namespace llvm;
+ 
+-MCTargetAsmParser::MCTargetAsmParser(const MCSubtargetInfo &STI,
++MCTargetAsmParser::MCTargetAsmParser(MCTargetOptions const &MCOptions,
++                                     const MCSubtargetInfo &STI,
+                                      const MCInstrInfo &MII)
+-    : STI(&STI), MII(MII) {}
++    : MCOptions(MCOptions), STI(&STI), MII(MII) {}
+ 
+ MCTargetAsmParser::~MCTargetAsmParser() = default;
+ 
+diff --git a/llvm/lib/Object/ModuleSymbolTable.cpp b/llvm/lib/Object/ModuleSymbolTable.cpp
+index 1da5fa9c10a0..1f1b1f792ca8 100644
+--- a/llvm/lib/Object/ModuleSymbolTable.cpp
++++ b/llvm/lib/Object/ModuleSymbolTable.cpp
+@@ -114,7 +114,7 @@ initializeRecordStreamer(const Module &M,
+       createMCAsmParser(SrcMgr, MCCtx, Streamer, *MAI));
+ 
+   std::unique_ptr<MCTargetAsmParser> TAP(
+-      T->createMCAsmParser(*STI, *Parser, *MCII));
++      T->createMCAsmParser(*STI, *Parser, *MCII, MCOptions));
+   if (!TAP)
+     return;
+ 
+diff --git a/llvm/lib/Target/AArch64/AsmParser/AArch64AsmParser.cpp b/llvm/lib/Target/AArch64/AsmParser/AArch64AsmParser.cpp
+index 6a6b73b8a4c8..5567c130153b 100644
+--- a/llvm/lib/Target/AArch64/AsmParser/AArch64AsmParser.cpp
++++ b/llvm/lib/Target/AArch64/AsmParser/AArch64AsmParser.cpp
+@@ -311,8 +311,8 @@ public:
+   bool IsWindowsArm64EC;
+ 
+   AArch64AsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-                   const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII) {
++                   const MCInstrInfo &MII, const MCTargetOptions &Options)
++    : MCTargetAsmParser(Options, STI, MII) {
+     IsILP32 = STI.getTargetTriple().getEnvironment() == Triple::GNUILP32;
+     IsWindowsArm64EC = STI.getTargetTriple().isWindowsArm64EC();
+     MCAsmParserExtension::Initialize(Parser);
+diff --git a/llvm/lib/Target/AMDGPU/AsmParser/AMDGPUAsmParser.cpp b/llvm/lib/Target/AMDGPU/AsmParser/AMDGPUAsmParser.cpp
+index 3ae957906fd8..a141204a77b0 100644
+--- a/llvm/lib/Target/AMDGPU/AsmParser/AMDGPUAsmParser.cpp
++++ b/llvm/lib/Target/AMDGPU/AsmParser/AMDGPUAsmParser.cpp
+@@ -1473,8 +1473,8 @@ public:
+   using OptionalImmIndexMap = std::map<AMDGPUOperand::ImmTy, unsigned>;
+ 
+   AMDGPUAsmParser(const MCSubtargetInfo &STI, MCAsmParser &_Parser,
+-                  const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII), Parser(_Parser),
++                  const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, STI, MII), Parser(_Parser),
+         HwMode(STI.getHwMode(MCSubtargetInfo::HwMode_RegInfo)) {
+     MCAsmParserExtension::Initialize(Parser);
+ 
+diff --git a/llvm/lib/Target/ARM/AsmParser/ARMAsmParser.cpp b/llvm/lib/Target/ARM/AsmParser/ARMAsmParser.cpp
+index 810644f194cf..a87fa1658d15 100644
+--- a/llvm/lib/Target/ARM/AsmParser/ARMAsmParser.cpp
++++ b/llvm/lib/Target/ARM/AsmParser/ARMAsmParser.cpp
+@@ -689,8 +689,8 @@ public:
+   };
+ 
+   ARMAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-               const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII), UC(Parser), MS(STI) {
++               const MCInstrInfo &MII, const MCTargetOptions &Options)
++    : MCTargetAsmParser(Options, STI, MII), UC(Parser), MS(STI) {
+     MCAsmParserExtension::Initialize(Parser);
+ 
+     // Cache the MCRegisterInfo.
+diff --git a/llvm/lib/Target/AVR/AsmParser/AVRAsmParser.cpp b/llvm/lib/Target/AVR/AsmParser/AVRAsmParser.cpp
+index 4d961573a7f9..48452f6d9391 100644
+--- a/llvm/lib/Target/AVR/AsmParser/AVRAsmParser.cpp
++++ b/llvm/lib/Target/AVR/AsmParser/AVRAsmParser.cpp
+@@ -91,8 +91,8 @@ class AVRAsmParser : public MCTargetAsmParser {
+ 
+ public:
+   AVRAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-               const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII), Parser(Parser) {
++               const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, STI, MII), Parser(Parser) {
+     MCAsmParserExtension::Initialize(Parser);
+     MRI = getContext().getRegisterInfo();
+ 
+diff --git a/llvm/lib/Target/BPF/AsmParser/BPFAsmParser.cpp b/llvm/lib/Target/BPF/AsmParser/BPFAsmParser.cpp
+index 8f7a147dc02e..9f86322a81b3 100644
+--- a/llvm/lib/Target/BPF/AsmParser/BPFAsmParser.cpp
++++ b/llvm/lib/Target/BPF/AsmParser/BPFAsmParser.cpp
+@@ -71,8 +71,8 @@ public:
+   };
+ 
+   BPFAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-               const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII) {
++               const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, STI, MII) {
+     setAvailableFeatures(ComputeAvailableFeatures(STI.getFeatureBits()));
+   }
+ };
+diff --git a/llvm/lib/Target/CSKY/AsmParser/CSKYAsmParser.cpp b/llvm/lib/Target/CSKY/AsmParser/CSKYAsmParser.cpp
+index 1feb24999b50..5f7e1497a1eb 100644
+--- a/llvm/lib/Target/CSKY/AsmParser/CSKYAsmParser.cpp
++++ b/llvm/lib/Target/CSKY/AsmParser/CSKYAsmParser.cpp
+@@ -128,8 +128,8 @@ public:
+   };
+ 
+   CSKYAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-                const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII) {
++                const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, STI, MII) {
+ 
+     MCAsmParserExtension::Initialize(Parser);
+ 
+diff --git a/llvm/lib/Target/Hexagon/AsmParser/HexagonAsmParser.cpp b/llvm/lib/Target/Hexagon/AsmParser/HexagonAsmParser.cpp
+index dd27d05e2a36..1978798a6d4d 100644
+--- a/llvm/lib/Target/Hexagon/AsmParser/HexagonAsmParser.cpp
++++ b/llvm/lib/Target/Hexagon/AsmParser/HexagonAsmParser.cpp
+@@ -159,8 +159,9 @@ class HexagonAsmParser : public MCTargetAsmParser {
+ 
+ public:
+   HexagonAsmParser(const MCSubtargetInfo &_STI, MCAsmParser &_Parser,
+-                   const MCInstrInfo &MII)
+-      : MCTargetAsmParser(_STI, MII), Parser(_Parser), InBrackets(false) {
++                   const MCInstrInfo &MII, const MCTargetOptions &Options)
++    : MCTargetAsmParser(Options, _STI, MII), Parser(_Parser),
++      InBrackets(false) {
+     MCB.setOpcode(Hexagon::BUNDLE);
+     setAvailableFeatures(ComputeAvailableFeatures(getSTI().getFeatureBits()));
+ 
+diff --git a/llvm/lib/Target/Lanai/AsmParser/LanaiAsmParser.cpp b/llvm/lib/Target/Lanai/AsmParser/LanaiAsmParser.cpp
+index 6621bdce4cbc..0444c865f686 100644
+--- a/llvm/lib/Target/Lanai/AsmParser/LanaiAsmParser.cpp
++++ b/llvm/lib/Target/Lanai/AsmParser/LanaiAsmParser.cpp
+@@ -83,9 +83,9 @@ class LanaiAsmParser : public MCTargetAsmParser {
+ 
+ public:
+   LanaiAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-                 const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII), Parser(Parser), Lexer(Parser.getLexer()),
+-        SubtargetInfo(STI) {
++                 const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, STI, MII), Parser(Parser),
++        Lexer(Parser.getLexer()), SubtargetInfo(STI) {
+     setAvailableFeatures(
+         ComputeAvailableFeatures(SubtargetInfo.getFeatureBits()));
+   }
+diff --git a/llvm/lib/Target/LoongArch/AsmParser/LoongArchAsmParser.cpp b/llvm/lib/Target/LoongArch/AsmParser/LoongArchAsmParser.cpp
+index 1f608fa85b7b..c8c3a2bc9ce6 100644
+--- a/llvm/lib/Target/LoongArch/AsmParser/LoongArchAsmParser.cpp
++++ b/llvm/lib/Target/LoongArch/AsmParser/LoongArchAsmParser.cpp
+@@ -193,8 +193,8 @@ public:
+                                 LoongArchMCExpr::Specifier &Kind);
+ 
+   LoongArchAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-                     const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII) {
++                     const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, STI, MII) {
+     Parser.addAliasForDirective(".half", ".2byte");
+     Parser.addAliasForDirective(".hword", ".2byte");
+     Parser.addAliasForDirective(".word", ".4byte");
+diff --git a/llvm/lib/Target/M68k/AsmParser/M68kAsmParser.cpp b/llvm/lib/Target/M68k/AsmParser/M68kAsmParser.cpp
+index eefcee8bcc98..fb5cd5c29d7d 100644
+--- a/llvm/lib/Target/M68k/AsmParser/M68kAsmParser.cpp
++++ b/llvm/lib/Target/M68k/AsmParser/M68kAsmParser.cpp
+@@ -56,8 +56,8 @@ class M68kAsmParser : public MCTargetAsmParser {
+ 
+ public:
+   M68kAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-                const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII), Parser(Parser) {
++                const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, STI, MII), Parser(Parser) {
+     MCAsmParserExtension::Initialize(Parser);
+     MRI = getContext().getRegisterInfo();
+ 
+diff --git a/llvm/lib/Target/MSP430/AsmParser/MSP430AsmParser.cpp b/llvm/lib/Target/MSP430/AsmParser/MSP430AsmParser.cpp
+index 160edc30eeac..a8891d686abe 100644
+--- a/llvm/lib/Target/MSP430/AsmParser/MSP430AsmParser.cpp
++++ b/llvm/lib/Target/MSP430/AsmParser/MSP430AsmParser.cpp
+@@ -77,8 +77,8 @@ class MSP430AsmParser : public MCTargetAsmParser {
+ 
+ public:
+   MSP430AsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-                  const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII), Parser(Parser) {
++                  const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, STI, MII), Parser(Parser) {
+     MCAsmParserExtension::Initialize(Parser);
+     MRI = getContext().getRegisterInfo();
+ 
+diff --git a/llvm/lib/Target/Mips/AsmParser/MipsAsmParser.cpp b/llvm/lib/Target/Mips/AsmParser/MipsAsmParser.cpp
+index 928bd03b57c6..092efb8d78b3 100644
+--- a/llvm/lib/Target/Mips/AsmParser/MipsAsmParser.cpp
++++ b/llvm/lib/Target/Mips/AsmParser/MipsAsmParser.cpp
+@@ -523,11 +523,10 @@ public:
+   };
+ 
+   MipsAsmParser(const MCSubtargetInfo &sti, MCAsmParser &parser,
+-                const MCInstrInfo &MII)
+-      : MCTargetAsmParser(sti, MII),
+-        ABI(MipsABIInfo::computeTargetABI(
+-            sti.getTargetTriple(),
+-            parser.getContext().getTargetOptions().getABIName())) {
++                const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, sti, MII),
++        ABI(MipsABIInfo::computeTargetABI(sti.getTargetTriple(),
++                                          Options.getABIName())) {
+     MCAsmParserExtension::Initialize(parser);
+ 
+     parser.addAliasForDirective(".asciiz", ".asciz");
+diff --git a/llvm/lib/Target/PowerPC/AsmParser/PPCAsmParser.cpp b/llvm/lib/Target/PowerPC/AsmParser/PPCAsmParser.cpp
+index 258239083d3d..3c2fb0bf73ec 100644
+--- a/llvm/lib/Target/PowerPC/AsmParser/PPCAsmParser.cpp
++++ b/llvm/lib/Target/PowerPC/AsmParser/PPCAsmParser.cpp
+@@ -144,8 +144,9 @@ class PPCAsmParser : public MCTargetAsmParser {
+ 
+ public:
+   PPCAsmParser(const MCSubtargetInfo &STI, MCAsmParser &,
+-               const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII), IsPPC64(STI.getTargetTriple().isPPC64()) {
++               const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, STI, MII),
++        IsPPC64(STI.getTargetTriple().isPPC64()) {
+     // Initialize the set of available features.
+     setAvailableFeatures(ComputeAvailableFeatures(STI.getFeatureBits()));
+   }
+diff --git a/llvm/lib/Target/RISCV/AsmParser/RISCVAsmParser.cpp b/llvm/lib/Target/RISCV/AsmParser/RISCVAsmParser.cpp
+index cbf3d0f518ac..a199b0ab646b 100644
+--- a/llvm/lib/Target/RISCV/AsmParser/RISCVAsmParser.cpp
++++ b/llvm/lib/Target/RISCV/AsmParser/RISCVAsmParser.cpp
+@@ -301,8 +301,8 @@ public:
+   static bool isSymbolDiff(const MCExpr *Expr);
+ 
+   RISCVAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-                 const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII) {
++                 const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, STI, MII) {
+     MCAsmParserExtension::Initialize(Parser);
+ 
+     Parser.addAliasForDirective(".half", ".2byte");
+@@ -311,7 +311,7 @@ public:
+     Parser.addAliasForDirective(".dword", ".8byte");
+     setAvailableFeatures(ComputeAvailableFeatures(STI.getFeatureBits()));
+ 
+-    auto ABIName = StringRef(getTargetOptions().ABIName);
++    auto ABIName = StringRef(Options.ABIName);
+     if (ABIName.ends_with("f") && !getSTI().hasFeature(RISCV::FeatureStdExtF)) {
+       errs() << "Hard-float 'f' ABI can't be used for a target that "
+                 "doesn't support the F instruction set extension (ignoring "
+diff --git a/llvm/lib/Target/Sparc/AsmParser/SparcAsmParser.cpp b/llvm/lib/Target/Sparc/AsmParser/SparcAsmParser.cpp
+index f6b8e0af6715..77b3634f4e40 100644
+--- a/llvm/lib/Target/Sparc/AsmParser/SparcAsmParser.cpp
++++ b/llvm/lib/Target/Sparc/AsmParser/SparcAsmParser.cpp
+@@ -141,8 +141,8 @@ class SparcAsmParser : public MCTargetAsmParser {
+ 
+ public:
+   SparcAsmParser(const MCSubtargetInfo &sti, MCAsmParser &parser,
+-                 const MCInstrInfo &MII)
+-      : MCTargetAsmParser(sti, MII), Parser(parser),
++                 const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, sti, MII), Parser(parser),
+         MRI(*Parser.getContext().getRegisterInfo()) {
+     Parser.addAliasForDirective(".half", ".2byte");
+     Parser.addAliasForDirective(".uahalf", ".2byte");
+diff --git a/llvm/lib/Target/SystemZ/AsmParser/SystemZAsmParser.cpp b/llvm/lib/Target/SystemZ/AsmParser/SystemZAsmParser.cpp
+index 761cbaaedd22..7397396a607b 100644
+--- a/llvm/lib/Target/SystemZ/AsmParser/SystemZAsmParser.cpp
++++ b/llvm/lib/Target/SystemZ/AsmParser/SystemZAsmParser.cpp
+@@ -501,8 +501,8 @@ private:
+ 
+ public:
+   SystemZAsmParser(const MCSubtargetInfo &sti, MCAsmParser &parser,
+-                   const MCInstrInfo &MII)
+-      : MCTargetAsmParser(sti, MII), Parser(parser) {
++                   const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, sti, MII), Parser(parser) {
+     MCAsmParserExtension::Initialize(Parser);
+ 
+     // Alias the .word directive to .short.
+diff --git a/llvm/lib/Target/VE/AsmParser/VEAsmParser.cpp b/llvm/lib/Target/VE/AsmParser/VEAsmParser.cpp
+index cc58efcd7b00..eceddd66e39d 100644
+--- a/llvm/lib/Target/VE/AsmParser/VEAsmParser.cpp
++++ b/llvm/lib/Target/VE/AsmParser/VEAsmParser.cpp
+@@ -85,8 +85,8 @@ class VEAsmParser : public MCTargetAsmParser {
+ 
+ public:
+   VEAsmParser(const MCSubtargetInfo &sti, MCAsmParser &parser,
+-              const MCInstrInfo &MII)
+-      : MCTargetAsmParser(sti, MII), Parser(parser) {
++              const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, sti, MII), Parser(parser) {
+     // Initialize the set of available features.
+     setAvailableFeatures(ComputeAvailableFeatures(getSTI().getFeatureBits()));
+   }
+diff --git a/llvm/lib/Target/WebAssembly/AsmParser/WebAssemblyAsmParser.cpp b/llvm/lib/Target/WebAssembly/AsmParser/WebAssemblyAsmParser.cpp
+index f52833408fdd..8d33934dc0a9 100644
+--- a/llvm/lib/Target/WebAssembly/AsmParser/WebAssemblyAsmParser.cpp
++++ b/llvm/lib/Target/WebAssembly/AsmParser/WebAssemblyAsmParser.cpp
+@@ -301,10 +301,10 @@ class WebAssemblyAsmParser final : public MCTargetAsmParser {
+ 
+ public:
+   WebAssemblyAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-                       const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII), Parser(Parser), Lexer(Parser.getLexer()),
+-        Is64(STI.getTargetTriple().isArch64Bit()), TC(Parser, MII, Is64),
+-        SkipTypeCheck(Parser.getContext().getTargetOptions().MCNoTypeCheck) {
++                       const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, STI, MII), Parser(Parser),
++        Lexer(Parser.getLexer()), Is64(STI.getTargetTriple().isArch64Bit()),
++        TC(Parser, MII, Is64), SkipTypeCheck(Options.MCNoTypeCheck) {
+     FeatureBitset FBS = ComputeAvailableFeatures(STI.getFeatureBits());
+ 
+     // bulk-memory implies bulk-memory-opt
+diff --git a/llvm/lib/Target/X86/AsmParser/X86AsmParser.cpp b/llvm/lib/Target/X86/AsmParser/X86AsmParser.cpp
+index 49dff380b476..704984381b64 100644
+--- a/llvm/lib/Target/X86/AsmParser/X86AsmParser.cpp
++++ b/llvm/lib/Target/X86/AsmParser/X86AsmParser.cpp
+@@ -1302,8 +1302,9 @@ public:
+   };
+ 
+   X86AsmParser(const MCSubtargetInfo &sti, MCAsmParser &Parser,
+-               const MCInstrInfo &mii)
+-      : MCTargetAsmParser(sti, mii), InstInfo(nullptr), Code16GCC(false) {
++               const MCInstrInfo &mii, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, sti, mii),  InstInfo(nullptr),
++        Code16GCC(false) {
+ 
+     Parser.addAliasForDirective(".word", ".2byte");
+ 
+@@ -3848,7 +3849,7 @@ static bool convertSSEToAVX(MCInst &Inst) {
+ }
+ 
+ bool X86AsmParser::processInstruction(MCInst &Inst, const OperandVector &Ops) {
+-  if (getTargetOptions().X86Sse2Avx && convertSSEToAVX(Inst))
++  if (MCOptions.X86Sse2Avx && convertSSEToAVX(Inst))
+     return true;
+ 
+   if (ForcedOpcodePrefix != OpcodePrefix_VEX3 &&
+diff --git a/llvm/lib/Target/Xtensa/AsmParser/XtensaAsmParser.cpp b/llvm/lib/Target/Xtensa/AsmParser/XtensaAsmParser.cpp
+index dc33295c16f2..4001b2cfa2a6 100644
+--- a/llvm/lib/Target/Xtensa/AsmParser/XtensaAsmParser.cpp
++++ b/llvm/lib/Target/Xtensa/AsmParser/XtensaAsmParser.cpp
+@@ -92,8 +92,8 @@ public:
+   };
+ 
+   XtensaAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-                  const MCInstrInfo &MII)
+-      : MCTargetAsmParser(STI, MII),
++                  const MCInstrInfo &MII, const MCTargetOptions &Options)
++      : MCTargetAsmParser(Options, STI, MII),
+         MRI(*Parser.getContext().getRegisterInfo()) {
+     setAvailableFeatures(ComputeAvailableFeatures(STI.getFeatureBits()));
+   }
+diff --git a/llvm/tools/llvm-exegesis/lib/SnippetFile.cpp b/llvm/tools/llvm-exegesis/lib/SnippetFile.cpp
+index 7919d75ed0c5..c2d0ce6a5308 100644
+--- a/llvm/tools/llvm-exegesis/lib/SnippetFile.cpp
++++ b/llvm/tools/llvm-exegesis/lib/SnippetFile.cpp
+@@ -272,7 +272,8 @@ Expected<std::vector<BenchmarkCode>> readSnippets(const LLVMState &State,
+ 
+   const std::unique_ptr<MCTargetAsmParser> TargetAsmParser(
+       TM.getTarget().createMCAsmParser(TM.getMCSubtargetInfo(), *AsmParser,
+-                                       *TM.getMCInstrInfo()));
++                                       *TM.getMCInstrInfo(),
++                                       MCTargetOptions()));
+ 
+   if (!TargetAsmParser)
+     return make_error<Failure>("cannot create target asm parser");
+diff --git a/llvm/tools/llvm-mc-assemble-fuzzer/llvm-mc-assemble-fuzzer.cpp b/llvm/tools/llvm-mc-assemble-fuzzer/llvm-mc-assemble-fuzzer.cpp
+index a4517f5739fe..af080923b286 100644
+--- a/llvm/tools/llvm-mc-assemble-fuzzer/llvm-mc-assemble-fuzzer.cpp
++++ b/llvm/tools/llvm-mc-assemble-fuzzer/llvm-mc-assemble-fuzzer.cpp
+@@ -115,7 +115,7 @@ static int AssembleInput(const char *ProgName, const Target *TheTarget,
+     createMCAsmParser(SrcMgr, Ctx, Str, MAI));
+ 
+   std::unique_ptr<MCTargetAsmParser> TAP(
+-      TheTarget->createMCAsmParser(STI, *Parser, MCII));
++    TheTarget->createMCAsmParser(STI, *Parser, MCII, MCOptions));
+ 
+   if (!TAP) {
+     errs() << ProgName
+diff --git a/llvm/tools/llvm-mc/llvm-mc.cpp b/llvm/tools/llvm-mc/llvm-mc.cpp
+index 903f82e6855b..782bceb7f48c 100644
+--- a/llvm/tools/llvm-mc/llvm-mc.cpp
++++ b/llvm/tools/llvm-mc/llvm-mc.cpp
+@@ -356,7 +356,7 @@ static int AssembleInput(const char *ProgName, const Target *TheTarget,
+   std::unique_ptr<MCAsmParser> Parser(
+       createMCAsmParser(SrcMgr, Ctx, Str, MAI));
+   std::unique_ptr<MCTargetAsmParser> TAP(
+-      TheTarget->createMCAsmParser(STI, *Parser, MCII));
++      TheTarget->createMCAsmParser(STI, *Parser, MCII, MCOptions));
+ 
+   if (!TAP) {
+     WithColor::error(errs(), ProgName)
+diff --git a/llvm/tools/llvm-mca/CodeRegionGenerator.cpp b/llvm/tools/llvm-mca/CodeRegionGenerator.cpp
+index 67b90d0ebe6c..146907189929 100644
+--- a/llvm/tools/llvm-mca/CodeRegionGenerator.cpp
++++ b/llvm/tools/llvm-mca/CodeRegionGenerator.cpp
+@@ -54,7 +54,7 @@ Expected<const CodeRegions &> AsmCodeRegionGenerator::parseCodeRegions(
+   Lexer.setLexMasmIntegers(true);
+ 
+   std::unique_ptr<MCTargetAsmParser> TAP(
+-      TheTarget.createMCAsmParser(STI, *Parser, MCII));
++      TheTarget.createMCAsmParser(STI, *Parser, MCII, Opts));
+   if (!TAP)
+     return make_error<StringError>(
+         "This target does not support assembly parsing.",
+diff --git a/llvm/tools/llvm-ml/llvm-ml.cpp b/llvm/tools/llvm-ml/llvm-ml.cpp
+index 6ecc1bf86ef5..f58fbe952d2e 100644
+--- a/llvm/tools/llvm-ml/llvm-ml.cpp
++++ b/llvm/tools/llvm-ml/llvm-ml.cpp
+@@ -158,7 +158,7 @@ static int AssembleInput(StringRef ProgName, const Target *TheTarget,
+   std::unique_ptr<MCAsmParser> Parser(
+       createMCMasmParser(SrcMgr, Ctx, Str, MAI, TM, 0));
+   std::unique_ptr<MCTargetAsmParser> TAP(
+-      TheTarget->createMCAsmParser(STI, *Parser, MCII));
++      TheTarget->createMCAsmParser(STI, *Parser, MCII, MCOptions));
+ 
+   if (!TAP) {
+     WithColor::error(errs(), ProgName)
+diff --git a/llvm/unittests/MC/SystemZ/SystemZAsmLexerTest.cpp b/llvm/unittests/MC/SystemZ/SystemZAsmLexerTest.cpp
+index 79e3f96e4eee..90f7c7c99be7 100644
+--- a/llvm/unittests/MC/SystemZ/SystemZAsmLexerTest.cpp
++++ b/llvm/unittests/MC/SystemZ/SystemZAsmLexerTest.cpp
+@@ -90,7 +90,8 @@ protected:
+ 
+     Parser.reset(createMCAsmParser(SrcMgr, *Ctx, *Str, *MAI));
+ 
+-    TargetAsmParser.reset(TheTarget->createMCAsmParser(*STI, *Parser, *MII));
++    TargetAsmParser.reset(
++        TheTarget->createMCAsmParser(*STI, *Parser, *MII, MCOptions));
+     Parser->setTargetParser(*TargetAsmParser);
+   }
+ 
+diff --git a/mlir/lib/Target/LLVM/ROCDL/Target.cpp b/mlir/lib/Target/LLVM/ROCDL/Target.cpp
+index 917c0ed399b7..92f043880c90 100644
+--- a/mlir/lib/Target/LLVM/ROCDL/Target.cpp
++++ b/mlir/lib/Target/LLVM/ROCDL/Target.cpp
+@@ -325,7 +325,7 @@ mlir::ROCDL::assembleIsa(StringRef isa, StringRef targetTriple, StringRef chip,
+   std::unique_ptr<llvm::MCAsmParser> parser(
+       createMCAsmParser(srcMgr, ctx, *mcStreamer, *mai));
+   std::unique_ptr<llvm::MCTargetAsmParser> tap(
+-      target->createMCAsmParser(*sti, *parser, *mcii));
++      target->createMCAsmParser(*sti, *parser, *mcii, mcOptions));
+ 
+   if (!tap)
+     return emitError() << "assembler initialization error";
+-- 
+2.34.1
+
