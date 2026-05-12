@@ -840,15 +840,14 @@ def wheel_change_extra_files(
             files_to_change = [
                 new_dir_path / package_name_no_version / "version.py",
             ]
-        if "torchvision" in package_name_no_version:
-            update_metadata_rocm_requires_dist(
-                new_dir_path,
-                package_name_no_version,
-                old_version,
-                old_rocm_version,
-                new_rocm_version,
-            )
-        return
+            if "torchvision" in package_name_no_version:
+                update_metadata_rocm_requires_dist(
+                    new_dir_path,
+                    package_name_no_version,
+                    old_version,
+                    old_rocm_version,
+                    new_rocm_version,
+                )
         else:
             # no additional (rocm-specific) files needed to be changed that contain the version
             # currently applying to: triton, jax_rocm7_pjrt
@@ -1099,16 +1098,19 @@ def main(
         #  (and delete with --delete-old-on-success). Bare
         # `gfx<N>` (no `device_`) denotes a single-arch package (e.g.
         # `rocm_sdk_libraries_gfx94x_dcgpu-...whl`) and falls through untouched.
-        if (
-            keep_set is not None
-            and "device_gfx" in file.name
-            and not any(f"device_{arch}" in file.name for arch in keep_set)
-        ):
-            print(f"Skipping per-gfx wheel for non-kept arch: {file.name}")
-            if delete:
-                print(f"Removing original per-gfx wheel: {file}")
-                file.unlink()
-            continue
+        #
+        # The arch token must be matched exactly: a substring check would let
+        # `gfx11` match `device_gfx1153`. Anchor on the trailing `-` (always
+        # present in wheel filenames between the arch and the version).
+        if keep_set is not None and "device_gfx" in file.name:
+            m = re.search(rf"device_({_GFX_ARCH})-", file.name)
+            file_arch = m.group(1) if m else None
+            if file_arch is not None and file_arch not in keep_set:
+                print(f"Skipping per-gfx wheel for non-kept arch: {file.name}")
+                if delete:
+                    print(f"Removing original per-gfx wheel: {file}")
+                    file.unlink()
+                continue
         if file.suffix == ".whl":
             if (
                 promote_wheel(
