@@ -192,3 +192,4 @@ jobs:
         ${{ github.event_name == 'schedule' && github.workflow || '' }}
       accepted_statuses: >-
         ${{ github.event_name == 'schedule' && 'success,failure' || '' }}
+      branch: ${{ github.ref_name }}

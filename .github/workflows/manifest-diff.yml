@@ -29,6 +29,11 @@ on:
         description: 'PR base branch name. When set, start_ref is resolved as the merge-base between end_ref and origin/<pr_base_ref> via the GitHub Compare API.'
         required: false
         type: string
+      branch:
+        description: 'Branch to scope --find-last-run lookups against (default: main).'
+        required: false
+        type: string
+        default: 'main'
   workflow_call:
     inputs:
       start_ref:
@@ -51,6 +56,10 @@ on:
       pr_base_ref:
         required: false
         type: string
+      branch:
+        required: false
+        type: string
+        default: 'main'
 
 permissions:
   contents: read
@@ -80,6 +89,7 @@ jobs:
             --find-last-run "${{ inputs.find_last_run }}" \
             --accepted-statuses "${{ inputs.accepted_statuses }}" \
             --pr-base-ref "${{ inputs.pr_base_ref }}" \
+            --branch "${{ inputs.branch }}" \
             ${{ inputs.workflow_mode && '--workflow-mode' || '' }} \
             --output-dir reports
 
@@ -90,8 +100,6 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
-      # upload_test_report_script.py appends the S3 report link to
-      # $GITHUB_STEP_SUMMARY itself, so no extra link step is needed.
       - name: Upload Report to S3
         if: ${{ github.repository == 'ROCm/TheRock' }}
         run: |
