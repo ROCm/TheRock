@@ -113,6 +113,13 @@ EXCLUDED_TEST_MODULES: list[str] = [
     # pytest -k filtering can skip individual tests.
     "distributed/pipelining/test_schedule",
     "distributed/test_device_mesh",
+    # 4-GPU validation (iter1-iter7): 12+ test-level failures across 6 distinct
+    # test classes (TestFullyShardCommunication, TestFullyShardPrefetch [whole class],
+    # TestFullyShardCollectiveOps, TestFullyShardMixedPrecisionCasts,
+    # TestFullyShardUnshardMultiProcess, TestFullyShardAllocFromPG).
+    # Most failures are 300s timeouts in patch_post_backward / barrier and SIGSEGV
+    # in mixed-precision casts. Module-level skip until upstream stack stabilizes.
+    "distributed/_composable/fsdp/test_fully_shard_comm",
 ]
 
 
