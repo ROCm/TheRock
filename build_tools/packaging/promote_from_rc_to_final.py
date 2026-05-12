@@ -279,11 +279,21 @@ def compute_new_version_str(
     return re.sub(rf"{src_version_type}\d*", replacement, version_str)
 
 
-# Arch token shape used in wheel filenames, extras names, and dep names. Common
-# values are `gfx950`, `gfx1010`, `gfx1201`, `gfx94x`. Hyphenated/underscored
-# variants like `gfx94x-dcgpu` are matched only up to the first separator
-# (i.e. `gfx94x`); if those become first-class keep-list targets, broaden here.
-_GFX_ARCH = r"gfx[a-z0-9]+"
+# Arch token shape used in wheel filenames, extras names, and dep names. Covers
+# the three packaging levels emitted by rocm_bootstrap:
+#   family     `gfx9`, `gfx11`, `gfx12`           -> `gfx` + digits
+#   target     `gfx906`, `gfx90a`, `gfx942`       -> `gfx` + digits + opt. letter
+#   sub-family `gfx9_4`, `gfx11_5`, `gfx12_0`     -> ...plus optional `_<digits>`
+# Regex breakdown:
+#   gfx              literal prefix
+#   [0-9]+           one or more digits (required: rejects junk like `gfx_foo`)
+#   [a-z]?           one optional lowercase letter (target suffix, e.g. `90a`)
+#   (?:_[0-9]+)?     optional `_<digits>` group for sub-family form (`_0`, `_4`)
+#                    `(?:...)` is a non-capturing group so the `?` applies to
+#                    the whole `_<digits>` chunk without adding a capture.
+# Hyphenated variants like `gfx94x-dcgpu` are matched only up to `gfx94x`;
+# if those become first-class keep-list targets, broaden here.
+_GFX_ARCH = r"gfx[0-9]+[a-z]?(?:_[0-9]+)?"
 
 
 def _scan_multiarch_metadata(path: pathlib.Path) -> set[str]:
