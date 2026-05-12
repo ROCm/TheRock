@@ -53,6 +53,7 @@ CI typically runs this module under pytest (same file; reporting handled by pyte
 
 Workflow/container ``env`` maps to CLI flags via :func:`_argv_from_ci_env` + ``test_native_linux_package_install``.
 For versioned metapackage names only, set ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` and omit ``--rocm-version`` when unversioned packages are desired.
+For multiple arches from CI, set ``GFX_ARCH`` to whitespace-separated tokens (e.g. ``gfx94x gfx1100``) or a single comma-separated value (e.g. ``gfx94x,gfx1100``); optional ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` pairs with ``GFX_ARCH`` like ``--rocm-version`` with ``--gfx-arch`` on the CLI.
 You can still invoke this file as a script for ad-hoc runs (no pytest required).
 
 Example invocations:
@@ -102,6 +103,25 @@ Example invocations:
          --os-profile ubuntu2404 \\
          --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly
+
+ # Versioned metapackages with multiple GPU architectures (requires --rocm-version for arch in names).
+ # Installs e.g. amdrocm7.13-gfx94x, amdrocm-core-sdk7.13-gfx94x, amdrocm7.13-gfx1100, ...
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --rocm-version 7.13.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # Same semantics: comma-separated arches in one --gfx-arch argument (or repeat --gfx-arch).
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --rocm-version 7.13 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # Versioned generic metapackages (no arch suffix) when --rocm-version is set without --gfx-arch.
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+ --rocm-version 7.13 --release-type prerelease --install-prefix /opt/rocm/core \\
+ --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
  # Simulate install (dry-run) from local .deb or .rpm directory
  python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
@@ -1063,6 +1083,24 @@ Examples:
  python native_linux_package_install_test.py --test-type install --os-profile ubuntu2404 \\
  --repo-url https://therock-dev-artifacts.s3.amazonaws.com/26299074718-linux/packages/deb \\
  --gfx-arch gfx94x --release-type dev --install-prefix /opt/rocm/core
+
+ # Versioned + multiple --gfx-arch (metapackages amdrocm7.13-<arch> per arch)
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --rocm-version 7.13.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # Comma-separated arches in one argument (equivalent normalization)
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --rocm-version 7.13 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # --rocm-version without --gfx-arch: amdrocm7.13 / amdrocm-core-sdk7.13 only
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+ --rocm-version 7.13 --release-type prerelease --install-prefix /opt/rocm/core \\
+ --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
  # Simulate install (dry-run) from local packages
  python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404

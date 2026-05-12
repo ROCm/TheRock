@@ -392,6 +392,110 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         )
         self.assertEqual(t.install_prefix, "/opt/rocm/core")
 
+    def test_gfx_arch_comma_string_with_rocm_version_expands_packages(self):
+        # Comma-separated arch in one string splits in normalization (same as CLI single token).
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch="gfx94x, GFX1100 ",
+            rocm_version="7.13",
+        )
+        self.assertEqual(t.gfx_arch_list, ["gfx94x", "gfx1100"])
+        self.assertEqual(
+            t.package_names,
+            [
+                "amdrocm7.13-gfx94x",
+                "amdrocm-core-sdk7.13-gfx94x",
+                "amdrocm7.13-gfx1100",
+                "amdrocm-core-sdk7.13-gfx1100",
+            ],
+        )
+
+
+class NormalizedGfxArchsFromInputTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest._normalized_gfx_archs_from_input()."""
+
+    def setUp(self):
+        self.n = (
+            native_linux_package_install_test.NativeLinuxPackageInstallTest._normalized_gfx_archs_from_input
+        )
+
+    def test_none_and_blank_yield_empty(self):
+        self.assertEqual(self.n(None), [])
+        self.assertEqual(self.n(""), [])
+
+    def test_list_with_commas_and_whitespace(self):
+        self.assertEqual(self.n(["gfx94x,gfx1100 ", ""]), ["gfx94x", "gfx1100"])
+
+    def test_dedupe_case_insensitive_order_preserved(self):
+        self.assertEqual(
+            self.n(["gfx94x", "GFX94X", "gfx1100"]),
+            ["gfx94x", "gfx1100"],
+        )
+
+
+class ArgvFromCiEnvTest(unittest.TestCase):
+    """Tests for _argv_from_ci_env() (workflow env → CLI argv)."""
+
+    _base_sanity_env = {
+        "TEST_TYPE": "sanity",
+        "OS_PROFILE": "ubuntu2404",
+        "REPO_URL": "https://repo.example.com/deb/",
+        "RELEASE_TYPE": "nightly",
+        "INSTALL_PREFIX": "/opt/rocm/core",
+    }
+
+    def test_returns_none_when_required_var_missing(self):
+        with patch.dict(os.environ, {"OS_PROFILE": "ubuntu2404"}, clear=False):
+            self.assertIsNone(native_linux_package_install_test._argv_from_ci_env())
+
+    def test_multi_gfx_arch_whitespace_and_rocm_version_in_argv(self):
+        env = {
+            **self._base_sanity_env,
+            "GFX_ARCH": "gfx94x gfx1100",
+            "NATIVE_LINUX_INSTALL_ROCM_VERSION": "7.13.1",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertIn("--gfx-arch", argv)
+        i = argv.index("--gfx-arch")
+        self.assertEqual(argv[i + 1 : i + 3], ["gfx94x", "gfx1100"])
+        self.assertIn("--rocm-version", argv)
+        j = argv.index("--rocm-version")
+        self.assertEqual(argv[j + 1], "7.13.1")
+
+    def test_gfx_arch_comma_single_token_in_argv(self):
+        env = {**self._base_sanity_env, "GFX_ARCH": "gfx94x,gfx1100"}
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        i = argv.index("--gfx-arch")
+        self.assertEqual(argv[i + 1], "gfx94x,gfx1100")
+
+    def test_parse_round_trip_from_ci_argv_multi_gfx_and_version(self):
+        env = {
+            **self._base_sanity_env,
+            "GFX_ARCH": "gfx94x gfx1100",
+            "NATIVE_LINUX_INSTALL_ROCM_VERSION": "7.13",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        args = native_linux_package_install_test.parse_cli_arguments(
+            argv, raise_instead_of_exit=True
+        )
+        self.assertEqual(args.gfx_arch, ["gfx94x", "gfx1100"])
+        self.assertEqual(args.rocm_version, "7.13")
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url=args.repo_url,
+            os_profile=args.os_profile,
+            release_type=args.release_type,
+            install_prefix=args.install_prefix,
+            gfx_arch=args.gfx_arch,
+            rocm_version=args.rocm_version,
+        )
+        self.assertEqual(len(t.package_names), 4)
+
 
 class RunSimulateInstallTestTest(unittest.TestCase):
     """Tests for run_simulate_install_test()."""
@@ -719,6 +823,51 @@ class RunTestsTestTypeTest(unittest.TestCase):
             rc = native_linux_package_install_test.run_tests(args)
         self.assertEqual(rc, 1)
 
+    def test_parse_cli_rocm_version_with_multiple_gfx_arch(self):
+        args = native_linux_package_install_test.parse_cli_arguments(
+            [
+                "--test-type",
+                "sanity",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-url",
+                "https://x.com",
+                "--release-type",
+                "nightly",
+                "--install-prefix",
+                "/opt/rocm/core",
+                "--rocm-version",
+                "7.13.1",
+                "--gfx-arch",
+                "gfx94x",
+                "gfx1100",
+            ],
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.rocm_version, "7.13.1")
+        self.assertEqual(args.gfx_arch, ["gfx94x", "gfx1100"])
+
+    def test_parse_cli_rocm_version_with_comma_single_gfx_arch_token(self):
+        args = native_linux_package_install_test.parse_cli_arguments(
+            [
+                "--test-type",
+                "sanity",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-url",
+                "https://x.com",
+                "--release-type",
+                "nightly",
+                "--install-prefix",
+                "/opt/rocm/core",
+                "--rocm-version",
+                "7.13",
+                "--gfx-arch",
+                "gfx94x,gfx1100",
+            ],
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.gfx_arch, ["gfx94x,gfx1100"])
 
 class RunBasicVerificationTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest.run_basic_verification()."""
@@ -1049,6 +1198,24 @@ class InstallDebPackagesTest(unittest.TestCase):
         call_args = mock_streaming.call_args[0][0]
         self.assertEqual(call_args[0], "apt")
         self.assertIn("amdrocm", call_args)
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_apt_install_includes_versioned_multi_arch_package_names(self, mock_streaming):
+        mock_streaming.return_value = 0
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch=["gfx94x", "gfx1100"],
+            rocm_version="7.13",
+        )
+        with _suppress_script_output():
+            self.assertTrue(t.install_deb_packages())
+        cmd = mock_streaming.call_args[0][0]
+        self.assertEqual(cmd[:3], ["apt", "install", "-y"])
+        self.assertIn("amdrocm7.13-gfx94x", cmd)
+        self.assertIn("amdrocm-core-sdk7.13-gfx94x", cmd)
+        self.assertIn("amdrocm7.13-gfx1100", cmd)
+        self.assertIn("amdrocm-core-sdk7.13-gfx1100", cmd)
 
     @patch("native_linux_package_install_test._run_streaming")
     def test_returns_false_when_apt_install_fails(self, mock_streaming):
