@@ -223,6 +223,8 @@ jobs:
       # TODO: Accept a pre-generated manifest as a workflow input so
       # an orchestrator can freeze commits once for the entire matrix.
       - name: Generate pytorch manifest
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python build_tools/github_actions/generate_pytorch_manifest_upfront.py \
             --rocm-version "${{ inputs.rocm_version }}" \
