@@ -213,6 +213,11 @@ jobs:
           python build_tools/github_actions/determine_version.py \
             --rocm-version ${{ inputs.rocm_version }}
 
+      - name: Compute manifest file path
+        run: |
+          ref="${{ inputs.pytorch_git_ref }}"
+          echo "MANIFEST_FILE=${{ env.MANIFEST_DIR }}/manifest_${ref//\//-}.json" >> "$GITHUB_ENV"
+
       # TODO: Accept a pre-generated manifest as a workflow input so
       # an orchestrator can freeze commits once for the entire matrix.
       - name: Generate pytorch manifest
@@ -221,14 +226,13 @@ jobs:
             --rocm-version "${{ inputs.rocm_version }}" \
             --version-suffix "${{ env.version_suffix }}" \
             --platform windows \
-            --manifest-dir "${{ env.MANIFEST_DIR }}" \
+            --output "${{ env.MANIFEST_FILE }}" \
             --pytorch-git-refs "${{ inputs.pytorch_git_ref }}"
 
       - name: Checkout PyTorch Source Repos from manifest
         run: |
-          manifest=$(ls "${{ env.MANIFEST_DIR }}"/*.json)
           python ./external-builds/pytorch/checkout_from_manifest.py \
-            --manifest "${manifest}" \
+            --manifest "${{ env.MANIFEST_FILE }}" \
             --checkout-root "${{ env.CHECKOUT_ROOT }}"
 
       - name: Configure AWS Credentials for sccache

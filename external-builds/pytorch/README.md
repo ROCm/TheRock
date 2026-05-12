@@ -475,3 +475,72 @@ python pytorch_vision_repo.py checkout --require-related-commit
 python pytorch_triton_repo.py checkout
 python pytorch_apex_repo.py checkout --require-related-commit
 ```
+
+### Checking out using manifests
+
+Instead of running individual checkout scripts, you can use a build
+manifest to pin exact commits for all repositories and check them out
+in one command. This is what CI/CD workflows use internally.
+
+#### Generating a manifest
+
+```bash
+# Single version (writes to an explicit path):
+python build_tools/github_actions/generate_pytorch_manifest_upfront.py \
+    --rocm-version 7.13.0a20260501 \
+    --version-suffix "+rocm7.13.0a20260501" \
+    --output manifest.json \
+    --pytorch-git-refs "release/2.10"
+
+# Multiple versions (computed filenames in a directory):
+python build_tools/github_actions/generate_pytorch_manifest_upfront.py \
+    --rocm-version 7.13.0a20260501 \
+    --version-suffix "+rocm7.13.0a20260501" \
+    --manifest-dir manifests/ \
+    --pytorch-git-refs "release/2.10 release/2.11 nightly"
+
+# Windows (uses triton-windows, excludes apex):
+python build_tools/github_actions/generate_pytorch_manifest_upfront.py \
+    --rocm-version 7.13.0a20260501 \
+    --version-suffix "+rocm7.13.0a20260501" \
+    --platform windows \
+    --output manifest.json \
+    --pytorch-git-refs "release/2.10"
+
+# Only pytorch (skip audio/vision/triton/apex):
+python build_tools/github_actions/generate_pytorch_manifest_upfront.py \
+    --rocm-version 7.13.0a20260501 \
+    --version-suffix "+rocm7.13.0a20260501" \
+    --output manifest.json \
+    --pytorch-git-refs "release/2.10" \
+    --projects pytorch
+```
+
+#### Downloading manifests from CI/CD runs
+
+Manifests from nightly and release builds are uploaded to S3:
+
+```
+https://therock-nightly-artifacts.s3.amazonaws.com/{run_id}-linux/manifests/pytorch/index.html
+```
+
+#### Checking out from a manifest
+
+```bash
+# Check out all projects at pinned commits:
+python external-builds/pytorch/checkout_from_manifest.py \
+    --manifest manifest.json \
+    --checkout-root ./src
+
+# Check out only pytorch:
+python external-builds/pytorch/checkout_from_manifest.py \
+    --manifest manifest.json \
+    --checkout-root ./src \
+    --projects pytorch
+
+# Skip HIPIFY (for test-only runs):
+python external-builds/pytorch/checkout_from_manifest.py \
+    --manifest manifest.json \
+    --checkout-root ./src \
+    --no-hipify
+```

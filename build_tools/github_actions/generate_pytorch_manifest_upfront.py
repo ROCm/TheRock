@@ -340,7 +340,17 @@ def main(argv: list[str]) -> None:
         default="linux",
         help="Target platform (affects repo selection and exclusions)",
     )
-    parser.add_argument("--manifest-dir", type=Path, required=True)
+    output_group = parser.add_mutually_exclusive_group(required=True)
+    output_group.add_argument(
+        "--output",
+        type=Path,
+        help="Write a single manifest to this exact path (requires one --pytorch-git-refs entry)",
+    )
+    output_group.add_argument(
+        "--manifest-dir",
+        type=Path,
+        help="Write manifests to this directory (filenames are computed from refs)",
+    )
     parser.add_argument(
         "--therock-commit", help="Override TheRock commit (default: detect from git)"
     )
@@ -370,6 +380,9 @@ def main(argv: list[str]) -> None:
         if args.pytorch_git_refs
         else DEFAULT_PYTORCH_GIT_REFS
     )
+
+    if args.output and len(refs) != 1:
+        parser.error("--output requires exactly one --pytorch-git-refs entry")
     projects = (
         args.projects.split()
         if args.projects
@@ -389,8 +402,6 @@ def main(argv: list[str]) -> None:
     log(f"PyTorch refs: {refs}")
     log("")
 
-    args.manifest_dir.mkdir(parents=True, exist_ok=True)
-
     for ref in refs:
         manifest = generate_manifest(
             pytorch_git_ref=ref,
@@ -402,8 +413,14 @@ def main(argv: list[str]) -> None:
             therock_repo=therock_repo,
             therock_branch=therock_branch,
         )
-        filename = f"therock-manifest_torch_{args.platform}_{normalize_ref_for_filename(ref)}.json"
-        out_path = args.manifest_dir / filename
+
+        if args.output:
+            out_path = args.output
+        else:
+            filename = f"therock-manifest_torch_{args.platform}_{normalize_ref_for_filename(ref)}.json"
+            out_path = args.manifest_dir / filename
+
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(
             json.dumps(manifest, indent=2, sort_keys=False) + "\n", encoding="utf-8"
         )
