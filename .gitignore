@@ -21,6 +21,10 @@ __pycache__
 
 # Branch-specific flag overrides (see FLAGS.cmake).
 /BRANCH_FLAGS.cmake
+/BRANCH_CONFIG.json
+
+# Optional externally fetched sources.
+/optional-sources/
 
 # Output directories.
 /build/

@@ -179,7 +179,7 @@ configuration. It is safe to re-run at any time.
 > Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.VC.ATL --add
 > Microsoft.VisualStudio.Component.Windows11SDK.22621"
 > winget install --id Git.Git -e --source winget --custom "/o:PathOption=CmdTools"
-> winget install cmake -v 3.31.0
+> winget install cmake
 > winget install ninja-build.ninja ccache python strawberryperl bloodrock.pkg-config-lite
 > winget install --id Iterative.DVC --silent --accept-source-agreements
 > ```
@@ -190,7 +190,10 @@ If you prefer to install tools manually, you will need:
   (Using either "Visual Studio" or "Build Tools for Visual Studio"),
   including these components:
 
-  - MSVC
+  - MSVC **version 19.43+** (Visual Studio 2022 **17.13+**). Older versions
+    will fail at link time because prebuilt libraries reference STL internals
+    introduced in 19.43.
+    See [Issue#5029](https://github.com/ROCm/TheRock/issues/5029).
   - C++ CMake tools for Windows
   - C++ ATL
   - C++ AddressSanitizer (optional)
@@ -199,8 +202,7 @@ If you prefer to install tools manually, you will need:
 
   - With "Use Git and optional Unix tools from the Windows Command Prompt" as certain build scripts use Bash.
 
-- CMake: https://cmake.org/download/, version < 4.0.0
-  (see [Issue#318](https://github.com/ROCm/TheRock/issues/318))
+- CMake: https://cmake.org/download/
 
 - Ninja: https://ninja-build.org/
 

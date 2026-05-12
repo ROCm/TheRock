@@ -72,7 +72,7 @@ on:
 permissions:
   contents: read
 
-run-name: Release Windows packages (${{ inputs.families || 'default' }}, ${{ inputs.release_type || 'nightly' }})
+run-name: Release Windows packages (${{ inputs.release_type || 'nightly' }}, ${{ inputs.families || 'default' }})
 
 jobs:
   setup_metadata:
