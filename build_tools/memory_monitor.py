@@ -298,21 +298,28 @@ class ResourceMonitor:
 
         main_line = " | ".join(parts)
 
-        # Add top processes when memory or CPU is high
+        # Always show top process, more when resources are high
         top_procs = stats.get("top_procs", [])
-        if top_procs and (
-            stats["mem_percent"] >= WARN_PERCENT
-            or stats.get("cpu_percent", 0) >= WARN_PERCENT
-        ):
+        in_container = is_in_container()
+        if top_procs:
+            # Show more processes when memory or CPU is high
+            show_count = (
+                4
+                if (
+                    stats["mem_percent"] >= WARN_PERCENT
+                    or stats.get("cpu_percent", 0) >= WARN_PERCENT
+                )
+                else 1
+            )
             proc_strs = []
-            for p in top_procs[:4]:
+            for p in top_procs[:show_count]:
                 # Convert raw cpu_percent (can exceed 100% on multi-core) to cores
                 cores_used = p["cpu_pct"] / 100
                 proc_strs.append(
-                    f"{p['cmd']}({p['mem_pct']:.1f}% mem, {cores_used:.1f} cores)"
+                    f"{p['cmd']}({p['mem_pct']:.1f}% mem, {cores_used:.1f} CPUs)"
                 )
             # Clarify scope when in container (process list is container-local)
-            prefix = "Container" if is_in_container() else "Top"
+            prefix = "Container top" if in_container else "Top"
             main_line += f"\n           {prefix}: {', '.join(proc_strs)}"
 
         return main_line
