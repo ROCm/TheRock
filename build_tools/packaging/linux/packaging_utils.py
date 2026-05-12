@@ -11,7 +11,7 @@ import re
 import shutil
 import sys
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 
@@ -31,7 +31,11 @@ GFX_GENERIC = "gfx_generic"
 # versioned_pkg - Used to indicate versioned or non versioned packages
 # enable_kpack - To enable multi-architecture support
 # gfxarch_list - List of all architectures for multi-arch mode
-@dataclass
+#
+# frozen=True makes this dataclass immutable (hashable and thread-safe).
+# Note: gfxarch_list uses tuple instead of list because frozen dataclasses
+# require all fields to be immutable types (tuples are immutable, lists are not).
+@dataclass(frozen=True)
 class PackageConfig:
     artifacts_dir: Path
     dest_dir: Path
@@ -40,10 +44,10 @@ class PackageConfig:
     version_suffix: str
     install_prefix: str
     gfx_arch: str
-    enable_rpath: bool = field(default=False)
-    versioned_pkg: bool = field(default=True)
-    enable_kpack: bool = field(default=False)
-    gfxarch_list: list = field(default_factory=list)
+    enable_rpath: bool = False
+    versioned_pkg: bool = True
+    enable_kpack: bool = False
+    gfxarch_list: tuple = field(default_factory=tuple)
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -221,6 +225,12 @@ def is_gfxarch_package(pkg_info, enable_kpack=False):
         pkgname = pkg_info.get("Package", "")
         if pkgname.endswith("-devel"):
             return False
+
+        # Override RCCL Gfxarch behavior in kpack mode
+        # When --enable-kpack is used, RCCL should look for architecture-specific artifacts
+        # instead of generic artifacts to ensure GPU-specific kernel support (e.g., gfx1201)
+        if pkgname in ["amdrocm-rccl", "amdrocm-rccl-test"]:
+            return True
 
     return is_key_defined(pkg_info, "Gfxarch")
 
@@ -414,11 +424,10 @@ def expand_metapackage_to_all_archs(pkg_name, gfxarch_list, config: PackageConfi
     Returns: List of architecture-specific package names
     """
     arch_specific_packages = []
-    local_config = copy.deepcopy(config)
-    local_config.versioned_pkg = True
 
     for gfx_arch in gfxarch_list:
-        local_config.gfx_arch = gfx_arch
+        # Create new config for each arch with versioned_pkg=True
+        local_config = replace(config, versioned_pkg=True, gfx_arch=gfx_arch)
         # update_package_name will append version and gfx_arch
         arch_pkg = update_package_name(pkg_name, local_config)
         arch_specific_packages.append(arch_pkg)
@@ -521,12 +530,14 @@ def convert_to_versiondependency(
     # This function is to add Version dependency
     # Make sure the flag is set to True
 
-    local_config = copy.deepcopy(config)
-    local_config.versioned_pkg = True
-    # In multi-arch mode, dependencies should always point to generic packages
-    # UNLESS preserve_arch is True (for arch-specific metapackages)
+    # Create config with versioned_pkg=True and conditionally override gfx_arch
     if config.enable_kpack and not preserve_arch:
-        local_config.gfx_arch = GFX_GENERIC
+        # In multi-arch mode, dependencies point to generic packages
+        # UNLESS preserve_arch is True (for arch-specific metapackages)
+        local_config = replace(config, versioned_pkg=True, gfx_arch=GFX_GENERIC)
+    else:
+        local_config = replace(config, versioned_pkg=True)
+
     pkg_list, skipped_list = get_package_list(config.artifacts_dir)
 
     filtered_deps = []
@@ -675,6 +686,16 @@ def filter_components_fromartifactory(
         if "Artifact_Gfxarch" in artifact:
             print(f"{pkg_name} : Artifact_Gfxarch key exists for artifacts {artifact}")
             is_gfxarch = str(artifact["Artifact_Gfxarch"]).lower() == "true"
+
+            # In kpack mode, skip non-gfxarch artifacts when building gfx-specific packages
+            # This prevents generic artifacts from being included in both base and arch-specific packages
+            if enable_kpack and gfx_arch != GFX_GENERIC and not is_gfxarch:
+                print(
+                    f"{pkg_name} : Skipping artifact '{artifact_prefix}' for {gfx_arch} package "
+                    f"(Artifact_Gfxarch=False, should only be in generic package)"
+                )
+                continue
+
             artifact_suffix = gfx_arch if is_gfxarch else "generic"
         else:
             artifact_suffix = dir_suffix
@@ -825,15 +846,39 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
         else:
             artifact_suffix = gfx_arch
 
+        # When checking for a specific gfx architecture (not generic),
+        # skip generic-only artifacts - they don't contribute to gfx-specific packages
+        if gfx_arch != GFX_GENERIC and artifact_suffix == "generic":
+            continue
+
         for subdir in artifact["Artifact_Subdir"]:
+            artifact_subdir = subdir["Name"]
             component_list = subdir["Components"]
             for component in component_list:
                 source_dir = (
                     Path(artifacts_dir)
                     / f"{artifact_prefix}_{component}_{artifact_suffix}"
                 )
-                if source_dir.exists():
-                    return True
+                if not source_dir.exists():
+                    continue
+
+                # Check if the required subdirectory exists in the manifest
+                manifest_file = source_dir / "artifact_manifest.txt"
+                if not manifest_file.exists():
+                    continue
+
+                try:
+                    with manifest_file.open("r", encoding="utf-8") as file:
+                        for line in file:
+                            match_found = (
+                                isinstance(artifact_subdir, str)
+                                and (artifact_subdir.lower() + "/") in line.lower()
+                            )
+                            if match_found and line.strip():
+                                # Found at least one required subdirectory in the manifest
+                                return True
+                except OSError:
+                    continue
 
     return False
 

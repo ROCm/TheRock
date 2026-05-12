@@ -4,15 +4,20 @@
 
 """Writes jaxlib_version, jax_plugin_version, jax_pjrt_version, and jax_version to GITHUB_OUTPUT.
 
-Fails if any expected JAX wheels are not found.
+Fails if required JAX wheels (jax_rocm7_plugin, jax_rocm7_pjrt) are not found.
+
+For JAX <= 0.9.0, jaxlib is built and expected in the wheelhouse.
+For JAX >= 0.9.1, jaxlib is not built - it is installed from upstream PyPI
+(e.g. `pip install jaxlib==0.9.1`). Only jax_rocm7_plugin and jax_rocm7_pjrt
+are built.
 
 Expected wheels:
-* jaxlib
+* jaxlib (not built for JAX >= 0.9.1)
 * jax_rocm7_plugin
 * jax_rocm7_pjrt
 
 The jax_version output is the base version (without the +rocm suffix),
-suitable for installing the `jax` package from PyPI.
+suitable for installing the `jax` and `jaxlib` packages from PyPI.
 """
 
 import argparse
@@ -70,7 +75,9 @@ def get_all_jax_wheel_versions(
     if jaxlib_version:
         all_versions = all_versions | {"jaxlib_version": jaxlib_version}
     else:
-        raise FileNotFoundError("Did not find jaxlib wheel")
+        _log(
+            "INFO: No jaxlib wheel found. For JAX >= 0.9.1, jaxlib is not built - use upstream PyPI."
+        )
 
     if jax_plugin_version:
         all_versions = all_versions | {"jax_plugin_version": jax_plugin_version}
@@ -82,8 +89,12 @@ def get_all_jax_wheel_versions(
     else:
         raise FileNotFoundError("Did not find jax_rocm7_pjrt wheel")
 
-    # Base JAX version (without +rocm suffix) for installing jax from PyPI.
-    all_versions = all_versions | {"jax_version": jaxlib_version.split("+")[0]}
+    # Assumption: the jax_rocm7_plugin version (e.g. "0.9.1+rocmXY") shares the
+    # same base version as the upstream `jax` / `jaxlib` PyPI packages.  If the
+    # plugin version scheme ever diverges, this fallback will silently produce a
+    # wrong jax_version and will need an explicit override.
+    base_version_source = jaxlib_version or jax_plugin_version
+    all_versions = all_versions | {"jax_version": base_version_source.split("+")[0]}
 
     return all_versions
 

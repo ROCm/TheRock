@@ -1,0 +1,35 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: "Configure AWS credentials for artifact uploads"
+
+description: >-
+  Determine the IAM role for the artifacts S3 bucket and assume it via OIDC.
+  * Forks and external repos skip OIDC and use runner base credentials.
+  * Release builds (dev/nightly/prerelease) use 'therock-{release_type}' roles.
+  * Other CI runs use the 'therock-ci' role.
+  See the "Authentication" section in docs/development/s3_buckets.md.
+
+inputs:
+  release_type:
+    description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Determine IAM role
+      if: ${{ always() }}
+      id: iam
+      shell: bash
+      run: |
+        python build_tools/github_actions/write_artifacts_bucket_info.py \
+          --release-type "${{ inputs.release_type }}"
+
+    - name: Configure AWS Credentials
+      if: ${{ always() && steps.iam.outputs.iam_role != '' }}
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+      with:
+        aws-region: ${{ steps.iam.outputs.aws_region }}
+        role-to-assume: ${{ steps.iam.outputs.iam_role }}
+        special-characters-workaround: ${{ runner.os == 'Windows' }}

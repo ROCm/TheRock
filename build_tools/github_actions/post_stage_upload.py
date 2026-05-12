@@ -136,7 +136,7 @@ def upload_stage_logs(
         log(f"[INFO] Log directory {log_dir} not found. Skipping upload.")
         return
 
-    dest = output_root.stage_log_dir(stage_name, amdgpu_family)
+    dest = output_root.log_stage_dir(stage_name, amdgpu_family)
     # Exclude raw ccache logs — they're uploaded compressed as ccache_logs.tar.zst.
     backend.upload_directory(log_dir, dest, exclude=["ccache/**/*"])
 

@@ -36,7 +36,8 @@ RUN sudo dnf install -y --nodocs \
 RUN sudo dnf install -y --nodocs git-lfs \
     && sudo dnf clean all
 
-RUN sudo dnf install -y --nodocs python3-setuptools python3-wheel \
+RUN sudo dnf install -y --nodocs python3-pip python3-setuptools python3-wheel \
+    python-unversioned-command \
     && sudo dnf clean all
 
 WORKDIR /home/tester/

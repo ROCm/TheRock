@@ -68,6 +68,7 @@ class TestUploadArtifacts(unittest.TestCase):
                 ).is_file()
             )
             # index.html is generated server-side — not uploaded from upload_artifacts
+            self.assertFalse((staging_dir / "12345-linux" / "index.html").exists())
             self.assertFalse(
                 (staging_dir / "12345-linux" / "index-gfx94X-dcgpu.html").exists()
             )
@@ -298,7 +299,7 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
             calls[1],
         )
         self.assertIn(
-            "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/index-gfx94X-dcgpu.html",
+            "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/index.html",
             calls[2],
         )
         self.assertIn(
@@ -342,6 +343,7 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
 
         for call in calls:
             self.assertNotIn("index-gfx94X-dcgpu.html", call)
+            self.assertNotIn("12345-linux/index.html", call)
 
     @mock.patch("post_build_upload.gha_append_step_summary")
     def test_summary_with_external_repo(self, mock_summary):

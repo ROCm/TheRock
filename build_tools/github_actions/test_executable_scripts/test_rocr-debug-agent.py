@@ -135,9 +135,24 @@ def get_default_paths() -> Dict[str, Path]:
     therock_bin_dir = validate_path(Path(therock_bin_dir_str), "THEROCK_BIN_DIR")
     artifacts_dir = validate_path(Path(artifacts_dir_str), "OUTPUT_ARTIFACTS_DIR")
 
+    # Try the old testing script location first (for backwards compatibility).
+    test_bin = therock_bin_dir / "rocm-debug-agent-test"
+    test_script = artifacts_dir / "src" / "rocm-debug-agent-test" / "run-test.py"
+
+    if not test_script.exists():
+        # Fall back to the new testing script location (both binary and script
+        # in the same directory).
+        test_dir = artifacts_dir / "tests" / "rocm-debug-agent"
+        test_bin = test_dir / "rocm-debug-agent-test"
+        test_script = test_dir / "run-test.py"
+
+        if not test_script.exists():
+            logger.error(f"[X] Error: run-test.py not found.")
+            sys.exit(1)
+
     return {
-        "test_bin": therock_bin_dir / "rocm-debug-agent-test",
-        "test_script": artifacts_dir / "src" / "rocm-debug-agent-test" / "run-test.py",
+        "test_bin": test_bin,
+        "test_script": test_script,
     }
 
 
