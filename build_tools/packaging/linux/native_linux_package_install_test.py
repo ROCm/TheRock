@@ -514,10 +514,10 @@ class NativeLinuxPackageInstallTest:
         if self.gpg_key_url:
             # Use GPG key verification
             apt_keyring = Path(APT_KEYRING_FILE)
-            repo_entry = f"deb [arch=amd64 signed-by={apt_keyring}] {self.repo_url} stable main\n"
+            repo_entry = f"deb [signed-by={apt_keyring}] {self.repo_url} stable main\n"
         else:
             # No GPG check (trusted=yes)
-            repo_entry = f"deb [arch=amd64 trusted=yes] {self.repo_url} stable main\n"
+            repo_entry = f"deb [trusted=yes] {self.repo_url} stable main\n"
 
         try:
             sources_list.write_text(repo_entry, encoding="utf-8")
