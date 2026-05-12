@@ -51,8 +51,8 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
-            {"label": "azure-linux-scale-rocm", "weight": 1.0},
-            {"label": "aws-linux-scale-rocm", "weight": 0.0},
+            {"label": "azure-linux-scale-rocm", "weight": 0.9},
+            {"label": "aws-linux-scale-rocm-prod", "weight": 0.1},
         ],
         "sanitizer": [
             {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
@@ -158,7 +158,7 @@ amdgpu_family_info_matrix_presubmit = {
                 },  # core42 (8/29)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
+            "test-runs-on-sandbox": "",
             # 8-GPU distribution: 11N (cirrascale) + 7N (core42)
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [

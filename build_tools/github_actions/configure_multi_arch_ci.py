@@ -501,6 +501,22 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
+    # Skip ASAN on PRs unless submodule changes are present.
+    # This avoids running expensive ASAN builds on every PR while still
+    # catching ASAN issues when library code (submodules) changes.
+    # TODO: Contributors may open draft PRs with submodule updates which run ASAN builds.
+    #       If overly expensive, remove that option
+    if (
+        ci_inputs.is_pull_request
+        and ci_inputs.build_variant == "asan"
+        and git_context.changed_files is not None
+        and git_context.submodule_paths is not None
+    ):
+        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
+        if not matching:
+            print("  Skipping: ASAN PR without submodule changes")
+            return True
+
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
     # files are changed, skip CI.
