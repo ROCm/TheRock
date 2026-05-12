@@ -88,10 +88,10 @@ def run_smoke_tests(python: Path, artifacts_path: Path) -> None:
         lib_path = str(artifacts_path / "lib")
         env["LD_LIBRARY_PATH"] = f"{lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
 
-    test_script = r'''
+    test_script = r"""
 import hipdnn_frontend as fe
 print(f"OK import hipdnn_frontend (version {fe.__version__})")
-'''
+"""
 
     cmd = [str(python), "-c", test_script]
     logging.info("Running smoke tests...")
