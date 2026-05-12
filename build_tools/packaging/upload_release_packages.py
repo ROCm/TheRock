@@ -374,13 +374,13 @@ Safety Features:
         args.bucket = "therock-release-python"
 
         if args.multi_arch:
-            args.bucket_prefix = "v4/whl/"
+            args.bucket_prefix = "v4/rocm/whl/"
             args.tarball_bucket = "therock-release-tarball"
-            args.tarball_bucket_prefix = "v4/tarball/"
+            args.tarball_bucket_prefix = "v4/rocm/tarball/"
         else:
-            args.bucket_prefix = "v3/whl/"
+            args.bucket_prefix = "v3/rocm/whl/"
             args.tarball_bucket = "therock-release-tarball"
-            args.tarball_bucket_prefix = "v3/tarball/"
+            args.tarball_bucket_prefix = "v3/rocm/tarball/"
 
     # Validate input directory
     if not args.input_dir.exists():
