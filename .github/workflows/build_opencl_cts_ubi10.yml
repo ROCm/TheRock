@@ -47,8 +47,8 @@ jobs:
     permissions:
       id-token: write
     container:
-      # TODO: Switch to ghcr.io/rocm/build_opencl_cts_ubi10 once the image is published.
-      image: ghcr.io/rocm/no_rocm_image_ubi10@sha256:a10f34d6006a20d02cf688982de9dea147710927ed405a3b0d5c73b58a6030c0
+      # TODO: Switch to a dedicated ubi10-based build image once the packages are available.
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
       options: --user 0:0
     env:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
@@ -57,13 +57,12 @@ jobs:
     steps:
       - name: Install opencl-cts build dependencies
         run: |
-          sudo dnf install -y --nodocs \
-            ocl-icd-devel \
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            ocl-icd-opencl-dev \
             opencl-headers \
-            spirv-headers-devel \
             spirv-tools \
-            spirv-tools-devel \
-          && sudo dnf clean all
+            spirv-headers
 
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
