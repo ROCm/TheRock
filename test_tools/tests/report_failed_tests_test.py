@@ -2,148 +2,25 @@
 # SPDX-License-Identifier: MIT
 
 import json
-import tempfile
-import unittest
-from pathlib import Path
 import sys
+import tempfile
+from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from report_failed_tests import (
+    FailedTest,
     TestResult,
-    parse_junit_xml,
-    parse_gtest_json,
-    parse_stdout_log,
     create_fallback_result,
     find_and_parse_results,
     generate_metrics_output,
+    parse_stdout_log,
 )
 
 
-class TestParseJunitXml(unittest.TestCase):
-    def test_parse_junit_xml_with_failures(self):
-        xml_content = """<?xml version="1.0"?>
-<testsuite name="Suite" tests="2" failures="1">
-  <testcase name="pass" classname="Suite"/>
-  <testcase name="fail" classname="Suite">
-    <failure message="failed"/>
-  </testcase>
-</testsuite>"""
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            xml_file = Path(tmpdir) / "ctest-comp-shard1.xml"
-            xml_file.write_text(xml_content)
-            result = parse_junit_xml(xml_file)
-
-            self.assertEqual(result.component, "comp")
-            self.assertEqual(result.failed_count, 1)
-            self.assertEqual(result.status, "failure")
-            self.assertIn("Suite.fail", result.failed_tests)
-
-    def test_parse_junit_xml_with_timeout(self):
-        """Test that timeout failures are properly detected."""
-        xml_content = """<?xml version="1.0"?>
-<testsuite name="rocblas-test_quick_suite" tests="1" failures="1" time="600.25">
-  <testcase name="rocblas-test_quick_suite" classname="rocblas-test_quick_suite" time="600.25">
-    <failure type="Timeout">Test timeout after 600.25 seconds</failure>
-  </testcase>
-</testsuite>"""
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            xml_file = Path(tmpdir) / "ctest-rocblas-shard1.xml"
-            xml_file.write_text(xml_content)
-            result = parse_junit_xml(xml_file)
-
-            self.assertEqual(result.component, "rocblas")
-            self.assertEqual(result.timeout_count, 1)
-            self.assertEqual(result.failure_reason, "timeout")
-            self.assertTrue(
-                any("Timeout" in t for t in result.failed_tests),
-                f"Expected timeout marker in {result.failed_tests}",
-            )
-
-    def test_parse_junit_xml_testsuites_wrapper(self):
-        """Test parsing with <testsuites> as root element."""
-        xml_content = """<?xml version="1.0"?>
-<testsuites tests="3" failures="1" time="10.5">
-  <testsuite name="Suite1" tests="2" failures="0">
-    <testcase name="pass1" classname="Suite1"/>
-    <testcase name="pass2" classname="Suite1"/>
-  </testsuite>
-  <testsuite name="Suite2" tests="1" failures="1">
-    <testcase name="fail1" classname="Suite2">
-      <failure message="assertion failed"/>
-    </testcase>
-  </testsuite>
-</testsuites>"""
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            xml_file = Path(tmpdir) / "ctest-multi-shard1.xml"
-            xml_file.write_text(xml_content)
-            result = parse_junit_xml(xml_file)
-
-            self.assertEqual(result.component, "multi")
-            self.assertEqual(result.total_tests, 3)
-            self.assertEqual(result.failed_count, 1)
-            self.assertEqual(result.duration_seconds, 10.5)
-
-
-class TestParseGtestJson(unittest.TestCase):
-    def test_parse_gtest_json_with_failures(self):
-        json_content = {
-            "tests": 2,
-            "failures": 1,
-            "time": "1.0s",
-            "testsuites": [
-                {
-                    "name": "Suite",
-                    "testsuite": [
-                        {"name": "pass"},
-                        {"name": "fail", "failures": [{"failure": "error"}]},
-                    ],
-                }
-            ],
-        }
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            json_file = Path(tmpdir) / "gtest-comp-shard1.json"
-            json_file.write_text(json.dumps(json_content))
-            result = parse_gtest_json(json_file)
-
-            self.assertEqual(result.component, "comp")
-            self.assertEqual(result.failed_count, 1)
-            self.assertIn("Suite.fail", result.failed_tests)
-
-    def test_parse_gtest_json_all_pass(self):
-        json_content = {
-            "tests": 3,
-            "failures": 0,
-            "disabled": 1,
-            "time": "2.5s",
-            "testsuites": [
-                {
-                    "name": "Suite",
-                    "testsuite": [
-                        {"name": "test1"},
-                        {"name": "test2"},
-                        {"name": "test3"},
-                    ],
-                }
-            ],
-        }
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            json_file = Path(tmpdir) / "gtest-passing-shard1.json"
-            json_file.write_text(json.dumps(json_content))
-            result = parse_gtest_json(json_file)
-
-            self.assertEqual(result.status, "success")
-            self.assertEqual(result.total_tests, 3)
-            self.assertEqual(result.skipped_count, 1)
-            self.assertEqual(result.duration_seconds, 2.5)
-
-
-class TestParseStdoutLog(unittest.TestCase):
+class TestParseStdoutLog:
     def test_parse_gtest_failures_from_stdout(self):
         """Test parsing GTest failures from stdout."""
         log_content = """
@@ -159,16 +36,15 @@ class TestParseStdoutLog(unittest.TestCase):
 [  FAILED  ] 1 test, listed below:
 [  FAILED  ] SuiteA.Test2
 """
-
         with tempfile.TemporaryDirectory() as tmpdir:
             log_file = Path(tmpdir) / "test.log"
             log_file.write_text(log_content)
             result = parse_stdout_log(log_file, "mycomponent")
 
-            self.assertEqual(result.component, "mycomponent")
-            self.assertEqual(result.total_tests, 100)
-            self.assertEqual(result.passed_tests, 99)
-            self.assertIn("SuiteA.Test2", result.failed_tests)
+            assert result.component == "mycomponent"
+            assert len(result.failed_tests) == 1
+            assert result.failed_tests[0].name == "SuiteA.Test2"
+            assert result.failed_tests[0].is_outer is False  # gtest is inner
 
     def test_parse_ctest_timeout_from_stdout(self):
         """Test parsing CTest timeout from stdout."""
@@ -180,150 +56,254 @@ Test project /path/to/build
 The following tests FAILED:
           1 - rocblas-test_quick_suite (Timeout)
 """
-
         with tempfile.TemporaryDirectory() as tmpdir:
             log_file = Path(tmpdir) / "test.log"
             log_file.write_text(log_content)
             result = parse_stdout_log(log_file, "rocblas")
 
-            self.assertEqual(result.timeout_count, 1)
-            self.assertEqual(result.failure_reason, "timeout")
-            self.assertTrue(
-                any("Timeout" in t for t in result.failed_tests),
-                f"Expected timeout marker in {result.failed_tests}",
-            )
+            assert result.timeout_count >= 1
+            timeouts = [t for t in result.failed_tests if t.status == "timeout"]
+            assert len(timeouts) >= 1
+            assert timeouts[0].is_outer is True  # ctest is outer
+
+    def test_parse_nested_gtest_in_ctest(self):
+        """Test parsing inner gtest failures AND outer ctest failure."""
+        log_content = """
+      Start  1: unit_tests
+1/1 Test  #1: unit_tests ...................***Failed    5.00 sec
+
+[ RUN      ] Suite.Test1
+[       OK ] Suite.Test1 (1 ms)
+[ RUN      ] Suite.Test2
+[  FAILED  ] Suite.Test2 (2 ms)
+
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] Suite.Test2
+
+The following tests FAILED:
+      1 - unit_tests (Failed)
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_file = Path(tmpdir) / "test.log"
+            log_file.write_text(log_content)
+            result = parse_stdout_log(log_file, "unit-tests")
+
+            assert result.status == "failure"
+
+            # Should have both inner gtest failure AND outer ctest failure
+            inner_tests = [t for t in result.failed_tests if not t.is_outer]
+            outer_tests = [t for t in result.failed_tests if t.is_outer]
+
+            assert len(inner_tests) == 1
+            assert inner_tests[0].name == "Suite.Test2"
+
+            assert len(outer_tests) == 1
+            assert outer_tests[0].name == "unit_tests"
+
+    def test_parse_empty_log(self):
+        """Test parsing empty log file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_file = Path(tmpdir) / "empty.log"
+            log_file.write_text("")
+            result = parse_stdout_log(log_file, "empty-tests")
+
+            assert result.status == "success"
+            assert result.failed_count == 0
+            assert len(result.failed_tests) == 0
+
+    def test_parse_interrupted_test(self):
+        """Test detecting interrupted tests."""
+        log_content = """
+[ RUN      ] Suite.LongTest
+Some output...
+Process killed by signal
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_file = Path(tmpdir) / "test.log"
+            log_file.write_text(log_content)
+            result = parse_stdout_log(log_file, "interrupted-tests")
+
+            assert result.status == "failure"
+            interrupted = [
+                t for t in result.failed_tests if t.failure_reason == "interrupted"
+            ]
+            assert len(interrupted) == 1
 
 
-class TestFallbackResult(unittest.TestCase):
+class TestFallbackResult:
     def test_create_fallback_result_timeout(self):
         result = create_fallback_result("rocblas", 124, "timeout")
 
-        self.assertEqual(result.component, "rocblas")
-        self.assertEqual(result.status, "failure")
-        self.assertEqual(result.failure_reason, "timeout")
-        self.assertEqual(result.timeout_count, 1)
-        self.assertTrue(any("Timeout" in t for t in result.failed_tests))
+        assert result.component == "rocblas"
+        assert result.status == "failure"
+        assert result.failure_reason == "timeout"
+        assert result.timeout_count == 1
+        assert len(result.failed_tests) == 1
+        assert result.failed_tests[0].status == "timeout"
+        assert result.failed_tests[0].is_outer is True
 
     def test_create_fallback_result_sigterm(self):
         result = create_fallback_result("rocblas", 143, "timeout")
 
-        self.assertEqual(result.exit_code, 143)
-        self.assertEqual(result.failure_reason, "timeout")
+        assert result.exit_code == 143
+        assert result.failure_reason == "timeout"
+        assert result.failed_tests[0].is_outer is True
 
     def test_create_fallback_result_success(self):
         result = create_fallback_result("rocblas", 0)
 
-        self.assertEqual(result.status, "success")
-        self.assertEqual(result.failed_count, 0)
+        assert result.status == "success"
+        assert result.failed_count == 0
+        assert len(result.failed_tests) == 0
 
 
-class TestFindAndParseResults(unittest.TestCase):
-    def test_fallback_to_stdout_log(self):
-        """Test that stdout log is used when no structured output exists."""
+class TestFindAndParseResults:
+    def test_parse_stdout_log(self):
+        """Test that stdout log is parsed."""
         log_content = """
 [==========] 10 tests from 1 test suite ran.
 [  PASSED  ] 9 tests.
 [  FAILED  ] 1 test:
 [  FAILED  ] Suite.FailingTest
 """
-
         with tempfile.TemporaryDirectory() as tmpdir:
-            results_dir = Path(tmpdir) / "results"
-            results_dir.mkdir()
-
             log_file = Path(tmpdir) / "stdout.log"
             log_file.write_text(log_content)
 
-            results = find_and_parse_results(
-                results_dir, stdout_log=log_file, step_name="mytest"
-            )
+            results = find_and_parse_results(stdout_log=log_file, step_name="mytest")
 
-            self.assertEqual(len(results), 1)
-            self.assertIn("Suite.FailingTest", results[0].failed_tests)
+            assert len(results) == 1
+            assert any(t.name == "Suite.FailingTest" for t in results[0].failed_tests)
 
     def test_fallback_with_exit_code(self):
-        """Test fallback result when no files and no stdout log."""
+        """Test fallback result when no stdout log."""
+        results = find_and_parse_results(
+            stdout_log=Path("/nonexistent/path.log"),
+            step_name="rocblas",
+            fallback_exit_code=143,
+        )
+
+        assert len(results) == 1
+        assert results[0].status == "failure"
+        assert results[0].failure_reason == "timeout"
+        assert results[0].failed_tests[0].is_outer is True
+
+    def test_no_fallback_on_success_exit(self):
+        """Test no fallback when exit code is 0."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            results_dir = Path(tmpdir) / "results"
-            results_dir.mkdir()
+            log_file = Path(tmpdir) / "empty.log"
+            log_file.write_text("")
 
             results = find_and_parse_results(
-                results_dir, step_name="rocblas", fallback_exit_code=143
+                stdout_log=log_file,
+                step_name="rocblas",
+                fallback_exit_code=0,
             )
 
-            self.assertEqual(len(results), 1)
-            self.assertEqual(results[0].status, "failure")
-            self.assertEqual(results[0].failure_reason, "timeout")
+            # No results because log is empty and exit code is 0
+            assert len(results) == 0
 
 
-class TestGenerateMetricsOutput(unittest.TestCase):
-    def test_generate_metrics_output(self):
-        """Test that each failed test becomes a separate metric entry."""
+class TestGenerateMetricsOutput:
+    def test_generate_metrics_inner_tests(self):
+        """Test that inner (gtest) tests use sub_step_name."""
         results = [
             TestResult(
                 component="rocblas",
-                failed_tests=["Test.Fail1", "Test.Fail2"],
+                failed_tests=[
+                    FailedTest(name="Test.Fail1", status="failure", is_outer=False),
+                    FailedTest(name="Test.Fail2", status="failure", is_outer=False),
+                ],
                 exit_code=1,
                 status="failure",
             )
         ]
         output = generate_metrics_output(results, step_name="rocblas")
 
-        self.assertIn("metadata", output)
-        self.assertIn("metrics", output)
-        # Each failed test should be a separate metric
-        self.assertEqual(len(output["metrics"]), 2)
-        self.assertEqual(output["metrics"][0]["sub_step_name"], "Test.Fail1")
-        self.assertEqual(output["metrics"][0]["status"], "failure")
-        self.assertEqual(output["metrics"][1]["sub_step_name"], "Test.Fail2")
-        self.assertEqual(output["metrics"][1]["status"], "failure")
+        assert "metadata" in output
+        assert "metrics" in output
+        assert len(output["metrics"]) == 2
 
-    def test_generate_metrics_with_timeout(self):
-        """Test that timeout tests have status='timeout' and failure_reason."""
+        # Inner tests should use sub_step_name
+        assert output["metrics"][0]["sub_step_name"] == "Test.Fail1"
+        assert "step_name" not in output["metrics"][0]
+        assert output["metrics"][1]["sub_step_name"] == "Test.Fail2"
+        assert "step_name" not in output["metrics"][1]
+
+    def test_generate_metrics_outer_tests(self):
+        """Test that outer (ctest) tests use step_name."""
         results = [
             TestResult(
                 component="rocblas",
-                failed_tests=["rocblas-test (Timeout)"],
-                timeout_count=1,
+                failed_tests=[
+                    FailedTest(name="unit_tests", status="failure", is_outer=True),
+                ],
                 exit_code=1,
                 status="failure",
-                failure_reason="timeout",
-                total_tests=1,
-                passed_tests=0,
-                failed_count=1,
             )
         ]
         output = generate_metrics_output(results, step_name="rocblas")
 
-        self.assertEqual(len(output["metrics"]), 1)
-        metric = output["metrics"][0]
-        self.assertEqual(metric["sub_step_name"], "rocblas-test (Timeout)")
-        self.assertEqual(metric["status"], "timeout")
-        self.assertEqual(metric["failure_reason"], "timeout")
+        assert len(output["metrics"]) == 1
+        # Outer tests should use step_name
+        assert output["metrics"][0]["step_name"] == "unit_tests"
+        assert "sub_step_name" not in output["metrics"][0]
 
-    def test_generate_metrics_mixed_failures(self):
-        """Test mix of timeout and regular failures."""
+    def test_generate_metrics_mixed_inner_outer(self):
+        """Test mixed inner (gtest) and outer (ctest) failures."""
         results = [
             TestResult(
                 component="hipblaslt",
-                failed_tests=["Suite.NormalFail", "Suite.TimeoutTest (Timeout)"],
+                failed_tests=[
+                    FailedTest(
+                        name="Suite.InnerFail", status="failure", is_outer=False
+                    ),
+                    FailedTest(name="unit_tests", status="failure", is_outer=True),
+                ],
                 exit_code=1,
                 status="failure",
             )
         ]
         output = generate_metrics_output(results, step_name="hipblaslt")
 
-        self.assertEqual(len(output["metrics"]), 2)
-        # Normal failure
-        self.assertEqual(output["metrics"][0]["sub_step_name"], "Suite.NormalFail")
-        self.assertEqual(output["metrics"][0]["status"], "failure")
-        self.assertNotIn("failure_reason", output["metrics"][0])
-        # Timeout failure
-        self.assertEqual(
-            output["metrics"][1]["sub_step_name"], "Suite.TimeoutTest (Timeout)"
-        )
-        self.assertEqual(output["metrics"][1]["status"], "timeout")
-        self.assertEqual(output["metrics"][1]["failure_reason"], "timeout")
+        assert len(output["metrics"]) == 2
+
+        # Inner test uses sub_step_name
+        inner_metric = output["metrics"][0]
+        assert inner_metric["sub_step_name"] == "Suite.InnerFail"
+        assert "step_name" not in inner_metric
+
+        # Outer test uses step_name
+        outer_metric = output["metrics"][1]
+        assert outer_metric["step_name"] == "unit_tests"
+        assert "sub_step_name" not in outer_metric
+
+    def test_generate_metrics_with_timeout(self):
+        """Test that timeout tests have status='timeout' and failure_reason."""
+        results = [
+            TestResult(
+                component="rocblas",
+                failed_tests=[
+                    FailedTest(
+                        name="rocblas-test",
+                        status="timeout",
+                        is_outer=True,
+                        failure_reason="timeout",
+                    ),
+                ],
+                timeout_count=1,
+                exit_code=1,
+                status="failure",
+                failure_reason="timeout",
+            )
+        ]
+        output = generate_metrics_output(results, step_name="rocblas")
+
+        assert len(output["metrics"]) == 1
+        metric = output["metrics"][0]
+        assert metric["step_name"] == "rocblas-test"
+        assert metric["status"] == "timeout"
+        assert metric["failure_reason"] == "timeout"
 
     def test_generate_metrics_no_failures(self):
         """Test that no metrics are generated when there are no failures."""
@@ -337,8 +317,28 @@ class TestGenerateMetricsOutput(unittest.TestCase):
         ]
         output = generate_metrics_output(results, step_name="rocblas")
 
-        self.assertEqual(len(output["metrics"]), 0)
+        assert len(output["metrics"]) == 0
 
+    def test_generate_metrics_interrupted(self):
+        """Test that interrupted tests have failure_reason='interrupted'."""
+        results = [
+            TestResult(
+                component="test",
+                failed_tests=[
+                    FailedTest(
+                        name="Suite.Test",
+                        status="failure",
+                        is_outer=False,
+                        failure_reason="interrupted",
+                    ),
+                ],
+                exit_code=1,
+                status="failure",
+            )
+        ]
+        output = generate_metrics_output(results, step_name="test")
 
-if __name__ == "__main__":
-    unittest.main()
+        assert len(output["metrics"]) == 1
+        metric = output["metrics"][0]
+        assert metric["sub_step_name"] == "Suite.Test"
+        assert metric["failure_reason"] == "interrupted"

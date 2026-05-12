@@ -5,277 +5,125 @@
 """
 Parse test results and report failed tests with structured metrics output.
 
-This script reads structured test output (JUnit XML, GTest JSON) and produces
-a metrics report in a format suitable for CI analysis.
+This script parses test output from stdout/stderr and produces a metrics report
+suitable for CI analysis. It supports multiple test frameworks:
+
+- GTest: Parses [FAILED], [PASSED] markers from stdout
+- CTest: Parses test execution lines, timeouts, and failure summaries
+
+When ctest wraps gtest (common pattern), it extracts both the inner gtest failures
+and the outer ctest status, using different field names:
+- Inner tests (gtest): sub_step_name
+- Outer wrapper (ctest): step_name
 
 Usage:
-    python report_failed_tests.py --results-dir <path> --output-file <path> [options]
+    python report_failed_tests.py --stdout-log <path> --output-file <path> [options]
 
-Supported formats:
-- CTest JUnit XML: ctest-*.xml files (from --output-junit)
-- GTest JSON: gtest-*.json files (from --gtest_output=json:)
-- Stdout fallback: Parse test output when structured files are missing (e.g., timeout)
+Examples:
+    # Parse stdout log and report failures
+    python report_failed_tests.py --stdout-log build/test.log --step-name hip-tests
 
-Timeout handling:
-- CTest timeout: Captured in JUnit XML with failure type containing "Timeout"
-- GTest killed mid-run: JSON not written; use --stdout-log for partial results
-- GitHub Actions timeout: No files written; use --step-name and --exit-code for fallback
+    # With exit code for fallback when no test output is found
+    python report_failed_tests.py --stdout-log build/test.log --step-name hip-tests --exit-code 1
 """
 
 import argparse
 import json
-import re
 import sys
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from parse_test_output import (
+    ParsedTestOutput,
+    TestFramework,
+    TestStatus,
+    parse_test_output,
+)
+
+
+@dataclass
+class FailedTest:
+    """A single failed test with metadata."""
+
+    name: str
+    status: str  # "failure", "timeout", "interrupted"
+    is_outer: bool = False  # True for ctest wrapper, False for inner tests
+    failure_reason: str | None = None
 
 
 @dataclass
 class TestResult:
-    """Result from parsing a single test result file."""
+    """Aggregated test result for a component."""
 
     component: str
-    failed_tests: list[str] = field(default_factory=list)
+    failed_tests: list[FailedTest] = field(default_factory=list)
     total_tests: int = 0
     passed_tests: int = 0
     failed_count: int = 0
     skipped_count: int = 0
     timeout_count: int = 0
-    duration_seconds: float | None = None
     exit_code: int = 0
     status: str = "success"
     failure_reason: str | None = None
 
 
-def parse_junit_xml(xml_file: Path) -> TestResult:
-    """Parse a JUnit XML file and extract test results.
-
-    Handles CTest JUnit XML format, including timeout detection.
-    """
-    # Extract component name from filename (ctest-<component>-shard*.xml)
-    name = xml_file.stem
-    component = name.replace("ctest-", "").rsplit("-shard", 1)[0]
-
-    result = TestResult(component=component)
-
-    try:
-        tree = ET.parse(xml_file)
-        root = tree.getroot()
-
-        # Handle both <testsuites> and <testsuite> as root
-        if root.tag == "testsuites":
-            testsuites = root.findall("testsuite")
-            # Get aggregate time from root if available
-            if root.get("time"):
-                result.duration_seconds = float(root.get("time", 0))
-        elif root.tag == "testsuite":
-            testsuites = [root]
-        else:
-            return result
-
-        total_time = 0.0
-        for testsuite in testsuites:
-            suite_name = testsuite.get("name", "")
-            suite_tests = int(testsuite.get("tests", 0))
-            suite_failures = int(testsuite.get("failures", 0))
-            suite_errors = int(testsuite.get("errors", 0))
-            suite_skipped = int(testsuite.get("skipped", 0))
-            suite_time = float(testsuite.get("time", 0))
-
-            result.total_tests += suite_tests
-            result.failed_count += suite_failures + suite_errors
-            result.skipped_count += suite_skipped
-            total_time += suite_time
-
-            for testcase in testsuite.findall("testcase"):
-                failure = testcase.find("failure")
-                error = testcase.find("error")
-
-                if failure is not None or error is not None:
-                    test_name = testcase.get("name", "unknown")
-                    classname = testcase.get("classname", "")
-
-                    # Build full test name
-                    if classname and classname != suite_name:
-                        full_name = f"{classname}.{test_name}"
-                    elif suite_name:
-                        full_name = f"{suite_name}.{test_name}"
-                    else:
-                        full_name = test_name
-
-                    # Check for timeout in failure type or message
-                    fail_elem = failure if failure is not None else error
-                    fail_type = fail_elem.get("type", "").lower()
-                    fail_message = fail_elem.get("message", "").lower()
-                    fail_text = (fail_elem.text or "").lower()
-
-                    is_timeout = (
-                        "timeout" in fail_type
-                        or "timeout" in fail_message
-                        or "timeout" in fail_text
-                    )
-
-                    if is_timeout:
-                        result.timeout_count += 1
-                        full_name = f"{full_name} (Timeout)"
-
-                    result.failed_tests.append(full_name)
-
-        if result.duration_seconds is None:
-            result.duration_seconds = total_time
-
-        result.passed_tests = (
-            result.total_tests - result.failed_count - result.skipped_count
-        )
-
-        if result.failed_count > 0:
-            result.status = "failure"
-            result.exit_code = 1
-            if result.timeout_count > 0:
-                result.failure_reason = "timeout"
-
-    except ET.ParseError as e:
-        print(f"Warning: Failed to parse {xml_file}: {e}")
-        result.status = "error"
-        result.exit_code = 1
-    except Exception as e:
-        print(f"Warning: Error reading {xml_file}: {e}")
-        result.status = "error"
-        result.exit_code = 1
-
-    return result
-
-
-def parse_gtest_json(json_file: Path) -> TestResult:
-    """Parse a GTest JSON file and extract test results.
-
-    Args:
-        json_file: Path to the GTest JSON file
-
-    Returns:
-        TestResult with parsed data
-    """
-    # Extract component name from filename (gtest-<component>-shard*.json)
-    name = json_file.stem
-    component = name.replace("gtest-", "").rsplit("-shard", 1)[0]
-
-    result = TestResult(component=component)
-
-    try:
-        with open(json_file) as f:
-            data = json.load(f)
-
-        # GTest JSON structure:
-        # { "testsuites": [ { "name": "...", "testsuite": [ { "name": "...", "failures": [...] } ] } ] }
-        result.total_tests = data.get("tests", 0)
-        result.failed_count = data.get("failures", 0)
-        result.skipped_count = data.get("disabled", 0)
-        result.passed_tests = result.total_tests - result.failed_count
-
-        # Duration is in seconds (GTest reports time as string like "1.234s")
-        time_str = data.get("time", "0s")
-        if isinstance(time_str, str) and time_str.endswith("s"):
-            result.duration_seconds = float(time_str[:-1])
-        elif isinstance(time_str, (int, float)):
-            result.duration_seconds = float(time_str)
-
-        for testsuite in data.get("testsuites", []):
-            suite_name = testsuite.get("name", "")
-            for test in testsuite.get("testsuite", []):
-                # Check if test has failures
-                failures = test.get("failures", [])
-                if failures:
-                    test_name = test.get("name", "unknown")
-                    full_name = f"{suite_name}.{test_name}" if suite_name else test_name
-                    result.failed_tests.append(full_name)
-
-        if result.failed_count > 0:
-            result.status = "failure"
-            result.exit_code = 1
-
-    except json.JSONDecodeError as e:
-        print(f"Warning: Failed to parse {json_file}: {e}")
-        result.status = "error"
-        result.exit_code = 1
-    except Exception as e:
-        print(f"Warning: Error reading {json_file}: {e}")
-        result.status = "error"
-        result.exit_code = 1
-
-    return result
-
-
 def parse_stdout_log(log_file: Path, component: str) -> TestResult:
-    """Parse test stdout/stderr log for test results when structured output is unavailable.
-
-    This is a fallback for when tests are killed mid-run (e.g., timeout) and
-    don't produce their normal JSON/XML output.
+    """Parse test stdout/stderr log using the new parser.
 
     Args:
         log_file: Path to the stdout/stderr log file
         component: Component name for the result
 
     Returns:
-        TestResult with parsed data (may be partial)
+        TestResult with parsed data
     """
     result = TestResult(component=component)
 
     try:
         content = log_file.read_text(errors="replace")
+        parsed = parse_test_output(content)
 
-        # Parse GTest-style output
-        # [  FAILED  ] TestSuite.TestName (123 ms)
-        failed_pattern = r"\[\s*FAILED\s*\]\s+(\S+)"
-        failed_matches = re.findall(failed_pattern, content)
-        result.failed_tests = list(set(failed_matches))  # Dedupe
-        result.failed_count = len(result.failed_tests)
+        # Convert parsed output to TestResult
+        result.total_tests = parsed.total_tests
+        result.passed_tests = parsed.passed_count
+        result.failed_count = parsed.failed_count
+        result.skipped_count = parsed.skipped_count
+        result.timeout_count = parsed.timeout_count
 
-        # [==========] X tests from Y test suites ran. (Z ms total)
-        summary_pattern = (
-            r"\[==========\]\s+(\d+)\s+tests?\s+from\s+(\d+)\s+test\s+suites?\s+ran"
-        )
-        summary_match = re.search(summary_pattern, content)
-        if summary_match:
-            result.total_tests = int(summary_match.group(1))
+        # Build failed test list with framework info
+        for test in parsed.tests:
+            if test.status == TestStatus.PASSED:
+                continue
 
-        # [  PASSED  ] X tests.
-        passed_pattern = r"\[\s*PASSED\s*\]\s+(\d+)\s+tests?"
-        passed_match = re.search(passed_pattern, content)
-        if passed_match:
-            result.passed_tests = int(passed_match.group(1))
+            # Determine if this is an outer (ctest) or inner (gtest) test
+            is_outer = test.framework == TestFramework.CTEST
 
-        # Check for CTest timeout marker
-        # 1/1 Test #1: test_name .........***Timeout 600.25 sec
-        ctest_timeout_pattern = (
-            r"Test\s+#\d+:\s+(\S+)\s+\.+\*\*\*Timeout\s+([\d.]+)\s+sec"
-        )
-        timeout_matches = re.findall(ctest_timeout_pattern, content)
-        if timeout_matches:
-            result.timeout_count = len(timeout_matches)
-            for test_name, duration in timeout_matches:
-                timeout_test = f"{test_name} (Timeout)"
-                if timeout_test not in result.failed_tests:
-                    result.failed_tests.append(timeout_test)
-                    result.failed_count += 1
+            if test.status == TestStatus.FAILED:
+                failed = FailedTest(
+                    name=test.name,
+                    status="failure",
+                    is_outer=is_outer,
+                )
+                result.failed_tests.append(failed)
+            elif test.status == TestStatus.TIMEOUT:
+                failed = FailedTest(
+                    name=test.name,
+                    status="timeout",
+                    is_outer=is_outer,
+                    failure_reason="timeout",
+                )
+                result.failed_tests.append(failed)
+                result.timeout_count += 1
+            elif test.status == TestStatus.RUNNING:
+                failed = FailedTest(
+                    name=test.name,
+                    status="failure",
+                    is_outer=is_outer,
+                    failure_reason="interrupted",
+                )
+                result.failed_tests.append(failed)
 
-        # Check for ctest summary
-        # 0% tests passed, 1 tests failed out of 1
-        ctest_summary_pattern = (
-            r"(\d+)%?\s+tests?\s+passed,\s+(\d+)\s+tests?\s+failed\s+out\s+of\s+(\d+)"
-        )
-        ctest_summary_match = re.search(ctest_summary_pattern, content)
-        if ctest_summary_match:
-            passed = int(ctest_summary_match.group(1))
-            failed = int(ctest_summary_match.group(2))
-            total = int(ctest_summary_match.group(3))
-            # Only use if we didn't get better data from GTest output
-            if result.total_tests == 0:
-                result.total_tests = total
-                result.passed_tests = passed
-                result.failed_count = max(result.failed_count, failed)
-
-        if result.failed_count > 0:
+        if parsed.has_failures:
             result.status = "failure"
             result.exit_code = 1
             if result.timeout_count > 0:
@@ -292,9 +140,9 @@ def parse_stdout_log(log_file: Path, component: str) -> TestResult:
 def create_fallback_result(
     component: str, exit_code: int, failure_reason: str | None = None
 ) -> TestResult:
-    """Create a fallback TestResult when no structured output is available.
+    """Create a fallback TestResult when no test output is available.
 
-    Used when tests fail without producing output files (e.g., GitHub Actions timeout).
+    Used when tests fail without producing parseable output.
 
     Args:
         component: Component name
@@ -312,111 +160,132 @@ def create_fallback_result(
         result.failure_reason = failure_reason
 
         if failure_reason == "timeout":
-            result.failed_tests = [f"{component} (GitHub Actions Timeout)"]
+            failed = FailedTest(
+                name=component,
+                status="timeout",
+                is_outer=True,
+                failure_reason="timeout",
+            )
             result.timeout_count = 1
         elif failure_reason == "cancelled":
-            result.failed_tests = [f"{component} (Cancelled)"]
+            failed = FailedTest(
+                name=component,
+                status="failure",
+                is_outer=True,
+                failure_reason="cancelled",
+            )
         else:
-            result.failed_tests = [
-                f"{component} (Unknown failure, exit code {exit_code})"
-            ]
+            failed = FailedTest(
+                name=f"{component} (exit code {exit_code})",
+                status="failure",
+                is_outer=True,
+            )
 
+        result.failed_tests.append(failed)
         result.failed_count = 1
 
     return result
 
 
 def find_and_parse_results(
-    results_dir: Path,
     stdout_log: Path | None = None,
     step_name: str | None = None,
     fallback_exit_code: int | None = None,
 ) -> list[TestResult]:
-    """Find and parse all test result files in the directory.
+    """Parse test results from stdout log.
 
     Args:
-        results_dir: Directory containing test result files
-        stdout_log: Optional path to stdout/stderr log for fallback parsing
-        step_name: Step name for fallback result if no files found
+        stdout_log: Path to stdout/stderr log file
+        step_name: Step name for the result
         fallback_exit_code: Exit code to use for fallback result
 
     Returns:
         List of TestResult objects
     """
     results = []
-    found_structured_output = False
+    component = step_name or "unknown"
 
-    if results_dir.exists():
-        # Parse JUnit XML files (from ctest)
-        for xml_file in sorted(results_dir.glob("ctest-*.xml")):
-            print(f"Parsing: {xml_file.name}")
-            result = parse_junit_xml(xml_file)
-            results.append(result)
-            found_structured_output = True
-
-        # Parse GTest JSON files
-        for json_file in sorted(results_dir.glob("gtest-*.json")):
-            print(f"Parsing: {json_file.name}")
-            result = parse_gtest_json(json_file)
-            results.append(result)
-            found_structured_output = True
-    else:
-        print(f"Results directory not found: {results_dir}")
-
-    # Fallback: try stdout log if no structured output found
-    if not found_structured_output and stdout_log and stdout_log.exists():
-        print(f"No structured output found, parsing stdout log: {stdout_log}")
-        component = step_name or "unknown"
+    # Parse stdout log
+    if stdout_log and stdout_log.exists():
+        print(f"Parsing stdout log: {stdout_log}")
         result = parse_stdout_log(stdout_log, component)
-        if result.total_tests > 0 or result.failed_count > 0:
+        if result.total_tests > 0 or result.failed_count > 0 or result.failed_tests:
             results.append(result)
-            found_structured_output = True
-
-    # Ultimate fallback: create a failure record if we have exit code but no results
-    if not found_structured_output and fallback_exit_code is not None and step_name:
-        print(f"No test output found, creating fallback result for {step_name}")
-        # Determine failure reason based on exit code patterns
-        failure_reason = None
-        if fallback_exit_code == 124:  # timeout command exit code
-            failure_reason = "timeout"
-        elif fallback_exit_code == 143:  # SIGTERM (128 + 15)
-            failure_reason = "timeout"
-        elif fallback_exit_code == 137:  # SIGKILL (128 + 9)
-            failure_reason = "timeout"
-
+        elif fallback_exit_code is not None and fallback_exit_code != 0:
+            # No test output found but we have a failure exit code
+            print(f"No test results found in log, using exit code fallback")
+            failure_reason = _get_failure_reason(fallback_exit_code)
+            result = create_fallback_result(
+                component, fallback_exit_code, failure_reason
+            )
+            results.append(result)
+    elif fallback_exit_code is not None and step_name:
+        # No log file, use exit code fallback
+        print(f"No stdout log found, creating fallback result for {step_name}")
+        failure_reason = _get_failure_reason(fallback_exit_code)
         result = create_fallback_result(step_name, fallback_exit_code, failure_reason)
         results.append(result)
 
     return results
 
 
+def _get_failure_reason(exit_code: int) -> str | None:
+    """Determine failure reason from exit code.
+
+    Args:
+        exit_code: Process exit code
+
+    Returns:
+        Failure reason string or None
+    """
+    # Common timeout/kill exit codes
+    if exit_code == 124:  # timeout command exit code
+        return "timeout"
+    elif exit_code == 143:  # SIGTERM (128 + 15)
+        return "timeout"
+    elif exit_code == 137:  # SIGKILL (128 + 9)
+        return "timeout"
+    return None
+
+
 def generate_metrics_output(results: list[TestResult], step_name: str) -> dict:
     """Generate structured metrics output.
 
-    Creates one metric entry per failed test, with the test name as sub_step_name.
+    Creates one metric entry per failed test:
+    - Inner tests (gtest): uses sub_step_name
+    - Outer wrapper (ctest): uses step_name
+
+    Args:
+        results: List of TestResult objects
+        step_name: Name of the test step
+
+    Returns:
+        Dict with metadata and metrics suitable for JSON output
     """
     metrics = []
 
     for result in results:
-        # Create a metric entry for each failed test
         for failed_test in result.failed_tests:
-            is_timeout = "(Timeout)" in failed_test
-            status = "timeout" if is_timeout else "failure"
-
             metric = {
                 "exit_code": 1,
-                "sub_step_name": failed_test,
-                "status": status,
+                "status": failed_test.status,
             }
 
-            if is_timeout:
-                metric["failure_reason"] = "timeout"
+            # Use step_name for outer (ctest) tests, sub_step_name for inner tests
+            if failed_test.is_outer:
+                metric["step_name"] = failed_test.name
+            else:
+                metric["sub_step_name"] = failed_test.name
+
+            if failed_test.failure_reason:
+                metric["failure_reason"] = failed_test.failure_reason
 
             metrics.append(metric)
 
     output = {
         "metadata": {
             "exit_code": {"metric_type": "exit_code"},
+            "step_name": {"metric_type": "string"},
             "sub_step_name": {"metric_type": "string"},
             "status": {"metric_type": "string"},
             "failure_reason": {"metric_type": "string"},
@@ -432,15 +301,14 @@ def main():
         description="Parse test results and report failed tests with structured metrics"
     )
     parser.add_argument(
-        "--results-dir",
+        "--stdout-log",
         type=Path,
-        required=True,
-        help="Directory containing test result files (JUnit XML, GTest JSON)",
+        help="Path to stdout/stderr log file to parse",
     )
     parser.add_argument(
         "--output-file",
         type=Path,
-        help="Output file for metrics JSON (default: results-dir/test-metrics.json)",
+        help="Output file for metrics JSON",
     )
     parser.add_argument(
         "--step-name",
@@ -449,20 +317,24 @@ def main():
         help="Name of the test step for reporting",
     )
     parser.add_argument(
-        "--stdout-log",
-        type=Path,
-        help="Path to stdout/stderr log for fallback parsing when structured output is missing",
-    )
-    parser.add_argument(
         "--exit-code",
         type=int,
-        help="Test process exit code (used for fallback when no output files exist)",
+        help="Test process exit code (used for fallback when no test output found)",
+    )
+    # Legacy argument for backwards compatibility
+    parser.add_argument(
+        "--results-dir",
+        type=Path,
+        help="(Deprecated) Directory containing test result files",
     )
 
     args = parser.parse_args()
 
+    # Handle legacy results-dir argument
+    if args.results_dir and not args.output_file:
+        args.output_file = args.results_dir / "test-metrics.json"
+
     results = find_and_parse_results(
-        args.results_dir,
         stdout_log=args.stdout_log,
         step_name=args.step_name,
         fallback_exit_code=args.exit_code,
@@ -473,7 +345,7 @@ def main():
     # Determine output file path
     output_file = args.output_file
     if output_file is None:
-        output_file = args.results_dir / "test-metrics.json"
+        output_file = Path("test-metrics.json")
 
     # Write metrics to file
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -482,11 +354,14 @@ def main():
 
     print(f"\nMetrics written to: {output_file}")
 
-    # Also print to stdout for visibility (metrics only, not metadata)
+    # Also print to stdout for visibility
     print(f"\n{'='*60}")
     print("TEST METRICS REPORT")
     print(f"{'='*60}")
-    print(json.dumps(metrics_output["metrics"], indent=2))
+    if metrics_output["metrics"]:
+        print(json.dumps(metrics_output["metrics"], indent=2))
+    else:
+        print("No test failures detected.")
 
     # Return non-zero if any tests failed
     any_failures = any(r.status != "success" for r in results)
