@@ -153,6 +153,23 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertEqual(inputs.pr_labels, ["gfx950", "test:rocprim"])
         self.assertEqual(inputs.base_ref, "HEAD^")
 
+    def test_pull_request_test_labels_extracted_to_test_labels(self):
+        """PR test:* labels are merged into linux/windows_test_labels."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "test:rccl", "id": 1},
+                        {"name": "test:rocprim", "id": 2},
+                        {"name": "gfx950", "id": 3},
+                    ]
+                }
+            },
+        )
+        self.assertEqual(inputs.linux_test_labels, ["test:rccl", "test:rocprim"])
+        self.assertEqual(inputs.windows_test_labels, ["test:rccl", "test:rocprim"])
+
     def test_push_reads_before_sha(self):
         """Push events use event.before as the diff base."""
         inputs = _run_from_environ(
@@ -220,6 +237,42 @@ class TestShouldSkipCI(unittest.TestCase):
         git = cm.GitContext()
         self.assertFalse(cm.should_skip_ci(inputs, git))
         mock_filter.assert_not_called()
+
+    def test_asan_pr_without_submodule_change_skips(self):
+        """ASAN PR without submodule changes skips CI."""
+        inputs = self._inputs(build_variant="asan", pr_labels=[])
+        git = cm.GitContext(
+            changed_files=["CMakeLists.txt", "build_tools/script.py"],
+            submodule_paths=["rocm-libraries", "rocm-systems"],
+        )
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_asan_pr_with_submodule_change_runs(self):
+        """ASAN PR with submodule changes runs CI."""
+        inputs = self._inputs(build_variant="asan", pr_labels=[])
+        git = cm.GitContext(
+            changed_files=["rocm-libraries", "CMakeLists.txt"],
+            submodule_paths=["rocm-libraries", "rocm-systems"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_asan_non_pr_runs_regardless_of_submodule(self):
+        """ASAN on schedule/push runs regardless of submodule changes."""
+        inputs = self._inputs(event_name="schedule", build_variant="asan")
+        git = cm.GitContext(
+            changed_files=None,
+            submodule_paths=["rocm-libraries"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_release_pr_without_submodule_change_runs(self):
+        """Release variant PR without submodule changes still runs (not skipped)."""
+        inputs = self._inputs(build_variant="release", pr_labels=[])
+        git = cm.GitContext(
+            changed_files=["CMakeLists.txt"],
+            submodule_paths=["rocm-libraries"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +349,7 @@ class TestDecideJobs(unittest.TestCase):
         result = cm.decide_jobs(
             self._inputs(
                 event_name="workflow_dispatch",
-                linux_test_labels="test:rocprim",
+                linux_test_labels=["test:rocprim"],
             ),
             git_context=cm.GitContext(),
         )
@@ -739,7 +792,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 {
                     "amdgpu_family": "gfx94X-dcgpu",
                     "amdgpu_targets": "gfx942",
-                    "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+                    "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
                     "sanity_check_only_for_family": false
                 },
                 ...
@@ -900,6 +953,34 @@ class TestConfigurePipeline(unittest.TestCase):
         outputs = cm.configure(inputs, cm.GitContext())
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
+
+    def test_test_labels_thread_to_outputs(self):
+        """test_labels on CIInputs pass through to CIOutputs."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_test_labels=["test:rccl"],
+            windows_test_labels=["test:rccl"],
+        )
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        self.assertEqual(outputs.linux_test_labels, ["test:rccl"])
+        self.assertEqual(outputs.windows_test_labels, ["test:rccl"])
+
+    def test_no_test_labels_has_empty_outputs(self):
+        """Without test labels, outputs are empty lists."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        self.assertEqual(outputs.linux_test_labels, [])
+        self.assertEqual(outputs.windows_test_labels, [])
 
 
 # ---------------------------------------------------------------------------
@@ -1152,13 +1233,13 @@ class TestBuildRunnerSelection(unittest.TestCase):
                 select_build_runner("linux", "release"), "azure-linux-scale-rocm"
             )
 
-        # Random >= 0.9 should select AWS
+        # Random >= 0.9 should select Azure
         with patch("random.random", return_value=0.95):
             self.assertEqual(
-                select_build_runner("linux", "release"), "aws-linux-scale-rocm"
+                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
             )
 
-        # Random >= 0.9 should select AWS
+        # Random >= 0.9 should select Azure
         with patch("random.random", return_value=0.95):
             self.assertEqual(
                 select_build_runner("windows", "release"), "azure-windows-scale-rocm"

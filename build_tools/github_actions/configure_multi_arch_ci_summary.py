@@ -110,8 +110,9 @@ def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
                 f"(not in default presubmit set)"
             )
         elif label.startswith("test_filter:"):
+            filter_type = label.split(":")[1]
             highlights.append(
-                f"Label `{label}`: overrode test level (default would be `quick`)"
+                f"Label `{label}`: overrode test level to `{filter_type}`"
             )
         elif label.startswith("test_runner:"):
             kernel = label.split(":")[1]

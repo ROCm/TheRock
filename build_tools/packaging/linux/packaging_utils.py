@@ -226,6 +226,12 @@ def is_gfxarch_package(pkg_info, enable_kpack=False):
         if pkgname.endswith("-devel"):
             return False
 
+        # Override RCCL Gfxarch behavior in kpack mode
+        # When --enable-kpack is used, RCCL should look for architecture-specific artifacts
+        # instead of generic artifacts to ensure GPU-specific kernel support (e.g., gfx1201)
+        if pkgname in ["amdrocm-rccl", "amdrocm-rccl-test"]:
+            return True
+
     return is_key_defined(pkg_info, "Gfxarch")
 
 
@@ -846,14 +852,33 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
             continue
 
         for subdir in artifact["Artifact_Subdir"]:
+            artifact_subdir = subdir["Name"]
             component_list = subdir["Components"]
             for component in component_list:
                 source_dir = (
                     Path(artifacts_dir)
                     / f"{artifact_prefix}_{component}_{artifact_suffix}"
                 )
-                if source_dir.exists():
-                    return True
+                if not source_dir.exists():
+                    continue
+
+                # Check if the required subdirectory exists in the manifest
+                manifest_file = source_dir / "artifact_manifest.txt"
+                if not manifest_file.exists():
+                    continue
+
+                try:
+                    with manifest_file.open("r", encoding="utf-8") as file:
+                        for line in file:
+                            match_found = (
+                                isinstance(artifact_subdir, str)
+                                and (artifact_subdir.lower() + "/") in line.lower()
+                            )
+                            if match_found and line.strip():
+                                # Found at least one required subdirectory in the manifest
+                                return True
+                except OSError:
+                    continue
 
     return False
 

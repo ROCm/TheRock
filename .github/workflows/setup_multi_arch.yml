@@ -52,6 +52,10 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
+        type: string
+        default: ""
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -86,6 +90,9 @@ on:
           to ensure all downstream jobs use the same commit, even if the branch
           HEAD moves during the workflow run.
         value: ${{ jobs.setup.outputs.ref }}
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
+        value: ${{ inputs.external_repo_config }}
 
 permissions:
   contents: read
@@ -129,6 +136,8 @@ jobs:
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          # Skip path filtering for external repos (git sha won't exist in TheRock)
+          SKIP_PATH_FILTERS: ${{ inputs.external_repo_config != '' && 'true' || '' }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.

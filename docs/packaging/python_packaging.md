@@ -199,6 +199,77 @@ pip install rocm[libraries,devel] --pre \
 > the index and organizes files into the `{run_id}-{platform}/python/{artifact_group}/`
 > structure used by CI uploads.
 
+## rocm-profiler
+
+The `rocm-profiler` package provides ROCm profiling tools and runtime components. It contains:
+
+- ROCm Systems Profiler (rocprofiler-systems)
+- ROCm Compute Profiler (rocprofiler-compute)
+
+### Installation
+
+#### Using meta package
+
+The recommended way to install profiling tools is via the meta package:
+
+```bash
+pip install "rocm[profiler]"
+```
+
+This will install:
+
+- `rocm-sdk-core` (required runtime + SDK)
+- `rocm-profiler` (profiling tools)
+
+#### Direct installation
+
+Direct installation is not recommended for typical use:
+
+```bash
+pip install rocm-profiler
+```
+
+This may result in missing dependencies unless `rocm-sdk-core` is also installed.
+
+Always prefer:
+
+```bash
+pip install "rocm[profiler]"
+```
+
+### Package Layout
+
+ROCm Python packaging separates profiling functionality as follows:
+
+- `rocm-sdk-core`:
+
+  - `rocprofiler-sdk` libraries
+  - `rocprofv3`, `rocprof-attach`
+  - `roctx` API (user-facing annotation library)
+
+- `rocm-profiler`:
+
+  - `rocprof-compute`
+  - `rocprof-sys-*`
+  - profiler runtime libraries (from `rocprofiler-systems` and `rocprofiler-compute`)
+
+This separation allows you to install profiling tools only when needed.
+
+### Dependency Model
+
+The `rocm-profiler` package intentionally does **not** declare `install_requires`.
+
+Instead:
+
+- Dependencies are managed by the `rocm` meta package.
+- Packages are co-installed into the same `site-packages`.
+- Runtime dependencies are resolved using RPATH.
+
+> [!NOTE]
+> The `rocm` meta package requires device-family-specific components
+> (e.g. `gfx94X-dcgpu`). If these are not available in the selected
+> package index, installation may be incomplete.
+
 ## Using Packages from Frameworks
 
 ### Building Python Based Projects

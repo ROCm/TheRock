@@ -28,12 +28,17 @@ if(NOT WIN32)
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdlld" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/offload-arch" "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
   )
-  install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/bin"
-    "${CMAKE_CURRENT_BINARY_DIR}/llvm"
-    "${CMAKE_CURRENT_BINARY_DIR}/amdgcn"
-    DESTINATION .
-  )
+  # llvm and amdgcn are symlinks to directories; install(FILES) rejects
+  # directories, so create the symlinks directly at install time.
+  # Targets must match those created by the symlinks target above.
+  # See https://github.com/ROCm/TheRock/issues/3714
+  install(CODE "
+    file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}\")
+    file(CREATE_LINK \"lib/llvm\"
+      \"\${CMAKE_INSTALL_PREFIX}/llvm\" SYMBOLIC)
+    file(CREATE_LINK \"lib/llvm/amdgcn\"
+      \"\${CMAKE_INSTALL_PREFIX}/amdgcn\" SYMBOLIC)
+  ")
   install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdflang"
