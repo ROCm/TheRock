@@ -823,8 +823,7 @@ def wheel_change_extra_files(
         files_to_change = [
             new_dir_path / package_name_no_version / "git_version_info_installed.py",
         ]
-    elif "jax_rocm7_plugin" in package_name_no_version:
-        # special handling: we only want to change Requires-Dist matching "rocm"
+    elif "jax_rocm7_plugin" in package_name_no_version or "jax_rocm7_pjrt" in package_name_no_version:
         update_metadata_rocm_requires_dist(
             new_dir_path,
             package_name_no_version,
@@ -850,7 +849,7 @@ def wheel_change_extra_files(
                 )
         else:
             # no additional (rocm-specific) files needed to be changed that contain the version
-            # currently applying to: triton, jax_rocm7_pjrt
+            # currently applying to: triton
             return
 
     for f in files_to_change:
