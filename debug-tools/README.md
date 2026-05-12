@@ -21,6 +21,19 @@ rocr-debug-agent: The ROCr debug agent source code.
 This guide covers configuration options and development workflows for building
 and debugging the debug-tools components.
 
+**Note:** This guide assumes all commands are executed from within a manylinux
+container. TheRock can also be built outside of a container, but this requires
+distro-specific environment configuration. For container setup, see
+[Container Environments](#build-container).
+
+Outside of the container, TheRock sources can be cloned with the following command:
+
+```bash
+# Clone the repository
+git clone https://github.com/ROCm/TheRock.git
+cd TheRock
+```
+
 ### Quick Start
 
 For users that just need a prebuilt ROCm stack, please refer to the [releases page](../RELEASES.md).
@@ -31,10 +44,14 @@ sources, the default configuration works out of the box:
 ```bash
 cmake -B /therock/output/build -GNinja \
   -DTHEROCK_AMDGPU_FAMILIES="gfx942" \
-  -DTHEROCK_TEST_AMDGPU_FAMILIES="gfx942" \
   /therock/src
 cmake --build /therock/output/build -t rocgdb amd-dbgapi rocr-debug-agent
 ```
+
+**Note:** `-DTHEROCK_TEST_AMDGPU_FAMILIES` can optionally be supplied to restrict
+the number of targets for which rocr-debug-agent-tests is built, as these tests
+are device-specific. If not specified, tests will be built for all available gfx
+targets.
 
 For development and debugging, you may want to build in Debug mode by passing
 the following option:
@@ -222,12 +239,6 @@ For building debug-tools components, use the TheRock build container:
 
 ```bash
 docker run --rm -i -t \
-  --ipc host \
-  --group-add video \
-  --device /dev/kfd \
-  --device /dev/dri \
-  --security-opt seccomp=unconfined \
-  --cap-add=SYS_PTRACE \
   --mount type=bind,src=$HOME/therock/output,dst=/therock/output \
   --mount type=bind,src=$HOME/therock,dst=/therock/src \
   --name $(whoami) ghcr.io/rocm/therock_build_manylinux_x86_64:latest \
@@ -237,10 +248,25 @@ docker run --rm -i -t \
 This container includes all necessary build dependencies and toolchains for
 building TheRock components.
 
-While the build itself does not depend on a GPU, it is worth passing docker
-options to enable the GPU within it so testing can take place.
-
 For additional information on the manylinux image, see [dockerfiles/README.md](../dockerfiles/README.md#build_manylinux_dockerfile).
+
+**GPU access for testing:**
+
+While the build itself does not depend on a GPU, you can enable GPU access within
+the container for testing after a build by adding these options to the `docker run`
+command:
+
+```bash
+  --ipc host \
+  --group-add video \
+  --device /dev/kfd \
+  --device /dev/dri \
+  --security-opt seccomp=unconfined \
+  --cap-add=SYS_PTRACE
+```
+
+**Note:** `--security-opt seccomp=unconfined` and `--cap-add=SYS_PTRACE` are
+required for debug-tools testing, as debuggers need ptrace capabilities.
 
 **Environment setup within the container:**
 
@@ -276,7 +302,6 @@ cmake -B /therock/output/build -GNinja \
   -DTHEROCK_ENABLE_ALL=OFF \
   -DTHEROCK_ENABLE_DEBUG_TOOLS=ON \
   -DTHEROCK_AMDGPU_FAMILIES="<gfx family>" \
-  -DTHEROCK_TEST_AMDGPU_FAMILIES="<gfx family>" \
   /therock/src
 
 # Build debug-tools components
@@ -301,7 +326,8 @@ For building the entirely of the ROCm stack it is enough to pass
 #### Testing Container
 
 For testing ROCgdb and rocr-debug-agent, use a dedicated Ubuntu testing
-container:
+container. This container is purely for testing purposes and should not be used
+for building.
 
 ```bash
 docker run --rm -i -t \
@@ -323,6 +349,9 @@ This container is specifically configured for testing debug tools. It uses
 required by ROCgdb, such as dejagnu (for the GDB test suite), gfortran (for
 Fortran debugging tests), and other utilities needed for comprehensive debugger
 testing. No builds are performed in this container.
+
+**Note:** This testing container matches the CI environment and can be used to
+locally reproduce CI test failures.
 
 For additional information on the testing container image, see [dockerfiles/README.md](../dockerfiles/README.md#no_rocm_image_dockerfile).
 
