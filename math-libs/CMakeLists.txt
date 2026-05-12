@@ -366,6 +366,8 @@ if(THEROCK_ENABLE_ROCWMMA)
       hip-clr
       rocBLAS
       ${_rocwmma_optional_deps}
+    TEST_SUBPROJECTS
+      rocWMMA
   )
   therock_cmake_subproject_glob_c_sources(rocWMMA
     SUBDIRS
