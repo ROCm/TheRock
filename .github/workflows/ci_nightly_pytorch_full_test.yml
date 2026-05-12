@@ -19,9 +19,9 @@
 #       successful build, or use a workflow_dispatch trigger / Quartz.
 #
 # Scheduled runs test all supported release branch source/wheel pairs nightly:
+#   - release/2.9 (latest 2.9.x wheel + release/2.9 sources)
 #   - release/2.10 (latest 2.10.x wheel + release/2.10 sources)
 #   - release/2.11 (latest 2.11.x wheel + release/2.11 sources)
-#   - release/2.12 (latest 2.12.x wheel + release/2.12 sources)
 # workflow_dispatch runs honor the pytorch_git_ref input as-is.
 
 name: CI Nightly PyTorch Full Test
@@ -99,7 +99,7 @@ jobs:
           INDEX_URL="${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}"
 
           if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
-            REFS=("release/2.10" "release/2.11" "release/2.12")
+            REFS=("release/2.9" "release/2.10" "release/2.11")
           else
             REFS=("${PYTORCH_GIT_REF_INPUT}")
           fi
