@@ -8,8 +8,7 @@
 #     matrix cell.
 #   - Builds directly against a TheRock ROCm tarball passed in
 #     via inputs.tar_url.
-#   - Uploads built wheels to:
-#       s3://therock-{release_type}-python/v2-staging/
+
 #
 # Triggered via workflow_call from
 # multi_arch_release_linux.yml's build_jax_wheels job.
@@ -119,7 +118,6 @@ jobs:
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
-      RELEASE_TYPE: ${{ inputs.release_type }}
 
     steps:
       - name: Checkout TheRock
