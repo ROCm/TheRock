@@ -150,9 +150,9 @@ jobs:
             --release-type="${{ inputs.release_type }}" \
             --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}"
 
-  dispatch_tests_per_family:
+  trigger_test_artifacts_per_family:
     needs: [build_artifacts]
-    name: Dispatch Tests ${{ matrix.family_info.amdgpu_family }}
+    name: Trigger Test Artifacts (${{ matrix.family_info.amdgpu_family }})
     if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
     permissions:
@@ -162,7 +162,7 @@ jobs:
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     steps:
-      - name: Dispatch test_artifacts
+      - name: Trigger test_artifacts
         if: ${{ matrix.family_info.test-runs-on != '' }}
         uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
         with:
@@ -182,9 +182,9 @@ jobs:
 
   # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
   #   bucket if the job order is not altered.
-  build_pytorch_wheels:
+  trigger_release_pytorch_wheels:
     needs: [build_artifacts, build_python_packages]
-    name: Build PyTorch Wheels
+    name: Trigger Release PyTorch Wheels
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -201,4 +201,4 @@ jobs:
               "ref": "${{ inputs.ref || '' }}"
             }
 
-  # TODO: dispatch jax wheels (release_portable_linux_jax_wheels.yml)
+  # TODO: trigger_build_jax_wheels (release_portable_linux_jax_wheels.yml or equivalent)
