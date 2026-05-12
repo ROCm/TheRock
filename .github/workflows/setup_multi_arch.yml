@@ -159,3 +159,36 @@ jobs:
             --release-type=${{ inputs.release_type || 'dev' }} \
             --prerelease-version=${{ inputs.prerelease_version }} \
             --override-git-sha=${{ steps.checkout.outputs.commit }}
+
+  # Per-event start-ref derivation:
+  #   pull_request → pr_base_ref (merge-base via Compare API, rebase-safe);
+  #                  end_ref is the PR head SHA, not setup.outputs.ref
+  #                  (which is the synthetic refs/pull/N/merge SHA).
+  #   push         → start_ref = github.event.before (previous tip).
+  #   schedule     → find_last_run scoped to github.workflow;
+  #                  accepted_statuses="success,failure" so a failed
+  #                  nightly still has a baseline.
+  manifest_diff:
+    name: Manifest Diff
+    needs: setup
+    if: >-
+      github.repository == 'ROCm/TheRock' &&
+      inputs.external_repo_config == '' &&
+      (github.event_name == 'pull_request' ||
+       github.event_name == 'push' ||
+       github.event_name == 'schedule')
+    uses: ./.github/workflows/manifest-diff.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      end_ref: >-
+        ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || needs.setup.outputs.ref }}
+      start_ref: >-
+        ${{ github.event_name == 'push' && github.event.before || '' }}
+      pr_base_ref: >-
+        ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
+      find_last_run: >-
+        ${{ github.event_name == 'schedule' && github.workflow || '' }}
+      accepted_statuses: >-
+        ${{ github.event_name == 'schedule' && 'success,failure' || '' }}

@@ -192,6 +192,7 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
     "multi_arch_build_windows.yml",
     "multi_arch_build_windows_artifacts.yml",
     "setup_multi_arch.yml",
+    "manifest-diff.yml",
     "test_artifacts_structure.yml",
     "test_native_linux_packages_install.yml",
     # both

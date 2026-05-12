@@ -4,14 +4,32 @@ Compares submodule versions and generates HTML reports showing commit changes
 for each component between builds.
 
 Arguments:
-  --start                  Start commit SHA or workflow run ID (required unless using --find-last-successful)
-  --end                    End commit SHA or workflow run ID (required)
-  --find-last-successful   Workflow file to find last successful run (e.g., 'ci_nightly.yml')
-  --workflow-mode          Treat --start and --end as workflow run IDs instead of commit SHAs
+  --start                Start commit SHA or workflow run ID (required unless using
+                         --find-last-run or --pr-base-ref).
+  --end                  End commit SHA or workflow run ID (required).
+  --find-last-run        Workflow file to find the most recent prior run on the
+                         branch whose status is in --accepted-statuses
+                         (e.g., 'ci_nightly.yml').
+  --accepted-statuses    Comma-separated workflow run conclusions accepted by
+                         --find-last-run (default: 'success'). Other examples:
+                         'success,failure'.
+  --pr-base-ref          PR base branch name. When set, --start is resolved as
+                         the merge-base between --end and the named branch via
+                         the GitHub Compare API. Rebase-safe.
+  --workflow-mode        Treat --start and --end as workflow run IDs instead of
+                         commit SHAs.
+  --branch               Branch to scope --find-last-run lookups against
+                         (default: 'main').
+  --output-dir           Directory to write the HTML report into (default: the
+                         TheRock root directory).
+
+If no usable start ref can be derived, the script logs the reason and
+exits 0 without writing a report.
 
 Example usage:
   python build_tools/generate_manifest_diff_report.py --start abc123 --end def456
-  python build_tools/generate_manifest_diff_report.py --end def456 --find-last-successful ci_nightly.yml
+  python build_tools/generate_manifest_diff_report.py --end def456 --find-last-run ci_nightly.yml
+  python build_tools/generate_manifest_diff_report.py --end def456 --pr-base-ref main
   python build_tools/generate_manifest_diff_report.py --start 12345 --end 67890 --workflow-mode
 """
 
@@ -34,7 +52,7 @@ sys.path.insert(0, str(THIS_SCRIPT_DIR))
 from generate_therock_manifest import build_manifest_schema
 from github_actions.github_actions_api import (
     gha_append_step_summary,
-    gha_query_last_successful_workflow_run,
+    gha_query_last_workflow_run,
     gha_query_workflow_run_by_id,
     gha_send_request,
 )
@@ -181,8 +199,28 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--end", required=True, help="End workflow ID or commit SHA")
     parser.add_argument(
-        "--find-last-successful",
-        help="Workflow name to find last successful run (e.g., 'ci_nightly.yml')",
+        "--find-last-run",
+        help=(
+            "Workflow name to find the most recent prior run on the branch "
+            "whose status is in --accepted-statuses (e.g., 'ci_nightly.yml')."
+        ),
+    )
+    parser.add_argument(
+        "--accepted-statuses",
+        default="success",
+        help=(
+            "Comma-separated workflow run conclusions accepted by "
+            "--find-last-run (default: 'success'). Examples: 'success', "
+            "'success,failure'."
+        ),
+    )
+    parser.add_argument(
+        "--pr-base-ref",
+        help=(
+            "PR base branch name. When set, --start is resolved as the "
+            "merge-base between --end and this branch via the GitHub Compare "
+            "API. Rebase-safe."
+        ),
     )
     parser.add_argument(
         "--workflow-mode",
@@ -192,7 +230,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--branch",
         default="main",
-        help="Branch to search for last successful workflow run (default: main)",
+        help="Branch to search for last workflow run (default: main)",
     )
     parser.add_argument(
         "--output-dir",
@@ -214,41 +252,67 @@ def _optional_str(val: str | None) -> str | None:
     return s if s else None
 
 
-def resolve_commits(args: argparse.Namespace) -> tuple[str, str]:
-    """Resolve start and end commit SHAs from arguments."""
+def resolve_commits(
+    args: argparse.Namespace,
+) -> tuple[str | None, str | None]:
+    """Resolve start and end commit SHAs from arguments.
+
+    Returns ``(None, None)`` when --find-last-run finds no prior matching
+    run (graceful empty); caller should exit 0. Other API errors (e.g.
+    Compare API 404 on --pr-base-ref) propagate as GitHubAPIError; the
+    workflow's continue-on-error gate handles those.
+    """
     start = _optional_str(args.start)
-    find_last = _optional_str(args.find_last_successful)
+    find_last = _optional_str(args.find_last_run)
+    pr_base = _optional_str(args.pr_base_ref)
     end = _optional_str(args.end)
 
-    if start is None and find_last is None:
-        raise ValueError(
-            "--start is required unless --find-last-successful is provided"
-        )
     if end is None:
         raise ValueError("--end is required")
-
-    therock_repo_full = f"{ROCM_ORG}/{THEROCK_REPO}"
-
-    # Resolve start commit
-    if find_last is not None:
-        last_run = gha_query_last_successful_workflow_run(
-            therock_repo_full, find_last, branch=args.branch
+    if start is None and find_last is None and pr_base is None:
+        raise ValueError(
+            "--start is required unless --find-last-run or --pr-base-ref is provided"
         )
-        if not last_run:
-            raise ValueError(f"No previous successful run found for {find_last}")
-        start_sha = last_run["head_sha"]
-    elif args.workflow_mode:
-        workflow_info = gha_query_workflow_run_by_id(therock_repo_full, start)
-        start_sha = workflow_info.get("head_sha")
-    else:
-        start_sha = start
 
-    # Resolve end commit
+    therock = f"{ROCM_ORG}/{THEROCK_REPO}"
+
+    # Resolve end first; --pr-base-ref needs end_sha to compute the merge-base.
     if args.workflow_mode:
-        workflow_info = gha_query_workflow_run_by_id(therock_repo_full, end)
-        end_sha = workflow_info.get("head_sha")
+        end_sha = gha_query_workflow_run_by_id(therock, end).get("head_sha")
     else:
         end_sha = end
+
+    # Resolve start, in priority order: --pr-base-ref, --find-last-run,
+    # --workflow-mode, then plain --start.
+    if pr_base is not None:
+        compare_url = (
+            f"https://api.github.com/repos/{therock}/compare/{pr_base}...{end_sha}"
+        )
+        compare = gha_send_request(compare_url)
+        start_sha = compare.get("merge_base_commit", {}).get("sha")
+    elif find_last is not None:
+        accepted = {
+            tok.strip().lower()
+            for tok in (args.accepted_statuses or "").split(",")
+            if tok.strip()
+        } or {"success"}
+        last_run = gha_query_last_workflow_run(
+            therock,
+            find_last,
+            branch=args.branch,
+            accepted_statuses=accepted,
+        )
+        if last_run is None:
+            print(
+                f"  [empty] No prior run of {find_last} on {args.branch} with "
+                f"conclusion in {sorted(accepted)} (likely a first-ever run)."
+            )
+            return None, None
+        start_sha = last_run["head_sha"]
+    elif args.workflow_mode:
+        start_sha = gha_query_workflow_run_by_id(therock, start).get("head_sha")
+    else:
+        start_sha = start
 
     return start_sha, end_sha
 
@@ -1423,11 +1487,11 @@ def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     args = parse_args(argv)
     start_commit, end_commit = resolve_commits(args)
+    if start_commit is None:
+        return 0
 
     diff = compare_manifests(start_commit, end_commit)
-
-    output_dir = args.output_dir
-    generate_html_report(diff, output_dir)
+    generate_html_report(diff, args.output_dir)
 
     print("\n=== Generating Step Summary ===")
     generate_step_summary(diff)

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       start_ref:
-        description: 'Start commit SHA or workflow run ID (required when using workflow mode or commit SHA mode without find-last-successful)'
+        description: 'Start commit SHA or workflow run ID (required when using workflow mode or commit SHA mode without find-last-run / pr-base-ref)'
         required: false
         type: string
       end_ref:
@@ -16,8 +16,17 @@ on:
         required: false
         type: boolean
         default: false
-      find_last_successful:
-        description: 'Workflow file to find last successful run (e.g., ci_nightly.yml)'
+      find_last_run:
+        description: 'Workflow file to find last run on the branch (e.g., ci_nightly.yml). Run status filter is set via accepted_statuses.'
+        required: false
+        type: string
+      accepted_statuses:
+        description: 'Comma-separated workflow run statuses accepted by --find-last-run (default: success).'
+        required: false
+        type: string
+        default: 'success'
+      pr_base_ref:
+        description: 'PR base branch name. When set, start_ref is resolved as the merge-base between end_ref and origin/<pr_base_ref> via the GitHub Compare API.'
         required: false
         type: string
   workflow_call:
@@ -32,7 +41,14 @@ on:
         required: false
         type: boolean
         default: false
-      find_last_successful:
+      find_last_run:
+        required: false
+        type: string
+      accepted_statuses:
+        required: false
+        type: string
+        default: 'success'
+      pr_base_ref:
         required: false
         type: string
 
@@ -43,6 +59,8 @@ jobs:
   generate-report:
     name: Generate Manifest Diff Report
     runs-on: ubuntu-24.04
+    # Informational job: never block the build/test jobs that needs: setup.
+    continue-on-error: true
     permissions:
       id-token: write
       contents: read
@@ -58,8 +76,10 @@ jobs:
         run: |
           python3 build_tools/generate_manifest_diff_report.py \
             --end "${{ inputs.end_ref }}" \
-            --start "${{ inputs.start_ref || '' }}" \
-            --find-last-successful "${{ inputs.find_last_successful || '' }}" \
+            --start "${{ inputs.start_ref }}" \
+            --find-last-run "${{ inputs.find_last_run }}" \
+            --accepted-statuses "${{ inputs.accepted_statuses }}" \
+            --pr-base-ref "${{ inputs.pr_base_ref }}" \
             ${{ inputs.workflow_mode && '--workflow-mode' || '' }} \
             --output-dir reports
 
@@ -70,6 +90,8 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
+      # upload_test_report_script.py appends the S3 report link to
+      # $GITHUB_STEP_SUMMARY itself, so no extra link step is needed.
       - name: Upload Report to S3
         if: ${{ github.repository == 'ROCm/TheRock' }}
         run: |
