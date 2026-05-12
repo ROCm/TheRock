@@ -115,6 +115,7 @@ PACKAGE CATEGORIES:
 """
 
 import argparse
+import re
 import sys
 from pathlib import Path
 from typing import List, Tuple, Union, Dict
@@ -214,7 +215,14 @@ def is_allowed_multi_arch_package(
           - gfx target in filename
           - optional requested arch match
     """
-    base = filename.split("-")[0].lower()
+    # Extract package name from wheel/sdist filename by splitting at the
+    # beginning of the version segment (e.g. "-7", "-2").
+    # This preserves hyphenated package names like:
+    #   amd-torch-device-gfx942 -> amd_torch_device_gfx942
+    # while also correctly handling regular packages like:
+    #   torch -> torch
+    base = re.split(r"-\d", filename, maxsplit=1)[0]
+    base = base.lower().replace("-", "_")
 
     for pkg in PACKAGES_TO_PROMOTE_MULTI_ARCH:
 
@@ -236,8 +244,8 @@ def is_allowed_multi_arch_package(
 
             return True
 
-        # Regular packages use exact match
-        if base == pkg:
+        # Regular packages use prefix match
+        if base.startswith(pkg):
             return True
 
     return False
@@ -410,10 +418,17 @@ def list_packages_multi_arch(
             key = obj["Key"]
             filename = key.split("/")[-1]
 
+            # Skip directories and generated indexes
             if not filename or filename == "index.html":
                 continue
 
-            if version in filename and is_allowed_multi_arch_package(
+            # Match either:
+            #   rocm_sdk_core-7.13.0rc0-...
+            # or:
+            #   torch-2.10.0+rocm7.13.0rc0-...
+            matches_version = version in filename or f"rocm{version}" in filename
+
+            if matches_version and is_allowed_multi_arch_package(
                 filename,
                 architectures,
             ):
