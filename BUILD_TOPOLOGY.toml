@@ -586,7 +586,6 @@ artifact_group = "opencl-cts"
 type = "target-neutral"
 artifact_deps = ["core-ocl"]
 feature_name = "OPENCL_CTS"
-feature_group = "CORE"
 disable_platforms = ["windows"]
 
 [artifacts.core-hipinfo]
