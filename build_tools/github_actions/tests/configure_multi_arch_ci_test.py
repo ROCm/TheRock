@@ -1141,7 +1141,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Mock random.random() to return 0.1 (< 0.59 first weight)
+        # Mock random.random() to return 0.1 (< 0.369 first weight)
         with patch("random.random", return_value=0.1):
             builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
 
@@ -1161,8 +1161,8 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Mock random.random() to return 0.65 (>= 0.59, < 0.73)
-        with patch("random.random", return_value=0.65):
+        # Mock random.random() to return 0.4 (>= 0.369, < 0.455)
+        with patch("random.random", return_value=0.4):
             builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
 
         self.assertIsNotNone(builds.linux)
@@ -1183,8 +1183,8 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Mock random.random() to return 0.8 (>= 0.59+0.14=0.73)
-        with patch("random.random", return_value=0.8):
+        # Mock random.random() to return 0.5 (>= 0.369+0.086=0.455)
+        with patch("random.random", return_value=0.5):
             builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
 
         self.assertIsNotNone(builds.linux)
