@@ -129,7 +129,6 @@ jobs:
         uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
         with:
           workflow: test_artifacts.yml
-          ref: ${{ inputs.ref }}
           inputs: |
             { "artifact_group": "${{ matrix.family_info.amdgpu_family }}",
               "artifact_run_id": "${{ github.run_id }}",
