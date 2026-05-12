@@ -57,44 +57,61 @@ assert_contains() {
     fi
 }
 
+# Helper: run script with --output-format github using a temp GITHUB_ENV file.
+# Returns the content written to GITHUB_ENV.
+run_github_format() {
+    local tmp_env
+    tmp_env=$(mktemp)
+    GITHUB_ENV="$tmp_env" bash "$SETUP_SCRIPT" "$@" --output-format github
+    local result
+    result=$(cat "$tmp_env")
+    rm -f "$tmp_env"
+    echo "$result"
+}
+
 # Test resolve_python_cmd logic (output format tests)
 test_ubuntu_profiles() {
-    local output=$(bash "$SETUP_SCRIPT" --os-profile ubuntu2404 --output-format github)
+    local output
+    output=$(run_github_format --os-profile ubuntu2404)
     assert_equals "PYTHON_CMD=python3.12" "$output" "Ubuntu 24.04 resolves to python3.12"
 
-    output=$(bash "$SETUP_SCRIPT" --os-profile ubuntu2204 --output-format github)
+    output=$(run_github_format --os-profile ubuntu2204)
     assert_equals "PYTHON_CMD=python3.12" "$output" "Ubuntu 22.04 resolves to python3.12"
 
-    output=$(bash "$SETUP_SCRIPT" --os-profile ubuntu2004 --output-format github)
+    output=$(run_github_format --os-profile ubuntu2004)
     assert_equals "PYTHON_CMD=python3.12" "$output" "Ubuntu 20.04 resolves to python3.12"
 }
 
 test_debian_profiles() {
-    local output=$(bash "$SETUP_SCRIPT" --os-profile debian12 --output-format github)
+    local output
+    output=$(run_github_format --os-profile debian12)
     assert_equals "PYTHON_CMD=python3.12" "$output" "Debian 12 resolves to python3.12"
 
-    output=$(bash "$SETUP_SCRIPT" --os-profile debian11 --output-format github)
+    output=$(run_github_format --os-profile debian11)
     assert_equals "PYTHON_CMD=python3.12" "$output" "Debian 11 resolves to python3.12"
 }
 
 test_sles_profiles() {
-    local output=$(bash "$SETUP_SCRIPT" --os-profile sles16 --output-format github)
+    local output
+    output=$(run_github_format --os-profile sles16)
     assert_equals "PYTHON_CMD=python3.13" "$output" "SLES 16 resolves to python3.13"
 
-    output=$(bash "$SETUP_SCRIPT" --os-profile sles15 --output-format github)
+    output=$(run_github_format --os-profile sles15)
     assert_equals "PYTHON_CMD=python3.13" "$output" "SLES 15 resolves to python3.13"
 }
 
 test_rhel_profiles() {
-    local output=$(bash "$SETUP_SCRIPT" --os-profile rhel10 --output-format github)
+    local output
+    output=$(run_github_format --os-profile rhel10)
     assert_equals "PYTHON_CMD=python3.12" "$output" "RHEL 10 resolves to python3.12"
 
-    output=$(bash "$SETUP_SCRIPT" --os-profile rhel9 --output-format github)
+    output=$(run_github_format --os-profile rhel9)
     assert_equals "PYTHON_CMD=python3.12" "$output" "RHEL 9 resolves to python3.12"
 }
 
 test_centos_profiles() {
-    local output=$(bash "$SETUP_SCRIPT" --os-profile centos9 --output-format github)
+    local output
+    output=$(run_github_format --os-profile centos9)
     assert_equals "PYTHON_CMD=python3.12" "$output" "CentOS 9 resolves to python3.12 (default case)"
 }
 
@@ -108,8 +125,9 @@ test_json_output() {
 }
 
 test_github_output() {
-    local output=$(bash "$SETUP_SCRIPT" --os-profile rhel10 --output-format github)
-    assert_equals "PYTHON_CMD=python3.12" "$output" "GitHub output format for RHEL"
+    local output
+    output=$(run_github_format --os-profile rhel10)
+    assert_equals "PYTHON_CMD=python3.12" "$output" "GitHub output format writes to GITHUB_ENV"
 }
 
 test_env_output() {

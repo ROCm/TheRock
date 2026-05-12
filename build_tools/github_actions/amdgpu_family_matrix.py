@@ -45,6 +45,47 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
     return selected["label"]
 
 
+# Build runner configuration for Linux builds
+# Uses weighted distribution: 90% Azure, 10% AWS
+# Sanitizer builds (asan/tsan) use ramdisk variants (100% Azure, no AWS yet)
+BUILD_RUNNER_LABELS = {
+    "linux": {
+        "default": [
+            {"label": "azure-linux-scale-rocm", "weight": 0.9},
+            {"label": "aws-linux-scale-rocm-prod", "weight": 0.1},
+        ],
+        "sanitizer": [
+            {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
+        ],
+    },
+    "windows": {
+        "default": [
+            {"label": "azure-windows-scale-rocm", "weight": 1.0},
+        ],
+    },
+}
+
+
+def select_build_runner(platform: str, build_variant: str) -> str:
+    """Select a build runner label based on platform and build variant."""
+    if platform not in BUILD_RUNNER_LABELS:
+        # Platform not configured for weighted selection, return default
+        print(f"  No build runner config for platform {platform}, using default")
+        return ""
+
+    platform_config = BUILD_RUNNER_LABELS[platform]
+
+    # Use sanitizer runners for asan/tsan builds
+    if "san" in build_variant:
+        labels_config = platform_config.get("sanitizer", platform_config["default"])
+        context_name = f"build-runner ({platform}, {build_variant})"
+    else:
+        labels_config = platform_config["default"]
+        context_name = f"build-runner ({platform})"
+
+    return select_weighted_label(labels_config, context_name)
+
+
 all_build_variants = {
     "linux": {
         "release": {
@@ -117,7 +158,7 @@ amdgpu_family_info_matrix_presubmit = {
                 },  # core42 (8/29)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
+            "test-runs-on-sandbox": "",
             # 8-GPU distribution: 11N (cirrascale) + 7N (core42)
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
@@ -151,7 +192,7 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
-            "fetch-gfx-targets": ["gfx1100", "gfx1101"],
+            "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
@@ -191,7 +232,7 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "windows-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,
@@ -203,7 +244,8 @@ amdgpu_family_info_matrix_presubmit = {
 amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
-            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
+            "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+            "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
             "build_variants": ["release", "asan", "tsan"],

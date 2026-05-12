@@ -196,6 +196,25 @@ class WorkflowOutputRoot:
             f"{self.prefix}/manifests/{artifact_group}/therock_manifest.json",
         )
 
+    # -- Native packages --------------------------------------------------------
+
+    def native_linux_packages(self, pkg_type: str) -> StorageLocation:
+        """Location for the native Linux package repository directory.
+
+        Returns ``StorageLocation`` at ``{run_id}-linux/packages/{pkg_type}``
+        (e.g. ``12345678901-linux/packages/deb``).
+
+        The contents under this prefix follow standard repository layouts
+        (not loose files): deb repos use APT layout (``pool/main/`` +
+        ``dists/stable/``); rpm repos place packages under ``x86_64/`` with
+        ``repodata/`` alongside. See ``upload_package_repo.py`` for the exact
+        on-disk and S3 layout.
+
+        Args:
+            pkg_type: Package type ('deb' or 'rpm').
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/packages/{pkg_type}")
+
     # -- Python packages --------------------------------------------------------
 
     def python_packages(self, artifact_group: str = "") -> StorageLocation:
