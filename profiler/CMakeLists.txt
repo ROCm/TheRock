@@ -320,7 +320,8 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
     INSTALL_RPATH_DIRS
       "lib"
       "lib/rocprofiler-systems"
-      "llvm/lib"
+      "lib/llvm/lib"
+      "lib/rocm_sysdeps/lib"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     BUILD_DEPS
@@ -384,7 +385,7 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
       INSTALL_RPATH_DIRS
         "lib"
         "lib/rocprofiler-systems"
-        "llvm/lib"
+        "lib/llvm/lib"
       RUNTIME_DEPS
         rocprofiler-systems
     )
