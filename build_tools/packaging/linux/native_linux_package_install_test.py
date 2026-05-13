@@ -53,7 +53,7 @@ CI typically runs this module under pytest (same file; reporting handled by pyte
 
 Workflow/container ``env`` maps to CLI flags via :func:`_argv_from_ci_env` + ``test_native_linux_package_install``.
 For versioned metapackage names only, set ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` and omit ``--rocm-version`` when unversioned packages are desired.
-For multiple arches from CI, set ``GFX_ARCH`` to whitespace-separated tokens (e.g. ``gfx94x gfx1100``) or a single comma-separated value (e.g. ``gfx94x,gfx1100``); optional ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` pairs with ``GFX_ARCH`` like ``--rocm-version`` with ``--gfx-arch`` on the CLI.
+For multiple arches from CI, set ``GFX_ARCH`` to whitespace-separated tokens (e.g. ``gfx94x gfx1100``), semicolon-separated (e.g. ``gfx94x;gfx1100``), or a single comma-separated value (e.g. ``gfx94x,gfx1100``); optional ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` pairs with ``GFX_ARCH`` like ``--rocm-version`` with ``--gfx-arch`` on the CLI.
 You can still invoke this file as a script for ad-hoc runs (no pytest required).
 
 Example invocations:
@@ -111,10 +111,14 @@ Example invocations:
  --rocm-version 7.13.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
- # Same semantics: comma-separated arches in one --gfx-arch argument (or repeat --gfx-arch).
+ # Same semantics: comma- or semicolon-separated arches in one --gfx-arch argument (or repeat --gfx-arch).
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
  --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
  --rocm-version 7.13 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --rocm-version 7.13 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Versioned generic metapackages (no arch suffix) when --rocm-version is set without --gfx-arch.
@@ -312,7 +316,7 @@ class NativeLinuxPackageInstallTest:
     def _normalized_gfx_archs_from_input(
         gfx_arch: str | list[str] | None,
     ) -> list[str]:
-        """Normalize GPU arch list: split commas, strip, lowercase, dedupe (order kept).
+        """Normalize GPU arch list: split commas and semicolons, strip, lowercase, dedupe (order kept).
 
         Does not supply a default architecture. ``None``, blank string, or only
         empty entries yield an empty list (caller uses generic package names).
@@ -331,7 +335,8 @@ class NativeLinuxPackageInstallTest:
             tokens = [str(a) for a in gfx_arch if a and str(a).strip()]
         expanded: list[str] = []
         for t in tokens:
-            for part in t.split(","):
+            # Commas and semicolons both delimit arches (semicolons match amdgpu-families CI style).
+            for part in t.replace(";", ",").split(","):
                 p = part.strip()
                 if p:
                     expanded.append(p)
@@ -1095,6 +1100,12 @@ Examples:
  --rocm-version 7.12 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
+ # Semicolon-separated (quote for POSIX shells so ``;`` is not a command separator)
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --rocm-version 7.12 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
  # --rocm-version without --gfx-arch: amdrocm7.13 / amdrocm-core-sdk7.13 only
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
  --repo-url https://therock-dev-artifacts.s3.amazonaws.com/25137154844-linux/packages/deb \\
@@ -1139,7 +1150,7 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         help="GPU architecture(s), optional. Used in package names only with --rocm-version "
         "(e.g. amdrocm7.13-gfx94x). Without --rocm-version, arch is ignored for install targets "
         "(generic amdrocm / amdrocm-core-sdk). "
-        "Repeat flag or list; commas split. Not used for simulate.",
+        "Repeat flag or list; commas and semicolons split within each value. Not used for simulate.",
     )
     parser.add_argument(
         "--rocm-version",
@@ -1397,7 +1408,10 @@ def _argv_from_ci_env() -> list[str] | None:
 
     os_profile = (os.environ.get("OS_PROFILE") or "").strip()
     repo_url = (os.environ.get("REPO_URL") or "").strip()
-    gfx_arch = (os.environ.get("GFX_ARCH") or "").split()
+    gfx_raw = (os.environ.get("GFX_ARCH") or "").strip()
+    # Semicolons delimit arches in CI; normalize to whitespace so split() does not
+    # leave stray ';' on the first token (e.g. "gfx94x; gfx1100").
+    gfx_arch = gfx_raw.replace(";", " ").split() if gfx_raw else []
     release_type = (os.environ.get("RELEASE_TYPE") or "").strip()
     install_prefix = (os.environ.get("INSTALL_PREFIX") or "").strip()
 
