@@ -91,6 +91,7 @@ jobs:
           extra_cmake_options: >-
             -DTHEROCK_ENABLE_ALL=OFF
             -DTHEROCK_ENABLE_OPENCL_CTS=ON
+            -DTHEROCK_BUNDLE_SYSDEPS=OFF
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py
