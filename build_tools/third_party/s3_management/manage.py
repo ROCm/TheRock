@@ -103,6 +103,7 @@ if CUSTOM_PREFIX:
 PACKAGE_ALLOW_LIST = {x.lower() for x in [
     # ---- ROCm ----
     "rocm",
+    "rocm_bootstrap",
     "rocm_sdk",
     "rocm_sdk_core",
     "rocm_sdk_devel",

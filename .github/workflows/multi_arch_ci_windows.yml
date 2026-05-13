@@ -13,7 +13,7 @@ on:
           artifact_group, per_family_info, dist_amdgpu_families,
           build_variant_label, build_variant_cmake_preset,
           build_variant_suffix, expect_failure, build_pytorch,
-          prebuilt_stages, baseline_run_id.
+          build_native_linux, prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
       rocm_package_version:
