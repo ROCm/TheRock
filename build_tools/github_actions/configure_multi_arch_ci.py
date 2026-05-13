@@ -587,12 +587,21 @@ def _determine_test_type(
     if _has_test_labels(ci_inputs):
         return "full", "test labels specified"
 
-    # Priority 3: schedule runs the full nightly suite — comprehensive
+    # Priority 3: release builds run deeper test suites than regular CI.
+    # * 'nightly' gets comprehensive (deeper than standard, on a daily cadence)
+    # * 'prerelease' gets full (exhaustive pre-release validation)
+    # * 'dev' falls through to later priorities so changes can be tested quickly
+    if ci_inputs.release_type == "nightly":
+        return "comprehensive", "release build (nightly)"
+    if ci_inputs.release_type == "prerelease":
+        return "full", "release build (prerelease)"
+
+    # Priority 4: schedule runs the full nightly suite — comprehensive
     # coverage on a cadence, catching regressions that quick tests miss.
     if ci_inputs.is_schedule:
         return "comprehensive", "scheduled run"
 
-    # Priority 4: a submodule change means actual library code changed
+    # Priority 5: a submodule change means actual library code changed
     # (e.g. rocBLAS, MIOpen). These need full testing since the change
     # could affect any downstream consumer.
     if (
