@@ -1,23 +1,21 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Weekly full PyTorch unit-test suite against nightly wheels from v2-staging.
+# Manually dispatchable full PyTorch unit-test suite against wheels from a
+# staging index.
 #
-# The nightly build pipeline (build_portable_linux_pytorch_wheels.yml) now
-# triggers full UTs automatically for gfx94X-dcgpu on every nightly build.
-# This weekly schedule serves as a supplemental run and can be manually
-# dispatched for ad-hoc testing of any branch/GPU family.
+# Nightly automation is driven by build_portable_linux_pytorch_wheels.yml after
+# a wheel build completes, so scheduled runs here would risk testing stale
+# wheels and duplicating the build-triggered signal.
 #
 # Current scope: Linux gfx94X-dcgpu only.
 # TODO: Expand to additional GPU families (Radeon, gfx950, etc.) and Windows.
 #       Runner labels should eventually come from amdgpu_family_matrix.py /
 #       configure_target_run.py instead of being passed as inputs here.
 
-name: CI Weekly PyTorch Full Test
+name: CI PyTorch Full Test
 
 on:
-  schedule:
-    - cron: "0 12 * * 0" # Every Sunday at 12:00 UTC
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -61,7 +59,7 @@ permissions:
   contents: read
 
 run-name: >-
-  CI Weekly PyTorch Full Test
+  CI PyTorch Full Test
   (${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }},
    ${{ inputs.pytorch_git_ref || 'nightly' }})
 
