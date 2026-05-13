@@ -289,6 +289,13 @@ if(THEROCK_ENABLE_ROCPROFV3)
       message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
     endif()
 
+    # When binutils is bundled, use its libiberty; otherwise let rocprofiler-systems build its own.
+    if(THEROCK_BUNDLED_BINUTILS)
+      set(_rocprofsys_build_libiberty OFF)
+    else()
+      set(_rocprofsys_build_libiberty ON)
+    endif()
+
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
@@ -300,6 +307,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_BUILD_TBB=ON
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
+        -DROCPROFSYS_BUILD_LIBIBERTY="${_rocprofsys_build_libiberty}"
         -DROCPROFSYS_BUILD_FOR_THEROCK=ON # TODO: Will be deprecated
         -DROCPROFSYS_INSTALL_TESTING="${THEROCK_BUILD_TESTING}"
         -DROCPROFSYS_INSTALL_EXAMPLES="${THEROCK_BUILD_TESTING}"

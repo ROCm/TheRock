@@ -416,6 +416,7 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     # macOS bundled deps - note: libcap, libdrm, numactl are Linux-specific
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
+    set(THEROCK_BUNDLED_BINUTILS therock-binutils)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
     set(THEROCK_BUNDLED_EXPAT therock-expat)
     set(THEROCK_BUNDLED_GMP therock-gmp)

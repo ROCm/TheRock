@@ -8,10 +8,11 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-binutils-sources
       SOURCE_DIR "${_source_dir}"
-      # Originally mirrored from: "http://ftpmirror.gnu.org/gnu/binutils/binutils-2.45.tar.gz"
-      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/binutils-2.45.tar.gz"
-      URL_HASH "SHA512=5c71ec80884c0b4c0f7a4f8600946f1f6feebe584261b63185b0942cba4062d5b6cf2337539132d0ca03505c0a74f3c2760bc62ed08843c3b7db03df7f5798ad"
+      # Originally mirrored from: "https://ftpmirror.gnu.org/gnu/binutils/binutils-2.46.0.tar.gz"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/binutils-2.46.0.tar.gz"
+      URL_HASH "SHA512=30d24f7461d459dcbd04e506bb74e487a92748ed411878aacf7388a79ac5b73f968569f43385c9f12c669a5c0b0295d3083a8a4f3ab1be1bb826b3a15ec1f029"
       TOUCH "${_download_stamp}"
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
     therock_cmake_subproject_declare(therock-binutils
@@ -56,19 +57,27 @@ if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
-set(EXTRA_CPPFLAGS)
-string(APPEND EXTRA_CPPFLAGS " -fPIC")
-message(STATUS "EXTRA_CPPFLAGS=${EXTRA_CPPFLAGS}")
+# -fPIC must be in CFLAGS/CXXFLAGS (compiler flags), so that libiberty object
+# files are compiled as position-independent code and can be linked into shared
+# libraries by downstream consumers (e.g. dyninst).
+set(EXTRA_CFLAGS "-fPIC")
+set(EXTRA_CXXFLAGS "-fPIC")
+message(STATUS "EXTRA_CFLAGS=${EXTRA_CFLAGS}")
+message(STATUS "EXTRA_CXXFLAGS=${EXTRA_CXXFLAGS}")
 
 add_custom_target(
   build ALL
-  WORKING_DIRECTORY "${SOURCE_DIR}"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  COMMAND
+    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${CMAKE_CURRENT_BINARY_DIR}/s"
+  COMMAND
+    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "CFLAGS=${EXTRA_CFLAGS}"
-      "CPPFLAGS=${EXTRA_CPPFLAGS}"
+      "CXXFLAGS=${EXTRA_CXXFLAGS}"
       --
-    "./configure"
+    "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --enable-install-libiberty
       --enable-shared
@@ -77,6 +86,7 @@ add_custom_target(
       --includedir="${CMAKE_INSTALL_PREFIX}/include"
       --disable-nls
       --disable-werror
+      --disable-gprofng
   COMMAND
     make -j "${PAR_JOBS}" V=1
   COMMAND
@@ -94,7 +104,7 @@ add_custom_target(
 )
 
 # This matches the conventions of the FindLibIberty.cmake module.
-# Other than that, there is so source of truth for this.
+# Other than that, there is no source of truth for this.
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/libiberty-config.cmake.in
   ${CMAKE_CURRENT_BINARY_DIR}/libiberty-config.cmake
