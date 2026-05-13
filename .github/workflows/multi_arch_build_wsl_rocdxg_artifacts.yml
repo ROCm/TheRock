@@ -142,15 +142,12 @@ jobs:
           wsl_venv_dir="/tmp/therock-wsl-rocdxg/.venv"
           python3 "${THEROCK_HOST_WORKSPACE}/build_tools/setup_venv.py" "${wsl_venv_dir}"
           "${wsl_venv_dir}/bin/python" -m pip install -r "${THEROCK_HOST_WORKSPACE}/requirements.txt"
-          # Match the manylinux builder image's Python-side build prerequisites.
-          "${wsl_venv_dir}/bin/python" -m pip install \
-            CppHeaderParser==2.7.4 \
-            meson==1.7.0 \
-            tomli==2.2.1 \
-            PyYAML==6.0.2
 
       - name: Get stage configuration
         id: stage_config
+        # This is a pure topology calculation, so keep it on the Windows host
+        # where GitHub step outputs are native. The explicit --platform=linux
+        # still makes configure_stage.py emit Linux/WSL feature selections.
         run: |
           python build_tools/configure_stage.py \
             --stage="${STAGE_NAME}" \
