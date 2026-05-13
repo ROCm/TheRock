@@ -58,6 +58,8 @@ def _make_fetch_args(**kwargs) -> types.SimpleNamespace:
         "media_libs_projects": [],
         "include_iree_libs": False,
         "iree_libs_projects": [],
+        "include_opencl": False,
+        "opencl_projects": [],
         "include_math_libraries": False,
         "math_library_projects": [],
     }

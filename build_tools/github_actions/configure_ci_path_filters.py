@@ -185,6 +185,7 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
     # multi_arch_ci.yml only
     "multi_arch_ci.yml",
     "multi_arch_ci_linux.yml",
+    "build_opencl_cts_ubi10.yml",
     "multi_arch_ci_windows.yml",
     "multi_arch_build_native_linux_packages.yml",
     "multi_arch_build_portable_linux.yml",
