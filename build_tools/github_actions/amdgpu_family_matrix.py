@@ -91,27 +91,20 @@ all_build_variants = {
         "release": {
             "build_variant_label": "release",
             "build_variant_suffix": "",
-            # TODO: Enable linux-release-package once capacity and rccl link
-            # issues are resolved. https://github.com/ROCm/TheRock/issues/1781
-            # "build_variant_cmake_preset": "linux-release-package",
-            "build_variant_cmake_preset": "",
         },
         "asan": {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
-            "build_variant_cmake_preset": "linux-release-asan",
         },
         "tsan": {
             "build_variant_label": "tsan",
             "build_variant_suffix": "tsan",
-            "build_variant_cmake_preset": "linux-release-tsan",
         },
     },
     "windows": {
         "release": {
             "build_variant_label": "release",
             "build_variant_suffix": "",
-            "build_variant_cmake_preset": "windows-release",
         },
     },
 }

@@ -62,7 +62,7 @@ jobs:
       test_runs_on: ${{ matrix.variant.test-runs-on }}
       build_variant_label: ${{ matrix.variant.build_variant_label }}
       build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
-      build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}
+      build_variant_cmake_preset: "linux-dev-tsan"
       test_labels: ${{ needs.setup.outputs.linux_test_labels }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       expect_failure: ${{ matrix.variant.expect_failure == true }}

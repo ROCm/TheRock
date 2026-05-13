@@ -11,9 +11,13 @@ on:
         description: >-
           JSON object with build configuration for this platform. Fields:
           artifact_group, per_family_info, dist_amdgpu_families,
-          build_variant_label, build_variant_cmake_preset,
-          build_variant_suffix, expect_failure, build_pytorch,
+          build_variant_label, build_variant_suffix,
+          expect_failure, build_pytorch,
           prebuilt_stages, baseline_run_id.
+      cmake_preset:
+        description: "CMake preset name (e.g. linux-dev, linux-release, linux-dev-asan)."
+        type: string
+        default: ""
       test_labels:
         type: string
       rocm_package_version:
@@ -92,7 +96,7 @@ jobs:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       build_variant_label: ${{ fromJSON(inputs.build_config).build_variant_label }}
-      build_variant_cmake_preset: ${{ fromJSON(inputs.build_config).build_variant_cmake_preset }}
+      build_variant_cmake_preset: ${{ inputs.cmake_preset }}
       build_variant_suffix: ${{ fromJSON(inputs.build_config).build_variant_suffix }}
       expect_failure: ${{ fromJSON(inputs.build_config).expect_failure }}
       prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}

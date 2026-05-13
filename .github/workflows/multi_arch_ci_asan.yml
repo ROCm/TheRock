@@ -68,6 +68,7 @@ jobs:
     secrets: inherit
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
+      cmake_preset: "linux-dev-asan"
       test_labels: ${{ needs.setup.outputs.linux_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
