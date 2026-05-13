@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from configure_ci_path_filters import is_ci_run_required
+from configure_ci_path_filters import is_ci_run_required, _GITHUB_WORKFLOWS_CI_FILENAMES
+from workflow_utils import get_transitive_workflow_uses
 
 
 class ConfigureCIPathFiltersTest(unittest.TestCase):
@@ -37,7 +38,7 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
 
-        paths = [".github/workflows/build_artifact.yml"]
+        paths = [".github/workflows/build_native_linux_packages.yml"]
         run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
 
@@ -54,6 +55,34 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         paths = ["source_file.h", ".github/workflows/pre-commit.yml"]
         run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
+
+    def test_ci_workflow_filenames_cover_all_transitive_uses(self):
+        """_GITHUB_WORKFLOWS_CI_FILENAMES must exactly match the set of
+        workflows transitively called by ci.yml and multi_arch_ci.yml.
+
+        This is a change-detector test that can be removed if
+        _GITHUB_WORKFLOWS_CI_FILENAMES is computed dynamically instead of
+        maintained by hand.
+
+        If this test fails, update _GITHUB_WORKFLOWS_CI_FILENAMES in
+        configure_ci_path_filters.py to match the actual workflow tree.
+        """
+        all_used = get_transitive_workflow_uses(["ci.yml", "multi_arch_ci.yml"])
+        missing = all_used - _GITHUB_WORKFLOWS_CI_FILENAMES
+        stale = _GITHUB_WORKFLOWS_CI_FILENAMES - all_used
+        errors = []
+        if missing:
+            errors.append(
+                "Missing (add to _GITHUB_WORKFLOWS_CI_FILENAMES):\n"
+                + "\n".join(f"  - {f}" for f in sorted(missing))
+            )
+        if stale:
+            errors.append(
+                "Stale (remove from _GITHUB_WORKFLOWS_CI_FILENAMES):\n"
+                + "\n".join(f"  - {f}" for f in sorted(stale))
+            )
+        if errors:
+            self.fail("\n".join(errors))
 
 
 if __name__ == "__main__":
