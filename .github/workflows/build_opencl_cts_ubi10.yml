@@ -90,7 +90,6 @@ jobs:
           package_version: ${{ inputs.package_version }}
           extra_cmake_options: >-
             -DTHEROCK_ENABLE_ALL=OFF
-            -DTHEROCK_ENABLE_CORE=ON
             -DTHEROCK_ENABLE_OPENCL_CTS=ON
           BUILD_DIR: build
         run: |

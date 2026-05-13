@@ -1,8 +1,7 @@
 # OpenCL Conformance Test Suite (CTS)
 # This builds the OpenCL CTS tests for validating OpenCL runtime implementations
 
-if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_OCL_RUNTIME)
-  if(THEROCK_ENABLE_OPENCL_CTS)
+if(THEROCK_ENABLE_OPENCL_CTS)
 
     ##############################################################################
     # opencl-cts
@@ -52,5 +51,4 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_OCL_RUNTIME)
         opencl-cts
     )
 
-  endif(THEROCK_ENABLE_OPENCL_CTS)
-endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_OCL_RUNTIME)
+endif(THEROCK_ENABLE_OPENCL_CTS)
