@@ -248,6 +248,10 @@ docker run --rm -i -t \
 This container includes all necessary build dependencies and toolchains for
 building TheRock components.
 
+**Note:** CI builds use a pinned image version rather than `:latest`. When using
+`:latest`, you may encounter different behavior or updated dependencies compared
+to what CI uses.
+
 For additional information on the manylinux image, see [dockerfiles/README.md](../dockerfiles/README.md#build_manylinux_dockerfile).
 
 **GPU access for testing:**
@@ -350,8 +354,10 @@ required by ROCgdb, such as dejagnu (for the GDB test suite), gfortran (for
 Fortran debugging tests), and other utilities needed for comprehensive debugger
 testing. No builds are performed in this container.
 
-**Note:** This testing container matches the CI environment and can be used to
-locally reproduce CI test failures.
+**Note:** CI tests use a pinned image version rather than `:latest`. To exactly
+reproduce CI test results, use the same pinned version that CI uses. When using
+`:latest`, you may encounter different behavior or updated testing tools compared
+to the CI environment.
 
 For additional information on the testing container image, see [dockerfiles/README.md](../dockerfiles/README.md#no_rocm_image_dockerfile).
 
