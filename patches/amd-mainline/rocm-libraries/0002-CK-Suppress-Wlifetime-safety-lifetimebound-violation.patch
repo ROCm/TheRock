@@ -1,0 +1,72 @@
+From 181283891c7a63b2a23cd67548d7ee3fb3936553 Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Tue, 12 May 2026 23:32:06 -0400
+Subject: [PATCH] [CK] Suppress -Wlifetime-safety-lifetimebound-violation
+ compiler errors
+
+The amd-staging compiler introduces a new -Wlifetime-safety-lifetimebound-violation
+warning. Combined with -Werror in Composable Kernel, this causes build failures
+in tuple.hpp, buffer_view.hpp, and kernel_launch.hpp.
+
+Suppress the warning alongside the existing -Wlifetime-safety-intra-tu-suggestions
+pragma in the affected headers.
+
+Upstream fix: https://github.com/ROCm/rocm-libraries/pull/7384
+---
+ projects/composablekernel/include/ck/utility/tuple.hpp           | 1 +
+ .../composablekernel/include/ck_tile/core/container/tuple.hpp    | 1 +
+ .../composablekernel/include/ck_tile/core/tensor/buffer_view.hpp | 1 +
+ projects/composablekernel/include/ck_tile/host/kernel_launch.hpp | 1 +
+ 4 files changed, 4 insertions(+)
+
+diff --git a/projects/composablekernel/include/ck/utility/tuple.hpp b/projects/composablekernel/include/ck/utility/tuple.hpp
+index 038a81b992d..38a107641e9 100644
+--- a/projects/composablekernel/include/ck/utility/tuple.hpp
++++ b/projects/composablekernel/include/ck/utility/tuple.hpp
+@@ -11,6 +11,7 @@
+ 
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
+ 
+ namespace ck {
+ 
+diff --git a/projects/composablekernel/include/ck_tile/core/container/tuple.hpp b/projects/composablekernel/include/ck_tile/core/container/tuple.hpp
+index d7da0e14670..601496c7e66 100644
+--- a/projects/composablekernel/include/ck_tile/core/container/tuple.hpp
++++ b/projects/composablekernel/include/ck_tile/core/container/tuple.hpp
+@@ -15,6 +15,7 @@
+ 
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
+ 
+ #ifndef CK_TILE_TUPLE_IMPL
+ #define CK_TILE_TUPLE_IMPL 1
+diff --git a/projects/composablekernel/include/ck_tile/core/tensor/buffer_view.hpp b/projects/composablekernel/include/ck_tile/core/tensor/buffer_view.hpp
+index 0a6a1fcba9f..689003ae1fe 100644
+--- a/projects/composablekernel/include/ck_tile/core/tensor/buffer_view.hpp
++++ b/projects/composablekernel/include/ck_tile/core/tensor/buffer_view.hpp
+@@ -19,6 +19,7 @@
+ 
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
+ 
+ namespace ck_tile {
+ 
+diff --git a/projects/composablekernel/include/ck_tile/host/kernel_launch.hpp b/projects/composablekernel/include/ck_tile/host/kernel_launch.hpp
+index c96a427db11..80d3897ca76 100644
+--- a/projects/composablekernel/include/ck_tile/host/kernel_launch.hpp
++++ b/projects/composablekernel/include/ck_tile/host/kernel_launch.hpp
+@@ -17,6 +17,7 @@
+ 
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
+ 
+ namespace ck_tile {
+ 
+-- 
+2.34.1
+
