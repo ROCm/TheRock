@@ -353,4 +353,4 @@ separately.
 - [Dockerfiles for TheRock](dockerfiles/README.md): Information about containers used for building, testing, and distributing ROCm using TheRock.
 - [Build Artifacts](docs/development/artifacts.md): Documentation about the outputs of the build system.
 - [Releases Page](RELEASES.md): Documentation for how to leverage our build artifacts.
-- [Roadmap for Support](ROADMAP.md): Documentation for our prioritized roadmap to support AMD GPUs.
+- [Supported GPUs](SUPPORTED_GPUS.md): Current support status and prioritized roadmap for each AMD GPU architecture.
