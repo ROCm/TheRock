@@ -132,6 +132,8 @@ jobs:
     # - Build succeeded (or using prebuilt artifacts)
     # - Not expecting failure
     # - Test runner is available (test_runs_on is set)
+    # - The build produced a find-links URL (empty on forks where the S3
+    #   upload step is skipped for lack of AWS credentials)
     if: >-
       ${{
         !failure() &&
@@ -141,7 +143,8 @@ jobs:
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
         inputs.expect_failure == false &&
-        inputs.test_runs_on != ''
+        inputs.test_runs_on != '' &&
+        needs.build_portable_linux_python_packages.outputs.package_find_links_url != ''
       }}
     uses: ./.github/workflows/test_rocm_wheels.yml
     with:
@@ -157,6 +160,9 @@ jobs:
   build_portable_linux_pytorch_wheels_ci:
     needs: [build_portable_linux_python_packages]
     name: Build PyTorch
+    # PyTorch builds pip-install ROCm wheels via rocm_package_find_links_url;
+    # an empty URL (fork PRs, where the S3 upload step is skipped) means
+    # pip cannot resolve them, so we skip the build.
     if: >-
       ${{
         !failure() &&
@@ -165,7 +171,8 @@ jobs:
           inputs.use_prebuilt_artifacts == 'false' ||
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
-        inputs.build_pytorch == true
+        inputs.build_pytorch == true &&
+        needs.build_portable_linux_python_packages.outputs.package_find_links_url != ''
       }}
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels_ci.yml
     with:

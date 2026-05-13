@@ -157,7 +157,9 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python ${{ matrix.family_info.amdgpu_family }}
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    # package_find_links_url is empty on forks (S3 upload skipped, no AWS
+    # credentials). Skip wheel tests when there's no find-links URL.
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && needs.build_python_packages.outputs.package_find_links_url != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -193,7 +195,9 @@ jobs:
   build_pytorch_wheel_fat:
     needs: [build_python_packages]
     name: Build PyTorch (fat + split)
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true }}
+    # PyTorch builds pip-install ROCm wheels via rocm_package_find_links_url;
+    # without it (forks have no S3 upload) the build can't resolve them.
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true && needs.build_python_packages.outputs.package_find_links_url != '' }}
     uses: ./.github/workflows/build_windows_pytorch_wheels_ci.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}

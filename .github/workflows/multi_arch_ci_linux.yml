@@ -169,7 +169,10 @@ jobs:
   test_native_packages_ubuntu2404:
     needs: [build_native_deb_packages]
     name: Test DEB Install - ubuntu2404
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    # The package_repository_url is empty on forks because the build job
+    # skips the S3 upload step (it has no AWS credentials). Skip install
+    # tests when there's no repository URL to install from.
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && needs.build_native_deb_packages.outputs.package_repository_url != '' }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       package_install_url: ${{ needs.build_native_deb_packages.outputs.package_repository_url }}
@@ -184,7 +187,8 @@ jobs:
   test_native_packages_rhel10:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - rhel10
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    # See note on test_native_packages_ubuntu2404 about the empty-URL guard.
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && needs.build_native_rpm_packages.outputs.package_repository_url != '' }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
@@ -199,7 +203,8 @@ jobs:
   test_native_packages_sles16:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - sles16
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    # See note on test_native_packages_ubuntu2404 about the empty-URL guard.
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && needs.build_native_rpm_packages.outputs.package_repository_url != '' }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
@@ -229,7 +234,9 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python ${{ matrix.family_info.amdgpu_family }} | ${{ matrix.image.name }}
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    # package_find_links_url is empty on forks (S3 upload skipped, no AWS
+    # credentials). Skip wheel tests when there's no find-links URL.
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && needs.build_python_packages.outputs.package_find_links_url != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -270,7 +277,9 @@ jobs:
   build_pytorch_wheel_fat:
     needs: [build_python_packages]
     name: Build PyTorch (fat + split)
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true }}
+    # PyTorch builds pip-install ROCm wheels via rocm_package_find_links_url;
+    # without it (forks have no S3 upload) the build can't resolve them.
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true && needs.build_python_packages.outputs.package_find_links_url != '' }}
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels_ci.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
