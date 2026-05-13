@@ -42,7 +42,9 @@ class CMakeParserTest(unittest.TestCase):
 
         # Verify rocPRIM test dependencies
         self.assertIn("rocprim", test_deps)
-        self.assertEqual(set(test_deps["rocprim"]), {"hipcub", "rocthrust", "rocsparse"})
+        self.assertEqual(
+            set(test_deps["rocprim"]), {"hipcub", "rocthrust", "rocsparse"}
+        )
 
         # Verify rocFFT test dependencies
         self.assertIn("rocfft", test_deps)
