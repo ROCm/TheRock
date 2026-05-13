@@ -1,0 +1,29 @@
+From 49717773aed76d80bb0190697cb148659ed111f6 Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Wed, 13 May 2026 02:44:11 -0400
+Subject: [PATCH] Fix missing LLVM include paths in RaiserScaffoldingTests
+ introduced by commit 7587b27c7078
+
+---
+ amd/comgr/test-unit/CMakeLists.txt | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/amd/comgr/test-unit/CMakeLists.txt b/amd/comgr/test-unit/CMakeLists.txt
+index 7e11d495ca76..ebc6304214eb 100644
+--- a/amd/comgr/test-unit/CMakeLists.txt
++++ b/amd/comgr/test-unit/CMakeLists.txt
+@@ -146,7 +146,10 @@ target_link_libraries(RaiserScaffoldingTests PRIVATE
+   ${LLVM_PTHREAD_LIB})
+ 
+ target_include_directories(RaiserScaffoldingTests PRIVATE
+-  ${COMGR_GTEST_INCLUDE_DIRS})
++  ${LLVM_INCLUDE_DIRS}
++  ${CMAKE_CURRENT_SOURCE_DIR}/../src
++  ${COMGR_GTEST_INCLUDE_DIRS}
++  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../include>)
+ 
+ comgr_configure_test_target(RaiserScaffoldingTests)
+ 
+-- 
+2.34.1
+
