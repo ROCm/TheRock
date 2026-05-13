@@ -34,7 +34,7 @@ def parse_cmake_test_subprojects(therock_dir):
             subproject_name = match.group(1).lower()
             block_content = match.group(2)
 
-                # Look for TEST_SUBPROJECTS within this block
+            # Look for TEST_SUBPROJECTS within this block
             # Match TEST_SUBPROJECTS with optional list of dependencies
             # Empty TEST_SUBPROJECTS is valid (only tests itself)
             test_subprojects_match = re.search(

@@ -27,7 +27,9 @@ class CMakeParserTest(unittest.TestCase):
 
         # Verify rocSPARSE test dependencies
         self.assertIn("rocsparse", test_deps)
-        self.assertEqual(set(test_deps["rocsparse"]), {"hipsparse", "rocsolver", "hipsolver"})
+        self.assertEqual(
+            set(test_deps["rocsparse"]), {"hipsparse", "rocsolver", "hipsolver"}
+        )
 
         # Verify hipSPARSE test dependencies
         self.assertIn("hipsparse", test_deps)
