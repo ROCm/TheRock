@@ -449,6 +449,12 @@ type = "target-neutral"
 artifact_deps = []
 feature_group = "CORE"
 
+[artifacts.nanobind]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+
 [artifacts.nlohmann-json]
 artifact_group = "third-party-libs"
 type = "target-neutral"
