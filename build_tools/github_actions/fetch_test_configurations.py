@@ -109,6 +109,9 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
     return job_config
 
 
+# Common settings applied to all jobs
+_common_settings = {}
+
 # Common settings for rocgdb jobs
 _rocgdb_common = {
     "fetch_artifact_args": "--debug-tools --tests",
@@ -711,6 +714,7 @@ def run():
                 shard_arr = list(range(1, total_shards + 1))
 
                 pal_entry = {
+                    **_common_settings,
                     "job_name": "hip-tests (PAL)",
                     "fetch_artifact_args": base["fetch_artifact_args"],
                     "timeout_minutes": base["timeout_minutes"],
@@ -725,6 +729,7 @@ def run():
 
                 if windows_hip_rocr_tests:
                     rocr_entry = {
+                        **_common_settings,
                         "job_name": "hip-tests (ROCR)",
                         "fetch_artifact_args": base["fetch_artifact_args"],
                         "timeout_minutes": base["timeout_minutes"],
@@ -739,7 +744,7 @@ def run():
                     all_components.append(rocr_entry)
                 continue
 
-            job_config_data = selected_matrix[key]
+            job_config_data = {**_common_settings, **selected_matrix[key]}
             job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
