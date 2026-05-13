@@ -104,7 +104,7 @@ index at https://rocm.nightlies.amd.com/whl-multi-arch/.
 > Multiple virtual environments can be present on a system at a time, allowing you to switch between them at will.
 
 > [!WARNING]
-> If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual enivornment.
+> If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual environment.
 > In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
 We provide several Python packages which together form the complete ROCm SDK.
@@ -419,7 +419,7 @@ We currently support Python 3.10, 3.11, 3.12, 3.13, and 3.14 (PyTorch 2.9+ only)
 > Multiple virtual environments can be present on a system at a time, allowing you to switch between them at will.
 
 > [!WARNING]
-> If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual enivornment.
+> If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual environment.
 > In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
 #### Python packages release status
@@ -786,6 +786,7 @@ also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
 >
 >   | jax version | jaxlib version   |
 >   | ----------- | ---------------- |
+>   | 0.9.2       | 0.9.2 (upstream) |
 >   | 0.9.1       | 0.9.1 (upstream) |
 >   | 0.8.2       | 0.8.2            |
 >   | 0.8.0       | 0.8.0            |
