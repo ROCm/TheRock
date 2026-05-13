@@ -124,7 +124,6 @@ jobs:
     uses: ./.github/workflows/build_opencl_cts_ubi10.yml
     secrets: inherit
     with:
-      amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}

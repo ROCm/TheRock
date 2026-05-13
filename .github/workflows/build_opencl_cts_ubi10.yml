@@ -6,8 +6,6 @@ name: Build opencl-cts (ubi10)
 on:
   workflow_call:
     inputs:
-      amdgpu_families:
-        type: string
       artifact_group:
         type: string
       package_version:
@@ -26,9 +24,6 @@ on:
         default: ""
   workflow_dispatch:
     inputs:
-      amdgpu_families:
-        type: string
-        default: gfx94X-dcgpu
       artifact_group:
         type: string
         default: gfx94X-dcgpu
@@ -51,7 +46,6 @@ jobs:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
       options: --user 0:0
     env:
-      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
     steps:
@@ -91,7 +85,8 @@ jobs:
 
       - name: Configure
         env:
-          amdgpu_families: ${{ inputs.amdgpu_families }}
+          # opencl-cts is target-neutral; any single valid family satisfies CMake.
+          amdgpu_families: gfx94X-dcgpu
           package_version: ${{ inputs.package_version }}
           extra_cmake_options: >-
             -DTHEROCK_ENABLE_ALL=OFF
