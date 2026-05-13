@@ -18,6 +18,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_backend import create_storage_backend
+from github_actions.github_actions_api import gha_append_step_summary
 
 
 PLATFORM = platform.system().lower()
@@ -95,6 +96,8 @@ def main(argv: list[str]) -> None:
     log(f"Uploaded {count} manifest file(s)")
     if count == 0:
         raise FileNotFoundError(f"No JSON files found in {args.manifest_dir}")
+
+    gha_append_step_summary(f"PyTorch manifests: {dest.https_url}/index.html\n")
 
 
 if __name__ == "__main__":
