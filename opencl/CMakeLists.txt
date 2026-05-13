@@ -31,9 +31,6 @@ if(THEROCK_ENABLE_OPENCL_CTS)
         "-DCMAKE_INSTALL_BINDIR=share/opencl/opencl-cts"
       BUILD_DEPS
         rocm-cmake
-      RUNTIME_DEPS
-        ocl-clr
-        ROCR-Runtime
       INTERFACE_LINK_DIRS
         "lib"
       INTERFACE_INSTALL_RPATH_DIRS
