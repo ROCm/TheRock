@@ -1,8 +1,8 @@
-From ffd7b4d7bb6bfb5dabc8c8c41e10ea46ad01d643 Mon Sep 17 00:00:00 2001
+From 94b24f1619d03981f63d17ebf887905bc8e8685a Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Wed, 13 May 2026 15:27:28 -0500
-Subject: [PATCH] [libhipcxx] Fix -x hip scope: use target_compile_options not
- CMAKE_CXX_FLAGS
+Subject: [PATCH 3/3] [libhipcxx] Fix -x hip scope: use target_compile_options
+ not CMAKE_CXX_FLAGS
 
 CMAKE_CXX_FLAGS=-x hip gets passed to the linker step too, causing
 amdclang++ to try to parse ELF object files as HIP source:
@@ -14,22 +14,9 @@ global cmake_opts passed to the sub-project configure step.
 
 Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
 ---
- cmake/test/CMakeLists.txt             | 1 -
  cmake/test/test_export/CMakeLists.txt | 1 +
- 2 files changed, 1 insertion(+), 1 deletion(-)
+ 1 file changed, 1 insertion(+)
 
-diff --git a/cmake/test/CMakeLists.txt b/cmake/test/CMakeLists.txt
-index 41dfb34cc..8c8070c2e 100644
---- a/cmake/test/CMakeLists.txt
-+++ b/cmake/test/CMakeLists.txt
-@@ -25,7 +25,6 @@ set(cmake_opts
-   -D "CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-   -D "CMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
-   -D "CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
--  -D "CMAKE_CXX_FLAGS=-x hip"
- )
- 
- # Temporary installation prefix for tests against installed project:
 diff --git a/cmake/test/test_export/CMakeLists.txt b/cmake/test/test_export/CMakeLists.txt
 index e80a06e2d..36f1da401 100644
 --- a/cmake/test/test_export/CMakeLists.txt
