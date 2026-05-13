@@ -53,6 +53,7 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y --no-install-recommends \
+            ccache \
             ocl-icd-opencl-dev \
             opencl-headers \
             spirv-tools \
