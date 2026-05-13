@@ -6,6 +6,16 @@
 #
 # Forked from https://github.com/pytorch/test-infra/blob/6105c6f94a6055fffdbbb7319f8fb10a45dae644/s3_management/manage.py
 
+"""
+This script supports both:
+- Static prefix updates (default behavior)
+- Explicit prefix override via CLI
+- Optional auto-detection of prefixes from S3 (guarded by flag)
+
+Auto-detection is not enabled by default to preserve backward compatibility
+with existing CI workflows.
+"""
+
 import argparse
 import base64
 import concurrent.futures
@@ -26,13 +36,33 @@ import botocore
 S3 = boto3.resource('s3')
 CLIENT = boto3.client('s3')
 
-# bucket for TheRock
-# We also manage `therock-nightly-python` (not the default to make the script safer to test)
-BUCKET_NAME = getenv("S3_BUCKET_PY", "therock-dev-python")
-BUCKET = S3.Bucket(BUCKET_NAME)
-# TODO: bucket mirror just to hold index used with CDN
-# BUCKET_CDN = S3.Bucket('therock-nightly-python-testing')
-INDEX_BUCKETS = {BUCKET} #, BUCKET_CDN}
+# Bucket configuration is resolved via initialize_bucket().
+# Must be provided via --bucket (CLI) or S3_BUCKET_PY (env).
+
+# Bucket globals configured via initialize_bucket()
+BUCKET_NAME: str | None = None
+BUCKET = None
+INDEX_BUCKETS: Set = set()
+
+def initialize_bucket(bucket_name: str | None) -> None:
+    """
+    initialize_bucket() is required for both CLI and Lambda usage.
+    Do not move bucket initialization exclusively into main(), as the
+    Lambda wrapper imports and calls update_pep503_index() directly.
+    """
+    # Resolve and configure the S3 bucket used for index updates.
+    # CLI --bucket takes precedence over S3_BUCKET_PY; fails if neither is set.
+    global BUCKET_NAME, BUCKET, INDEX_BUCKETS
+    # Bucket resolution order:
+    # 1. CLI --bucket (explicit override)
+    # 2. S3_BUCKET_PY environment variable
+    # Raises if neither is provided.
+    BUCKET_NAME = bucket_name or getenv("S3_BUCKET_PY")
+    if not BUCKET_NAME:
+        raise RuntimeError("Bucket must be provided via --bucket or S3_BUCKET_PY")
+
+    BUCKET = S3.Bucket(BUCKET_NAME)
+    INDEX_BUCKETS = {BUCKET}
 
 ACCEPTED_FILE_EXTENSIONS = ("whl", "zip", "tar.gz")
 PREFIXES = [
@@ -40,11 +70,23 @@ PREFIXES = [
     # and the developer wants to more safely cancel the script.
     "v2-staging/gfx110X-all",
     "v2-staging/gfx1151",
+    "v2-staging/gfx1152",
+    "v2-staging/gfx1153",
+    "v2-staging/gfx900",
+    "v2-staging/gfx90a",
+    "v2-staging/gfx908",
+    "v2-staging/gfx906",
     "v2-staging/gfx120X-all",
     "v2-staging/gfx94X-dcgpu",
     "v2-staging/gfx950-dcgpu",
     "v2/gfx110X-all",
     "v2/gfx1151",
+    "v2/gfx1152",
+    "v2/gfx1153",
+    "v2/gfx900",
+    "v2/gfx90a",
+    "v2/gfx908",
+    "v2/gfx906",
     "v2/gfx120X-all",
     "v2/gfx94X-dcgpu",
     "v2/gfx950-dcgpu",
@@ -64,6 +106,8 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "rocm_sdk",
     "rocm_sdk_core",
     "rocm_sdk_devel",
+    "rocm_profiler",
+    "rocm_sdk_libraries",
     # ---- triton ----
     "triton",
     # ---- triton additional packages ----
@@ -212,12 +256,29 @@ class S3Index:
         for obj in all_sorted_packages:
             full_package_name = path.basename(obj)
             package_name = full_package_name.split('-')[0]
-            # Hard pass on `rocm_sdk_libraries` and packages that are included in our allow list
-            if not match(r"rocm_sdk_libraries_gfx", package_name.lower()) and package_name.lower() not in PACKAGE_ALLOW_LIST:
+            pkg = package_name.lower()
+            BLACKLISTED_PACKAGES = {
+                "rocm_sdk_libraries_dev",
+                "rocm_sdk_libraries_doc",
+                "rocm_sdk_libraries_run",
+            }
+            if pkg in BLACKLISTED_PACKAGES:
+                print(f"[BLACKLISTED] {package_name}")
                 to_hide.add(obj)
                 continue
-            else:
+            # Allow legacy packages + explicitly handle dynamic multi-arch packages
+            if (
+                pkg in PACKAGE_ALLOW_LIST
+                or pkg.startswith("rocm_sdk_device_")
+                or pkg.startswith("rocm_sdk_libraries_")
+                or pkg.startswith("amd_torch_device")
+                or pkg.startswith("amd_torchvision_device")
+            ):
                 packages[package_name] += 1
+            else:
+                print(f"[FILTERED OUT] {package_name}")
+                to_hide.add(obj)
+                continue
         return list(set(self.objects).difference({
             obj for obj in self.objects
             if self.normalize_package_version(obj) in to_hide
@@ -458,39 +519,152 @@ class S3Index:
             rc.fetch_pep658()
         return rc
 
+def update_pep503_index(prefix: str, compute_sha256: bool = False, upload: bool = True):
+    """
+    Regenerates the PEP 503 simple index for a given S3 prefix.
+    Fetches valid artifacts, applies allow-list filtering, optionally updates
+    checksums, and uploads (or saves) the generated index.html files.
+
+    This function is used both by the CLI (via main()) and by the AWS Lambda
+    wrapper (lambda_function.py).
+
+    IMPORTANT:
+        `initialize_bucket()` must be called prior to invoking this function.
+
+        This function is not fully self-contained and depends on the
+        module-level globals `BUCKET_NAME`, `BUCKET`, and `INDEX_BUCKETS`
+        being initialized beforehand via `initialize_bucket()`.
+
+        Both the CLI flow and the Lambda wrapper perform this initialization
+        before calling `update_pep503_index()`.
+
+    Returns:
+        int: The number of S3 objects included in the index after filtering.
+    """
+    print(f"Processing prefix: {prefix}")
+
+    # Record start time to measure S3 fetch duration
+    stime = time.time()
+
+    # Bucket must already be initialized via initialize_bucket().
+    # S3Index.from_S3() relies on module-level BUCKET_NAME / BUCKET.
+    idx = S3Index.from_S3(prefix=prefix, with_metadata=True)
+    
+    # Record end time and compute elapsed duration
+    etime = time.time()
+    print(f"Fetched {len(idx.objects)} objects for '{prefix}' in {etime-stime:.2f}s")
+
+    if compute_sha256:
+        idx.compute_sha256()
+    elif not upload:
+        idx.save_pep503_htmls()
+    else:
+        idx.upload_pep503_htmls()
+
+    return len(idx.objects)
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser("Manage S3 HTML indices for PyTorch")
     parser.add_argument(
         "prefix",
+        nargs="?",
+        default=None,
+        help="Prefix to update (overrides defaults)"
+    )
+    parser.add_argument("--bucket", type=str, help="S3 bucket name")
+    parser.add_argument(
+        "--auto-detect-prefixes",
+        action="store_true",
+        help=(
+            "Automatically detect architecture prefixes under the given base "
+            "path using S3 CommonPrefixes. Disabled by default."
+    )
+    )
+    parser.add_argument(
+        "--starting-from",
         type=str,
-        choices=PREFIXES + ["all"]
+        help=(
+            "Base prefix for auto-detection (e.g. v2/, v2-staging/, v3/whl/). "
+            "Required when using --auto-detect-prefixes."
+    )
     )
     parser.add_argument("--do-not-upload", action="store_true")
     parser.add_argument("--compute-sha256", action="store_true")
     return parser
 
+def resolve_prefixes(args) -> List[str]:
+    """
+    Determines which prefixes to update.
+
+    Priority:
+    1. Explicit CLI prefix
+    2. Auto-detection (if enabled)
+    3. Static PREFIXES list (+ CUSTOM_PREFIX)
+    """
+    # Backward compatibility: support old "all" behavior
+    if args.prefix == "all":
+        return PREFIXES
+
+    # Explicit CLI prefix wins
+    if args.prefix:
+        return [args.prefix]
+
+    # Auto-detection (guarded by flag)
+    if args.auto_detect_prefixes:
+        base = args.starting_from
+        if not base:
+            raise RuntimeError("--starting-from must be provided when using --auto-detect-prefixes")
+
+        return detect_prefixes_from_bucket(base)
+
+    # Default static list
+    return PREFIXES
+
+def detect_prefixes_from_bucket(base_prefix: str) -> List[str]:
+    """
+    Detects architecture prefixes dynamically by listing common prefixes
+    under a base path (e.g. v2/, v2-staging/, v3/whl/).
+    """
+
+    print(f"INFO: Auto-detecting prefixes under '{base_prefix}'")
+
+    prefixes = set()
+
+    paginator = CLIENT.get_paginator("list_objects_v2")
+    page_iterator = paginator.paginate(
+        Bucket=BUCKET_NAME,
+        Prefix=base_prefix,
+        Delimiter="/"
+    )
+
+    for page in page_iterator:
+        for common_prefix in page.get("CommonPrefixes", []):
+            prefixes.add(common_prefix["Prefix"].rstrip("/"))
+
+    detected = sorted(prefixes)
+    print(f"INFO: Detected prefixes: {detected}")
+
+    return detected
 
 def main() -> None:
     parser = create_parser()
     args = parser.parse_args()
+    initialize_bucket(args.bucket)
+
     action = "Saving indices" if args.do_not_upload else "Uploading indices"
     if args.compute_sha256:
         action = "Computing checksums"
 
-    prefixes = PREFIXES if args.prefix == 'all' else [args.prefix]
+    prefixes = resolve_prefixes(args)
+
+    print(f"INFO: {action} for prefixes: {prefixes}")
+
     for prefix in prefixes:
-        print(f"INFO: {action} for '{prefix}'")
-        stime = time.time()
-        idx = S3Index.from_S3(prefix=prefix, with_metadata=True or args.compute_sha256)
-        etime = time.time()
-        print(f"DEBUG: Fetched {len(idx.objects)} objects for '{prefix}' in {etime-stime:.2f} seconds")
-        if args.compute_sha256:
-            idx.compute_sha256()
-        elif args.do_not_upload:
-            idx.save_pep503_htmls()
-        else:
-            idx.upload_pep503_htmls()
+        update_pep503_index(
+            prefix=prefix,
+            compute_sha256=args.compute_sha256,
+            upload=not args.do_not_upload
+        )
 
 if __name__ == "__main__":
     main()

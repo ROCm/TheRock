@@ -501,6 +501,22 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
+    # Skip ASAN on PRs unless submodule changes are present.
+    # This avoids running expensive ASAN builds on every PR while still
+    # catching ASAN issues when library code (submodules) changes.
+    # TODO: Contributors may open draft PRs with submodule updates which run ASAN builds.
+    #       If overly expensive, remove that option
+    if (
+        ci_inputs.is_pull_request
+        and ci_inputs.build_variant == "asan"
+        and git_context.changed_files is not None
+        and git_context.submodule_paths is not None
+    ):
+        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
+        if not matching:
+            print("  Skipping: ASAN PR without submodule changes")
+            return True
+
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
     # files are changed, skip CI.
@@ -571,12 +587,21 @@ def _determine_test_type(
     if _has_test_labels(ci_inputs):
         return "full", "test labels specified"
 
-    # Priority 3: schedule runs the full nightly suite — comprehensive
+    # Priority 3: release builds run deeper test suites than regular CI.
+    # * 'nightly' gets comprehensive (deeper than standard, on a daily cadence)
+    # * 'prerelease' gets full (exhaustive pre-release validation)
+    # * 'dev' falls through to later priorities so changes can be tested quickly
+    if ci_inputs.release_type == "nightly":
+        return "comprehensive", "release build (nightly)"
+    if ci_inputs.release_type == "prerelease":
+        return "full", "release build (prerelease)"
+
+    # Priority 4: schedule runs the full nightly suite — comprehensive
     # coverage on a cadence, catching regressions that quick tests miss.
     if ci_inputs.is_schedule:
         return "comprehensive", "scheduled run"
 
-    # Priority 4: a submodule change means actual library code changed
+    # Priority 5: a submodule change means actual library code changed
     # (e.g. rocBLAS, MIOpen). These need full testing since the change
     # could affect any downstream consumer.
     if (
@@ -1064,7 +1089,16 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 def main():
     ci_inputs = CIInputs.from_environ()
 
-    if ci_inputs.is_pull_request or ci_inputs.is_push:
+    # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
+    # The "run everything" is initial state for superrepo multi-arch CI migration.
+    # We will eventually support path filtering and component selection.
+    # TODO: Provide custom decision logic to run specific components and paths
+    skip_path_filters = os.environ.get("SKIP_PATH_FILTERS", "").lower() == "true"
+
+    if skip_path_filters:
+        # External repo: skip path filtering, run everything
+        git_context = GitContext.empty()
+    elif ci_inputs.is_pull_request or ci_inputs.is_push:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
         git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)

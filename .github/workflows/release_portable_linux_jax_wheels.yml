@@ -94,7 +94,7 @@ permissions:
   contents: read
   packages: read
 
-run-name: Release portable Linux JAX Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.release_type }}, ${{ inputs.rocm_version }})
+run-name: Release portable Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_family }})
 
 jobs:
   release:
