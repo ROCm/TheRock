@@ -1,7 +1,7 @@
-From 64753008ca133591e1af3cd22798dd19f5a193fc Mon Sep 17 00:00:00 2001
+From 8c372aedd2cd892b9a9c7130ff95b99375baa0b0 Mon Sep 17 00:00:00 2001
 From: therockbot <therockbot@amd.com>
 Date: Tue, 12 May 2026 23:32:06 -0400
-Subject: [PATCH] [CK] Suppress -Wlifetime-safety compiler errors
+Subject: [PATCH] Suppress -Wlifetime-safety compiler errors
 
 The amd-staging compiler introduces -Wlifetime-safety-lifetimebound-violation
 and -Wlifetime-safety-intra-tu-suggestions warnings. Combined with -Werror in
@@ -15,11 +15,13 @@ recognize these options yet.
 Upstream fix: https://github.com/ROCm/rocm-libraries/pull/7384
 ---
  .../device_grouped_conv_fwd_multiple_abd_xdl_cshuffle.hpp  | 7 +++++++
+ .../composablekernel/include/ck/utility/dtype_vector.hpp   | 2 ++
  projects/composablekernel/include/ck/utility/tuple.hpp     | 2 ++
+ .../composablekernel/include/ck/utility/type_convert.hpp   | 7 +++++++
  .../include/ck_tile/core/container/tuple.hpp               | 2 ++
  .../include/ck_tile/core/tensor/buffer_view.hpp            | 2 ++
  .../include/ck_tile/host/kernel_launch.hpp                 | 2 ++
- 5 files changed, 15 insertions(+)
+ 7 files changed, 24 insertions(+)
 
 diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_xdl_cshuffle.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_xdl_cshuffle.hpp
 index 452b0af6c46..e879025c053 100644
@@ -43,6 +45,20 @@ index 452b0af6c46..e879025c053 100644
  } // namespace ck
 +
 +#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/utility/dtype_vector.hpp b/projects/composablekernel/include/ck/utility/dtype_vector.hpp
+index b6a199bd4a8..4446cda58fe 100644
+--- a/projects/composablekernel/include/ck/utility/dtype_vector.hpp
++++ b/projects/composablekernel/include/ck/utility/dtype_vector.hpp
+@@ -6,7 +6,9 @@
+ #include "ck/utility/math.hpp"
+ 
+ #pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
+ #pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
+ namespace ck {
+ 
+ __device__ int static err = 0;
 diff --git a/projects/composablekernel/include/ck/utility/tuple.hpp b/projects/composablekernel/include/ck/utility/tuple.hpp
 index 038a81b992d..0067433839a 100644
 --- a/projects/composablekernel/include/ck/utility/tuple.hpp
@@ -57,6 +73,28 @@ index 038a81b992d..0067433839a 100644
  
  namespace ck {
  
+diff --git a/projects/composablekernel/include/ck/utility/type_convert.hpp b/projects/composablekernel/include/ck/utility/type_convert.hpp
+index 11f00535859..eb006f69760 100644
+--- a/projects/composablekernel/include/ck/utility/type_convert.hpp
++++ b/projects/composablekernel/include/ck/utility/type_convert.hpp
+@@ -13,6 +13,11 @@
+ #include "ck/utility/amd_inline_asm.hpp"
+ #include "ck/utility/type.hpp"
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ namespace ck {
+ // Define the common macro for MI300 models
+ #if defined(__gfx942__) || defined(__gfx950__)
+@@ -2483,3 +2488,5 @@ inline __host__ __device__ void array_convert(Array<Y, NumElems>& y, const Array
+ }
+ 
+ } // namespace ck
++
++#pragma clang diagnostic pop
 diff --git a/projects/composablekernel/include/ck_tile/core/container/tuple.hpp b/projects/composablekernel/include/ck_tile/core/container/tuple.hpp
 index d7da0e14670..c147208f78c 100644
 --- a/projects/composablekernel/include/ck_tile/core/container/tuple.hpp
