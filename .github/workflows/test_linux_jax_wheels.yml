@@ -267,18 +267,27 @@ jobs:
         run: |
           set -euo pipefail
           echo "::group::rocm-smi"
+          ROCM_SMI=""
           if command -v rocm-smi >/dev/null 2>&1; then
-            rocm-smi --showid --showproductname || true
+            ROCM_SMI=rocm-smi
           else
-            echo "rocm-smi not on PATH; skipping"
+            for cand in /opt/rocm/bin/rocm-smi /opt/rocm-*/bin/rocm-smi; do
+              if [ -x "$cand" ]; then ROCM_SMI="$cand"; break; fi
+            done
+          fi
+          if [ -n "$ROCM_SMI" ]; then
+            "$ROCM_SMI" --showid --showproductname || true
+          else
+            echo "rocm-smi not found on PATH or in /opt/rocm*/bin; skipping"
           fi
           echo "::endgroup::"
           python - <<'PY'
           import sys, jax
-          backend = jax.default_backend()
           devs = jax.devices()
-          print(f"default_backend={backend}  num_devices={len(devs)}  devices={devs}")
-          if backend != "rocm" or not devs:
+          platforms = sorted({d.platform for d in devs}) if devs else []
+          print(f"default_backend={jax.default_backend()}  num_devices={len(devs)}  platforms={platforms}  devices={devs}")
+          # JAX returns "gpu" as backend for both CUDA and ROCm; the platform lives on the device.
+          if not devs or "rocm" not in platforms:
               sys.stderr.write("ERROR: no ROCm devices visible to JAX; aborting test run\n")
               sys.exit(2)
           PY
