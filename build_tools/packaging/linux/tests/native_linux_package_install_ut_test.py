@@ -1200,7 +1200,9 @@ class InstallDebPackagesTest(unittest.TestCase):
         self.assertIn("amdrocm", call_args)
 
     @patch("native_linux_package_install_test._run_streaming")
-    def test_apt_install_includes_versioned_multi_arch_package_names(self, mock_streaming):
+    def test_apt_install_includes_versioned_multi_arch_package_names(
+        self, mock_streaming
+    ):
         mock_streaming.return_value = 0
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
