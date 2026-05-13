@@ -89,6 +89,13 @@ test_matrix = {
             "linux": 6,
             "windows": 6,
         },
+        # rocBLAS's "quick" suite is a single CTest target (rocblas-test_quick_suite)
+        # with a 600s CTest TIMEOUT. The unsharded gtest invocation runs every
+        # *quick* test case in one process and now exceeds 600s on CI, so the
+        # one-shard default for test_type=quick must be overridden here. With
+        # 6 shards, each gtest invocation handles ~1/6 of the cases via
+        # GTEST_TOTAL_SHARDS/GTEST_SHARD_INDEX and finishes well under 600s.
+        "shard_quick_tests": True,
     },
     "rocroller": {
         "job_name": "rocroller",
@@ -677,8 +684,13 @@ def run():
             job_config_data["total_shards"] = total_shards
 
             # If the test type is quick tests, we only need one shard for the test job
+            # unless the component opts in to shard its quick tests too. Components
+            # whose quick suite has grown beyond a single CTest TIMEOUT budget set
+            # "shard_quick_tests": True and keep their total_shards_dict value.
             # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
-            if test_type == "quick":
+            if test_type == "quick" and not job_config_data.get(
+                "shard_quick_tests", False
+            ):
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 

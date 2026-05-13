@@ -125,9 +125,27 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         fetch_test_configurations.run()
         components = self._get_components()
 
+        # Components without the shard_quick_tests opt-in collapse to a single
+        # shard on quick runs; opted-in components keep their full shard count.
         for job in components:
+            if job.get("shard_quick_tests"):
+                continue
             self.assertEqual(job["total_shards"], 1)
             self.assertEqual(job["shard_arr"], [1])
+
+    def test_quick_test_respects_shard_quick_tests_opt_in(self):
+        """Components with shard_quick_tests=True keep their full shard count on quick runs."""
+        os.environ["TEST_TYPE"] = "quick"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        # rocBLAS opts in (its quick suite is one CTest target that exceeds
+        # the CTest TIMEOUT budget when unsharded). It must keep linux: 6.
+        rocblas = next(j for j in components if j["job_name"] == "rocblas")
+        self.assertTrue(rocblas.get("shard_quick_tests"))
+        self.assertEqual(rocblas["total_shards"], 6)
+        self.assertEqual(rocblas["shard_arr"], [1, 2, 3, 4, 5, 6])
 
     def test_platform_specific_shards(self):
         os.environ["PROJECTS_TO_TEST"] = "hipblaslt"
