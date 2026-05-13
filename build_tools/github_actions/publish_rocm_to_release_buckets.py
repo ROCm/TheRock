@@ -8,7 +8,7 @@ These release file types are supported:
 
 - [x] tarballs
 - [x] python packages
-- [ ] native linux packages
+- [x] native linux packages
 - [ ] native windows packages
 
 Example with ``--run-id 12345 --platform linux --release-type dev``:
@@ -33,12 +33,27 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
       -> s3://therock-dev-python/v4/whl/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
       -> s3://therock-dev-python/v4/whl/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
 
+    native linux packages (dev/nightly):
+
+    s3://therock-dev-artifacts/12345-linux/packages/deb/
+      -> s3://therock-dev-packages/v4/deb/20250101-12345/
+    s3://therock-dev-artifacts/12345-linux/packages/rpm/
+      -> s3://therock-dev-packages/v4/rpm/20250101-12345/
+
+    native linux packages (prerelease):
+
+    s3://therock-prerelease-artifacts/12345-linux/packages/deb/
+      -> s3://therock-prerelease-packages/v4/packages/deb/
+    s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
+      -> s3://therock-prerelease-packages/v4/packages/rpm/
+
 Test usage:
     python build_tools/github_actions/publish_rocm_to_release_buckets.py \\
         --run-id 12345 --platform linux --release-type dev --dry-run
 """
 
 import argparse
+import datetime
 import logging
 import platform as platform_module
 import sys
@@ -125,6 +140,57 @@ def publish_python_packages(
             raise FileNotFoundError(f"No python packages found at {source.s3_uri}")
 
 
+def publish_native_linux_packages(
+    artifacts_root: WorkflowOutputRoot,
+    release_type: str,
+    backend: StorageBackend,
+) -> None:
+    """Copy native Linux packages from the artifacts bucket to the release packages bucket.
+
+    The source packages were uploaded by upload_package_repo.py (called from
+    multi_arch_build_native_linux_packages.yml) and already include repodata
+    (Packages/Release files for deb, repodata/ for rpm).
+
+    dev/nightly example:
+        s3://therock-dev-artifacts/12345-linux/packages/deb/
+          -> s3://therock-dev-packages/v4/deb/20250101-12345/
+        s3://therock-dev-artifacts/12345-linux/packages/rpm/
+          -> s3://therock-dev-packages/v4/rpm/20250101-12345/
+
+    prerelease example:
+        s3://therock-prerelease-artifacts/12345-linux/packages/deb/
+          -> s3://therock-prerelease-packages/v4/packages/deb/
+        s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
+          -> s3://therock-prerelease-packages/v4/packages/rpm/
+
+    Note (prerelease): This is a plain copy — the repodata already present in the
+    packages bucket is overwritten with the repodata from this run. If multiple
+    prerelease runs upload packages to the same fixed prefix, earlier packages
+    will no longer be referenced by the repodata.
+    TODO: Implement a proper repodata merge for the prerelease case, similar to
+    the merge logic in upload_package_repo.py (regenerate_repo_metadata_from_s3).
+    """
+    dest_bucket = get_release_bucket_config(release_type, "packages")
+    today = datetime.date.today().strftime("%Y%m%d")
+
+    for pkg_type in ["deb", "rpm"]:
+        source = artifacts_root.native_linux_packages(pkg_type)
+
+        if release_type == "prerelease":
+            dest_prefix = f"v4/packages/{pkg_type}"
+        else:
+            dest_prefix = f"v4/{pkg_type}/{today}-{artifacts_root.run_id}"
+
+        dest = StorageLocation(dest_bucket.name, dest_prefix)
+        logger.info(
+            "Native %s packages: %s -> %s", pkg_type, source.s3_uri, dest.s3_uri
+        )
+        count = backend.copy_directory(source, dest)
+        logger.info("Copied %d files for %s packages", count, pkg_type)
+        if count == 0:
+            raise FileNotFoundError(f"No {pkg_type} packages found at {source.s3_uri}")
+
+
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         description="Publish ROCm release files to release buckets"
@@ -149,6 +215,11 @@ def main(argv: list[str]) -> None:
         help='Whether kpack split is enabled ("true" or "false")',
     )
     parser.add_argument(
+        "--skip-native-packages",
+        action="store_true",
+        help="Skip publishing native Linux packages (deb/rpm)",
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without copying"
     )
     args = parser.parse_args(argv)
@@ -161,6 +232,8 @@ def main(argv: list[str]) -> None:
 
     publish_tarballs(artifacts_root, args.release_type, backend)
     publish_python_packages(artifacts_root, args.release_type, backend, kpack_split)
+    if artifacts_root.platform == "linux" and not args.skip_native_packages:
+        publish_native_linux_packages(artifacts_root, args.release_type, backend)
 
 
 if __name__ == "__main__":
