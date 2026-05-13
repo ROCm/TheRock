@@ -56,6 +56,7 @@ if(THEROCK_ENABLE_RAND)
     RUNTIME_DEPS
       hip-clr
       rocRAND
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipRAND
     SUBDIRS
@@ -299,6 +300,7 @@ if(THEROCK_ENABLE_FFT)
     RUNTIME_DEPS
       hip-clr
       rocFFT
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipFFT
     SUBDIRS
@@ -367,7 +369,6 @@ if(THEROCK_ENABLE_ROCWMMA)
       rocBLAS
       ${_rocwmma_optional_deps}
     TEST_SUBPROJECTS
-      rocWMMA
   )
   therock_cmake_subproject_glob_c_sources(rocWMMA
     SUBDIRS
