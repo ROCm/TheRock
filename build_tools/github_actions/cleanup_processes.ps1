@@ -33,10 +33,11 @@ function Get-Process-Filter ([String]$RegexStr)  {
     # Skip processes that have already exited: PowerShell's Get-Process can
     # surface stale handles for processes that died naturally but whose
     # process objects are still cached, and WMI Terminate is a silent no-op
-    # on them. Without this guard, Wait-Process-Filter loops forever on the
-    # zombie handle and the script reports "Failed to stop" on a process
-    # that already finished. The -and short-circuits the .MainModule access
-    # for exited processes, where that property is unreliable.
+    # on them. Without this guard, Wait-Process-Filter exhausts all of its
+    # bounded retries on the zombie handle and the script then reports
+    # "Failed to stop" on a process that already finished. The -and
+    # short-circuits the .MainModule access for exited processes, where
+    # that property is unreliable.
     Get-Process | Where-Object { -not $_.HasExited -and $_.MainModule.FileName -Match $RegexStr }
 }
 function Get-Process-Info ($PSobj) {
