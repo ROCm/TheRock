@@ -119,7 +119,7 @@ def git_config_ignore_submodules(repo_path: Path):
 def do_hipify(args: argparse.Namespace):
     repo_dir: Path = args.checkout_dir
     print(f"Hipifying {repo_dir}")
-    build_amd_path = repo_dir / "tools" / "amd_build" / "build_amd.py"
+    build_amd_path = Path("tools") / "amd_build" / "build_amd.py"
     if build_amd_path.exists():
         run_command([sys.executable, build_amd_path], cwd=repo_dir)
 
