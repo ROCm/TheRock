@@ -1,0 +1,15 @@
+diff --git a/dnn-providers/fusilli-provider/CMakeLists.txt b/dnn-providers/fusilli-provider/CMakeLists.txt
+index d99db7ec..4a5fe13d 100644
+--- a/dnn-providers/fusilli-provider/CMakeLists.txt
++++ b/dnn-providers/fusilli-provider/CMakeLists.txt
+@@ -131,4 +131,9 @@ install(TARGETS ${FUSILLI_PLUGIN_TARGET}
+ 
+ # Tests
+ enable_testing()
+-add_subdirectory(test)
++# Honor FUSILLI_PLUGIN_SKIP_TESTS, and disable on Windows where the test
++# sources use POSIX-only headers and assume std::filesystem::path::value_type
++# is char (it's wchar_t on Windows).
++if(NOT FUSILLI_PLUGIN_SKIP_TESTS AND NOT WIN32)
++  add_subdirectory(test)
++endif()

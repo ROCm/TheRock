@@ -89,7 +89,10 @@ add_custom_target(
       "-S${CMAKE_CURRENT_BINARY_DIR}/s"
       "-B${CMAKE_CURRENT_BINARY_DIR}/b"
       "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${CMAKE_CURRENT_SOURCE_DIR}/zlib_include.cmake"
-      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+      # On Windows, force Release so the static archive is zs.lib instead of
+      # zsd.lib (the zlib upstream CMakeLists hardcodes CMAKE_DEBUG_POSTFIX="d"
+      # for MSVC, but TheRock's zlib-config.cmake points at zs.lib).
+      "$<IF:$<BOOL:${WIN32}>,-DCMAKE_BUILD_TYPE=Release,-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}>"
       "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"

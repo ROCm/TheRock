@@ -1,0 +1,27 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "debug-iree-hipdnn-tests",
+      "displayName": "Debug build, IREE libs, hipDNN integration tests (Windows)",
+      "description": "Windows: MSVC (cl.exe), Debug build, IREE libs + hipDNN integration tests for gfx942",
+      "inherits": ["windows-base"],
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "amd-llvm_BUILD_TYPE": "Release",
+        "amd-comgr_BUILD_TYPE": "Release",
+        "hipcc_BUILD_TYPE": "Release",
+        "iree-compiler_BUILD_TYPE": "Release",
+        "THEROCK_ENABLE_ALL": "OFF",
+        "THEROCK_ENABLE_IREE_LIBS": "ON",
+        "THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS": "ON",
+        "Python3_EXECUTABLE": "${sourceDir}/.venv/Scripts/python.exe",
+        "THEROCK_SPLIT_DEBUG_INFO": "ON",
+        "THEROCK_QUIET_INSTALL": "OFF",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install",
+        "THEROCK_AMDGPU_FAMILIES": "gfx942"
+      }
+    }
+  ]
+}

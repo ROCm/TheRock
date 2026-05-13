@@ -15,6 +15,7 @@ set(_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/build")
 
 therock_cmake_subproject_declare(therock-grpc
   USE_DIST_AMDGPU_TARGETS
+  EXCLUDE_FROM_ALL
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
   BINARY_DIR "${_binary_dir}"
   NO_MERGE_COMPILE_COMMANDS

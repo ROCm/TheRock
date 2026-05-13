@@ -1,6 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# rocminfo is Linux-only (it lives in rocm-systems). On Windows we omit it
+# from RUNTIME_DEPS; the rocm_agent_enumerator binary is unavailable there.
+set(_iree_libs_optional_runtime_deps)
+if(NOT WIN32)
+  list(APPEND _iree_libs_optional_runtime_deps rocminfo)
+endif()
+
 ##############################################################################
 # IREE Compiler - builds libIREECompiler.so
 ##############################################################################
@@ -36,6 +43,14 @@ if(THEROCK_ENABLE_IREE_COMPILER)
       -DIREE_BUILD_BINDINGS_TFLITE_JAVA=OFF
       # Disable runtime, it's built into fusilli, we only need the compiler
       -DIREE_HAL_DRIVER_DEFAULTS=OFF
+      # Use the AMD device bitcode that amd-llvm just built instead of
+      # downloading it from GitHub (the download host has no working TLS
+      # path from many networks, and we already have a known-good copy).
+      "-DIREE_TARGET_BACKEND_ROCM_DEVICE_BC_PATH=${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/amdgcn/bitcode"
+      # Don't promote warnings to errors; flatcc-generated code triggers
+      # -Wunused-variable that we don't control, and clang-on-MSVC surfaces
+      # other warnings the canonical Linux build doesn't see.
+      -DIREE_ENABLE_WERROR_FLAG=OFF
     INSTALL_OPTIONAL_COMPONENTS
       IREEDevLibraries-Compiler
     BUILD_DEPS
@@ -69,7 +84,7 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
     EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fusilli"
     RUNTIME_DEPS
       hip-clr
-      rocminfo  # Provides rocm_agent_enumerator
+      ${_iree_libs_optional_runtime_deps}  # rocminfo on non-Windows
     CMAKE_ARGS
       -DFUSILLI_BUILD_TESTS=OFF
       -DFUSILLI_BUILD_BENCHMARKS=OFF
@@ -91,13 +106,23 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
   ##############################################################################
   # fusilli hipDNN provider
   ##############################################################################
+  # The fusilli-provider integration tests use POSIX-only headers
+  # (<unistd.h>) and rely on std::filesystem::path::value_type being char,
+  # which is wchar_t on Windows. Until those are ported, skip the tests on
+  # Windows even when global testing is enabled.
+  if(WIN32)
+    set(_fusilliprovider_skip_tests ON)
+  else()
+    set(_fusilliprovider_skip_tests $<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>)
+  endif()
+
   therock_cmake_subproject_declare(fusilliprovider
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/fusilli-provider"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/fusilliprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
-      -DFUSILLI_PLUGIN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>
+      -DFUSILLI_PLUGIN_SKIP_TESTS=${_fusilliprovider_skip_tests}
       -DIREE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/iree
       -DIREE_USE_SYSTEM_DEPS=ON
       -DHIP_PLATFORM=amd
@@ -113,7 +138,7 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
       hip-clr
       hipdnn_integration_tests
       iree-compiler  # Provides libIREECompiler.so for CAPI compilation
-      rocminfo  # Provides rocm_agent_enumerator
+      ${_iree_libs_optional_runtime_deps}  # rocminfo on non-Windows
   )
   therock_cmake_subproject_glob_c_sources(fusilliprovider
     SUBDIRS

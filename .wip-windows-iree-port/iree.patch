@@ -1,0 +1,165 @@
+diff --git a/build_tools/cmake/iree_copts.cmake b/build_tools/cmake/iree_copts.cmake
+index dc6d93b..c766e22 100644
+--- a/build_tools/cmake/iree_copts.cmake
++++ b/build_tools/cmake/iree_copts.cmake
+@@ -408,7 +408,9 @@ endif()
+ iree_select_compiler_opts(IREE_DEFAULT_LINKOPTS
+   CLANG_OR_GCC
+     # Required by all modern software, effectively:
+-    "-lm"
++    # -lm is not needed on Windows (math is in the C runtime) and lld-link
++    # rewrites it to m.lib, which does not exist on MSVC toolchains.
++    "$<$<NOT:$<BOOL:${WIN32}>>:-lm>"
+     ${_IREE_LOGGING_LINKOPTS}
+   MSVC
+     "-natvis:${IREE_ROOT_DIR}/runtime/iree.natvis"
+diff --git a/build_tools/cmake/iree_external_cmake_options.cmake b/build_tools/cmake/iree_external_cmake_options.cmake
+index db8c3b6..05a676c 100644
+--- a/build_tools/cmake/iree_external_cmake_options.cmake
++++ b/build_tools/cmake/iree_external_cmake_options.cmake
+@@ -11,6 +11,10 @@
+ macro(iree_set_benchmark_cmake_options)
+   set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+   set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
++  # google/benchmark turns on -Werror by default for non-Debug builds, which
++  # surfaces -Wmissing-format-attribute warnings on clang/Windows that the
++  # canonical Linux build does not see.
++  set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
+ endmacro()
+ 
+ macro(iree_set_cpuinfo_cmake_options)
+diff --git a/compiler/bindings/c/iree/compiler/loader/loader.cpp b/compiler/bindings/c/iree/compiler/loader/loader.cpp
+index 73b6647..3594c41 100644
+--- a/compiler/bindings/c/iree/compiler/loader/loader.cpp
++++ b/compiler/bindings/c/iree/compiler/loader/loader.cpp
+@@ -13,7 +13,9 @@
+ 
+ #if (defined(_WIN32) || defined(__CYGWIN__))
+ // Windows implementation
++#ifndef WIN32_LEAN_AND_MEAN
+ #define WIN32_LEAN_AND_MEAN
++#endif
+ #include <windows.h>
+ namespace {
+ using DlHandle = HMODULE;
+diff --git a/compiler/src/iree/compiler/API/CMakeLists.txt b/compiler/src/iree/compiler/API/CMakeLists.txt
+index 8d76da8..295c69a 100644
+--- a/compiler/src/iree/compiler/API/CMakeLists.txt
++++ b/compiler/src/iree/compiler/API/CMakeLists.txt
+@@ -126,7 +126,11 @@ foreach(_object_lib ${_EXPORT_OBJECT_LIBS})
+   # like this, but MSVC is weird and given the structure of the projects, this
+   # isn't so bad.
+   get_target_property(_imported ${_object_lib} IMPORTED)
+-  if(MSVC AND NOT ${_imported})
++  # Use WIN32 instead of MSVC so the dllexport annotations are also emitted
++  # when the C/C++ compiler is clang in MSVC-compat mode (CMake leaves the
++  # MSVC variable unset in that configuration, but __declspec(dllexport) is
++  # still what produces an importable IREECompiler.lib).
++  if(WIN32 AND NOT ${_imported})
+     target_compile_definitions(${_object_lib} PRIVATE
+       # See compiler/bindings/c/iree/compiler/api_support.h.
+       # IREE embedded CAPI uses its own macros to enable
+diff --git a/compiler/src/iree/compiler/Dialect/LinalgExt/IR/AggregatedOpInterfaceImpl.cpp b/compiler/src/iree/compiler/Dialect/LinalgExt/IR/AggregatedOpInterfaceImpl.cpp
+index c9a294d..daaa1e7 100644
+--- a/compiler/src/iree/compiler/Dialect/LinalgExt/IR/AggregatedOpInterfaceImpl.cpp
++++ b/compiler/src/iree/compiler/Dialect/LinalgExt/IR/AggregatedOpInterfaceImpl.cpp
+@@ -4,6 +4,13 @@
+ // See https://llvm.org/LICENSE.txt for license information.
+ // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+ 
++// Windows' <math.h>/<cmath> only exposes M_LOG2E and friends when
++// _USE_MATH_DEFINES is set before the first inclusion.
++#ifndef _USE_MATH_DEFINES
++#define _USE_MATH_DEFINES
++#endif
++#include <cmath>
++
+ #include "iree/compiler/Dialect/LinalgExt/IR/Im2colUtils.h"
+ #include "iree/compiler/Dialect/LinalgExt/IR/LinalgExtOps.h"
+ #include "iree/compiler/Dialect/LinalgExt/Utils/IndexingUtils.h"
+diff --git a/compiler/src/iree/compiler/Dialect/LinalgExt/Transforms/RewriteFft.cpp b/compiler/src/iree/compiler/Dialect/LinalgExt/Transforms/RewriteFft.cpp
+index 3902a5c..b61d5d0 100644
+--- a/compiler/src/iree/compiler/Dialect/LinalgExt/Transforms/RewriteFft.cpp
++++ b/compiler/src/iree/compiler/Dialect/LinalgExt/Transforms/RewriteFft.cpp
+@@ -4,6 +4,13 @@
+ // See https://llvm.org/LICENSE.txt for license information.
+ // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+ 
++// Windows' <math.h>/<cmath> only exposes M_PI and friends when
++// _USE_MATH_DEFINES is set before the first inclusion.
++#ifndef _USE_MATH_DEFINES
++#define _USE_MATH_DEFINES
++#endif
++#include <cmath>
++
+ #include "iree/compiler/Dialect/LinalgExt/IR/LinalgExtOps.h"
+ #include "iree/compiler/Dialect/LinalgExt/Transforms/Transforms.h"
+ #include "mlir/Dialect/Arith/IR/Arith.h"
+diff --git a/runtime/src/iree/base/internal/debugging.h b/runtime/src/iree/base/internal/debugging.h
+index 39b45f1..e5ab803 100644
+--- a/runtime/src/iree/base/internal/debugging.h
++++ b/runtime/src/iree/base/internal/debugging.h
+@@ -13,6 +13,7 @@
+ extern "C" {
+ #endif
+ 
++#ifndef IREE_ATTRIBUTE_ALWAYS_INLINE
+ #if defined(IREE_COMPILER_GCC_COMPAT)
+ #define IREE_ATTRIBUTE_ALWAYS_INLINE __attribute__((always_inline))
+ #elif defined(IREE_COMPILER_MSVC)
+@@ -20,6 +21,7 @@ extern "C" {
+ #else
+ #define IREE_ATTRIBUTE_ALWAYS_INLINE
+ #endif  // IREE_COMPILER_*
++#endif  // !IREE_ATTRIBUTE_ALWAYS_INLINE
+ 
+ //===----------------------------------------------------------------------===//
+ // Debugger interaction
+diff --git a/runtime/src/iree/hal/local/elf/CMakeLists.txt b/runtime/src/iree/hal/local/elf/CMakeLists.txt
+index 22c6cb7..562c972 100644
+--- a/runtime/src/iree/hal/local/elf/CMakeLists.txt
++++ b/runtime/src/iree/hal/local/elf/CMakeLists.txt
+@@ -90,22 +90,22 @@ iree_cc_library(
+ ### BAZEL_TO_CMAKE_PRESERVES_ALL_CONTENT_BELOW_THIS_LINE ###
+ 
+ # TODO(*): figure out how to make this work on Bazel+Windows.
+-if(MSVC)
++# Use WIN32 + 64-bit-host detection so this also works when the C/C++
++# compiler is clang in MSVC-compatibility mode (CMake then does not set MSVC).
++if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+   # CMake + MASM does not work well and CMake ends up passing all our C/C++
+   # flags confusing MASM. We invoke MASM directly (ml.exe/ml64.exe) to keep it
+   # quiet.
+-  if(MSVC_C_ARCHITECTURE_ID MATCHES 64 OR MSVC_CXX_ARCHITECTURE_ID MATCHES 64)
+-    set_source_files_properties(
+-      arch/x86_64_msvc.asm
+-      PROPERTIES
+-      LANGUAGE ASM_MASM
+-    )
+-    target_sources(iree_hal_local_elf_arch PRIVATE "arch/x86_64_msvc.obj")
+-    add_custom_command(
+-      OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/arch/x86_64_msvc.obj
+-      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/arch/x86_64_msvc.asm
+-      COMMAND ml64 /nologo /Zi /c /Fo ${CMAKE_CURRENT_BINARY_DIR}/arch/x86_64_msvc.obj ${CMAKE_CURRENT_SOURCE_DIR}/arch/x86_64_msvc.asm
+-      VERBATIM
+-    )
+-  endif()
++  set_source_files_properties(
++    arch/x86_64_msvc.asm
++    PROPERTIES
++    LANGUAGE ASM_MASM
++  )
++  target_sources(iree_hal_local_elf_arch PRIVATE "arch/x86_64_msvc.obj")
++  add_custom_command(
++    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/arch/x86_64_msvc.obj
++    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/arch/x86_64_msvc.asm
++    COMMAND ml64 /nologo /Zi /c /Fo ${CMAKE_CURRENT_BINARY_DIR}/arch/x86_64_msvc.obj ${CMAKE_CURRENT_SOURCE_DIR}/arch/x86_64_msvc.asm
++    VERBATIM
++  )
+ endif()
+diff --git a/third_party/torch-mlir b/third_party/torch-mlir
+--- a/third_party/torch-mlir
++++ b/third_party/torch-mlir
+@@ -1 +1 @@
+-Subproject commit 172a8b4d5caddbb3af9045f7329dd4121b590cbf
++Subproject commit 172a8b4d5caddbb3af9045f7329dd4121b590cbf-dirty

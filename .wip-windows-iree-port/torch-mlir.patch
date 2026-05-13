@@ -1,0 +1,54 @@
+diff --git a/lib/Conversion/TorchOnnxToTorch/DefaultDomainGtoP.cpp b/lib/Conversion/TorchOnnxToTorch/DefaultDomainGtoP.cpp
+index a131d4c..c142ecc 100644
+--- a/lib/Conversion/TorchOnnxToTorch/DefaultDomainGtoP.cpp
++++ b/lib/Conversion/TorchOnnxToTorch/DefaultDomainGtoP.cpp
+@@ -7,6 +7,13 @@
+ //
+ //===----------------------------------------------------------------------===//
+ 
++// Windows' <math.h>/<cmath> only exposes M_PI and friends when
++// _USE_MATH_DEFINES is set before the first inclusion.
++#ifndef _USE_MATH_DEFINES
++#define _USE_MATH_DEFINES
++#endif
++#include <cmath>
++
+ #include "torch-mlir/Conversion/TorchOnnxToTorch/Patterns.h"
+ #include "torch-mlir/Conversion/TorchOnnxToTorch/Utils.h"
+ #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
+diff --git a/lib/Conversion/TorchToLinalg/Linear.cpp b/lib/Conversion/TorchToLinalg/Linear.cpp
+index 9a2013f..9387c88 100644
+--- a/lib/Conversion/TorchToLinalg/Linear.cpp
++++ b/lib/Conversion/TorchToLinalg/Linear.cpp
+@@ -7,6 +7,13 @@
+ //
+ //===----------------------------------------------------------------------===//
+ 
++// Windows' <math.h>/<cmath> only exposes M_PI and friends when
++// _USE_MATH_DEFINES is set before the first inclusion.
++#ifndef _USE_MATH_DEFINES
++#define _USE_MATH_DEFINES
++#endif
++#include <cmath>
++
+ #include "torch-mlir/Conversion/TorchToLinalg/TorchToLinalg.h"
+ 
+ #include "PopulatePatterns.h"
+diff --git a/lib/Dialect/Torch/Transforms/DecomposeComplexOps.cpp b/lib/Dialect/Torch/Transforms/DecomposeComplexOps.cpp
+index f13aaad..60fd9cd 100644
+--- a/lib/Dialect/Torch/Transforms/DecomposeComplexOps.cpp
++++ b/lib/Dialect/Torch/Transforms/DecomposeComplexOps.cpp
+@@ -7,6 +7,13 @@
+ //
+ //===----------------------------------------------------------------------===//
+ 
++// Windows' <math.h>/<cmath> only exposes M_PI and friends when
++// _USE_MATH_DEFINES is set before the first inclusion.
++#ifndef _USE_MATH_DEFINES
++#define _USE_MATH_DEFINES
++#endif
++#include <cmath>
++
+ #include "mlir/Dialect/Func/IR/FuncOps.h"
+ #include "mlir/Dialect/Utils/StaticValueUtils.h"
+ #include "mlir/IR/BuiltinDialect.h"
