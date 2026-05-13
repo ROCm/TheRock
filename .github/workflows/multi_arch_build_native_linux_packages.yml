@@ -141,7 +141,7 @@ jobs:
         # Only assume OIDC role for authorized repositories (ROCm/TheRock, ROCm/rockrel).
         # Allowing both CI builds (TheRock) and release builds (rockrel) to upload packages.
         if: ${{ (github.repository == 'ROCm/TheRock' || github.repository == 'ROCm/rockrel') && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
           aws-region: us-east-2
           role-to-assume: ${{ steps.iam_role.outputs.iam_role }}

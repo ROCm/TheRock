@@ -103,13 +103,15 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", "3.13", "3.14"]
-        jax_ref: ["rocm-jaxlib-v0.8.2", "rocm-jaxlib-v0.9.0", "rocm-jaxlib-v0.9.1"]
+        jax_ref: ["rocm-jaxlib-v0.8.2", "rocm-jaxlib-v0.9.0", "rocm-jaxlib-v0.9.1", "rocm-jaxlib-v0.9.2"]
         include:
           - jax_ref: "rocm-jaxlib-v0.8.2"
             build_jaxlib: true
           - jax_ref: "rocm-jaxlib-v0.9.0"
             build_jaxlib: true
           - jax_ref: "rocm-jaxlib-v0.9.1"
+            build_jaxlib: false
+          - jax_ref: "rocm-jaxlib-v0.9.2"
             build_jaxlib: false
 
     uses: ./.github/workflows/build_linux_jax_wheels.yml

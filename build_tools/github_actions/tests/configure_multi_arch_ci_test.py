@@ -355,6 +355,28 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.test_type, "full")
 
+    def test_nightly_release_is_comprehensive(self):
+        """Nightly release → comprehensive tests."""
+        result = cm.decide_jobs(
+            self._inputs(release_type="nightly"), git_context=cm.GitContext()
+        )
+        self.assertEqual(result.test_rocm.test_type, "comprehensive")
+        self.assertIn("release", result.test_rocm.test_type_reason)
+
+    def test_prerelease_is_full(self):
+        """Prerelease → full tests."""
+        result = cm.decide_jobs(
+            self._inputs(release_type="prerelease"), git_context=cm.GitContext()
+        )
+        self.assertEqual(result.test_rocm.test_type, "full")
+        self.assertIn("release", result.test_rocm.test_type_reason)
+
+    def test_dev_release_falls_through_to_default(self):
+        """Dev release without other signals → quick (falls through)."""
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.decide_jobs(self._inputs(release_type="dev"), git_context=git)
+        self.assertEqual(result.test_rocm.test_type, "quick")
+
     def test_test_filter_label_overrides(self):
         """test_filter: PR label overrides the computed test_type."""
         # Even though schedule would set comprehensive, test_filter overrides.
@@ -1141,7 +1163,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Mock random.random() to return 0.1 (< 0.59 first weight)
+        # Mock random.random() to return 0.1 (< 0.369 first weight)
         with patch("random.random", return_value=0.1):
             builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
 
@@ -1161,8 +1183,8 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Mock random.random() to return 0.65 (>= 0.59, < 0.73)
-        with patch("random.random", return_value=0.65):
+        # Mock random.random() to return 0.4 (>= 0.369, < 0.455)
+        with patch("random.random", return_value=0.4):
             builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
 
         self.assertIsNotNone(builds.linux)
@@ -1183,8 +1205,8 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Mock random.random() to return 0.8 (>= 0.59+0.14=0.73)
-        with patch("random.random", return_value=0.8):
+        # Mock random.random() to return 0.5 (>= 0.369+0.086=0.455)
+        with patch("random.random", return_value=0.5):
             builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
 
         self.assertIsNotNone(builds.linux)
