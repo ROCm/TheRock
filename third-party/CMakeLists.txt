@@ -22,6 +22,7 @@ add_subdirectory(libdivide)
 add_subdirectory(msgpack-cxx)
 add_subdirectory(nanobind)
 add_subdirectory(nlohmann-json)
+add_subdirectory(robin-map)
 add_subdirectory(simde)
 add_subdirectory(yaml-cpp)
 
