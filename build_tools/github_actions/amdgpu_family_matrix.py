@@ -141,35 +141,33 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             # TODO: Remove multi-label config once we get dedicated set of machines
             # As we are bringing up mi325, we are using a multi-label configuration to distribute load
-            # 1-GPU distribution: 17N (vultr) + 4N (cirrascale) + 8N (core42)
             "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
             "test-runs-on-labels": [
                 {
                     "label": "linux-gfx942-1gpu-ossci-rocm",
-                    "weight": 0.59,
-                },  # vultr (17/29)
+                    "weight": 0.369,
+                },  # vultr (17/46)
                 {
                     "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.14,
-                },  # cirrascale (4/29)
+                    "weight": 0.086,
+                },  # cirrascale (4/46)
                 {
                     "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 0.27,
-                },  # core42 (8/29)
+                    "weight": 0.543,
+                },  # core42 (25/46)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "",
-            # 8-GPU distribution: 11N (cirrascale) + 7N (core42)
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {
                     "label": "linux-gfx942-8gpu-ossci-rocm",
-                    "weight": 0.61,
-                },  # cirrascale (11/18)
+                    "weight": 0.78,
+                },  # cirrascale (11/14)
                 {
                     "label": "linux-gfx942-8gpu-core42-ossci-rocm",
-                    "weight": 0.39,
-                },  # core42 (7/18)
+                    "weight": 0.21,
+                },  # core42 (3/14)
             ],
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
