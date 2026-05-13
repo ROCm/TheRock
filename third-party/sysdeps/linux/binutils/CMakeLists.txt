@@ -80,8 +80,7 @@ add_custom_target(
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --enable-install-libiberty
-      --enable-shared
-      --disable-static
+      --disable-shared
       --libdir="${CMAKE_INSTALL_PREFIX}/lib"
       --includedir="${CMAKE_INSTALL_PREFIX}/include"
       --disable-nls

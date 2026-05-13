@@ -25,7 +25,8 @@ rm -f $PREFIX/lib/*.la
 rm -f "$PREFIX/lib"/libbfd*.so* \
       "$PREFIX/lib"/libopcodes*.so* \
       "$PREFIX/lib"/libctf*.so* \
-      "$PREFIX/lib"/libsframe*.so*
+      "$PREFIX/lib"/libsframe*.so* \
+      "$PREFIX/lib"/libiberty*.so*
 
 if [ -d "$PREFIX/lib/bfd-plugins" ]; then
   rm -rf $PREFIX/lib/bfd-plugins

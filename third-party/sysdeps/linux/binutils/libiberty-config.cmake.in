@@ -6,6 +6,11 @@ if(_IMPORT_PREFIX STREQUAL "/")
   set(_IMPORT_PREFIX "")
 endif()
 
+set(LibIberty_FOUND TRUE)
+set(LibIberty_LIBRARIES "${_IMPORT_PREFIX}/lib/libiberty.a")
+set(LibIberty_INCLUDE_DIRS "${_IMPORT_PREFIX}/include;${_IMPORT_PREFIX}/include/libiberty")
+set(LibIberty_LIBRARY_DIRS "${_IMPORT_PREFIX}/lib")
+
 if(NOT TARGET LibIberty::LibIberty)
   add_library(LibIberty::LibIberty STATIC IMPORTED)
   set_target_properties(LibIberty::LibIberty PROPERTIES
