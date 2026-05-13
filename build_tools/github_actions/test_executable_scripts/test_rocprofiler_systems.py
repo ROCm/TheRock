@@ -21,7 +21,6 @@ EXCLUDED_TESTS = [
     "roctx-sampling",
     "roctx-runtime-instrument",
     "jacobi-usm-sys-run",
-    "kfd.*",
     "selective-region-region-1-filter.*",
     "selective-region-region-2-and-3.*",
     "selective-region-no-marker-region-1-filter.*",
