@@ -52,7 +52,7 @@ PACKAGES_PER_PROJECT = {
     "opt_einsum": {"versions": ["latest"], "project": "jax"},
     "tomli": {"versions": ["latest"], "project": "jax"},
     "sympy": {"versions": ["latest"], "project": "torch"},
-    "mpmath": {"versions": ["latest"], "project": "torch"},
+    "mpmath": {"versions": ["1.3.0"], "project": "torch"},
     "pillow": {"versions": ["latest"], "project": "torch"},
     # 3.4.2 for Python 3.10, latest for Python 3.11+
     "networkx": {"versions": ["3.4.2", "latest"], "project": "torch"},
@@ -62,7 +62,8 @@ PACKAGES_PER_PROJECT = {
     "filelock": {"versions": ["latest"], "project": "torch"},
     "fsspec": {"versions": ["latest"], "project": "torch"},
     "typing-extensions": {"versions": ["latest"], "project": "torch"},
-    "setuptools": {"versions": ["latest"], "project": "rocm"},
+    "rocm-bootstrap": {"versions": ["latest"], "project": "torch"},
+    "setuptools": {"versions": ["81.0.0"], "project": "rocm"},
 }
 
 

@@ -23,6 +23,39 @@
 name: Multi-Arch Release Linux PyTorch Wheels
 
 on:
+  workflow_call:
+    inputs:
+      amdgpu_families:
+        description: >-
+          Semicolon-separated list of AMD GPU families to build PyTorch for
+          (e.g. 'gfx94X-dcgpu;gfx120X-all'). Expanded to gfx targets at
+          build time via cmake/therock_amdgpu_targets.cmake.
+        type: string
+        required: true
+      rocm_version:
+        description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
+        type: string
+        required: true
+      rocm_package_find_links_url:
+        description: URL for pip --find-links to install ROCm packages
+        type: string
+        required: true
+      release_type:
+        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
+        type: string
+        required: true
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      cache_type:
+        description: "Compiler cache type ('none', 'sccache', or 'ccache')"
+        type: string
+        default: "none"
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -61,7 +94,7 @@ on:
           - ccache
         default: none
 
-run-name: Multi-Arch Release Linux PyTorch Wheels (${{ inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.rocm_version }})
+run-name: Release Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
 permissions:
   contents: read
@@ -73,7 +106,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        pytorch_git_ref: ["release/2.8", "release/2.9", "release/2.10", "release/2.11", "nightly"]
+        pytorch_git_ref: ["release/2.8", "release/2.9", "release/2.10", "release/2.11", "release/2.12", "nightly"]
         exclude:
           # Python 3.14 support was added in PyTorch 2.9.
           - pytorch_git_ref: "release/2.8"
