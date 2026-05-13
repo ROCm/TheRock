@@ -84,13 +84,6 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
-      - name: Setup ccache
-        run: |
-          ./build_tools/setup_ccache.py \
-            --config-preset "github-oss-dev" \
-            --dir "$(dirname $CCACHE_CONFIGPATH)" \
-            --local-path "$CACHE_DIR/ccache"
-
       - name: Fetch sources
         timeout-minutes: 30
         run: |
@@ -119,9 +112,6 @@ jobs:
             echo "Artifact Archives:"
             echo "------------------"
             ls -lh build/artifacts/*.tar.xz || true
-            echo "CCache Stats:"
-            echo "-------------"
-            ccache -s -v
           else
             echo "[ERROR] Build directory ./build does not exist."
             exit 1
