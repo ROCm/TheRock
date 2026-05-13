@@ -421,10 +421,10 @@ def main(argv: list[str]) -> None:
             out_path = args.manifest_dir / filename
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(
-            json.dumps(manifest, indent=2, sort_keys=False) + "\n", encoding="utf-8"
-        )
-        log(f"Wrote {out_path}\n")
+        manifest_json = json.dumps(manifest, indent=2, sort_keys=False) + "\n"
+        out_path.write_text(manifest_json, encoding="utf-8")
+        log(f"Wrote {out_path}")
+        log(manifest_json)
 
 
 if __name__ == "__main__":
