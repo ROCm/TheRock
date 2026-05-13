@@ -9,6 +9,7 @@ therock_subproject_fetch(therock-nanobind-sources
 )
 
 therock_cmake_subproject_declare(therock-nanobind
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS
