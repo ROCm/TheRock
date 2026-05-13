@@ -21,13 +21,4 @@ therock_cmake_subproject_declare(therock-nanobind
 therock_cmake_subproject_provide_package(therock-nanobind nanobind nanobind/cmake)
 therock_cmake_subproject_activate(therock-nanobind)
 
-therock_provide_artifact(nanobind
-  TARGET_NEUTRAL
-  DESCRIPTOR artifact-nanobind.toml
-  COMPONENTS
-    dev
-  SUBPROJECT_DEPS
-    therock-nanobind
-)
-
 add_dependencies(therock-third-party therock-nanobind)
