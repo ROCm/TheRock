@@ -6,8 +6,8 @@
 # Built shape:
 #   - One build/ci_build invocation per (python_version, jax_ref)
 #     matrix cell.
-#   - Builds directly against a TheRock ROCm tarball passed in
-#     via inputs.tar_url.
+#   - Builds directly against the shared TheRock multiarch tarball
+#     passed in via inputs.tar_url.
 
 #
 # Triggered via workflow_call from
@@ -117,8 +117,6 @@ jobs:
 
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse
-      S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
-
     steps:
       - name: Checkout TheRock
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
