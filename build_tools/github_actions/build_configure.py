@@ -108,6 +108,13 @@ def build_configure(build_dir, manylinux=False):
             f"-DCMAKE_C_COMPILER_LAUNCHER={c_launcher}",
             f"-DCMAKE_CXX_COMPILER_LAUNCHER={cxx_launcher}",
             "-DBUILD_TESTING=ON",
+            # Opt-out of KPACK_SPLIT_ARTIFACTS for non-multi-arch CI/CD.
+            # * Multi-arch CI/CD uses configure_stage.py instead of this script
+            # * Local developer builds will use the flag default value
+            # Related issues:
+            # * multi-arch kpack parent: https://github.com/ROCm/TheRock/issues/3323
+            # * multi-arch opt-in: https://github.com/ROCm/TheRock/issues/3338
+            "-DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF",
         ]
     )
 

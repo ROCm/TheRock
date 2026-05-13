@@ -1,0 +1,218 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Test Native Linux Packages Install
+
+on:
+  workflow_call:
+    inputs:
+      package_install_url:
+        description: "Package installation URL (includes architecture subdirectory for RPM)."
+        required: true
+        type: string
+      release_type:
+        description: "Release Type (ci, dev, nightly, prerelease)."
+        required: true
+        type: string
+      gpg_key_url:
+        description: "GPG key URL for signed repos"
+        required: false
+        type: string
+        default: ""
+      os_profile:
+        description: OS profile (e.g., ubuntu2404, rhel10, sles16). Package type (deb/rpm) is derived from this.
+        required: true
+        type: string
+      artifact_group:
+        description: Artifact group to extract GPU architecture from (e.g., gfx94X-dcgpu). Default gfx94X-dcgpu.
+        required: false
+        type: string
+        default: "gfx94X-dcgpu"
+      install_prefix:
+        description: Installation prefix path (optional, defaults to /opt/rocm/core).
+        required: false
+        type: string
+        default: "/opt/rocm/core"
+      test_type:
+        description: "Test type: sanity (install + basic verification), full (install + basic + rdhc). If not set, script default is used."
+        required: false
+        type: string
+        default: ""
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`"
+        type: string
+        required: false
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
+        type: string
+        required: false
+  workflow_dispatch:
+    inputs:
+      package_install_url:
+        description: "Package installation URL (includes architecture subdirectory for RPM)"
+        required: true
+        type: string
+      release_type:
+        description: "Release line (ci, dev, nightly, or prerelease)"
+        required: true
+        type: choice
+        options:
+          - ci
+          - dev
+          - nightly
+          - prerelease
+      gpg_key_url:
+        description: "GPG key URL for signed repos"
+        type: string
+        default: ""
+      os_profile:
+        description: OS profile (package type deb/rpm is derived from this).
+        required: true
+        type: choice
+        options:
+          - ubuntu2404
+          - rhel10
+          - sles16
+      artifact_group:
+        description: Artifact group to extract GPU architecture from (e.g., gfx94X-dcgpu)
+        type: string
+        default: "gfx94X-dcgpu"
+      install_prefix:
+        description: Installation prefix path
+        type: string
+        default: "/opt/rocm/core"
+        required: false
+      test_type:
+        description: "Test type: sanity or full (optional; leave empty for script default)"
+        type: string
+        default: ""
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`"
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
+
+jobs:
+  prepare_install_context:
+    name: Prepare install context (package type, GPU arch, container image)
+    runs-on: ubuntu-24.04
+    outputs:
+      pkg_type: ${{ steps.derive.outputs.pkg_type }}
+      gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
+      container_image: ${{ steps.derive.outputs.container_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Derive package type, GPU architecture, and container image
+        id: derive
+        run: |
+          case "${{ inputs.os_profile }}" in
+            ubuntu*|debian*) PKG_TYPE="deb" ;;
+            *) PKG_TYPE="rpm" ;;
+          esac
+          echo "pkg_type=${PKG_TYPE}" >> $GITHUB_OUTPUT
+          python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch \
+            --artifact-group "${{ inputs.artifact_group }}"
+          python build_tools/packaging/linux/get_url_repo_params.py get-container-image \
+            --os-profile "${{ inputs.os_profile }}"
+
+  test_native_linux_packages_install:
+    name: Test Native Linux Packages Installation - ${{ inputs.os_profile }}
+    needs: [prepare_install_context]
+    strategy:
+      fail-fast: false
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-gfx942-1gpu-ossci-rocm' || 'ubuntu-24.04' }}
+    container:
+      image: ${{ needs.prepare_install_context.outputs.container_image }}
+      options: --ipc host
+        --privileged
+    env:
+      REPO_URL: ${{ inputs.package_install_url }}
+      GPG_KEY_URL: ${{ inputs.gpg_key_url || '' }}
+      OS_PROFILE: ${{ inputs.os_profile }}
+      PKG_TYPE: ${{ needs.prepare_install_context.outputs.pkg_type }}
+      RELEASE_TYPE: ${{ inputs.release_type }}
+      GFX_ARCH: ${{ needs.prepare_install_context.outputs.gfx_arch }}
+      INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
+      TEST_TYPE: ${{ inputs.test_type || 'sanity' }}
+    steps:
+      - name: Install System Prerequisites
+        run: |
+          echo "Installing prerequisites for ${{ env.PKG_TYPE }} on container"
+
+          if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
+            apt update
+            apt install -y \
+              wget \
+              curl \
+              ca-certificates \
+              gpg \
+              lsb-release
+            if [ "$TEST_TYPE" = "full" ]; then
+              echo "Extra OS packages for --test-type full (e.g. rdhc): pciutils, kmod, apt-utils"
+              apt install -y pciutils kmod apt-utils
+            fi
+          elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
+            # SLES prerequisites (uses BCI base - zypper)
+            zypper refresh
+            zypper install -y \
+              wget \
+              curl \
+              ca-certificates \
+              gpg2 \
+              lsb-release \
+              update-alternatives
+            if [ "$TEST_TYPE" = "full" ]; then
+              echo "Extra OS packages for --test-type full on SLES (e.g. rdhc): pciutils, kmod"
+              zypper install -y pciutils kmod
+            fi
+          else
+            # rpm (non-SLES on UBI 10); --allowerasing for curl vs curl-minimal on UBI
+            dnf install -y --allowerasing \
+              wget \
+              curl \
+              ca-certificates \
+              gnupg2 \
+              dnf-plugins-core
+            if [ "$TEST_TYPE" = "full" ]; then
+              echo "Extra OS packages for --test-type full (e.g. rdhc): pciutils, kmod"
+              dnf install -y --allowerasing pciutils kmod
+            fi
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Python and install runtime
+        run: |
+          bash build_tools/packaging/linux/setup_python_cmd.sh \
+            --os-profile "${{ inputs.os_profile }}" \
+            --install-runtime \
+            --output-format github
+
+      - name: Install Python Dependencies
+        run: |
+          # Use venv for all distros for consistency and future-proofing (PEP 668)
+          $PYTHON_CMD -m venv /tmp/test-venv
+          /tmp/test-venv/bin/python -m pip install --upgrade pip
+          /tmp/test-venv/bin/python -m pip install -r build_tools/packaging/linux/tests/requirements.txt
+          echo "PYTHON_CMD=/tmp/test-venv/bin/python" >> $GITHUB_ENV
+
+      - name: Package Installation Test
+        run: |
+          echo "TEST - OS:${{ inputs.os_profile }} REPO:${{ env.REPO_URL }} Arch:${{ env.GFX_ARCH }} Type:${{ env.RELEASE_TYPE }}"
+          $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
