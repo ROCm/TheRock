@@ -143,11 +143,7 @@ jobs:
   build_native_deb_packages:
     needs: [build_multi_arch_stages]
     name: Build DEB Packages
-    if: >-
-      ${{
-        !failure() && !cancelled() &&
-        fromJSON(inputs.build_config).build_native_linux == true
-      }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -160,11 +156,7 @@ jobs:
   build_native_rpm_packages:
     needs: [build_multi_arch_stages]
     name: Build RPM Packages
-    if: >-
-      ${{
-        !failure() && !cancelled() &&
-        fromJSON(inputs.build_config).build_native_linux == true
-      }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -177,11 +169,7 @@ jobs:
   test_native_packages_ubuntu2404:
     needs: [build_native_deb_packages]
     name: Test DEB Install - ubuntu2404
-    if: >-
-      ${{
-        !failure() && !cancelled() &&
-        fromJSON(inputs.build_config).build_native_linux == true
-      }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       package_install_url: ${{ needs.build_native_deb_packages.outputs.package_repository_url }}
@@ -196,11 +184,7 @@ jobs:
   test_native_packages_rhel10:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - rhel10
-    if: >-
-      ${{
-        !failure() && !cancelled() &&
-        fromJSON(inputs.build_config).build_native_linux == true
-      }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
@@ -215,11 +199,7 @@ jobs:
   test_native_packages_sles16:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - sles16
-    if: >-
-      ${{
-        !failure() && !cancelled() &&
-        fromJSON(inputs.build_config).build_native_linux == true
-      }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
@@ -290,11 +270,7 @@ jobs:
   build_pytorch_wheel_fat:
     needs: [build_python_packages]
     name: Build PyTorch (fat + split)
-    if: >-
-      ${{
-        !failure() && !cancelled() &&
-        fromJSON(inputs.build_config).build_pytorch == true
-      }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true }}
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels_ci.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
