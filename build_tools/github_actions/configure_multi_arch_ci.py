@@ -927,10 +927,10 @@ def _expand_build_config_for_platform(
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         expect_failure=expect_failure,
-        build_pytorch=not expect_failure
-        and not expect_pytorch_failure
-        and suffix != "asan",
-        build_native_linux=not expect_failure and suffix != "asan",
+        build_pytorch=(
+            not expect_failure and not expect_pytorch_failure and suffix != "asan"
+        ),
+        build_native_linux=(not expect_failure and suffix != "asan"),
         build_runs_on=build_runs_on,
         prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,
