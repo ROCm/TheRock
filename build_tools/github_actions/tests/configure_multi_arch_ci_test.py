@@ -710,6 +710,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_cmake_preset="",
             expect_failure=False,
             build_pytorch=True,
+            build_native_linux=True,
         )
         d = config.to_dict()
         # to_dict keys should match dataclass fields.
@@ -737,6 +738,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_cmake_preset="release",
             expect_failure=False,
             build_pytorch=True,
+            build_native_linux=True,
         )
         # Present config → valid JSON
         serialized = json.dumps(config.to_dict())
