@@ -163,15 +163,16 @@ jobs:
       TORCH_PACKAGE: ${{ matrix.torch_package }}
     steps:
       - name: Check full test cadence
+        id: cadence
         run: |
           if [ "${{ matrix.dispatch_on }}" = "daily" ] || [ "$(date -u +%u)" = "7" ]; then
-            echo "dispatch=true" >> "$GITHUB_ENV"
+            echo "dispatch=true" >> "$GITHUB_OUTPUT"
           else
-            echo "dispatch=false" >> "$GITHUB_ENV"
+            echo "dispatch=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Resolve staged torch version
-        if: ${{ env.dispatch == 'true' }}
+        if: ${{ steps.cadence.outputs.dispatch == 'true' }}
         id: resolve
         run: |
           INDEX_URL="${PACKAGE_INDEX_URL%/}/${AMDGPU_FAMILY}"
@@ -199,7 +200,7 @@ jobs:
           echo "Resolved torch_version: ${TORCH_VERSION}"
 
       - name: Dispatch full PyTorch test workflow
-        if: ${{ env.dispatch == 'true' }}
+        if: ${{ steps.cadence.outputs.dispatch == 'true' }}
         uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
         with:
           workflow: test_pytorch_wheels_full.yml

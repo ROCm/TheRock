@@ -4,8 +4,8 @@
 # Manually dispatchable full PyTorch unit-test suite against wheels from a
 # staging index.
 #
-# Nightly automation is driven by build_portable_linux_pytorch_wheels.yml after
-# a wheel build completes, so scheduled runs here would risk testing stale
+# Nightly automation is driven by release_portable_linux_pytorch_wheels.yml
+# after wheel builds complete, so scheduled runs here would risk testing stale
 # wheels and duplicating the build-triggered signal.
 #
 # Current scope: Linux gfx94X-dcgpu only.
