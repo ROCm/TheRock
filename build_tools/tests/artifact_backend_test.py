@@ -558,7 +558,7 @@ class TestS3BackendCredentials(unittest.TestCase):
 
     @unittest.skipUnless(
         _is_public_s3_available(),
-        "Public S3 endpoint is not reachable",
+        "Public S3 endpoint is not reachable (sandbox with no network access?)",
     )
     def test_list_objects_unsigned(self):
         """Listing objects in a public bucket must succeed without credentials."""
