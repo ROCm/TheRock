@@ -454,7 +454,8 @@ test_matrix = {
     "rocwmma": {
         "job_name": "rocwmma",
         "fetch_artifact_args": "--rocwmma --tests --blas",
-        "timeout_minutes": 60,
+        # Headroom above typical shard runtime; per-test CTest timeouts fail fast on hangs (ROCM-24171).
+        "timeout_minutes": 90,
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
