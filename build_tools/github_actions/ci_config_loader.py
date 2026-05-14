@@ -8,7 +8,7 @@ The config repo is checked out during workflow setup, and this module
 reads the JSON config from that checkout. The checkout SHA is logged
 for full traceability.
 
-Testing: Run ci_config_loader_test.py for unit tests.
+Testing: Update ref in setup_multi_arch.yml to point to a test branch/SHA.
 """
 
 from __future__ import annotations
