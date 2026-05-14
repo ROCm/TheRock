@@ -52,8 +52,8 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
-      external_repo_config:
-        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
+      external_repo:
+        description: "JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields for external repo builds."
         type: string
         default: ""
     outputs:
@@ -91,8 +91,8 @@ on:
           HEAD moves during the workflow run.
         value: ${{ jobs.setup.outputs.ref }}
       external_repo_config:
-        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
-        value: ${{ inputs.external_repo_config }}
+        description: "JSON config for external repo checkout (generated from external_repo_name)"
+        value: ${{ jobs.setup.outputs.external_repo_config }}
 
 permissions:
   contents: read
@@ -111,6 +111,7 @@ jobs:
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
+      external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
     steps:
       - name: Checking out repository
         id: checkout
@@ -137,7 +138,7 @@ jobs:
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
-          SKIP_PATH_FILTERS: ${{ inputs.external_repo_config != '' && 'true' || '' }}
+          SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.
@@ -159,3 +160,10 @@ jobs:
             --release-type=${{ inputs.release_type || 'dev' }} \
             --prerelease-version=${{ inputs.prerelease_version }} \
             --override-git-sha=${{ steps.checkout.outputs.commit }}
+
+      - name: Detect external repo config
+        id: external_repo_config
+        if: ${{ inputs.external_repo != '' }}
+        run: |
+          python ./build_tools/github_actions/detect_external_repo_config.py \
+            --external-repo-json='${{ inputs.external_repo }}'

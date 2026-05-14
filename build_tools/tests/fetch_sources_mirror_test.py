@@ -43,6 +43,7 @@ def _make_fetch_args(**kwargs) -> types.SimpleNamespace:
     defaults = {
         "stage": None,
         "source_sets": [],
+        "skip_submodules": [],
         "include_system_projects": False,
         "system_projects": [],
         "include_compilers": False,
