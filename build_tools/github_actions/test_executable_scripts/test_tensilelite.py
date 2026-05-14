@@ -50,15 +50,12 @@ env["PYTHONPATH"] = (
 )
 env["ROCM_PATH"] = str(rocm_path)
 
-# Install dependencies from the artifact's requirements.txt.
-requirements_txt = tensilelite_root / "requirements.txt"
-if requirements_txt.is_file():
-    logging.info("=== Installing test dependencies ===")
-    subprocess.run(
-        ["uv", "pip", "install", "-r", str(requirements_txt)],
-        check=True,
-        env=env,
-    )
+# _rocisa links libamdhip64.so — ensure HIP libraries are findable.
+lib_path = rocm_path / "lib"
+existing_ld_path = env.get("LD_LIBRARY_PATH", "")
+env["LD_LIBRARY_PATH"] = (
+    f"{lib_path}{os.pathsep}{existing_ld_path}" if existing_ld_path else str(lib_path)
+)
 
 # Smoke test: verify install layout allows single-PYTHONPATH imports.
 logging.info("=== Verifying artifact install layout ===")
