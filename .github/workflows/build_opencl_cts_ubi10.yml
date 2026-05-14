@@ -6,8 +6,6 @@ name: Build opencl-cts (ubi10)
 on:
   workflow_call:
     inputs:
-      artifact_group:
-        type: string
       package_version:
         type: string
         default: ADHOCBUILD
@@ -24,9 +22,6 @@ on:
         default: ""
   workflow_dispatch:
     inputs:
-      artifact_group:
-        type: string
-        default: gfx94X-dcgpu
       package_version:
         type: string
         default: ADHOCBUILD
@@ -45,17 +40,18 @@ jobs:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:b4966196b9cec5742776504fd76e7deb4d3765471da687354be9edcaf689c151
       options: --user 0:0
     env:
+      STAGE_NAME: opencl-cts
+      BUILD_DIR: build
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
       - name: Install opencl-cts build dependencies
         run: |
           sudo apt-get update -y
           sudo apt-get install -y --no-install-recommends \
             ccache \
-            opencl-headers \
-            spirv-tools \
-            spirv-headers
+            spirv-tools
 
       - name: Setup python3
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
@@ -84,39 +80,46 @@ jobs:
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
 
+      - name: Fetch inbound artifacts
+        run: |
+          python build_tools/artifact_manager.py fetch \
+            --run-id=${{ github.run_id }} \
+            --stage="${STAGE_NAME}" \
+            --output-dir="${BUILD_DIR}" \
+            --bootstrap
+
       - name: Fetch sources
         timeout-minutes: 30
         run: |
           ./build_tools/fetch_sources.py --jobs 12 --source-sets opencl-cts
 
-      - name: Configure
-        env:
-          # opencl-cts is target-neutral; any single valid family satisfies CMake.
-          amdgpu_families: gfx94X-dcgpu
-          package_version: ${{ inputs.package_version }}
-          extra_cmake_options: >-
-            -DTHEROCK_ENABLE_ALL=OFF
-            -DTHEROCK_ENABLE_OPENCL_CTS=ON
-            -DTHEROCK_BUNDLE_SYSDEPS=OFF
-          BUILD_DIR: build
+      - name: Get stage configuration
+        id: stage_config
         run: |
-          python3 build_tools/github_actions/build_configure.py
+          python build_tools/configure_stage.py \
+            --stage="${STAGE_NAME}" \
+            --gha-output
+
+      - name: Configure
+        run: |
+          cmake -B "${BUILD_DIR}" -S . -GNinja \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DTHEROCK_BUNDLE_SYSDEPS=OFF \
+            ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build opencl-cts
         run: |
-          cmake --build build --target opencl-cts -- -k 0
+          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
         run: |
-          if [ -d "./build" ]; then
-            echo "Artifact Archives:"
-            echo "------------------"
-            ls -lh build/artifacts/*.tar.xz || true
-          else
-            echo "[ERROR] Build directory ./build does not exist."
-            exit 1
-          fi
+          echo "CCache Stats:"
+          ccache -s -v
+          echo "Artifacts:"
+          ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
       - name: Configure AWS Credentials
         if: ${{ always() }}
@@ -124,11 +127,17 @@ jobs:
         with:
           release_type: ${{ inputs.release_type }}
 
-      - name: Post Build Upload
-        if: always()
+      - name: Push stage artifacts
         run: |
-          python3 build_tools/github_actions/post_build_upload.py \
-            --run-id ${{ github.run_id }} \
-            --artifact-group "${{ inputs.artifact_group }}" \
-            --build-dir build \
-            --upload
+          python build_tools/artifact_manager.py push \
+            --run-id=${{ github.run_id }} \
+            --stage="${STAGE_NAME}" \
+            --build-dir="${BUILD_DIR}"
+
+      - name: Upload stage logs
+        if: ${{ always() }}
+        run: |
+          python build_tools/github_actions/post_stage_upload.py \
+            --run-id=${{ github.run_id }} \
+            --stage="${STAGE_NAME}" \
+            --build-dir="${BUILD_DIR}"

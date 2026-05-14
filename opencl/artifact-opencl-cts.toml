@@ -3,7 +3,3 @@
 include = [
   "share/opencl/opencl-cts/**",
 ]
-[components.test."opencl/opencl-icd-loader/stage"]
-include = [
-  "lib/*.so*",
-]

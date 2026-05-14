@@ -210,6 +210,10 @@ artifact_groups = ["profiler-apps"]
 description = "Media Libraries"
 artifact_groups = ["media-libs"]
 
+[build_stages.opencl-cts]
+description = "OpenCL Conformance Test Suite"
+artifact_groups = ["opencl-cts"]
+
 # ==============================================================================
 # ARTIFACT GROUPS - Logical groupings of related artifacts
 # ==============================================================================
@@ -284,8 +288,8 @@ source_sets = ["rocm-systems"]
 
 [artifact_groups.opencl-cts]
 description = "OpenCL Conformance Test Suite"
-type = "per-arch"
-artifact_group_deps = ["opencl-runtime"]
+type = "target-neutral"
+artifact_group_deps = ["base", "third-party-sysdeps"]
 source_sets = ["opencl-cts"]
 
 [artifact_groups.math-libs]
