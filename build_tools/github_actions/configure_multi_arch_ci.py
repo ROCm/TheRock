@@ -21,7 +21,7 @@ The CI pipeline is a DAG of job groups:
     build-rocm → test-rocm
                → build-rocm-python → build-pytorch → test-pytorch
                                    → build-jax     → test-jax (future)
-               → build-native-linux   → test-native-linux   (future)
+               → build-native-linux   → test-native-linux
                → build-native-windows → test-native-windows (future)
 
 Step 4 determines which job groups to run, skip, or satisfy with prebuilt
@@ -427,6 +427,7 @@ class BuildConfig:
     build_variant_suffix: str
     build_variant_cmake_preset: str
     expect_failure: bool
+    build_native_linux: bool
     build_pytorch: bool
     # Build runner label for this platform/variant combination
     build_runs_on: str = ""
@@ -935,7 +936,10 @@ def _expand_build_config_for_platform(
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         expect_failure=expect_failure,
-        build_pytorch=not expect_failure and not expect_pytorch_failure,
+        build_native_linux=(not expect_failure and suffix != "asan"),
+        build_pytorch=(
+            not expect_failure and not expect_pytorch_failure and suffix != "asan"
+        ),
         build_runs_on=build_runs_on,
         prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,
