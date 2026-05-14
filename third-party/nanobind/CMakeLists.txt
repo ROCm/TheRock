@@ -18,6 +18,8 @@ therock_cmake_subproject_declare(therock-nanobind
   CMAKE_ARGS
     -DNB_TEST=OFF
     -DNB_USE_SUBMODULE_DEPS=OFF
+  BUILD_DEPS
+    therock-robin-map
 )
 therock_cmake_subproject_provide_package(therock-nanobind nanobind nanobind/cmake)
 therock_cmake_subproject_activate(therock-nanobind)
