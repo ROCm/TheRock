@@ -243,9 +243,8 @@ if(THEROCK_ENABLE_WSL_ROCDXG)
     message(FATAL_ERROR "THEROCK_WSL_WIN_SDK must be set when THEROCK_ENABLE_WSL_ROCDXG=ON")
   endif()
 
-  # Fingerprint only the files that feed the upstream WSL ROCDXG build.
-  # This list is derived from rocm-systems/projects/rocr-runtime/libhsakmt/
-  # CMakeLists_wsl.txt and the files it directly compiles/includes.
+  # FPRINT_SOURCE_DIR tracks upstream libhsakmt; the small file glob tracks this
+  # wrapper, whose source dir is otherwise outside that upstream fingerprint.
   # The upstream WSL rocdxg path expects the mounted Windows SDK shared include
   # directory to be provided explicitly, so forward THEROCK_WSL_WIN_SDK into
   # the nested subproject configure.
@@ -255,18 +254,9 @@ if(THEROCK_ENABLE_WSL_ROCDXG)
     USE_DIST_AMDGPU_TARGETS
     BACKGROUND_BUILD
     CMAKE_ARGS
-      "-DTHEROCK_BUNDLE_SYSDEPS=OFF"
       "-DTHEROCK_WSL_WIN_SDK=${THEROCK_WSL_WIN_SDK}"
     FPRINT_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt"
     FPRINT_FILE_GLOBS
-      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt/CMakeLists.txt"
-      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt/CMakeLists_wsl.txt"
-      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt/src/dxg/*"
-      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt/src/dxg/wddm/*"
-      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt/include/hsakmt/*"
-      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/core/util/timer.cpp"
-      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/core/util/small_heap.cpp"
-      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp"
       "${CMAKE_CURRENT_SOURCE_DIR}/wsl-rocdxg/*"
     INTERFACE_INCLUDE_DIRS
       include

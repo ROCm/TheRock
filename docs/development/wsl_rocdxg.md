@@ -17,7 +17,7 @@ flowchart TD
   runner["Windows runner<br/>checkout + MSVC/SDK discovery"]
   wsl["Enter WSL Ubuntu shell"]
   base["Linux foundation/base artifact"]
-  cfg["Inside WSL Ubuntu<br/>configure wsl-rocdxg<br/>BASE=ON, WSL_ROCDXG=ON<br/>BUNDLE_SYSDEPS=OFF"]
+  cfg["Inside WSL Ubuntu<br/>configure wsl-rocdxg<br/>BASE=ON, WSL_ROCDXG=ON"]
   build["Inside WSL Ubuntu<br/>build stage-wsl-rocdxg<br/>publish ROCDXG artifact"]
 
   runner --> wsl
@@ -68,12 +68,6 @@ CMake arguments include:
 -DTHEROCK_ENABLE_WSL_ROCDXG=ON
 ```
 
-The workflow also passes:
-
-```text
--DTHEROCK_BUNDLE_SYSDEPS=OFF
-```
-
 ## Workflow Differences
 
 Compared with the portable Linux artifact workflow, the WSL workflow:
@@ -99,11 +93,6 @@ artifact flow.
 
 ## Troubleshooting
 
-- If the job cannot find inbound `base` artifacts, check that the WSL job
-  depends on `foundation` and that `wsl-rocdxg` has an artifact group dependency
-  on `base`.
-- If configure tries to build bundled sysdeps, check that the workflow is still
-  passing `-DTHEROCK_BUNDLE_SYSDEPS=OFF`.
 - If the WSL build cannot find Windows SDK shared headers, check the Windows SDK
   discovery step and the `WSLENV` bridge into WSL.
 - If `rocdxg` outputs are missing, check the `libhsakmt` WSL CMake path in

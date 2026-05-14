@@ -204,7 +204,6 @@ jobs:
           cmake -B "${THEROCK_HOST_BUILD_DIR}" -S . -G Ninja \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
-            -DTHEROCK_BUNDLE_SYSDEPS=OFF \
             -DTHEROCK_WSL_WIN_SDK="$win_sdk" \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
@@ -216,8 +215,7 @@ jobs:
           stage_name="${{ inputs.stage_name }}"
           wsl_venv_dir="/tmp/therock-wsl-rocdxg/.venv"
           source "${wsl_venv_dir}/bin/activate"
-          "${wsl_venv_dir}/bin/python" "${THEROCK_HOST_WORKSPACE}/build_tools/memory_monitor.py" --phase Build -- \
-            cmake --build "${THEROCK_HOST_BUILD_DIR}" --target "stage-${stage_name}" -- -k 0
+          cmake --build "${THEROCK_HOST_BUILD_DIR}" --target "stage-${stage_name}" -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -248,6 +246,7 @@ jobs:
         run: |
           python build_tools/github_actions/post_stage_upload.py \
             --run-id=${{ github.run_id }} \
+            --platform=linux \
             --stage="${STAGE_NAME}" \
             --build-dir="${THEROCK_HOST_BUILD_DIR}" \
             --amdgpu-family=""

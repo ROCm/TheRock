@@ -25,7 +25,6 @@ if [ ! -d "$win_sdk" ]; then
   exit 1
 fi
 
-rm -rf "$build_root" "$install_root" "$stage_root"
 mkdir -p "$build_root" "$install_root" "$stage_root"
 
 cmake -B "$build_root" -S "$rocdxg_source_dir" -G Ninja \
