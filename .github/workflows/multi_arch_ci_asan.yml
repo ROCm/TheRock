@@ -28,6 +28,10 @@ on:
         type: string
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+      ci_config_ref:
+        type: string
+        default: ""
+        description: "Branch/SHA of therock-ci-config to use. Test new runner configs by setting to your branch."
   pull_request:
     types:
       - labeled
@@ -58,6 +62,7 @@ jobs:
       linux_test_labels: ${{ inputs.linux_test_labels || '' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
+      ci_config_ref: ${{ inputs.ci_config_ref || '' }}
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
