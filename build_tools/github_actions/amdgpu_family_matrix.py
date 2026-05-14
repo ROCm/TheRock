@@ -405,11 +405,26 @@ amdgpu_family_info_matrix_nightly = {
 }
 
 
-def get_all_families_for_trigger_types(trigger_types):
+def get_all_families_for_trigger_types(trigger_types, external_config=None):
     """
     Returns a combined family matrix for the specified trigger types.
-    trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
+
+    Args:
+        trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
+        external_config: Optional external config dict from ci_config_loader.
+            If provided, uses gpu_families from external config instead of
+            local definitions.
+
+    Returns:
+        Combined family matrix for the specified trigger types.
     """
+    # Use external config if provided
+    if external_config is not None:
+        from . import ci_config_loader
+
+        return ci_config_loader.get_gpu_families(external_config, trigger_types)
+
+    # Fall back to local definitions
     result = {}
     matrix_map = {
         "presubmit": amdgpu_family_info_matrix_presubmit,
@@ -423,3 +438,22 @@ def get_all_families_for_trigger_types(trigger_types):
                 result[family_name] = family_config
 
     return result
+
+
+def get_build_runner_labels(external_config=None):
+    """
+    Returns build runner label configuration.
+
+    Args:
+        external_config: Optional external config dict from ci_config_loader.
+            If provided, uses build_runners from external config.
+
+    Returns:
+        Build runner labels dict with platform -> variant -> labels mapping.
+    """
+    if external_config is not None:
+        from . import ci_config_loader
+
+        return ci_config_loader.get_build_runners(external_config)
+
+    return BUILD_RUNNER_LABELS
