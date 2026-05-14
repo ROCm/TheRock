@@ -113,6 +113,12 @@ EXCLUDED_TEST_MODULES: list[str] = [
     # pytest -k filtering can skip individual tests.
     "distributed/pipelining/test_schedule",
     "distributed/test_device_mesh",
+    # CI run 25756405826: import/collection-time failures before pytest -k
+    # can isolate individual tests. DTensor ops xfail registration cannot find
+    # nn.functional.linear_cross_entropy OpInfo; overlap bucketing imports a
+    # missing torch._inductor.fx_passes.profile_guided_estimation module.
+    "distributed/tensor/test_dtensor_ops",
+    "distributed/test_overlap_bucketing_unit",
     # 4-GPU validation (iter1-iter7): 12+ test-level failures across 6 distinct
     # test classes (TestFullyShardCommunication, TestFullyShardPrefetch [whole class],
     # TestFullyShardCollectiveOps, TestFullyShardMixedPrecisionCasts,

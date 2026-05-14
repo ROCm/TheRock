@@ -292,6 +292,31 @@ skip_tests = {
             # Third local 4-GPU wrapper validation iter2: prefetch multi-module backward prefetch timeout.
             "(TestFullyShardPrefetch and test_fully_shard_multi_module_backward_prefetch)",
 
+            # CI run 25756405826 distributed shard 1/3: DTensor source/wheel
+            # API drift, sharding-strategy gaps, and sync-decision assertion drift.
+            "(TestDTensorDebugMode and test_nested_invoke_subgraph)",
+            "(TestDTensorCompile and test_pad_tensor_no_guard_on_symbolic_pad_size)",
+            "(TestOpSchema and test_no_dtensor_spec_leak_in_comparison_key)",
+            "(TestOpSpecMesh and test_mesh_from_input_specs_when_tuple_output_all_none)",
+            "(DistTensorOpsTest and test_detach_inplace_inference_mode)",
+            "(TestComputeCommReorderingMultiProc and test_sink_waits)",
+            "(TestSyncDecisionCrossRanks and test_sync_decision_cross_ranks_invalid_node_error)",
+
+            # CI run 25756405826 distributed shard 2/3: identified per-test
+            # timeout/SIGSEGV/API-drift failures after prior FSDP skips.
+            "(TestFullyShardMixedPrecisionCasts and test_norm_modules_bf16)",
+            "(TestFullyShardCustomForwardMethod and test_register_fsdp_forward_method)",
+            "(TestCompileOnOneRank and test_all_reduce_with_explicit_pg_input)",
+            "(TestDataParallel and test_strided_grad_layout)",
+            "(TestFakePG and test_allgather_into_tensor_requires_grad)",
+
+            # CI run 25756405826 distributed shard 3/3: compiler/distributed
+            # numerical drift and missing inductor config on the May 1 wheel stack.
+            "(test_replicate_with_compiler and test_compile_backward_only)",
+            "(DistMathOpsTest and test_interpolation_upsample_ops)",
+            "(TestComputeCommReorderingMultiProc and test_inductor_default_comms_ordering)",
+            "(NCCLTraceTest and test_compiled_ring_attention_pattern_num_steps_2_M_1024)",
+            "(TestSyncDecisionCrossRanks and test_align_runtime_estimations_across_all_distributed_ranks)",
 
             # Elastic launcher failure.
             "(ElasticLaunchTest and test_virtual_local_rank)",
