@@ -179,7 +179,7 @@ configuration. It is safe to re-run at any time.
 > Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.VC.ATL --add
 > Microsoft.VisualStudio.Component.Windows11SDK.22621"
 > winget install --id Git.Git -e --source winget --custom "/o:PathOption=CmdTools"
-> winget install cmake -v 3.31.0
+> winget install cmake
 > winget install ninja-build.ninja ccache python strawberryperl bloodrock.pkg-config-lite
 > winget install --id Iterative.DVC --silent --accept-source-agreements
 > ```
@@ -190,7 +190,10 @@ If you prefer to install tools manually, you will need:
   (Using either "Visual Studio" or "Build Tools for Visual Studio"),
   including these components:
 
-  - MSVC
+  - MSVC **version 19.43+** (Visual Studio 2022 **17.13+**). Older versions
+    will fail at link time because prebuilt libraries reference STL internals
+    introduced in 19.43.
+    See [Issue#5029](https://github.com/ROCm/TheRock/issues/5029).
   - C++ CMake tools for Windows
   - C++ ATL
   - C++ AddressSanitizer (optional)
@@ -199,8 +202,7 @@ If you prefer to install tools manually, you will need:
 
   - With "Use Git and optional Unix tools from the Windows Command Prompt" as certain build scripts use Bash.
 
-- CMake: https://cmake.org/download/, version < 4.0.0
-  (see [Issue#318](https://github.com/ROCm/TheRock/issues/318))
+- CMake: https://cmake.org/download/
 
 - Ninja: https://ninja-build.org/
 
@@ -279,22 +281,9 @@ options you may want to set.
 
 ```bash
 cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
-
-# If iterating and wishing to cache, add these:
-#  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-#  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-#  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
 ```
 
-> [!TIP]
-> ccache [does not support](https://github.com/ccache/ccache/issues/1040)
-> MSVC's `/Zi` flag which may be set by default when a project (e.g. LLVM) opts
-> in to
-> [policy CMP0141](https://cmake.org/cmake/help/latest/policy/CMP0141.html).
-> Setting
-> [`-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded`](https://cmake.org/cmake/help/latest/variable/CMAKE_MSVC_DEBUG_INFORMATION_FORMAT.html)
-> instructs CMake to compile with `/Z7` or equivalent, which is supported by
-> ccache.
+If iterating and wishes to use ccache, see [CCache usage on Windows](../../README.md#ccache-usage-on-windows)
 
 > [!TIP]
 > Ensure that MSVC is used by looking for lines like these in the logs:

@@ -87,6 +87,46 @@ class BuildTopologyTest(unittest.TestCase):
         compiler = topology.build_stages["compiler"]
         self.assertEqual(compiler.type, "per-arch")
 
+    def test_parse_external_git_sources(self):
+        """Test parsing external git sources in source sets."""
+        self.write_topology(
+            """
+            [source_sets.optional-hrx]
+            description = "Optional HRX"
+            external_git_sources = [
+              { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "e642a13425f46bcf909078459dd4e07df0723a0d", path = "optional-sources/hrx" },
+            ]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        source_set = topology.source_sets["optional-hrx"]
+
+        self.assertEqual(source_set.description, "Optional HRX")
+        self.assertEqual(len(source_set.external_git_sources), 1)
+        hrx = source_set.external_git_sources[0]
+        self.assertEqual(hrx.name, "hrx")
+        self.assertEqual(hrx.origin, "https://github.com/ROCm/hrx.git")
+        self.assertEqual(hrx.commit, "e642a13425f46bcf909078459dd4e07df0723a0d")
+        self.assertEqual(hrx.path, "optional-sources/hrx")
+
+    def test_validate_external_git_source_path(self):
+        """Test validation rejects external sources outside optional-sources."""
+        self.write_topology(
+            """
+            [source_sets.optional-hrx]
+            description = "Optional HRX"
+            external_git_sources = [
+              { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "e642a13425f46bcf909078459dd4e07df0723a0d", path = "rocm-systems/hrx" },
+            ]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+
+        self.assertTrue(any("must be under optional-sources" in e for e in errors))
+
     def test_parse_artifact_groups(self):
         """Test parsing artifact groups."""
         self.write_topology(
@@ -480,6 +520,54 @@ class BuildTopologyTest(unittest.TestCase):
         self.assertIn("B", stage2_inbound)
         self.assertIn("C", stage2_inbound)
         self.assertIn("D", stage2_inbound)
+
+    def test_group_dependencies_include_transitive_artifact_dependencies(self):
+        """Test group deps include the artifact deps of artifacts they pull in."""
+        self.write_topology(
+            """
+            [build_stages.producer]
+            description = "Producer"
+            artifact_groups = ["base"]
+
+            [build_stages.consumer]
+            description = "Consumer"
+            artifact_groups = ["leaf"]
+
+            [artifact_groups.base]
+            description = "Base"
+            type = "generic"
+
+            [artifact_groups.leaf]
+            description = "Leaf"
+            type = "generic"
+            artifact_group_deps = ["base"]
+
+            [artifacts.toolchain-runtime]
+            artifact_group = "base"
+            type = "target-neutral"
+            artifact_deps = ["toolchain-frontend"]
+
+            [artifacts.toolchain-frontend]
+            artifact_group = "base"
+            type = "target-neutral"
+            artifact_deps = ["toolchain-base"]
+
+            [artifacts.toolchain-base]
+            artifact_group = "base"
+            type = "target-neutral"
+
+            [artifacts.leaf-artifact]
+            artifact_group = "leaf"
+            type = "target-neutral"
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        consumer_inbound = topology.get_inbound_artifacts("consumer")
+        self.assertIn("toolchain-runtime", consumer_inbound)
+        self.assertIn("toolchain-frontend", consumer_inbound)
+        self.assertIn("toolchain-base", consumer_inbound)
 
     def test_complex_dependency_chain(self):
         """Test complex dependency chain resolution."""

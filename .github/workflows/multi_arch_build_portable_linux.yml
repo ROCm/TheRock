@@ -58,6 +58,10 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -82,6 +86,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
@@ -105,6 +110,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
@@ -138,6 +144,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
@@ -165,6 +172,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
@@ -188,6 +196,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
@@ -211,6 +220,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
@@ -234,6 +244,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
@@ -257,6 +268,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
@@ -287,6 +299,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
@@ -310,6 +323,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
