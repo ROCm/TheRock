@@ -36,6 +36,11 @@ if(THEROCK_ENABLE_IREE_COMPILER)
       -DIREE_BUILD_BINDINGS_TFLITE_JAVA=OFF
       # Disable runtime, it's built into fusilli, we only need the compiler
       -DIREE_HAL_DRIVER_DEFAULTS=OFF
+      # flatcc-generated headers (e.g. bytecode_module_def_reader.h) emit
+      # unused-variable patterns that -Werror,-Wunused-variable rejects on
+      # clang/Windows. We don't own the generator output, so disable
+      # IREE's own -Werror promotion. -Wall is still on.
+      -DIREE_ENABLE_WERROR_FLAG=OFF
     INSTALL_OPTIONAL_COMPONENTS
       IREEDevLibraries-Compiler
     BUILD_DEPS
