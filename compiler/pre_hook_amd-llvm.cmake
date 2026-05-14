@@ -39,6 +39,11 @@ else()
     # CONFIG mode.
     set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
 
+    # Use DWARF4 for ASAN builds - compatibility with dwz < 0.15 which doesn't support DWARF5.
+    if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN")
+        string(APPEND RUNTIMES_CMAKE_ARGS ";-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} -gdwarf-4;-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -gdwarf-4")
+    endif()
+
     # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
     if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
       list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
