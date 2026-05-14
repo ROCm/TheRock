@@ -367,6 +367,19 @@ def get_enabled_sources(args) -> tuple[List[str], list[ExternalGitSource]]:
             external_sources_by_path,
             current_platform=current_platform,
         )
+        # Apply --skip-submodules filter
+        skip_set = set(args.skip_submodules or [])
+        if skip_set:
+            original_count = len(projects_by_name)
+            projects_by_name = {
+                k: v for k, v in projects_by_name.items() if k not in skip_set
+            }
+            skipped_count = original_count - len(projects_by_name)
+            if skipped_count > 0:
+                log(
+                    f"Skipped {skipped_count} submodule(s) via --skip-submodules: "
+                    f"{sorted(skip_set)}"
+                )
         projects = list(projects_by_name)
         log(f"Stage '{args.stage}' requires submodules: {projects}")
         external_sources = list(external_sources_by_path.values())
@@ -409,6 +422,19 @@ def get_enabled_sources(args) -> tuple[List[str], list[ExternalGitSource]]:
         external_sources_by_path,
         current_platform=current_platform,
     )
+    # Apply --skip-submodules filter
+    skip_set = set(args.skip_submodules or [])
+    if skip_set:
+        original_count = len(projects_by_name)
+        projects_by_name = {
+            k: v for k, v in projects_by_name.items() if k not in skip_set
+        }
+        skipped_count = original_count - len(projects_by_name)
+        if skipped_count > 0:
+            log(
+                f"Skipped {skipped_count} submodule(s) via --skip-submodules: "
+                f"{sorted(skip_set)}"
+            )
     return list(projects_by_name), list(external_sources_by_path.values())
 
 
@@ -895,6 +921,16 @@ def main(argv):
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Include math libraries that are part of ROCM",
+    )
+    parser.add_argument(
+        "--skip-submodules",
+        nargs="+",
+        default=[],
+        help=(
+            "Submodule names to skip (e.g., 'rocm-libraries rocm-systems'). "
+            "These will not be fetched regardless of stage or source set configuration. "
+            "Useful for external repo builds where the submodule is checked out separately."
+        ),
     )
     parser.add_argument(
         "--system-projects",
