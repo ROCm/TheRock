@@ -202,7 +202,7 @@ jobs:
 
   build_jax_wheels:
     needs: [build_artifacts, build_tarballs]
-    name: Build JAX Wheels
+    name: Trigger Release JAX Wheels
     runs-on: ubuntu-24.04
     permissions:
       actions: write
