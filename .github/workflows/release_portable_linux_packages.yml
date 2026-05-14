@@ -322,7 +322,6 @@ jobs:
               "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
               "cloudfront_staging_url": "${{ needs.setup_metadata.outputs.cloudfront_staging_url }}",
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
-              "run_full_pytorch_tests": ${{ github.event_name == 'schedule' }},
               "ref": "${{ inputs.ref || '' }}"
             }
 

@@ -43,6 +43,10 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly Linux PyTorch wheel builds complete.
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       release_type:
@@ -65,6 +69,10 @@ on:
         description: 'Comma-separated list of Windows GPU families. "all" = all, "none" = skip platform.'
         type: string
         default: "gfx110x"
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly Linux PyTorch wheel builds complete.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -101,6 +109,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ needs.setup.outputs.ref }}
+      run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
