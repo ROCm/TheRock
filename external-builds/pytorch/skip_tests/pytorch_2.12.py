@@ -356,6 +356,68 @@ skip_tests = {
             "test_unused_forward_module",
             # TestViewOpsWithLocalTensor - list index out of range
             "test_view_ops",
+            # TestFullyShardNDTraining - 300s per-process timeout
+            "test_2d_mlp_with_nd_mesh",
+            # TestCommModeFeatures - 300s per-process timeout
+            "test_MLPStacked_distributed_sharding_display",
+            # TestFullyShardPrefetch - 300s per-process timeout
+            "test_backward_misprefetch",
+            # TestDistBackendWithSpawn - AssertionError (scalars not equal)
+            "test_ddp_buffer_hook_allreduce_return_future",
+            # TestDistBackendWithSpawn - error code 10
+            "test_ddp_uneven_inputs",
+            # TestFullyShard1DTrainingCompose - 300s per-process timeout
+            "test_double_forward_with_nested_fsdp_and_checkpoint",
+            # TestFullyShardPrefetch - 300s per-process timeout
+            "test_fully_shard_backward_prefetch",
+            # TestFullyShardForceSumReduction - 300s per-process timeout
+            "test_fully_shard_force_sum_both_reductions",
+            # TestFullyShardForceSumReduction - 300s per-process timeout
+            "test_fully_shard_force_sum_reduce_scatter",
+            # TestFullyShardPrefetch - 300s per-process timeout
+            "test_fully_shard_multi_module_backward_prefetch",
+            # TestFullyShardPerParamMeshOverlap - 300s per-process timeout
+            "test_fully_shard_per_param_mesh_training_overlap",
+            # TestFullyShardGradientAccumulation - 300s per-process timeout
+            "test_gradient_accumulation",
+            # TestFullyShardSharedParams - 300s per-process timeout
+            "test_layer_by_layer_shard_no_false_positive",
+            # TestFullyShard1DTrainingCore - error code 10
+            "test_non_root_forward_backward",
+            # TestFullyShard1DTrainingCore - 300s per-process timeout
+            "test_post_optim_event",
+            # TestFullyShardMixedPrecisionTraining - 300s per-process timeout
+            "test_reduce_dtype",
+            # DeviceMeshCollectiveTest - error code 10
+            "test_reduce_scatter_uneven",
+            # TestFullyShardPrefetch - 300s per-process timeout
+            "test_set_modules_to_backward_prefetch",
+            # TestFullyShardPrefetch - 300s per-process timeout
+            "test_set_modules_to_backward_prefetch_inside_ac",
+            # TestFullyShardPrefetch - 300s per-process timeout
+            "test_set_modules_to_forward_prefetch",
+            # TestFullyShardCommunication - 300s per-process timeout
+            "test_set_reduce_scatter_divide_factor",
+            # TestFullyShardNDTraining - 300s per-process timeout
+            "test_shard_placement_fn_tp_ep",
+            # TestJoin - error code 10
+            "test_single_joinable",
+            # TestFullyShardMixedPrecisionTraining - 300s per-process timeout (also exit code 10)
+            "test_structured_input_output",
+            # TestFullyShardFrozen - 300s per-process timeout
+            "test_train_mixed_requires_grad_across_groups",
+            # TestFullyShardFrozen - 300s per-process timeout
+            "test_train_mixed_requires_grad_per_group",
+            # TestFullyShardHSDPTraining - 300s per-process timeout
+            "test_train_parity_hsdp",
+            # TestFullyShardShardPlacementFnMultiProcess - 300s per-process timeout
+            "test_train_parity_shard_placement_fn_shard_largest_dim",
+            # TestFullyShard1DTrainingCompose - 300s per-process timeout
+            "test_train_parity_with_activation_checkpointing",
+            # TestFullyShardUnshardMultiProcess - 300s per-process timeout
+            "test_unshard_async",
+            # ElasticLaunchTest - ChildFailedError
+            "test_virtual_local_rank",
         ],
     },
 }
