@@ -2,33 +2,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""
-Loads CI runner configuration from therock-ci-config repository.
-
-This module fetches runner configuration dynamically, allowing updates
-without requiring changes to TheRock, rocm-libraries, or rocm-systems.
+"""Loads CI runner configuration from therock-ci-config repository.
 
 The config repo is checked out during workflow setup, and this module
 reads the JSON config from that checkout. The checkout SHA is logged
 for full traceability.
 
-Testing new runner configurations:
-    1. Create a branch in therock-ci-config with your changes
-    2. In TheRock workflow_dispatch, set ci_config_ref to your branch/SHA
-    3. Run CI to validate the new configuration
-    4. Once validated, merge your branch to main in therock-ci-config
-
-Usage:
-    from ci_config_loader import load_runner_config, get_build_runners, get_gpu_families
-
-    # Load config from checkout path
-    config = load_runner_config(Path("ci-config"))
-
-    # Access build runners
-    build_runners = get_build_runners(config)
-
-    # Access GPU families for specific trigger types
-    families = get_gpu_families(config, ["presubmit", "postsubmit"])
+Testing: Run ci_config_loader_test.py for unit tests.
 """
 
 from __future__ import annotations

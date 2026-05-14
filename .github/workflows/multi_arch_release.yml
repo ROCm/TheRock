@@ -89,10 +89,6 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
-      ci_config_ref:
-        description: "Branch/SHA of therock-ci-config to use. Test new runner configs by setting to your branch."
-        type: string
-        default: ""
 
 permissions:
   contents: read
@@ -113,7 +109,6 @@ jobs:
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
-      ci_config_ref: ${{ inputs.ci_config_ref || '' }}
 
   linux_release:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
