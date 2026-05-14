@@ -34,7 +34,7 @@ class GpuArchTest(unittest.TestCase):
         self.assertEqual(test_utils.extract_gpu_arch(""), "")
         self.assertEqual(test_utils.extract_gpu_arch("gfx1151"), "gfx1151")
         self.assertEqual(test_utils.extract_gpu_arch("family=gfx942,gfx90a"), "gfx942")
-        self.assertEqual(test_utils.extract_gpu_arch("GFX90A"), "gfx90a")
+        self.assertEqual(test_utils.extract_gpu_arch("GFX90A"), "")
         self.assertEqual(test_utils.extract_gpu_arch("generic"), "")
 
     def test_find_matching_gpu_arch_exact_match(self):

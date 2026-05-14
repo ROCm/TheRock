@@ -19,7 +19,7 @@ from typing import Iterable, Mapping
 
 VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
 
-_GPU_ARCH_PATTERN = re.compile(r"gfx[0-9a-zA-Z]+", re.IGNORECASE)
+_GPU_ARCH_PATTERN = re.compile(r"gfx[0-9a-zA-Z]+")
 _ROCMINFO_NAME_PATTERN = re.compile(r"^\s*Name:\s+(gfx[0-9a-z]+)\s*$", re.IGNORECASE)
 
 
@@ -44,7 +44,7 @@ def extract_gpu_arch(amdgpu_families: str | None) -> str:
     if not amdgpu_families:
         return ""
     match = _GPU_ARCH_PATTERN.search(amdgpu_families)
-    return match.group(0).lower() if match else ""
+    return match.group(0) if match else ""
 
 
 def find_matching_gpu_arch(gpu_arch: str, available_gpu_archs: set[str]) -> str | None:
