@@ -143,10 +143,6 @@ disable_platforms = ["windows"]
 description = "Foundation - critical path dependencies"
 artifact_groups = ["third-party-sysdeps", "base"]
 
-[build_stages.wsl-rocdxg]
-description = "WSL-only ROCDXG bridge library"
-artifact_groups = ["wsl-rocdxg"]
-
 [build_stages.compiler-runtime]
 description = "Compiler, runtimes, and core profiling"
 artifact_groups = [
@@ -159,6 +155,10 @@ artifact_groups = [
     "profiler-core",
     "rocrtst"
 ]
+
+[build_stages.wsl-rocdxg]
+description = "WSL-only ROCDXG bridge library"
+artifact_groups = ["wsl-rocdxg"]
 
 [build_stages.math-libs]
 description = "Math and ML libraries per architecture"
@@ -513,7 +513,7 @@ disable_platforms = ["windows"]
 [artifacts.wsl-rocdxg]
 artifact_group = "wsl-rocdxg"
 type = "target-neutral"
-artifact_deps = []
+artifact_deps = ["core-hip"]
 feature_name = "WSL_ROCDXG"
 feature_group = "WSL"
 

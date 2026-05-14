@@ -6,7 +6,7 @@
 # This workflow builds TheRock in stages:
 # 1. foundation (generic) - sysdeps, base
 # 2. compiler-runtime (generic) - compiler, runtimes, profiler-core
-# 3. wsl-rocdxg (generic) - WSL-only ROCDXG bridge library
+# 3. wsl-rocdxg (generic) - WSL-only ROCDXG bridge library (after compiler-runtime)
 # 4. math-libs (per-arch) - BLAS, FFT, etc.
 # 5. comm-libs (per-arch) - RCCL, rocshmem (parallel to math-libs)
 # 6. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
@@ -120,7 +120,7 @@ jobs:
   # STAGE: wsl-rocdxg (generic)
   # ==========================================================================
   wsl-rocdxg:
-    needs: foundation
+    needs: compiler-runtime
     if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') }}
     uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
     secrets: inherit

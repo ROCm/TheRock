@@ -16,12 +16,12 @@ build steps inside a WSL Ubuntu shell:
 flowchart TD
   runner["Windows runner<br/>checkout + MSVC/SDK discovery"]
   wsl["Enter WSL Ubuntu shell"]
-  base["Linux foundation/base artifact"]
-  cfg["Inside WSL Ubuntu<br/>configure wsl-rocdxg<br/>BASE=ON, WSL_ROCDXG=ON"]
+  deps["Linux base + compiler-runtime artifacts"]
+  cfg["Inside WSL Ubuntu<br/>configure wsl-rocdxg<br/>amd-hip toolchain"]
   build["Inside WSL Ubuntu<br/>build stage-wsl-rocdxg<br/>publish ROCDXG artifact"]
 
   runner --> wsl
-  base --> cfg
+  deps --> cfg
   wsl --> cfg --> build
 ```
 
@@ -41,19 +41,20 @@ The relevant feature controls are:
 - `THEROCK_ENABLE_WSL`: enables the WSL feature group.
 - `THEROCK_ENABLE_WSL_ROCDXG`: enables the ROCDXG component.
 
-The `wsl-rocdxg` artifact group depends on `base`. This lets the WSL stage
-bootstrap from the same inbound base artifact pattern used by other downstream
-multi-arch stages.
+The `wsl-rocdxg` artifact group depends on `base`, and the artifact depends on
+`core-hip`. This lets the WSL stage bootstrap from the same inbound Linux
+artifact pattern used by other downstream multi-arch stages and use TheRock's
+`amd-hip` compiler toolchain for the nested ROCDXG build.
 
 ## Linux Inbound Artifacts
 
 Although the job starts on a Windows runner, CMake runs inside WSL Ubuntu. That
 means the configure and build environment is Linux userspace, so the stage
-consumes Linux prebuilt artifacts from the Linux `foundation` stage, including
-the `base` artifact.
+consumes Linux prebuilt artifacts, including the `base` artifact and compiler
+runtime artifacts used by the `amd-hip` toolchain.
 
 The portable Linux multi-arch workflow gives the WSL job a dependency on
-`foundation` so those inbound artifacts exist before the WSL stage fetches
+`compiler-runtime` so those inbound artifacts exist before the WSL stage fetches
 them.
 
 ## Configure Behavior
@@ -64,9 +65,11 @@ CMake arguments include:
 
 ```text
 -DTHEROCK_ENABLE_ALL=OFF
--DTHEROCK_ENABLE_BASE=ON
 -DTHEROCK_ENABLE_WSL_ROCDXG=ON
 ```
+
+Topology-derived inbound dependency features are also enabled for the stage,
+including the `core-hip` dependency used for the `amd-hip` compiler toolchain.
 
 ## Workflow Differences
 
