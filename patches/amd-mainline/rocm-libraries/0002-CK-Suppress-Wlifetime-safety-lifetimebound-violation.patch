@@ -1,4 +1,4 @@
-From 8c372aedd2cd892b9a9c7130ff95b99375baa0b0 Mon Sep 17 00:00:00 2001
+From 02fcc326df79ee7164715231b36a9527dbe6f80b Mon Sep 17 00:00:00 2001
 From: therockbot <therockbot@amd.com>
 Date: Tue, 12 May 2026 23:32:06 -0400
 Subject: [PATCH] Suppress -Wlifetime-safety compiler errors
@@ -15,13 +15,14 @@ recognize these options yet.
 Upstream fix: https://github.com/ROCm/rocm-libraries/pull/7384
 ---
  .../device_grouped_conv_fwd_multiple_abd_xdl_cshuffle.hpp  | 7 +++++++
+ ...evice_grouped_conv_fwd_multiple_abd_xdl_cshuffle_v3.hpp | 7 +++++++
  .../composablekernel/include/ck/utility/dtype_vector.hpp   | 2 ++
  projects/composablekernel/include/ck/utility/tuple.hpp     | 2 ++
  .../composablekernel/include/ck/utility/type_convert.hpp   | 7 +++++++
  .../include/ck_tile/core/container/tuple.hpp               | 2 ++
  .../include/ck_tile/core/tensor/buffer_view.hpp            | 2 ++
  .../include/ck_tile/host/kernel_launch.hpp                 | 2 ++
- 7 files changed, 24 insertions(+)
+ 8 files changed, 31 insertions(+)
 
 diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_xdl_cshuffle.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_xdl_cshuffle.hpp
 index 452b0af6c46..e879025c053 100644
@@ -40,6 +41,28 @@ index 452b0af6c46..e879025c053 100644
  #include <iostream>
  #include <iterator>
 @@ -2233,3 +2238,5 @@ struct DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_xdl_cshuffle_v3.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_xdl_cshuffle_v3.hpp
+index 5cff4cf7f2f..5c0a3fb1e97 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_xdl_cshuffle_v3.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_xdl_cshuffle_v3.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <functional>
+ #include <iostream>
+ #include <iterator>
+@@ -2208,3 +2213,5 @@ struct DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3
  } // namespace device
  } // namespace tensor_operation
  } // namespace ck
