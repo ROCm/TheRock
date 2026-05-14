@@ -1501,13 +1501,24 @@ function(_therock_cmake_subproject_absolutize list_var relative_to)
   set("${list_var}" "${_abs_dirs}" PARENT_SCOPE)
 endfunction()
 
+# Filters a list of AMDGPU targets against the project's EXCLUDE_TARGET_PROJECTS
+# entries from therock_add_amdgpu_target. Silent — callable before the subproject
+# target exists (e.g. to decide whether to declare it at all). For the warning
+# variant used during subproject activation, see _therock_filter_project_gpu_targets.
+function(therock_filter_amdgpu_targets out_var project_name)
+  set(_filtered ${ARGN})
+  get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${project_name}")
+  list(REMOVE_ITEM _filtered ${_excludes})
+  set("${out_var}" "${_filtered}" PARENT_SCOPE)
+endfunction()
+
 # Filters the target's THEROCK_AMDGPU_TARGETS property based on global settings for the project.
 function(_therock_filter_project_gpu_targets out_var target_name)
   get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${target_name}")
   get_target_property(_gpu_targets "${target_name}" THEROCK_AMDGPU_TARGETS)
   set(_filtered ${_gpu_targets})
   if(_excludes)
-    foreach(exclude in ${_excludes})
+    foreach(exclude IN LISTS _excludes)
       if("${exclude}" IN_LIST _filtered)
         message(WARNING
           "Excluding support for ${exclude} in ${target_name} because it was "

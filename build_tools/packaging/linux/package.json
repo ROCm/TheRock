@@ -2089,6 +2089,7 @@
             "Name": "rocshmem",
             "Components": [
               "run",
+              "lib",
               "doc"
             ]
           }

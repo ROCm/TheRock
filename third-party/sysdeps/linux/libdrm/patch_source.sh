@@ -21,3 +21,14 @@ sed -i -E "/libdrm_amdgpu[[:space:]]*=[[:space:]]*library\(/,/\)/ s/^([[:space:]
 sed -i "/pkg\.generate\s*(/,/)/ s/\blibdrm_amdgpu,\s*//" "$AMDGPU_MESON_BUILD"
 # Add libraries tag to pkg.generate block
 sed -i "/pkg\.generate\s*(/a\  libraries : ['-L\${libdir}', '-ldrm_amdgpu']," $AMDGPU_MESON_BUILD
+
+# Append missing device IDs to amdgpu.ids
+AMDGPU_IDS="$SOURCE_DIR/data/amdgpu.ids"
+cat >> "$AMDGPU_IDS" << 'EOF'
+7590,	C0,	AMD Radeon RX 9060 XT
+744B,	00,	AMD Radeon PRO W7900D
+75A0,	00,	AMD Instinct MI350X
+75A3,	00,	AMD Instinct MI355X
+75B0,	00,	AMD Instinct MI350X VF
+75B3,	00,	AMD Instinct MI355X VF
+EOF

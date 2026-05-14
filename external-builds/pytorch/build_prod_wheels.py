@@ -939,13 +939,28 @@ def do_build_pytorch(
     is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
     is_pytorch_2_11_or_later = pytorch_build_version_parsed.release[:2] >= (2, 11)
 
-    # aotriton is not supported on certain architectures yet.
-    # gfx900/gfx906/gfx908/gfx101X/gfx103X: https://github.com/ROCm/TheRock/issues/1925
-    AOTRITON_UNSUPPORTED_ARCHS = ["gfx900", "gfx906", "gfx908", "gfx101", "gfx103"]
+    # aotriton supports a subset of GPU architectures. When at least one
+    # target arch is supported, we enable flash attention and let aotriton's
+    # build system (gpu_targets.py) filter to just the supported ones. The
+    # runtime (check_gpu in sdp_utils.cpp) gracefully falls back to math/CK
+    # backends on unsupported GPUs. We only disable flash attention when
+    # *no* target arch is supported — otherwise aotriton's configure step
+    # fails on the empty target list (https://github.com/ROCm/aotriton/issues/169).
+    #
+    # These prefixes match what aotriton's gpu_targets.py recognizes.
+    # See also the image list in pytorch/cmake/External/aotriton.cmake.
+    AOTRITON_SUPPORTED_ARCH_PREFIXES = ("gfx90a", "gfx942", "gfx950", "gfx11", "gfx12")
     # gfx1152/53: supported in aotriton 0.11.2b+ (https://github.com/ROCm/aotriton/pull/142),
     #   which is pinned by pytorch >= 2.11. Older versions don't include it.
+    aotriton_unsupported_archs_for_version = []
     if not is_pytorch_2_11_or_later:
-        AOTRITON_UNSUPPORTED_ARCHS += ["gfx1152", "gfx1153"]
+        aotriton_unsupported_archs_for_version = ["gfx1152", "gfx1153"]
+    rocm_arch_list = env.get("PYTORCH_ROCM_ARCH", "").split(";")
+    has_aotriton_supported_arch = any(
+        arch.startswith(AOTRITON_SUPPORTED_ARCH_PREFIXES)
+        and arch not in aotriton_unsupported_archs_for_version
+        for arch in rocm_arch_list
+    )
 
     ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
     ## and causes build failures for other PyTorch versions
@@ -981,15 +996,15 @@ def do_build_pytorch(
         print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
 
         if args.enable_pytorch_flash_attention_linux is None:
-            # Default behavior — determined by if triton is build
-            use_flash_attention = "ON" if triton_requirement else "OFF"
-
-            if any(
-                arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
-            ):
-                use_flash_attention = "OFF"
+            # Default: enable when triton is available AND at least one
+            # target arch is supported by aotriton. When all targets are
+            # unsupported, aotriton can't produce a valid library.
+            use_flash_attention = (
+                "ON" if triton_requirement and has_aotriton_supported_arch else "OFF"
+            )
             print(
-                f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
+                f"Flash Attention default behavior (triton={bool(triton_requirement)},"
+                f" aotriton_arch={has_aotriton_supported_arch}): {use_flash_attention}"
             )
         else:
             # Explicit override: user has set the flag to true/false
@@ -1038,12 +1053,12 @@ def do_build_pytorch(
     if is_windows:
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
 
-        use_flash_attention = "0"
-
-        if args.enable_pytorch_flash_attention_windows and not any(
-            arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
-        ):
-            use_flash_attention = "1"
+        use_flash_attention = (
+            "1"
+            if args.enable_pytorch_flash_attention_windows
+            and has_aotriton_supported_arch
+            else "0"
+        )
 
         env.update(
             {
@@ -1060,9 +1075,7 @@ def do_build_pytorch(
                 "BUILD_TEST": "0",
             }
         )
-        print(
-            f"  Flash attention enabled: {args.enable_pytorch_flash_attention_windows or not is_windows}"
-        )
+        print(f"  Flash attention enabled: {use_flash_attention == '1'}")
 
     if not is_windows:
         # Prepend the ROCm sysdeps dir so that we use bundled libraries.

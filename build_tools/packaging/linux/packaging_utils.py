@@ -846,14 +846,33 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
             continue
 
         for subdir in artifact["Artifact_Subdir"]:
+            artifact_subdir = subdir["Name"]
             component_list = subdir["Components"]
             for component in component_list:
                 source_dir = (
                     Path(artifacts_dir)
                     / f"{artifact_prefix}_{component}_{artifact_suffix}"
                 )
-                if source_dir.exists():
-                    return True
+                if not source_dir.exists():
+                    continue
+
+                # Check if the required subdirectory exists in the manifest
+                manifest_file = source_dir / "artifact_manifest.txt"
+                if not manifest_file.exists():
+                    continue
+
+                try:
+                    with manifest_file.open("r", encoding="utf-8") as file:
+                        for line in file:
+                            match_found = (
+                                isinstance(artifact_subdir, str)
+                                and (artifact_subdir.lower() + "/") in line.lower()
+                            )
+                            if match_found and line.strip():
+                                # Found at least one required subdirectory in the manifest
+                                return True
+                except OSError:
+                    continue
 
     return False
 
