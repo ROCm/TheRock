@@ -411,7 +411,7 @@ def get_all_families_for_trigger_types(trigger_types, external_config=None):
     """
     # Use external config if provided
     if external_config is not None:
-        from . import ci_config_loader
+        import ci_config_loader
 
         return ci_config_loader.get_gpu_families(external_config, trigger_types)
 
@@ -443,7 +443,7 @@ def get_build_runner_labels(external_config=None):
         Build runner labels dict with platform -> variant -> labels mapping.
     """
     if external_config is not None:
-        from . import ci_config_loader
+        import ci_config_loader
 
         return ci_config_loader.get_build_runners(external_config)
 

@@ -56,6 +56,10 @@ on:
         description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
         type: string
         default: ""
+      ci_config_ref:
+        description: "Branch, tag, or SHA for therock-ci-config. Use to test new runner configs before merging."
+        type: string
+        default: ""
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -121,6 +125,21 @@ jobs:
           # We need the parent commit to do a diff
           fetch-depth: 2
 
+      - name: Checkout CI config
+        id: ci_config
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/therock-ci-config
+          ref: ${{ inputs.ci_config_ref || '' }}
+          path: ci-config
+        continue-on-error: true
+
+      - name: Log CI config version
+        if: steps.ci_config.outcome == 'success'
+        run: |
+          echo "CI config checkout: ci-config/"
+          echo "CI config SHA: $(git -C ci-config rev-parse HEAD)"
+
       # Note: the script reads PR labels, the base ref, etc. from the event
       # payload (GITHUB_EVENT_PATH). That is the original event that started
       # the workflow run, which may not directly map to the "inputs" on
@@ -138,6 +157,8 @@ jobs:
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo_config != '' && 'true' || '' }}
+          # Path to CI config checkout (if available)
+          CI_CONFIG_PATH: ${{ steps.ci_config.outcome == 'success' && 'ci-config' || '' }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.

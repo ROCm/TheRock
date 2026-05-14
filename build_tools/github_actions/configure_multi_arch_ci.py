@@ -61,6 +61,7 @@ from amdgpu_family_matrix import (
     select_build_runner,
     select_weighted_label,
 )
+from ci_config_loader import config_exists, load_runner_config, log_config_version
 from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
@@ -714,7 +715,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     that have a platform entry in amdgpu_family_matrix.py.
     """
     all_families = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit", "nightly"]
+        ["presubmit", "postsubmit", "nightly"], external_config=_external_config
     )
 
     # Select family names per platform based on trigger type.
@@ -738,7 +739,11 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (gfx* for individual families, ci:run-all-archs
         # for everything).
-        defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
+        defaults = list(
+            get_all_families_for_trigger_types(
+                ["presubmit"], external_config=_external_config
+            ).keys()
+        )
         linux_names = list(defaults)
         windows_names = list(defaults)
     elif ci_inputs.is_push:
@@ -746,7 +751,9 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         # we validate on more targets (e.g. gfx950) without paying full
         # nightly cost.
         defaults = list(
-            get_all_families_for_trigger_types(["presubmit", "postsubmit"]).keys()
+            get_all_families_for_trigger_types(
+                ["presubmit", "postsubmit"], external_config=_external_config
+            ).keys()
         )
         linux_names = list(defaults)
         windows_names = list(defaults)
@@ -959,7 +966,7 @@ def expand_build_configs(
     platforms where the variant isn't available or no families match.
     """
     all_families = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit", "nightly"]
+        ["presubmit", "postsubmit", "nightly"], external_config=_external_config
     )
     build_variant = ci_inputs.build_variant
 
@@ -1090,7 +1097,32 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 # ---------------------------------------------------------------------------
 
 
+def _load_external_config():
+    """Load external CI config if CI_CONFIG_PATH is set and valid."""
+    ci_config_path = os.environ.get("CI_CONFIG_PATH", "").strip()
+    if not ci_config_path:
+        return None
+    config_path = Path(ci_config_path)
+    if not config_exists(config_path):
+        print(f"CI_CONFIG_PATH={ci_config_path} set but config not found, using defaults")
+        return None
+    try:
+        config = load_runner_config(config_path)
+        log_config_version(config, config_path)
+        return config
+    except Exception as e:
+        print(f"Warning: Failed to load CI config from {ci_config_path}: {e}")
+        return None
+
+
+# Module-level config, set by main() before configure() runs
+_external_config = None
+
+
 def main():
+    global _external_config
+    _external_config = _load_external_config()
+
     ci_inputs = CIInputs.from_environ()
 
     # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
