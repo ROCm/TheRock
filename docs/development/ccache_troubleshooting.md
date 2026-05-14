@@ -64,19 +64,13 @@ namespaces could be introduced.
 | `compiler_check` | Custom script (hashes binary + shared libs via sha256sum)                                                    | `content` (hashes binary content)                                                                                                         |
 | Build container  | Same manylinux Docker image for all jobs                                                                     | Ephemeral VMs with unique workspace GUIDs                                                                                                 |
 | Workspace path   | `/__w/TheRock/TheRock/` (consistent)                                                                         | `C:\home\runner\_work\TheRock\TheRock\` (consistent)                                                                                      |
-| Build directory  | `/__w/TheRock/TheRock/build/`                                                                                | `D:\build` (via `subst` over `B:\` volume mount)                                                                                          |
+| Build directory  | `/__w/TheRock/TheRock/build/`                                                                                | `B:\build` (volume mount)                                                                                                                 |
 
 ### Windows drive mounts
 
 Windows CI runners use Azure VMs where `B:\` is a temporary disk mounted
 as a volume mount point to `C:\{GUID}\`. The GUID is unique per VM, so
 `B:\build` resolves to different absolute paths on different runners.
-
-The `subst D: B:\` step in the workflow creates a stable drive letter
-that does NOT resolve through the volume mount. Tools see `D:\build\...`
-which stays consistent. Without this, clang's resource directory
-resolution (via `GetModuleFileNameW`) embeds the GUID in include paths,
-making ccache entries runner-specific.
 
 The `-resource-dir` flag is explicitly passed to clang in the toolchain
 setup (`cmake/therock_subproject.cmake`) to prevent clang from
@@ -218,12 +212,8 @@ runner that no longer exist on the current runner.
 different absolute path on each runner (e.g., GUID-based volume mounts
 on Windows).
 
-**Fix:** Ensure all tools see a stable path. On Windows, the `subst`
-step in the workflow handles this. Check that:
-
-- `BUILD_DIR` uses the subst drive letter (not `B:\`)
-- The `subst` step runs before any build step
-- `-resource-dir` is passed to clang (in `therock_subproject.cmake`)
+**Fix:** Ensure all tools see and use stable paths. Passing an explicit
+`-resource-dir` to clang (in `therock_subproject.cmake`) can help.
 
 ### Symptom: Manifest found but no entries match
 
@@ -309,5 +299,5 @@ ccache logs. Key things to check:
 
 - `-I` and `-isystem` paths should be consistent
 - `-D` defines should not contain runner-specific values
-- `--hip-path` and `--hip-device-lib-path` should use stable paths
-- `-resource-dir` should use the subst drive letter, not the resolved path
+- `-resource-dir`, `--hip-path`, and `--hip-device-lib-path` should use stable
+  paths
