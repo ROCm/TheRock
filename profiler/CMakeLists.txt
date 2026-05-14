@@ -302,6 +302,16 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
     message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
   endif()
 
+  # Disable Fortran dependent examples when flang is not available
+  set(_rocprofsys_disable_example "lulesh")
+  if(NOT THEROCK_ENABLE_FLANG_SUPPORT)
+    list(APPEND _rocprofsys_disable_example
+      "jacobi-fortran-targetdata-markers"
+      "jacobi-fortran-usm"
+      "openmp-vv")
+  endif()
+  string(REPLACE ";" "\\;" _rocprofsys_disable_example_escaped "${_rocprofsys_disable_example}")
+
   therock_cmake_subproject_declare(rocprofiler-systems
     USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
@@ -323,6 +333,7 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
       -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_ROCPROFSYS_PYTHON_VERSIONS_STR}"
       -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}"
       "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
+      "-DROCPROFSYS_DISABLE_EXAMPLES=${_rocprofsys_disable_example_escaped}"
     INSTALL_RPATH_DIRS
       "lib"
       "lib/rocprofiler-systems"
