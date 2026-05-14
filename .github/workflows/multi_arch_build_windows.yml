@@ -111,6 +111,29 @@ jobs:
       id-token: write
 
   # ==========================================================================
+  # STAGE: iree-compiler (generic, parallel to math-libs)
+  # ==========================================================================
+  iree-compiler:
+    needs: compiler-runtime
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'iree-compiler') }}
+    uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: iree-compiler
+      stage_display_name: "Stage - IREE Compiler"
+      timeout_minutes: 90  # 1.5 hours - iree is not _yet_ building with a common llvm, it includes its own.
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
   # STAGE: math-libs (per-arch)
   # ==========================================================================
   math-libs:
