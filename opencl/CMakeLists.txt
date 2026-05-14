@@ -12,6 +12,10 @@ if(THEROCK_ENABLE_OPENCL_CTS)
     find_program(SPIRV_AS_PROGRAM spirv-as REQUIRED)
     get_filename_component(_spirv_tools_dir "${SPIRV_AS_PROGRAM}" DIRECTORY)
     find_path(SPIRV_INCLUDE_DIR NAMES spirv/unified1/spirv.h REQUIRED)
+    # opencl-cts expects SPIRV_INCLUDE_DIR to be the root where include/spirv/... lives,
+    # but find_path returns the directory containing spirv/ directly (e.g. /usr/include).
+    # Pass the parent so that ${SPIRV_INCLUDE_DIR}/include/spirv/... resolves correctly.
+    get_filename_component(_spirv_root "${SPIRV_INCLUDE_DIR}" DIRECTORY)
 
     get_filename_component(_cl_lib_dir "${OpenCL_LIBRARY}" DIRECTORY)
 
@@ -24,7 +28,7 @@ if(THEROCK_ENABLE_OPENCL_CTS)
       CMAKE_ARGS
         "-DCL_INCLUDE_DIR=${OpenCL_INCLUDE_DIRS}"
         "-DCL_LIB_DIR=${_cl_lib_dir}"
-        "-DSPIRV_INCLUDE_DIR=${SPIRV_INCLUDE_DIR}"
+        "-DSPIRV_INCLUDE_DIR=${_spirv_root}"
         "-DSPIRV_TOOLS_DIR=${_spirv_tools_dir}"
         "-DOPENCL_LIBRARIES=OpenCL"
         "-DCMAKE_BUILD_TYPE=Release"
