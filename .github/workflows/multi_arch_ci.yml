@@ -115,6 +115,22 @@ jobs:
       contents: read
       id-token: write
 
+  manifest_diff:
+    name: Manifest Diff
+    if: github.repository == 'ROCm/TheRock'
+    uses: ./.github/workflows/manifest-diff.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      end_ref: >-
+        ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      start_ref: >-
+        ${{ github.event_name == 'push' && github.event.before || '' }}
+      pr_base_ref: >-
+        ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
+      branch: ${{ github.event.pull_request.base.ref || github.ref_name }}
+
   ci_summary:
     name: CI Summary
     if: always()

@@ -67,17 +67,25 @@ permissions:
 jobs:
   generate-report:
     name: Generate Manifest Diff Report
-    runs-on: ubuntu-24.04
-    # Informational job: never block the build/test jobs that needs: setup.
+    runs-on: azure-linux-scale-rocm
+    # Informational job: never fail the parent caller.
     continue-on-error: true
     permissions:
       id-token: write
       contents: read
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
+      options: -v /runner/config:/home/awsconfig/
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+
+      - name: Install python deps
+        run: pip install -r requirements.txt
 
       - name: Generate manifest diff report
         env:
@@ -93,15 +101,12 @@ jobs:
             ${{ inputs.workflow_mode && '--workflow-mode' || '' }} \
             --output-dir reports
 
-      - name: Configure AWS Credentials
-        if: ${{ github.repository == 'ROCm/TheRock' }}
-        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+      - name: Configure AWS credentials for artifact uploads
+        if: ${{ always() }}
+        uses: ./.github/actions/configure_aws_artifacts_credentials
 
       - name: Upload Report to S3
-        if: ${{ github.repository == 'ROCm/TheRock' }}
+        if: ${{ always() }}
         run: |
           python3 build_tools/github_actions/upload_test_report_script.py \
             --run-id ${{ github.run_id }} \
