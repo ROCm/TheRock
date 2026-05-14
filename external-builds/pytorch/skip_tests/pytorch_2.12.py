@@ -6,15 +6,8 @@ skip_tests = {
         "cuda": [
             # RuntimeError: Error building extension 'dummy_allocator_v1'
             "test_mempool_limited_memory_with_allocator",
-            # RuntimeError: Error building extension 'dummy_allocator_v3'
-            "test_tensor_delete_after_allocator_delete",
-            # RuntimeError: Error building extension 'dummy_allocator'
-            "test_deleted_mempool_not_used_on_oom",
             # AssertionError: Scalars are not equal!
             "test_mempool_ctx_multithread",
-            # Same hipblas.h compilation error as test_mempool_with_allocator.
-            # See https://github.com/pytorch/pytorch/pull/173330
-            "test_mempool_expandable",
             # torch.AcceleratorError: HIP error: operation not permitted when
             # stream is capturing
             "test_cuda_graph_tensor_item_not_allowed",

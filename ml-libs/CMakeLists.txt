@@ -8,21 +8,27 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
-# limit use of composable kernel to the GPU families it is valid for
-if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
-  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1150 gfx1151 gfx1152 gfx1153 gfx1200 gfx1201)
-  foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
-    if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
-      message(WARNING
-        "${_gfx_target} (included in THEROCK_AMDGPU_TARGETS) is not supported by composable kernel. "
-        "Disabling composable kernel and it's use in MIOpen.")
-      set(THEROCK_ENABLE_COMPOSABLE_KERNEL OFF)
-      set(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL OFF)
-    endif()
-  endforeach()
+# composable_kernel only supports a subset of gfx targets (per its own
+# rocm_check_target_ids allowlist). The per-arch EXCLUDE_TARGET_PROJECTS
+# mechanism in cmake/therock_amdgpu_targets.cmake removes unsupported arches
+# from the CK subproject's GPU_TARGETS at activate time. If no targets remain
+# after that filter (e.g. a single-arch shard for a CK-unsupported arch),
+# declaring CK with an empty GPU_TARGETS list breaks CK's own HIP try-compile
+# with "HIP_ARCHITECTURES is empty", so flip the global gate off here and let
+# MIOpen build with MIOPEN_USE_COMPOSABLEKERNEL=OFF.
+# See https://github.com/ROCm/TheRock/issues/4836
+set(_ck_enabled ${THEROCK_ENABLE_COMPOSABLE_KERNEL})
+if(_ck_enabled)
+  therock_filter_amdgpu_targets(_ck_targets composable_kernel ${THEROCK_AMDGPU_TARGETS})
+  if(NOT _ck_targets)
+    message(STATUS
+      "composable_kernel: no supported gfx targets remain after filtering "
+      "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+    set(_ck_enabled OFF)
+  endif()
 endif()
 
-if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
+if(_ck_enabled)
   ##############################################################################
   # Composable_kernel
   ##############################################################################
@@ -69,9 +75,16 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
 endif()
 
 if(THEROCK_ENABLE_MIOPEN)
-  # If composable kernel is enabled, add it as an MIOpen dep.
+  # MIOpen's CK use is gated on both the per-arch CK availability above and
+  # the user-facing THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL opt-out, which lets
+  # someone build CK for other consumers while keeping it out of MIOpen.
+  set(_miopen_use_ck OFF)
+  if(_ck_enabled AND THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+    set(_miopen_use_ck ON)
+  endif()
+
   set(optional_miopen_build_deps)
-  if(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+  if(_miopen_use_ck)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
@@ -90,7 +103,7 @@ if(THEROCK_ENABLE_MIOPEN)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
-      "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL}"
+      "-DMIOPEN_USE_COMPOSABLEKERNEL=${_miopen_use_ck}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
       "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""

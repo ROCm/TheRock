@@ -739,13 +739,13 @@ def main():
         s3_client, bucket, prefix, args.pkg_type, uploaded_packages, job_type
     )
 
-    # Skip index.html generation for CI builds (handled by Lambda function)
-    if job_type != "ci":
+    # Skip index.html generation for run_id is not passed. (handled by Lambda function)
+    if not args.run_id:
         generate_index_from_s3(s3_client, bucket, prefix)
         top_prefix = prefix.split("/")[0]
         generate_top_index_from_s3(s3_client, bucket, top_prefix)
     else:
-        print("Skipping index.html generation for CI build")
+        print("Skipping index.html generation for cases Lamda fn is set")
 
     print(f"Package repository URL: {install_url}")
     _emit_github_output("package_repository_url", install_url)

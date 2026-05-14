@@ -24,8 +24,10 @@ Table of contents:
 - [Multi-arch releases](#multi-arch-releases)
   - [Multi-arch release status](#multi-arch-release-status)
   - [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages)
-  <!-- - [Installing multi-arch PyTorch Python packages](#installing-multi-arch-pytorch-python-packages) -->
+  - [Installing multi-arch PyTorch Python packages](#installing-multi-arch-pytorch-python-packages)
+  - [Supported Python `[device-*]` install extras](#supported-python-device--install-extras)
   - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
+  - [Installing multi-arch native Linux packages](#installing-multi-arch-native-linux-packages)
 - [Per-family releases](#per-family-releases)
   - [Installing per-family releases using pip](#installing-per-family-releases-using-pip)
     - [Python packages release status](#python-packages-release-status)
@@ -59,30 +61,37 @@ Table of contents:
 > This new setup will streamline package installation, so please note the
 > differences in the install instructions.
 
-See this table for key differences between release types:
+Key differences from [per-family releases](#per-family-releases):
 
-|                      | Multi-arch releases                    | Per-family releases                    |
-| -------------------- | -------------------------------------- | -------------------------------------- |
-| GPU code separation  | Split into device packages / `.kpack`  | Bundled into each artifact             |
-| GPU selection        | Package extras/variants                | Chosen by index URL or tarball name    |
-| Multiple GPU targets | Install extras / use multiarch tarball | Separate venvs or tarballs per family  |
-| Download size        | Smaller per target                     | Larger (all targets in family bundled) |
+- **One index URL for all GPUs**: select your target with a pip extra like
+  `[device-gfx942]` instead of finding a per-family index URL
+- **Broader GPU support**: adding support for a new GPU target is just one
+  more device package, so more GPUs can be supported without impacting build
+  times or download sizes for other targets
+- **Smaller downloads**: kernels downloads can be scoped to a single GPU
+  instead of always being scoped to a family or "all"
 
 ### Multi-arch release status
 
-[![Multi-arch release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml)
+| Platform |                                                                                                                                                                                  ROCm |                                                                                                                                                                                                                                       PyTorch |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| Linux    | [![Multi-arch release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml) |       [![Multi-arch PyTorch (Linux)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml) |
+| Windows  | [![Multi-arch release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml) | [![Multi-arch PyTorch (Windows)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml) |
 
 **Package availability:**
 
-| Package type            | Linux                                                                 | Windows                                                               |
-| ----------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| ROCm Python packages    | ✅ Available                                                          | ✅ Available                                                          |
-| PyTorch Python packages | 🟡 In progress ([#3332](https://github.com/ROCm/TheRock/issues/3332)) | 🟡 In progress ([#3332](https://github.com/ROCm/TheRock/issues/3332)) |
-| JAX Python packages     | 🟠 Planned                                                            | -                                                                     |
-| ROCm tarballs           | 🟡 In progress (missing index)                                        | 🟡 In progress (missing index)                                        |
-| Native Linux packages   | 🟡 In progress ([#3333](https://github.com/ROCm/TheRock/issues/3333)) | 🟠 Planned ([#1987](https://github.com/ROCm/TheRock/issues/1987))     |
+| Package type            | Linux                                                                                                                                                                                                                                        | Windows                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| ROCm Python packages    | ✅ Available                                                                                                                                                                                                                                 | ✅ Available                                                                                                       |
+| PyTorch Python packages | ✅ Available<ul><li>Torch versions 2.10 and 2.11 only,<br>other versions pending [#4768](https://github.com/ROCm/TheRock/issues/4768)</li><li>Missing flash attention pending [#4969](https://github.com/ROCm/TheRock/issues/4969)</li></ul> | ✅ Available<ul><li>Missing flash attention pending [#4969](https://github.com/ROCm/TheRock/issues/4969)</li></ul> |
+| JAX Python packages     | 🟠 Planned                                                                                                                                                                                                                                   | -                                                                                                                  |
+| ROCm tarballs           | ✅ Available                                                                                                                                                                                                                                 | ✅ Available                                                                                                       |
+| Native Linux packages   | ✅ Available                                                                                                                                                                                                                                 | 🟠 Planned ([#1987](https://github.com/ROCm/TheRock/issues/1987))                                                  |
 
 ### Installing multi-arch ROCm Python packages
+
+Nightly releases of ROCm and related Python packages are published to a unified
+index at https://rocm.nightlies.amd.com/whl-multi-arch/.
 
 > [!TIP]
 > We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html):
@@ -91,35 +100,39 @@ See this table for key differences between release types:
 > python -m venv .venv
 > source .venv/bin/activate
 > ```
+>
+> Multiple virtual environments can be present on a system at a time, allowing you to switch between them at will.
 
-Install ROCm with device support for your GPU using the unified index and one or
-more `device-gfx*` pip extras:
+> [!WARNING]
+> If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual enivornment.
+> In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
+
+We provide several Python packages which together form the complete ROCm SDK.
+In multi-arch releases, GPU-specific device code is split into separate
+`rocm-sdk-device-{target}` packages.
+
+- See [ROCm Python Packaging via TheRock](./docs/packaging/python_packaging.md)
+  for information about each package.
+- The packages are defined in the
+  [`build_tools/packaging/python/templates/`](https://github.com/ROCm/TheRock/tree/main/build_tools/packaging/python/templates)
+  directory.
+
+| Package name               | Description                                                        |
+| -------------------------- | ------------------------------------------------------------------ |
+| `rocm`                     | Primary sdist meta package that dynamically determines other deps  |
+| `rocm-sdk-core`            | OS-specific core of the ROCm SDK (e.g. compiler and utility tools) |
+| `rocm-sdk-libraries`       | OS-specific libraries (architecture-neutral host code)             |
+| `rocm-sdk-device-{target}` | GPU-specific device code (e.g. `rocm-sdk-device-gfx942`)           |
+| `rocm-sdk-devel`           | OS-specific development tools                                      |
+
+Install ROCm with device support for your GPU using the unified index:
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ --pre "rocm[devel,device-gfx####]"
+# Replace device-gfx942 with your GPU, see the section below for details
+pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ "rocm[libraries,device-gfx942]"
 ```
 
 <!-- TODO: Advertise wheel variants / WheelNext once available  -->
-
-Where `####` is the GFX target taken from the following table:
-
-| Product Name                       | GFX Target | Device Extra     |
-| ---------------------------------- | ---------- | ---------------- |
-| MI300A/MI300X                      | gfx942     | `device-gfx942`  |
-| MI350X/MI355X                      | gfx950     | `device-gfx950`  |
-| AMD RX 7900 XTX                    | gfx1100    | `device-gfx1100` |
-| AMD RX 7800 XT                     | gfx1101    | `device-gfx1101` |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    | `device-gfx1102` |
-| AMD Radeon 780M Laptop iGPU        | gfx1103    | `device-gfx1103` |
-| AMD Strix Halo iGPU                | gfx1151    | `device-gfx1151` |
-| AMD RX 9060 / XT                   | gfx1200    | `device-gfx1200` |
-| AMD RX 9070 / XT                   | gfx1201    | `device-gfx1201` |
-
-For example, install the gfx1100 device code like so:
-
-```bash
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ --pre "rocm[devel,device-gfx1100]"
-```
 
 After installing, verify your installation:
 
@@ -127,9 +140,113 @@ After installing, verify your installation:
 rocm-sdk test
 ```
 
-<!-- ### Installing multi-arch PyTorch Python packages -->
+#### Supported Python `[device-*]` install extras
 
-<!-- TODO(#3332): Document torch packages once they are available in nightly releases -->
+For packages which include device-specific code (such as `rocm`, `torch`, and
+`torchvision`), support for individual devices can be installed using the
+corresponding `device-*` extra from the table below. See also the
+[GPU architecture specs](https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html)
+for a full list of supported AMD GPUs.
+
+| Product Name                                         | GFX Target | Device Extra     |
+| ---------------------------------------------------- | ---------- | ---------------- |
+| AMD Instinct MI355X / MI350X                         | gfx950     | `device-gfx950`  |
+| AMD Instinct MI325X / MI300X / MI300A                | gfx942     | `device-gfx942`  |
+| AMD Instinct MI250X / MI250 / MI210                  | gfx90a     | `device-gfx90a`  |
+| AMD Instinct MI100                                   | gfx908     | `device-gfx908`  |
+| AMD Instinct MI60 / MI50, Radeon Pro VII, Radeon VII | gfx906     | `device-gfx906`  |
+| AMD Instinct MI25                                    | gfx900     | `device-gfx900`  |
+| AMD Radeon RX 9070 / XT, AI PRO R9700 / R9600D       | gfx1201    | `device-gfx1201` |
+| AMD Radeon RX 9060 / XT                              | gfx1200    | `device-gfx1200` |
+| AMD Radeon 820M iGPU                                 | gfx1153    | `device-gfx1153` |
+| AMD Ryzen AI 7 350                                   | gfx1152    | `device-gfx1152` |
+| AMD Ryzen AI Max+ PRO 395                            | gfx1151    | `device-gfx1151` |
+| AMD Ryzen AI 9 HX 375                                | gfx1150    | `device-gfx1150` |
+| AMD Ryzen 7 7840U / Ryzen 9 270                      | gfx1103    | `device-gfx1103` |
+| AMD Radeon RX 7600                                   | gfx1102    | `device-gfx1102` |
+| AMD Radeon RX 7800 XT / 7700 XT, PRO V710 / W7700    | gfx1101    | `device-gfx1101` |
+| AMD Radeon RX 7900 XTX / 7900 XT, PRO W7900 / W7800  | gfx1100    | `device-gfx1100` |
+| AMD Radeon RX 6900 XT / 6800 XT, PRO W6800 / V620    | gfx1030    | `device-gfx1030` |
+| AMD Radeon RX 6750 XT / 6700 XT                      | gfx1031    | `device-gfx1031` |
+| AMD Radeon RX 6600 XT / 6600, PRO W6600              | gfx1032    | `device-gfx1032` |
+| AMD Van Gogh iGPU                                    | gfx1033    | `device-gfx1033` |
+| AMD Radeon RX 6500 XT                                | gfx1034    | `device-gfx1034` |
+| AMD Radeon 680M iGPU                                 | gfx1035    | `device-gfx1035` |
+| AMD Raphael iGPU                                     | gfx1036    | `device-gfx1036` |
+| AMD Radeon RX 5700 / XT                              | gfx1010    | `device-gfx1010` |
+| AMD Radeon Pro V520                                  | gfx1011    | `device-gfx1011` |
+| AMD Radeon Pro W5500                                 | gfx1012    | `device-gfx1012` |
+
+#### The Python `[device-all]` install extra
+
+A `[device-all]` extra is also provided which installs device code for all GPUs.
+
+> [!WARNING]
+> The `[device-all]` extra may not work consistently for nightly releases because
+> packages are promoted per-target as they pass tests. If tests are still
+> running or if they failed for an individual target, this extra will not be
+> able to find all required packages.
+>
+> We also publish **untested** packages to the nightly "whl-staging-multi-arch"
+> index which is not affected by this limitation.
+>
+> | Package index                                          | Safe to use `[device-all]`?                              |
+> | ------------------------------------------------------ | -------------------------------------------------------- |
+> | https://rocm.nightlies.amd.com/whl-multi-arch/         | ❌ No (some packages may not be available)               |
+> | https://rocm.nightlies.amd.com/whl-staging-multi-arch/ | ✅ Yes (index includes all packages, even if tests fail) |
+
+<!-- TODO: add repo.amd.com URL to the list of package indexes once we publish a stable release? -->
+
+### Installing multi-arch PyTorch Python packages
+
+Install PyTorch with ROCm support using the same unified index:
+
+```bash
+# Replace device-gfx942 with your GPU, see the section above for details
+# Note: we'll recommend 'whl-multi-arch' instead of 'whl-staging-multi-arch'
+#       as soon as we test run automate tests on these packages
+pip install --index-url https://rocm.nightlies.amd.com/whl-staging-multi-arch/ \
+    "torch[device-gfx942]" "torchvision[device-gfx942]" torchaudio
+
+# Optional additional packages on Linux:
+#   apex
+```
+
+> [!TIP]
+> The device extras install GPU-specific packages like `amd-torch-device-gfx1100`
+> which contain GPU-specific kernels and depend on `rocm-sdk-device-gfx1100`.
+> The compatible ROCm packages are installed automatically, you do not need to
+> install ROCm separately:
+>
+> ```bash
+> pip install --index-url https://rocm.nightlies.amd.com/whl-staging-multi-arch/ \
+>     "torch[device-gfx1100]"
+>
+> pip freeze  # with approximate download sizes:
+> # rocm-sdk-core==7.13.0a...              ~700 MB
+> # rocm-sdk-libraries==7.13.0a...         ~100 MB  (host code, shared across GPUs)
+> # rocm-sdk-device-gfx1100==7.13.0a...     ~50 MB  (only gfx1100 device code)
+> # torch==2.11.0+rocm...                  ~100 MB  (host code, shared across GPUs)
+> # amd-torch-device-gfx1100==2.11.0+...    ~50 MB  (only gfx1100 device code)
+> # Total:                                 ~1.1 GB
+> #
+> # For comparison, a similar per-family (non-multi-arch) torch wheel for
+> # gfx110X-all [gfx1100, gfx1101, gfx1102, gfx1103] is ~600 MB.
+> ```
+
+After installing, verify PyTorch can see your GPU:
+
+```python
+import torch
+
+print(torch.cuda.is_available())
+# True
+print(torch.cuda.get_device_name(0))
+# e.g. AMD Radeon Pro W7900 Dual Slot
+```
+
+See [external-builds/pytorch/README.md](/external-builds/pytorch/README.md) for
+more details on supported PyTorch versions and building from source.
 
 ### Installing multi-arch tarballs
 
@@ -138,7 +255,7 @@ Standalone "ROCm SDK tarballs" are a flattened view of ROCm
 structure seen with system installs on Linux to `/opt/rocm/` or on Windows via
 the HIP SDK:
 
-```
+```bash
 install/
   .kpack/     # GPU-specific kernel packs (multi-arch only)
   bin/
@@ -155,16 +272,124 @@ such as setting environment variables.
 Multi-arch tarballs separate GPU-specific kernel code into a `.kpack/`
 directory. Two variants are available:
 
-- **Per-family tarballs** (e.g. `therock-dist-linux-gfx110X-all-7.13.0a20260427.tar.gz`)
+- **Per-family tarballs** (e.g. `therock-dist-linux-gfx110X-all-7.13.0a20260430.tar.gz`)
   that include `.kpack` files only for one family.
-- **Multiarch tarball** (e.g. `therock-dist-linux-multiarch-7.13.0a20260427.tar.gz`)
+- **Multiarch tarball** (e.g. `therock-dist-linux-multiarch-7.13.0a20260430.tar.gz`)
   that include `.kpack` files for all supported targets.
 
-> [!NOTE]
-> Multi-arch tarball releases are coming soon (index pages are not yet generated).
+Browse and download tarballs from
+https://rocm.nightlies.amd.com/tarball-multi-arch/.
 
-<!-- TODO: Document tarball download/install once index pages are generated
-           and the CloudFront path is finalized. -->
+To download and extract:
+
+```bash
+mkdir therock-tarball && cd therock-tarball
+
+# Per-family (smaller, one GPU family):
+wget https://rocm.nightlies.amd.com/tarball-multi-arch/therock-dist-linux-gfx110X-all-7.13.0a20260430.tar.gz
+
+# Or multiarch (all GPUs):
+wget https://rocm.nightlies.amd.com/tarball-multi-arch/therock-dist-linux-multiarch-7.13.0a20260430.tar.gz
+
+mkdir install && tar -xf *.tar.gz -C install
+```
+
+After extraction, test the install:
+
+```bash
+./install/bin/rocminfo
+ls install/.kpack/
+# blas_lib_gfx1100.kpack  fft_lib_gfx1100.kpack  rand_lib_gfx1100.kpack  ...
+```
+
+> [!TIP]
+> You may also want to add parts of the install directory to your `PATH` or set
+> other environment variables like `ROCM_HOME`.
+>
+> See also [this issue](https://github.com/ROCm/TheRock/issues/1658) discussing
+> relevant environment variables.
+
+### Installing multi-arch native Linux packages
+
+In addition to Python wheels and tarballs, ROCm native Linux packages are
+published for Debian-based and RPM-based distributions via the
+multi-arch pipeline.
+
+> [!WARNING]
+> These builds are primarily intended for development and testing and are
+> currently **unsigned**.
+
+Multi-arch native packages use a simplified package model compared to the
+[per-family native packages](#installing-from-native-packages):
+
+| Package name       | Description                                                                                                      |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `amdrocm`          | Installs all base ROCm libraries and runtime support for all supported GPU architectures                         |
+| `amdrocm-core-sdk` | Installs the full ROCm SDK including runtime, development tools, and headers for all supported GPU architectures |
+
+> [!TIP]
+> To find the latest available release, browse the index pages:
+>
+> - **Debian packages**: https://rocm.nightlies.amd.com/packages-multi-arch/deb/
+> - **RPM packages**: https://rocm.nightlies.amd.com/packages-multi-arch/rpm/
+>
+> Look for directories in the format `YYYYMMDD-<action-run-id>`
+> (e.g., `20260501-25200531110`) and use the latest in the commands below.
+
+#### Installing on Debian-based systems (Ubuntu, Debian, etc.)
+
+```bash
+# Step 1: Find the latest release from
+#         https://rocm.nightlies.amd.com/packages-multi-arch/deb/
+#         Look for directories like "20260501-25200531110"
+# Step 2: Set the variable below
+export RELEASE_ID=20260501-25200531110  # Replace with the latest date-runid
+
+# Step 3: Add repository and install
+sudo apt update
+sudo apt install -y ca-certificates
+echo "deb [trusted=yes] https://rocm.nightlies.amd.com/packages-multi-arch/deb/${RELEASE_ID} stable main" \
+  | sudo tee /etc/apt/sources.list.d/rocm-multiarch-nightly.list
+sudo apt update
+
+# Install base runtime for all supported GPU architectures:
+sudo apt install amdrocm
+# Or install full SDK (runtime + dev tools + headers) for all supported GPU architectures:
+sudo apt install amdrocm-core-sdk
+```
+
+#### Installing on RPM-based systems (RHEL, SLES, AlmaLinux, etc.)
+
+```bash
+# Step 1: Find the latest release from
+#         https://rocm.nightlies.amd.com/packages-multi-arch/rpm/
+#         Look for directories like "20260501-25200531110"
+# Step 2: Set the variable below
+export RELEASE_ID=20260501-25200531110  # Replace with the latest date-runid
+
+# Step 3: Add repository and install
+sudo dnf install -y ca-certificates
+sudo tee /etc/yum.repos.d/rocm-multiarch-nightly.repo <<EOF
+[rocm-multiarch-nightly]
+name=ROCm Multi-Arch Nightly Repository
+baseurl=https://rocm.nightlies.amd.com/packages-multi-arch/rpm/${RELEASE_ID}/x86_64
+enabled=1
+gpgcheck=0
+priority=50
+EOF
+
+# Install base runtime for all supported GPU architectures:
+sudo dnf clean all
+sudo dnf install amdrocm
+# Or install full SDK (runtime + dev tools + headers) for all supported GPU architectures:
+sudo dnf install amdrocm-core-sdk
+```
+
+> [!NOTE]
+> To install support for a specific GPU architecture only, you can use the
+> per-arch package variant (e.g., `apt install amdrocm-gfx942` or `dnf install amdrocm-gfx942`). For a full list of
+> supported GPU targets and their identifiers, see
+> [Supported Python `[device-*]` install extras](#supported-python-device--install-extras).
 
 ## Per-family releases
 
@@ -202,8 +427,6 @@ We currently support Python 3.10, 3.11, 3.12, 3.13, and 3.14 (PyTorch 2.9+ only)
 > [!IMPORTANT]
 > Known issues with the Python wheels are tracked at
 > https://github.com/ROCm/TheRock/issues/808.
->
-> ⚠️ Windows packages are new and may be unstable! ⚠️
 
 | Platform |                                                                                                                                                                                                                                         ROCm Python packages |                                                                                                                                                                                                                                               PyTorch Python packages |                                                                                                                                                                                                                                       JAX Python packages |
 | -------- | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
@@ -246,8 +469,28 @@ We provide several Python packages which together form the complete ROCm SDK.
 | -------------------- | ------------------------------------------------------------------ |
 | `rocm`               | Primary sdist meta package that dynamically determines other deps  |
 | `rocm-sdk-core`      | OS-specific core of the ROCm SDK (e.g. compiler and utility tools) |
-| `rocm-sdk-devel`     | OS-specific development tools                                      |
 | `rocm-sdk-libraries` | OS-specific libraries                                              |
+| `rocm-sdk-devel`     | OS-specific development tools                                      |
+
+##### Optional profiler package
+
+A new optional package `rocm-profiler` is available, providing ROCm profiling tools:
+
+- ROCm Systems Profiler (rocprofiler-systems)
+- ROCm Compute Profiler (rocprofiler-compute)
+
+###### Installing the profiler package
+
+Install profiling tools via the meta package:
+
+```bash
+pip install "rocm[profiler]"
+```
+
+This will install:
+
+- `rocm-sdk-core` (required runtime + SDK)
+- `rocm-profiler` (profiling tools)
 
 ##### rocm for gfx94X-dcgpu
 
@@ -850,6 +1093,7 @@ enabled=1
 gpgcheck=0
 priority=50
 EOF
+sudo dnf clean all
 sudo dnf install amdrocm-core-sdk-${GFX_ARCH}
 # If only runtime is needed, install amdrocm-${GFX_ARCH} instead
 ```

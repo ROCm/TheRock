@@ -111,7 +111,7 @@ on:
           - ccache
         default: none
 
-run-name: Build portable Linux PyTorch Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.python_version }}, ${{ inputs.release_type }})
+run-name: Build portable Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.amdgpu_family }})
 
 jobs:
   build_pytorch_wheels:
