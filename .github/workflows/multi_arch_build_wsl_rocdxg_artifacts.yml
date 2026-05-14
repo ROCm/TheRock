@@ -246,7 +246,6 @@ jobs:
         run: |
           python build_tools/github_actions/post_stage_upload.py \
             --run-id=${{ github.run_id }} \
-            --platform=linux \
             --stage="${STAGE_NAME}" \
             --build-dir="${THEROCK_HOST_BUILD_DIR}" \
             --amdgpu-family=""
