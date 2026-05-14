@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
@@ -37,19 +38,27 @@ test_type = os.getenv("TEST_TYPE", "full")
 TESTS_TO_IGNORE = ["unpack_util_test", "contamination_test", "map_util_test"]
 
 test_subdir = ""
-timeout = "3600"
+# CTest --timeout is per-test (seconds), not wall-clock for the whole shard.
+# A value near the GitHub step limit lets one hung test burn the entire job (ROCM-24171).
+# rocWMMA unit/gemm binaries should finish well under this on healthy runners; a stuck
+# test then fails with a clear CTest timeout instead of an opaque workflow cancel at the
+# GitHub Actions step limit.
+_PER_TEST_TIMEOUT_FULL_SEC = 1800
+_PER_TEST_TIMEOUT_QUICK_SEC = 720
+timeout = str(_PER_TEST_TIMEOUT_FULL_SEC)
 if test_type == "quick":
     # The emulator regression tests are very fast.
     # If we need something even faster we can use "/smoke" here.
     test_subdir = "/regression"
-    timeout = "720"
+    timeout = str(_PER_TEST_TIMEOUT_QUICK_SEC)
 elif test_type == "regression":
     test_subdir = "/regression"
-    timeout = "720"
+    timeout = str(_PER_TEST_TIMEOUT_QUICK_SEC)
 
-# ROCM-24171: Default CTest --parallel was 2; intermittent lockups / 60m timeouts on
-# gfx942 TheRock CI suggested avoiding concurrent GPU tests — use 1 until root cause is found.
-ctest_parallelism = "1"
+# Make per-device adjustments
+ctest_parallelism = "2"
+if AMDGPU_FAMILIES == "gfx1153":
+    ctest_parallelism = "1"
 
 cmd = [
     "ctest",
