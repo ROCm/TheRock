@@ -412,6 +412,7 @@ class ComponentScannerTest(TmpDirTestCase):
         self.touch("src/a/stage/bin/def.exe")
         self.touch("src/a/stage/bin/xyz.exe")
         self.touch("src/a/stage/.build-id/999999999/88888.debug")
+        self.touch("src/a/stage/.debug/pdb/a/foo/foo.pdb")
         self.touch("src/a/stage/share/doc/README.md")
         self.touch("src/b/stage/lib/libbar.so.1")
 
@@ -430,6 +431,7 @@ class ComponentScannerTest(TmpDirTestCase):
                     "share/doc/README.md",
                     "share/doc",
                     ".build-id/999999999/88888.debug",
+                    ".debug/pdb/a/foo/foo.pdb",
                 ]
             ),
         )
@@ -448,6 +450,17 @@ class ComponentScannerTest(TmpDirTestCase):
         pm_b = lib_comp.basedir_contents["b/stage"]
         self.assertSetEqual(set(pm_a.all.keys()), set(["lib/libfoo.so.1"]))
         self.assertSetEqual(set(pm_b.all.keys()), set(["lib/libbar.so.1"]))
+        dbg_comp = scanner.components["dbg"]
+        dbg_pm_a = dbg_comp.basedir_contents["a/stage"]
+        self.assertSetEqual(
+            set(dbg_pm_a.all.keys()),
+            set(
+                [
+                    ".build-id/999999999/88888.debug",
+                    ".debug/pdb/a/foo/foo.pdb",
+                ]
+            ),
+        )
 
         # Write the artifact and verify.
         lib_comp.write_artifact(self.temp_dir / "out")
@@ -468,6 +481,40 @@ class ComponentScannerTest(TmpDirTestCase):
                 self.temp_dir / "out" / "a" / "stage" / "lib" / "libfoo.so.1",
             ),
             "artifact should be a copy, not a hardlink",
+        )
+
+    def testRunCatchAllDoesNotClaimDebugSymbols(self):
+        self.write_indented(
+            "descriptor.toml",
+            r"""
+        [components.run."a/stage"]
+        [components.dbg."a/stage"]
+        """,
+        )
+        ad = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
+        self.touch("src/a/stage/bin/tool.exe")
+        self.touch("src/a/stage/.build-id/999999999/88888.debug")
+        self.touch("src/a/stage/.debug/pdb/a/foo/foo.pdb")
+
+        scanner = builder.ComponentScanner(self.temp_dir / "src", ad)
+        scanner.verify()
+
+        run_comp = scanner.components["run"]
+        run_pm_a = run_comp.basedir_contents["a/stage"]
+        self.assertSetEqual(set(run_pm_a.all.keys()), set(["bin", "bin/tool.exe"]))
+
+        dbg_comp = scanner.components["dbg"]
+        dbg_pm_a = dbg_comp.basedir_contents["a/stage"]
+        self.assertSetEqual(
+            set(dbg_pm_a.all.keys()),
+            set(
+                [
+                    ".build-id/999999999/88888.debug",
+                    ".debug/pdb/a/foo/foo.pdb",
+                ]
+            ),
         )
 
     def testNonOptionalNotExists(self):

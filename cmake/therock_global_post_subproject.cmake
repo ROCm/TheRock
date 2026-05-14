@@ -94,6 +94,13 @@ endblock()
 
 # Process all shared library and executable targets and emit install time code
 # to process their build id and split debug files out.
+set(_therock_windows_pdb_debug_info FALSE)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND
+   (MSVC OR CMAKE_C_COMPILER_ID MATCHES "Clang" OR
+    CMAKE_CXX_COMPILER_ID MATCHES "Clang"))
+  set(_therock_windows_pdb_debug_info TRUE)
+endif()
+
 if(THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
   include(CMakeFindBinUtils)
   block(SCOPE_FOR POLICIES VARIABLES)
@@ -120,6 +127,36 @@ if(THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     install(
         SCRIPT "${THEROCK_SOURCE_DIR}/cmake/therock_install_linux_build_id_files.cmake"
         COMPONENT THEROCK_DEBUG_BUILD_ID
+    )
+  endblock()
+elseif(THEROCK_SPLIT_DEBUG_INFO AND _therock_windows_pdb_debug_info)
+  block(SCOPE_FOR POLICIES VARIABLES)
+    install(
+      CODE "set(THEROCK_DEBUG_PDB_RECORDS)"
+      CODE "set(THEROCK_DEBUG_PDB_SUBDIR \"${THEROCK_SUBPROJECT_TARGET}\")"
+      CODE "set(THEROCK_STAGE_INSTALL_ROOT \"${THEROCK_STAGE_INSTALL_ROOT}\")"
+      COMPONENT THEROCK_DEBUG_PDB
+    )
+    foreach(target
+            ${THEROCK_EXECUTABLE_TARGETS}
+            ${THEROCK_SHARED_LIBRARY_TARGETS}
+            ${THEROCK_MODULE_TARGETS})
+      message(STATUS "Installing debug PDB for ${target}")
+      set_target_properties("${target}" PROPERTIES
+        PDB_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/therock-pdb/${target}"
+      )
+      target_link_options("${target}" PRIVATE
+        "LINKER:/DEBUG:FULL"
+        "LINKER:/PDBALTPATH:$<TARGET_PDB_FILE_NAME:${target}>"
+      )
+      install(
+        CODE "list(APPEND THEROCK_DEBUG_PDB_RECORDS \"${target}|$<TARGET_PDB_FILE:${target}>\")"
+        COMPONENT THEROCK_DEBUG_PDB
+      )
+    endforeach()
+    install(
+      SCRIPT "${THEROCK_SOURCE_DIR}/cmake/therock_install_windows_pdb_files.cmake"
+      COMPONENT THEROCK_DEBUG_PDB
     )
   endblock()
 endif()

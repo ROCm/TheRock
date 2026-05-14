@@ -62,11 +62,22 @@ ComponentDefaults(
 # explicitly include "bin" directory contents as needed.
 # WARNING: 'run' has no default includes, so a bare entry like
 #   [components.run."some/stage"]
-# acts as a catch-all that claims ALL files not matched by 'lib'. This prevents
-# later components (dbg, dev, doc, test) from claiming files in that stage dir.
+# acts as a catch-all that claims files not matched by 'lib' or the debug-symbol
+# excludes below. This can still prevent later components (dev, doc, test) from
+# claiming files in that stage dir.
 # Always use explicit includes on run, or omit it for stage dirs where dev/test
 # content is expected.
-ComponentDefaults("run", extends=["lib"])
+ComponentDefaults(
+    "run",
+    excludes=[
+        # Keep debug symbols available for the dbg component even when a run
+        # component uses catch-all matching.
+        ".build-id/**",
+        ".debug/**",
+        "**/*.pdb",
+    ],
+    extends=["lib"],
+)
 
 # Debug components collect all platform-specific debug file patterns.
 ComponentDefaults(
@@ -74,6 +85,8 @@ ComponentDefaults(
     includes=[
         # Linux build-id based debug files.
         ".build-id/**/*.debug",
+        # Windows linker PDB files collected from build targets.
+        ".debug/pdb/**/*.pdb",
     ],
     extends=["run"],
 )

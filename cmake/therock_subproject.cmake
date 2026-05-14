@@ -1043,7 +1043,8 @@ function(therock_cmake_subproject_activate target_name)
 
     # stage install target.
     set(_install_strip_option)
-    if(THEROCK_SPLIT_DEBUG_INFO)
+    # Linux strips debug symbol during install, Windows generates separate .pdb files during linking.
+    if(THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
       set(_install_strip_option "--strip")
     endif()
     # Set up install command(s) for optional components. If INSTALL_COMPONENTS is specified, run cmake
@@ -1615,6 +1616,7 @@ function(_therock_cmake_subproject_setup_toolchain
   string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@CMAKE_LINKER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"@CMAKE_C_COMPILER_LAUNCHER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"@CMAKE_CXX_COMPILER_LAUNCHER@\")\n")
+  string(APPEND _toolchain_contents "set(CMAKE_POLICY_DEFAULT_CMP0141 NEW)\n") # Enforce MSVC_DEBUG_INFORMATION_FORMAT
   string(APPEND _toolchain_contents "set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT \"@CMAKE_MSVC_DEBUG_INFORMATION_FORMAT@\")\n")
   if(MSVC AND compiler_toolchain)
     # The system compiler and the toolchain compiler are incompatible, so we

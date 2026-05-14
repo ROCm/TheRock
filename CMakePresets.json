@@ -134,6 +134,7 @@
       "description": "Ninja generator, MSVC (cl.exe), x64 architecture, Release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
+        "THEROCK_SPLIT_DEBUG_INFO": "ON",
         "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
       },
       "inherits": [

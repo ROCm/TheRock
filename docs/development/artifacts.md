@@ -182,7 +182,7 @@ While artifacts can be defined with any component type mnemonic, the following a
 
 - `lib`: Files needed in order to depend on the artifact's contents as a library at runtime. This typically includes shared libraries, DLLs, dylibs, etc. It also includes any file level dependencies that the shared-libraries require in order to function (i.e. for HIP, this can include headers, compiler resources, etc).
 - `run`: Files needed in order to use the artifact's contents as a tool. This includes CLI tools (not required at build time), etc.
-- `dbg`: Platform-specific debug-symbol files. These are typically produced in a platform specific way by the build system and bundled into one component.
+- `dbg`: Platform-specific debug-symbol files. These are typically produced in a platform specific way by the build system and bundled into one component. Linux debug files are stored under `.build-id/**/*.debug`; Windows MSVC/Clang linker PDBs are stored under `.debug/pdb/**/*.pdb`.
 - `dev`: Files needed in order to depend on the artifact's contents at build time. This typically includes static libraries, CMake package config files, pkgconfig files, modulefiles, and any tools needed at build time. Notably it does not include shared libraries but does include import libraries (Windows). It is expected that the `dev` component is combined with the `lib` component to produce a fully functional development tree.
 - `doc`: Documentation files (typically under `share/doc/`).
 - `test`: Additional files needed in order to run tests, build test projects, etc. This typically includes test binaries, data file dependencies, and standalone test project trees.
@@ -204,8 +204,8 @@ Each component has default include patterns that determine what it matches (defi
 | Component | Default includes                                                                                   | Notes                                                                                                 |
 | --------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `lib`     | `**/*.so`, `**/*.so.*`, `**/*.dll`, `**/*.dylib`, `**/*.dylib.*`                                   | Shared libraries                                                                                      |
-| `run`     | *(none)*                                                                                           | **Catch-all if no includes specified** — descriptors should use explicit includes (see warning below) |
-| `dbg`     | `.build-id/**/*.debug`                                                                             | Debug symbol files                                                                                    |
+| `run`     | *(none)*                                                                                           | **Catch-all if no includes specified** — excludes debug-symbol trees by default                       |
+| `dbg`     | `.build-id/**/*.debug`, `.debug/pdb/**/*.pdb`                                                       | Linux build-ID debug files and Windows MSVC/Clang linker PDB files                                    |
 | `dev`     | `**/*.a`, `**/*.lib`, `**/cmake/**`, `**/include/**`, `**/share/modulefiles/**`, `**/pkgconfig/**` | Build-time dependencies                                                                               |
 | `doc`     | `**/share/doc/**`                                                                                  | Documentation                                                                                         |
 | `test`    | *(none)*                                                                                           | Only matches files not claimed by earlier components                                                  |
@@ -213,7 +213,7 @@ Each component has default include patterns that determine what it matches (defi
 When a descriptor specifies `include` patterns for a component, those patterns are **added to** the defaults (not replacing them). To override defaults, set `default_patterns = false`. Use `exclude` patterns to carve out files that would otherwise match.
 
 > [!WARNING]
-> Because `run` has no default include patterns, a bare entry like `[components.run."some/stage"]` acts as a **catch-all** that claims ALL files not matched by `lib` — including headers, cmake configs, and test binaries that should go to `dev` or `test`. Always use explicit `include` patterns on `run` to select specific runtime tools (e.g. `include = ["bin/mytool"]`), or omit `run` entirely for stage dirs where `dev`/`test` content is expected.
+> Because `run` has no default include patterns, a bare entry like `[components.run."some/stage"]` acts as a **catch-all** that claims files not matched by `lib` — including headers, cmake configs, and test binaries that should go to `dev` or `test`. Debug-symbol trees such as `.build-id/**` and `.debug/**` are excluded from `run` by default so they can still route to `dbg`. Always use explicit `include` patterns on `run` to select specific runtime tools (e.g. `include = ["bin/mytool"]`), or omit `run` entirely for stage dirs where `dev`/`test` content is expected.
 
 ### Routing Files to the Right Component
 
