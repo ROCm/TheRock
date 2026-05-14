@@ -658,14 +658,12 @@ artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests
 artifact_group = "iree-compiler"
 type = "target-neutral"
 artifact_deps = ["core-hip"]
-disable_platforms = ["windows"]
 feature_group = "IREE_LIBS"
 
 [artifacts.fusilliprovider]
 artifact_group = "fusilli-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn", "iree-compiler", "hipdnn-integration-tests"]
-disable_platforms = ["windows"]
+artifact_deps = ["core-hip", "hipdnn", "iree-compiler", "hipdnn-integration-tests"]
 feature_group = "IREE_LIBS"
 
 # --- Media Integration ---
