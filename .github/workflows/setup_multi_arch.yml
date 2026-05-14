@@ -122,22 +122,12 @@ jobs:
           fetch-depth: 2
 
       - name: Checkout CI config
-        id: ci_config
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ROCm/therock-ci-config
           ref: main
           path: ci-config
-        continue-on-error: true
 
-      - name: Log CI config version
-        if: steps.ci_config.outcome == 'success'
-        run: echo "CI config SHA:$(git -C ci-config rev-parse HEAD)"
-
-      # Note: the script reads PR labels, the base ref, etc. from the event
-      # payload (GITHUB_EVENT_PATH). That is the original event that started
-      # the workflow run, which may not directly map to the "inputs" on
-      # the "workflow_call" trigger for this file.
       - name: Configuring CI options
         id: configure
         env:
@@ -149,9 +139,8 @@ jobs:
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
-          # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo_config != '' && 'true' || '' }}
-          CI_CONFIG_PATH: ${{ steps.ci_config.outcome == 'success' && 'ci-config' || '' }}
+          CI_CONFIG_PATH: ci-config
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.

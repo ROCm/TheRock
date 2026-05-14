@@ -32,17 +32,7 @@ class ConfigError(Exception):
 def load_runner_config(
     config_path: Path = DEFAULT_CONFIG_PATH,
 ) -> dict[str, Any]:
-    """Load runner configuration from the config repository checkout.
-
-    Args:
-        config_path: Path to the ci-config checkout directory.
-
-    Returns:
-        Parsed configuration dictionary.
-
-    Raises:
-        ConfigError: If config file is missing or invalid.
-    """
+    """Load runner configuration from the config repository checkout."""
     config_file = config_path / CONFIG_FILENAME
 
     if not config_file.exists():
@@ -67,14 +57,7 @@ def load_runner_config(
 
 
 def get_build_runners(config: dict[str, Any]) -> dict[str, Any]:
-    """Extract build runner configuration.
-
-    Args:
-        config: Loaded configuration dictionary.
-
-    Returns:
-        Build runner config with platform -> variant -> labels mapping.
-    """
+    """Extract build runner configuration."""
     return config.get("build_runners", {})
 
 
@@ -82,15 +65,7 @@ def get_gpu_families(
     config: dict[str, Any],
     trigger_types: list[str],
 ) -> dict[str, Any]:
-    """Get combined GPU family matrix for specified trigger types.
-
-    Args:
-        config: Loaded configuration dictionary.
-        trigger_types: List of trigger types (presubmit, postsubmit, nightly).
-
-    Returns:
-        Combined family matrix with all families from specified triggers.
-    """
+    """Get combined GPU family matrix for specified trigger types."""
     gpu_families = config.get("gpu_families", {})
     result: dict[str, Any] = {}
 
@@ -103,24 +78,12 @@ def get_gpu_families(
 
 
 def config_exists(config_path: Path = DEFAULT_CONFIG_PATH) -> bool:
-    """Check if the config file exists at the given path.
-
-    Args:
-        config_path: Path to check for config.
-
-    Returns:
-        True if config file exists, False otherwise.
-    """
+    """Check if the config file exists at the given path."""
     return (config_path / CONFIG_FILENAME).exists()
 
 
 def log_config_version(config: dict[str, Any], config_path: Path) -> None:
-    """Log config version and path for traceability.
-
-    Args:
-        config: Loaded configuration dictionary.
-        config_path: Path where config was loaded from.
-    """
+    """Log config version and path for traceability."""
     version = config.get("version", "unknown")
     print(f"CI Config loaded from: {config_path}")
     print(f"CI Config version: {version}")
@@ -139,7 +102,9 @@ if __name__ == "__main__":
         config = load_runner_config(path)
         log_config_version(config, path)
         print(f"Build runners: {list(get_build_runners(config).keys())}")
-        print(f"GPU families (presubmit): {list(get_gpu_families(config, ['presubmit']).keys())}")
+        print(
+            f"GPU families (presubmit): {list(get_gpu_families(config, ['presubmit']).keys())}"
+        )
     except ConfigError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
