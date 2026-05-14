@@ -12,6 +12,12 @@ The config repo is checked out during workflow setup, and this module
 reads the JSON config from that checkout. The checkout SHA is logged
 for full traceability.
 
+Testing new runner configurations:
+    1. Create a branch in therock-ci-config with your changes
+    2. In TheRock workflow_dispatch, set ci_config_ref to your branch/SHA
+    3. Run CI to validate the new configuration
+    4. Once validated, merge your branch to main in therock-ci-config
+
 Usage:
     from ci_config_loader import load_runner_config, get_build_runners, get_gpu_families
 
