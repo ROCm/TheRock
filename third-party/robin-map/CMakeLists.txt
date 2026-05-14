@@ -3,9 +3,9 @@
 
 therock_subproject_fetch(therock-robin-map-sources
   CMAKE_PROJECT
-  # Originally mirrored from: https://github.com/Tessil/robin-map/archive/refs/tags/v1.3.0.tar.gz
-  URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/robin-map-1.3.0.tar.gz
-  URL_HASH SHA256=a8424ad3b0affd4c57ed26f0f3d8a29604f0e1f2ef2089f497f614b1c94c7236
+  # Originally mirrored from: https://github.com/Tessil/robin-map/archive/refs/tags/v1.4.1.tar.gz
+  URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/robin-map-1.4.1.tar.gz
+  URL_HASH SHA256=0e3f53a377fdcdc5f9fed7a4c0d4f99e82bbb64175233bd13427fef9a771f4a1
 )
 
 therock_cmake_subproject_declare(therock-robin-map
