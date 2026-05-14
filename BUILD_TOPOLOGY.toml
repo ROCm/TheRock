@@ -288,7 +288,7 @@ source_sets = ["rocm-systems"]
 
 [artifact_groups.opencl-cts]
 description = "OpenCL Conformance Test Suite"
-type = "target-neutral"
+type = "generic"
 artifact_group_deps = ["base", "third-party-sysdeps"]
 source_sets = ["opencl-cts"]
 
