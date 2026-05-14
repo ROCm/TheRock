@@ -164,8 +164,6 @@ jobs:
       - name: Detect external repo config
         id: external_repo_config
         if: ${{ inputs.external_repo != '' }}
-        env:
-          EXTERNAL_REPO_JSON: ${{ inputs.external_repo }}
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
-            --external-repo-json="${EXTERNAL_REPO_JSON}"
+            --external-repo-json='${{ inputs.external_repo }}'

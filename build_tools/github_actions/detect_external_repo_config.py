@@ -419,20 +419,24 @@ def main(argv=None):
             )
 
         # Build config_json with all fields needed by workflows
-        # This is the primary output used by downstream workflow jobs
-        # source_repository/source_ref come from --external-repo-json parsing above
         final_source_repo = source_repository or f"ROCm/{args.repository}"
+        source_package = (
+            config["cmake_source_var"]
+            .replace("THEROCK_", "")
+            .replace("_SOURCE_DIR", "")
+        )
         config_json = {
             "repository": final_source_repo,
             "ref": source_ref,
-            "checkout_path": checkout_path,  # relative path for actions/checkout
-            "source_package": config["cmake_source_var"]
-            .replace("THEROCK_", "")
-            .replace("_SOURCE_DIR", ""),
+            "checkout_path": checkout_path,
+            "source_package": source_package,
             "fetch_sources_args": config.get("fetch_sources_args", ""),
         }
         config["config_json"] = json.dumps(config_json)
-        print(f"Generated config_json: {config['config_json']}", file=sys.stderr)
+        print(
+            f"Generated config_json:\n{json.dumps(config_json, indent=2)}",
+            file=sys.stderr,
+        )
 
         output_github_actions_vars(config)
         return 0

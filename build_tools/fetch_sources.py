@@ -368,7 +368,7 @@ def get_enabled_sources(args) -> tuple[List[str], list[ExternalGitSource]]:
             current_platform=current_platform,
         )
         # Apply --skip-submodules filter
-        skip_set = set(getattr(args, "skip_submodules", []))
+        skip_set = set(args.skip_submodules or [])
         if skip_set:
             original_count = len(projects_by_name)
             projects_by_name = {
@@ -423,7 +423,7 @@ def get_enabled_sources(args) -> tuple[List[str], list[ExternalGitSource]]:
         current_platform=current_platform,
     )
     # Apply --skip-submodules filter
-    skip_set = set(getattr(args, "skip_submodules", []))
+    skip_set = set(args.skip_submodules or [])
     if skip_set:
         original_count = len(projects_by_name)
         projects_by_name = {
