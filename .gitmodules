@@ -16,7 +16,7 @@
 	branch = mainline
 [submodule "rocm-libraries"]
 	path = rocm-libraries
-	url = https://github.com/ROCm/rocm-libraries
+	url = git@github.com:AaronStGeorge/rocm-libraries.git
 	branch = develop
 [submodule "rocm-systems"]
 	path = rocm-systems
@@ -36,7 +36,7 @@
 	branch = main
 [submodule "fusilli"]
 	path = iree-libs/fusilli
-	url = https://github.com/iree-org/fusilli.git
+	url = git@github.com:AaronStGeorge/fusilli.git
 	branch = main
 [submodule "libhipcxx"]
 	path = math-libs/libhipcxx
