@@ -52,7 +52,7 @@ BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
             {"label": "azure-linux-scale-rocm", "weight": 0.0},
-            {"label": "aws-linux-scale-rocm-customer-dev", "weight": 1.0},
+            {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
         "sanitizer": [
             {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
