@@ -42,8 +42,7 @@ jobs:
     permissions:
       id-token: write
     container:
-      # TODO: Switch to a dedicated ubi10-based build image once the packages are available.
-      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:b4966196b9cec5742776504fd76e7deb4d3765471da687354be9edcaf689c151
       options: --user 0:0
     env:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
@@ -54,7 +53,6 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y --no-install-recommends \
             ccache \
-            ocl-icd-opencl-dev \
             opencl-headers \
             spirv-tools \
             spirv-headers
