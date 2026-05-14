@@ -119,6 +119,20 @@ std::uint32_t EvaluateVectorFloatBinaryF32(CompiledOpcode opcode,
   }
 }
 
+std::uint32_t EvaluateVectorMulI32I24(std::uint32_t lhs,
+                                      std::uint32_t rhs) {
+  const auto sign_extend24 = [](std::uint32_t value) -> std::int32_t {
+    const std::uint32_t masked = value & 0x00ffffffu;
+    if ((masked & 0x00800000u) == 0u) {
+      return static_cast<std::int32_t>(masked);
+    }
+    return static_cast<std::int32_t>(masked | 0xff000000u);
+  };
+  const std::int64_t product = static_cast<std::int64_t>(sign_extend24(lhs)) *
+                               static_cast<std::int64_t>(sign_extend24(rhs));
+  return static_cast<std::uint32_t>(product);
+}
+
 std::uint32_t EvaluateVectorFloatBinaryF16(CompiledOpcode opcode,
                                            std::uint32_t lhs,
                                            std::uint32_t rhs) {
@@ -2406,7 +2420,8 @@ bool IsVectorBinaryOpcode(std::string_view opcode) {
          opcode == "V_SUBBREV_CO_U32" ||
          opcode == "V_MUL_LO_U32" ||
          opcode == "V_MUL_HI_U32" ||
-         opcode == "V_MUL_HI_I32" || opcode == "V_BCNT_U32_B32" ||
+         opcode == "V_MUL_HI_I32" || opcode == "V_MUL_I32_I24" ||
+         opcode == "V_BCNT_U32_B32" ||
          opcode == "V_BFM_B32" ||
          opcode == "V_MBCNT_LO_U32_B32" || opcode == "V_MBCNT_HI_U32_B32" ||
          opcode == "V_LSHLREV_B64" || opcode == "V_LSHRREV_B64" ||
@@ -7083,6 +7098,10 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kVMovB64;
     return true;
   }
+  if (opcode == "V_SWAP_B32") {
+    compiled_instruction->opcode = CompiledOpcode::kVSwapB32;
+    return true;
+  }
   if (opcode == "V_READFIRSTLANE_B32") {
     compiled_instruction->opcode = CompiledOpcode::kVReadfirstlaneB32;
     return true;
@@ -7409,6 +7428,10 @@ bool TryCompileOpcode(std::string_view opcode,
   }
   if (opcode == "V_MUL_HI_I32") {
     compiled_instruction->opcode = CompiledOpcode::kVMulHiI32;
+    return true;
+  }
+  if (opcode == "V_MUL_I32_I24") {
+    compiled_instruction->opcode = CompiledOpcode::kVMulI32I24;
     return true;
   }
   if (opcode == "V_ADD_F32") {
@@ -9624,7 +9647,7 @@ bool Gfx950Interpreter::Supports(std::string_view opcode) const {
   }
 
   return IsScalarMoveOpcode(opcode) || opcode == "S_ENDPGM" ||
-         opcode == "V_NOP" || opcode == "DS_NOP" ||
+         opcode == "V_NOP" || opcode == "DS_NOP" || opcode == "V_SWAP_B32" ||
          opcode == "V_MOV_B32" || opcode == "V_MOV_B64" ||
          IsExecMaskOpcode(opcode) || IsVectorToScalarOpcode(opcode) ||
          IsVectorUnaryOpcode(opcode) ||
@@ -9992,7 +10015,8 @@ bool Gfx950Interpreter::ExecuteInstruction(const DecodedInstruction& instruction
   if (IsExecMaskOpcode(instruction.opcode)) {
     return ExecuteExecMaskOp(instruction, state, error_message);
   }
-  if (instruction.opcode == "V_MOV_B32" || instruction.opcode == "V_MOV_B64") {
+  if (instruction.opcode == "V_MOV_B32" || instruction.opcode == "V_MOV_B64" ||
+      instruction.opcode == "V_SWAP_B32") {
     return ExecuteVectorMove(instruction, state, error_message);
   }
   if (IsVectorToScalarOpcode(instruction.opcode)) {
@@ -10237,6 +10261,7 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
       return ExecuteExecMaskOp(instruction, state, error_message);
     case CompiledOpcode::kVMovB32:
     case CompiledOpcode::kVMovB64:
+    case CompiledOpcode::kVSwapB32:
       return ExecuteVectorMove(instruction, state, error_message);
     case CompiledOpcode::kVReadfirstlaneB32:
     case CompiledOpcode::kVReadlaneB32:
@@ -10414,6 +10439,7 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kVSubrevF32:
     case CompiledOpcode::kVMulF16:
     case CompiledOpcode::kVMulF32:
+    case CompiledOpcode::kVMulI32I24:
     case CompiledOpcode::kVSubU32:
     case CompiledOpcode::kVSubCoU32:
     case CompiledOpcode::kVSubbCoU32:
@@ -13885,6 +13911,33 @@ bool Gfx950Interpreter::ExecuteVectorMove(const DecodedInstruction& instruction,
     return true;
   }
 
+  if (instruction.opcode == "V_SWAP_B32") {
+    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+
+      const std::uint32_t dst_value = ReadVectorOperand(
+          instruction.operands[0], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t src_value = ReadVectorOperand(
+          instruction.operands[1], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      if (!WriteVectorOperand(instruction.operands[0], lane_index, src_value,
+                              state, error_message) ||
+          !WriteVectorOperand(instruction.operands[1], lane_index, dst_value,
+                              state, error_message)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
        ++lane_index) {
     if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
@@ -13925,6 +13978,33 @@ bool Gfx950Interpreter::ExecuteVectorMove(const CompiledInstruction& instruction
       }
       if (!WriteVectorPairOperandValue(instruction.operands[0], lane_index, value,
                                        state, error_message)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  if (instruction.opcode == CompiledOpcode::kVSwapB32) {
+    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+
+      const std::uint32_t dst_value = ReadVectorOperand(
+          instruction.operands[0], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t src_value = ReadVectorOperand(
+          instruction.operands[1], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      if (!WriteVectorOperand(instruction.operands[0], lane_index, src_value,
+                              state, error_message) ||
+          !WriteVectorOperand(instruction.operands[1], lane_index, dst_value,
+                              state, error_message)) {
         return false;
       }
     }
@@ -14601,6 +14681,8 @@ bool Gfx950Interpreter::ExecuteVectorBinary(const DecodedInstruction& instructio
           static_cast<std::int64_t>(BitCast<std::int32_t>(lhs)) *
           static_cast<std::int64_t>(BitCast<std::int32_t>(rhs));
       result = static_cast<std::uint32_t>(product >> 32);
+    } else if (instruction.opcode == "V_MUL_I32_I24") {
+      result = EvaluateVectorMulI32I24(lhs, rhs);
     } else if (instruction.opcode == "V_BCNT_U32_B32") {
       result = static_cast<std::uint32_t>(__builtin_popcount(lhs)) + rhs;
     } else if (instruction.opcode == "V_BFM_B32") {
@@ -14903,6 +14985,9 @@ bool Gfx950Interpreter::ExecuteVectorBinary(const CompiledInstruction& instructi
         result = static_cast<std::uint32_t>(product >> 32);
         break;
       }
+      case CompiledOpcode::kVMulI32I24:
+        result = EvaluateVectorMulI32I24(lhs, rhs);
+        break;
       case CompiledOpcode::kVBcntU32B32:
         result = static_cast<std::uint32_t>(__builtin_popcount(lhs)) + rhs;
         break;

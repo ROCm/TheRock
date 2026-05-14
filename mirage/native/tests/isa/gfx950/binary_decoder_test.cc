@@ -923,6 +923,74 @@ int main() {
     return 1;
   }
 
+  const auto swap_opcode = FindDefaultEncodingOpcode("V_SWAP_B32", "ENC_VOP1");
+  const auto mul_i24_opcode =
+      FindDefaultEncodingOpcode("V_MUL_I32_I24", "ENC_VOP2");
+  if (!Expect(swap_opcode.has_value(), "expected V_SWAP_B32 opcode lookup") ||
+      !Expect(mul_i24_opcode.has_value(),
+              "expected V_MUL_I32_I24 opcode lookup")) {
+    return 1;
+  }
+
+  const std::vector<std::uint32_t> vector_swap_mul_program = {
+      MakeVop1(*swap_opcode, 4, 261),          // v_swap_b32 v4, v5
+      MakeVop2(*mul_i24_opcode, 6, 264, 265),  // v_mul_i32_i24 v6, v8, v9
+      MakeSopp(1),
+  };
+  decoded_program.clear();
+  if (!Expect(decoder.DecodeProgram(vector_swap_mul_program, &decoded_program,
+                                    &error_message),
+              error_message.c_str()) ||
+      !Expect(decoded_program.size() == 3,
+              "expected vector swap/mul decoded instruction count") ||
+      !Expect(decoded_program[0].opcode == "V_SWAP_B32",
+              "expected V_SWAP_B32 decode") ||
+      !Expect(decoded_program[1].opcode == "V_MUL_I32_I24",
+              "expected V_MUL_I32_I24 decode")) {
+    return 1;
+  }
+
+  WaveExecutionState swap_mul_state;
+  swap_mul_state.exec_mask = 0b1011ULL;
+  swap_mul_state.vgprs[4][0] = 11u;
+  swap_mul_state.vgprs[4][1] = 22u;
+  swap_mul_state.vgprs[4][2] = 0xdeadbeefu;
+  swap_mul_state.vgprs[4][3] = 44u;
+  swap_mul_state.vgprs[5][0] = 101u;
+  swap_mul_state.vgprs[5][1] = 202u;
+  swap_mul_state.vgprs[5][2] = 0xdeadbeefu;
+  swap_mul_state.vgprs[5][3] = 404u;
+  swap_mul_state.vgprs[8][0] = 0x00ffff80u;
+  swap_mul_state.vgprs[8][1] = 0x00ffff80u;
+  swap_mul_state.vgprs[8][2] = 0xdeadbeefu;
+  swap_mul_state.vgprs[8][3] = 0x00ffff80u;
+  swap_mul_state.vgprs[9][0] = 2u;
+  swap_mul_state.vgprs[9][1] = 2u;
+  swap_mul_state.vgprs[9][2] = 0xdeadbeefu;
+  swap_mul_state.vgprs[9][3] = 2u;
+  swap_mul_state.vgprs[6][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(decoded_program, &swap_mul_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(swap_mul_state.halted, "expected swap/mul program to halt") ||
+      !Expect(swap_mul_state.vgprs[4][0] == 101u &&
+                  swap_mul_state.vgprs[4][1] == 202u &&
+                  swap_mul_state.vgprs[4][2] == 0xdeadbeefu &&
+                  swap_mul_state.vgprs[4][3] == 404u,
+              "expected V_SWAP_B32 destination results") ||
+      !Expect(swap_mul_state.vgprs[5][0] == 11u &&
+                  swap_mul_state.vgprs[5][1] == 22u &&
+                  swap_mul_state.vgprs[5][2] == 0xdeadbeefu &&
+                  swap_mul_state.vgprs[5][3] == 44u,
+              "expected V_SWAP_B32 source results") ||
+      !Expect(swap_mul_state.vgprs[6][0] == 0xffffff00u &&
+                  swap_mul_state.vgprs[6][1] == 0xffffff00u &&
+                  swap_mul_state.vgprs[6][2] == 0xdeadbeefu &&
+                  swap_mul_state.vgprs[6][3] == 0xffffff00u,
+              "expected V_MUL_I32_I24 results")) {
+    return 1;
+  }
+
   const std::array<SaveexecBinaryCase, 10> kSaveexecCases = {{
       {"S_AND_SAVEEXEC_B64", 0x00000000000000f0ULL, 0x0000000000000cc3ULL,
        0x00000000000000c0ULL},

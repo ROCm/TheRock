@@ -1,14 +1,14 @@
 # GFX950 Coverage Report
 
 - Catalog instructions: 1242
-- Semantic support: 897 (72.2%)
+- Semantic support: 899 (72.4%)
 - Raw decode support: 946 (76.2% of total, 83.6% of measured)
 - Raw decode measurable instructions: 1131
 
 ## Gaps
 
 - Semantic-only coverage without measured decode: 0
-- Decode-only without semantic support: 49
+- Decode-only without semantic support: 47
 - Missing both semantic and decode support: 296
 
 ## Unmeasured Encoding Families
@@ -54,13 +54,13 @@
 - `S_SET_GPR_IDX_ON`
 - `V_CLREXCP`
 - `V_SCREEN_PARTITION_4SE_B32`
-- `V_SWAP_B32`
 - `V_ACCVGPR_MOV_B32`
 - `V_PRNG_B32`
 - `V_PERMLANE16_SWAP_B32`
 - `V_PERMLANE32_SWAP_B32`
 - `V_FMAC_F64`
-- `V_MUL_I32_I24`
+- `V_MUL_HI_I32_I24`
+- `V_MUL_U32_U24`
 
 ## Missing-Both Sample
 

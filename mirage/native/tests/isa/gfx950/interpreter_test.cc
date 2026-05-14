@@ -2938,12 +2938,16 @@ int main() {
               "expected V_ADDC_CO_U32 support") ||
       !Expect(interpreter.Supports("V_MOV_B64"),
               "expected V_MOV_B64 support") ||
+      !Expect(interpreter.Supports("V_SWAP_B32"),
+              "expected V_SWAP_B32 support") ||
       !Expect(interpreter.Supports("V_MUL_LO_U32"),
               "expected V_MUL_LO_U32 support") ||
       !Expect(interpreter.Supports("V_MUL_HI_U32"),
               "expected V_MUL_HI_U32 support") ||
       !Expect(interpreter.Supports("V_MUL_HI_I32"),
               "expected V_MUL_HI_I32 support") ||
+      !Expect(interpreter.Supports("V_MUL_I32_I24"),
+              "expected V_MUL_I32_I24 support") ||
       !Expect(interpreter.Supports("V_BCNT_U32_B32"),
               "expected V_BCNT_U32_B32 support") ||
       !Expect(interpreter.Supports("V_BFM_B32"),
@@ -4372,6 +4376,109 @@ int main() {
               "expected compiled lane 0 V_ADD_U32 result") ||
       !Expect(compiled_state.vgprs[3][3] == 14,
               "expected compiled lane 3 V_SUB_U32 result")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> vector_swap_mul_program = {
+      DecodedInstruction::TwoOperand("V_SWAP_B32", InstructionOperand::Vgpr(4),
+                                     InstructionOperand::Vgpr(5)),
+      DecodedInstruction::Binary("V_MUL_I32_I24", InstructionOperand::Vgpr(6),
+                                 InstructionOperand::Vgpr(8),
+                                 InstructionOperand::Vgpr(9)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  WaveExecutionState vector_swap_mul_state;
+  vector_swap_mul_state.exec_mask = 0b1011ULL;
+  vector_swap_mul_state.vgprs[4][0] = 11u;
+  vector_swap_mul_state.vgprs[4][1] = 22u;
+  vector_swap_mul_state.vgprs[4][2] = 0xdeadbeefu;
+  vector_swap_mul_state.vgprs[4][3] = 44u;
+  vector_swap_mul_state.vgprs[5][0] = 101u;
+  vector_swap_mul_state.vgprs[5][1] = 202u;
+  vector_swap_mul_state.vgprs[5][2] = 0xdeadbeefu;
+  vector_swap_mul_state.vgprs[5][3] = 404u;
+  vector_swap_mul_state.vgprs[8][0] = 0x00ffff80u;
+  vector_swap_mul_state.vgprs[8][1] = 0x00ffff80u;
+  vector_swap_mul_state.vgprs[8][2] = 0xdeadbeefu;
+  vector_swap_mul_state.vgprs[8][3] = 0x00ffff80u;
+  vector_swap_mul_state.vgprs[9][0] = 2u;
+  vector_swap_mul_state.vgprs[9][1] = 2u;
+  vector_swap_mul_state.vgprs[9][2] = 0xdeadbeefu;
+  vector_swap_mul_state.vgprs[9][3] = 2u;
+  vector_swap_mul_state.vgprs[6][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(vector_swap_mul_program,
+                                         &vector_swap_mul_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_swap_mul_state.halted,
+              "expected decoded swap/mul program to halt") ||
+      !Expect(vector_swap_mul_state.vgprs[4][0] == 101u &&
+                  vector_swap_mul_state.vgprs[4][1] == 202u &&
+                  vector_swap_mul_state.vgprs[4][2] == 0xdeadbeefu &&
+                  vector_swap_mul_state.vgprs[4][3] == 404u,
+              "expected decoded V_SWAP_B32 destination results") ||
+      !Expect(vector_swap_mul_state.vgprs[5][0] == 11u &&
+                  vector_swap_mul_state.vgprs[5][1] == 22u &&
+                  vector_swap_mul_state.vgprs[5][2] == 0xdeadbeefu &&
+                  vector_swap_mul_state.vgprs[5][3] == 44u,
+              "expected decoded V_SWAP_B32 source results") ||
+      !Expect(vector_swap_mul_state.vgprs[6][0] == 0xffffff00u &&
+                  vector_swap_mul_state.vgprs[6][1] == 0xffffff00u &&
+                  vector_swap_mul_state.vgprs[6][2] == 0xdeadbeefu &&
+                  vector_swap_mul_state.vgprs[6][3] == 0xffffff00u,
+              "expected decoded V_MUL_I32_I24 results")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_vector_swap_mul_program;
+  if (!Expect(interpreter.CompileProgram(vector_swap_mul_program,
+                                         &compiled_vector_swap_mul_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_vector_swap_mul_state;
+  compiled_vector_swap_mul_state.exec_mask = 0b1011ULL;
+  compiled_vector_swap_mul_state.vgprs[4][0] = 11u;
+  compiled_vector_swap_mul_state.vgprs[4][1] = 22u;
+  compiled_vector_swap_mul_state.vgprs[4][2] = 0xdeadbeefu;
+  compiled_vector_swap_mul_state.vgprs[4][3] = 44u;
+  compiled_vector_swap_mul_state.vgprs[5][0] = 101u;
+  compiled_vector_swap_mul_state.vgprs[5][1] = 202u;
+  compiled_vector_swap_mul_state.vgprs[5][2] = 0xdeadbeefu;
+  compiled_vector_swap_mul_state.vgprs[5][3] = 404u;
+  compiled_vector_swap_mul_state.vgprs[8][0] = 0x00ffff80u;
+  compiled_vector_swap_mul_state.vgprs[8][1] = 0x00ffff80u;
+  compiled_vector_swap_mul_state.vgprs[8][2] = 0xdeadbeefu;
+  compiled_vector_swap_mul_state.vgprs[8][3] = 0x00ffff80u;
+  compiled_vector_swap_mul_state.vgprs[9][0] = 2u;
+  compiled_vector_swap_mul_state.vgprs[9][1] = 2u;
+  compiled_vector_swap_mul_state.vgprs[9][2] = 0xdeadbeefu;
+  compiled_vector_swap_mul_state.vgprs[9][3] = 2u;
+  compiled_vector_swap_mul_state.vgprs[6][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(compiled_vector_swap_mul_program,
+                                         &compiled_vector_swap_mul_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(compiled_vector_swap_mul_state.halted,
+              "expected compiled swap/mul program to halt") ||
+      !Expect(compiled_vector_swap_mul_state.vgprs[4][0] == 101u &&
+                  compiled_vector_swap_mul_state.vgprs[4][1] == 202u &&
+                  compiled_vector_swap_mul_state.vgprs[4][2] == 0xdeadbeefu &&
+                  compiled_vector_swap_mul_state.vgprs[4][3] == 404u,
+              "expected compiled V_SWAP_B32 destination results") ||
+      !Expect(compiled_vector_swap_mul_state.vgprs[5][0] == 11u &&
+                  compiled_vector_swap_mul_state.vgprs[5][1] == 22u &&
+                  compiled_vector_swap_mul_state.vgprs[5][2] == 0xdeadbeefu &&
+                  compiled_vector_swap_mul_state.vgprs[5][3] == 44u,
+              "expected compiled V_SWAP_B32 source results") ||
+      !Expect(compiled_vector_swap_mul_state.vgprs[6][0] == 0xffffff00u &&
+                  compiled_vector_swap_mul_state.vgprs[6][1] == 0xffffff00u &&
+                  compiled_vector_swap_mul_state.vgprs[6][2] == 0xdeadbeefu &&
+                  compiled_vector_swap_mul_state.vgprs[6][3] == 0xffffff00u,
+              "expected compiled V_MUL_I32_I24 results")) {
     return 1;
   }
 
