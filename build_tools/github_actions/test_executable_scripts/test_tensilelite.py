@@ -57,6 +57,19 @@ env["LD_LIBRARY_PATH"] = (
     f"{lib_path}{os.pathsep}{existing_ld_path}" if existing_ld_path else str(lib_path)
 )
 
+# GPU unit tests use amdclang++ to assemble kernels.
+existing_path = env.get("PATH", "")
+env["PATH"] = os.pathsep.join(
+    filter(
+        None,
+        [
+            str(rocm_path / "bin"),
+            str(rocm_path / "lib" / "llvm" / "bin"),
+            existing_path,
+        ],
+    )
+)
+
 # Smoke test: verify install layout allows single-PYTHONPATH imports.
 logging.info("=== Verifying artifact install layout ===")
 subprocess.check_call(
