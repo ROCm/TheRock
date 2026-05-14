@@ -59,21 +59,20 @@ env["LD_LIBRARY_PATH"] = (
 
 # Smoke test: verify install layout allows single-PYTHONPATH imports.
 logging.info("=== Verifying artifact install layout ===")
-subprocess.run(
+subprocess.check_call(
     [
         sys.executable,
         "-c",
         "import Tensile, rocisa, rocisa.instruction; "
         "print(Tensile.ROOT_PATH); print(rocisa.__file__)",
     ],
-    check=True,
     cwd=str(THEROCK_DIR),
     env=env,
 )
 
 # rocisa tests (includes GPU tests — runner has GPU access).
 logging.info("=== Running rocisa tests ===")
-subprocess.run(
+subprocess.check_call(
     [
         sys.executable,
         "-m",
@@ -81,14 +80,13 @@ subprocess.run(
         "-v",
         str(tensilelite_root / "rocisa_tests"),
     ],
-    check=True,
     cwd=str(THEROCK_DIR),
     env=env,
 )
 
 # TensileLite Python unit tests (includes GPU subtile tests).
 logging.info("=== Running TensileLite unit tests ===")
-subprocess.run(
+subprocess.check_call(
     [
         sys.executable,
         "-m",
@@ -96,7 +94,6 @@ subprocess.run(
         "-v",
         str(tensilelite_root / "Tensile" / "Tests" / "unit"),
     ],
-    check=True,
     cwd=str(THEROCK_DIR),
     env=env,
 )
