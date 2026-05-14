@@ -31,7 +31,6 @@ include(therock_sanitizers)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_testing)
-include("${CMAKE_CURRENT_SOURCE_DIR}/FLAGS.cmake")
 
 ################################################################################
 # Python is used throughout the build. Ensure it is initialized early.
@@ -45,8 +44,10 @@ find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
 # Track BUILD_TOPOLOGY.toml and related files for changes to trigger reconfigure
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/BUILD_TOPOLOGY.toml"
+  "${CMAKE_CURRENT_SOURCE_DIR}/BRANCH_CONFIG.json"
   "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/topology_to_cmake.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/build_topology.py"
+  "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/branch_config.py"
 )
 
 block(SCOPE_FOR VARIABLES)
@@ -55,12 +56,16 @@ block(SCOPE_FOR VARIABLES)
     COMMAND ${Python3_EXECUTABLE}
       "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/topology_to_cmake.py"
       "--topology" "${CMAKE_CURRENT_SOURCE_DIR}/BUILD_TOPOLOGY.toml"
+      "--branch-config" "${CMAKE_CURRENT_SOURCE_DIR}/BRANCH_CONFIG.json"
       "--output" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake"
+      "--branch-config-output" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_branch_config.cmake"
     OUTPUT_VARIABLE _topology_output
     COMMAND_ERROR_IS_FATAL ANY  # Fail on any error
   )
   message(STATUS "Generated build topology targets from BUILD_TOPOLOGY.toml")
 endblock()
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/FLAGS.cmake")
 
 ################################################################################
 # Notices
@@ -92,6 +97,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND NOT DEFINED THEROCK_BUILD_TESTIN
 endif()
 if(THEROCK_BUILD_TESTING)
   message(STATUS "Enabling building tests")
+  therock_add_convenience_target(build-tests)
 endif()
 
 ################################################################################
@@ -150,8 +156,11 @@ set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/rocm-systems"
 set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rocm-systems superrepo")
 cmake_path(ABSOLUTE_PATH THEROCK_ROCM_SYSTEMS_SOURCE_DIR NORMALIZE)
 
-# Allow specifying alternative source location for ROCgdb.
+# Allow specifying alternative source locations for ROCgdb, amd-dbgapi
+# and rocr-debug-agent (and rocr-debug-agent-tests as a consequence).
 therock_enable_external_source("rocgdb" "${THEROCK_SOURCE_DIR}/debug-tools/rocgdb/source" OFF)
+therock_enable_external_source("amd-dbgapi" "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocdbgapi" OFF)
+therock_enable_external_source("rocr-debug-agent" "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-debug-agent" OFF)
 
 # Allow to specify alternative source locations instead of using
 # repositories tracked in TheRock's `.gitmodules`.
@@ -239,10 +248,9 @@ option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABL
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
-# TODO(iree-org/fusilli/issues/57): Enable fusilli build once multi-arch support lands.
-option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" OFF)
 
 ################################################################################
 # Artifact-based features are auto-generated from BUILD_TOPOLOGY.toml
@@ -395,23 +403,35 @@ if(THEROCK_BUNDLE_SYSDEPS)
     if(NOT MESON_BUILD)
       message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on Linux requires (easiest: `pip install meson`)")
     endif()
+    # Core sysdeps (always part of the 'sysdeps' artifact)
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
-    set(THEROCK_BUNDLED_EXPAT therock-expat)
-    set(THEROCK_BUNDLED_GMP therock-gmp)
-    set(THEROCK_BUNDLED_HWLOC therock-hwloc)
     set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
     set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
     set(THEROCK_BUNDLED_LIBMNL therock-libmnl)
     set(THEROCK_BUNDLED_LIBNL therock-libnl)
-    set(THEROCK_BUNDLED_MPFR therock-mpfr)
-    set(THEROCK_BUNDLED_NCURSES therock-ncurses)
     set(THEROCK_BUNDLED_NUMACTL therock-numactl)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    # Optional sysdeps (gated on their artifact feature flags)
+    if(THEROCK_ENABLE_SYSDEPS_EXPAT)
+      set(THEROCK_BUNDLED_EXPAT therock-expat)
+    endif()
+    if(THEROCK_ENABLE_SYSDEPS_GMP)
+      set(THEROCK_BUNDLED_GMP therock-gmp)
+    endif()
+    if(THEROCK_ENABLE_SYSDEPS_HWLOC)
+      set(THEROCK_BUNDLED_HWLOC therock-hwloc)
+    endif()
+    if(THEROCK_ENABLE_SYSDEPS_MPFR)
+      set(THEROCK_BUNDLED_MPFR therock-mpfr)
+    endif()
+    if(THEROCK_ENABLE_SYSDEPS_NCURSES)
+      set(THEROCK_BUNDLED_NCURSES therock-ncurses)
+    endif()
     if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
       set(THEROCK_BUNDLED_AMDMESA therock-amd-mesa)
     endif()
@@ -421,17 +441,27 @@ if(THEROCK_BUNDLE_SYSDEPS)
       message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on macOS requires `meson` (easiest: `pip install meson`)")
     endif()
     # macOS bundled deps - note: libcap, libdrm, numactl are Linux-specific
+    # Core sysdeps
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
-    set(THEROCK_BUNDLED_EXPAT therock-expat)
-    set(THEROCK_BUNDLED_GMP therock-gmp)
     set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
-    set(THEROCK_BUNDLED_MPFR therock-mpfr)
-    set(THEROCK_BUNDLED_NCURSES therock-ncurses)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    # Optional sysdeps
+    if(THEROCK_ENABLE_SYSDEPS_EXPAT)
+      set(THEROCK_BUNDLED_EXPAT therock-expat)
+    endif()
+    if(THEROCK_ENABLE_SYSDEPS_GMP)
+      set(THEROCK_BUNDLED_GMP therock-gmp)
+    endif()
+    if(THEROCK_ENABLE_SYSDEPS_MPFR)
+      set(THEROCK_BUNDLED_MPFR therock-mpfr)
+    endif()
+    if(THEROCK_ENABLE_SYSDEPS_NCURSES)
+      set(THEROCK_BUNDLED_NCURSES therock-ncurses)
+    endif()
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)

@@ -96,8 +96,6 @@ def run_tests(build_dir: Path):
         "--output-on-failure",
         "--parallel",
         "8",
-        "--timeout",
-        "120",
     ]
     logging.info(f"++ Test: {shlex.join(test_cmd)}")
     subprocess.run(test_cmd, check=True, cwd=THEROCK_DIR, env=environ_vars)

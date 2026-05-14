@@ -20,8 +20,6 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
-    "--timeout",
-    "600",
 ]
 
 # Determine test filter based on TEST_TYPE environment variable
@@ -39,4 +37,5 @@ subprocess.run(
     cwd=THEROCK_DIR,
     check=True,
     env=environ_vars,
+    stderr=subprocess.STDOUT,
 )

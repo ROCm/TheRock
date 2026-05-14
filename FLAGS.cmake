@@ -31,6 +31,20 @@ therock_declare_flag(
     hipkernelprovider
 )
 
+therock_declare_flag(
+  NAME STAMP_LIBRARY_GIT_VERSIONS
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Stamp library git revisions into generated version metadata"
+  ISSUE https://github.com/ROCm/TheRock/issues/5009
+  GLOBAL_PROPAGATE_FLAG
+)
+
+therock_declare_flag(
+  NAME INCLUDE_HRX
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Include experimental HRX runtime in core-runtime"
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on
@@ -38,6 +52,10 @@ therock_declare_flag(
 # therock_override_flag_default().
 ###############################################################################
 include("${CMAKE_CURRENT_SOURCE_DIR}/BRANCH_FLAGS.cmake" OPTIONAL)
+include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_branch_config.cmake" OPTIONAL)
+if(COMMAND therock_apply_branch_config_flags)
+  therock_apply_branch_config_flags()
+endif()
 
 ###############################################################################
 # Finalize all flags and report.
