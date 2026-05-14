@@ -138,7 +138,7 @@ jobs:
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
-          SKIP_PATH_FILTERS: ${{ inputs.external_repo_config != '' && 'true' || '' }}
+          SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.

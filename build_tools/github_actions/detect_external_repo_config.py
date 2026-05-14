@@ -383,7 +383,10 @@ def main(argv=None):
             else:
                 repo_name = source_repository
             args.repository = repo_name
-            print(f"Parsed external_repo: repository={source_repository}, ref={source_ref}", file=sys.stderr)
+            print(
+                f"Parsed external_repo: repository={source_repository}, ref={source_ref}",
+                file=sys.stderr,
+            )
         except json.JSONDecodeError as e:
             print(f"ERROR: Invalid JSON in --external-repo-json: {e}", file=sys.stderr)
             return 1
@@ -423,9 +426,9 @@ def main(argv=None):
             "repository": final_source_repo,
             "ref": source_ref,
             "checkout_path": checkout_path,  # relative path for actions/checkout
-            "source_package": config["cmake_source_var"].replace(
-                "THEROCK_", ""
-            ).replace("_SOURCE_DIR", ""),
+            "source_package": config["cmake_source_var"]
+            .replace("THEROCK_", "")
+            .replace("_SOURCE_DIR", ""),
             "fetch_sources_args": config.get("fetch_sources_args", ""),
         }
         config["config_json"] = json.dumps(config_json)
