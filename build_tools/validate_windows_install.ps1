@@ -219,12 +219,34 @@ try {
 # ============================================================================
 Write-Section "3. MSVC Compiler"
 
+$MinMsvcVersion = [Version]"19.43"
+
 $clCmd = Get-Command cl.exe -ErrorAction SilentlyContinue
 if ($clCmd) {
-    # cl.exe prints its version banner to stderr
-    $clBanner = (& cl.exe 2>&1 | Select-Object -First 1).ToString().Trim()
+    # cl.exe prints its version banner to stderr; capture it with
+    # ErrorAction Continue so SilentlyContinue doesn't swallow error records.
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $clOutput = (& cl.exe 2>&1) | ForEach-Object { $_.ToString().Trim() }
+    $ErrorActionPreference = $prevEAP
+    $clBanner = ($clOutput | Select-Object -First 1)
     Write-Pass "cl.exe in PATH: $($clCmd.Source)"
     Write-Info $clBanner
+
+    # Check MSVC version meets minimum requirement.
+    # Prebuilt libraries (e.g. wkmi.lib) may reference STL internals introduced
+    # in newer MSVC versions, causing LNK2019 errors on older toolchains.
+    # See https://github.com/ROCm/TheRock/issues/5029
+    $clVersionLine = $clOutput | Where-Object { $_ -match "Version \d+\.\d+" } | Select-Object -First 1
+    if ($clVersionLine -match "Version (\d+\.\d+)") {
+        $msvcVer = [Version]$matches[1]
+        if ($msvcVer -ge $MinMsvcVersion) {
+            Write-Pass "MSVC version $msvcVer (>= $MinMsvcVersion)"
+        } else {
+            Write-Fail "MSVC version $msvcVer is too old (>= $MinMsvcVersion required)" `
+                -Detail "Update Visual Studio 2022 to version 17.13+ or install a newer Build Tools"
+        }
+    }
 } else {
     Write-Warn "cl.exe not in PATH - checking for VS installation..."
 
@@ -505,7 +527,6 @@ $sccacheCmd = Get-Command sccache -ErrorAction SilentlyContinue
 if ($ccacheCmd) {
     $ccVer = ((& ccache --version 2>&1 | Select-Object -First 1) -replace "ccache version ", "").Trim()
     Write-Pass "ccache $ccVer (speeds up rebuilds)"
-    Write-Info "Note: use -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded with ccache to avoid /Zi conflicts"
 } elseif ($sccacheCmd) {
     $scVer = ((& sccache --version 2>&1) -replace "sccache ", "").Trim()
     Write-Pass "sccache $scVer (speeds up rebuilds)"

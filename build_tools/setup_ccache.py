@@ -40,6 +40,11 @@ POSIX_COMPILER_CHECK_SCRIPT = (
 CACHE_SRV_DEV = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
 CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
 
+# Bump this version when making hash-affecting config changes (sloppiness,
+# compiler_check, etc.) to logically isolate new cache entries from stale
+# ones on the shared remote cache server.
+CCACHE_NAMESPACE_VERSION = "v1"
+
 DEFAULT_LOG_DIR = REPO_ROOT / "build" / "logs" / "ccache"
 
 # See https://ccache.dev/manual/4.6.1.html#_configuration
@@ -47,19 +52,21 @@ DEFAULT_LOG_DIR = REPO_ROOT / "build" / "logs" / "ccache"
 # so that Windows workflows can direct logs to BUILD_DIR/logs/ccache/ (B:\build)
 # instead of REPO_ROOT/build/logs/ccache/ (C: drive).
 CONFIG_PRESETS_MAP = {
-    "local": {},
+    "local": {"max_size": "10G"},
     # Dev and release use separate cache servers to avoid cache pollution.
     # We may later split these further into presubmit (PR) vs postsubmit
     # (post-merge) presets — presubmit serves varied code at mixed trust
     # levels while postsubmit serves a uniform stream of approved commits,
     # so separating them improves both cache hit rates and data integrity.
     "github-oss-dev": {
-        "secondary_storage": CACHE_SRV_DEV,
-        "max_size": "5G",
+        "remote_storage": CACHE_SRV_DEV,
+        "max_size": "10G",
+        "namespace": f"therock-{CCACHE_NAMESPACE_VERSION}",
     },
     "github-oss-release": {
-        "secondary_storage": CACHE_SRV_REL,
-        "max_size": "5G",
+        "remote_storage": CACHE_SRV_REL,
+        "max_size": "10G",
+        "namespace": f"therock-{CCACHE_NAMESPACE_VERSION}",
     },
 }
 
@@ -98,25 +105,34 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
         local_path.mkdir(parents=True, exist_ok=True)
         lines.append(f"cache_dir = {local_path}")
 
-    # Compiler check: on POSIX we use a custom script that fingerprints the
-    # compiler binary and its shared libraries via ldd + sha256sum. On Windows
-    # (MSVC) those tools don't exist; ccache's default mtime check works well.
+    # Compiler Check
     if not IS_WINDOWS:
+        # On POSIX we use a custom script that fingerprints the
+        # compiler binary and its shared libraries via ldd + sha256sum.
         lines.append(
             f"compiler_check = {sys.executable} {compiler_check_file} "
             f"{dir / 'compiler_check_cache'} %compiler%"
         )
+    else:
+        # On Windows the LLVM toolchain is compiled statically linked,
+        # therefore using content is sufficient to detect changes.
+        lines.append(f"compiler_check = content")
 
-    # Slop settings.
-    # Creating a hard link to a file increasing the link count, which triggers
-    # a ctime update (since ctime tracks changes to the inode metadata) for
-    # *all* links to the file. Since we are basically always creating hard
-    # link farms in parallel as part of sandboxing, we have to disable this
-    # check as it is never valid for our build system and will result in
-    # spurious ccache panics where it randomly falls back to the real compiler
-    # if the ccache invocation happens to coincide with parallel sandbox
-    # creation for another sub-project.
-    lines.append(f"sloppiness = include_file_ctime")
+    # Sloppiness settings.
+    # include_file_ctime:
+    #   Creating a hard link to a file increasing the link count, which triggers
+    #   a ctime update (since ctime tracks changes to the inode metadata) for
+    #   *all* links to the file. Since we are basically always creating hard
+    #   link farms in parallel as part of sandboxing, we have to disable this
+    #   check as it is never valid for our build system and will result in
+    #   spurious ccache panics where it randomly falls back to the real compiler
+    #   if the ccache invocation happens to coincide with parallel sandbox
+    #   creation for another sub-project.
+    # pch_defines, time_macros:
+    #   amd-llvm uses PCH on Windows builds by default, CMake will correctly
+    #   use the appropriate compilation flags that ccache understands. See
+    #   https://ccache.dev/manual/4.7.html#_precompiled_headers for details.
+    lines.append(f"sloppiness = include_file_ctime,pch_defines,time_macros")
 
     # End with blank line.
     lines.append("")
