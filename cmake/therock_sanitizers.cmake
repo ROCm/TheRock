@@ -44,8 +44,8 @@ function(therock_sanitizer_configure
 
     # TODO: Support ASAN_STATIC/TSAN_STATIC to use static sanitizer linkage. Shared is almost always the right thing,
     # so make the sanitizer imply shared linkage.
-    string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer -g\")\n")
-    string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer -g\")\n")
+    string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer -g -gdwarf-4\")\n")
+    string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer -g -gdwarf-4\")\n")
 
     # Sharp edge: The -shared-libsan flag is compiler frontend specific:
     #   gcc (and gfortran): defaults to shared sanitizer linkage
@@ -72,7 +72,6 @@ function(therock_sanitizer_configure
       # HOST_ASAN.
       string(APPEND _stanza "message(STATUS \"HOST_ASAN enabled - GPU_TARGETS unchanged\")\n")
     endif()
-
     # Action at a distance: Signal that the sub-project should extend its build and install
     # RPATHs to include the clang resource dir.
     string(APPEND _stanza "set(THEROCK_INCLUDE_CLANG_RESOURCE_DIR_RPATH ON)")
