@@ -51,7 +51,8 @@ on:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    runs-on: rocr-runtime-libhsakmt-wsl
+    runs-on:
+      group: ROCR-Runtime-libhsakmt-WSL
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       contents: read
