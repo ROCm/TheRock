@@ -223,7 +223,9 @@ def is_gfxarch_package(pkg_info, enable_kpack=False):
     """
     if enable_kpack:
         pkgname = pkg_info.get("Package", "")
-        if pkgname.endswith("-devel"):
+        # Only non-metapackage -devel should be non-gfxarch
+        # Metapackages like amdrocm-core-devel should create arch-specific variants
+        if pkgname.endswith("-devel") and not is_meta_package(pkg_info):
             return False
 
         # Override RCCL Gfxarch behavior in kpack mode
@@ -785,7 +787,18 @@ def resolve_versioned_dependencies(dep_list, config: PackageConfig, is_meta):
         deps = append_version_suffix(", ".join(dep_list), config)
     elif config.enable_kpack and is_meta and config.gfx_arch != GFX_GENERIC:
         # Arch-specific metapackage: preserve architecture for gfxarch dependencies
-        deps = convert_to_versiondependency(dep_list, config, preserve_arch=True)
+        # For -devel metapackages: mix arch-specific (gfxarch) and generic (non-gfxarch)
+        result_deps = []
+        for dep in dep_list:
+            dep_info = get_package_info(dep)
+            # Only gfxarch dependencies get arch suffix, others stay generic
+            preserve = dep_info and is_gfxarch_package(dep_info, config.enable_kpack)
+            versioned = convert_to_versiondependency(
+                [dep], config, preserve_arch=preserve
+            )
+            result_deps.append(versioned)
+
+        deps = ", ".join(result_deps)
         deps = append_version_suffix(deps, config)
     elif config.enable_kpack and not is_meta and config.gfx_arch != GFX_GENERIC:
         # Gfx-specific non-meta package:
@@ -896,10 +909,15 @@ def get_dependency_list_for_multiarch(pkg_info, dep_key, config: PackageConfig):
     pkg_name = pkg_info.get("Package")
     is_meta = is_meta_package(pkg_info)
 
-    if config.enable_kpack and is_meta:
-        # For metapackages in multi-arch mode:
+    if (
+        config.enable_kpack
+        and is_meta
+        and is_gfxarch_package(pkg_info, config.enable_kpack)
+    ):
+        # For gfxarch metapackages in multi-arch mode:
         # - Generic variant depends on all arch-specific variants
         # - Arch-specific variants depend on actual runtime packages
+        # Non-gfxarch metapackages (e.g., developer-tools) fall through to generic handling
         if config.gfx_arch == GFX_GENERIC:
             # Generic metapackage: depend on all arch-specific metapackages
             return expand_metapackage_to_all_archs(
@@ -907,18 +925,46 @@ def get_dependency_list_for_multiarch(pkg_info, dep_key, config: PackageConfig):
             )
         else:
             # Arch-specific metapackage: depend on actual runtime packages
-            # Filter out dependencies that don't have artifacts for this architecture
             dep_list = pkg_info.get(dep_key, [])
-            return [
-                dep
-                for dep in dep_list
-                if has_artifact_for_arch(dep, config.artifacts_dir, config.gfx_arch)
-            ]
+
+            # Check if this is a non-gfxarch metapackage or a -devel metapackage
+            is_pkg_gfxarch = is_gfxarch_package(pkg_info, config.enable_kpack)
+
+            if not is_pkg_gfxarch or pkg_name.endswith("-devel"):
+                # For non-gfxarch metapackages (e.g., developer-tools) and
+                # -devel metapackages (even if gfxarch):
+                # Include all dependencies that exist in pkg_list (no arch filtering)
+                pkg_list, _ = get_package_list(config.artifacts_dir)
+                return [
+                    dep
+                    for dep in dep_list
+                    if not dep.startswith("amdrocm") or dep in pkg_list
+                ]
+            else:
+                # Gfxarch metapackages (non-devel): filter by artifacts
+                return [
+                    dep
+                    for dep in dep_list
+                    if has_artifact_for_arch(dep, config.artifacts_dir, config.gfx_arch)
+                ]
     elif config.enable_kpack and config.gfx_arch == GFX_GENERIC:
         # Generic package in multi-arch mode:
         # Only include non-gfxarch dependencies
         # Gfxarch deps are pulled via the gfx-specific package
+        # Exception: non-gfxarch packages and -devel packages keep all dependencies
         dep_list = pkg_info.get(dep_key, [])
+
+        # For non-gfxarch packages (e.g., developer-tools) and -devel packages,
+        # keep all dependencies but verify amdrocm* packages exist
+        is_pkg_gfxarch = is_gfxarch_package(pkg_info, config.enable_kpack)
+        if not is_pkg_gfxarch or pkg_name.endswith("-devel"):
+            pkg_list, _ = get_package_list(config.artifacts_dir)
+            return [
+                dep
+                for dep in dep_list
+                if not dep.startswith("amdrocm") or dep in pkg_list
+            ]
+
         return [
             dep
             for dep in dep_list
