@@ -89,7 +89,6 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       TEATIME_FORCE_INTERACTIVE: 0
       RELEASE_TYPE: ${{ inputs.release_type }}
-      EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
 
     steps:
       - name: Checkout Repository
@@ -98,13 +97,20 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      - name: Check if stage needs external repo
+        id: external_repo
+        run: |
+          python3 build_tools/github_actions/detect_external_repo_config.py \
+            --check-stage='${{ inputs.external_repo_config }}' \
+            --stage='${{ inputs.stage_name }}'
+
       - name: Checkout external repository
-        if: ${{ inputs.external_repo_config != '' }}
+        if: ${{ steps.external_repo.outputs.needs_checkout == 'true' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          repository: ${{ fromJSON(inputs.external_repo_config).repository }}
-          ref: ${{ fromJSON(inputs.external_repo_config).ref }}
-          path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
+          repository: ${{ steps.external_repo.outputs.repository }}
+          ref: ${{ steps.external_repo.outputs.ref }}
+          path: ${{ steps.external_repo.outputs.checkout_path }}
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -138,7 +144,7 @@ jobs:
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
+        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${{ steps.external_repo.outputs.fetch_sources_args }}
 
       - name: Get stage configuration
         id: stage_config
@@ -161,7 +167,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
-            ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
+            ${{ steps.external_repo.outputs.cmake_args }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage

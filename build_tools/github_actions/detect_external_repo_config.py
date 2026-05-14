@@ -41,16 +41,20 @@ from github_actions_api import gha_set_output
 
 
 # Repository configuration map
+# "stages" defines which build stages actually need this external repo checked out.
+# This enables stage-specific checkouts to avoid unnecessary clones.
 REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
     "rocm-libraries": {
         "cmake_source_var": "THEROCK_ROCM_LIBRARIES_SOURCE_DIR",
         "submodule_path": "rocm-libraries",
         "skip_submodules": ["rocm-libraries"],
+        "stages": ["math-libs", "fusilli-libs"],
     },
     "rocm-systems": {
         "cmake_source_var": "THEROCK_ROCM_SYSTEMS_SOURCE_DIR",
         "submodule_path": "rocm-systems",
         "skip_submodules": ["rocm-systems"],
+        "stages": ["compiler-runtime"],
     },
     # Future repos can be added here:
     # "llvm-project": {...},
@@ -309,6 +313,37 @@ def output_github_actions_vars(config: Dict[str, Any]) -> None:
     gha_set_output(normalized_config)
 
 
+def _check_stage_needs_external_repo(config_json: str, stage: str) -> int:
+    """Check if a build stage needs an external repo checkout."""
+    if not config_json:
+        print("No external repo config provided")
+        gha_set_output({"needs_checkout": "false"})
+        return 0
+
+    config = json.loads(config_json)
+    stages = config.get("stages", [])
+    needs_checkout = stage in stages
+
+    print(f"Stage '{stage}' needs external repo: {needs_checkout}")
+    print(f"Configured stages: {stages}")
+
+    outputs = {"needs_checkout": str(needs_checkout).lower()}
+    if needs_checkout:
+        outputs["fetch_sources_args"] = config.get("fetch_sources_args", "")
+        outputs["repository"] = config.get("repository", "")
+        outputs["ref"] = config.get("ref", "")
+        outputs["checkout_path"] = config.get("checkout_path", "")
+        source_package = config.get("source_package", "")
+        checkout_path = config.get("checkout_path", "")
+        if source_package and checkout_path:
+            outputs["cmake_args"] = (
+                f"-DTHEROCK_{source_package}_SOURCE_DIR={checkout_path}"
+            )
+
+    gha_set_output(outputs)
+    return 0
+
+
 def main(argv=None):
     """Main entry point for the script.
 
@@ -360,6 +395,16 @@ def main(argv=None):
         action="store_true",
         help="List all known repository configurations",
     )
+    parser.add_argument(
+        "--check-stage",
+        type=str,
+        help="Check if a stage needs external repo. Pass the config JSON and stage name.",
+    )
+    parser.add_argument(
+        "--stage",
+        type=str,
+        help="Stage name to check (used with --check-stage)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -368,6 +413,13 @@ def main(argv=None):
         for repo_name in REPO_CONFIGS.keys():
             print(f"  - {repo_name}")
         return 0
+
+    # Check if a stage needs external repo checkout
+    if args.check_stage is not None:
+        if not args.stage:
+            print("ERROR: --stage is required with --check-stage", file=sys.stderr)
+            return 1
+        return _check_stage_needs_external_repo(args.check_stage, args.stage)
 
     # Parse external repo JSON if provided, extract repository name
     source_repository = None
@@ -431,6 +483,7 @@ def main(argv=None):
             "checkout_path": checkout_path,
             "source_package": source_package,
             "fetch_sources_args": config.get("fetch_sources_args", ""),
+            "stages": config.get("stages", []),
         }
         config["config_json"] = json.dumps(config_json)
         print(
