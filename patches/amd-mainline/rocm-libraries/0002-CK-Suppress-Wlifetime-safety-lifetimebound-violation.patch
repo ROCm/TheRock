@@ -1,12 +1,13 @@
-From d4fbff2fb73694e66d997c78072eee83ba2047c0 Mon Sep 17 00:00:00 2001
+From 7645f0dd281fb69833c169ac1870f23145b8b1f4 Mon Sep 17 00:00:00 2001
 From: therockbot <therockbot@amd.com>
-Date: Tue, 12 May 2026 23:32:06 -0400
+Date: Thu, 14 May 2026 12:32:43 -0400
 Subject: [PATCH] Suppress -Wlifetime-safety compiler errors
 
 The amd-staging compiler introduces -Wlifetime-safety-lifetimebound-violation
 and -Wlifetime-safety-intra-tu-suggestions warnings. Combined with -Werror in
 Composable Kernel, this causes build failures in tuple.hpp, buffer_view.hpp,
-kernel_launch.hpp, and device_grouped_conv_fwd_multiple_abd_xdl_cshuffle.hpp.
+kernel_launch.hpp, device_grouped_conv_fwd_multiple* and device_gemm_multiple_d*
+implementation headers.
 
 Suppress both warnings in the affected headers, and add
 -Wno-unknown-warning-option to avoid warnings on compilers that do not
@@ -14,6 +15,21 @@ recognize these options yet.
 
 Upstream fix: https://github.com/ROCm/rocm-libraries/pull/7384
 ---
+ .../gpu/device/impl/device_gemm_multiple_d_dl.hpp          | 7 +++++++
+ .../device_gemm_multiple_d_layernorm_wmma_cshuffle_v3.hpp  | 7 +++++++
+ .../impl/device_gemm_multiple_d_layernorm_xdl_cshuffle.hpp | 7 +++++++
+ .../device_gemm_multiple_d_multiple_r_xdl_cshuffle.hpp     | 7 +++++++
+ .../device/impl/device_gemm_multiple_d_wmma_cshuffle.hpp   | 7 +++++++
+ .../impl/device_gemm_multiple_d_wmma_cshuffle_v3.hpp       | 7 +++++++
+ .../device_gemm_multiple_d_wmma_cshuffle_v3_ab_scale.hpp   | 7 +++++++
+ ...evice_gemm_multiple_d_wmma_cshuffle_v3_b_preshuffle.hpp | 7 +++++++
+ ..._multiple_d_wmma_cshuffle_v3_blockscale_bpreshuffle.hpp | 7 +++++++
+ .../device/impl/device_gemm_multiple_d_xdl_cshuffle.hpp    | 7 +++++++
+ ...device_gemm_multiple_d_xdl_cshuffle_lds_direct_load.hpp | 7 +++++++
+ .../device/impl/device_gemm_multiple_d_xdl_cshuffle_v3.hpp | 7 +++++++
+ .../device_gemm_multiple_d_xdl_cshuffle_v3_ab_scale.hpp    | 7 +++++++
+ ...device_gemm_multiple_d_xdl_cshuffle_v3_b_preshuffle.hpp | 7 +++++++
+ ...m_multiple_d_xdl_cshuffle_v3_blockscale_bpreshuffle.hpp | 7 +++++++
  ...vice_grouped_conv_fwd_multiple_abd_wmma_cshuffle_v3.hpp | 7 +++++++
  .../device_grouped_conv_fwd_multiple_abd_xdl_cshuffle.hpp  | 7 +++++++
  ...evice_grouped_conv_fwd_multiple_abd_xdl_cshuffle_v3.hpp | 7 +++++++
@@ -29,8 +45,338 @@ Upstream fix: https://github.com/ROCm/rocm-libraries/pull/7384
  .../include/ck_tile/core/container/tuple.hpp               | 2 ++
  .../include/ck_tile/core/tensor/buffer_view.hpp            | 2 ++
  .../include/ck_tile/host/kernel_launch.hpp                 | 2 ++
- 15 files changed, 80 insertions(+)
+ 30 files changed, 185 insertions(+)
 
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_dl.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_dl.hpp
+index 11d1a748193..61970dd0320 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_dl.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_dl.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -667,3 +672,5 @@ struct DeviceGemmMultipleD_Dl : public DeviceGemmMultipleD<ALayout,
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_layernorm_wmma_cshuffle_v3.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_layernorm_wmma_cshuffle_v3.hpp
+index 81f505b594d..c782963efad 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_layernorm_wmma_cshuffle_v3.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_layernorm_wmma_cshuffle_v3.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -919,3 +924,5 @@ struct DeviceGemmMultipleDLayernorm_Wmma_CShuffleV3
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_layernorm_xdl_cshuffle.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_layernorm_xdl_cshuffle.hpp
+index 78631d7bfa5..efe4a791637 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_layernorm_xdl_cshuffle.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_layernorm_xdl_cshuffle.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -1150,3 +1155,5 @@ struct DeviceGemmMultipleDLayernorm_Xdl_CShuffle
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_multiple_r_xdl_cshuffle.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_multiple_r_xdl_cshuffle.hpp
+index c38d569d313..e8cde1e3aa7 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_multiple_r_xdl_cshuffle.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_multiple_r_xdl_cshuffle.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -712,3 +717,5 @@ struct DeviceGemmMultipleDMultipleR_Xdl_CShuffle
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle.hpp
+index ce973e500b3..944c9289c01 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -738,3 +743,5 @@ struct DeviceGemmMultipleD_Wmma_CShuffle : public DeviceGemmMultipleD<ALayout,
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3.hpp
+index f603f423dba..a3955fbc1c4 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -408,3 +413,5 @@ struct DeviceGemmMultipleD_Wmma_CShuffleV3
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3_ab_scale.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3_ab_scale.hpp
+index 81a5d35e7c6..1ab292f1a88 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3_ab_scale.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3_ab_scale.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -360,3 +365,5 @@ struct DeviceGemmMultiD_ABScale_Wmma_CShuffle_V3
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3_b_preshuffle.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3_b_preshuffle.hpp
+index bc6462d0924..8edfee748a4 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3_b_preshuffle.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3_b_preshuffle.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -305,3 +310,5 @@ struct DeviceGemmMultiD_Wmma_CShuffle_V3_BPreshuffle
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3_blockscale_bpreshuffle.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3_blockscale_bpreshuffle.hpp
+index 1b1a1fcc6c7..acf1db6a512 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3_blockscale_bpreshuffle.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_wmma_cshuffle_v3_blockscale_bpreshuffle.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -358,3 +363,5 @@ struct DeviceGemmMultiD_BlockScale_Wmma_CShuffle_V3_BPreshuffle
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle.hpp
+index 4fdb878d645..1e51e5e83ab 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #ifndef __HIPCC_RTC__
+ #include <iostream>
+ #include <sstream>
+@@ -941,3 +946,5 @@ struct DeviceGemmMultipleD_Xdl_CShuffle : public DeviceGemmMultipleD<ALayout,
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_lds_direct_load.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_lds_direct_load.hpp
+index 83e16d1c3de..84d71f9bf93 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_lds_direct_load.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_lds_direct_load.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -439,3 +444,5 @@ struct DeviceGemmMultipleD_Xdl_CShuffle_LdsDirectLoad
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3.hpp
+index 34b4f1c80e0..e8da0dd0248 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -831,3 +836,5 @@ struct DeviceGemmMultiD_Xdl_CShuffle_V3 : public DeviceGemmMultipleDSplitK<ALayo
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3_ab_scale.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3_ab_scale.hpp
+index 7d53ca00357..55aa51c2ca1 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3_ab_scale.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3_ab_scale.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -573,3 +578,5 @@ struct DeviceGemmMultiD_ABScale_Xdl_CShuffle_V3
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3_b_preshuffle.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3_b_preshuffle.hpp
+index c2b713db627..3128724e228 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3_b_preshuffle.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3_b_preshuffle.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -694,3 +699,5 @@ struct DeviceGemmMultiD_Xdl_CShuffle_V3_BPreshuffle
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
+diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3_blockscale_bpreshuffle.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3_blockscale_bpreshuffle.hpp
+index 8f1a0f3b3de..b303baad6af 100644
+--- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3_blockscale_bpreshuffle.hpp
++++ b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_gemm_multiple_d_xdl_cshuffle_v3_blockscale_bpreshuffle.hpp
+@@ -3,6 +3,11 @@
+ 
+ #pragma once
+ 
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wno-unknown-warning-option"
++#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
++#pragma clang diagnostic ignored "-Wlifetime-safety-lifetimebound-violation"
++
+ #include <iostream>
+ #include <sstream>
+ 
+@@ -533,3 +538,5 @@ struct DeviceGemmMultiD_BlockScale_Xdl_CShuffle_V3_BPreshuffle
+ } // namespace device
+ } // namespace tensor_operation
+ } // namespace ck
++
++#pragma clang diagnostic pop
 diff --git a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_wmma_cshuffle_v3.hpp b/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_wmma_cshuffle_v3.hpp
 index 8781a3c38a2..7ced4c6a8b7 100644
 --- a/projects/composablekernel/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_wmma_cshuffle_v3.hpp
