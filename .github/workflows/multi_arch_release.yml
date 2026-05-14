@@ -65,6 +65,10 @@ on:
         description: 'Comma-separated list of Windows GPU families. "all" = all, "none" = skip platform.'
         type: string
         default: "gfx110x"
+      ci_config_ref:
+        description: "Branch/SHA of therock-ci-config to use. Test new runner configs by setting to your branch."
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -85,6 +89,7 @@ jobs:
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
+      ci_config_ref: ${{ inputs.ci_config_ref || '' }}
 
   linux_release:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
