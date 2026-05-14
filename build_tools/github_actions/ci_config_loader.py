@@ -48,7 +48,7 @@ def load_runner_config(
         raise ConfigError(f"Invalid JSON in {config_file}: {e}")
 
     # Basic validation
-    required_keys = ["version", "build_runners", "gpu_families"]
+    required_keys = ["build_runners", "gpu_families"]
     missing = [k for k in required_keys if k not in config]
     if missing:
         raise ConfigError(f"Config missing required keys: {missing}")
@@ -83,10 +83,8 @@ def config_exists(config_path: Path = DEFAULT_CONFIG_PATH) -> bool:
 
 
 def log_config_version(config: dict[str, Any], config_path: Path) -> None:
-    """Log config version and path for traceability."""
-    version = config.get("version", "unknown")
+    """Log config path for traceability."""
     print(f"CI Config loaded from: {config_path}")
-    print(f"CI Config version: {version}")
 
 
 if __name__ == "__main__":
