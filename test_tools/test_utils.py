@@ -431,10 +431,10 @@ def get_visible_gpu_architectures(
         env=env,
         check=check,
     )
-    return parse_rocminfo_gpu_archs(result.stdout or "")
+    return _parse_rocminfo_gpu_archs(result.stdout or "")
 
 
-def parse_rocminfo_gpu_archs(output: str) -> list[str]:
+def _parse_rocminfo_gpu_archs(output: str) -> list[str]:
     """Return visible GPU architecture names from rocminfo output."""
     gpu_archs: list[str] = []
     for line in output.splitlines():

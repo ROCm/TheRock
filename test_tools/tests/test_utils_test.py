@@ -422,7 +422,7 @@ class RocminfoTest(unittest.TestCase):
 
     def test_parse_rocminfo_gpu_archs_preserves_visible_gpu_records(self):
         self.assertEqual(
-            test_utils.parse_rocminfo_gpu_archs(self.ROCMINFO_OUTPUT),
+            test_utils._parse_rocminfo_gpu_archs(self.ROCMINFO_OUTPUT),
             ["gfx942", "gfx942", "gfx1100"],
         )
 
