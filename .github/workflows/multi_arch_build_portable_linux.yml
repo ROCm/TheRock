@@ -6,14 +6,15 @@
 # This workflow builds TheRock in stages:
 # 1. foundation (generic) - sysdeps, base
 # 2. compiler-runtime (generic) - compiler, runtimes, profiler-core
-# 3. math-libs (per-arch) - BLAS, FFT, etc.
-# 4. comm-libs (per-arch) - RCCL, rocshmem (parallel to math-libs)
-# 5. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
-# 6. dctools-core (generic) - RDC (parallel to math-libs)
-# 7. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
-# 8. iree-compiler (generic) - IREE compiler (parallel to math-libs)
-# 9. fusilli-libs (generic) - Fusilli hipdnn provider (after math-libs + iree-compiler)
-# 10. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
+# 3. wsl-rocdxg (generic) - WSL-only ROCDXG bridge library (after compiler-runtime)
+# 4. math-libs (per-arch) - BLAS, FFT, etc.
+# 5. comm-libs (per-arch) - RCCL, rocshmem (parallel to math-libs)
+# 6. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
+# 7. dctools-core (generic) - RDC (parallel to math-libs)
+# 8. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
+# 9. iree-compiler (generic) - IREE compiler (parallel to math-libs)
+# 10. fusilli-libs (generic) - Fusilli hipdnn provider (after math-libs + iree-compiler)
+# 11. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 
 name: Multi-Arch Build (Linux)
 
@@ -107,6 +108,29 @@ jobs:
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       build_runs_on: ${{ inputs.build_runs_on }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
+  # STAGE: wsl-rocdxg (generic)
+  # ==========================================================================
+  wsl-rocdxg:
+    needs: compiler-runtime
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') }}
+    uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: wsl-rocdxg
+      stage_display_name: "Stage - WSL ROCDXG"
+      timeout_minutes: 120  # 2 hours
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}

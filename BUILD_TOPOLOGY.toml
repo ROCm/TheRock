@@ -157,6 +157,10 @@ artifact_groups = [
     "rocjitsu"
 ]
 
+[build_stages.wsl-rocdxg]
+description = "WSL-only ROCDXG bridge library"
+artifact_groups = ["wsl-rocdxg"]
+
 [build_stages.math-libs]
 description = "Math and ML libraries per architecture"
 artifact_groups = ["math-libs", "ml-libs"]
@@ -223,6 +227,12 @@ source_sets = ["base", "rocm-systems"]
 description = "Core runtime (ROCR-Runtime, rocminfo)"
 type = "generic"
 artifact_group_deps = ["base", "third-party-sysdeps"]
+source_sets = ["rocm-systems"]
+
+[artifact_groups.wsl-rocdxg]
+description = "WSL-only ROCDXG bridge library"
+type = "generic"
+artifact_group_deps = ["base"]
 source_sets = ["rocm-systems"]
 
 [artifact_groups.core-amdsmi]
@@ -507,6 +517,13 @@ artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms = ["windows"]
+
+[artifacts.wsl-rocdxg]
+artifact_group = "wsl-rocdxg"
+type = "target-neutral"
+artifact_deps = ["core-hip"]
+feature_name = "WSL_ROCDXG"
+feature_group = "WSL"
 
 [artifacts.core-amdsmi]
 artifact_group = "core-amdsmi"

@@ -171,6 +171,7 @@ enable/disable selected subsets:
 | `-DTHEROCK_ENABLE_PROFILER=OFF`    | Disables profilers                   |
 | `-DTHEROCK_ENABLE_DC_TOOLS=OFF`    | Disables data center tools           |
 | `-DTHEROCK_ENABLE_MEDIA_LIBS=OFF`  | Disables all media libraries         |
+| `-DTHEROCK_ENABLE_WSL=ON`          | Enables WSL-specific artifacts       |
 | `-DTHEROCK_ENABLE_EMULATION=ON`    | Enables emulation tools              |
 
 Individual features can be controlled separately (typically in combination with
@@ -186,6 +187,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_CORE_RUNTIME=ON`     | Enables the core runtime components and tools       |
 | `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`      | Enables the HIP runtime components                  |
 | `-DTHEROCK_ENABLE_OCL_RUNTIME=ON`      | Enables the OpenCL runtime components               |
+| `-DTHEROCK_ENABLE_WSL_ROCDXG=ON`       | Enables the WSL ROCDXG bridge library               |
 | `-DTHEROCK_ENABLE_ROCGDB=ON`           | Enables the ROCm debugger (ROCgdb)                  |
 | `-DTHEROCK_ENABLE_ROCPROFV3=ON`        | Enables rocprofv3                                   |
 | `-DTHEROCK_ENABLE_ROCPROFSYS=ON`       | Enables rocprofiler-systems                         |

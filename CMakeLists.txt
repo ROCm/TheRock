@@ -251,6 +251,7 @@ option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK
 option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_EMULATION "Enable building of emulation tools" OFF)
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
+option(THEROCK_ENABLE_WSL "Enable building WSL-specific artifacts" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 
 ################################################################################
