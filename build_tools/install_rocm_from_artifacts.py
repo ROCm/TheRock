@@ -398,6 +398,13 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipdnn")
         if args.hipdnn_integration_tests:
             extra_artifacts.append("hipdnn-integration-tests")
+            # The main test binary `hipdnn_integration_tests` is in the artifact's
+            # _run component (per ml-libs/artifact-hipdnn-integration-tests.toml).
+            # Provider cross-provider integration suites (e.g. miopenprovider's
+            # external-integration-check) invoke it with --test-article and
+            # --test-engine; without _run, ctest finds the entry but errors with
+            # "Unable to find executable: ../hipdnn_integration_tests".
+            argv.append("hipdnn-integration-tests_run")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.miopen:
