@@ -63,9 +63,11 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix }}
-      OUTPUT_DIR: ${{ github.workspace }}/output
-      ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
-      PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
+      # Use relative paths to avoid host/container path mismatch
+      # (github.workspace resolves to host path, but container mounts at /__w/)
+      OUTPUT_DIR: output
+      ARTIFACTS_DIR: output/artifacts
+      PACKAGE_DIST_DIR: output/packages
       RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
       - name: Checking out repository
