@@ -541,6 +541,22 @@ class ConfigureCITest(unittest.TestCase):
         entry = linux_target_output[0]
         self.assertEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
 
+    def test_sandbox_test_runner_with_asan_workflow_dispatch(self):
+        """ASAN tests should use sandbox runner for workflow_dispatch runs."""
+        base_args = {"build_variant": "asan"}
+        build_families = {"amdgpu_families": "gfx94X"}
+        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+            is_pull_request=False,
+            is_workflow_dispatch=True,
+            is_push=False,
+            is_schedule=False,
+            base_args=base_args,
+            families=build_families,
+            platform="linux",
+        )
+        entry = linux_target_output[0]
+        self.assertEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
+
     ###########################################################################
     # Tests for multi-label runner selection
 

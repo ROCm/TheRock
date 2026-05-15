@@ -875,22 +875,23 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove sandbox logic once ASAN tests are passing
-        # For nightly ASAN builds, use sandbox runner to avoid impacting production.
-        # Non-nightly ASAN builds skip tests entirely (no sandbox runner used).
+        # For nightly/workflow_dispatch ASAN builds, use sandbox runner to avoid
+        # impacting production. PR ASAN builds skip tests entirely.
         if build_variant == "asan":
-            if ci_inputs.is_schedule and "test-runs-on-sandbox" in platform_info:
+            can_run_asan = ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch
+            if can_run_asan and "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
             else:
                 test_runs_on = ""
-                if ci_inputs.is_schedule:
+                if can_run_asan:
                     print(
                         f"  {family_name}: no ASAN sandbox runner available, "
                         f"disabling tests"
                     )
                 else:
                     print(
-                        f"  {family_name}: ASAN tests only run on nightly, "
+                        f"  {family_name}: ASAN tests only run on nightly/workflow_dispatch, "
                         f"disabling tests"
                     )
 

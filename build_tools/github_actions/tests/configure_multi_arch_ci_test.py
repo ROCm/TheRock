@@ -928,8 +928,8 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Tests should use sandbox runner for schedule ASAN
         self.assertEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
 
-    def test_asan_workflow_dispatch_disables_tests(self):
-        """ASAN builds on workflow_dispatch should disable tests (not nightly)."""
+    def test_asan_workflow_dispatch_uses_sandbox_runner(self):
+        """ASAN builds on workflow_dispatch should use the sandbox runner."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         # workflow_dispatch event
         result = cm.expand_build_configs(
@@ -941,8 +941,8 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
-        # Tests should be disabled for workflow_dispatch ASAN
-        self.assertEqual(entry["test-runs-on"], "")
+        # Tests should use sandbox runner for workflow_dispatch ASAN
+        self.assertEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
 
     def test_release_schedule_uses_normal_runner(self):
         """Release builds on schedule runs should use normal test runner."""
