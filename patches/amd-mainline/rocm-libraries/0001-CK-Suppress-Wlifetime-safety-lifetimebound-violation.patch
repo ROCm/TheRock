@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Kirill Kasaurov <kirill.kasaurov@amd.com>
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
 Date: Wed, 14 May 2026 18:30:00 -0700
 Subject: [PATCH] CK: Suppress -Wlifetime-safety-lifetimebound-violation in
  dtype_vector.hpp
