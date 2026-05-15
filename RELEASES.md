@@ -28,6 +28,7 @@ Table of contents:
   - [Supported Python `[device-*]` install extras](#supported-python-device--install-extras)
   - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
   - [Installing multi-arch native Linux packages](#installing-multi-arch-native-linux-packages)
+  - [Using ROCm from WSL](#using-rocm-from-wsl)
 - [Per-family releases](#per-family-releases)
   - [Installing per-family releases using pip](#installing-per-family-releases-using-pip)
     - [Python packages release status](#python-packages-release-status)
@@ -398,6 +399,19 @@ sudo dnf install amdrocm-core-sdk
 > per-arch package variant (e.g., `apt install amdrocm-gfx942` or `dnf install amdrocm-gfx942`). For a full list of
 > supported GPU targets and their identifiers, see
 > [Supported Python `[device-*]` install extras](#supported-python-device--install-extras).
+
+### Using ROCm from WSL
+
+When using ROCm from WSL, enable DXG detection before running ROCm
+applications:
+
+```bash
+export HSA_ENABLE_DXG_DETECTION=1
+```
+
+Native Linux packages installed inside WSL set this for future shells via
+`/etc/profile.d/rocm-wsl-rocdxg.sh`. For Python packages and tarballs, set it
+manually in your shell or startup files.
 
 ## Per-family releases
 
