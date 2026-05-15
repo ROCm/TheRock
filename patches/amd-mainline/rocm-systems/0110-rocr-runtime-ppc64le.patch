@@ -1,26 +1,25 @@
-From cd02dc3cbd21c4c2b1e0e2b6afd1f3fa488609da Mon Sep 17 00:00:00 2001
+From cf0d9fcf6061459ec7af187419ccf4f0125044bd Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Tue, 14 Apr 2026 01:52:09 +0000
-Subject: [PATCH] ppc64le rocr-runtime
+Date: Tue, 12 May 2026 20:36:32 +0000
+Subject: [PATCH] rocr-runtime ppc64le
 
 ---
  projects/rocr-runtime/libhsakmt/src/queues.c  |  28 ++++++++++++++----
  .../rocr-runtime/rocrtst/common/hsatimer.cc   |  28 +++++++++++++-----
  .../rocrtst/suites/test_common/CMakeLists.txt |   1 +
  .../thirdparty/lib/libhwloc.ppc64le.so.5.7.10 | Bin 0 -> 1260280 bytes
- .../core/runtime/amd_aql_queue.cpp            |   2 --
  .../core/runtime/amd_gpu_agent.cpp            |  10 +++++--
  .../hsa-runtime/core/runtime/runtime.cpp      |   8 +++--
  .../hsa-runtime/core/util/lnx/os_linux.cpp    |   2 +-
- .../runtime/hsa-runtime/core/util/utils.h     |   3 ++
- 9 files changed, 60 insertions(+), 22 deletions(-)
+ .../runtime/hsa-runtime/core/util/utils.h     |   6 ++++
+ 8 files changed, 63 insertions(+), 20 deletions(-)
  create mode 100755 projects/rocr-runtime/rocrtst/thirdparty/lib/libhwloc.ppc64le.so.5.7.10
 
 diff --git a/projects/rocr-runtime/libhsakmt/src/queues.c b/projects/rocr-runtime/libhsakmt/src/queues.c
-index a0395b4c5c..03ad082527 100644
+index 0c1a555009..d1cd128619 100644
 --- a/projects/rocr-runtime/libhsakmt/src/queues.c
 +++ b/projects/rocr-runtime/libhsakmt/src/queues.c
-@@ -333,8 +333,8 @@ static bool update_ctx_save_restore_size(HsaKFDContext *ctx, uint32_t nodeid, st
+@@ -376,8 +376,8 @@ static bool update_ctx_save_restore_size(HsaKFDContext *ctx, uint32_t nodeid, st
  
  		ctl_stack_size = wave_num * CNTL_STACK_BYTES_PER_WAVE(q->gfxv) + 8;
  		wg_data_size = cu_num * WG_CONTEXT_DATA_SIZE_PER_CU(q->gfxv, node);
@@ -31,7 +30,7 @@ index a0395b4c5c..03ad082527 100644
  		if ((q->gfxv & 0x3f0000) == 0xA0000) {
  			/* HW design limits control stack size to 0x7000.
  			 * This is insufficient for theoretical PM4 cases
-@@ -350,7 +350,7 @@ static bool update_ctx_save_restore_size(HsaKFDContext *ctx, uint32_t nodeid, st
+@@ -393,7 +393,7 @@ static bool update_ctx_save_restore_size(HsaKFDContext *ctx, uint32_t nodeid, st
  		 * the CtlStackSize and CwsrSize from KFD, use that as the definitive value
  		 */
  		q->ctx_save_restore_size = node.CwsrSize > 0 ? node.CwsrSize :
@@ -40,7 +39,7 @@ index a0395b4c5c..03ad082527 100644
  		q->ctl_stack_size = node.CtlStackSize > 0 ? node.CtlStackSize : q->ctl_stack_size;
  
  		return true;
-@@ -434,6 +434,23 @@ void hsakmt_free_exec_aligned_memory_gpu(HsaKFDContext *ctx, void *addr, uint32_
+@@ -477,6 +477,23 @@ void hsakmt_free_exec_aligned_memory_gpu(HsaKFDContext *ctx, void *addr, uint32_
  		hsaKmtFreeMemoryCtx(ctx, addr, size);
  }
  
@@ -64,7 +63,7 @@ index a0395b4c5c..03ad082527 100644
  /*
   * Allocates memory aligned to sysconf(_SC_PAGESIZE)
   */
-@@ -451,6 +468,7 @@ static void *allocate_exec_aligned_memory(HsaKFDContext *ctx,
+@@ -494,6 +511,7 @@ static void *allocate_exec_aligned_memory(HsaKFDContext *ctx,
  							size, PAGE_SIZE, gpu_id, NodeId,
  							nonPaged, DeviceLocal,
  							Uncached);
@@ -72,7 +71,7 @@ index a0395b4c5c..03ad082527 100644
  	return allocate_exec_aligned_memory_cpu(size);
  }
  
-@@ -551,8 +569,7 @@ static int handle_concrete_asic(HsaKFDContext *ctx,
+@@ -594,8 +612,7 @@ static int handle_concrete_asic(HsaKFDContext *ctx,
  
  	if (q->eop_buffer_size > 0) {
  		pr_info("Allocating VRAM for EOP\n");
@@ -82,7 +81,7 @@ index a0395b4c5c..03ad082527 100644
  				q->use_ats, gpu_id,
  				NodeId, true, true, /* Unused for VRAM */false);
  		if (!q->eop_buffer)
-@@ -753,7 +770,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueueExtCtx(HsaKFDContext *ctx,
+@@ -785,7 +802,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueueV2Ctx(
  		free_queue(ctx, q);
  		return err;
  	}
@@ -148,10 +147,10 @@ index 2610ecdd06..6705eba1c4 100755
  
  }  // namespace rocrtst
 diff --git a/projects/rocr-runtime/rocrtst/suites/test_common/CMakeLists.txt b/projects/rocr-runtime/rocrtst/suites/test_common/CMakeLists.txt
-index a3ec052804..0e3e5454db 100644
+index 9f7ba143aa..fd3bddec38 100644
 --- a/projects/rocr-runtime/rocrtst/suites/test_common/CMakeLists.txt
 +++ b/projects/rocr-runtime/rocrtst/suites/test_common/CMakeLists.txt
-@@ -603,6 +603,7 @@ endif()
+@@ -694,6 +694,7 @@ endif()
  set(HAVE_HWLOC FALSE)
  set(HWLOC_TARGET "")
  
@@ -11007,24 +11006,11 @@ u{{$6Xe(#skrnwi_LPX@rt-ovge=&Hg-jTJB^}xTh^$7vFUJzW|Hvb1V95y)s
 literal 0
 HcmV?d00001
 
-diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_aql_queue.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_aql_queue.cpp
-index ccc20b8d19..64c49f2322 100644
---- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_aql_queue.cpp
-+++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_aql_queue.cpp
-@@ -537,8 +537,6 @@ uint32_t AqlQueue::ComputeRingBufferMaxPkts() {
- void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
-   // Allocate storage for the ring buffer.
-   ring_buf_alloc_bytes_ = queue_size_pkts * sizeof(core::AqlPacket);
--  assert(IsMultipleOf(ring_buf_alloc_bytes_, 4096) && "Ring buffer sizes must be 4KiB aligned.");
--
-   if (IsDeviceMemRingBuf()) {
-     if (!agent_->LargeBarEnabled()) {
-       throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_QUEUE_CREATION,
 diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_gpu_agent.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_gpu_agent.cpp
-index b154ee457a..3e805ac055 100644
+index 29aadfddda..815a6dfff6 100644
 --- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_gpu_agent.cpp
 +++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_gpu_agent.cpp
-@@ -2269,7 +2269,9 @@ void GpuAgent::AcquireQueueMainScratch(ScratchInfo& scratch) {
+@@ -2350,7 +2350,9 @@ void GpuAgent::AcquireQueueMainScratch(ScratchInfo& scratch) {
    if (large) scratch.main_size = scratch.dispatch_size;
  
    // Ensure mapping will be in whole pages.
@@ -11035,7 +11021,7 @@ index b154ee457a..3e805ac055 100644
  
    /*
    Sequence of attempts is:
-@@ -2411,7 +2413,9 @@ void GpuAgent::AcquireQueueAltScratch(ScratchInfo& scratch) {
+@@ -2492,7 +2494,9 @@ void GpuAgent::AcquireQueueAltScratch(ScratchInfo& scratch) {
    std::lock_guard<std::mutex> lock(scratch_lock_);
  
    // Ensure mapping will be in whole pages.
@@ -11046,7 +11032,7 @@ index b154ee457a..3e805ac055 100644
  
    /*
    Sequence of attempts is:
-@@ -2873,7 +2877,7 @@ void GpuAgent::InitAllocators() {
+@@ -2966,7 +2970,7 @@ void GpuAgent::InitAllocators() {
        const core::MemoryRegion* pool_ptr = pool.get();
        system_allocator_ = [pool_ptr](size_t size, size_t alignment,
                                   MemoryRegion::AllocateFlags alloc_flags) -> void* {
@@ -11056,7 +11042,7 @@ index b154ee457a..3e805ac055 100644
          return (HSA_STATUS_SUCCESS ==
                  core::Runtime::runtime_singleton_->AllocateMemory(pool_ptr, size, alloc_flags, &ptr))
 diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
-index b849f5a629..517ff07cac 100644
+index 009f7b0504..2584a84fda 100644
 --- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
 +++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
 @@ -205,7 +205,7 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
@@ -11068,7 +11054,7 @@ index b849f5a629..517ff07cac 100644
              void* ptr = NULL;
              return (HSA_STATUS_SUCCESS ==
                      core::Runtime::runtime_singleton_->AllocateMemory(pool.get(), size, alloc_flags,
-@@ -2203,6 +2203,7 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
+@@ -2212,6 +2212,7 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
        } else if (fault.Failure.ErrorType == 3) {
          reason += "Generic hang recovery";
        } else {
@@ -11076,7 +11062,7 @@ index b849f5a629..517ff07cac 100644
          reason += "Unknown";
        }
  
-@@ -3066,8 +3067,9 @@ hsa_status_t Runtime::SetSvmAttrib(void* ptr, size_t size,
+@@ -3061,8 +3062,9 @@ hsa_status_t Runtime::SetSvmAttrib(void* ptr, size_t size,
    if (clear_flags) attribs.push_back(kmtPair(HSA_SVM_ATTR_CLR_FLAGS, clear_flags));
    if (set_flags) attribs.push_back(kmtPair(HSA_SVM_ATTR_SET_FLAGS, set_flags));
  
@@ -11102,19 +11088,22 @@ index 9e99aa7412..037a367704 100644
      /*
       * Iterate through the program headers of the loaded lib and check for PT_DYNAMIC program
 diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h b/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
-index 96e9e476e0..9aa3f93cc1 100644
+index 8029428d82..ff3ddc5b16 100644
 --- a/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
 +++ b/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
-@@ -78,6 +78,9 @@ void log_printf(const char* file, int line, const char* format, ...);
+@@ -83,6 +83,12 @@ typedef uint64_t uint64;
+ void log_printf(const char* file, int line, const char* format, ...);
+ 
  #if defined(__GNUC__)
- #if defined(__i386__) || defined(__x86_64__)
- #include <x86intrin.h>
++#if defined(__i386__) || defined(__x86_64__)
++#include <x86intrin.h>
 +#elif defined(__powerpc__) || defined(__powerpc64__)            
 +#define NO_WARN_X86_INTRINSICS 1
 +#include <emmintrin.h>
- #endif
++#endif
  
  #define __forceinline __inline__ __attribute__((always_inline))
+ #define __declspec(x) __attribute__((x))
 -- 
 2.47.3
 

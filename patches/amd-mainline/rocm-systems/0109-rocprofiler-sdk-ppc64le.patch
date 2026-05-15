@@ -1,15 +1,13 @@
-From 7c3f526733906192988c82223bfb77ddbedbd3cd Mon Sep 17 00:00:00 2001
+From 3e9059ba5b45d83dc67d62e60693ac76e35d8aa8 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 2 Apr 2026 21:15:16 +0000
+Date: Tue, 12 May 2026 20:15:15 +0000
 Subject: [PATCH] rocprofiler-sdk ppc64le
 
 ---
  projects/rocprofiler-sdk/CMakeLists.txt       |  3 ++
- projects/rocprofiler-sdk/external/elfio       |  2 +-
- projects/rocprofiler-sdk/external/yaml-cpp    |  2 +-
  .../rocprofiler-sdk/source/lib/CMakeLists.txt |  7 ++--
  .../source/lib/rocprofiler-sdk/agent.cpp      | 33 +++++++++++++++++--
- 5 files changed, 40 insertions(+), 7 deletions(-)
+ 3 files changed, 38 insertions(+), 5 deletions(-)
 
 diff --git a/projects/rocprofiler-sdk/CMakeLists.txt b/projects/rocprofiler-sdk/CMakeLists.txt
 index 25f335afb3..32f3f1bf9f 100644
@@ -26,25 +24,11 @@ index 25f335afb3..32f3f1bf9f 100644
  include(rocprofiler_config_install_tests)
  
  # ROCPROFILER_BUILD_INTEGRATION_TESTS is not a standard option. If not defined, set it as
-diff --git a/projects/rocprofiler-sdk/external/elfio b/projects/rocprofiler-sdk/external/elfio
-index 8ae6cec5d6..7d30a22fc5 160000
---- a/projects/rocprofiler-sdk/external/elfio
-+++ b/projects/rocprofiler-sdk/external/elfio
-@@ -1 +1 @@
--Subproject commit 8ae6cec5d60495822ecd57d736f66149da9b1830
-+Subproject commit 7d30a22fc5aac06adfe7887ae57f3701b6b5f913
-diff --git a/projects/rocprofiler-sdk/external/yaml-cpp b/projects/rocprofiler-sdk/external/yaml-cpp
-index 1d8ca1f35e..97d150e98b 160000
---- a/projects/rocprofiler-sdk/external/yaml-cpp
-+++ b/projects/rocprofiler-sdk/external/yaml-cpp
-@@ -1 +1 @@
--Subproject commit 1d8ca1f35eb3a9c9142462b28282a848e5d29a91
-+Subproject commit 97d150e98b77faefa8f1d08f678a2121cfb4f08d
 diff --git a/projects/rocprofiler-sdk/source/lib/CMakeLists.txt b/projects/rocprofiler-sdk/source/lib/CMakeLists.txt
-index 952a65266f..ef179106bc 100644
+index 82bdfe466e..06175bc47e 100644
 --- a/projects/rocprofiler-sdk/source/lib/CMakeLists.txt
 +++ b/projects/rocprofiler-sdk/source/lib/CMakeLists.txt
-@@ -15,8 +15,11 @@ add_subdirectory(rocprofiler-sdk-roctx)
+@@ -16,8 +16,11 @@ add_subdirectory(rocprofiler-sdk-roctx)
  set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "rocpd")
  add_subdirectory(rocprofiler-sdk-rocpd)
  
@@ -59,7 +43,7 @@ index 952a65266f..ef179106bc 100644
  set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "tools")
  add_subdirectory(att-tool)
 diff --git a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/agent.cpp b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/agent.cpp
-index b1afc9d658..f531868948 100644
+index 025594cb07..2a9170b058 100644
 --- a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/agent.cpp
 +++ b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/agent.cpp
 @@ -89,8 +89,14 @@ struct cpu_info

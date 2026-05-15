@@ -1,22 +1,19 @@
-From 50406f51764aa878642fcc8eb2ecfd1319a27e5d Mon Sep 17 00:00:00 2001
+From e997f025a4cc1f164fe13287e223d4665d60c851 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 2 Apr 2026 21:15:16 +0000
+Date: Tue, 12 May 2026 19:55:34 +0000
 Subject: [PATCH] hip ppc64le
 
 ---
- projects/hip/VERSION | 4 ++--
- 1 file changed, 2 insertions(+), 2 deletions(-)
+ projects/hip/VERSION | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/projects/hip/VERSION b/projects/hip/VERSION
-index d93710f395..c7e6920e59 100644
+index b094b7acac..6552f37f0b 100644
 --- a/projects/hip/VERSION
 +++ b/projects/hip/VERSION
-@@ -1,6 +1,6 @@
- #HIP_VERSION_MAJOR
- 7
+@@ -3,4 +3,4 @@
  #HIP_VERSION_MINOR
--2
-+12
+ 13
  #HIP_VERSION_PATCH
 -0
 +60490
