@@ -655,7 +655,7 @@ def decide_jobs(
 
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
-    enable_jax = ci_inputs.event_name == "workflow_dispatch" or (
+    enable_jax = ci_inputs.is_workflow_dispatch or (
         ci_inputs.is_pull_request and "ci:build-jax" in ci_inputs.pr_labels
     )
     return JobDecisions(
