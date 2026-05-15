@@ -45,5 +45,4 @@
 [submodule "rocgdb"]
 	path = debug-tools/rocgdb/source
 	url = https://github.com/ROCm/rocgdb.git
-    branch = amd-staging-rocgdb-16
-
+	branch = amd-staging-rocgdb-16
