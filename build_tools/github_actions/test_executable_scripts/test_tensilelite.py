@@ -70,14 +70,23 @@ env["PATH"] = os.pathsep.join(
     )
 )
 
-# Smoke test: verify install layout allows single-PYTHONPATH imports.
+# Smoke test: verify install layout and stable ABI.
 logging.info("=== Verifying artifact install layout ===")
+rocisa_dir = tensilelite_root / "rocisa"
+logging.info(
+    f"rocisa directory contents: {[f.name for f in rocisa_dir.iterdir() if not f.name.startswith('__')]}"
+)
+abi3_files = list(rocisa_dir.glob("*.abi3.*"))
+if abi3_files:
+    logging.info(f"Stable ABI confirmed: {[f.name for f in abi3_files]}")
+else:
+    logging.warning("No .abi3 extension found — stable ABI may not be enabled")
 subprocess.check_call(
     [
         sys.executable,
         "-c",
         "import Tensile, rocisa, rocisa.instruction; "
-        "print(Tensile.ROOT_PATH); print(rocisa.__file__)",
+        "print('Tensile:', Tensile.ROOT_PATH); print('rocisa:', rocisa.__file__)",
     ],
     cwd=str(THEROCK_DIR),
     env=env,
