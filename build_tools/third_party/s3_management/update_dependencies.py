@@ -14,7 +14,6 @@ from botocore.exceptions import ClientError
 
 import re
 
-
 # Whitelist of allowed wheel platform and Python tags.
 # Wheels not matching both criteria are skipped (not uploaded to S3).
 
@@ -60,6 +59,11 @@ PACKAGES_PER_PROJECT = {
     "rocm-bootstrap": {"versions": ["latest"], "project": "torch"},
     "setuptools": {"versions": ["81.0.0"], "project": "rocm"},
 }
+
+
+def normalize_package_name(name: str) -> str:
+    """Normalize a Python distribution name for comparison."""
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 def get_project_paths() -> List[str]:
@@ -295,6 +299,7 @@ def run_update_dependencies(
     prefix: str | None = None,
     auto_detect_prefixes: bool = False,
     starting_from: str | None = None,
+    dependency_names: frozenset[str] | None = None,
 ) -> None:
     print(f"Running update_dependencies for package={package}, dry_run={dry_run}")
 
@@ -304,12 +309,25 @@ def run_update_dependencies(
             f"Unsupported package '{package}'. Expected one of: {', '.join(project_paths)}"
         )
 
+    normalized_dependency_names = (
+        frozenset(normalize_package_name(name) for name in dependency_names)
+        if dependency_names is not None
+        else None
+    )
+
     bucket = get_s3_bucket(bucket_name)
     selected_packages = {
         pkg_name: pkg_info
         for pkg_name, pkg_info in PACKAGES_PER_PROJECT.items()
         if pkg_info["project"] == package
+        and (
+            normalized_dependency_names is None
+            or normalize_package_name(pkg_name) in normalized_dependency_names
+        )
     }
+    if not selected_packages:
+        raise ValueError(f"No dependency packages selected for project '{package}'")
+
     target_prefixes = resolve_target_prefixes(
         bucket=bucket,
         explicit_prefix=prefix,
@@ -362,6 +380,15 @@ def main() -> None:
             "Required when using --auto-detect-prefixes."
         ),
     )
+    parser.add_argument(
+        "--dependency-package",
+        action="append",
+        dest="dependency_packages",
+        help=(
+            "Limit reconciliation to one dependency package. "
+            "Can be passed multiple times."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--only-pypi", action="store_true")
 
@@ -375,6 +402,9 @@ def main() -> None:
         prefix=args.prefix,
         auto_detect_prefixes=args.auto_detect_prefixes,
         starting_from=args.starting_from,
+        dependency_names=(
+            frozenset(args.dependency_packages) if args.dependency_packages else None
+        ),
     )
 
 
