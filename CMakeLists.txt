@@ -533,4 +533,3 @@ endif()
 # Finalization
 ################################################################################
 therock_subproject_merge_compile_commands()
-# TO BE REMOVED - just a line to start the testing
