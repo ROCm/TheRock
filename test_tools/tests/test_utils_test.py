@@ -457,7 +457,26 @@ class RocminfoTest(unittest.TestCase):
                 test_utils.get_visible_gpu_count(rocm_bin_dir=temp_dir, runner=runner),
                 3,
             )
-            self.assertEqual(calls[0][0], [os.fspath(rocminfo_path)])
+        self.assertEqual(calls[0][0], [os.fspath(rocminfo_path)])
+
+    def test_get_visible_gpu_architectures_uses_runner(self):
+        calls = []
+
+        def runner(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+            return SimpleNamespace(stdout=self.ROCMINFO_OUTPUT)
+
+        self.assertEqual(
+            test_utils.get_visible_gpu_architectures(
+                env={"ROCR_VISIBLE_DEVICES": "0"},
+                runner=runner,
+                check=True,
+            ),
+            ["gfx942", "gfx942", "gfx1100"],
+        )
+        self.assertEqual(calls[0][0], ["rocminfo"])
+        self.assertEqual(calls[0][1]["env"], {"ROCR_VISIBLE_DEVICES": "0"})
+        self.assertTrue(calls[0][1]["check"])
 
     def test_get_first_gpu_architecture_returns_first_visible_gpu(self):
         def runner(cmd, **kwargs):
@@ -480,6 +499,13 @@ class ArtifactGroupTest(unittest.TestCase):
         self.assertFalse(test_utils.is_asan_artifact_group("core-runtime"))
         self.assertTrue(test_utils.is_asan_artifact_group("core-asan"))
         self.assertTrue(test_utils.is_asan_artifact_group("CORE-ASAN"))
+
+    def test_is_tsan_artifact_group(self):
+        self.assertFalse(test_utils.is_tsan_artifact_group(None))
+        self.assertFalse(test_utils.is_tsan_artifact_group(""))
+        self.assertFalse(test_utils.is_tsan_artifact_group("core-runtime"))
+        self.assertTrue(test_utils.is_tsan_artifact_group("core-tsan"))
+        self.assertTrue(test_utils.is_tsan_artifact_group("CORE-TSAN"))
 
 
 if __name__ == "__main__":

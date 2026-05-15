@@ -238,6 +238,10 @@ def build_ctest_label_args(
     args: list[str] = ["-L", normalized_category]
     le_patterns: list[str] = []
 
+    # Category exclude labels, such as quick_exclude, always exclude tests from
+    # the selected category. GPU labels are additive: include the matching
+    # ex_gpu_gfxXXX label when one exists, otherwise exclude all ex_gpu tests so
+    # tests for other GPU targets do not run accidentally.
     category_exclude_label = f"{normalized_category}_exclude"
     if category_exclude_label in exclude_labels:
         le_patterns.append(category_exclude_label)
@@ -411,6 +415,25 @@ def _rocminfo_command(rocm_bin_dir: str | Path | None = None) -> str:
     return "rocminfo"
 
 
+def get_visible_gpu_architectures(
+    env: Mapping[str, str] | None = None,
+    rocm_bin_dir: str | Path | None = None,
+    runner=subprocess.run,
+    *,
+    check: bool = False,
+) -> list[str]:
+    """Return visible GPU architecture records reported by rocminfo."""
+    result = runner(
+        [_rocminfo_command(rocm_bin_dir)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        check=check,
+    )
+    return parse_rocminfo_gpu_archs(result.stdout or "")
+
+
 def parse_rocminfo_gpu_archs(output: str) -> list[str]:
     """Return visible GPU architecture names from rocminfo output."""
     gpu_archs: list[str] = []
@@ -427,15 +450,14 @@ def get_visible_gpu_count(
     runner=subprocess.run,
 ) -> int:
     """Return the number of visible GPU architecture records in rocminfo output."""
-    result = runner(
-        [_rocminfo_command(rocm_bin_dir)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=env,
-        check=False,
+    return len(
+        get_visible_gpu_architectures(
+            env=env,
+            rocm_bin_dir=rocm_bin_dir,
+            runner=runner,
+            check=False,
+        )
     )
-    return len(parse_rocminfo_gpu_archs(result.stdout or ""))
 
 
 def get_first_gpu_architecture(
@@ -444,15 +466,12 @@ def get_first_gpu_architecture(
     runner=subprocess.run,
 ) -> str:
     """Return the first visible GPU architecture, such as gfx942."""
-    result = runner(
-        [_rocminfo_command(rocm_bin_dir)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
+    gpu_archs = get_visible_gpu_architectures(
         env=env,
+        rocm_bin_dir=rocm_bin_dir,
+        runner=runner,
         check=True,
     )
-    gpu_archs = parse_rocminfo_gpu_archs(result.stdout or "")
     if gpu_archs:
         gpu_arch = gpu_archs[0]
         logging.info("Detected GPU architecture: %s", gpu_arch)
@@ -463,3 +482,8 @@ def get_first_gpu_architecture(
 def is_asan_artifact_group(artifact_group: str | None) -> bool:
     """Return whether an artifact group name describes an ASAN build."""
     return "asan" in (artifact_group or "").lower()
+
+
+def is_tsan_artifact_group(artifact_group: str | None) -> bool:
+    """Return whether an artifact group name describes a TSAN build."""
+    return "tsan" in (artifact_group or "").lower()
