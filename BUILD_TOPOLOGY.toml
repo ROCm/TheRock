@@ -163,7 +163,6 @@ artifact_groups = [
     "profiler-core",
     "rocrtst",
     "rocjitsu",
-    "opencl-cts"
 ]
 
 [build_stages.wsl-rocdxg]

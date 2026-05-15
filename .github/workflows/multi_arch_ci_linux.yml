@@ -118,7 +118,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
 
   build_opencl_cts_ubi10:
-    needs: [build_multi_arch_stages]
+    needs: [copy_prebuilt_stages]
     name: Build opencl-cts (ubi10)
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
     uses: ./.github/workflows/build_opencl_cts_ubi10.yml
