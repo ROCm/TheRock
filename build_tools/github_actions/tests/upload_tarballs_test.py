@@ -8,6 +8,8 @@ destination fields and that multiarch tarballs continue to be exported
 correctly even if the filename format changes.
 """
 
+import sys
+import os
 import json
 import tempfile
 import types
@@ -16,6 +18,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import build_tools.github_actions.upload_tarballs as mod
+
+# Add repository root to path so build_tools is importable.
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent.parent))
 
 
 class TestUploadTarballsMain(unittest.TestCase):
