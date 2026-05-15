@@ -57,8 +57,11 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         self.assertTrue(run_ci)
 
     def test_ci_workflow_filenames_cover_all_transitive_uses(self):
-        """_GITHUB_WORKFLOWS_CI_FILENAMES must exactly match the set of
-        workflows transitively called by ci.yml and multi_arch_ci.yml.
+        """_GITHUB_WORKFLOWS_CI_FILENAMES must include all workflows
+        transitively called by ci.yml and multi_arch_ci.yml.
+
+        Additional release workflows may be included to ensure CI runs
+        when those workflows are modified.
 
         This is a change-detector test that can be removed if
         _GITHUB_WORKFLOWS_CI_FILENAMES is computed dynamically instead of
@@ -67,9 +70,15 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         If this test fails, update _GITHUB_WORKFLOWS_CI_FILENAMES in
         configure_ci_path_filters.py to match the actual workflow tree.
         """
+        # Release workflows that should trigger CI when modified,
+        # even though they're not called by ci.yml/multi_arch_ci.yml
+        additional_release_workflows = {
+            "multi_arch_release_linux_pytorch_wheels.yml",
+        }
+
         all_used = get_transitive_workflow_uses(["ci.yml", "multi_arch_ci.yml"])
         missing = all_used - _GITHUB_WORKFLOWS_CI_FILENAMES
-        stale = _GITHUB_WORKFLOWS_CI_FILENAMES - all_used
+        stale = _GITHUB_WORKFLOWS_CI_FILENAMES - all_used - additional_release_workflows
         errors = []
         if missing:
             errors.append(
