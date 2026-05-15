@@ -105,8 +105,8 @@ jobs:
       linux_build_config: ${{ steps.configure.outputs.linux_build_config }}
       windows_build_config: ${{ steps.configure.outputs.windows_build_config }}
       test_type: ${{ steps.configure.outputs.test_type }}
-      linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
-      windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
+      linux_test_labels: ${{ steps.external_test_labels.outputs.test_labels || steps.configure.outputs.linux_test_labels }}
+      windows_test_labels: ${{ steps.external_test_labels.outputs.test_labels || steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
@@ -167,3 +167,20 @@ jobs:
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
             --external-repo-json='${{ inputs.external_repo }}'
+
+      - name: Compute external repo test labels
+        id: external_test_labels
+        if: ${{ inputs.external_repo != '' }}
+        run: |
+          # Get projects from external_repo_config (if any)
+          CONFIG_JSON='${{ steps.external_repo_config.outputs.config_json }}'
+          if [[ -n "$CONFIG_JSON" ]]; then
+            PROJECTS_JSON=$(echo "$CONFIG_JSON" | jq -r '.projects // []')
+            PROJECTS=$(echo "$PROJECTS_JSON" | jq -r 'if length > 0 then .[] else empty end' | tr '\n' ' ')
+            if [[ -n "$PROJECTS" ]]; then
+              echo "Computing test labels for projects: $PROJECTS"
+              python ./build_tools/determine_build_config.py --projects $PROJECTS --gha-output
+            else
+              echo "No projects specified, skipping test label computation"
+            fi
+          fi

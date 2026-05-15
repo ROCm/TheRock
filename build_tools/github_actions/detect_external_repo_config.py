@@ -372,11 +372,13 @@ def main(argv=None):
     # Parse external repo JSON if provided, extract repository name
     source_repository = None
     source_ref = ""
+    source_projects = []  # Projects to build/test (optional)
     if args.external_repo_json:
         try:
             external_repo = json.loads(args.external_repo_json)
             source_repository = external_repo.get("repository", "")
             source_ref = external_repo.get("ref", "")
+            source_projects = external_repo.get("projects", [])
             # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries")
             if "/" in source_repository:
                 repo_name = source_repository.split("/")[-1]
@@ -384,7 +386,7 @@ def main(argv=None):
                 repo_name = source_repository
             args.repository = repo_name
             print(
-                f"Parsed external_repo: repository={source_repository}, ref={source_ref}",
+                f"Parsed external_repo: repository={source_repository}, ref={source_ref}, projects={source_projects}",
                 file=sys.stderr,
             )
         except json.JSONDecodeError as e:
@@ -431,6 +433,7 @@ def main(argv=None):
             "checkout_path": checkout_path,
             "source_package": source_package,
             "fetch_sources_args": config.get("fetch_sources_args", ""),
+            "projects": source_projects,  # Projects to build/test (empty = full stage)
         }
         config["config_json"] = json.dumps(config_json)
         print(

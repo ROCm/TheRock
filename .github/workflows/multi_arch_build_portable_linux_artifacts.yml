@@ -156,13 +156,33 @@ jobs:
 
       - name: Get project-specific build config
         id: project_config
-        if: ${{ inputs.projects != '' }}
         run: |
-          # Convert comma-separated to space-separated for argparse
-          PROJECTS=$(echo "${{ inputs.projects }}" | tr ',' ' ')
-          python build_tools/determine_build_config.py \
-            --projects $PROJECTS \
-            --gha-output
+          # Determine which projects to build
+          # Priority: external_repo_config.projects > inputs.projects > none (full stage)
+          PROJECTS=""
+
+          # Check external_repo_config first (primary source for external repos)
+          if [[ -n '${{ inputs.external_repo_config }}' ]]; then
+            PROJECTS_JSON='${{ inputs.external_repo_config != '' && toJSON(fromJSON(inputs.external_repo_config).projects) || '[]' }}'
+            PROJECTS=$(echo "$PROJECTS_JSON" | jq -r 'if length > 0 then .[] else empty end' | tr '\n' ' ')
+          fi
+
+          # Fall back to inputs.projects if no external_repo_config projects
+          if [[ -z "$PROJECTS" && -n "${{ inputs.projects }}" ]]; then
+            PROJECTS=$(echo "${{ inputs.projects }}" | tr ',' ' ')
+          fi
+
+          # Output results
+          if [[ -n "$PROJECTS" ]]; then
+            echo "Using project-specific build: $PROJECTS"
+            python build_tools/determine_build_config.py \
+              --projects $PROJECTS \
+              --gha-output
+            echo "has_projects=true" >> $GITHUB_OUTPUT
+          else
+            echo "No projects specified, using full stage build"
+            echo "has_projects=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Install stage python deps
         if: ${{ steps.stage_config.outputs.pip_install_cmd }}
@@ -170,8 +190,8 @@ jobs:
 
       - name: Configure
         run: |
-          # Use project-specific cmake_args if projects input is set, otherwise use stage config
-          if [[ -n "${{ inputs.projects }}" ]]; then
+          # Use project-specific cmake_args if has_projects is true, otherwise use stage config
+          if [[ "${{ steps.project_config.outputs.has_projects }}" == "true" ]]; then
             CMAKE_FEATURE_ARGS="${{ steps.project_config.outputs.cmake_args }}"
           else
             CMAKE_FEATURE_ARGS="${{ steps.stage_config.outputs.cmake_args }}"

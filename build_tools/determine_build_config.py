@@ -8,6 +8,9 @@ Given a list of project names, this script outputs:
 1. CMake flags to enable only those projects (and dependencies)
 2. Test labels to run for those projects
 
+The project-to-feature mapping is parsed from CMakeLists.txt files by looking
+for therock_cmake_subproject_declare() calls inside if(THEROCK_ENABLE_*) blocks.
+
 Example:
     # Get build config for rocprim
     python build_tools/determine_build_config.py --projects rocprim
@@ -17,10 +20,14 @@ Example:
 
     # Output for GitHub Actions
     python build_tools/determine_build_config.py --projects rocprim --gha-output
+
+    # List all known projects and their features
+    python build_tools/determine_build_config.py --list-projects
 """
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Set
@@ -33,27 +40,65 @@ from _therock_utils.build_topology import BuildTopology
 from github_actions.github_actions_api import gha_set_output
 from determine_rocm_test_dependencies import get_subprojects_to_test
 
-# Map from project/subproject names to their THEROCK_ENABLE_* feature names
-# This maps the lowercase project names used in CMakeLists.txt to feature flags
-PROJECT_TO_FEATURE: Dict[str, str] = {
-    # Math libs - prim group
-    "rocprim": "PRIM",
-    "rocprim_tests": "PRIM",
-    "rocthrust": "PRIM",
-    "rocthrust_tests": "PRIM",
-    "hipcub": "PRIM",
-    "hipcub_tests": "PRIM",
-    # Math libs - rand group
-    "rocrand": "RAND",
-    "rocrand_tests": "RAND",
-    "hiprand": "RAND",
-    "hiprand_tests": "RAND",
-    # Math libs - fft group
-    "rocfft": "FFT",
-    "rocfft_tests": "FFT",
-    "hipfft": "FFT",
-    "hipfft_tests": "FFT",
-    # Math libs - blas group
+
+def parse_project_to_feature_map(therock_dir: Path) -> Dict[str, str]:
+    """Parse CMakeLists.txt files to build project -> feature mapping.
+
+    Looks for patterns like:
+        if(THEROCK_ENABLE_PRIM)
+          ...
+          therock_cmake_subproject_declare(rocPRIM ...)
+          ...
+        endif()
+
+    Returns dict mapping lowercase project name -> feature name (e.g., "rocprim" -> "PRIM")
+    """
+    project_to_feature: Dict[str, str] = {}
+    cmake_files = list(therock_dir.rglob("CMakeLists.txt"))
+
+    for cmake_file in cmake_files:
+        content = cmake_file.read_text()
+
+        # Find all if(THEROCK_ENABLE_*) blocks and track current feature context
+        # We use a simple state machine approach
+        lines = content.split("\n")
+        current_feature = None
+        depth = 0
+
+        for line in lines:
+            # Check for if(THEROCK_ENABLE_*)
+            enable_match = re.match(
+                r"\s*if\s*\(\s*THEROCK_ENABLE_(\w+)\s*\)", line, re.IGNORECASE
+            )
+            if enable_match:
+                if depth == 0:
+                    current_feature = enable_match.group(1)
+                depth += 1
+                continue
+
+            # Check for endif
+            if re.match(r"\s*endif\s*\(", line, re.IGNORECASE):
+                depth -= 1
+                if depth == 0:
+                    current_feature = None
+                continue
+
+            # Check for therock_cmake_subproject_declare
+            if current_feature:
+                declare_match = re.match(
+                    r"\s*therock_cmake_subproject_declare\s*\(\s*(\w+)", line
+                )
+                if declare_match:
+                    project_name = declare_match.group(1).lower()
+                    project_to_feature[project_name] = current_feature
+
+    return project_to_feature
+
+
+# Fallback mapping for projects in subdirectories (add_subdirectory)
+# These are not directly inside if(THEROCK_ENABLE_*) blocks
+SUBDIRECTORY_PROJECT_TO_FEATURE: Dict[str, str] = {
+    # BLAS subdirectory projects
     "rocblas": "BLAS",
     "rocblas_tests": "BLAS",
     "hipblas": "BLAS",
@@ -62,20 +107,26 @@ PROJECT_TO_FEATURE: Dict[str, str] = {
     "hipblaslt_tests": "BLAS",
     "hipsparselt": "BLAS",
     "rocroller": "BLAS",
-    # Math libs - sparse group
+    # SPARSE subdirectory projects
     "rocsparse": "SPARSE",
     "rocsparse_tests": "SPARSE",
     "hipsparse": "SPARSE",
     "hipsparse_tests": "SPARSE",
-    # Math libs - solver group
+    # SOLVER subdirectory projects
     "rocsolver": "SOLVER",
     "rocsolver_tests": "SOLVER",
     "hipsolver": "SOLVER",
     "hipsolver_tests": "SOLVER",
-    # Math libs - other
-    "rocwmma": "ROCWMMA",
-    "rocwmma_tests": "ROCWMMA",
-    "libhipcxx": "LIBHIPCXX",
+    # PRIM projects (rocthrust, hipcub are in prim block)
+    "rocthrust": "PRIM",
+    "rocthrust_tests": "PRIM",
+    "hipcub": "PRIM",
+    "hipcub_tests": "PRIM",
+    # FFT projects
+    "rocfft": "FFT",
+    "rocfft_tests": "FFT",
+    "hipfft": "FFT",
+    "hipfft_tests": "FFT",
     # ML libs
     "composable_kernel": "COMPOSABLE_KERNEL",
     "miopen": "MIOPEN",
@@ -86,9 +137,30 @@ PROJECT_TO_FEATURE: Dict[str, str] = {
     "rccl": "RCCL",
     "rccl_tests": "RCCL",
     "rocshmem": "ROCSHMEM",
+    # Other
+    "rocwmma": "ROCWMMA",
+    "rocwmma_tests": "ROCWMMA",
+    "libhipcxx": "LIBHIPCXX",
 }
 
+# Cache for parsed mapping
+_PROJECT_TO_FEATURE_CACHE: Dict[str, str] | None = None
+
+
+def get_project_to_feature_map(therock_dir: Path = None) -> Dict[str, str]:
+    """Get project -> feature mapping, combining parsed and fallback mappings."""
+    global _PROJECT_TO_FEATURE_CACHE
+    if _PROJECT_TO_FEATURE_CACHE is None:
+        if therock_dir is None:
+            therock_dir = Path(__file__).parent.parent
+        # Start with fallback, then override with parsed (parsed takes precedence)
+        _PROJECT_TO_FEATURE_CACHE = dict(SUBDIRECTORY_PROJECT_TO_FEATURE)
+        _PROJECT_TO_FEATURE_CACHE.update(parse_project_to_feature_map(therock_dir))
+    return _PROJECT_TO_FEATURE_CACHE
+
+
 # Feature dependencies - if you enable X, you also need Y
+# These are based on artifact_deps in BUILD_TOPOLOGY.toml
 FEATURE_DEPS: Dict[str, List[str]] = {
     "SPARSE": ["BLAS", "PRIM"],
     "SOLVER": ["BLAS", "PRIM", "SPARSE"],
@@ -121,13 +193,16 @@ def resolve_feature_deps(features: Set[str]) -> Set[str]:
     return result
 
 
-def get_features_for_projects(projects: List[str]) -> Set[str]:
+def get_features_for_projects(
+    projects: List[str], therock_dir: Path = None
+) -> Set[str]:
     """Get the set of features needed to build the given projects."""
+    project_to_feature = get_project_to_feature_map(therock_dir)
     features = set()
     for project in projects:
         project_lower = project.lower()
-        if project_lower in PROJECT_TO_FEATURE:
-            features.add(PROJECT_TO_FEATURE[project_lower])
+        if project_lower in project_to_feature:
+            features.add(project_to_feature[project_lower])
         else:
             print(f"Warning: Unknown project '{project}'", file=sys.stderr)
     return resolve_feature_deps(features)
@@ -141,6 +216,36 @@ def generate_cmake_args(features: Set[str]) -> List[str]:
     return args
 
 
+def get_build_and_test_config(
+    projects: List[str], therock_dir: Path = None
+) -> Dict[str, any]:
+    """Get complete build and test configuration for projects.
+
+    Returns dict with:
+        - projects: input project list
+        - features: list of features to enable
+        - cmake_args: list of cmake arg strings
+        - cmake_args_str: space-separated cmake args
+        - test_projects: list of projects to test
+        - test_labels: comma-separated test labels
+    """
+    if therock_dir is None:
+        therock_dir = Path(__file__).parent.parent
+
+    features = get_features_for_projects(projects, therock_dir)
+    cmake_args = generate_cmake_args(features)
+    test_projects = get_subprojects_to_test(projects, therock_dir)
+
+    return {
+        "projects": projects,
+        "features": sorted(features),
+        "cmake_args": cmake_args,
+        "cmake_args_str": " ".join(cmake_args),
+        "test_projects": sorted(test_projects),
+        "test_labels": ",".join(f"test:{p}" for p in sorted(test_projects)),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Determine build and test configuration for specific projects"
@@ -148,7 +253,6 @@ def main():
     parser.add_argument(
         "--projects",
         nargs="+",
-        required=True,
         help="Project names (e.g., rocprim, rocblas)",
     )
     parser.add_argument(
@@ -169,28 +273,19 @@ def main():
     )
     args = parser.parse_args()
 
+    therock_dir = Path(__file__).parent.parent
+
     if args.list_projects:
-        print("Known projects:")
-        for project in sorted(PROJECT_TO_FEATURE.keys()):
-            print(f"  {project} -> THEROCK_ENABLE_{PROJECT_TO_FEATURE[project]}")
+        project_to_feature = get_project_to_feature_map(therock_dir)
+        print("Known projects (parsed from CMakeLists.txt):")
+        for project in sorted(project_to_feature.keys()):
+            print(f"  {project} -> THEROCK_ENABLE_{project_to_feature[project]}")
         return 0
 
-    # Get features and cmake args
-    features = get_features_for_projects(args.projects)
-    cmake_args = generate_cmake_args(features)
+    if not args.projects:
+        parser.error("--projects is required unless --list-projects is specified")
 
-    # Get test dependencies
-    therock_dir = Path(__file__).parent.parent
-    test_projects = get_subprojects_to_test(args.projects, therock_dir)
-
-    result = {
-        "projects": args.projects,
-        "features": sorted(features),
-        "cmake_args": cmake_args,
-        "cmake_args_str": " ".join(cmake_args),
-        "test_projects": sorted(test_projects),
-        "test_labels": ",".join(f"test:{p}" for p in sorted(test_projects)),
-    }
+    result = get_build_and_test_config(args.projects, therock_dir)
 
     if args.gha_output:
         gha_set_output(
@@ -204,9 +299,9 @@ def main():
         print(json.dumps(result, indent=2))
     else:
         print(f"Projects: {', '.join(args.projects)}")
-        print(f"Features: {', '.join(sorted(features))}")
-        print(f"CMake args: {' '.join(cmake_args)}")
-        print(f"Test projects: {', '.join(sorted(test_projects))}")
+        print(f"Features: {', '.join(result['features'])}")
+        print(f"CMake args: {result['cmake_args_str']}")
+        print(f"Test projects: {', '.join(result['test_projects'])}")
 
     return 0
 
