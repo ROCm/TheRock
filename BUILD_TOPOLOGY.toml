@@ -233,7 +233,7 @@ source_sets = ["rocm-systems"]
 description = "WSL-only ROCDXG bridge library"
 type = "generic"
 artifact_group_deps = ["base"]
-source_sets = ["rocm-systems"]
+source_sets = ["base", "rocm-systems"]
 
 [artifact_groups.core-amdsmi]
 description = "AMD SMI tool (amdsmi)"
