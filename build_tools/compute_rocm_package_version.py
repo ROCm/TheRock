@@ -6,37 +6,28 @@
 """Computes a ROCm package version with an appropriate suffix for a given release type.
 
 For usage from other Python scripts, call the `compute_version()` function
-directly. When used from GitHub Actions, this writes to GITHUB_OUTPUT:
-  - 'rocm_package_version' for wheel packages (default)
+directly. When used from GitHub Actions, this writes all three version outputs
+to GITHUB_OUTPUT:
+  - 'rocm_package_version' for wheel packages
   - 'rocm_deb_package_version' for deb packages
   - 'rocm_rpm_package_version' for rpm packages
 
-Sample usage for wheel packages (Python):
+Sample usage:
 
   python compute_rocm_package_version.py --release-type=dev
-  # 7.10.0.dev0+f689a8ea40232f3f6be1ec958354b108349023ff
+  # rocm_package_version=7.10.0.dev0+f689a8ea40232f3f6be1ec958354b108349023ff
+  # rocm_deb_package_version=7.10.0~dev20251203
+  # rocm_rpm_package_version=7.10.0~20251203gf689a8e
 
   python compute_rocm_package_version.py --release-type=prerelease --prerelease-version=2
-  # 7.10.0rc2
+  # rocm_package_version=7.10.0rc2
+  # rocm_deb_package_version=7.10.0~pre2
+  # rocm_rpm_package_version=7.10.0~rc2
 
   python compute_rocm_package_version.py --release-type=nightly
-  # 7.10.0a20251021
-
-Sample usage for native packages (deb/rpm):
-
-  python compute_rocm_package_version.py --release-type=dev --package-type=deb
-  # 8.1.0~dev20251203
-
-  python compute_rocm_package_version.py --release-type=dev --package-type=rpm
-  # 8.1.0~20251203gf689a8e
-
-  python compute_rocm_package_version.py --release-type=prerelease --prerelease-version=2 --package-type=deb
-  # 8.1.0~pre2
-
-  python compute_rocm_package_version.py --release-type=release --package-type=rpm
-  # 8.1.0
-
-Sample usage with custom release versions:
+  # rocm_package_version=7.10.0a20251021
+  # rocm_deb_package_version=7.10.0~20251021
+  # rocm_rpm_package_version=7.10.0~20251021
 
   python compute_rocm_package_version.py --custom-version-suffix=.dev0
   # 7.10.0.dev0
@@ -221,14 +212,6 @@ def compute_version(
 def main(argv):
     parser = argparse.ArgumentParser(prog="compute_rocm_package_version")
 
-    parser.add_argument(
-        "--package-type",
-        type=str,
-        choices=["wheel", "deb", "rpm"],
-        default="wheel",
-        help="The type of package (default: wheel)",
-    )
-
     release_type_group = parser.add_mutually_exclusive_group()
     release_type_group.add_argument(
         "--release-type",
@@ -263,7 +246,7 @@ def main(argv):
     args = parser.parse_args(argv)
 
     # Validation
-    if args.release_type == "release" and args.package_type == "wheel":
+    if args.release_type == "release":
         parser.error("'release' type is only valid for deb/rpm packages, not wheel")
 
     if args.release_type != "prerelease" and args.prerelease_version:
@@ -273,22 +256,24 @@ def main(argv):
             "--prerelease-version is required when release type is 'prerelease'"
         )
 
-    rocm_package_version = compute_version(
-        args.package_type,
-        args.release_type,
-        args.custom_version_suffix,
-        args.prerelease_version,
-        args.override_base_version,
-        args.override_git_sha,
-    )
-
-    # Set appropriate output variable based on package type
-    if args.package_type == "wheel":
-        gha_set_output({"rocm_package_version": rocm_package_version})
-    else:  # deb or rpm
-        gha_set_output(
-            {f"rocm_{args.package_type}_package_version": rocm_package_version}
+    # Compute versions for all three package types: wheel, deb, and rpm
+    outputs = {}
+    for pkg_type in ["wheel", "deb", "rpm"]:
+        version = compute_version(
+            pkg_type,
+            args.release_type,
+            args.custom_version_suffix,
+            args.prerelease_version,
+            args.override_base_version,
         )
+
+        # Set appropriate output variable based on package type
+        if pkg_type == "wheel":
+            outputs["rocm_package_version"] = version
+        else:  # deb or rpm
+            outputs[f"rocm_{pkg_type}_package_version"] = version
+
+    gha_set_output(outputs)
 
 
 if __name__ == "__main__":

@@ -171,6 +171,8 @@ enable/disable selected subsets:
 | `-DTHEROCK_ENABLE_PROFILER=OFF`    | Disables profilers                   |
 | `-DTHEROCK_ENABLE_DC_TOOLS=OFF`    | Disables data center tools           |
 | `-DTHEROCK_ENABLE_MEDIA_LIBS=OFF`  | Disables all media libraries         |
+| `-DTHEROCK_ENABLE_WSL=ON`          | Enables WSL-specific artifacts       |
+| `-DTHEROCK_ENABLE_EMULATION=ON`    | Enables emulation tools              |
 
 Individual features can be controlled separately (typically in combination with
 `-DTHEROCK_ENABLE_ALL=OFF` or `-DTHEROCK_RESET_FEATURES=ON` to force a
@@ -185,6 +187,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_CORE_RUNTIME=ON`     | Enables the core runtime components and tools       |
 | `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`      | Enables the HIP runtime components                  |
 | `-DTHEROCK_ENABLE_OCL_RUNTIME=ON`      | Enables the OpenCL runtime components               |
+| `-DTHEROCK_ENABLE_WSL_ROCDXG=ON`       | Enables the WSL ROCDXG bridge library               |
 | `-DTHEROCK_ENABLE_ROCGDB=ON`           | Enables the ROCm debugger (ROCgdb)                  |
 | `-DTHEROCK_ENABLE_ROCPROFV3=ON`        | Enables rocprofv3                                   |
 | `-DTHEROCK_ENABLE_ROCPROFSYS=ON`       | Enables rocprofiler-systems                         |
@@ -208,6 +211,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCDECODE=ON`        | Enables rocDecode video decoder (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCJPEG=ON`          | Enables rocJPEG JPEG decoder (Linux only)           |
+| `-DTHEROCK_ENABLE_ROCJITSU=ON`         | Enables ROCm emulation tools (Linux only)           |
 
 hipDNN provider plugins:
 
@@ -299,8 +303,33 @@ cmake --build build
 
 #### CCache usage on Windows
 
-We are still investigating the exact proper options for ccache on Windows and
-do not currently recommend that end users enable it.
+- You must have a recent ccache (>= 4.13.3 at the time of writing) that contains
+  bug fixes for MSVC and supports proper caching with the `--offload-compress`
+  option used for compressing AMDGPU device code.
+- `export CCACHE_SLOPPINESS=include_file_ctime,pch_defines,time_macros` to
+  support hard-linking and precompiled headers (amd-llvm is built with PCH).
+- Proper setup of the `compiler_check` directive to do safe caching in the
+  presence of compiler bootstrapping.
+- Set the C/CXX compiler launcher options to cmake appropriately.
+
+Since these options are very fiddly and prone to change over time, we recommend
+using the `./build_tools/setup_ccache.py` script to create a `.ccache` directory
+in the repository root with hard coded configuration suitable for the project.
+
+Example (In Command Prompt):
+
+```bat
+# Any command prompt used to build must eval setup_ccache.py to set environment
+# variables.
+for /f "delims=" %i in ('python build_tools/setup_ccache.py') do @%i
+
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all \
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache ^
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ^
+  .
+
+cmake --build build
+```
 
 ### Running tests
 
@@ -328,4 +357,4 @@ separately.
 - [Dockerfiles for TheRock](dockerfiles/README.md): Information about containers used for building, testing, and distributing ROCm using TheRock.
 - [Build Artifacts](docs/development/artifacts.md): Documentation about the outputs of the build system.
 - [Releases Page](RELEASES.md): Documentation for how to leverage our build artifacts.
-- [Roadmap for Support](ROADMAP.md): Documentation for our prioritized roadmap to support AMD GPUs.
+- [Supported GPUs](SUPPORTED_GPUS.md): Current support status and prioritized roadmap for each AMD GPU architecture.
