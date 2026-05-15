@@ -112,30 +112,40 @@ jobs:
             --release-type="${{ inputs.release_type }}" \
             --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}"
 
-  test_artifacts_per_family:
+  trigger_test_artifacts_per_family:
     needs: [build_artifacts]
-    name: Test ${{ matrix.family_info.amdgpu_family }}
+    name: Trigger Test Artifacts (${{ matrix.family_info.amdgpu_family }})
     if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
     strategy:
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
-    uses: ./.github/workflows/test_artifacts.yml
-    with:
-      artifact_group: ${{ matrix.family_info.amdgpu_family }}
-      amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
-      amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
-      test_runs_on: ${{ matrix.family_info.test-runs-on }}
-      test_type: ${{ inputs.test_type }}
-      release_type: ${{ inputs.release_type }}
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
+    steps:
+      - name: Trigger test_artifacts
+        if: ${{ matrix.family_info.test-runs-on != '' }}
+        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        with:
+          workflow: test_artifacts.yml
+          inputs: |
+            { "artifact_group": "${{ matrix.family_info.amdgpu_family }}",
+              "artifact_run_id": "${{ github.run_id }}",
+              "amdgpu_families": "${{ matrix.family_info.amdgpu_family }}",
+              "amdgpu_targets": "${{ matrix.family_info.amdgpu_targets }}",
+              "test_runs_on": "${{ matrix.family_info.test-runs-on }}",
+              "test_type": "${{ inputs.test_type }}",
+              "release_type": "${{ inputs.release_type }}",
+              "repository": "${{ inputs.repository }}",
+              "ref": "${{ inputs.ref }}"
+            }
 
   # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
   #   bucket if the job order is not altered.
-  build_pytorch_wheels:
+  trigger_release_pytorch_wheels:
     needs: [build_artifacts, build_python_packages]
-    name: Build PyTorch Wheels
+    name: Trigger Release PyTorch Wheels
     runs-on: ubuntu-24.04
     permissions:
       actions: write

@@ -105,7 +105,7 @@ def main(cl_args: list[str]):
         has_related_commit,
     ) = repo_management.read_pytorch_rocm_pins(
         args.torch_dir,
-        os="centos",  # Read pins for "centos" on Linux and Windows
+        os="ubuntu",  # Read shared Linux pins on Linux and Windows
         project="apex",
         default_origin=DEFAULT_ORIGIN,
         default_hashtag=DEFAULT_HASHTAG,
