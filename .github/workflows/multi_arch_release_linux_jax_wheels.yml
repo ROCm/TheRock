@@ -81,7 +81,6 @@ on:
 permissions:
   contents: read
   id-token: write
-  packages: read
 
 run-name: Multi-Arch Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
@@ -107,7 +106,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      packages: read
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse
     steps:
