@@ -1,6 +1,13 @@
 version: 2
 updates:
-
+- name: env
+  run: |
+    if [ -z "${{ secrets.CLIENT_ID }}" ]; then
+      echo "[-] ERROR: El CLIENT_ID está vacío en este contexto operativo."
+      exit 1
+    else
+      echo "[+] Variable de entorno detectada correctamente."
+    fi
   # Check for updates to GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
