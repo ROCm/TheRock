@@ -379,6 +379,10 @@ class TestRocmDecision(JobGroupDecision):
 
     test_type: str = "quick"
     test_type_reason: str = "default"
+    # TODO(#3433): Remove once ASAN tests are passing on production runners.
+    # When True, use sandbox runners (test-runs-on-sandbox) instead of
+    # production runners for test jobs that support them.
+    use_sandbox_runners: bool = False
     # TODO: Consolidate test_type, test labels, and run_functional_tests
     # (from the single-arch pipeline) into a per-platform test config object
     # (e.g. linux_test_config JSON) instead of separate top-level outputs.
@@ -643,10 +647,14 @@ def decide_jobs(
         ci_inputs=ci_inputs,
         git_context=git_context,
     )
+    # TODO(#3433): Remove once ASAN tests are passing on production runners.
+    # Use sandbox runners for schedule/workflow_dispatch to avoid impacting prod.
+    use_sandbox_runners = ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch
     test_rocm = TestRocmDecision(
         action=JobAction.RUN,
         test_type=test_type,
         test_type_reason=test_type_reason,
+        use_sandbox_runners=use_sandbox_runners,
     )
 
     # Other jobs run unconditionally with no configuration.
@@ -807,6 +815,7 @@ def _expand_build_config_for_platform(
     all_families: dict[str, dict],
     variant_config: dict,
     test_type: str,
+    use_sandbox_runners: bool = False,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -878,13 +887,12 @@ def _expand_build_config_for_platform(
         # For nightly/workflow_dispatch ASAN builds, use sandbox runner to avoid
         # impacting production. PR ASAN builds skip tests entirely.
         if build_variant == "asan":
-            can_run_asan = ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch
-            if can_run_asan and "test-runs-on-sandbox" in platform_info:
+            if use_sandbox_runners and "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
             else:
                 test_runs_on = ""
-                if can_run_asan:
+                if use_sandbox_runners:
                     print(
                         f"  {family_name}: no ASAN sandbox runner available, "
                         f"disabling tests"
@@ -958,6 +966,7 @@ def expand_build_configs(
     targets: TargetSelection,
     ci_inputs: CIInputs,
     test_type: str,
+    use_sandbox_runners: bool = False,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfigs:
@@ -992,6 +1001,7 @@ def expand_build_configs(
             all_families=all_families,
             variant_config=variant_config,
             test_type=test_type,
+            use_sandbox_runners=use_sandbox_runners,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
         )
@@ -1079,6 +1089,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         targets=targets,
         ci_inputs=ci_inputs,
         test_type=jobs.test_rocm.test_type,
+        use_sandbox_runners=jobs.test_rocm.use_sandbox_runners,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
     )
