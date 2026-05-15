@@ -153,6 +153,9 @@ therock_cmake_subproject_declare(hipBLASLt
     ${hipBLASLt_rocRoller_runtime_deps}
     ${hipBLASLt_runtime_deps}
     ${optional_profiler_deps}
+  TEST_SUBPROJECTS
+    hipSPARSELt
+    MIOpen
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt
   SUBDIRS
@@ -272,8 +275,9 @@ if(THEROCK_ENABLE_SPARSE)
       hip-clr
       ${optional_profiler_deps}
     TEST_SUBPROJECTS
-      rocSPARSE
       hipSPARSE
+      rocSOLVER
+      hipSOLVER
   )
   therock_cmake_subproject_glob_c_sources(rocSPARSE
     SUBDIRS

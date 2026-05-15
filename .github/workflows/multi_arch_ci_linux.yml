@@ -31,7 +31,7 @@ on:
         type: string
         default: ""
       external_repo_config:
-        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package, fetch_sources_args)"
         type: string
         default: ""
       repository:

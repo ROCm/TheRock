@@ -172,6 +172,7 @@ enable/disable selected subsets:
 | `-DTHEROCK_ENABLE_DC_TOOLS=OFF`    | Disables data center tools           |
 | `-DTHEROCK_ENABLE_MEDIA_LIBS=OFF`  | Disables all media libraries         |
 | `-DTHEROCK_ENABLE_WSL=ON`          | Enables WSL-specific artifacts       |
+| `-DTHEROCK_ENABLE_EMULATION=ON`    | Enables emulation tools              |
 
 Individual features can be controlled separately (typically in combination with
 `-DTHEROCK_ENABLE_ALL=OFF` or `-DTHEROCK_RESET_FEATURES=ON` to force a
@@ -210,6 +211,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCDECODE=ON`        | Enables rocDecode video decoder (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCJPEG=ON`          | Enables rocJPEG JPEG decoder (Linux only)           |
+| `-DTHEROCK_ENABLE_ROCJITSU=ON`         | Enables ROCm emulation tools (Linux only)           |
 
 hipDNN provider plugins:
 
