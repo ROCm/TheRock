@@ -80,25 +80,10 @@ jobs:
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
 
-      - name: Fetch inbound artifacts
-        run: |
-          python build_tools/artifact_manager.py fetch \
-            --run-id=${{ github.run_id }} \
-            --stage="${STAGE_NAME}" \
-            --output-dir="${BUILD_DIR}" \
-            --bootstrap
-
       - name: Fetch sources
         timeout-minutes: 30
         run: |
           ./build_tools/fetch_sources.py --jobs 12 --source-sets opencl-cts
-
-      - name: Get stage configuration
-        id: stage_config
-        run: |
-          python build_tools/configure_stage.py \
-            --stage="${STAGE_NAME}" \
-            --gha-output
 
       - name: Configure
         run: |
@@ -106,8 +91,10 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DTHEROCK_BUNDLE_SYSDEPS=OFF \
-            ${{ steps.stage_config.outputs.cmake_args }}
+            -DTHEROCK_AMDGPU_FAMILIES=gfx94X-dcgpu \
+            -DTHEROCK_ENABLE_ALL=OFF \
+            -DTHEROCK_ENABLE_OPENCL_CTS=ON \
+            -DTHEROCK_BUNDLE_SYSDEPS=OFF
 
       - name: Build opencl-cts
         run: |
