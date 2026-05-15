@@ -934,7 +934,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # workflow_dispatch event
         result = cm.expand_build_configs(
             targets=targets,
-            ci_inputs=self._inputs(event_name="workflow_dispatch", build_variant="asan"),
+            ci_inputs=self._inputs(
+                event_name="workflow_dispatch", build_variant="asan"
+            ),
             test_type="quick",
         )
         self.assertIsNotNone(result.linux)
