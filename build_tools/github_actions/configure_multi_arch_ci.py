@@ -20,7 +20,7 @@ The CI pipeline is a DAG of job groups:
 
     build-rocm → test-rocm
                → build-rocm-python → build-pytorch → test-pytorch
-                                   → build-jax     → test-jax
+                                   → build-jax     → test-jax (future)
                → build-native-linux   → test-native-linux
                → build-native-windows → test-native-windows (future)
 

@@ -78,9 +78,6 @@ on:
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
-      build_jax:
-        description: Whether to run JAX build jobs.
-        value: ${{ jobs.setup.outputs.build_jax }}
       rocm_deb_package_version:
         description: ROCm DEB package version for native packages.
         value: ${{ jobs.setup.outputs.rocm_deb_package_version }}
@@ -111,7 +108,6 @@ jobs:
       linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
-      build_jax: ${{ steps.configure.outputs.build_jax }}
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
