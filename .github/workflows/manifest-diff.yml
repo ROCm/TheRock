@@ -84,6 +84,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
       - name: Install python deps
         run: pip install -r requirements.txt
 
