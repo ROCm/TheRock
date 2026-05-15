@@ -368,6 +368,52 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
 
 endif(THEROCK_ENABLE_HIP_RUNTIME)
 
+if(THEROCK_ENABLE_WSL_ROCDXG)
+  if(NOT THEROCK_WSL_WIN_SDK)
+    message(FATAL_ERROR "THEROCK_WSL_WIN_SDK must be set when THEROCK_ENABLE_WSL_ROCDXG=ON")
+  endif()
+
+  # FPRINT_SOURCE_DIR tracks upstream libhsakmt; the small file glob tracks this
+  # wrapper, whose source dir is otherwise outside that upstream fingerprint.
+  # The upstream WSL rocdxg path expects the mounted Windows SDK shared include
+  # directory to be provided explicitly, so forward THEROCK_WSL_WIN_SDK into
+  # the nested subproject configure.
+  therock_cmake_subproject_declare(therock-wsl-rocdxg
+    EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/wsl-rocdxg"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/wsl-rocdxg"
+    USE_DIST_AMDGPU_TARGETS
+    BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      amd-hip
+    CMAKE_ARGS
+      "-DTHEROCK_WSL_WIN_SDK=${THEROCK_WSL_WIN_SDK}"
+    FPRINT_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt"
+    FPRINT_FILE_GLOBS
+      "${CMAKE_CURRENT_SOURCE_DIR}/wsl-rocdxg/*"
+    INTERFACE_INCLUDE_DIRS
+      include
+    INTERFACE_LINK_DIRS
+      lib
+    INTERFACE_PKG_CONFIG_DIRS
+      lib/pkgconfig
+    INTERFACE_INSTALL_RPATH_DIRS
+      lib
+  )
+  therock_cmake_subproject_provide_package(therock-wsl-rocdxg rocdxg lib/cmake/rocdxg)
+  therock_cmake_subproject_activate(therock-wsl-rocdxg)
+
+  therock_provide_artifact(wsl-rocdxg
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-wsl-rocdxg.toml
+    COMPONENTS
+      dev
+      doc
+      lib
+    SUBPROJECT_DEPS
+      therock-wsl-rocdxg
+  )
+endif()
+
 if(THEROCK_BUILD_TESTING)
   if(THEROCK_ENABLE_CORE_HIPTESTS)
     set(HIP_TESTS_CMAKE_ARGS)
