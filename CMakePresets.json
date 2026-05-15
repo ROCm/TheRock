@@ -18,7 +18,8 @@
         "therock-SuiteSparse_BUILD_TYPE": "Release",
         "THEROCK_SPLIT_DEBUG_INFO": "ON",
         "THEROCK_MINIMAL_DEBUG_INFO": "ON",
-        "THEROCK_QUIET_INSTALL": "OFF"
+        "THEROCK_QUIET_INSTALL": "OFF",
+        "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
       }
     },
     {
@@ -46,7 +47,8 @@
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1",
         "CMAKE_CXX_FLAGS": "-g1",
         "CMAKE_C_FLAGS": "-g1",
-        "THEROCK_FLAG_KPACK_SPLIT_ARTIFACTS": "OFF"
+        "THEROCK_FLAG_KPACK_SPLIT_ARTIFACTS": "OFF",
+        "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
       }
     },
     {
@@ -71,7 +73,8 @@
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1",
         "CMAKE_CXX_FLAGS": "-g1",
-        "CMAKE_C_FLAGS": "-g1"
+        "CMAKE_C_FLAGS": "-g1",
+        "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
       }
     },
     {
@@ -96,7 +99,8 @@
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1",
         "CMAKE_CXX_FLAGS": "-g1",
-        "CMAKE_C_FLAGS": "-g1"
+        "CMAKE_C_FLAGS": "-g1",
+        "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
       }
     },
     {
@@ -129,7 +133,8 @@
       "displayName": "Windows release builds preset",
       "description": "Ninja generator, MSVC (cl.exe), x64 architecture, Release",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
       },
       "inherits": [
         "windows-base"
