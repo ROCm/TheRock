@@ -23,6 +23,7 @@ if [ -n "$VA_LIB" ]; then
     # Keep the meson-created symlinks, just add the additional symlink we need
     pushd "$PREFIX/lib" > /dev/null
     ln -sf "$(basename "$VA_LIB")" "libva.so"
+    ln -sf "$(basename "$VA_LIB")" "libva.so.2"
     popd > /dev/null
 else
     echo "Warning: Could not find librocm_sysdeps_va.so.2 symlink"
@@ -33,6 +34,7 @@ if [ -n "$VA_DRM_LIB" ]; then
     # Keep the meson-created symlinks, just add the additional symlink we need
     pushd "$PREFIX/lib" > /dev/null
     ln -sf "$(basename "$VA_DRM_LIB")" "libva-drm.so"
+    ln -sf "$(basename "$VA_DRM_LIB")" "libva-drm.so.2"
     popd > /dev/null
 else
     echo "Warning: Could not find librocm_sysdeps_va-drm.so.2 symlink"
