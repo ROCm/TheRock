@@ -300,7 +300,7 @@ jobs:
   # ==========================================================================
   # STAGE: fusilli-libs (generic, after math-libs + iree-compiler)
   # ==========================================================================
-  # TODO: re-enable for ASAN once fusilli-libs build is validated to work
+  # TODO: re-enable for sanitizers once fusilli-libs build is validated to work
   fusilli-libs:
     needs: [compiler-runtime, math-libs, iree-compiler]
     if: >-
@@ -308,7 +308,8 @@ jobs:
         !cancelled() &&
         !failure() &&
         !contains(inputs.prebuilt_stages, 'fusilli-libs') &&
-        inputs.build_variant_label != 'asan'
+        inputs.build_variant_label != 'asan' &&
+        inputs.build_variant_label != 'tsan'
       }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
