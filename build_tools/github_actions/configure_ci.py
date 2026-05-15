@@ -447,12 +447,12 @@ def matrix_generator(
                         break
 
                 # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
-                # To avoid impact on the production environment, we use the custom sandbox runners if this is an ASAN test run
-                if (
-                    "asan" in base_args.get("build_variant")
-                    and "test-runs-on-sandbox" in matrix_row
-                ):
-                    matrix_row["test-runs-on"] = matrix_row["test-runs-on-sandbox"]
+                # For nightly ASAN builds, use sandbox runner. Non-nightly ASAN builds skip tests.
+                if "asan" in base_args.get("build_variant"):
+                    if is_schedule and "test-runs-on-sandbox" in matrix_row:
+                        matrix_row["test-runs-on"] = matrix_row["test-runs-on-sandbox"]
+                    else:
+                        matrix_row["test-runs-on"] = ""
 
                 # Select build runner using weighted distribution (90% Azure, 10% AWS)
                 # Sanitizer builds use ramdisk variants

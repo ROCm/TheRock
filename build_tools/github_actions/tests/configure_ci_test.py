@@ -509,7 +509,8 @@ class ConfigureCITest(unittest.TestCase):
             self.assertFalse(configure_ci.determine_long_lived_branch(branch))
 
     # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
-    def test_sandbox_test_runner_with_asan(self):
+    def test_sandbox_test_runner_with_asan_non_schedule(self):
+        """ASAN tests should be disabled for non-schedule runs."""
         base_args = {"build_variant": "asan"}
         build_families = {"amdgpu_families": "gfx94X"}
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(
@@ -523,6 +524,22 @@ class ConfigureCITest(unittest.TestCase):
         )
         entry = linux_target_output[0]
         self.assertEqual(entry["test-runs-on"], "")
+
+    def test_sandbox_test_runner_with_asan_schedule(self):
+        """ASAN tests should use sandbox runner for schedule runs."""
+        base_args = {"build_variant": "asan"}
+        build_families = {"amdgpu_families": "gfx94X"}
+        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+            is_pull_request=False,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=True,
+            base_args=base_args,
+            families=build_families,
+            platform="linux",
+        )
+        entry = linux_target_output[0]
+        self.assertEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
 
     ###########################################################################
     # Tests for multi-label runner selection
