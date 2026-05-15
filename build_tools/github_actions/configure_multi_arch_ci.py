@@ -651,21 +651,13 @@ def decide_jobs(
 
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
-    enable_jax = ci_inputs.is_workflow_dispatch or (
-        ci_inputs.is_pull_request and "ci:build-jax" in ci_inputs.pr_labels
-    )
+
     return JobDecisions(
         build_rocm=build_rocm,
         test_rocm=test_rocm,
         build_rocm_python=JobGroupDecision(action=JobAction.RUN),
         build_pytorch=JobGroupDecision(action=JobAction.RUN),
         test_pytorch=JobGroupDecision(action=JobAction.RUN),
-        build_jax=JobGroupDecision(
-            action=JobAction.RUN if enable_jax else JobAction.SKIP
-        ),
-        test_jax=JobGroupDecision(
-            action=JobAction.RUN if enable_jax else JobAction.SKIP
-        ),
     )
 
 
@@ -1030,7 +1022,6 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
-        "build_jax": outputs.jobs.build_jax.action.value if outputs.jobs else "skip",
     }
     gha_set_output(output_vars)
 
