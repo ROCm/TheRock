@@ -68,11 +68,15 @@ skip_tests = {
             "test_cpp_warnings_have_python_context_cuda",
         ],
         "distributed": [
+            # --- Host / CI limits (/dev/shm, GPU memory context) ---
             # Error while creating shared memory segment /dev/shm/nccl-VPyhzw (size 21823872), error: No space left on device (28)
             "test_3d_mlp_with_nd_mesh",
             # AssertionError: False is not true : cuda:0 used 2615148544.0 bytes after collective, 70% more than the status before (1495269376.0 bytes). Extra CUDA context may have been created.
             "test_extra_cuda_context",
-            # Timout errors (fsdp)
+
+            # --- Timeouts (pytest-timeout, multiprocessing join, undifferentiated CI hangs / ROCm slowness) ---
+            # Former umbrella: "Timout errors (fsdp)". Additional cases from gfx94X-dcgpu —
+            # https://github.com/ROCm/TheRock/actions/runs/25875103215
             "(TestClipGradNormWorldSize2 and test_clip_grad_norm_1d)",
             "(TestClipGradNormWorldSize4 and test_clip_grad_norm_2d)",
             "(TestFullyShardAllGatherExtensionsMultiProcess and test_all_gather_extensions_train_parity)",
@@ -168,49 +172,39 @@ skip_tests = {
             "(TestCommModeFeatures and test_MLPStacked_distributed_sharding_display)",
             "(DistributedDataParallelTest and test_ddp_weight_sharing)",
             "(TestDistBackendWithSpawn and test_ddp_uneven_inputs_stop_iteration_sync_bn)",
-            # gfx94X-dcgpu distributed full suite — https://github.com/ROCm/TheRock/actions/runs/25875103215
-            # Failed: Timeout (>900s) from pytest-timeout.
             "(TestFSDPFineTuneCUDA and test_parity_with_ddp_cuda)",
-            # AssertionError: Tensor-likes are not close! (FSDP state_dict save/load parity)
-            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and cpu_offload1 and fp16_True and use_orig_params_False and not local_state_dict)",
-            # RuntimeError: Process 0 terminated or timed out after 300s
             "(TestFreezingWeights and nested_trunk_True and GradToNone and forward_prefetch_True)",
             "(TestFSDPOptimState and test_full_optim_state_dict_keys)",
-            # Failed: Timeout (>900s) from pytest-timeout.
             "(TestFSDPWrap and test_main_wrap_api and cpu_offload0 and backward_prefetch1 and forward_prefetch_False and device_init_mode0)",
-            # RuntimeError: Process 0 terminated or timed out after 300s
             "(TestFSDPStateDict and test_basic_save_and_load_state_dict and local_state_dict and cpu_offload1 and fp16_False and use_orig_params_False)",
             "(TestFSDPMixedPrecisionSharded and test_mp_batchnorm_convert_sync_bn_True)",
             "(TestFSDPOptimState and test_optim_state_dict_nested and FULL_STATE_DICT and use_multiple_param_groups_False and rank0_only_False and use_diff_optim_inputs_False)",
             "(TestParityWithDDPCUDA and test_nested_always_wrap_model_offload_false_none_cuda)",
             "(TestCommunicationHooks and test_fp16_hook_has_wrapping_True_sharding_strategy1)",
-            # Failed: Timeout (>900s) from pytest-timeout.
             "(TestExplicitUnshardCUDA and test_unshard_async_use_orig_params_True_cuda)",
-            # AssertionError: Expected exit code 0 but got -6 (spawned child)
-            "(TestDistBackendWithSpawn and test_ddp_buffer_hook_allreduce_return_future)",
             "(TestFSDPUseOrigParamsMultipleParamGroups and test_diff_trainability)",
             "(TestFullyShardWithDistributedStateDict and test_save_with_fsdp2_tp_and_load_with_tp)",
-            # AssertionError: Tensor-likes are not close!
-            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and sharded_state_dict and cpu_offload0 and fp16_False and use_orig_params_False)",
-            # Failed: Timeout (>900s) from pytest-timeout.
             "(TestFSDPIgnoredModules and test_ignored_modules_not_under_wrapped_root_ignore_modules_False)",
             "(TestFSDPHybridShard and test_fsdp_hybrid_shard_parity)",
-            # AssertionError: False is not true (FSDP meta vs regular parameter mismatch)
-            "(TestFSDPWithMetaDevice and test_nested_model_with_meta_device_reset_params_auto_wrap_True)",
-            # RuntimeError: Process 0 terminated or timed out after 300s
             "(TestFSDPMemory and test_fsdp_memory_ckpt_no_ckpt)",
-            # Failed: Timeout (>900s) from pytest-timeout.
             "(TestFSDPMiscMultiProcess and test_fsdp_device_id_use_index_False)",
             "(TestShardedGradScalerParityWithDDP and test_fsdp_ddp_parity_with_grad_scaler_offload_false_none_none_none)",
-            # RuntimeError: Process 0 terminated or timed out after 200s
             "(TestJoin and test_join_kwargs)",
-            # AssertionError: Scalars are not close! (FSDP vs DDP transformer loss parity)
-            "(TestParityWithDDPCUDA and test_transformer_offload_true_no_shard_cuda)",
-            # Failed: Timeout (>900s) from pytest-timeout.
             "(TestGradAcc and test_grad_acc_configs0_use_orig_params_True)",
-            # RuntimeError: Exception in worker process
+
+            # --- Numerical / parity (tensor mismatch, meta init, FSDP vs ref loss) ---
+            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and cpu_offload1 and fp16_True and use_orig_params_False and not local_state_dict)",
+            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and sharded_state_dict and cpu_offload0 and fp16_False and use_orig_params_False)",
+            "(TestFSDPWithMetaDevice and test_nested_model_with_meta_device_reset_params_auto_wrap_True)",
+            "(TestParityWithDDPCUDA and test_transformer_offload_true_no_shard_cuda)",
+
+            # --- Spawned child abnormal exit (non-zero / signal from fork/spawn worker) ---
+            "(TestDistBackendWithSpawn and test_ddp_buffer_hook_allreduce_return_future)",
+
+            # --- Worker exception (distributed autograd / pipeline) ---
             "(ScheduleTest and test_grad_with_manual_ScheduleClass1_shape_inference_False)",
-            # AssertionError: Scalars are not equal!
+
+            # --- Context-parallel flex attention (scalar mismatch) ---
             "(CPFlexAttentionTest and test_cp_flex_attention_causal_mask)",
         ],
     },
