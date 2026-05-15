@@ -45,14 +45,6 @@ from github_actions_api import gha_set_output
 logger = logging.getLogger(__name__)
 
 
-def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
-    if not s3_uri.startswith("s3://"):
-        raise ValueError(f"Unexpected S3 URI: {s3_uri}")
-    bucket_and_key = s3_uri[len("s3://") :]
-    bucket, prefix = bucket_and_key.split("/", 1)
-    return bucket, prefix
-
-
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Upload tarballs to S3")
     parser.add_argument(
@@ -110,22 +102,25 @@ def main(argv: list[str]) -> int:
 
     logger.info("Uploaded %d files", count)
     tarball_urls: dict[str, str] = {}
-    bucket, prefix = parse_s3_uri(dest.s3_uri)
 
     for f in tarball_files:
-        # Existing tarball naming convention:
-        # therock-dist-<platform>-<family>-<package_version>.tar.gz
         name = f.name
-        if not name.startswith(f"therock-dist-{args.platform}-") or not name.endswith(
-            ".tar.gz"
-        ):
-            raise ValueError(f"Unexpected tarball name: {name}")
+        url = f"https://{dest.bucket}.s3.amazonaws.com/{dest.relative_path}/{name}"
 
-        family_and_version = name[
-            len(f"therock-dist-{args.platform}-") : -len(".tar.gz")
-        ]
-        family = family_and_version.rsplit("-", 1)[0]
-        tarball_urls[family] = f"https://{bucket}.s3.amazonaws.com/{prefix}/{name}"
+        if name.startswith(f"therock-dist-{args.platform}-multiarch-"):
+            tarball_urls["multiarch"] = url
+        else:
+            family_and_version = name[
+                len(f"therock-dist-{args.platform}-") : -len(".tar.gz")
+            ]
+
+            # Future-proof shared tarball naming:
+            # therock-dist-linux-<version>.tar.gz
+            if "-" not in family_and_version:
+                tarball_urls["multiarch"] = url
+            else:
+                family = family_and_version.rsplit("-", 1)[0]
+                tarball_urls[family] = url
 
     gha_set_output({"tarball_urls": json.dumps(tarball_urls)})
     return 0
