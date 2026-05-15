@@ -199,13 +199,14 @@ The following meta packages aggregate fine-grained packages into user-facing ins
 | `amdrocm-raytracing.msi`      | ROCm Ray Tracing Runtime Redistributable | Ray tracing runtime libraries, acceleration structures, and GPU architecture-specific binaries                                                                                                                                                          | Run ROCm ray tracing workloads              |
 | `amdrocm-raytracing-sdk.msi`  | ROCm Ray Tracing SDK                     | Ray tracing development headers, SDK libraries, samples, and tooling                                                                                                                                                                                    | Develop and build ROCm ray tracing projects |
 
+> **Note:** The ray tracing packages are planned for a different ROCm release and will be further defined in the future.
+
 #### Fine-Grained Packages
 
 Windows package granularity must match the Linux model defined in [RFC0009](./RFC0009-OS-Packaging-Requirements.md#package-granularity). Each fine-grained package separates runtime and development components. On Windows these are implemented as MSI features or individual MSI packages, depending on installer architecture.
 
 | Package Name                 | Runtime Contents                                                     | Dev Package Contents (additional)                |
 | :--------------------------- | :------------------------------------------------------------------- | :----------------------------------------------- |
-| `amdrocm-sysdeps`            | Bundled 3rd party dependencies (libdrm, libelf, ncurses, etc.)       |                                                  |
 | `amdrocm-base`               | rocminfo, rocm-core, rocprofiler-register, rocm-cmake, half          |                                                  |
 | `amdrocm-llvm`               | amd-llvm, hipcc, aux-overlay                                         | amd-llvm headers, hipcc headers                  |
 | `amdrocm-runtime`            | ROCR-Runtime, CLR, rocm-kpack, amd-comgr                             | ROCR-Runtime headers, CLR headers, comgr headers |
@@ -218,7 +219,6 @@ Windows package granularity must match the Linux model defined in [RFC0009](./RF
 | `amdrocm-ck`                 | composable_kernel                                                    |                                                  |
 | `amdrocm-dnn`                | hipDNN, MIOpen                                                       | hipDNN headers, MIOpen headers, flatbuffers      |
 | `amdrocm-hipify`             | HIPIFY                                                               |                                                  |
-| `amdrocm-opencl`             | OpenCL runtime (ocl-clr, ocl-icd)                                    | OpenCL headers                                   |
 | `amdrocm-math-common`        | SuiteSparse, host-blas                                               |                                                  |
 
 Winget package identifiers may use Windows ecosystem naming conventions such as `AMD.ROCm`, but they should map cleanly to the same product and component boundaries.
