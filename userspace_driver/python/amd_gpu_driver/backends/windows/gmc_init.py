@@ -759,6 +759,7 @@ def init_gmc(
     vram_size_bytes: int,
     gart_table_bus_addr: int,
     dummy_page_bus_addr: int,
+    gart_start: int | None = None,
 ) -> GMCConfig:
     """Full GMC initialization sequence for RDNA4.
 
@@ -777,6 +778,8 @@ def init_gmc(
         vram_size_bytes: VRAM size in bytes.
         gart_table_bus_addr: Bus address of the GART page table (from DMA alloc).
         dummy_page_bus_addr: Bus address of a dummy page for fault handling.
+        gart_start: Optional VMID0 GART aperture base. If omitted, use the
+            historical userspace-driver layout after VRAM.
 
     Returns:
         Configured GMCConfig for use by other modules.
@@ -793,14 +796,20 @@ def init_gmc(
     config.vram_start = fb_base_reg << 24
     config.vram_end = (fb_top_reg << 24) | 0xFFFFFF  # Inclusive end
     config.vram_size = vram_size_bytes
+    config.fb_offset = (
+        _mmhub_reg(dev, config, regMMMC_VM_FB_OFFSET) & 0x00FFFFFF
+    ) << 24
 
     # If VBIOS didn't set FB location, use a reasonable default
     if config.vram_start == 0 and config.vram_end == 0:
         config.vram_start = 0
         config.vram_end = vram_size_bytes - 1
 
-    # GART sits after VRAM in GPU MC address space
-    config.gart_start = config.vram_end + 1
+    if gart_start is None:
+        # Historical userspace-driver layout. Linux amdgpu_lite passes the
+        # kernel-reported low aperture to match stock amdgpu VMID0 setup.
+        gart_start = config.vram_end + 1
+    config.gart_start = gart_start
     config.gart_end = config.gart_start + config.gart_size - 1
 
     # AGP disabled (bot > top)

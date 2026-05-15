@@ -123,10 +123,9 @@ class LiteMemoryManager:
     def _alloc_vram(self, size: int, *, map_gpu: bool = True) -> MemoryHandle:
         """Allocate VRAM via ALLOC_VRAM ioctl.
 
-        VRAM allocations already have a physical GPU address (their offset
-        within the VRAM aperture). They don't need GART page table entries
-        because the GPU accesses VRAM directly. The gpu_addr returned by
-        the kernel is the VRAM-relative offset.
+        VRAM allocations already have an MC address in the VRAM aperture.
+        They don't need GART page table entries because the GPU accesses
+        VRAM directly.
         """
         args = amdgpu_lite_alloc_vram()
         args.size = size
@@ -153,7 +152,7 @@ class LiteMemoryManager:
 
         handle = MemoryHandle(
             kfd_handle=args.handle,
-            gpu_addr=args.gpu_addr,  # VRAM offset, directly addressable by GPU
+            gpu_addr=args.gpu_addr,
             cpu_addr=cpu_addr,
             size=size,
             location=MemoryLocation.VRAM,

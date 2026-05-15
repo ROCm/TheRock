@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import ctypes
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,16 +38,28 @@ from amd_gpu_driver.backends.windows.ip_discovery import (
     read_discovery_table_via_mmio,
 )
 from amd_gpu_driver.backends.windows.nbio_init import NBIOConfig, init_nbio
-from amd_gpu_driver.backends.windows.gmc_init import GMCConfig, init_gmc
+from amd_gpu_driver.backends.windows.gmc_init import (
+    GMCConfig,
+    flush_gpu_tlb,
+    gfxhub_gart_enable,
+    init_gmc,
+)
 from amd_gpu_driver.backends.windows.psp_init import (
     PSPConfig,
     init_psp,
     load_all_firmware,
 )
+from amd_gpu_driver.backends.windows.smu_init import (
+    SMUConfig,
+    init_smu,
+    load_smu_firmware_direct,
+)
 from amd_gpu_driver.backends.windows.ih_init import IHConfig, init_ih
 from amd_gpu_driver.backends.windows.ring_init import (
     ComputeQueueConfig,
+    MESRingConfig,
     init_gfx_for_compute,
+    init_mes_for_compute,
     init_compute_queue,
     submit_compute_packets,
     wait_fence,
@@ -63,7 +76,9 @@ class GPUContext:
     nbio_config: NBIOConfig
     gmc_config: GMCConfig
     psp_config: PSPConfig | None
+    smu_config: SMUConfig | None
     ih_config: IHConfig | None
+    mes_ring: MESRingConfig | None
     compute_queue: ComputeQueueConfig | None
     gart_table_dma_handle: int = 0
     dummy_page_dma_handle: int = 0
@@ -165,18 +180,33 @@ def full_gpu_bringup(
         vram_size_bytes=dev.vram_size,
         gart_table_bus_addr=gart_bus,
         dummy_page_bus_addr=dummy_bus,
+        gart_start=info.gart_gpu_va_start,
     )
+    gfxhub_gart_enable(dev, gmc_config)
+    flush_gpu_tlb(dev, gmc_config, vmid=0, hub="gfxhub")
+    print("  GMC: GFXHUB GART enabled")
 
     # --- 5. PSP init + firmware loading ---
     print("\n[5/8] Initializing PSP (firmware)...")
     psp_config = None
     try:
-        psp_config = init_psp(dev, ip_result, fw_dir=str(fw_dir))
+        psp_config = init_psp(
+            dev,
+            ip_result,
+            fw_dir=str(fw_dir),
+            vram_mc_base=gmc_config.vram_start,
+            vram_base_offset=gmc_config.fb_offset,
+            vram_bar_phys_addr=info.bars[info.vram_bar_index].phys_addr,
+            nbio_config=nbio_config,
+        )
         try:
+            mp1_version = psp_config.ip_versions.get("mp1", "14_0_2")
+            if os.environ.get("AMDGPU_LITE_DIRECT_SMU_LOAD", "0") != "0":
+                load_smu_firmware_direct(dev, fw_dir, mp1_version, force=True)
             load_all_firmware(dev, psp_config)
-        except FileNotFoundError as e:
-            print(f"  WARNING: Firmware loading skipped — {e}")
-            print("  Continuing with VBIOS-initialized firmware state")
+        except (FileNotFoundError, RuntimeError) as e:
+            print(f"  WARNING: Firmware loading incomplete — {e}")
+            print("  Continuing with firmware state loaded so far")
     except RuntimeError as e:
         # On a VBIOS-POST'd GPU (e.g. passthrough), PSP ring creation
         # may fail because firmware is already loaded and running.
@@ -185,12 +215,32 @@ def full_gpu_bringup(
         print("  Continuing with VBIOS-initialized firmware state")
         psp_config = PSPConfig(mp0_base=[0] * 6)
 
+    smu_config = None
+    print("\n[5a/8] Initializing SMU...")
+    try:
+        smu_config = init_smu(
+            dev,
+            ip_result,
+            vram_mc_base=gmc_config.vram_start,
+        )
+    except Exception as e:
+        print(f"  SMU init failed: {e}")
+        print("  Continuing with existing SMU state")
+
     print("\n[5b/8] Initializing GFX/MEC...")
     try:
-        init_gfx_for_compute(dev, ip_result, psp_config)
+        init_gfx_for_compute(dev, ip_result, psp_config, smu_config)
     except Exception as e:
         print(f"  GFX/MEC init failed: {e}")
         print("  Continuing with existing firmware state")
+
+    print("\n[5c/8] Initializing MES scheduler...")
+    mes_ring = None
+    try:
+        mes_ring = init_mes_for_compute(dev, ip_result, nbio_config)
+    except Exception as e:
+        print(f"  MES init failed: {e}")
+        print("  Continuing with direct queue fallback")
 
     # --- 6. IH init ---
     print("\n[6/8] Initializing IH (interrupts)...")
@@ -205,14 +255,8 @@ def full_gpu_bringup(
     print("\n[7/8] Creating compute queue...")
     compute_queue = None
     try:
-        compute_queue = init_compute_queue(dev, ip_result, nbio_config)
-
-        # Fix up doorbell address: NBIO init may not have found the doorbell
-        # physical address from registers, but the kernel module already mapped
-        # the doorbell BAR for us.
-        if compute_queue.doorbell_cpu_addr == 0 and dev.doorbell_addr != 0:
-            doorbell_offset = compute_queue.doorbell_index * 4
-            compute_queue.doorbell_cpu_addr = dev.doorbell_addr + doorbell_offset
+        compute_queue = init_compute_queue(
+            dev, ip_result, nbio_config, mes_ring=mes_ring)
     except Exception as e:
         print(f"  Compute queue init failed: {e}")
 
@@ -223,9 +267,7 @@ def full_gpu_bringup(
             print("  PASS: NOP + RELEASE_MEM fence completed")
         else:
             print("  FAIL: Fence timeout")
-            print("  Note: GFX12 requires MES for compute queue activation.")
-            print("  Direct MMIO HQD programming (SOC21 offsets) does not work.")
-            print("  Next step: implement MES-based queue add.")
+            print("  Note: MES queue activation or GFX firmware bring-up is incomplete.")
     else:
         print("  SKIP: No compute queue available")
 
@@ -239,7 +281,9 @@ def full_gpu_bringup(
         nbio_config=nbio_config,
         gmc_config=gmc_config,
         psp_config=psp_config,
+        smu_config=smu_config,
         ih_config=ih_config,
+        mes_ring=mes_ring,
         compute_queue=compute_queue,
         gart_table_dma_handle=gart_handle,
         dummy_page_dma_handle=dummy_handle,

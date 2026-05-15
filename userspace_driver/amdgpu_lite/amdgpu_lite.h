@@ -224,7 +224,7 @@ struct amdgpu_lite_setup_irq {
 /* GART table configuration */
 #define AMDGPU_LITE_GART_TABLE_SIZE   (1024 * 1024)       /* 1MB */
 #define AMDGPU_LITE_GART_NUM_ENTRIES  (AMDGPU_LITE_GART_TABLE_SIZE / 8)  /* 128K entries */
-#define AMDGPU_LITE_GART_VA_START     0x100000000ULL       /* 4GB, after VRAM */
+#define AMDGPU_LITE_GART_VA_START     0x00400000ULL        /* Low VMID0 aperture */
 
 /* VRAM allocation tracking */
 struct vram_allocation {
@@ -309,6 +309,7 @@ struct amdgpu_lite_device {
 	uint64_t *gart_table;          /* GART PTE array (DMA coherent) */
 	dma_addr_t gart_table_bus_addr;
 	uint64_t gart_size;            /* Size of GART table in bytes */
+	uint64_t gart_gpu_va_start;    /* GPU VA where GART aperture begins */
 	uint64_t gart_next_gpu_va;     /* Bump allocator for auto-assign */
 	struct mutex gart_lock;
 

@@ -1,4 +1,4 @@
-"""NBIO v7.11 initialization for RDNA4 (Navi 48 / GFX1201).
+"""NBIF/NBIO initialization for RDNA4 (Navi 48 / GFX1201).
 
 Programs NBIO registers needed for GPU bring-up:
 - Doorbell aperture enable
@@ -7,7 +7,7 @@ Programs NBIO registers needed for GPU bring-up:
 - Interrupt control
 
 Register offsets are SOC15-style (base_index + offset) resolved using
-IP discovery base addresses. Access is via BAR0 MMIO escape commands.
+IP discovery base addresses. Access is via BAR0 MMIO.
 
 Reference: Linux amdgpu nbio_v7_11.c
 """
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from amd_gpu_driver.backends.windows.ip_discovery import IPDiscoveryResult
 
 
-# ── NBIO v7.11 register offsets (SOC15 index, NOT byte offsets) ──────
+# -- NBIF/NBIO register offsets (SOC15 index, NOT byte offsets) --------
 
 # Base index 2 registers (NBIO address space)
 regRCC_DOORBELL_APER_EN = 0x00C0         # Doorbell aperture enable
@@ -69,23 +69,33 @@ class NBIOConfig:
 
 
 def resolve_nbio_bases(ip_result: IPDiscoveryResult) -> NBIOConfig:
-    """Resolve NBIO base addresses from IP discovery.
+    """Resolve NBIF/NBIO base addresses from IP discovery.
 
-    NBIO uses base_index 0-5. The base addresses come from
-    the IP discovery table's ip_v3/ip_v4 base_address array.
+    Navi48 exposes these registers through the NBIF block (HW_ID 108).
+    OSSSYS (HW_ID 40) is the interrupt handler block and has a different
+    base array; using it here moves register programming to the wrong
+    BAR offsets. Keep a fallback for older discovery tables that may not
+    enumerate NBIF separately.
     """
     from amd_gpu_driver.backends.windows.ip_discovery import HardwareID
 
     bases = [0] * 6  # 6 possible base indexes
+    fallback = [0] * 6
 
     for block in ip_result.ip_blocks:
-        # NBIO is OSSSYS (HW_ID 40) in the IP discovery table
-        # But some versions report as separate NBIO entries
-        # For SOC21, NBIO base addresses come from the discovery table
-        if block.hw_id == HardwareID.OSSSYS and block.instance_number == 0:
+        if block.hw_id == HardwareID.NBIF and block.instance_number == 0:
             for i, addr in enumerate(block.base_addresses):
                 if i < len(bases) and addr != 0:
                     bases[i] = addr
+            break
+
+        if block.hw_id == HardwareID.OSSSYS and block.instance_number == 0:
+            for i, addr in enumerate(block.base_addresses):
+                if i < len(fallback) and addr != 0:
+                    fallback[i] = addr
+
+    if not any(bases):
+        bases = fallback
 
     return NBIOConfig(base=bases)
 

@@ -230,19 +230,12 @@ class AmdgpuLiteDevice(DeviceBackend):
         ctypes.c_uint32.from_address(mmio + byte_offset).value = value & 0xFFFFFFFF
 
     def read_reg_indirect(self, address: int) -> int:
-        """Read a register via SMN indirect access (NBIO index/data).
-
-        Writes the target SMN address to the NBIO index register (byte
-        offset 0x60), then reads the result from the data register (0x64).
-
-        Note: On RDNA4 with amdgpu_lite, SMN indirect reads return zeros
-        because the NBIO index/data path requires kernel-level SMN
-        configuration. Use read_vram() for VRAM reads instead.
-        """
-        NBIO_INDEX = 0x60
-        NBIO_DATA = 0x64
-        self.write_reg32(NBIO_INDEX, address)
-        return self.read_reg32(NBIO_DATA)
+        """Read a register via the NBIF PCIE_INDEX2/DATA2 aperture."""
+        PCIE_INDEX2 = 0x000E * 4
+        PCIE_DATA2 = 0x000F * 4
+        self.write_reg32(PCIE_INDEX2, address)
+        self.read_reg32(PCIE_INDEX2)
+        return self.read_reg32(PCIE_DATA2)
 
     def map_vram_bar(self) -> int:
         """Map the VRAM BAR if not already mapped. Returns CPU address."""
@@ -270,11 +263,13 @@ class AmdgpuLiteDevice(DeviceBackend):
         return (ctypes.c_char * size).from_address(vram_addr + offset).raw
 
     def write_reg_indirect(self, address: int, value: int) -> None:
-        """Write a register via SMN indirect access."""
-        NBIO_INDEX = 0x60
-        NBIO_DATA = 0x64
-        self.write_reg32(NBIO_INDEX, address)
-        self.write_reg32(NBIO_DATA, value)
+        """Write a register via the NBIF PCIE_INDEX2/DATA2 aperture."""
+        PCIE_INDEX2 = 0x000E * 4
+        PCIE_DATA2 = 0x000F * 4
+        self.write_reg32(PCIE_INDEX2, address)
+        self.read_reg32(PCIE_INDEX2)
+        self.write_reg32(PCIE_DATA2, value)
+        self.read_reg32(PCIE_DATA2)
 
     # --- Windows driver compatibility stubs ---
 

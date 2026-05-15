@@ -14,6 +14,7 @@
 #include <linux/vmalloc.h>
 #include <linux/bitmap.h>
 #include <linux/io.h>
+#include <linux/delay.h>
 
 #include "amdgpu_lite.h"
 
@@ -22,6 +23,15 @@
  * userspace path. Keep the generic VRAM allocator away from it.
  */
 #define AMDGPU_LITE_VRAM_RESERVED_BYTES (64ULL * 1024ULL * 1024ULL)
+
+#define AMDGPU_LITE_GC_BASE0			0x1260
+#define AMDGPU_LITE_MMHUB_BASE0		0x1A000
+#define regMMVM_INVALIDATE_ENG0_SEM		0x0575
+#define regMMVM_INVALIDATE_ENG0_REQ		0x0587
+#define regMMVM_INVALIDATE_ENG0_ACK		0x0599
+#define regGCVM_INVALIDATE_ENG0_SEM		0x1635
+#define regGCVM_INVALIDATE_ENG0_REQ		0x1647
+#define regGCVM_INVALIDATE_ENG0_ACK		0x1659
 
 /* ======================================================================
  * GTT allocation helpers
@@ -49,6 +59,74 @@ find_gtt_by_mmap_offset(struct amdgpu_lite_fpriv *fpriv, u64 mmap_offset)
 			return alloc;
 	}
 	return NULL;
+}
+
+static bool amdgpu_lite_mmio_reg_valid(struct amdgpu_lite_device *ldev,
+				       u32 base, u32 reg)
+{
+	struct amdgpu_lite_bar *mmio = &ldev->bars[ldev->mmio_bar_idx];
+	u64 offset = ((u64)base + reg) * sizeof(u32);
+
+	return mmio->kaddr && offset + sizeof(u32) <= mmio->size;
+}
+
+static u32 amdgpu_lite_mmio_rreg(struct amdgpu_lite_device *ldev,
+				 u32 base, u32 reg)
+{
+	struct amdgpu_lite_bar *mmio = &ldev->bars[ldev->mmio_bar_idx];
+
+	if (!amdgpu_lite_mmio_reg_valid(ldev, base, reg))
+		return 0;
+	return ioread32(mmio->kaddr + ((base + reg) * sizeof(u32)));
+}
+
+static void amdgpu_lite_mmio_wreg(struct amdgpu_lite_device *ldev,
+				  u32 base, u32 reg, u32 value)
+{
+	struct amdgpu_lite_bar *mmio = &ldev->bars[ldev->mmio_bar_idx];
+
+	if (!amdgpu_lite_mmio_reg_valid(ldev, base, reg))
+		return;
+	iowrite32(value, mmio->kaddr + ((base + reg) * sizeof(u32)));
+}
+
+static void amdgpu_lite_flush_tlb_hub(struct amdgpu_lite_device *ldev,
+				      u32 base, u32 sem_reg, u32 req_reg,
+				      u32 ack_reg)
+{
+	u32 val;
+	int i;
+
+	for (i = 0; i < 10; i++) {
+		val = amdgpu_lite_mmio_rreg(ldev, base, sem_reg);
+		if (val & 0x1)
+			break;
+		amdgpu_lite_mmio_wreg(ldev, base, sem_reg, 1);
+		udelay(1);
+	}
+
+	amdgpu_lite_mmio_wreg(ldev, base, req_reg, 1);
+
+	for (i = 0; i < 100; i++) {
+		val = amdgpu_lite_mmio_rreg(ldev, base, ack_reg);
+		if (val & 0x1)
+			break;
+		udelay(1);
+	}
+
+	amdgpu_lite_mmio_wreg(ldev, base, sem_reg, 0);
+}
+
+static void amdgpu_lite_flush_gpu_tlb(struct amdgpu_lite_device *ldev)
+{
+	amdgpu_lite_flush_tlb_hub(ldev, AMDGPU_LITE_MMHUB_BASE0,
+				  regMMVM_INVALIDATE_ENG0_SEM,
+				  regMMVM_INVALIDATE_ENG0_REQ,
+				  regMMVM_INVALIDATE_ENG0_ACK);
+	amdgpu_lite_flush_tlb_hub(ldev, AMDGPU_LITE_GC_BASE0,
+				  regGCVM_INVALIDATE_ENG0_SEM,
+				  regGCVM_INVALIDATE_ENG0_REQ,
+				  regGCVM_INVALIDATE_ENG0_ACK);
 }
 
 /* ======================================================================
@@ -513,7 +591,10 @@ int amdgpu_lite_gart_init(struct amdgpu_lite_device *ldev)
 {
 	mutex_init(&ldev->gart_lock);
 	ldev->gart_size = AMDGPU_LITE_GART_TABLE_SIZE;
-	ldev->gart_next_gpu_va = AMDGPU_LITE_GART_VA_START;
+	if (!ldev->gart_gpu_va_start)
+		ldev->gart_gpu_va_start = AMDGPU_LITE_GART_VA_START;
+	ldev->gart_gpu_va_start = ALIGN(ldev->gart_gpu_va_start, PAGE_SIZE);
+	ldev->gart_next_gpu_va = ldev->gart_gpu_va_start;
 
 	ldev->gart_table = dma_alloc_coherent(&ldev->pdev->dev,
 					      ldev->gart_size,
@@ -601,13 +682,13 @@ long amdgpu_lite_ioctl_map_gpu(struct amdgpu_lite_fpriv *fpriv,
 	}
 
 	/* Calculate page index relative to GART VA start */
-	if (gpu_va < AMDGPU_LITE_GART_VA_START) {
+	if (gpu_va < ldev->gart_gpu_va_start) {
 		mutex_unlock(&ldev->gart_lock);
 		mutex_unlock(&fpriv->alloc_lock);
 		return -EINVAL;
 	}
 
-	page_index = (gpu_va - AMDGPU_LITE_GART_VA_START) >> PAGE_SHIFT;
+	page_index = (gpu_va - ldev->gart_gpu_va_start) >> PAGE_SHIFT;
 
 	/* Check bounds */
 	if (page_index + num_pages > AMDGPU_LITE_GART_NUM_ENTRIES) {
@@ -621,6 +702,8 @@ long amdgpu_lite_ioctl_map_gpu(struct amdgpu_lite_fpriv *fpriv,
 		ldev->gart_table[page_index + i] =
 			build_gart_pte(alloc->bus_addr + i * PAGE_SIZE);
 	}
+	wmb();
+	amdgpu_lite_flush_gpu_tlb(ldev);
 
 	/* Advance bump allocator if we used auto-assign */
 	if (params.gpu_va == 0) {
@@ -665,10 +748,10 @@ long amdgpu_lite_ioctl_unmap_gpu(struct amdgpu_lite_fpriv *fpriv,
 
 	num_pages = PAGE_ALIGN(params.size) >> PAGE_SHIFT;
 
-	if (params.gpu_va < AMDGPU_LITE_GART_VA_START)
+	if (params.gpu_va < ldev->gart_gpu_va_start)
 		return -EINVAL;
 
-	page_index = (params.gpu_va - AMDGPU_LITE_GART_VA_START) >> PAGE_SHIFT;
+	page_index = (params.gpu_va - ldev->gart_gpu_va_start) >> PAGE_SHIFT;
 
 	if (page_index + num_pages > AMDGPU_LITE_GART_NUM_ENTRIES)
 		return -EINVAL;
@@ -676,6 +759,8 @@ long amdgpu_lite_ioctl_unmap_gpu(struct amdgpu_lite_fpriv *fpriv,
 	mutex_lock(&ldev->gart_lock);
 	for (i = 0; i < num_pages; i++)
 		ldev->gart_table[page_index + i] = 0;
+	wmb();
+	amdgpu_lite_flush_gpu_tlb(ldev);
 	mutex_unlock(&ldev->gart_lock);
 
 	dev_dbg(&ldev->pdev->dev,

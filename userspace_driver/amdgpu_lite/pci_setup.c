@@ -21,6 +21,7 @@
 /* MMHUB v4.1 FB location. Same register sequence used by the macOS DEXT path. */
 #define MMHUB_BASE0                 0x1A000
 #define MMMC_VM_FB_LOCATION_BASE    0x0554
+#define MMMC_VM_FB_LOCATION_TOP     0x0555
 
 /* ======================================================================
  * BAR enumeration
@@ -143,18 +144,22 @@ static void detect_vram_size(struct amdgpu_lite_device *ldev)
 	struct amdgpu_lite_bar *vram_bar = &ldev->bars[ldev->vram_bar_idx];
 	u32 mem_size_mb;
 	u32 fb_base;
+	u32 fb_top;
 
 	if (!mmio_bar->kaddr ||
 	    RCC_CONFIG_MEMSIZE_REG + sizeof(u32) > mmio_bar->size) {
 		ldev->vram_size = vram_bar->size;
 		ldev->visible_vram_size = vram_bar->size;
 		ldev->vram_mc_base = vram_bar->phys_addr;
+		ldev->gart_gpu_va_start = AMDGPU_LITE_GART_VA_START;
 		return;
 	}
 
 	mem_size_mb = ioread32(mmio_bar->kaddr + RCC_CONFIG_MEMSIZE_REG);
 	fb_base = ioread32(mmio_bar->kaddr +
 			   (MMHUB_BASE0 + MMMC_VM_FB_LOCATION_BASE) * sizeof(u32));
+	fb_top = ioread32(mmio_bar->kaddr +
+			  (MMHUB_BASE0 + MMMC_VM_FB_LOCATION_TOP) * sizeof(u32));
 
 	dev_info(&ldev->pdev->dev,
 		 "amdgpu_lite: RCC_CONFIG_MEMSIZE = 0x%08x (%u MB)\n",
@@ -170,10 +175,11 @@ static void detect_vram_size(struct amdgpu_lite_device *ldev)
 	ldev->vram_mc_base = (u64)(fb_base & 0x00ffffff) << 24;
 	if (!ldev->vram_mc_base)
 		ldev->vram_mc_base = vram_bar->phys_addr;
+	ldev->gart_gpu_va_start = AMDGPU_LITE_GART_VA_START;
 
 	dev_info(&ldev->pdev->dev,
-		 "amdgpu_lite: VRAM MC base = 0x%llx (FB_LOCATION_BASE=0x%08x)\n",
-		 ldev->vram_mc_base, fb_base);
+		 "amdgpu_lite: VRAM MC base = 0x%llx (FB_LOCATION_BASE=0x%08x TOP=0x%08x)\n",
+		 ldev->vram_mc_base, fb_base, fb_top);
 }
 
 /* ======================================================================
@@ -292,7 +298,7 @@ long amdgpu_lite_ioctl_get_info(struct amdgpu_lite_device *ldev,
 	/* GART page table info */
 	info.gart_table_bus_addr = ldev->gart_table_bus_addr;
 	info.gart_table_size = ldev->gart_size;
-	info.gart_gpu_va_start = AMDGPU_LITE_GART_VA_START;
+	info.gart_gpu_va_start = ldev->gart_gpu_va_start;
 
 	if (copy_to_user((void __user *)arg, &info, sizeof(info)))
 		return -EFAULT;

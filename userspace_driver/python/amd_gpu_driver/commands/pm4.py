@@ -52,9 +52,18 @@ CP_COHER_CNTL_TC_WB_ACTION = 1 << 18
 CP_COHER_CNTL_SH_KCACHE_ACTION = 1 << 27
 CP_COHER_CNTL_SH_ICACHE_ACTION = 1 << 29
 
-# RELEASE_MEM cache flush flags (GFX9)
+# RELEASE_MEM cache flush flags (GFX9 and earlier)
 EOP_TC_WB_ACTION_EN = 1 << 15
 EOP_TC_NC_ACTION_EN = 1 << 19
+
+# RELEASE_MEM GCR cache flags (GFX10+)
+PACKET3_RELEASE_MEM_GCR_GLM_WB = 1 << 12
+PACKET3_RELEASE_MEM_GCR_GLM_INV = 1 << 13
+PACKET3_RELEASE_MEM_GCR_GLV_INV = 1 << 14
+PACKET3_RELEASE_MEM_GCR_GL1_INV = 1 << 15
+PACKET3_RELEASE_MEM_GCR_GL2_INV = 1 << 20
+PACKET3_RELEASE_MEM_GCR_GL2_WB = 1 << 21
+PACKET3_RELEASE_MEM_GCR_SEQ = 1 << 22
 
 # EVENT_WRITE event types
 CS_PARTIAL_FLUSH = 7
@@ -142,16 +151,29 @@ class PM4PacketBuilder:
         int_sel: int = INT_SEL_SEND_INT_ON_CONFIRM,
         event_index: int = 5,  # EOP event
         cache_flush: bool = False,
+        use_gcr: bool = True,
     ) -> PM4PacketBuilder:
         """RELEASE_MEM: write a value to memory and optionally raise interrupt.
 
         Used for signaling completion of dispatch.
-        GFX9 format: 7 payload dwords (header + 7).
+        GFX10+ uses GCR cache flags in dword 0. Set use_gcr=False for
+        GFX9-style EOP_TC_* cache flags.
         """
         # dword 0: event_type | event_index | optional cache flags
         dw0 = (event_type & 0x3F) | ((event_index & 0xF) << 8)
         if cache_flush:
-            dw0 |= EOP_TC_WB_ACTION_EN | EOP_TC_NC_ACTION_EN
+            if use_gcr:
+                dw0 |= (
+                    PACKET3_RELEASE_MEM_GCR_GLV_INV |
+                    PACKET3_RELEASE_MEM_GCR_GL1_INV |
+                    PACKET3_RELEASE_MEM_GCR_GL2_INV |
+                    PACKET3_RELEASE_MEM_GCR_GLM_WB |
+                    PACKET3_RELEASE_MEM_GCR_GLM_INV |
+                    PACKET3_RELEASE_MEM_GCR_GL2_WB |
+                    PACKET3_RELEASE_MEM_GCR_SEQ
+                )
+            else:
+                dw0 |= EOP_TC_WB_ACTION_EN | EOP_TC_NC_ACTION_EN
         # dword 1: data_sel | int_sel
         dw1 = ((data_sel & 0x7) << 29) | ((int_sel & 0x3) << 24)
         # dword 2-3: address (low, high)
