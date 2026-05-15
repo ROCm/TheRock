@@ -47,6 +47,7 @@ Outputs (written to GITHUB_OUTPUT):
 import enum
 import json
 import os
+import subprocess
 import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
@@ -246,8 +247,24 @@ class GitContext:
 
     @staticmethod
     def from_repo(base_ref: str) -> "GitContext":
-        """Compute from the actual repo. Only called from main()."""
-        changed_files = get_git_modified_paths(base_ref)
+        """Compute from the actual repo. Only called from main().
+
+        If the base_ref commit doesn't exist (e.g., shallow clone missing
+        the 'before' commit on a push event), falls back to HEAD^1.
+        """
+        fallback_ref = "HEAD^1"
+        try:
+            changed_files = get_git_modified_paths(base_ref)
+        except subprocess.CalledProcessError:
+            if base_ref == fallback_ref:
+                # Already using fallback, re-raise the error
+                raise
+            print(
+                f"Warning: base ref '{base_ref}' not found in shallow clone, "
+                f"falling back to '{fallback_ref}'",
+                file=sys.stderr,
+            )
+            changed_files = get_git_modified_paths(fallback_ref)
         submodule_paths = list(get_git_submodule_paths() or [])
         return GitContext(
             changed_files=changed_files,
