@@ -538,8 +538,14 @@ class ConfigureCITest(unittest.TestCase):
             families=build_families,
             platform="linux",
         )
-        entry = linux_target_output[0]
-        self.assertEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
+        # Find the gfx94X entry (schedule runs include multiple families)
+        gfx94x_entry = next(
+            (e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"), None
+        )
+        self.assertIsNotNone(gfx94x_entry, "gfx94X-dcgpu entry not found")
+        self.assertEqual(
+            gfx94x_entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox"
+        )
 
     def test_sandbox_test_runner_with_asan_workflow_dispatch(self):
         """ASAN tests should use sandbox runner for workflow_dispatch runs."""
@@ -554,6 +560,8 @@ class ConfigureCITest(unittest.TestCase):
             families=build_families,
             platform="linux",
         )
+        # workflow_dispatch respects amdgpu_families filter, so should have one entry
+        self.assertEqual(len(linux_target_output), 1)
         entry = linux_target_output[0]
         self.assertEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
 
