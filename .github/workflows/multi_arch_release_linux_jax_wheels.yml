@@ -9,8 +9,10 @@
 #   - Builds directly against the shared TheRock multiarch tarball
 #     passed in via inputs.tar_url.
 #
-# Triggered via workflow_call from
+# Triggered via workflow_dispatch from
 # multi_arch_release_linux.yml's build_jax_wheels job.
+#
+# Can also be run manually via workflow_dispatch.
 #
 # Build phase only: testing and promotion are deferred follow-ups.
 #
