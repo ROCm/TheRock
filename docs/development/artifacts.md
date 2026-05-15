@@ -201,14 +201,14 @@ This ordering ensures that components are **disjoint** — each file in a stage 
 
 Each component has default include patterns that determine what it matches (defined in `artifact_builder.py`):
 
-| Component | Default includes                                                                                   | Notes                                                                                                 |
-| --------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `lib`     | `**/*.so`, `**/*.so.*`, `**/*.dll`, `**/*.dylib`, `**/*.dylib.*`                                   | Shared libraries                                                                                      |
-| `run`     | *(none)*                                                                                           | **Catch-all if no includes specified** — excludes debug-symbol trees by default                       |
-| `dbg`     | `.build-id/**/*.debug`, `.debug/pdb/**/*.pdb`                                                       | Linux build-ID debug files and Windows MSVC/Clang linker PDB files                                    |
-| `dev`     | `**/*.a`, `**/*.lib`, `**/cmake/**`, `**/include/**`, `**/share/modulefiles/**`, `**/pkgconfig/**` | Build-time dependencies                                                                               |
-| `doc`     | `**/share/doc/**`                                                                                  | Documentation                                                                                         |
-| `test`    | *(none)*                                                                                           | Only matches files not claimed by earlier components                                                  |
+| Component | Default includes                                                                                   | Notes                                                                           |
+| --------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `lib`     | `**/*.so`, `**/*.so.*`, `**/*.dll`, `**/*.dylib`, `**/*.dylib.*`                                   | Shared libraries                                                                |
+| `run`     | *(none)*                                                                                           | **Catch-all if no includes specified** — excludes debug-symbol trees by default |
+| `dbg`     | `.build-id/**/*.debug`, `.debug/pdb/**/*.pdb`                                                      | Linux build-ID debug files and Windows MSVC/Clang linker PDB files              |
+| `dev`     | `**/*.a`, `**/*.lib`, `**/cmake/**`, `**/include/**`, `**/share/modulefiles/**`, `**/pkgconfig/**` | Build-time dependencies                                                         |
+| `doc`     | `**/share/doc/**`                                                                                  | Documentation                                                                   |
+| `test`    | *(none)*                                                                                           | Only matches files not claimed by earlier components                            |
 
 When a descriptor specifies `include` patterns for a component, those patterns are **added to** the defaults (not replacing them). To override defaults, set `default_patterns = false`. Use `exclude` patterns to carve out files that would otherwise match.
 
