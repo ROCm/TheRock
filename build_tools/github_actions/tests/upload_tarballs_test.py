@@ -8,25 +8,25 @@ destination fields and that multiarch tarballs continue to be exported
 correctly even if the filename format changes.
 """
 
-import sys
-import os
 import json
+import os
+import sys
 import tempfile
 import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import build_tools.github_actions.upload_tarballs as mod
+# Add build_tools to path so github_actions and _therock_utils are importable.
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
-# Add repository root to path so build_tools is importable.
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent.parent))
+import github_actions.upload_tarballs as mod
 
 
 class TestUploadTarballsMain(unittest.TestCase):
-    @patch("build_tools.github_actions.upload_tarballs.gha_set_output")
-    @patch("build_tools.github_actions.upload_tarballs.create_storage_backend")
-    @patch("build_tools.github_actions.upload_tarballs.WorkflowOutputRoot")
+    @patch("github_actions.upload_tarballs.gha_set_output")
+    @patch("github_actions.upload_tarballs.create_storage_backend")
+    @patch("github_actions.upload_tarballs.WorkflowOutputRoot")
     def test_main_exports_multiarch_url(
         self,
         mock_workflow_output_root,
@@ -76,9 +76,9 @@ class TestUploadTarballsMain(unittest.TestCase):
                 "25834210506-linux/tarballs/therock-dist-linux-multiarch-7.13.0.tar.gz",
             )
 
-    @patch("build_tools.github_actions.upload_tarballs.gha_set_output")
-    @patch("build_tools.github_actions.upload_tarballs.create_storage_backend")
-    @patch("build_tools.github_actions.upload_tarballs.WorkflowOutputRoot")
+    @patch("github_actions.upload_tarballs.gha_set_output")
+    @patch("github_actions.upload_tarballs.create_storage_backend")
+    @patch("github_actions.upload_tarballs.WorkflowOutputRoot")
     def test_main_treats_tarball_without_family_as_multiarch(
         self,
         mock_workflow_output_root,
