@@ -397,8 +397,6 @@ class JobDecisions:
     build_rocm_python: JobGroupDecision
     build_pytorch: JobGroupDecision
     test_pytorch: JobGroupDecision
-    build_jax: JobGroupDecision
-    test_jax: JobGroupDecision
 
     def log(self) -> None:
         """Log job decisions for CI diagnostics."""
@@ -412,8 +410,6 @@ class JobDecisions:
         print(f"  build_rocm_python: {self.build_rocm_python.action.value}")
         print(f"  build_pytorch: {self.build_pytorch.action.value}")
         print(f"  test_pytorch: {self.test_pytorch.action.value}")
-        print(f"  build_jax: {self.build_jax.action.value}")
-        print(f"  test_jax: {self.test_jax.action.value}")
 
 
 @dataclass(frozen=True)

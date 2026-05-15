@@ -24,6 +24,7 @@ from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -302,8 +303,6 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.build_rocm_python.action, cm.JobAction.RUN)
         self.assertEqual(result.build_pytorch.action, cm.JobAction.RUN)
         self.assertEqual(result.test_pytorch.action, cm.JobAction.RUN)
-        self.assertEqual(result.build_jax.action, cm.JobAction.SKIP)
-        self.assertEqual(result.test_jax.action, cm.JobAction.SKIP)
 
     def test_default_test_type_is_quick(self):
         """Default test_type for PR/push with no special conditions."""
