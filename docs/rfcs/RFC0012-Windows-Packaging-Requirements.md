@@ -189,15 +189,15 @@ The `amdrocm-` naming prefix is used for AMD-published Windows package component
 
 The following meta packages aggregate fine-grained packages into user-facing installation units. These map 1:1 to the Linux meta packages defined in [RFC0009](./RFC0009-OS-Packaging-Requirements.md#meta-packages).
 
-| File Name                     | Friendly Name                            | Included Packages                                                                                                                                                                                                                                       | Description                                 |
-| :---------------------------- | :--------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------ |
-| `amdrocm-runtimes.msi`        | ROCm Runtime Redistributable             | amdrocm-runtime, amdrocm-sysdeps                                                                                                                                                                                                                       | Run pre-built ROCm projects                 |
-| `amdrocm-core.msi`            | ROCm Core Runtime Redistributable        | amdrocm-base, amdrocm-sysdeps, amdrocm-llvm, amdrocm-runtime, amdrocm-debugger, amdrocm-blas, amdrocm-rand, amdrocm-fft, amdrocm-solver, amdrocm-sparse, amdrocm-ck, amdrocm-dnn, amdrocm-rccl, amdrocm-rocshmem, amdrocm-amdsmi, amdrocm-hipify, amdrocm-decode, amdrocm-jpeg | Run ROCm projects                           |
+| File Name                     | Friendly Name                            | Included Packages                                                                                                                                                                                                                                                                                                 | Description                                 |
+| :---------------------------- | :--------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------ |
+| `amdrocm-runtimes.msi`        | ROCm Runtime Redistributable             | amdrocm-runtime, amdrocm-sysdeps                                                                                                                                                                                                                                                                                  | Run pre-built ROCm projects                 |
+| `amdrocm-core.msi`            | ROCm Core Runtime Redistributable        | amdrocm-base, amdrocm-sysdeps, amdrocm-llvm, amdrocm-runtime, amdrocm-debugger, amdrocm-blas, amdrocm-rand, amdrocm-fft, amdrocm-solver, amdrocm-sparse, amdrocm-ck, amdrocm-dnn, amdrocm-rccl, amdrocm-rocshmem, amdrocm-amdsmi, amdrocm-hipify, amdrocm-decode, amdrocm-jpeg                                    | Run ROCm projects                           |
 | `amdrocm-core-devel.msi`      | ROCm Core SDK Development                | amdrocm-core + amdrocm-runtime-devel, amdrocm-llvm-devel, amdrocm-fft-devel, amdrocm-blas-devel, amdrocm-sparse-devel, amdrocm-solver-devel, amdrocm-rand-devel, amdrocm-ccl-devel, amdrocm-opencl-devel, amdrocm-rccl-devel, amdrocm-rocshmem-devel, amdrocm-dnn-devel, amdrocm-decode-devel, amdrocm-jpeg-devel | Build software with ROCm Core               |
-| `amdrocm-developer-tools.msi` | ROCm Core Developer Tools                | amdrocm-base, amdrocm-amdsmi, amdrocm-profiler-base, amdrocm-profiler                                                                                                                                                                                 | Debug and optimize ROCm projects            |
-| `amdrocm-core-sdk.msi`        | ROCm Core SDK Redistributable            | amdrocm-core-devel, amdrocm-developer-tools, amdrocm-rdc, amdrocm-opencl                                                                                                                                                                               | Everything                                  |
-| `amdrocm-raytracing.msi`      | ROCm Ray Tracing Runtime Redistributable | Ray tracing runtime libraries, acceleration structures, and GPU architecture-specific binaries                                                                                                                                                          | Run ROCm ray tracing workloads              |
-| `amdrocm-raytracing-sdk.msi`  | ROCm Ray Tracing SDK                     | Ray tracing development headers, SDK libraries, samples, and tooling                                                                                                                                                                                    | Develop and build ROCm ray tracing projects |
+| `amdrocm-developer-tools.msi` | ROCm Core Developer Tools                | amdrocm-base, amdrocm-amdsmi, amdrocm-profiler-base, amdrocm-profiler                                                                                                                                                                                                                                             | Debug and optimize ROCm projects            |
+| `amdrocm-core-sdk.msi`        | ROCm Core SDK Redistributable            | amdrocm-core-devel, amdrocm-developer-tools, amdrocm-rdc, amdrocm-opencl                                                                                                                                                                                                                                          | Everything                                  |
+| `amdrocm-raytracing.msi`      | ROCm Ray Tracing Runtime Redistributable | Ray tracing runtime libraries, acceleration structures, and GPU architecture-specific binaries                                                                                                                                                                                                                    | Run ROCm ray tracing workloads              |
+| `amdrocm-raytracing-sdk.msi`  | ROCm Ray Tracing SDK                     | Ray tracing development headers, SDK libraries, samples, and tooling                                                                                                                                                                                                                                              | Develop and build ROCm ray tracing projects |
 
 > **Note:** The ray tracing packages are planned for a different ROCm release and will be further defined in the future.
 
@@ -205,25 +205,25 @@ The following meta packages aggregate fine-grained packages into user-facing ins
 
 Windows package granularity must match the Linux model defined in [RFC0009](./RFC0009-OS-Packaging-Requirements.md#package-granularity). Each fine-grained package separates runtime and development components. On Windows these are implemented as MSI features or individual MSI packages, depending on installer architecture.
 
-| Package Name                 | Runtime Contents                                                     | Dev Package Contents (additional)                |
-| :--------------------------- | :------------------------------------------------------------------- | :----------------------------------------------- |
-| `amdrocm-base`               | rocminfo, rocm-core, rocprofiler-register, rocm-cmake, half          |                                                  |
-| `amdrocm-llvm`               | amd-llvm, hipcc, aux-overlay                                         | amd-llvm headers, hipcc headers                  |
-| `amdrocm-runtime`            | ROCR-Runtime, CLR, rocm-kpack, amd-comgr                             | ROCR-Runtime headers, CLR headers, comgr headers |
-| `amdrocm-blas`               | hipBLAS, rocBLAS, hipBLASLt, hipSPARSELt                             | hipBLAS headers, rocBLAS headers, hipBLAS-common |
-| `amdrocm-sparse`             | rocSPARSE, hipSPARSE                                                 | rocSPARSE headers, hipSPARSE headers             |
-| `amdrocm-solver`             | rocSOLVER, hipSOLVER                                                 | rocSOLVER headers, hipSOLVER headers             |
-| `amdrocm-fft`                | rocFFT, hipFFT                                                       | rocFFT headers, hipFFT headers                   |
-| `amdrocm-rand`               | rocRAND, hipRAND                                                     | rocRAND headers, hipRAND headers                 |
-| `amdrocm-ccl-devel`          |                                                                      | rocPRIM, hipCUB, rocThrust, libhipcxx, rocWMMA   |
-| `amdrocm-ck`                 | composable_kernel                                                    |                                                  |
-| `amdrocm-dnn`                | hipDNN, MIOpen                                                       | hipDNN headers, MIOpen headers, flatbuffers      |
-| `amdrocm-hipify`             | HIPIFY                                                               |                                                  |
-| `amdrocm-math-common`        | SuiteSparse, host-blas                                               |                                                  |
+| Package Name                 | Runtime Contents                                            | Dev Package Contents (additional)                |
+| :--------------------------- | :---------------------------------------------------------- | :----------------------------------------------- |
+| `amdrocm-base`               | rocminfo, rocm-core, rocprofiler-register, rocm-cmake, half |                                                  |
+| `amdrocm-llvm`               | amd-llvm, hipcc, aux-overlay                                | amd-llvm headers, hipcc headers                  |
+| `amdrocm-runtime`            | ROCR-Runtime, CLR, rocm-kpack, amd-comgr                    | ROCR-Runtime headers, CLR headers, comgr headers |
+| `amdrocm-blas`               | hipBLAS, rocBLAS, hipBLASLt, hipSPARSELt                    | hipBLAS headers, rocBLAS headers, hipBLAS-common |
+| `amdrocm-sparse`             | rocSPARSE, hipSPARSE                                        | rocSPARSE headers, hipSPARSE headers             |
+| `amdrocm-solver`             | rocSOLVER, hipSOLVER                                        | rocSOLVER headers, hipSOLVER headers             |
+| `amdrocm-fft`                | rocFFT, hipFFT                                              | rocFFT headers, hipFFT headers                   |
+| `amdrocm-rand`               | rocRAND, hipRAND                                            | rocRAND headers, hipRAND headers                 |
+| `amdrocm-ccl-devel`          |                                                             | rocPRIM, hipCUB, rocThrust, libhipcxx, rocWMMA   |
+| `amdrocm-ck`                 | composable_kernel                                           |                                                  |
+| `amdrocm-dnn`                | hipDNN, MIOpen                                              | hipDNN headers, MIOpen headers, flatbuffers      |
+| `amdrocm-hipify`             | HIPIFY                                                      |                                                  |
+| `amdrocm-math-common`        | SuiteSparse, host-blas                                      |                                                  |
 
 Winget package identifiers may use Windows ecosystem naming conventions such as `AMD.ROCm`, but they should map cleanly to the same product and component boundaries.
 
-### ROCm Installer Branding 
+### ROCm Installer Branding
 
 All installers will have proper ROCm and AMD branding. This includes the ROCm logo and the AMD logo that will be included on the installers GUI.
 
@@ -333,7 +333,7 @@ This enables the common workflow where developers compile HIP applications on GP
 
 ### Device-Specific Architecture Packages
 
-Users are encouraged to identify their local GPU architecture and install packages exclusive to the GPU architectures present. Otherwise, users can install a complete ROCm installation with all GPU architectures to enable all GPUs. 
+Users are encouraged to identify their local GPU architecture and install packages exclusive to the GPU architectures present. Otherwise, users can install a complete ROCm installation with all GPU architectures to enable all GPUs.
 
 The following two installer options will be available:
 
@@ -387,13 +387,13 @@ Upon execution, MSI packages must inspect the installation target and apply dete
 
 The following behavior matrix must be supported:
 
-| Scenario                                                   | Behavior                                                                                           |
-| :--------------------------------------------------------- | :------------------------------------------------------------------------------------------------- |
-| No ROCm installation at target path                        | Installs normally                                                                                  |
-| Older version detected at the same target path             | Perform in-place upgrade                                                                           |
-| Same version detected at the same target path              | Return success with no action, unless an explicit repair or reinstall mode is requested            |
-| Newer version detected at the same target path             | Abort with error and instruct the user to uninstall or choose a different path                     |
-| Different major.minor version detected at a different path | Allow multi-version installation                                                                    |
+| Scenario                                                   | Behavior                                                                                |
+| :--------------------------------------------------------- | :-------------------------------------------------------------------------------------- |
+| No ROCm installation at target path                        | Installs normally                                                                       |
+| Older version detected at the same target path             | Perform in-place upgrade                                                                |
+| Same version detected at the same target path              | Return success with no action, unless an explicit repair or reinstall mode is requested |
+| Newer version detected at the same target path             | Abort with error and instruct the user to uninstall or choose a different path          |
+| Different major.minor version detected at a different path | Allow multi-version installation                                                        |
 
 Patch versions must upgrade in place within the same `X.Y` installation root.
 
@@ -426,8 +426,8 @@ At minimum:
 
 - `ROCM_PATH` may point to the installation root of the latest installed and active ROCm version, but must be treated as a convenience variable only, not a guaranteed or authoritative source of truth
 - The selected installation's `bin` directory may be prepended to the relevant `PATH`, provided:
-    - Duplicate `PATH` entries are not introduced across reinstalls or upgrades
-    - Existing user or system configuration is not overridden in a way that breaks other ROCm installations or development environments
+  - Duplicate `PATH` entries are not introduced across reinstalls or upgrades
+  - Existing user or system configuration is not overridden in a way that breaks other ROCm installations or development environments
 - Per-machine installs must modify machine-scoped environment variables
 - Per-user installs must modify user-scoped environment variables only
 
@@ -436,9 +436,9 @@ The following constraints apply:
 - Tools and libraries within the same ROCm installation must be able to discover one another without relying on global environment variables such as `ROCM_PATH`
 - Applications and build systems must not assume a fixed installation path, as ROCm may be installed in custom directories, build trees, or distributed via package managers such as Python wheels
 - Build systems and applications that require deterministic selection of a specific ROCm version should rely on:
-    - Versioned installation directories
-    - Explicit configuration (e.g., CMake/toolchain files)
-    - Registry-based discovery where applicable
+  - Versioned installation directories
+  - Explicit configuration (e.g., CMake/toolchain files)
+  - Registry-based discovery where applicable
 
 The convenience variable `ROCM_PATH` is last-writer-wins. Build systems and applications that require deterministic selection of a specific version should rely on versioned install paths and registry-based discovery rather than assuming `ROCM_PATH` is pinned permanently.
 
