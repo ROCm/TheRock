@@ -197,7 +197,6 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
     # both
     "build_portable_linux_python_packages.yml",
     "build_portable_linux_pytorch_wheels_ci.yml",
-    "multi_arch_release_linux_pytorch_wheels.yml",
     "build_windows_python_packages.yml",
     "build_windows_pytorch_wheels_ci.yml",
     "test_artifacts.yml",
