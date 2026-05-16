@@ -1,0 +1,298 @@
+From e1efbffb30ecf8fd143ae9a1d90bf930055167fb Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Sat, 16 May 2026 10:31:03 +0000
+Subject: [PATCH] Update kpack to support > 4KB pages
+
+---
+ .../kpack/python/rocm_kpack/elf/operations.py | 10 +++---
+ .../python/rocm_kpack/elf/phdr_manager.py     | 33 ++++++++++++++++---
+ shared/kpack/python/rocm_kpack/elf/types.py   | 20 +++++------
+ shared/kpack/python/rocm_kpack/elf/verify.py  | 17 +++++++---
+ .../kpack/python/rocm_kpack/elf/zero_page.py  | 21 ++++++++----
+ 5 files changed, 71 insertions(+), 30 deletions(-)
+
+diff --git a/shared/kpack/python/rocm_kpack/elf/operations.py b/shared/kpack/python/rocm_kpack/elf/operations.py
+index bfdb32d44c..766dec8157 100644
+--- a/shared/kpack/python/rocm_kpack/elf/operations.py
++++ b/shared/kpack/python/rocm_kpack/elf/operations.py
+@@ -86,8 +86,9 @@ def map_section_to_load(
+             error=f"Section '{section_name}' already has SHF_ALLOC",
+         )
+ 
+-    # Initialize PHDR manager
++    # Initialize PHDR manager (also detects the page size from existing segments)
+     manager = ProgramHeaderManager(surgery, spare_slots=spare_slots)
++    page_size = manager._page_size
+ 
+     # Allocate virtual address if not specified
+     if vaddr is None:
+@@ -95,13 +96,13 @@ def map_section_to_load(
+ 
+     # Check if we need to relocate section data for mmap alignment
+     section_offset = section.header.sh_offset
+-    vaddr_mod = vaddr % PAGE_SIZE
+-    offset_mod = section_offset % PAGE_SIZE
++    vaddr_mod = vaddr % page_size
++    offset_mod = section_offset % page_size
+ 
+     new_offset = section_offset
+     if offset_mod != vaddr_mod:
+         # Need to copy section data to a new location with proper alignment
+-        new_offset = page_align_offset(len(surgery.data), vaddr)
++        new_offset = page_align_offset(len(surgery.data), vaddr, page_size)
+         padding = new_offset - len(surgery.data)
+ 
+         if padding > 0:
+@@ -118,6 +119,7 @@ def map_section_to_load(
+         file_offset=new_offset,
+         size=section.header.sh_size,
+         flags=PF_R,  # Read-only
++        page_size=page_size,
+     )
+     manager.add_program_header(new_load)
+ 
+diff --git a/shared/kpack/python/rocm_kpack/elf/phdr_manager.py b/shared/kpack/python/rocm_kpack/elf/phdr_manager.py
+index e127f182e1..5792a6f92f 100644
+--- a/shared/kpack/python/rocm_kpack/elf/phdr_manager.py
++++ b/shared/kpack/python/rocm_kpack/elf/phdr_manager.py
+@@ -91,6 +91,25 @@ class ProgramHeaderManager:
+         # Track if we've made changes
+         self._modified = False
+ 
++        # Infer page size from existing PT_LOAD segments. Some platforms use
++        # a page size larger than the 4KB default (e.g. 64KB). New segments
++        # we create must use the same alignment as the existing ones or the
++        # dynamic linker will refuse to load the library.
++        self._page_size = self._detect_page_size()
++
++    def _detect_page_size(self) -> int:
++        """Infer page size from existing PT_LOAD p_align values.
++
++        Some platforms require a page size larger than the 4KB default.
++        Rather than hard-coding platform-specific values, we read the
++        alignment from the existing segments, which the linker already set
++        correctly for the target platform.
++        """
++        for phdr in self._phdrs:
++            if phdr.p_type == PT_LOAD and phdr.p_align > PAGE_SIZE:
++                return phdr.p_align
++        return PAGE_SIZE
++
+     @property
+     def program_headers(self) -> list[ProgramHeader]:
+         """Current program headers."""
+@@ -135,7 +154,7 @@ class ProgramHeaderManager:
+         Returns:
+             Virtual address at page boundary after existing segments
+         """
+-        return round_up_to_page(self.get_max_vaddr())
++        return round_up_to_page(self.get_max_vaddr(), self._page_size)
+ 
+     def _get_available_space(self) -> int:
+         """Get available space for program headers at current location."""
+@@ -207,7 +226,7 @@ class ProgramHeaderManager:
+ 
+         # Calculate file offset with proper alignment
+         current_end = len(self._surgery.data)
+-        new_phoff = page_align_offset(current_end, phdr_vaddr)
++        new_phoff = page_align_offset(current_end, phdr_vaddr, self._page_size)
+ 
+         # Add padding to reach aligned offset
+         padding = new_phoff - current_end
+@@ -249,7 +268,7 @@ class ProgramHeaderManager:
+             p_paddr=phdr_vaddr,
+             p_filesz=allocated_size,
+             p_memsz=allocated_size,
+-            p_align=PAGE_SIZE,
++            p_align=self._page_size,
+         )
+         self._phdrs.append(phdr_load)
+ 
+@@ -285,6 +304,7 @@ def create_load_segment(
+     file_offset: int,
+     size: int,
+     flags: int = PF_R,
++    page_size: int = PAGE_SIZE,
+ ) -> ProgramHeader:
+     """Create a PT_LOAD segment.
+ 
+@@ -293,12 +313,15 @@ def create_load_segment(
+         file_offset: File offset (must be page-aligned with vaddr)
+         size: Size of segment
+         flags: Segment flags (default: read-only)
++        page_size: Page size for alignment; defaults to 4KB but should match
++            the target platform's page size for platforms that require larger
++            alignment
+ 
+     Returns:
+         New ProgramHeader
+     """
+     # Verify alignment constraint
+-    if (file_offset % PAGE_SIZE) != (vaddr % PAGE_SIZE):
++    if (file_offset % page_size) != (vaddr % page_size):
+         raise ValueError(
+             f"File offset 0x{file_offset:x} not page-aligned with vaddr 0x{vaddr:x}"
+         )
+@@ -311,5 +334,5 @@ def create_load_segment(
+         p_paddr=vaddr,
+         p_filesz=size,
+         p_memsz=size,
+-        p_align=PAGE_SIZE,
++        p_align=page_size,
+     )
+diff --git a/shared/kpack/python/rocm_kpack/elf/types.py b/shared/kpack/python/rocm_kpack/elf/types.py
+index 2d6c6c7347..f820fc908c 100644
+--- a/shared/kpack/python/rocm_kpack/elf/types.py
++++ b/shared/kpack/python/rocm_kpack/elf/types.py
+@@ -561,34 +561,34 @@ class RelEntry:
+ # =============================================================================
+ 
+ 
+-def round_up_to_page(addr: int) -> int:
++def round_up_to_page(addr: int, page_size: int = PAGE_SIZE) -> int:
+     """Round address up to next page boundary."""
+-    return (addr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1)
++    return (addr + page_size - 1) & ~(page_size - 1)
+ 
+ 
+-def round_down_to_page(addr: int) -> int:
++def round_down_to_page(addr: int, page_size: int = PAGE_SIZE) -> int:
+     """Round address down to previous page boundary."""
+-    return addr & ~(PAGE_SIZE - 1)
++    return addr & ~(page_size - 1)
+ 
+ 
+-def page_align_offset(offset: int, vaddr: int) -> int:
++def page_align_offset(offset: int, vaddr: int, page_size: int = PAGE_SIZE) -> int:
+     """Calculate file offset that maintains mmap alignment with vaddr.
+ 
+     For mmap to work correctly:
+-        (p_offset % PAGE_SIZE) == (p_vaddr % PAGE_SIZE)
++        (p_offset % page_size) == (p_vaddr % page_size)
+ 
+     This function finds the smallest offset >= the given offset that
+     satisfies this constraint for the given vaddr.
+     """
+-    vaddr_page_offset = vaddr & (PAGE_SIZE - 1)
+-    offset_page_offset = offset & (PAGE_SIZE - 1)
++    vaddr_page_offset = vaddr & (page_size - 1)
++    offset_page_offset = offset & (page_size - 1)
+ 
+     if offset_page_offset == vaddr_page_offset:
+         return offset
+     elif offset_page_offset < vaddr_page_offset:
+-        return (offset & ~(PAGE_SIZE - 1)) + vaddr_page_offset
++        return (offset & ~(page_size - 1)) + vaddr_page_offset
+     else:
+-        return round_up_to_page(offset) + vaddr_page_offset
++        return round_up_to_page(offset, page_size) + vaddr_page_offset
+ 
+ 
+ def get_section_name(
+diff --git a/shared/kpack/python/rocm_kpack/elf/verify.py b/shared/kpack/python/rocm_kpack/elf/verify.py
+index 9a40ff6c88..46f543e33f 100644
+--- a/shared/kpack/python/rocm_kpack/elf/verify.py
++++ b/shared/kpack/python/rocm_kpack/elf/verify.py
+@@ -137,19 +137,26 @@ class ElfVerifier(BinaryVerifier):
+     def check_phdr_alignment(self) -> VerificationResult:
+         """Check PT_LOAD segments satisfy mmap alignment requirements.
+ 
+-        For mmap to work: (p_offset % PAGE_SIZE) == (p_vaddr % PAGE_SIZE)
++        For mmap to work: (p_offset % p_align) == (p_vaddr % p_align).
++        We use the segment's own p_align rather than a hardcoded page size
++        so that platforms with page sizes larger than 4KB are handled correctly.
+         """
+         result = VerificationResult()
+ 
+         for idx, phdr in self._surgery.iter_load_segments():
+-            offset_mod = phdr.p_offset % PAGE_SIZE
+-            vaddr_mod = phdr.p_vaddr % PAGE_SIZE
++            align = phdr.p_align
++            if align <= 1:
++                # No alignment required for this segment
++                continue
++
++            offset_mod = phdr.p_offset % align
++            vaddr_mod = phdr.p_vaddr % align
+ 
+             if offset_mod != vaddr_mod:
+                 result.add_error(
+                     f"PT_LOAD segment {idx} has misaligned offset/vaddr: "
+-                    f"offset=0x{phdr.p_offset:x} ({offset_mod:#x} mod PAGE_SIZE), "
+-                    f"vaddr=0x{phdr.p_vaddr:x} ({vaddr_mod:#x} mod PAGE_SIZE)"
++                    f"offset=0x{phdr.p_offset:x} ({offset_mod:#x} mod 0x{align:x}), "
++                    f"vaddr=0x{phdr.p_vaddr:x} ({vaddr_mod:#x} mod 0x{align:x})"
+                 )
+ 
+         return result
+diff --git a/shared/kpack/python/rocm_kpack/elf/zero_page.py b/shared/kpack/python/rocm_kpack/elf/zero_page.py
+index 4f33db60ee..5306f01950 100644
+--- a/shared/kpack/python/rocm_kpack/elf/zero_page.py
++++ b/shared/kpack/python/rocm_kpack/elf/zero_page.py
+@@ -45,12 +45,15 @@ class ZeroPageResult:
+     error: str | None = None
+ 
+ 
+-def calculate_aligned_range(vaddr: int, size: int) -> tuple[int, int]:
++def calculate_aligned_range(
++    vaddr: int, size: int, page_size: int = PAGE_SIZE
++) -> tuple[int, int]:
+     """Calculate the page-aligned range within a section.
+ 
+     Args:
+         vaddr: Section virtual address
+         size: Section size
++        page_size: System page size (may be larger than 4KB on some platforms)
+ 
+     Returns:
+         Tuple of (aligned_vaddr, aligned_size) - the range of full pages
+@@ -59,10 +62,10 @@ def calculate_aligned_range(vaddr: int, size: int) -> tuple[int, int]:
+     end = vaddr + size
+ 
+     # Round up start to next page boundary
+-    aligned_start = round_up_to_page(vaddr)
++    aligned_start = round_up_to_page(vaddr, page_size)
+ 
+     # Round down end to previous page boundary
+-    aligned_end = round_down_to_page(end)
++    aligned_end = round_down_to_page(end, page_size)
+ 
+     if aligned_start >= aligned_end:
+         # No full pages to zero
+@@ -229,8 +232,14 @@ def conservative_zero_page(
+     section_size = section.header.sh_size
+     section_offset = section.header.sh_offset
+ 
++    # Detect page size from existing PT_LOAD segments (may exceed 4KB on some platforms)
++    manager = ProgramHeaderManager(surgery, spare_slots=spare_slots)
++    page_size = manager._page_size
++
+     # Calculate aligned range
+-    aligned_vaddr, aligned_size = calculate_aligned_range(section_vaddr, section_size)
++    aligned_vaddr, aligned_size = calculate_aligned_range(
++        section_vaddr, section_size, page_size
++    )
+ 
+     if aligned_size == 0:
+         # Section is too small or misaligned - no optimization possible
+@@ -251,7 +260,7 @@ def conservative_zero_page(
+     section_end = section_vaddr + section_size
+     suffix = section_end - round_down_to_page(section_end)
+     if suffix == 0:
+-        aligned_size -= PAGE_SIZE
++        aligned_size -= page_size
+         if aligned_size == 0:
+             return ZeroPageResult(
+                 success=True,
+@@ -262,7 +271,7 @@ def conservative_zero_page(
+             )
+ 
+     aligned_offset = section_offset + (aligned_vaddr - section_vaddr)
+-    pages_to_zero = aligned_size // PAGE_SIZE
++    pages_to_zero = aligned_size // page_size
+ 
+     # Find the PT_LOAD containing the section
+     target_result = surgery.find_phdr_containing_vaddr(section_vaddr)
+-- 
+2.47.3
+
