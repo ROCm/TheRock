@@ -89,10 +89,13 @@ jobs:
     strategy:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    container:
+      image: ubuntu:24.04
+      options: -v /runner/config:/home/awsconfig/
     outputs:
       package_install_url: ${{ steps.upload-packages.outputs.package_repository_url }}
     env:
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || '' }}
       OUTPUT_DIR: ${{ github.workspace }}/output
@@ -120,10 +123,10 @@ jobs:
         run: |
           # Install the needed tools for creating rpm / deb packages
           # Also install tools for creating repo files
-          sudo apt update
-          sudo apt install -y llvm-20
-          sudo apt install -y rpm debhelper-compat build-essential
-          sudo apt install -y dpkg-dev createrepo-c
+          apt-get update
+          apt-get install -y llvm-20
+          apt-get install -y rpm debhelper-compat build-essential
+          apt-get install -y dpkg-dev createrepo-c
 
       - name: Fetch Artifacts
         run: |
