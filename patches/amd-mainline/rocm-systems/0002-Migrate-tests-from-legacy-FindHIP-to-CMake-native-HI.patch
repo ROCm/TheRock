@@ -1,7 +1,7 @@
-From 3abbc78facacd31dbee3fc26982fc1acc0b2addf Mon Sep 17 00:00:00 2001
+From f51e310d8027801c04f5a45664500a91ba930c1f Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Thu, 7 May 2026 13:39:14 -0500
-Subject: [PATCH 2/3] Migrate tests from legacy FindHIP to CMake native HIP
+Subject: [PATCH 2/7] Migrate tests from legacy FindHIP to CMake native HIP
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit

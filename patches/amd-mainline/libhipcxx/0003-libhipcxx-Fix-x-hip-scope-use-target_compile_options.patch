@@ -1,4 +1,4 @@
-From 94b24f1619d03981f63d17ebf887905bc8e8685a Mon Sep 17 00:00:00 2001
+From e7c63ea4f6b825f3872a5ccfd09c832583825ebc Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Wed, 13 May 2026 15:27:28 -0500
 Subject: [PATCH 3/3] [libhipcxx] Fix -x hip scope: use target_compile_options

@@ -1,7 +1,7 @@
-From aa89c94eb9361977770d73fc7c6172cc1b4588d5 Mon Sep 17 00:00:00 2001
+From 365a36619c2ef4b59b83abade14f8f903bbea7be Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Sat, 9 May 2026 15:18:25 -0500
-Subject: [PATCH] [rocBLAS/shared-tensile] Deprecate hipconfig: read ROCm
+Subject: [PATCH 2/2] [rocBLAS/shared-tensile] Deprecate hipconfig: read ROCm
  version without hipconfig
 
 Replace hipconfig dependency in shared Tensile with alternatives:
@@ -26,10 +26,10 @@ Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
  4 files changed, 15 insertions(+), 8 deletions(-)
 
 diff --git a/shared/tensile/Tensile/Common.py b/shared/tensile/Tensile/Common.py
-index 220430061b..3f35e173af 100644
+index 55954296e9..221d5c7553 100644
 --- a/shared/tensile/Tensile/Common.py
 +++ b/shared/tensile/Tensile/Common.py
-@@ -2393,12 +2393,24 @@ def assignGlobalParameters( config, capabilitiesCache: Optional[dict] = None ):
+@@ -2394,12 +2394,24 @@ def assignGlobalParameters( config, capabilitiesCache: Optional[dict] = None ):
        printExit("Config file requires version=%s is not compatible with current Tensile version=%s" \
            % (config["MinimumRequiredVersion"], __version__) )
  
@@ -102,7 +102,7 @@ index f19dab132c..c214f21b06 100644
      if args.NoEnumerate:
          arguments["ROCmAgentEnumeratorPath"] = False
 diff --git a/shared/tensile/Tensile/cmake/TensileConfig.cmake b/shared/tensile/Tensile/cmake/TensileConfig.cmake
-index 28be994c7c..140d241e0d 100644
+index 0a078ab798..656ade2a36 100644
 --- a/shared/tensile/Tensile/cmake/TensileConfig.cmake
 +++ b/shared/tensile/Tensile/cmake/TensileConfig.cmake
 @@ -232,7 +232,7 @@ function(TensileCreateLibraryFiles

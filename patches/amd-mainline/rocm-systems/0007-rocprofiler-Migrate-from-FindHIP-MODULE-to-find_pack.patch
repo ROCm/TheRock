@@ -1,8 +1,8 @@
-From 886e32c41976efe48d6590f33d292f464b6774da Mon Sep 17 00:00:00 2001
+From 5d26b14a69d34c04cb6122d76a8eccb873693bcd Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Fri, 8 May 2026 17:41:04 -0500
-Subject: [PATCH] [rocprofiler] Migrate from FindHIP MODULE to find_package(hip
- CONFIG)
+Subject: [PATCH 7/7] [rocprofiler] Migrate from FindHIP MODULE to
+ find_package(hip CONFIG)
 
 Replace find_package(HIP REQUIRED MODULE) with find_package(hip CONFIG)
 + enable_language(HIP) in rocprofiler samples and legacy test files.

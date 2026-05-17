@@ -1,7 +1,7 @@
-From 4d0c1ed6c362b20a34793f17f48c25d9f2e1a8f0 Mon Sep 17 00:00:00 2001
+From 525437c70797ac3eb57afd60f9b088a8f1067886 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Fri, 8 May 2026 15:27:08 -0500
-Subject: [PATCH] [rccl] Deprecate hipconfig: derive HIP version from
+Subject: [PATCH 4/7] [rccl] Deprecate hipconfig: derive HIP version from
  find_package(hip)
 
 Replace the hipconfig -v call used to populate hip_version_string with
@@ -18,7 +18,7 @@ is hipcc-specific and not recognized by clang directly.
  1 file changed, 2 insertions(+), 5 deletions(-)
 
 diff --git a/projects/rccl/CMakeLists.txt b/projects/rccl/CMakeLists.txt
-index 52062e7051..e7fafb1ad9 100644
+index aa88f79527..d944fbfae4 100644
 --- a/projects/rccl/CMakeLists.txt
 +++ b/projects/rccl/CMakeLists.txt
 @@ -250,11 +250,8 @@ execute_process(

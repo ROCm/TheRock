@@ -1,7 +1,7 @@
-From 67b28e659e81466fb77db8c8545461471f89030d Mon Sep 17 00:00:00 2001
+From 5f382f5c67daa01a0cbaae53f79513bb04f531be Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Fri, 8 May 2026 17:17:49 -0500
-Subject: [PATCH] [clr] Deprecate hipconfig: remove hipconfig-based
+Subject: [PATCH 6/7] [clr] Deprecate hipconfig: remove hipconfig-based
  HIP_PLATFORM detection
 
 Replace the _hip_clr_auto_detect_hip_platform() function, which called

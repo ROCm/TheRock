@@ -1,8 +1,8 @@
-From 2af8fe84d81398a2ba2736fcb70a13b6899e146f Mon Sep 17 00:00:00 2001
+From 3a4f45be3377dc8366c6cbe478a2f41b607b9844 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Fri, 8 May 2026 17:14:14 -0500
-Subject: [PATCH] [rccl-tests, hip-tests/samples] Deprecate hipconfig: derive
- HIP version from find_package(hip)
+Subject: [PATCH 5/7] [rccl-tests, hip-tests/samples] Deprecate hipconfig:
+ derive HIP version from find_package(hip)
 
 Replace hipconfig calls used to determine the HIP version string with
 hip_VERSION from find_package(hip), which is already available in scope.

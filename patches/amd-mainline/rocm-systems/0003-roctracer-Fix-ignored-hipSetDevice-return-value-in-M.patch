@@ -1,7 +1,7 @@
-From 9a84fb7b3a1c1305a66677704a2a31393d21624a Mon Sep 17 00:00:00 2001
+From bfa81244f234e35b437b7a2af38ac411049863dd Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Thu, 7 May 2026 16:11:40 -0500
-Subject: [PATCH 3/3] [roctracer] Fix ignored hipSetDevice return value in
+Subject: [PATCH 3/7] [roctracer] Fix ignored hipSetDevice return value in
  MatrixTranspose_test
 
 hipSetDevice() returns hipError_t with [[nodiscard]], and clang's

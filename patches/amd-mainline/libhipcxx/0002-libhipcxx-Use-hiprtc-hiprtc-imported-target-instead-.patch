@@ -1,4 +1,4 @@
-From 9d073a668156170f17066b35f0b441856a8cc964 Mon Sep 17 00:00:00 2001
+From 214e1d6cb9220f16c6b5674b7d308d2c9c6760e8 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Wed, 13 May 2026 11:48:43 -0500
 Subject: [PATCH 2/3] [libhipcxx] Use hiprtc::hiprtc imported target instead of

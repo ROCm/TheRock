@@ -1,8 +1,8 @@
-From ed46cb655138830a199182513ef4dc8d61b3c6d8 Mon Sep 17 00:00:00 2001
+From 67129a0a549c54ef0d485f228953b68841b7e5ee Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Fri, 8 May 2026 21:30:58 -0500
-Subject: [PATCH] [hipblaslt] Deprecate hipconfig: read ROCm version without
- hipconfig
+Subject: [PATCH 1/2] [hipblaslt] Deprecate hipconfig: read ROCm version
+ without hipconfig
 
 Replace hipconfig dependency in tensilelite with alternatives:
 
@@ -35,10 +35,10 @@ index 658f50fe23..0eb4c71e01 100644
          --
          "${Python3_EXECUTABLE}"
 diff --git a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
-index c4356c0727..7a663b76c3 100644
+index 04254a4bc5..3607115464 100644
 --- a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
 +++ b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
-@@ -813,12 +813,11 @@ def run():
+@@ -821,12 +821,11 @@ def run():
      arguments = parseArguments()
      setVerbosity(arguments["PrintLevel"])
      outputPath = Path(ensurePath(os.path.abspath(arguments["OutputPath"])))

@@ -1,7 +1,7 @@
-From e94358b50ef9d4741040af5e6f733233dba579ef Mon Sep 17 00:00:00 2001
+From 7172cf8fc9403f35f4409df7917407899bcf52f1 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Fri, 1 May 2026 10:37:47 -0500
-Subject: [PATCH 1/3] [hip-tests] Deprecate hipconfig: derive HIP version from
+Subject: [PATCH 1/7] [hip-tests] Deprecate hipconfig: derive HIP version from
  find_package(hip)
 
 Replace find_program(HIPCONFIG_EXEC hipconfig REQUIRED) and the
@@ -14,7 +14,7 @@ Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
  1 file changed, 11 insertions(+), 11 deletions(-)
 
 diff --git a/projects/hip-tests/catch/CMakeLists.txt b/projects/hip-tests/catch/CMakeLists.txt
-index 062f745fe8..8ef2776824 100644
+index 3847afd5de..6e3e4ee4f6 100644
 --- a/projects/hip-tests/catch/CMakeLists.txt
 +++ b/projects/hip-tests/catch/CMakeLists.txt
 @@ -50,7 +50,8 @@ include_directories(${hip_INCLUDE_DIRS})
