@@ -308,6 +308,20 @@ function(therock_provide_artifact slice_name)
     endif()
   endif()
 
+  # Register artifact manifest files as configure dependencies for downstream
+  # subprojects. Any subproject whose configure step references
+  # dist/<distribution>/ (via ROCM_PATH or CMAKE_PREFIX_PATH) needs the
+  # artifact-flatten to have populated that directory first. The manifest files
+  # are outputs of the add_custom_command that chains both the 'artifact' and
+  # 'artifact-flatten' operations, so depending on them guarantees dist/ is
+  # populated.
+  if(ARG_DISTRIBUTION)
+    foreach(subproject_dep ${ARG_SUBPROJECT_DEPS})
+      set_property(TARGET "${subproject_dep}" APPEND PROPERTY
+        THEROCK_INTERFACE_CONFIGURE_DEPEND_FILES ${_manifest_files})
+    endforeach()
+  endif()
+
   # If target exists from topology, create a helper target for file dependencies
   if(_target_exists)
     # Target already exists from topology - create a helper target for file dependencies
