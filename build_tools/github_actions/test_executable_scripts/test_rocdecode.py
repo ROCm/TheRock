@@ -50,9 +50,7 @@ def setup_env(env):
         LD_PRELOAD_VALUE = ":".join(LD_PRELOAD_LIBS)
         logging.info(f"++ rocdecode setting LD_PRELOAD={LD_PRELOAD_VALUE}")
         env["LD_PRELOAD"] = LD_PRELOAD_VALUE
-        logging.info(
-            f"++ rocdecode setting LIBVA_DRIVERS_PATH={ROCM_SYSDEPS_LIB_PATH}"
-        )
+        logging.info(f"++ rocdecode setting LIBVA_DRIVERS_PATH={ROCM_SYSDEPS_LIB_PATH}")
         env["LIBVA_DRIVERS_PATH"] = str(ROCM_SYSDEPS_LIB_PATH)
     else:
         logging.info(f"++ rocdecode tests only supported on Linux")
