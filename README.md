@@ -171,6 +171,8 @@ enable/disable selected subsets:
 | `-DTHEROCK_ENABLE_PROFILER=OFF`    | Disables profilers                   |
 | `-DTHEROCK_ENABLE_DC_TOOLS=OFF`    | Disables data center tools           |
 | `-DTHEROCK_ENABLE_MEDIA_LIBS=OFF`  | Disables all media libraries         |
+| `-DTHEROCK_ENABLE_WSL=ON`          | Enables WSL-specific artifacts       |
+| `-DTHEROCK_ENABLE_EMULATION=ON`    | Enables emulation tools              |
 
 Individual features can be controlled separately (typically in combination with
 `-DTHEROCK_ENABLE_ALL=OFF` or `-DTHEROCK_RESET_FEATURES=ON` to force a
@@ -185,6 +187,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_CORE_RUNTIME=ON`     | Enables the core runtime components and tools       |
 | `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`      | Enables the HIP runtime components                  |
 | `-DTHEROCK_ENABLE_OCL_RUNTIME=ON`      | Enables the OpenCL runtime components               |
+| `-DTHEROCK_ENABLE_WSL_ROCDXG=ON`       | Enables the WSL ROCDXG bridge library               |
 | `-DTHEROCK_ENABLE_ROCGDB=ON`           | Enables the ROCm debugger (ROCgdb)                  |
 | `-DTHEROCK_ENABLE_ROCPROFV3=ON`        | Enables rocprofv3                                   |
 | `-DTHEROCK_ENABLE_ROCPROFSYS=ON`       | Enables rocprofiler-systems                         |
@@ -208,6 +211,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCDECODE=ON`        | Enables rocDecode video decoder (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCJPEG=ON`          | Enables rocJPEG JPEG decoder (Linux only)           |
+| `-DTHEROCK_ENABLE_ROCJITSU=ON`         | Enables ROCm emulation tools (Linux only)           |
 
 hipDNN provider plugins:
 
@@ -353,4 +357,4 @@ separately.
 - [Dockerfiles for TheRock](dockerfiles/README.md): Information about containers used for building, testing, and distributing ROCm using TheRock.
 - [Build Artifacts](docs/development/artifacts.md): Documentation about the outputs of the build system.
 - [Releases Page](RELEASES.md): Documentation for how to leverage our build artifacts.
-- [Roadmap for Support](ROADMAP.md): Documentation for our prioritized roadmap to support AMD GPUs.
+- [Supported GPUs](SUPPORTED_GPUS.md): Current support status and prioritized roadmap for each AMD GPU architecture.
