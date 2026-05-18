@@ -144,7 +144,7 @@ test_matrix = {
         "job_name": "hipsolver",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_hipsolver.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
