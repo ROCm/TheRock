@@ -62,6 +62,25 @@ CDN_TO_S3_FALLBACK_MAP = {
     "rocm.nightlies.amd.com": "therock-nightly-python.s3.amazonaws.com",
 }
 
+# ROCm packages for S3 fallback. We use --find-links instead of --index-url because
+# S3 doesn't auto-serve index.html for directory requests (pip requests /pkg/, not
+# /pkg/index.html). Each package's index.html must be specified explicitly.
+ROCM_PACKAGE_NAMES = [
+    "apex",
+    "jax-rocm7-pjrt",
+    "jax-rocm7-plugin",
+    "jaxlib",
+    "pytorch-triton-rocm",
+    "rocm",
+    "rocm-profiler",
+    "rocm-sdk-core",
+    "rocm-sdk-devel",
+    "torch",
+    "torchaudio",
+    "torchvision",
+    "triton",
+]
+
 
 def log(*args, **kwargs):
     print(*args, **kwargs)
@@ -248,8 +267,17 @@ def install_packages_into_venv(
         index_url, using_s3_fallback = apply_url_fallback(index_url)
 
         if using_s3_fallback:
-            # S3 has same PEP 503 index structure as CDN, use as extra index.
-            pip_install_cmd.append(f"--extra-index-url={index_url}")
+            # TODO(#5285): remove fallback once DNS issues on test machine are resolved
+            # Use --find-links with explicit index.html paths. S3 doesn't auto-serve
+            # index.html for directory URLs, so --index-url won't work
+            pkg_names = list(ROCM_PACKAGE_NAMES)
+            # Add arch-specific libraries package (e.g., rocm-sdk-libraries-gfx94x-dcgpu).
+            if index_subdir:
+                arch = index_subdir.strip("/").lower()
+                pkg_names.append(f"rocm-sdk-libraries-{arch}")
+            for pkg_name in pkg_names:
+                pkg_find_links = f"{index_url.rstrip('/')}/{pkg_name}/index.html"
+                pip_install_cmd.append(f"--find-links={pkg_find_links}")
         else:
             pip_install_cmd.append(f"--index-url={index_url}")
 
