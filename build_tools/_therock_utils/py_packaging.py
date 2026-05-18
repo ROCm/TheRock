@@ -189,17 +189,14 @@ class PopulatedDistPackage:
                 f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
             )
 
-        # Device packages need to know the libraries package name so their
-        # setup.py can declare the correct install_requires and overlay dir.
+        # Device packages need to know the libraries package's Python package
+        # name so their setup.py can set up the correct overlay directory.
+        # The dist name ("rocm-sdk-libraries") is static and hardcoded in setup.py.
         if logical_name == "device":
             libraries_entry = self.params.dist_info.ALL_PACKAGES["libraries"]
-            libraries_dist_name = libraries_entry.get_dist_package_name(
-                target_family=None
-            )
             libraries_py_package_name = libraries_entry.get_py_package_name(
                 target_family=None
             )
-            dist_info_contents += f"LIBRARIES_DIST_NAME = {repr(libraries_dist_name)}\n"
             dist_info_contents += (
                 f"LIBRARIES_PY_PACKAGE_NAME = {repr(libraries_py_package_name)}\n"
             )

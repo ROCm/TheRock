@@ -9,3 +9,27 @@
 [components.run."core/rocminfo/stage"]
 [components.dbg."core/rocminfo/stage"]
 [components.doc."core/rocminfo/stage"]
+
+# hrx
+[components.lib."core/hrx/stage"]
+optional = true
+[components.run."core/hrx/stage"]
+optional = true
+include = [
+  "lib/hrx/bin/**",
+]
+[components.dbg."core/hrx/stage"]
+optional = true
+[components.dev."core/hrx/stage"]
+optional = true
+include = [
+  "lib/hrx/include/**",
+  "lib/hrx/lib/cmake/**",
+]
+[components.doc."core/hrx/stage"]
+optional = true
+[components.test."core/hrx/stage"]
+optional = true
+include = [
+  "lib/hrx/share/hrx-cts/**",
+]

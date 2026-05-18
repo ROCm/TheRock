@@ -8,12 +8,27 @@
 
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent.parent))
 import get_url_repo_params
+
+
+def _run_main_with_output(argv: list[str]) -> tuple[int, str]:
+    """Run main() with a temp GITHUB_OUTPUT file; return (exit_code, file_contents)."""
+    with tempfile.NamedTemporaryFile(mode="r", suffix=".txt", delete=False) as f:
+        tmp_path = f.name
+    try:
+        with patch.dict(os.environ, {"GITHUB_OUTPUT": tmp_path}):
+            code = get_url_repo_params.main(argv)
+        contents = Path(tmp_path).read_text()
+    finally:
+        os.unlink(tmp_path)
+    return code, contents
 
 
 class GetBaseUrlTest(unittest.TestCase):
@@ -289,14 +304,11 @@ class MainSubcommandsTest(unittest.TestCase):
     """Tests for main() subcommands (get-base-url, get-repo-sub-folder, get-repo-url)."""
 
     def test_get_base_url_success(self):
-        # Test that get-base-url subcommand prints repo_base_url= and returns 0.
-        with patch("sys.stdout") as mock_stdout:
-            code = get_url_repo_params.main(
-                ["get-base-url", "--from-url", "https://example.com/v2/whl"]
-            )
+        # Test that get-base-url subcommand writes repo_base_url= to GITHUB_OUTPUT.
+        code, output = _run_main_with_output(
+            ["get-base-url", "--from-url", "https://example.com/v2/whl"]
+        )
         self.assertEqual(code, 0)
-        mock_stdout.write.assert_called()
-        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertIn("repo_base_url=https://example.com", output)
 
     def test_get_base_url_invalid_returns_one(self):
@@ -306,35 +318,31 @@ class MainSubcommandsTest(unittest.TestCase):
         self.assertEqual(code, 1)
 
     def test_get_repo_sub_folder_success(self):
-        # Test that get-repo-sub-folder prints repo_sub_folder= and returns 0.
-        with patch("sys.stdout") as mock_stdout:
-            code = get_url_repo_params.main(
-                ["get-repo-sub-folder", "--from-s3-prefix", "v3/deb/20260204-12345"]
-            )
+        # Test that get-repo-sub-folder writes repo_sub_folder= to GITHUB_OUTPUT.
+        code, output = _run_main_with_output(
+            ["get-repo-sub-folder", "--from-s3-prefix", "v3/deb/20260204-12345"]
+        )
         self.assertEqual(code, 0)
-        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertIn("repo_sub_folder=20260204-12345", output)
 
     def test_get_repo_url_success(self):
-        # Test that get-repo-url prints repo_url= and returns 0.
-        with patch("sys.stdout") as mock_stdout:
-            code = get_url_repo_params.main(
-                [
-                    "get-repo-url",
-                    "--release-type",
-                    "prerelease",
-                    "--native-package-type",
-                    "deb",
-                    "--repo-base-url",
-                    "https://x.com",
-                    "--os-profile",
-                    "ubuntu2404",
-                    "--repo-sub-folder",
-                    "",
-                ]
-            )
+        # Test that get-repo-url writes repo_url= to GITHUB_OUTPUT.
+        code, output = _run_main_with_output(
+            [
+                "get-repo-url",
+                "--release-type",
+                "prerelease",
+                "--native-package-type",
+                "deb",
+                "--repo-base-url",
+                "https://x.com",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-sub-folder",
+                "",
+            ]
+        )
         self.assertEqual(code, 0)
-        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertIn("repo_url=https://x.com/ubuntu2404", output)
 
     def test_get_repo_url_error_returns_one(self):
@@ -361,23 +369,19 @@ class MainSubcommandsTest(unittest.TestCase):
         self.assertEqual(code, 1)
 
     def test_extract_gfx_arch_success(self):
-        # Test that extract-gfx-arch subcommand prints gfx_arch= and returns 0.
-        with patch("sys.stdout") as mock_stdout:
-            code = get_url_repo_params.main(
-                ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu"]
-            )
+        # Test that extract-gfx-arch writes gfx_arch= to GITHUB_OUTPUT.
+        code, output = _run_main_with_output(
+            ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu"]
+        )
         self.assertEqual(code, 0)
-        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertIn("gfx_arch=gfx94x", output)
 
     def test_extract_gfx_arch_lowercase(self):
         # Test that extract-gfx-arch handles already-lowercase input.
-        with patch("sys.stdout") as mock_stdout:
-            code = get_url_repo_params.main(
-                ["extract-gfx-arch", "--artifact-group", "gfx1100-consumer"]
-            )
+        code, output = _run_main_with_output(
+            ["extract-gfx-arch", "--artifact-group", "gfx1100-consumer"]
+        )
         self.assertEqual(code, 0)
-        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertIn("gfx_arch=gfx1100", output)
 
     def test_extract_gfx_arch_empty_returns_one(self):
@@ -390,110 +394,124 @@ class MainSubcommandsTest(unittest.TestCase):
 
     def test_extract_gfx_arch_comma_list(self):
         # Test that extract-gfx-arch handles comma-separated list.
-        with patch("sys.stdout") as mock_stdout:
-            code = get_url_repo_params.main(
-                [
-                    "extract-gfx-arch",
-                    "--artifact-group",
-                    "gfx94X-dcgpu,gfx1100-consumer",
-                ]
-            )
+        code, output = _run_main_with_output(
+            ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu,gfx1100-consumer"]
+        )
         self.assertEqual(code, 0)
-        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertIn("gfx_arch=gfx94x,gfx1100", output)
 
     def test_extract_gfx_arch_semicolon_list(self):
         # Test that extract-gfx-arch handles semicolon-separated list.
-        with patch("sys.stdout") as mock_stdout:
-            code = get_url_repo_params.main(
-                [
-                    "extract-gfx-arch",
-                    "--artifact-group",
-                    "gfx94X-dcgpu;gfx1100-consumer",
-                ]
-            )
+        code, output = _run_main_with_output(
+            ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu;gfx1100-consumer"]
+        )
         self.assertEqual(code, 0)
-        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertIn("gfx_arch=gfx94x,gfx1100", output)
 
     def test_get_gpg_url_success(self):
-        # Test that get-gpg-url subcommand prints gpg_key_url= and returns 0.
-        with patch("sys.stdout") as mock_stdout:
-            code = get_url_repo_params.main(
-                [
-                    "get-gpg-url",
-                    "--from-url",
-                    "https://rocm.prereleases.amd.com/packages/ubuntu2404",
-                ]
-            )
+        # Test that get-gpg-url writes gpg_key_url= to GITHUB_OUTPUT.
+        code, output = _run_main_with_output(
+            [
+                "get-gpg-url",
+                "--from-url",
+                "https://rocm.prereleases.amd.com/packages/ubuntu2404",
+            ]
+        )
         self.assertEqual(code, 0)
-        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertIn(
             "gpg_key_url=https://rocm.prereleases.amd.com/gpg/rocm.gpg", output
         )
 
     def test_get_gpg_url_with_release_type_dev_emits_empty(self):
-        with patch("sys.stdout") as mock_stdout:
-            code = get_url_repo_params.main(
-                [
-                    "get-gpg-url",
-                    "--release-type",
-                    "dev",
-                    "--from-url",
-                    "https://rocm.prereleases.amd.com/packages/ubuntu2404",
-                ]
-            )
+        code, output = _run_main_with_output(
+            [
+                "get-gpg-url",
+                "--release-type",
+                "dev",
+                "--from-url",
+                "https://rocm.prereleases.amd.com/packages/ubuntu2404",
+            ]
+        )
         self.assertEqual(code, 0)
-        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertIn("gpg_key_url=", output)
         self.assertNotIn("rocm.gpg", output)
 
     def test_get_gpg_url_with_release_type_dev_ignores_invalid_url(self):
-        with patch("sys.stdout") as mock_stdout:
-            code = get_url_repo_params.main(
-                [
-                    "get-gpg-url",
-                    "--release-type",
-                    "nightly",
-                    "--from-url",
-                    "not-a-valid-url",
-                ]
-            )
+        code, output = _run_main_with_output(
+            [
+                "get-gpg-url",
+                "--release-type",
+                "nightly",
+                "--from-url",
+                "not-a-valid-url",
+            ]
+        )
         self.assertEqual(code, 0)
-        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertEqual(output.strip(), "gpg_key_url=")
 
     def test_get_gpg_url_with_release_type_prerelease(self):
-        with patch("sys.stdout") as mock_stdout:
-            code = get_url_repo_params.main(
-                [
-                    "get-gpg-url",
-                    "--release-type",
-                    "prerelease",
-                    "--from-url",
-                    "https://rocm.prereleases.amd.com/packages/ubuntu2404",
-                ]
-            )
+        code, output = _run_main_with_output(
+            [
+                "get-gpg-url",
+                "--release-type",
+                "prerelease",
+                "--from-url",
+                "https://rocm.prereleases.amd.com/packages/ubuntu2404",
+            ]
+        )
         self.assertEqual(code, 0)
-        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertIn(
             "gpg_key_url=https://rocm.prereleases.amd.com/gpg/rocm.gpg", output
         )
 
     def test_get_gpg_url_with_release_type_release(self):
-        with patch("sys.stdout") as mock_stdout:
-            code = get_url_repo_params.main(
-                [
-                    "get-gpg-url",
-                    "--release-type",
-                    "release",
-                    "--from-url",
-                    "https://repo.amd.com/rocm/packages/rhel10/x86_64/",
-                ]
-            )
+        code, output = _run_main_with_output(
+            [
+                "get-gpg-url",
+                "--release-type",
+                "release",
+                "--from-url",
+                "https://repo.amd.com/rocm/packages/rhel10/x86_64/",
+            ]
+        )
         self.assertEqual(code, 0)
-        output = "".join(c[0][0] for c in mock_stdout.write.call_args_list)
         self.assertIn("gpg_key_url=https://repo.amd.com/gpg/rocm.gpg", output)
+
+
+class GetContainerImageTest(unittest.TestCase):
+    """Tests for get_container_image()."""
+
+    def test_ubuntu_returns_ubuntu_image(self):
+        self.assertEqual(
+            get_url_repo_params.get_container_image("ubuntu2404"),
+            "ubuntu:24.04",
+        )
+
+    def test_debian_returns_ubuntu_image(self):
+        self.assertEqual(
+            get_url_repo_params.get_container_image("debian12"),
+            "ubuntu:24.04",
+        )
+
+    def test_sles_returns_bci_image(self):
+        self.assertEqual(
+            get_url_repo_params.get_container_image("sles16"),
+            "registry.suse.com/bci/bci-base:16.0",
+        )
+
+    def test_rhel_returns_ubi_image(self):
+        self.assertEqual(
+            get_url_repo_params.get_container_image("rhel10"),
+            "registry.access.redhat.com/ubi10/ubi:10.1",
+        )
+
+    def test_get_container_image_subcommand(self):
+        # Test that get-container-image writes container_image= to GITHUB_OUTPUT.
+        code, output = _run_main_with_output(
+            ["get-container-image", "--os-profile", "ubuntu2404"]
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("container_image=ubuntu:24.04", output)
 
 
 if __name__ == "__main__":

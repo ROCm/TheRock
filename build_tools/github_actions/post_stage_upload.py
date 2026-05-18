@@ -148,7 +148,7 @@ def run(args: argparse.Namespace):
 
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id,
-        platform=platform.system().lower(),
+        platform=args.platform,
     )
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
 
@@ -168,6 +168,12 @@ def main(argv: list[str] | None = None):
         type=str,
         default=os.environ.get("GITHUB_RUN_ID"),
         help="GitHub Actions run ID (default: $GITHUB_RUN_ID)",
+    )
+    parser.add_argument(
+        "--platform",
+        type=str,
+        default=platform.system().lower(),
+        help=f"Platform for workflow output paths (default: {platform.system().lower()})",
     )
     parser.add_argument(
         "--stage",
