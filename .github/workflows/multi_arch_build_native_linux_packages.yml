@@ -101,12 +101,12 @@ jobs:
 
           RELEASE_TYPE="${{ env.RELEASE_TYPE }}"
 
-          if [[ -z "${RELEASE_TYPE}" ]]; then
+          if [ -z "${RELEASE_TYPE}" ]; then
             IAM_ROLE="arn:aws:iam::692859939525:role/therock-ci"
-            echo "✓ Using CI role: ${IAM_ROLE}"
+            echo "Using CI role: ${IAM_ROLE}"
           else
             IAM_ROLE="arn:aws:iam::692859939525:role/therock-${RELEASE_TYPE}"
-            echo "✓ Using release-type role: ${IAM_ROLE}"
+            echo "Using release-type role: ${IAM_ROLE}"
           fi
 
           echo "iam_role=${IAM_ROLE}" >> $GITHUB_OUTPUT

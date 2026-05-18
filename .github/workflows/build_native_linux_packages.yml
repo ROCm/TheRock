@@ -154,12 +154,25 @@ jobs:
             --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --pkg-type ${{ inputs.native_package_type }}
 
+      - name: Determine IAM role
+        id: iam_role
+        run: |
+          # CI builds (empty RELEASE_TYPE) use therock-ci role.
+          # Release builds (dev/nightly/prerelease) use therock-{type} role.
+          RELEASE_TYPE="${{ env.RELEASE_TYPE }}"
+          if [ -z "${RELEASE_TYPE}" ]; then
+            IAM_ROLE="arn:aws:iam::692859939525:role/therock-ci"
+          else
+            IAM_ROLE="arn:aws:iam::692859939525:role/therock-${RELEASE_TYPE}"
+          fi
+          echo "iam_role=${IAM_ROLE}" >> $GITHUB_OUTPUT
+
       - name: Configure AWS Credentials
-        if: ${{ !inputs.skip_package_upload }}
+        if: ${{ !inputs.skip_package_upload && (github.repository == 'ROCm/TheRock' || github.repository == 'ROCm/rockrel') && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
+          role-to-assume: ${{ steps.iam_role.outputs.iam_role }}
 
       - name: Upload Package repo to S3
         if: ${{ !inputs.skip_package_upload }}
