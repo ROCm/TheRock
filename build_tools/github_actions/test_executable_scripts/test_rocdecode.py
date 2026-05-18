@@ -46,6 +46,18 @@ def setup_env(env):
         logging.info(f"++ rocdecode tests only supported on Linux")
         sys.exit(0)
 
+    # When testing an ASAN artifact, propagate sanitizer flags to test compile steps.
+    # CFLAGS/CXXFLAGS are inherited by all cmake child processes, including each
+    # isolated cmake invocation spawned by `ctest --build-and-test`, which is the
+    # only mechanism that reaches those sub-projects (cmake cache vars do not).
+    # librocdecode.so is built with -shared-libsan; amdclang matches that automatically
+    # when -fsanitize=address is present in the compiler flags at link time.
+    if "ASAN_OPTIONS" in env:
+        asan_flags = "-fsanitize=address -fno-omit-frame-pointer"
+        env["CFLAGS"] = f"{env.get('CFLAGS', '')} {asan_flags}".strip()
+        env["CXXFLAGS"] = f"{env.get('CXXFLAGS', '')} {asan_flags}".strip()
+        logging.info(f"++ rocdecode ASAN detected: setting CFLAGS/CXXFLAGS={asan_flags}")
+
 
 def execute_tests(env):
     ROCDECODE_TEST_DIR = Path(THEROCK_TEST_DIR) / "rocdecode-test"
