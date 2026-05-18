@@ -116,28 +116,29 @@ jobs:
       contents: read
       id-token: write
 
-  # ==========================================================================
-  # STAGE: wsl-rocdxg (generic)
-  # ==========================================================================
-  wsl-rocdxg:
-    needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') }}
-    uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
-    secrets: inherit
-    with:
-      stage_name: wsl-rocdxg
-      stage_display_name: "Stage - WSL ROCDXG"
-      timeout_minutes: 120  # 2 hours
-      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
-      rocm_package_version: ${{ inputs.rocm_package_version }}
-      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      release_type: ${{ inputs.release_type }}
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-      external_repo_config: ${{ inputs.external_repo_config }}
-    permissions:
-      contents: read
-      id-token: write
+  # TODO: bring back runner ROCR-Runtime-libhsakmt-WSL to re-enable workflow
+  # # ==========================================================================
+  # # STAGE: wsl-rocdxg (generic)
+  # # ==========================================================================
+  # wsl-rocdxg:
+  #   needs: compiler-runtime
+  #   if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') }}
+  #   uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
+  #   secrets: inherit
+  #   with:
+  #     stage_name: wsl-rocdxg
+  #     stage_display_name: "Stage - WSL ROCDXG"
+  #     timeout_minutes: 120  # 2 hours
+  #     dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+  #     rocm_package_version: ${{ inputs.rocm_package_version }}
+  #     build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+  #     release_type: ${{ inputs.release_type }}
+  #     repository: ${{ inputs.repository }}
+  #     ref: ${{ inputs.ref }}
+  #     external_repo_config: ${{ inputs.external_repo_config }}
+  #   permissions:
+  #     contents: read
+  #     id-token: write
 
   # ==========================================================================
   # STAGE: math-libs (per-arch)
