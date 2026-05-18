@@ -58,6 +58,7 @@ ROCM_INDEX_URLS_MAP = {
 # Fallback mapping from CDN domains to direct S3 bucket URLs.
 # Used when DNS resolution fails for the CDN.
 CDN_TO_S3_FALLBACK_MAP = {
+    "rocm.devreleases.amd.com": "therock-dev-python.s3.amazonaws.com",
     "rocm.nightlies.amd.com": "therock-nightly-python.s3.amazonaws.com",
 }
 
@@ -254,6 +255,10 @@ def install_packages_into_venv(
 
     if find_links:
         pip_install_cmd.append(f"--find-links={find_links}")
+        # When using find-links without index-url, prevent fallback to PyPI.
+        if not index_url:
+            pip_install_cmd.append("--no-index")
+            pip_install_cmd.append("--no-build-isolation")
 
     if pre:
         pip_install_cmd.append("--prerelease=allow" if use_uv else "--pre")
