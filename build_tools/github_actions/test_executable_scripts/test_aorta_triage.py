@@ -86,6 +86,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 RECIPE_REL = Path("recipes") / "recom_repro_smoke.yaml"
+# nan-repro / fixed docker envs are defined in this sidecar until B3 entry-points land.
+SIDECAR_REL = Path("recipes") / "SHAMPOO-NAN-2026-042-sidecar.json"
 
 
 def _resolve_recipe() -> Path:
@@ -129,13 +131,20 @@ def test_aorta_triage_smoke(tmp_path: Path) -> None:
     if shutil.which("aorta") is None:
         pytest.skip("aorta CLI not on PATH (pip install -e aorta -e aorta-internal)")
 
+    aorta_internal = Path(os.environ["AORTA_INTERNAL_DIR"])
     recipe = _resolve_recipe()
+    sidecar = aorta_internal / SIDECAR_REL
+    if not sidecar.is_file():
+        pytest.fail(f"Mitigations sidecar not found: {sidecar}")
+
     cmd = [
         "aorta",
         "triage",
         "run",
         "--recipe",
         str(recipe),
+        "--mitigations-file",
+        str(sidecar),
         "--output-dir",
         str(tmp_path),
     ]
