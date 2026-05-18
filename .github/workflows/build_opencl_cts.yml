@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 jobs:
-  build_opencl_cts_ubi10:
+  build_opencl_cts:
     name: Build opencl-cts
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 120
