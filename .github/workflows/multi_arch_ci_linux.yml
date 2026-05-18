@@ -128,8 +128,23 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 
+  build_opencl_cts:
+    needs: [copy_prebuilt_stages]
+    name: Build opencl-cts
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    uses: ./.github/workflows/build_opencl_cts.yml
+    secrets: inherit
+    with:
+      package_version: ${{ inputs.rocm_package_version }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
   test_artifacts_per_family:
-    needs: [copy_prebuilt_stages, build_multi_arch_stages]
+    needs: [copy_prebuilt_stages, build_multi_arch_stages, build_opencl_cts]
     name: Test ${{ matrix.family_info.amdgpu_family }}
     if: ${{ !failure() && !cancelled() }}
     strategy:

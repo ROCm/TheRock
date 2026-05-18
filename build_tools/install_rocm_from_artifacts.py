@@ -531,6 +531,8 @@ def retrieve_artifacts_by_run_id(args):
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
         if args.tests:
             extra_artifact_patterns.extend([f"{a}_test" for a in extra_artifacts])
+            # opencl-cts is a test-only artifact (no _lib); always included with --tests.
+            extra_artifact_patterns.append("opencl-cts_test")
 
         argv.extend(extra_artifact_patterns)
     else:

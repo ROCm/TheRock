@@ -253,6 +253,7 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
     "multi_arch_build_windows.yml",
     "multi_arch_build_wsl_rocdxg_artifacts.yml",
     "multi_arch_ci_linux.yml",
+    "build_opencl_cts.yml",
     "multi_arch_ci_windows.yml",
     "multi_arch_ci.yml",
     "setup_multi_arch.yml",

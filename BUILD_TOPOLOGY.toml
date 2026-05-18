@@ -152,6 +152,7 @@ artifact_groups = [
     "hip-runtime",
     "opencl-runtime",
     "profiler-core",
+    "rocrtst",
     "rocjitsu"
 ]
 
@@ -199,6 +200,10 @@ artifact_groups = ["profiler-apps"]
 [build_stages.media-libs]
 description = "Media Libraries"
 artifact_groups = ["media-libs"]
+
+[build_stages.opencl-cts]
+description = "OpenCL Conformance Test Suite"
+artifact_groups = ["opencl-cts"]
 
 # ==============================================================================
 # ARTIFACT GROUPS - Logical groupings of related artifacts
@@ -270,6 +275,12 @@ description = "Runtime tests (hip-tests, rocrtst)"
 type = "generic"
 artifact_group_deps = ["hip-runtime", "opencl-runtime", "core-runtime"]
 source_sets = ["rocm-systems"]
+
+[artifact_groups.opencl-cts]
+description = "OpenCL Conformance Test Suite"
+type = "generic"
+artifact_group_deps = ["base", "third-party-sysdeps"]
+source_sets = ["opencl-cts"]
 
 [artifact_groups.math-libs]
 description = "Math libraries (BLAS, FFT, RAND, etc.)"
@@ -565,6 +576,12 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "core-ocl", "core-amdsmi", "sysdeps-hwloc"]
 feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.opencl-cts]
+artifact_group = "opencl-cts"
+type = "target-neutral"
+feature_name = "OPENCL_CTS"
 disable_platforms = ["windows"]
 
 [artifacts.core-hipinfo]
