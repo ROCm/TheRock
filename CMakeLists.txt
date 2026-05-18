@@ -115,6 +115,10 @@ set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact a
 
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 
+cmake_dependent_option(THEROCK_ENABLE_HSA_WINDOWS_SHARED_RUNTIME
+  "Link Windows CLR against the separately built shared HSA runtime"
+  OFF "WIN32" OFF)
+
 # TODO: Set default to true for Linux branch after necessary changes land
 cmake_dependent_option(THEROCK_ENABLE_MPI
   "Enables building components with Message Passing Interface (MPI) support"

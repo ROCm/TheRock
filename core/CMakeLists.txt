@@ -268,6 +268,14 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
       "-DCOMGR_DLL_NAME=${_comgr_dll_name}"
     )
+    if(THEROCK_ENABLE_HSA_WINDOWS_SHARED_RUNTIME)
+      list(APPEND HIP_CLR_CMAKE_ARGS
+        "-DROCCLR_USE_SHARED_HSA_RUNTIME=ON"
+      )
+      list(APPEND HIP_CLR_RUNTIME_DEPS
+        ROCR-Runtime
+      )
+    endif()
   else()
     # Non-Windows CLR options.
     list(APPEND HIP_CLR_RUNTIME_DEPS
@@ -517,6 +525,14 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
       "-DCOMGR_DLL_NAME=${_comgr_dll_name}"
     )
+    if(THEROCK_ENABLE_HSA_WINDOWS_SHARED_RUNTIME)
+      list(APPEND OCL_CLR_CMAKE_ARGS
+        "-DROCCLR_USE_SHARED_HSA_RUNTIME=ON"
+      )
+      list(APPEND OCL_CLR_RUNTIME_DEPS
+        ROCR-Runtime
+      )
+    endif()
   else()
     # Non-Windows CLR options.
     list(APPEND OCL_CLR_RUNTIME_DEPS
