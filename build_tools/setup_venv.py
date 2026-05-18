@@ -38,9 +38,11 @@ from pathlib import Path
 import platform
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import re
+from urllib.parse import urlparse
 
 from github_actions.github_actions_api import *
 
@@ -53,10 +55,74 @@ ROCM_INDEX_URLS_MAP = {
     "dev": "https://rocm.devreleases.amd.com/v2",
 }
 
+# Fallback mapping from CDN domains to direct S3 bucket URLs.
+# Used when DNS resolution fails for the CDN.
+CDN_TO_S3_FALLBACK_MAP = {
+    "rocm.nightlies.amd.com": "therock-nightly-python.s3.amazonaws.com",
+}
+
+# ROCm packages for S3 fallback --find-links (S3 doesn't auto-serve index.html).
+ROCM_PACKAGE_NAMES = [
+    "apex",
+    "jax-rocm7-pjrt",
+    "jax-rocm7-plugin",
+    "jaxlib",
+    "pytorch-triton-rocm",
+    "rocm",
+    "rocm-profiler",
+    "rocm-sdk-core",
+    "rocm-sdk-devel",
+    "torch",
+    "torchaudio",
+    "torchvision",
+    "triton",
+]
+
 
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
+
+
+def check_dns_resolution(hostname: str, timeout: float = 5.0) -> bool:
+    """Check if a hostname can be resolved via DNS."""
+    try:
+        socket.setdefaulttimeout(timeout)
+        socket.gethostbyname(hostname)
+        return True
+    except (socket.gaierror, socket.timeout):
+        return False
+
+
+def apply_url_fallback(url: str) -> tuple[str, bool]:
+    """If DNS fails for the URL's domain, substitute a fallback domain if configured."""
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+
+    if not hostname:
+        return url, False
+
+    # Check if we have a fallback configured for this domain.
+    fallback_hostname = CDN_TO_S3_FALLBACK_MAP.get(hostname)
+    if not fallback_hostname:
+        return url, False
+
+    # Check if the original domain is reachable.
+    if check_dns_resolution(hostname):
+        return url, False
+
+    # DNS failed, check if fallback is reachable.
+    log(f"[WARNING] DNS resolution failed for '{hostname}', trying fallback...")
+    if not check_dns_resolution(fallback_hostname):
+        log(
+            f"[WARNING] Fallback '{fallback_hostname}' also unreachable, using original URL"
+        )
+        return url, False
+
+    # Replace the hostname with the fallback.
+    fallback_url = url.replace(f"://{hostname}", f"://{fallback_hostname}", 1)
+    log(f"[INFO] Using fallback URL: {fallback_url}")
+    return fallback_url, True
 
 
 def run_command(args: list[str | Path], cwd: Path = Path.cwd()):
@@ -188,12 +254,27 @@ def install_packages_into_venv(
         # Look up known index name.
         index_url = ROCM_INDEX_URLS_MAP[index_name]
 
+    using_s3_fallback = False
     if index_url:
         # Join index with subdir.
         if index_subdir:
             index_url = f"{index_url.rstrip('/')}/{index_subdir.strip('/')}"
 
-        pip_install_cmd.append(f"--index-url={index_url}")
+        # Apply DNS fallback if needed (e.g., CDN domain unreachable).
+        index_url, using_s3_fallback = apply_url_fallback(index_url)
+
+        if using_s3_fallback:
+            # S3 doesn't serve root index, use --find-links for each package.
+            pkg_names = list(ROCM_PACKAGE_NAMES)
+            # Add arch-specific libraries package (e.g., rocm-sdk-libraries-gfx94x-dcgpu).
+            if index_subdir:
+                arch = index_subdir.strip("/").lower()
+                pkg_names.append(f"rocm-sdk-libraries-{arch}")
+            for pkg_name in pkg_names:
+                pkg_find_links = f"{index_url.rstrip('/')}/{pkg_name}/index.html"
+                pip_install_cmd.append(f"--find-links={pkg_find_links}")
+        else:
+            pip_install_cmd.append(f"--index-url={index_url}")
 
     if find_links:
         pip_install_cmd.append(f"--find-links={find_links}")
